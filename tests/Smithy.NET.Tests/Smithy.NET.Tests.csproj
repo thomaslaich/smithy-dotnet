@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Smithy.NET.Client/Smithy.NET.Client.csproj" />
+    <ProjectReference Include="../../src/Smithy.NET.CodeGeneration/Smithy.NET.CodeGeneration.csproj" />
+    <ProjectReference Include="../../src/Smithy.NET.Core/Smithy.NET.Core.csproj" />
+    <ProjectReference Include="../../src/Smithy.NET.Generators/Smithy.NET.Generators.csproj" />
+    <ProjectReference Include="../../src/Smithy.NET.Http/Smithy.NET.Http.csproj" />
+    <ProjectReference Include="../../src/Smithy.NET.Json/Smithy.NET.Json.csproj" />
+    <ProjectReference Include="../../src/Smithy.NET.MSBuild/Smithy.NET.MSBuild.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

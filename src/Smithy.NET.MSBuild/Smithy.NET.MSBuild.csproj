@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Smithy.NET.CodeGeneration/Smithy.NET.CodeGeneration.csproj" />
+  </ItemGroup>
+</Project>

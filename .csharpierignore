@@ -1,0 +1,5 @@
+**/.devenv/**
+**/.direnv/**
+**/bin/**
+**/obj/**
+artifacts/**
