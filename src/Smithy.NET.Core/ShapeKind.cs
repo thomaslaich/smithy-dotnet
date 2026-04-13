@@ -1,0 +1,29 @@
+namespace Smithy.NET.Core;
+
+public enum ShapeKind
+{
+    Blob,
+    Boolean,
+    Byte,
+    Short,
+    Integer,
+    Long,
+    Float,
+    Double,
+    BigInteger,
+    BigDecimal,
+    Timestamp,
+    String,
+    Document,
+    List,
+    Set,
+    Map,
+    Structure,
+    Union,
+    Service,
+    Operation,
+    Resource,
+    Member,
+    Apply,
+    Unknown,
+}

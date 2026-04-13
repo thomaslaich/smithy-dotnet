@@ -1,14 +1,25 @@
 { pkgs, lib, ... }:
 
+let
+  smithy-cli = pkgs.callPackage ./nix/smithy-cli.nix { };
+in
 {
-  packages = with pkgs; [
-    git
-    just
+  packages = [
+    pkgs.git
+    pkgs.just
+    smithy-cli
   ];
 
   languages.dotnet = {
     enable = true;
-    package = pkgs.dotnet-sdk_10;
+    # package = pkgs.dotnet-sdk_10;
+    package =
+      with pkgs.dotnetCorePackages;
+      combinePackages [
+        sdk_10_0-bin
+        sdk_9_0-bin
+        sdk_8_0-bin
+      ];
   };
 
   languages.java = {
