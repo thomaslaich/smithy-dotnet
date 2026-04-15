@@ -7,6 +7,8 @@ in
   packages = [
     pkgs.git
     pkgs.just
+    pkgs.sbt
+    pkgs.gradle
     smithy-cli
   ];
 

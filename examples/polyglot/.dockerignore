@@ -1,0 +1,12 @@
+.bsp/
+.devenv/
+.gradle/
+.metals/
+.scala-build/
+**/.bsp/
+**/.devenv/
+**/.gradle/
+**/.metals/
+**/.scala-build/
+**/build/
+**/target/

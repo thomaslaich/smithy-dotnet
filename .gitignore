@@ -11,3 +11,8 @@ TestResults/
 *.nupkg
 *.snupkg
 artifacts/
+
+
+# because of examples
+.metals/
+.scala-build/
