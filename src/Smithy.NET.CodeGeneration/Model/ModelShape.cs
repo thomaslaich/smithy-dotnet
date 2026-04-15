@@ -17,10 +17,11 @@ public sealed record ModelShape(
 )
 {
     public IReadOnlyList<ShapeId> Protocols { get; } =
-        Traits
+    [
+        .. Traits
             .Keys.Where(id =>
                 !string.Equals(id.Namespace, SmithyPrelude.Namespace, StringComparison.Ordinal)
             )
-            .OrderBy(id => id.ToString(), StringComparer.Ordinal)
-            .ToArray();
+            .OrderBy(id => id.ToString(), StringComparer.Ordinal),
+    ];
 }

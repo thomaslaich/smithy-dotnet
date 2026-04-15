@@ -130,8 +130,8 @@ public static class SmithyJsonAstReader
             ? ReadTraits(traitsProperty)
             : TraitCollection.None;
         var members = shape.TryGetProperty("members", out var membersProperty)
-            ? ReadMembers(id, membersProperty)
-            : new ReadOnlyDictionary<string, MemberShape>(new Dictionary<string, MemberShape>());
+            ? ReadMembers(id, kind, membersProperty)
+            : ReadCollectionMembers(id, kind, shape);
 
         return new ModelShape(
             id,
@@ -166,6 +166,7 @@ public static class SmithyJsonAstReader
 
     private static IReadOnlyDictionary<string, MemberShape> ReadMembers(
         ShapeId containerId,
+        ShapeKind containerKind,
         JsonElement members
     )
     {
@@ -179,31 +180,77 @@ public static class SmithyJsonAstReader
         var result = new Dictionary<string, MemberShape>(StringComparer.Ordinal);
         foreach (var memberProperty in members.EnumerateObject())
         {
-            if (!memberProperty.Value.TryGetProperty("target", out var targetProperty))
-            {
-                throw new SmithyException(
-                    $"Member '{containerId}${memberProperty.Name}' is missing a target."
-                );
-            }
-
-            var traits = memberProperty.Value.TryGetProperty("traits", out var traitsProperty)
-                ? ReadTraits(traitsProperty)
-                : TraitCollection.None;
-            var defaultValue = traits.GetValueOrDefault(SmithyPrelude.DefaultTrait);
-
             result.Add(
                 memberProperty.Name,
-                new MemberShape(
-                    containerId.WithMember(memberProperty.Name),
-                    memberProperty.Name,
-                    ShapeId.Parse(targetProperty.GetString() ?? string.Empty),
-                    traits,
-                    defaultValue
-                )
+                ReadMember(containerId, containerKind, memberProperty.Name, memberProperty.Value)
             );
         }
 
         return new ReadOnlyDictionary<string, MemberShape>(result);
+    }
+
+    private static IReadOnlyDictionary<string, MemberShape> ReadCollectionMembers(
+        ShapeId containerId,
+        ShapeKind containerKind,
+        JsonElement shape
+    )
+    {
+        return containerKind switch
+        {
+            ShapeKind.List or ShapeKind.Set when shape.TryGetProperty("member", out var member) =>
+                ReadSyntheticMembers(containerId, containerKind, [new("member", member)]),
+            ShapeKind.Map
+                when shape.TryGetProperty("key", out var key)
+                    && shape.TryGetProperty("value", out var value) =>
+                ReadSyntheticMembers(containerId, containerKind, [new("key", key), new("value", value)]),
+            _ => new ReadOnlyDictionary<string, MemberShape>(new Dictionary<string, MemberShape>()),
+        };
+    }
+
+    private static IReadOnlyDictionary<string, MemberShape> ReadSyntheticMembers(
+        ShapeId containerId,
+        ShapeKind containerKind,
+        IReadOnlyList<KeyValuePair<string, JsonElement>> members
+    )
+    {
+        return new ReadOnlyDictionary<string, MemberShape>(
+            members.ToDictionary(
+                member => member.Key,
+                member => ReadMember(containerId, containerKind, member.Key, member.Value),
+                StringComparer.Ordinal
+            )
+        );
+    }
+
+    private static MemberShape ReadMember(
+        ShapeId containerId,
+        ShapeKind containerKind,
+        string memberName,
+        JsonElement member
+    )
+    {
+        if (
+            !member.TryGetProperty("target", out var targetProperty)
+            && containerKind is not (ShapeKind.Enum or ShapeKind.IntEnum)
+        )
+        {
+            throw new SmithyException($"Member '{containerId}${memberName}' is missing a target.");
+        }
+
+        var traits = member.TryGetProperty("traits", out var traitsProperty)
+            ? ReadTraits(traitsProperty)
+            : TraitCollection.None;
+        var defaultValue = traits.GetValueOrDefault(SmithyPrelude.DefaultTrait);
+
+        return new MemberShape(
+            containerId.WithMember(memberName),
+            memberName,
+            targetProperty.ValueKind == JsonValueKind.String
+                ? ShapeId.Parse(targetProperty.GetString() ?? string.Empty)
+                : GetSyntheticEnumMemberTarget(containerKind),
+            traits,
+            defaultValue
+        );
     }
 
     private static ShapeId? ReadOptionalShapeId(JsonElement shape, string propertyName)
@@ -265,6 +312,8 @@ public static class SmithyJsonAstReader
             "bigDecimal" => ShapeKind.BigDecimal,
             "timestamp" => ShapeKind.Timestamp,
             "string" => ShapeKind.String,
+            "enum" => ShapeKind.Enum,
+            "intEnum" => ShapeKind.IntEnum,
             "document" => ShapeKind.Document,
             "list" => ShapeKind.List,
             "set" => ShapeKind.Set,
@@ -277,6 +326,18 @@ public static class SmithyJsonAstReader
             "member" => ShapeKind.Member,
             "apply" => ShapeKind.Apply,
             _ => ShapeKind.Unknown,
+        };
+    }
+
+    private static ShapeId GetSyntheticEnumMemberTarget(ShapeKind containerKind)
+    {
+        return containerKind switch
+        {
+            ShapeKind.Enum => new ShapeId(SmithyPrelude.Namespace, "String"),
+            ShapeKind.IntEnum => new ShapeId(SmithyPrelude.Namespace, "Integer"),
+            _ => throw new InvalidOperationException(
+                $"Cannot synthesize an enum member target for '{containerKind}'."
+            ),
         };
     }
 }

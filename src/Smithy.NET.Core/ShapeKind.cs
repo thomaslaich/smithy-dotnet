@@ -14,6 +14,8 @@ public enum ShapeKind
     BigDecimal,
     Timestamp,
     String,
+    Enum,
+    IntEnum,
     Document,
     List,
     Set,

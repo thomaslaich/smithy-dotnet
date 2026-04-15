@@ -13,4 +13,8 @@ public static class SmithyPrelude
     public static ShapeId ClientOptionalTrait { get; } = new(Namespace, "clientOptional");
 
     public static ShapeId ErrorTrait { get; } = new(Namespace, "error");
+
+    public static ShapeId EnumValueTrait { get; } = new(Namespace, "enumValue");
+
+    public static ShapeId SparseTrait { get; } = new(Namespace, "sparse");
 }
