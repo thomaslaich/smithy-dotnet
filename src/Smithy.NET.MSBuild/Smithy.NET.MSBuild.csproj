@@ -7,12 +7,23 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Build.Framework" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" PrivateAssets="all" />
-    <ProjectReference Include="../Smithy.NET.CodeGeneration/Smithy.NET.CodeGeneration.csproj" />
+    <ProjectReference
+      Include="../Smithy.NET.CodeGeneration/Smithy.NET.CodeGeneration.csproj"
+      PrivateAssets="all"
+    />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="Targets/Smithy.NET.MSBuild.targets" Pack="true" PackagePath="build/Smithy.NET.MSBuild.targets" />
-    <None Include="Targets/Smithy.NET.MSBuild.targets" Pack="true" PackagePath="buildTransitive/Smithy.NET.MSBuild.targets" />
+    <None
+      Include="Targets/Smithy.NET.MSBuild.targets"
+      Pack="true"
+      PackagePath="build/Smithy.NET.MSBuild.targets"
+    />
+    <None
+      Include="Targets/Smithy.NET.MSBuild.targets"
+      Pack="true"
+      PackagePath="buildTransitive/Smithy.NET.MSBuild.targets"
+    />
   </ItemGroup>
 
   <Target Name="AddSmithyTaskFilesToPackage" BeforeTargets="Pack">

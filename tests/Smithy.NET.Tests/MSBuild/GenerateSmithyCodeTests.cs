@@ -1,4 +1,8 @@
+using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.Build.Utilities;
+using Smithy.NET.CodeGeneration;
+using Smithy.NET.Core;
 using Smithy.NET.MSBuild;
 
 namespace Smithy.NET.Tests.MSBuild;
@@ -99,6 +103,276 @@ public sealed class GenerateSmithyCodeTests
             Path.Combine(generatedOutputDirectory, "Example", "Weather", "Forecast.g.cs"),
             generatedFile.ItemSpec
         );
+    }
+
+    [Fact]
+    public void ExecuteDeletesFilesFromPreviousGeneratedFileManifest()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var buildOutputDirectory = Path.Combine(directory.Path, "smithy-build");
+        var generatedOutputDirectory = Path.Combine(directory.Path, "generated");
+        var generatedFileManifest = Path.Combine(buildOutputDirectory, "generated-files.json");
+        var modelFile = Path.Combine(directory.Path, "weather.smithy");
+
+        File.WriteAllText(
+            modelFile,
+            """
+            $version: "2"
+
+            namespace example.weather
+
+            structure Forecast {
+                @required
+                city: String
+            }
+            """
+        );
+
+        var firstTask = new GenerateSmithyCode
+        {
+            WorkingDirectory = directory.Path,
+            BuildFile = "smithy-build.json",
+            OutputDirectory = buildOutputDirectory,
+            GeneratedOutputDirectory = generatedOutputDirectory,
+            GeneratedFileManifest = generatedFileManifest,
+            SmithyModel = [new TaskItem(modelFile)],
+        };
+
+        Assert.True(firstTask.Execute());
+        var staleFile = Assert.Single(firstTask.GeneratedFiles).ItemSpec;
+        Assert.True(File.Exists(staleFile));
+
+        File.WriteAllText(
+            modelFile,
+            """
+            $version: "2"
+
+            namespace example.weather
+
+            structure Observation {
+                @required
+                city: String
+            }
+            """
+        );
+
+        var secondTask = new GenerateSmithyCode
+        {
+            WorkingDirectory = directory.Path,
+            BuildFile = "smithy-build.json",
+            OutputDirectory = buildOutputDirectory,
+            GeneratedOutputDirectory = generatedOutputDirectory,
+            GeneratedFileManifest = generatedFileManifest,
+            SmithyModel = [new TaskItem(modelFile)],
+        };
+
+        Assert.True(secondTask.Execute());
+
+        var generatedFile = Assert.Single(secondTask.GeneratedFiles).ItemSpec;
+        Assert.False(File.Exists(staleFile));
+        Assert.Equal(
+            Path.Combine(generatedOutputDirectory, "Example", "Weather", "Observation.g.cs"),
+            generatedFile
+        );
+        Assert.Contains(generatedFile, File.ReadAllText(generatedFileManifest));
+    }
+
+    [Fact]
+    public void ExecuteWritesDependencyManifest()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var buildOutputDirectory = Path.Combine(directory.Path, "smithy-build");
+        var generatedOutputDirectory = Path.Combine(directory.Path, "generated");
+        var dependencyManifest = Path.Combine(buildOutputDirectory, "dependencies.json");
+        var modelFile = Path.Combine(directory.Path, "weather.smithy");
+
+        File.WriteAllText(
+            modelFile,
+            """
+            $version: "2"
+
+            namespace example.weather
+
+            structure Forecast {
+                @required
+                city: String
+            }
+            """
+        );
+
+        var task = new GenerateSmithyCode
+        {
+            WorkingDirectory = directory.Path,
+            BuildFile = "smithy-build.json",
+            OutputDirectory = buildOutputDirectory,
+            GeneratedOutputDirectory = generatedOutputDirectory,
+            DependencyManifest = dependencyManifest,
+            SmithyModel = [new TaskItem("weather.smithy")],
+        };
+
+        Assert.True(task.Execute());
+
+        using var document = JsonDocument.Parse(File.ReadAllText(dependencyManifest));
+        var root = document.RootElement;
+        Assert.Equal(
+            Path.GetFullPath(modelFile),
+            root.GetProperty("ConfiguredModelInputs")[0].GetString()
+        );
+        Assert.EndsWith(
+            Path.Combine("source", "model", "model.json"),
+            root.GetProperty("ModelPath").GetString(),
+            StringComparison.Ordinal
+        );
+        Assert.NotEmpty(root.GetProperty("SmithySourceArtifacts").EnumerateArray());
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task TargetsGenerateCompileItemsForConsumerProject()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var packageDirectory = Path.Combine(directory.Path, "package");
+        var projectDirectory = Path.Combine(directory.Path, "consumer");
+        var modelDirectory = Path.Combine(projectDirectory, "model");
+        Directory.CreateDirectory(Path.Combine(packageDirectory, "build"));
+        Directory.CreateDirectory(Path.Combine(packageDirectory, "tasks"));
+        Directory.CreateDirectory(modelDirectory);
+
+        File.Copy(
+            Path.Combine(
+                FindRepositoryRoot(),
+                "src",
+                "Smithy.NET.MSBuild",
+                "Targets",
+                "Smithy.NET.MSBuild.targets"
+            ),
+            Path.Combine(packageDirectory, "build", "Smithy.NET.MSBuild.targets")
+        );
+        CopyAssemblyToTasks(typeof(GenerateSmithyCode).Assembly.Location, packageDirectory);
+        CopyAssemblyToTasks(typeof(SmithyCli).Assembly.Location, packageDirectory);
+        CopyAssemblyToTasks(typeof(ShapeId).Assembly.Location, packageDirectory);
+
+        File.WriteAllText(
+            Path.Combine(modelDirectory, "weather.smithy"),
+            """
+            $version: "2"
+
+            namespace example.weather
+
+            structure Forecast {
+                @required
+                city: String
+            }
+            """
+        );
+        File.WriteAllText(
+            Path.Combine(projectDirectory, "ConsumerProject.csproj"),
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <Nullable>enable</Nullable>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <SmithyGeneratedOutputPath>obj/Smithy/</SmithyGeneratedOutputPath>
+                <SmithyBuildOutputPath>obj/SmithyBuild/</SmithyBuildOutputPath>
+              </PropertyGroup>
+
+              <ItemGroup>
+                <SmithyModel Include="model/**/*.smithy" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/Smithy.NET.Core/Smithy.NET.Core.csproj" />
+              </ItemGroup>
+
+              <Import Project="{{Path.Combine(
+                packageDirectory,
+                "build",
+                "Smithy.NET.MSBuild.targets"
+            )}}" />
+            </Project>
+            """
+        );
+        File.WriteAllText(
+            Path.Combine(projectDirectory, "Consumer.cs"),
+            """
+            using ConsumerProject.Example.Weather;
+
+            namespace ConsumerProject;
+
+            public static class Consumer
+            {
+                public static Forecast Create()
+                {
+                    return new Forecast("Zurich");
+                }
+            }
+            """
+        );
+
+        var result = await RunDotNetBuild(projectDirectory);
+
+        Assert.True(
+            result.ExitCode == 0,
+            $"dotnet build failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}{Environment.NewLine}{result.Error}"
+        );
+        Assert.True(
+            File.Exists(
+                Path.Combine(
+                    projectDirectory,
+                    "obj",
+                    "Smithy",
+                    "Example",
+                    "Weather",
+                    "Forecast.g.cs"
+                )
+            )
+        );
+    }
+
+    private static void CopyAssemblyToTasks(string assemblyPath, string packageDirectory)
+    {
+        File.Copy(
+            assemblyPath,
+            Path.Combine(packageDirectory, "tasks", Path.GetFileName(assemblyPath)),
+            overwrite: true
+        );
+    }
+
+    private static async System.Threading.Tasks.Task<(
+        int ExitCode,
+        string Output,
+        string Error
+    )> RunDotNetBuild(string projectDirectory)
+    {
+        using var process = Process.Start(
+            new ProcessStartInfo("dotnet", ["build", "-p:UseSharedCompilation=false"])
+            {
+                WorkingDirectory = projectDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            }
+        );
+
+        Assert.NotNull(process);
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        return (process.ExitCode, await outputTask, await errorTask);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (
+            directory is not null
+            && !File.Exists(Path.Combine(directory.FullName, "Smithy.NET.slnx"))
+        )
+        {
+            directory = directory.Parent;
+        }
+
+        return directory?.FullName
+            ?? throw new InvalidOperationException(
+                "Could not find the Smithy.NET repository root."
+            );
     }
 
     private sealed class TemporaryDirectory : IDisposable

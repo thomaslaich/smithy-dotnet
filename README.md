@@ -2,7 +2,34 @@
 
 Smithy.NET is an early-stage .NET toolkit for generating C# code and runtime clients from Smithy models.
 
-Current status: repository scaffolding and planning are in progress. See `docs/planning/roadmap.md` for the implementation roadmap.
+Current status: C# model-shape generation is implemented for the first model-only slice, and MSBuild integration is in progress. See `docs/planning/roadmap.md` for the implementation roadmap.
+
+## MSBuild integration
+
+The `Smithy.NET.MSBuild` package runs Smithy build before compilation, reads the selected projection's JSON AST, writes generated C# under `$(IntermediateOutputPath)Smithy/` by default, and adds those files to `Compile`.
+
+Add Smithy model files to a project with:
+
+```xml
+<ItemGroup>
+  <SmithyModel Include="models/**/*.smithy" />
+</ItemGroup>
+```
+
+Optional MSBuild properties:
+
+| Property | Default | Description |
+| --- | --- | --- |
+| `SmithyBuildFile` | `$(MSBuildProjectDirectory)/smithy-build.json` | Smithy build configuration file. If it is missing and `SmithyModel` items are present, a minimal build file is generated under `obj`. |
+| `SmithyProjection` | `source` | Smithy build projection to compile. |
+| `SmithyGeneratedOutputPath` | `$(IntermediateOutputPath)Smithy/` | Directory for generated `.g.cs` files that are added to `Compile`. |
+| `SmithyBuildOutputPath` | `$(IntermediateOutputPath)SmithyBuild/` | Directory for Smithy build output and generated manifests. |
+| `SmithyGeneratedFileManifest` | `$(SmithyBuildOutputPath)generated-files.json` | Manifest used to delete stale generated `.g.cs` files when shapes are renamed or removed. |
+| `SmithyDependencyManifest` | `$(SmithyBuildOutputPath)dependencies.json` | Manifest recording the selected Smithy model output, configured model inputs, and Smithy source artifacts. |
+| `SmithyEmitGeneratedFiles` | `false` | Marks generated compile items as visible in IDE project views when set to `true`. |
+| `SmithyCliPath` | empty | Explicit Smithy CLI executable path. When omitted, `smithy` is resolved from `PATH`. |
+
+The current MSBuild task requires the Smithy CLI to be installed. If the CLI distribution uses Java, Java must also be available in the build environment. Bundled or pinned Smithy CLI acquisition is still planned.
 
 ## Development
 

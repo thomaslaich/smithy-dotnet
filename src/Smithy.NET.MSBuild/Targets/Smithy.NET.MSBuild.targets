@@ -1,30 +1,45 @@
 <Project>
   <PropertyGroup>
-    <SmithyBuildFile Condition="'$(SmithyBuildFile)' == ''">$(MSBuildProjectDirectory)\smithy-build.json</SmithyBuildFile>
+    <SmithyBuildFile Condition="'$(SmithyBuildFile)' == ''">$(MSBuildProjectDirectory)/smithy-build.json</SmithyBuildFile>
     <SmithyProjection Condition="'$(SmithyProjection)' == ''">source</SmithyProjection>
-    <SmithyGeneratedOutputPath Condition="'$(SmithyGeneratedOutputPath)' == ''">$(IntermediateOutputPath)Smithy\</SmithyGeneratedOutputPath>
-    <SmithyBuildOutputPath Condition="'$(SmithyBuildOutputPath)' == ''">$(IntermediateOutputPath)SmithyBuild\</SmithyBuildOutputPath>
+    <SmithyGeneratedOutputPath Condition="'$(SmithyGeneratedOutputPath)' == ''">$(IntermediateOutputPath)Smithy/</SmithyGeneratedOutputPath>
+    <SmithyBuildOutputPath Condition="'$(SmithyBuildOutputPath)' == ''">$(IntermediateOutputPath)SmithyBuild/</SmithyBuildOutputPath>
+    <SmithyGeneratedFileManifest Condition="'$(SmithyGeneratedFileManifest)' == ''">$(SmithyBuildOutputPath)generated-files.json</SmithyGeneratedFileManifest>
+    <SmithyDependencyManifest Condition="'$(SmithyDependencyManifest)' == ''">$(SmithyBuildOutputPath)dependencies.json</SmithyDependencyManifest>
+    <SmithyEmitGeneratedFiles Condition="'$(SmithyEmitGeneratedFiles)' == ''">false</SmithyEmitGeneratedFiles>
   </PropertyGroup>
+
+  <ItemGroup>
+    <_SmithyGeneratorInput Include="$(MSBuildThisFileFullPath)" />
+    <_SmithyGeneratorInput Include="$(MSBuildThisFileDirectory)../tasks/Smithy.NET.MSBuild.dll" />
+    <_SmithyGeneratorInput Include="$(MSBuildThisFileDirectory)../tasks/Smithy.NET.CodeGeneration.dll" />
+    <_SmithyGeneratorInput Include="$(MSBuildThisFileDirectory)../tasks/Smithy.NET.Core.dll" />
+    <_SmithyProjectModelInput
+      Include="$(MSBuildProjectDirectory)/**/*.smithy;$(MSBuildProjectDirectory)/**/*.json"
+      Exclude="$(MSBuildProjectDirectory)/obj/**;$(MSBuildProjectDirectory)/bin/**;$(SmithyGeneratedOutputPath)**;$(SmithyBuildOutputPath)**" />
+  </ItemGroup>
 
   <UsingTask
     TaskName="Smithy.NET.MSBuild.GenerateSmithyCode"
-    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\Smithy.NET.MSBuild.dll" />
+    AssemblyFile="$(MSBuildThisFileDirectory)../tasks/Smithy.NET.MSBuild.dll" />
 
   <ItemGroup Condition="Exists('$(SmithyGeneratedOutputPath)')">
-    <Compile Include="$(SmithyGeneratedOutputPath)**\*.g.cs" />
+    <Compile Include="$(SmithyGeneratedOutputPath)**/*.g.cs" />
   </ItemGroup>
 
   <Target
     Name="GenerateSmithyCode"
-    BeforeTargets="BeforeCompile"
+    BeforeTargets="CoreCompile"
     Condition="'@(SmithyModel)' != '' Or Exists('$(SmithyBuildFile)')"
-    Inputs="@(SmithyModel);$(SmithyBuildFile)"
+    Inputs="@(SmithyModel);@(_SmithyProjectModelInput);@(_SmithyGeneratorInput)"
     Outputs="$(SmithyGeneratedOutputPath)Smithy.NET.Generated.stamp">
     <GenerateSmithyCode
       WorkingDirectory="$(MSBuildProjectDirectory)"
       BuildFile="$(SmithyBuildFile)"
       OutputDirectory="$(SmithyBuildOutputPath)"
       GeneratedOutputDirectory="$(SmithyGeneratedOutputPath)"
+      GeneratedFileManifest="$(SmithyGeneratedFileManifest)"
+      DependencyManifest="$(SmithyDependencyManifest)"
       Projection="$(SmithyProjection)"
       SmithyCliPath="$(SmithyCliPath)"
       BaseNamespace="$(RootNamespace)"
@@ -33,10 +48,12 @@
     </GenerateSmithyCode>
 
     <ItemGroup>
-      <Compile Remove="$(SmithyGeneratedOutputPath)**\*.g.cs" />
-      <Compile Include="@(_SmithyGeneratedCompile)" />
+      <Compile Remove="$(SmithyGeneratedOutputPath)**/*.g.cs" />
+      <Compile Include="@(_SmithyGeneratedCompile)" Visible="$(SmithyEmitGeneratedFiles)" />
       <FileWrites Include="@(_SmithyGeneratedCompile)" />
       <FileWrites Include="$(SmithyGeneratedOutputPath)Smithy.NET.Generated.stamp" />
+      <FileWrites Include="$(SmithyGeneratedFileManifest)" />
+      <FileWrites Include="$(SmithyDependencyManifest)" />
     </ItemGroup>
 
     <Touch Files="$(SmithyGeneratedOutputPath)Smithy.NET.Generated.stamp" AlwaysCreate="true" />
