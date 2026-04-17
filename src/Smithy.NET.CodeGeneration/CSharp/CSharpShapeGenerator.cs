@@ -17,11 +17,13 @@ public sealed class CSharpShapeGenerator
         ArgumentNullException.ThrowIfNull(model);
         options ??= new CSharpGenerationOptions();
 
-        return model
-            .Shapes.Values.Where(ShouldGenerate)
-            .OrderBy(shape => shape.Id.ToString(), StringComparer.Ordinal)
-            .Select(shape => GenerateShape(model, shape, options))
-            .ToArray();
+        return
+        [
+            .. model
+                .Shapes.Values.Where(ShouldGenerate)
+                .OrderBy(shape => shape.Id.ToString(), StringComparer.Ordinal)
+                .Select(shape => GenerateShape(model, shape, options)),
+        ];
     }
 
     private static bool ShouldGenerate(ModelShape shape)
@@ -44,8 +46,11 @@ public sealed class CSharpShapeGenerator
     {
         var contents = shape.Kind switch
         {
-            ShapeKind.Structure when shape.Traits.Has(SmithyPrelude.ErrorTrait) =>
-                GenerateError(model, shape, options),
+            ShapeKind.Structure when shape.Traits.Has(SmithyPrelude.ErrorTrait) => GenerateError(
+                model,
+                shape,
+                options
+            ),
             ShapeKind.Structure => GenerateStructure(model, shape, options),
             ShapeKind.List or ShapeKind.Set => GenerateList(model, shape, options),
             ShapeKind.Map => GenerateMap(model, shape, options),
@@ -68,11 +73,12 @@ public sealed class CSharpShapeGenerator
     {
         var builder = CreateFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
-        builder.AppendLine($"public sealed partial record class {typeName}");
-        builder.AppendLine("{");
-        AppendConstructor(builder, model, shape, typeName, options, baseCall: null);
-        AppendProperties(builder, model, shape, options);
-        builder.AppendLine("}");
+        builder.Line($"public sealed partial record class {typeName}");
+        builder.Block(() =>
+        {
+            AppendConstructor(builder, model, shape, typeName, options, baseCall: null);
+            AppendProperties(builder, model, shape, options);
+        });
         return builder.ToString();
     }
 
@@ -84,11 +90,13 @@ public sealed class CSharpShapeGenerator
     {
         var builder = CreateFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
-        builder.AppendLine($"public sealed partial class {typeName} : Exception");
-        builder.AppendLine("{");
-        AppendConstructor(builder, model, shape, typeName, options, "base(message)");
-        AppendProperties(builder, model, shape, options);
-        builder.AppendLine("}");
+        builder.Line($"public sealed partial class {typeName} : Exception");
+        builder.Block(() =>
+        {
+            var messageMember = GetErrorMessageMember(shape);
+            AppendErrorConstructor(builder, model, shape, typeName, options, messageMember);
+            AppendProperties(builder, model, shape, options, messageMember);
+        });
         return builder.ToString();
     }
 
@@ -110,16 +118,18 @@ public sealed class CSharpShapeGenerator
             currentNamespace: shape.Id.Namespace,
             baseNamespace: options.BaseNamespace
         );
-        builder.AppendLine($"public sealed partial record class {typeName}");
-        builder.AppendLine("{");
-        builder.AppendLine($"    public {typeName}(IEnumerable<{memberType}> values)");
-        builder.AppendLine("    {");
-        builder.AppendLine("        ArgumentNullException.ThrowIfNull(values);");
-        builder.AppendLine("        Values = Array.AsReadOnly(values.ToArray());");
-        builder.AppendLine("    }");
-        builder.AppendLine();
-        builder.AppendLine($"    public IReadOnlyList<{memberType}> Values {{ get; }}");
-        builder.AppendLine("}");
+        builder.Line($"public sealed partial record class {typeName}");
+        builder.Block(() =>
+        {
+            builder.Line($"public {typeName}(IEnumerable<{memberType}> values)");
+            builder.Block(() =>
+            {
+                builder.Line("ArgumentNullException.ThrowIfNull(values);");
+                builder.Line("Values = Array.AsReadOnly(values.ToArray());");
+            });
+            builder.Line();
+            builder.Line($"public IReadOnlyList<{memberType}> Values {{ get; }}");
+        });
         return builder.ToString();
     }
 
@@ -152,18 +162,20 @@ public sealed class CSharpShapeGenerator
             baseNamespace: options.BaseNamespace
         );
 
-        builder.AppendLine($"public sealed partial record class {typeName}");
-        builder.AppendLine("{");
-        builder.AppendLine(
-            $"    public {typeName}(IReadOnlyDictionary<{keyType}, {valueType}> values)"
-        );
-        builder.AppendLine("    {");
-        builder.AppendLine("        ArgumentNullException.ThrowIfNull(values);");
-        builder.AppendLine($"        Values = new Dictionary<{keyType}, {valueType}>(values);");
-        builder.AppendLine("    }");
-        builder.AppendLine();
-        builder.AppendLine($"    public IReadOnlyDictionary<{keyType}, {valueType}> Values {{ get; }}");
-        builder.AppendLine("}");
+        builder.Line($"public sealed partial record class {typeName}");
+        builder.Block(() =>
+        {
+            builder.Line($"public {typeName}(IReadOnlyDictionary<{keyType}, {valueType}> values)");
+            builder.Block(() =>
+            {
+                builder.Line("ArgumentNullException.ThrowIfNull(values);");
+                builder.Line(
+                    $"Values = new System.Collections.ObjectModel.ReadOnlyDictionary<{keyType}, {valueType}>(new Dictionary<{keyType}, {valueType}>(values));"
+                );
+            });
+            builder.Line();
+            builder.Line($"public IReadOnlyDictionary<{keyType}, {valueType}> Values {{ get; }}");
+        });
         return builder.ToString();
     }
 
@@ -171,23 +183,32 @@ public sealed class CSharpShapeGenerator
     {
         var builder = CreateFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
-        builder.AppendLine($"public readonly partial record struct {typeName}(string Value)");
-        builder.AppendLine("{");
-        foreach (var member in shape.Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal))
+        builder.Line($"public readonly partial record struct {typeName}(string Value)");
+        builder.Block(() =>
         {
-            var propertyName = CSharpIdentifier.PropertyName(member.Name);
-            var value = member.Traits.GetValueOrDefault(SmithyPrelude.EnumValueTrait)?.AsString() ?? member.Name;
-            builder.AppendLine(
-                $"    public static {typeName} {propertyName} {{ get; }} = new({FormatString(value)});"
-            );
-        }
+            foreach (
+                var member in shape.Members.Values.OrderBy(
+                    member => member.Name,
+                    StringComparer.Ordinal
+                )
+            )
+            {
+                var propertyName = CSharpIdentifier.PropertyName(member.Name);
+                var value =
+                    member.Traits.GetValueOrDefault(SmithyPrelude.EnumValueTrait)?.AsString()
+                    ?? member.Name;
+                builder.Line(
+                    $"public static {typeName} {propertyName} {{ get; }} = new({FormatString(value)});"
+                );
+            }
 
-        builder.AppendLine();
-        builder.AppendLine("    public override string ToString()");
-        builder.AppendLine("    {");
-        builder.AppendLine("        return Value;");
-        builder.AppendLine("    }");
-        builder.AppendLine("}");
+            builder.Line();
+            builder.Line("public override string ToString()");
+            builder.Block(() =>
+            {
+                builder.Line("return Value;");
+            });
+        });
         return builder.ToString();
     }
 
@@ -195,19 +216,26 @@ public sealed class CSharpShapeGenerator
     {
         var builder = CreateFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
-        builder.AppendLine($"public enum {typeName}");
-        builder.AppendLine("{");
-        foreach (var member in shape.Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal))
+        builder.Line($"public enum {typeName}");
+        builder.Block(() =>
         {
-            var propertyName = CSharpIdentifier.PropertyName(member.Name);
-            var value = member.Traits.GetValueOrDefault(SmithyPrelude.EnumValueTrait)?.AsNumber();
-            var suffix = value is null
-                ? string.Empty
-                : string.Create(CultureInfo.InvariantCulture, $" = {(int)value.Value}");
-            builder.AppendLine($"    {propertyName}{suffix},");
-        }
-
-        builder.AppendLine("}");
+            foreach (
+                var member in shape.Members.Values.OrderBy(
+                    member => member.Name,
+                    StringComparer.Ordinal
+                )
+            )
+            {
+                var propertyName = CSharpIdentifier.PropertyName(member.Name);
+                var value = member
+                    .Traits.GetValueOrDefault(SmithyPrelude.EnumValueTrait)
+                    ?.AsNumber();
+                var suffix = value is null
+                    ? string.Empty
+                    : string.Create(CultureInfo.InvariantCulture, $" = {(int)value.Value}");
+                builder.Line($"{propertyName}{suffix},");
+            }
+        });
         return builder.ToString();
     }
 
@@ -219,59 +247,131 @@ public sealed class CSharpShapeGenerator
     {
         var builder = CreateFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
-        builder.AppendLine($"public abstract partial record class {typeName}");
-        builder.AppendLine("{");
-        builder.AppendLine($"    private protected {typeName}() {{ }}");
-        builder.AppendLine();
-        foreach (var member in shape.Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal))
+        builder.Line($"public abstract partial record class {typeName}");
+        var members = shape
+            .Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal)
+            .ToArray();
+        builder.Block(() =>
         {
-            var variantName = CSharpIdentifier.TypeName(member.Name);
-            var valueType = GetValueType(
-                model,
-                member.Target,
-                nullable: false,
-                currentNamespace: shape.Id.Namespace,
-                baseNamespace: options.BaseNamespace
-            );
-            builder.AppendLine(
-                $"    public sealed partial record class {variantName}({valueType} Value) : {typeName};"
-            );
-        }
+            builder.Line($"private protected {typeName}() {{ }}");
+            builder.Line();
+            foreach (var member in members)
+            {
+                var variantName = CSharpIdentifier.TypeName(member.Name);
+                var valueType = GetValueType(
+                    model,
+                    member.Target,
+                    nullable: false,
+                    currentNamespace: shape.Id.Namespace,
+                    baseNamespace: options.BaseNamespace
+                );
+                builder.Line($"public sealed partial record class {variantName} : {typeName}");
+                builder.Block(() =>
+                {
+                    builder.Line($"public {variantName}({valueType} value)");
+                    builder.Block(() =>
+                    {
+                        builder.Line(
+                            $"Value = {GetUnionValueAssignment(model, member.Target, "value")};"
+                        );
+                    });
+                    builder.Line();
+                    builder.Line($"public {valueType} Value {{ get; }}");
+                });
+                builder.Line();
+                builder.Line($"public static {typeName} From{variantName}({valueType} value)");
+                builder.Block(() =>
+                {
+                    builder.Line($"return new {variantName}(value);");
+                });
+                builder.Line();
+            }
 
-        builder.AppendLine();
-        builder.AppendLine(
-            $"    public sealed partial record class Unknown(string Tag, Document Value) : {typeName};"
-        );
-        builder.AppendLine();
-        builder.AppendLine("    public T Match<T>(");
-        foreach (var member in shape.Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal))
-        {
-            var variantName = CSharpIdentifier.TypeName(member.Name);
-            var parameterName = CSharpIdentifier.ParameterName(member.Name);
-            builder.AppendLine($"        Func<{variantName}, T> {parameterName},");
-        }
+            builder.Line("public sealed partial record class Unknown : " + typeName);
+            builder.Block(() =>
+            {
+                builder.Line("public Unknown(string tag, Document value)");
+                builder.Block(() =>
+                {
+                    builder.Line("Tag = tag ?? throw new ArgumentNullException(nameof(tag));");
+                    builder.Line("Value = value;");
+                });
+                builder.Line();
+                builder.Line("public string Tag { get; }");
+                builder.Line("public Document Value { get; }");
+            });
+            builder.Line();
+            builder.Line($"public static {typeName} FromUnknown(string tag, Document value)");
+            builder.Block(() =>
+            {
+                builder.Line("return new Unknown(tag, value);");
+            });
+            builder.Line();
 
-        builder.AppendLine("        Func<Unknown, T> unknown)");
-        builder.AppendLine("    {");
-        builder.AppendLine("        return this switch");
-        builder.AppendLine("        {");
-        foreach (var member in shape.Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal))
-        {
-            var variantName = CSharpIdentifier.TypeName(member.Name);
-            var parameterName = CSharpIdentifier.ParameterName(member.Name);
-            builder.AppendLine($"            {variantName} value => {parameterName}(value),");
-        }
+            builder.Line("public T Match<T>(");
+            builder.Indented(() =>
+            {
+                foreach (var member in members)
+                {
+                    var parameterName = CSharpIdentifier.ParameterName(member.Name);
+                    var valueType = GetValueType(
+                        model,
+                        member.Target,
+                        nullable: false,
+                        currentNamespace: shape.Id.Namespace,
+                        baseNamespace: options.BaseNamespace
+                    );
+                    builder.Line($"Func<{valueType}, T> {parameterName},");
+                }
 
-        builder.AppendLine("            Unknown value => unknown(value),");
-        builder.AppendLine("            _ => throw new InvalidOperationException(\"Unknown union variant.\"),");
-        builder.AppendLine("        };");
-        builder.AppendLine("    }");
-        builder.AppendLine("}");
+                builder.Line("Func<string, Document, T> unknown)");
+            });
+            builder.Block(() =>
+            {
+                foreach (var member in members)
+                {
+                    var parameterName = CSharpIdentifier.ParameterName(member.Name);
+                    builder.Line($"ArgumentNullException.ThrowIfNull({parameterName});");
+                }
+
+                builder.Line("ArgumentNullException.ThrowIfNull(unknown);");
+                builder.Line();
+                builder.Line("return this switch");
+                builder.Block(
+                    () =>
+                    {
+                        foreach (var member in members)
+                        {
+                            var variantName = CSharpIdentifier.TypeName(member.Name);
+                            var parameterName = CSharpIdentifier.ParameterName(member.Name);
+                            builder.Line($"{variantName} value => {parameterName}(value.Value),");
+                        }
+
+                        builder.Line("Unknown value => unknown(value.Tag, value.Value),");
+                        builder.Line(
+                            "_ => throw new InvalidOperationException(\"Unknown union variant.\"),"
+                        );
+                    },
+                    closingSuffix: ";"
+                );
+            });
+        });
         return builder.ToString();
     }
 
+    private static string GetUnionValueAssignment(
+        SmithyModel model,
+        ShapeId target,
+        string parameterName
+    )
+    {
+        return IsReferenceType(model, target)
+            ? $"{parameterName} ?? throw new ArgumentNullException(nameof({parameterName}))"
+            : parameterName;
+    }
+
     private static void AppendConstructor(
-        StringBuilder builder,
+        CSharpWriter builder,
         SmithyModel model,
         ModelShape shape,
         string typeName,
@@ -279,100 +379,178 @@ public sealed class CSharpShapeGenerator
         string? baseCall
     )
     {
-        var members = shape.Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal).ToArray();
-        builder.Append($"    public {typeName}(");
+        var members = shape
+            .Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal)
+            .ToArray();
+        builder.Write($"public {typeName}(");
         if (baseCall is not null)
         {
-            builder.Append("string? message = null");
+            builder.Write("string? message = null");
             if (members.Length > 0)
             {
-                builder.Append(", ");
+                builder.Write(", ");
             }
         }
 
-        builder.Append(
+        builder.Write(
             string.Join(
                 ", ",
                 members.Select(member =>
-                    GetParameter(model, member, shape.Id.Namespace, options.BaseNamespace)
+                    GetParameter(model, shape, member, shape.Id.Namespace, options)
                 )
             )
         );
-        builder.AppendLine(")");
+        builder.Line(")");
         if (baseCall is not null)
         {
-            builder.AppendLine($"        : {baseCall}");
+            builder.Indented(() =>
+            {
+                builder.Line($": {baseCall}");
+            });
         }
 
-        builder.AppendLine("    {");
-        foreach (var member in members)
+        builder.Block(() =>
         {
-            var propertyName = CSharpIdentifier.PropertyName(member.Name);
-            var parameterName = CSharpIdentifier.ParameterName(member.Name);
-            builder.AppendLine(
-                $"        {propertyName} = {GetAssignment(model, member, parameterName, shape.Id.Namespace, options.BaseNamespace)};"
-            );
-        }
+            foreach (var member in members)
+            {
+                var propertyName = CSharpIdentifier.PropertyName(member.Name);
+                var parameterName = CSharpIdentifier.ParameterName(member.Name);
+                builder.Line(
+                    $"{propertyName} = {GetAssignment(model, shape, member, parameterName, shape.Id.Namespace, options)};"
+                );
+            }
+        });
 
-        builder.AppendLine("    }");
         if (members.Length > 0)
         {
-            builder.AppendLine();
+            builder.Line();
+        }
+    }
+
+    private static void AppendErrorConstructor(
+        CSharpWriter builder,
+        SmithyModel model,
+        ModelShape shape,
+        string typeName,
+        CSharpGenerationOptions options,
+        MemberShape? messageMember
+    )
+    {
+        var members = GetSortedMembers(shape, excludedMember: messageMember).ToArray();
+        builder.Write($"public {typeName}(string? message = null");
+        if (members.Length > 0)
+        {
+            builder.Write(", ");
+        }
+
+        builder.Write(
+            string.Join(
+                ", ",
+                members.Select(member =>
+                    GetParameter(model, shape, member, shape.Id.Namespace, options)
+                )
+            )
+        );
+        builder.Line(")");
+        builder.Indented(() =>
+        {
+            builder.Line(": base(message)");
+        });
+
+        builder.Block(() =>
+        {
+            foreach (var member in members)
+            {
+                var propertyName = CSharpIdentifier.PropertyName(member.Name);
+                var parameterName = CSharpIdentifier.ParameterName(member.Name);
+                builder.Line(
+                    $"{propertyName} = {GetAssignment(model, shape, member, parameterName, shape.Id.Namespace, options)};"
+                );
+            }
+        });
+
+        if (members.Length > 0)
+        {
+            builder.Line();
         }
     }
 
     private static void AppendProperties(
-        StringBuilder builder,
+        CSharpWriter builder,
         SmithyModel model,
         ModelShape shape,
-        CSharpGenerationOptions options
+        CSharpGenerationOptions options,
+        MemberShape? excludedMember = null
     )
     {
-        foreach (var member in shape.Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal))
+        foreach (var member in GetSortedMembers(shape, excludedMember))
         {
             var propertyName = CSharpIdentifier.PropertyName(member.Name);
-            var propertyType = GetMemberType(
-                model,
-                member,
-                shape.Id.Namespace,
-                options.BaseNamespace
-            );
-            builder.AppendLine($"    public {propertyType} {propertyName} {{ get; }}");
+            var propertyType = GetMemberType(model, shape, member, shape.Id.Namespace, options);
+            builder.Line($"public {propertyType} {propertyName} {{ get; }}");
         }
+    }
+
+    private static IEnumerable<MemberShape> GetSortedMembers(
+        ModelShape shape,
+        MemberShape? excludedMember = null
+    )
+    {
+        return shape
+            .Members.Values.Where(member => !ReferenceEquals(member, excludedMember))
+            .OrderBy(member => member.Name, StringComparer.Ordinal);
+    }
+
+    private static MemberShape? GetErrorMessageMember(ModelShape shape)
+    {
+        return
+            shape.Members.TryGetValue("message", out var member)
+            && member.Target.Namespace == SmithyPrelude.Namespace
+            && member.Target.Name == "String"
+            ? member
+            : null;
     }
 
     private static string GetParameter(
         SmithyModel model,
+        ModelShape container,
         MemberShape member,
         string currentNamespace,
-        string? baseNamespace
+        CSharpGenerationOptions options
     )
     {
         var parameterType = GetMemberParameterType(
             model,
+            container,
             member,
             currentNamespace,
-            baseNamespace
+            options
         );
         var parameterName = CSharpIdentifier.ParameterName(member.Name);
-        var defaultValue = IsOptional(member) ? " = null" : string.Empty;
+        var defaultValue =
+            IsNullableMember(container, member, options)
+            || GetEffectiveDefaultValue(container, member, options) is not null
+                ? " = null"
+                : string.Empty;
         return $"{parameterType} {parameterName}{defaultValue}";
     }
 
     private static string GetAssignment(
         SmithyModel model,
+        ModelShape container,
         MemberShape member,
         string parameterName,
         string currentNamespace,
-        string? baseNamespace
+        CSharpGenerationOptions options
     )
     {
-        if (member.DefaultValue is not null)
+        var effectiveDefault = GetEffectiveDefaultValue(container, member, options);
+        if (effectiveDefault is not null)
         {
-            return $"{parameterName} ?? {GetDefaultExpression(model, member.Target, member.DefaultValue.Value, currentNamespace, baseNamespace)}";
+            return $"{parameterName} ?? {GetDefaultExpression(model, member.Target, effectiveDefault.Value, currentNamespace, options.BaseNamespace)}";
         }
 
-        if (!IsOptional(member) && IsReferenceType(model, member.Target))
+        if (!IsNullableMember(container, member, options) && IsReferenceType(model, member.Target))
         {
             return $"{parameterName} ?? throw new ArgumentNullException(nameof({parameterName}))";
         }
@@ -382,39 +560,76 @@ public sealed class CSharpShapeGenerator
 
     private static string GetMemberType(
         SmithyModel model,
+        ModelShape container,
         MemberShape member,
         string currentNamespace,
-        string? baseNamespace
+        CSharpGenerationOptions options
     )
     {
         return GetValueType(
             model,
             member.Target,
-            nullable: IsOptional(member) && member.DefaultValue is null,
+            nullable: IsNullableMember(container, member, options),
             currentNamespace,
-            baseNamespace
+            options.BaseNamespace
         );
     }
 
     private static string GetMemberParameterType(
         SmithyModel model,
+        ModelShape container,
         MemberShape member,
         string currentNamespace,
-        string? baseNamespace
+        CSharpGenerationOptions options
     )
     {
         return GetValueType(
             model,
             member.Target,
-            nullable: IsOptional(member) || member.DefaultValue is not null,
+            nullable: IsNullableMember(container, member, options)
+                || GetEffectiveDefaultValue(container, member, options) is not null,
             currentNamespace,
-            baseNamespace
+            options.BaseNamespace
         );
     }
 
-    private static bool IsOptional(MemberShape member)
+    private static bool IsNullableMember(
+        ModelShape container,
+        MemberShape member,
+        CSharpGenerationOptions options
+    )
     {
-        return !member.IsRequired || member.IsClientOptional;
+        if (options.NullabilityMode == CSharpNullabilityMode.NonAuthoritative)
+        {
+            if (container.Traits.Has(SmithyPrelude.InputTrait) || member.IsClientOptional)
+            {
+                return true;
+            }
+        }
+
+        return !member.IsRequired && GetEffectiveDefaultValue(container, member, options) is null;
+    }
+
+    private static Document? GetEffectiveDefaultValue(
+        ModelShape container,
+        MemberShape member,
+        CSharpGenerationOptions options
+    )
+    {
+        if (member.DefaultValue is not { Kind: not DocumentKind.Null } value)
+        {
+            return null;
+        }
+
+        if (
+            options.NullabilityMode == CSharpNullabilityMode.NonAuthoritative
+            && (container.Traits.Has(SmithyPrelude.InputTrait) || member.IsClientOptional)
+        )
+        {
+            return null;
+        }
+
+        return value;
     }
 
     private static string GetValueType(
@@ -468,7 +683,11 @@ public sealed class CSharpShapeGenerator
         }
 
         return model.GetShape(target).Kind
-            is ShapeKind.Structure or ShapeKind.List or ShapeKind.Set or ShapeKind.Map or ShapeKind.Union;
+            is ShapeKind.Structure
+                or ShapeKind.List
+                or ShapeKind.Set
+                or ShapeKind.Map
+                or ShapeKind.Union;
     }
 
     private static string GetDefaultExpression(
@@ -520,24 +739,21 @@ public sealed class CSharpShapeGenerator
         };
     }
 
-    private static StringBuilder CreateFileBuilder(
-        ModelShape shape,
-        CSharpGenerationOptions options
-    )
+    private static CSharpWriter CreateFileBuilder(ModelShape shape, CSharpGenerationOptions options)
     {
-        var builder = new StringBuilder();
-        builder.AppendLine("// <auto-generated />");
-        builder.AppendLine("#nullable enable");
-        builder.AppendLine();
-        builder.AppendLine("using System;");
-        builder.AppendLine("using System.Collections.Generic;");
-        builder.AppendLine("using System.Linq;");
-        builder.AppendLine("using Smithy.NET.Core;");
-        builder.AppendLine();
-        builder.AppendLine(
+        var builder = new CSharpWriter();
+        builder.Line("// <auto-generated />");
+        builder.Line("#nullable enable");
+        builder.Line();
+        builder.Line("using System;");
+        builder.Line("using System.Collections.Generic;");
+        builder.Line("using System.Linq;");
+        builder.Line("using Smithy.NET.Core;");
+        builder.Line();
+        builder.Line(
             $"namespace {CSharpIdentifier.Namespace(shape.Id.Namespace, options.BaseNamespace)};"
         );
-        builder.AppendLine();
+        builder.Line();
         return builder;
     }
 
@@ -555,7 +771,11 @@ public sealed class CSharpShapeGenerator
         return CSharpIdentifier.TypeName(id.Name);
     }
 
-    private static string GetTypeReference(ShapeId id, string currentNamespace, string? baseNamespace)
+    private static string GetTypeReference(
+        ShapeId id,
+        string currentNamespace,
+        string? baseNamespace
+    )
     {
         var typeName = GetTypeName(id);
         return string.Equals(id.Namespace, currentNamespace, StringComparison.Ordinal)

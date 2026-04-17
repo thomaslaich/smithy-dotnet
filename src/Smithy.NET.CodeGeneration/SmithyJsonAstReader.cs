@@ -201,8 +201,11 @@ public static class SmithyJsonAstReader
                 ReadSyntheticMembers(containerId, containerKind, [new("member", member)]),
             ShapeKind.Map
                 when shape.TryGetProperty("key", out var key)
-                    && shape.TryGetProperty("value", out var value) =>
-                ReadSyntheticMembers(containerId, containerKind, [new("key", key), new("value", value)]),
+                    && shape.TryGetProperty("value", out var value) => ReadSyntheticMembers(
+                containerId,
+                containerKind,
+                [new("key", key), new("value", value)]
+            ),
             _ => new ReadOnlyDictionary<string, MemberShape>(new Dictionary<string, MemberShape>()),
         };
     }

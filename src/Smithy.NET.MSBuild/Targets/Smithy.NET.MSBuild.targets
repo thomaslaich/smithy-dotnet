@@ -1,0 +1,44 @@
+<Project>
+  <PropertyGroup>
+    <SmithyBuildFile Condition="'$(SmithyBuildFile)' == ''">$(MSBuildProjectDirectory)\smithy-build.json</SmithyBuildFile>
+    <SmithyProjection Condition="'$(SmithyProjection)' == ''">source</SmithyProjection>
+    <SmithyGeneratedOutputPath Condition="'$(SmithyGeneratedOutputPath)' == ''">$(IntermediateOutputPath)Smithy\</SmithyGeneratedOutputPath>
+    <SmithyBuildOutputPath Condition="'$(SmithyBuildOutputPath)' == ''">$(IntermediateOutputPath)SmithyBuild\</SmithyBuildOutputPath>
+  </PropertyGroup>
+
+  <UsingTask
+    TaskName="Smithy.NET.MSBuild.GenerateSmithyCode"
+    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\Smithy.NET.MSBuild.dll" />
+
+  <ItemGroup Condition="Exists('$(SmithyGeneratedOutputPath)')">
+    <Compile Include="$(SmithyGeneratedOutputPath)**\*.g.cs" />
+  </ItemGroup>
+
+  <Target
+    Name="GenerateSmithyCode"
+    BeforeTargets="BeforeCompile"
+    Condition="'@(SmithyModel)' != '' Or Exists('$(SmithyBuildFile)')"
+    Inputs="@(SmithyModel);$(SmithyBuildFile)"
+    Outputs="$(SmithyGeneratedOutputPath)Smithy.NET.Generated.stamp">
+    <GenerateSmithyCode
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+      BuildFile="$(SmithyBuildFile)"
+      OutputDirectory="$(SmithyBuildOutputPath)"
+      GeneratedOutputDirectory="$(SmithyGeneratedOutputPath)"
+      Projection="$(SmithyProjection)"
+      SmithyCliPath="$(SmithyCliPath)"
+      BaseNamespace="$(RootNamespace)"
+      SmithyModel="@(SmithyModel)">
+      <Output TaskParameter="GeneratedFiles" ItemName="_SmithyGeneratedCompile" />
+    </GenerateSmithyCode>
+
+    <ItemGroup>
+      <Compile Remove="$(SmithyGeneratedOutputPath)**\*.g.cs" />
+      <Compile Include="@(_SmithyGeneratedCompile)" />
+      <FileWrites Include="@(_SmithyGeneratedCompile)" />
+      <FileWrites Include="$(SmithyGeneratedOutputPath)Smithy.NET.Generated.stamp" />
+    </ItemGroup>
+
+    <Touch Files="$(SmithyGeneratedOutputPath)Smithy.NET.Generated.stamp" AlwaysCreate="true" />
+  </Target>
+</Project>
