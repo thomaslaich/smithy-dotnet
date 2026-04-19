@@ -35,6 +35,8 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
 
     public string? DependencyManifest { get; set; }
 
+    public string? DependencyInputFile { get; set; }
+
     public ITaskItem[] SmithyModel { get; set; } = [];
 
     [Output]
@@ -63,6 +65,9 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
             : null;
         var dependencyManifest = NormalizeOptional(DependencyManifest) is { } dependencyManifestPath
             ? ResolveProjectPath(dependencyManifestPath)
+            : null;
+        var dependencyInputFile = NormalizeOptional(DependencyInputFile) is { } dependencyInputFilePath
+            ? ResolveProjectPath(dependencyInputFilePath)
             : null;
         var buildFile = ResolveBuildFile(outputDirectory);
         var result = await new SmithyCli()
@@ -110,11 +115,31 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
         }
 
         WriteGeneratedFileManifest(generatedPaths, generatedFileManifest);
-        WriteDependencyManifest(result, dependencyManifest);
+        var dependencyInputs = GetDependencyInputs(result, buildFile);
+        WriteDependencyManifest(result, buildFile, dependencyInputs, dependencyManifest);
+        WriteDependencyInputFile(dependencyInputs, dependencyInputFile);
         GeneratedFiles = generatedFiles.ToArray();
     }
 
-    private void WriteDependencyManifest(SmithyBuildResult result, string? dependencyManifest)
+    private string[] GetDependencyInputs(SmithyBuildResult result, string buildFile)
+    {
+        return
+        [
+            .. SmithyModel
+                .Select(item => ResolveProjectPath(item.ItemSpec))
+                .Concat(ReadBuildModelInputs(ResolveProjectPath(buildFile)))
+                .Concat(ReadSmithySourceArtifacts(result.ModelPath))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal),
+        ];
+    }
+
+    private void WriteDependencyManifest(
+        SmithyBuildResult result,
+        string buildFile,
+        string[] dependencyInputs,
+        string? dependencyManifest
+    )
     {
         if (string.IsNullOrWhiteSpace(dependencyManifest))
         {
@@ -123,13 +148,14 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
 
         var manifest = new SmithyDependencyManifest(
             ModelPath: Path.GetFullPath(result.ModelPath),
-            BuildFile: ResolveBuildFilePath(),
+            BuildFile: ResolveProjectPath(buildFile),
             ConfiguredModelInputs:
             [
                 .. SmithyModel
                     .Select(item => ResolveProjectPath(item.ItemSpec))
                     .Order(StringComparer.Ordinal),
             ],
+            DependencyInputs: dependencyInputs,
             SmithySourceArtifacts: ReadSmithySourceArtifacts(result.ModelPath)
         );
 
@@ -143,6 +169,124 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
             dependencyManifest,
             JsonSerializer.Serialize(manifest, IndentedJsonOptions)
         );
+    }
+
+    private static void WriteDependencyInputFile(
+        string[] dependencyInputs,
+        string? dependencyInputFile
+    )
+    {
+        if (string.IsNullOrWhiteSpace(dependencyInputFile))
+        {
+            return;
+        }
+
+        var manifestDirectory = Path.GetDirectoryName(dependencyInputFile);
+        if (!string.IsNullOrWhiteSpace(manifestDirectory))
+        {
+            Directory.CreateDirectory(manifestDirectory);
+        }
+
+        File.WriteAllLines(dependencyInputFile, dependencyInputs);
+    }
+
+    private static string[] ReadBuildModelInputs(string buildFile)
+    {
+        if (!File.Exists(buildFile))
+        {
+            return [];
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(buildFile);
+            using var document = JsonDocument.Parse(
+                stream,
+                new JsonDocumentOptions
+                {
+                    AllowTrailingCommas = true,
+                    CommentHandling = JsonCommentHandling.Skip,
+                }
+            );
+            var buildFileDirectory = Path.GetDirectoryName(Path.GetFullPath(buildFile))
+                ?? Directory.GetCurrentDirectory();
+            return
+            [
+                .. ReadModelPathArray(document.RootElement, "sources", buildFileDirectory)
+                    .Concat(ReadModelPathArray(document.RootElement, "imports", buildFileDirectory))
+                    .Distinct(StringComparer.Ordinal)
+                    .Order(StringComparer.Ordinal),
+            ];
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static IEnumerable<string> ReadModelPathArray(
+        JsonElement root,
+        string propertyName,
+        string buildFileDirectory
+    )
+    {
+        if (
+            !root.TryGetProperty(propertyName, out var property)
+            || property.ValueKind != JsonValueKind.Array
+        )
+        {
+            yield break;
+        }
+
+        foreach (var value in property.EnumerateArray())
+        {
+            if (value.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            var configuredPath = value.GetString();
+            if (string.IsNullOrWhiteSpace(configuredPath))
+            {
+                continue;
+            }
+
+            foreach (var path in ExpandModelInputPath(configuredPath, buildFileDirectory))
+            {
+                yield return path;
+            }
+        }
+    }
+
+    private static IEnumerable<string> ExpandModelInputPath(string path, string buildFileDirectory)
+    {
+        var fullPath = Path.GetFullPath(
+            Path.IsPathRooted(path) ? path : Path.Combine(buildFileDirectory, path)
+        );
+        if (File.Exists(fullPath))
+        {
+            yield return fullPath;
+            yield break;
+        }
+
+        if (!Directory.Exists(fullPath))
+        {
+            yield break;
+        }
+
+        foreach (
+            var file in Directory.EnumerateFiles(fullPath, "*.smithy", SearchOption.AllDirectories)
+        )
+        {
+            yield return Path.GetFullPath(file);
+        }
+
+        foreach (
+            var file in Directory.EnumerateFiles(fullPath, "*.json", SearchOption.AllDirectories)
+        )
+        {
+            yield return Path.GetFullPath(file);
+        }
     }
 
     private static string[] ReadSmithySourceArtifacts(string modelPath)
@@ -306,6 +450,7 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
         string ModelPath,
         string BuildFile,
         string[] ConfiguredModelInputs,
+        string[] DependencyInputs,
         string[] SmithySourceArtifacts
     );
 }

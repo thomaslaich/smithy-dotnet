@@ -6,6 +6,7 @@
     <SmithyBuildOutputPath Condition="'$(SmithyBuildOutputPath)' == ''">$(IntermediateOutputPath)SmithyBuild/</SmithyBuildOutputPath>
     <SmithyGeneratedFileManifest Condition="'$(SmithyGeneratedFileManifest)' == ''">$(SmithyBuildOutputPath)generated-files.json</SmithyGeneratedFileManifest>
     <SmithyDependencyManifest Condition="'$(SmithyDependencyManifest)' == ''">$(SmithyBuildOutputPath)dependencies.json</SmithyDependencyManifest>
+    <SmithyDependencyInputFile Condition="'$(SmithyDependencyInputFile)' == ''">$(SmithyBuildOutputPath)dependency-inputs.txt</SmithyDependencyInputFile>
     <SmithyEmitGeneratedFiles Condition="'$(SmithyEmitGeneratedFiles)' == ''">false</SmithyEmitGeneratedFiles>
   </PropertyGroup>
 
@@ -28,10 +29,19 @@
   </ItemGroup>
 
   <Target
+    Name="_ReadSmithyDependencyInputs"
+    Condition="Exists('$(SmithyDependencyInputFile)')">
+    <ReadLinesFromFile File="$(SmithyDependencyInputFile)">
+      <Output TaskParameter="Lines" ItemName="_SmithyDependencyInput" />
+    </ReadLinesFromFile>
+  </Target>
+
+  <Target
     Name="GenerateSmithyCode"
+    DependsOnTargets="_ReadSmithyDependencyInputs"
     BeforeTargets="CoreCompile"
     Condition="'@(SmithyModel)' != '' Or Exists('$(SmithyBuildFile)')"
-    Inputs="@(SmithyModel);@(_SmithyProjectModelInput);@(_SmithyGeneratorInput)"
+    Inputs="@(SmithyModel);@(_SmithyProjectModelInput);@(_SmithyDependencyInput);@(_SmithyGeneratorInput)"
     Outputs="$(SmithyGeneratedOutputPath)Smithy.NET.Generated.stamp">
     <GenerateSmithyCode
       WorkingDirectory="$(MSBuildProjectDirectory)"
@@ -40,6 +50,7 @@
       GeneratedOutputDirectory="$(SmithyGeneratedOutputPath)"
       GeneratedFileManifest="$(SmithyGeneratedFileManifest)"
       DependencyManifest="$(SmithyDependencyManifest)"
+      DependencyInputFile="$(SmithyDependencyInputFile)"
       Projection="$(SmithyProjection)"
       SmithyCliPath="$(SmithyCliPath)"
       BaseNamespace="$(RootNamespace)"
@@ -54,6 +65,7 @@
       <FileWrites Include="$(SmithyGeneratedOutputPath)Smithy.NET.Generated.stamp" />
       <FileWrites Include="$(SmithyGeneratedFileManifest)" />
       <FileWrites Include="$(SmithyDependencyManifest)" />
+      <FileWrites Include="$(SmithyDependencyInputFile)" />
     </ItemGroup>
 
     <Touch Files="$(SmithyGeneratedOutputPath)Smithy.NET.Generated.stamp" AlwaysCreate="true" />

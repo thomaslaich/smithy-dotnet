@@ -2,7 +2,7 @@
 
 Smithy.NET is an early-stage .NET toolkit for generating C# code and runtime clients from Smithy models.
 
-Current status: C# model-shape generation is implemented for the first model-only slice, and MSBuild integration is in progress. See `docs/planning/roadmap.md` for the implementation roadmap.
+Current status: C# model-shape generation and MSBuild integration are implemented for the first model-only slice. JSON codec and client generation are next on the roadmap. See `docs/planning/roadmap.md` for the implementation roadmap.
 
 ## MSBuild integration
 
@@ -26,6 +26,7 @@ Optional MSBuild properties:
 | `SmithyBuildOutputPath` | `$(IntermediateOutputPath)SmithyBuild/` | Directory for Smithy build output and generated manifests. |
 | `SmithyGeneratedFileManifest` | `$(SmithyBuildOutputPath)generated-files.json` | Manifest used to delete stale generated `.g.cs` files when shapes are renamed or removed. |
 | `SmithyDependencyManifest` | `$(SmithyBuildOutputPath)dependencies.json` | Manifest recording the selected Smithy model output, configured model inputs, and Smithy source artifacts. |
+| `SmithyDependencyInputFile` | `$(SmithyBuildOutputPath)dependency-inputs.txt` | Newline-delimited dependency file read by MSBuild incremental inputs on later builds. |
 | `SmithyEmitGeneratedFiles` | `false` | Marks generated compile items as visible in IDE project views when set to `true`. |
 | `SmithyCliPath` | empty | Explicit Smithy CLI executable path. When omitted, `smithy` is resolved from `PATH`. |
 

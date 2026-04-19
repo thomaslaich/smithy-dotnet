@@ -184,6 +184,7 @@ public sealed class GenerateSmithyCodeTests
         var buildOutputDirectory = Path.Combine(directory.Path, "smithy-build");
         var generatedOutputDirectory = Path.Combine(directory.Path, "generated");
         var dependencyManifest = Path.Combine(buildOutputDirectory, "dependencies.json");
+        var dependencyInputFile = Path.Combine(buildOutputDirectory, "dependency-inputs.txt");
         var modelFile = Path.Combine(directory.Path, "weather.smithy");
 
         File.WriteAllText(
@@ -207,6 +208,7 @@ public sealed class GenerateSmithyCodeTests
             OutputDirectory = buildOutputDirectory,
             GeneratedOutputDirectory = generatedOutputDirectory,
             DependencyManifest = dependencyManifest,
+            DependencyInputFile = dependencyInputFile,
             SmithyModel = [new TaskItem("weather.smithy")],
         };
 
@@ -218,12 +220,89 @@ public sealed class GenerateSmithyCodeTests
             Path.GetFullPath(modelFile),
             root.GetProperty("ConfiguredModelInputs")[0].GetString()
         );
+        Assert.Contains(
+            Path.GetFullPath(modelFile),
+            root.GetProperty("DependencyInputs")
+                .EnumerateArray()
+                .Select(element => element.GetString())
+        );
         Assert.EndsWith(
             Path.Combine("source", "model", "model.json"),
             root.GetProperty("ModelPath").GetString(),
             StringComparison.Ordinal
         );
         Assert.NotEmpty(root.GetProperty("SmithySourceArtifacts").EnumerateArray());
+        Assert.Contains(Path.GetFullPath(modelFile), File.ReadAllLines(dependencyInputFile));
+    }
+
+    [Fact]
+    public void ExecuteTracksBuildFileSourcesAndImportsInDependencyInputs()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var modelDirectory = Path.Combine(directory.Path, "model");
+        var importsDirectory = Path.Combine(directory.Path, "imports");
+        var buildOutputDirectory = Path.Combine(directory.Path, "smithy-build");
+        var generatedOutputDirectory = Path.Combine(directory.Path, "generated");
+        var dependencyInputFile = Path.Combine(buildOutputDirectory, "dependency-inputs.txt");
+        var modelFile = Path.Combine(modelDirectory, "weather.smithy");
+        var importFile = Path.Combine(importsDirectory, "common.smithy");
+        Directory.CreateDirectory(modelDirectory);
+        Directory.CreateDirectory(importsDirectory);
+
+        File.WriteAllText(
+            Path.Combine(directory.Path, "smithy-build.json"),
+            """
+            {
+              "version": "1.0",
+              "sources": ["model"],
+              "imports": ["imports/common.smithy"],
+              "projections": {
+                "source": {}
+              }
+            }
+            """
+        );
+        File.WriteAllText(
+            modelFile,
+            """
+            $version: "2"
+
+            namespace example.weather
+
+            use example.common#Metadata
+
+            structure Forecast {
+                metadata: Metadata
+            }
+            """
+        );
+        File.WriteAllText(
+            importFile,
+            """
+            $version: "2"
+
+            namespace example.common
+
+            structure Metadata {
+                source: String
+            }
+            """
+        );
+
+        var task = new GenerateSmithyCode
+        {
+            WorkingDirectory = directory.Path,
+            BuildFile = "smithy-build.json",
+            OutputDirectory = buildOutputDirectory,
+            GeneratedOutputDirectory = generatedOutputDirectory,
+            DependencyInputFile = dependencyInputFile,
+        };
+
+        Assert.True(task.Execute());
+
+        var dependencyInputs = File.ReadAllLines(dependencyInputFile);
+        Assert.Contains(Path.GetFullPath(modelFile), dependencyInputs);
+        Assert.Contains(Path.GetFullPath(importFile), dependencyInputs);
     }
 
     [Fact]
