@@ -28,6 +28,8 @@ The preview package set is:
 | `SmithyNet.Json` | Reflection-based JSON serializer for generated Smithy shapes. |
 | `SmithyNet.Http` | HTTP transport abstractions and `HttpClient` transport. |
 | `SmithyNet.Client` | Operation invoker, client middleware pipeline, errors, and retry middleware. |
+| `SmithyNet.Server` | Server dispatch primitives for generated service handlers and middleware. |
+| `SmithyNet.Server.AspNetCore` | ASP.NET Core integration package for generated server endpoints. |
 | `SmithyNet.Generators` | Placeholder for future Roslyn/source-generation work. |
 
 ## Quick Start

@@ -16,6 +16,7 @@ The C# generator emits files for:
 - unions
 - Smithy error structures
 - `restJson1` services as typed clients
+- `simpleRestJson` services as typed server handler interfaces
 
 Generated files include Smithy metadata attributes from `SmithyNet.Core`.
 
@@ -65,12 +66,36 @@ serializer metadata is planned but not implemented.
 - HTTP error dispatch through generated error deserializers
 - `SmithyClientOptions`
 
+## Server Runtime
+
+`SmithyNet.Server` provides the first server-side runtime primitives:
+
+- `SmithyServerDispatcher`
+- operation handler registration and dispatch
+- server middleware
+- operation not-found errors
+- generated handler registration extensions
+- generated ASP.NET Core endpoint mapping extensions
+
+The generated ASP.NET Core mapping currently covers the first HTTP skeleton:
+
+- route registration from Smithy `@http`
+- handler resolution through ASP.NET Core dependency injection
+- `@httpLabel`, `@httpQuery`, and `@httpHeader` request binding
+- JSON request body and member binding for simple payloads
+- JSON output serialization, including first-pass `@httpHeader`, `@httpPayload`,
+  and `@httpResponseCode` response bindings
+- modeled error serialization with `@httpError`
+
+Response binding edge cases still need broader protocol tests.
+
 ## Protocols
 
 The implemented protocol slice is `aws.protocols#restJson1` for generated
 clients.
 
-The next protocol target is `alloy#simpleRestJson`. The intended split is:
+The next protocol target is broader `alloy#simpleRestJson` support. The
+intended split is:
 
 - generated clients support both `aws.protocols#restJson1` and
   `alloy#simpleRestJson`

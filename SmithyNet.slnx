@@ -7,6 +7,8 @@
     <Project Path="src/SmithyNet.Http/SmithyNet.Http.csproj" />
     <Project Path="src/SmithyNet.Json/SmithyNet.Json.csproj" />
     <Project Path="src/SmithyNet.MSBuild/SmithyNet.MSBuild.csproj" />
+    <Project Path="src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
+    <Project Path="src/SmithyNet.Server/SmithyNet.Server.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SmithyNet.Tests/SmithyNet.Tests.csproj" />

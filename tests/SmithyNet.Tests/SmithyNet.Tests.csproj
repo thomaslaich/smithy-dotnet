@@ -26,6 +26,8 @@
     <ProjectReference Include="../../src/SmithyNet.Http/SmithyNet.Http.csproj" />
     <ProjectReference Include="../../src/SmithyNet.Json/SmithyNet.Json.csproj" />
     <ProjectReference Include="../../src/SmithyNet.MSBuild/SmithyNet.MSBuild.csproj" />
+    <ProjectReference Include="../../src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
+    <ProjectReference Include="../../src/SmithyNet.Server/SmithyNet.Server.csproj" />
   </ItemGroup>
 
   <ItemGroup>

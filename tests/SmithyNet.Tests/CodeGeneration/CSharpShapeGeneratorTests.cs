@@ -440,6 +440,147 @@ public sealed class CSharpShapeGeneratorTests
     }
 
     [Fact]
+    public async Task GenerateEmitsCompilableServerForSimpleRestJsonService()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var projectDirectory = directory.Path;
+        Directory.CreateDirectory(projectDirectory);
+
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "alloy#simpleRestJson": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "GET",
+                      "uri": "/forecast/{city}"
+                    }
+                  },
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpLabel": {}
+                      }
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        foreach (var generatedFile in new CSharpShapeGenerator().Generate(model))
+        {
+            var path = Path.Combine(projectDirectory, generatedFile.Path);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, generatedFile.Contents);
+        }
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "GeneratedServerCompileTest.csproj"),
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <Nullable>enable</Nullable>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+              </PropertyGroup>
+              <ItemGroup>
+                <FrameworkReference Include="Microsoft.AspNetCore.App" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Json/SmithyNet.Json.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server/SmithyNet.Server.csproj" />
+              </ItemGroup>
+            </Project>
+            """
+        );
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "Consumer.cs"),
+            """
+            using Example.Weather;
+            using Microsoft.AspNetCore.Routing;
+            using SmithyNet.Server;
+
+            namespace GeneratedServerCompileTest;
+
+            public static class Consumer
+            {
+                public static Task<SmithyServerResponse> DispatchAsync(CancellationToken cancellationToken)
+                {
+                    var dispatcher = new SmithyServerDispatcher()
+                        .RegisterWeatherService(new Handler());
+                    return dispatcher.DispatchAsync(
+                        new SmithyServerRequest(
+                            "Weather",
+                            "GetForecast",
+                            new GetForecastInput("Zurich")),
+                        cancellationToken);
+                }
+
+                public static IEndpointRouteBuilder Map(IEndpointRouteBuilder endpoints)
+                {
+                    return endpoints.MapWeatherService();
+                }
+
+                private sealed class Handler : IWeatherServiceHandler
+                {
+                    public Task<GetForecastOutput> GetForecastAsync(
+                        GetForecastInput input,
+                        CancellationToken cancellationToken = default)
+                    {
+                        return Task.FromResult(new GetForecastOutput(input.City));
+                    }
+                }
+            }
+            """
+        );
+
+        var result = await RunDotNetBuild(projectDirectory);
+
+        Assert.True(
+            result.ExitCode == 0,
+            $"dotnet build failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}{Environment.NewLine}{result.Error}"
+        );
+    }
+
+    [Fact]
     public void GenerateClientBindsRestJsonHttpResponseMembersAndErrors()
     {
         var model = SmithyJsonAstReader.Read(
@@ -628,6 +769,145 @@ public sealed class CSharpShapeGeneratorTests
         Assert.Contains("""AppendQuery(requestUriBuilder, "units", input.Units);""", client);
         Assert.Contains("""AddHeader(request.Headers, "x-request-id", input.RequestId);""", client);
         Assert.Contains("request.Content = SmithyJsonSerializer.Serialize(input.Details);", client);
+    }
+
+    [Fact]
+    public void GenerateServerEmitsHandlerInterfaceForSimpleRestJsonService()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "alloy#simpleRestJson": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast",
+                    "example.weather#Ping"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "GET",
+                      "uri": "/forecast/{city}"
+                    }
+                  },
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  }
+                },
+                "example.weather#Ping": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "GET",
+                      "uri": "/ping"
+                    }
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpLabel": {}
+                      }
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var files = new CSharpShapeGenerator()
+            .Generate(model)
+            .ToDictionary(file => file.Path, file => file.Contents);
+
+        Assert.Contains("Example/Weather/WeatherServer.g.cs", files.Keys);
+        var server = files["Example/Weather/WeatherServer.g.cs"];
+        Assert.Contains("public interface IWeatherServiceHandler", server);
+        Assert.Contains(
+            "Task<GetForecastOutput> GetForecastAsync(GetForecastInput input, CancellationToken cancellationToken = default);",
+            server
+        );
+        Assert.Contains("Task PingAsync(CancellationToken cancellationToken = default);", server);
+        Assert.Contains(
+            "public static SmithyServerDispatcher RegisterWeatherService(this SmithyServerDispatcher dispatcher, IWeatherServiceHandler handler)",
+            server
+        );
+        Assert.Contains(
+            """dispatcher.Register("Weather", "GetForecast", async (request, cancellationToken) =>""",
+            server
+        );
+        Assert.Contains(
+            "public static IEndpointRouteBuilder MapWeatherService(this IEndpointRouteBuilder endpoints)",
+            server
+        );
+        Assert.Contains(
+            """endpoints.MapMethods("/forecast/{city}", ["GET"], async (HttpContext httpContext, IWeatherServiceHandler handler, CancellationToken cancellationToken) =>""",
+            server
+        );
+    }
+
+    [Fact]
+    public void GenerateServerDoesNotEmitHandlerInterfaceForRestJson1Service()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "aws.protocols#restJson1": {}
+                  },
+                  "operations": [
+                    "example.weather#Ping"
+                  ]
+                },
+                "example.weather#Ping": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "GET",
+                      "uri": "/ping"
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var files = new CSharpShapeGenerator().Generate(model);
+
+        Assert.DoesNotContain(
+            files,
+            file => file.Path.EndsWith("Server.g.cs", StringComparison.Ordinal)
+        );
     }
 
     [Fact]

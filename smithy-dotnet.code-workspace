@@ -20,13 +20,7 @@
   "settings": {
     "dotnet.defaultSolution": "SmithyNet.slnx",
     "files.exclude": {
-      "**/.devenv": true,
-      "**/.direnv": true,
-      "**/.gradle": true,
-      "**/artifacts": true,
-      "**/bin": true,
-      "**/obj": true,
-      "**/target": true
+      "examples": true,
     },
     "files.watcherExclude": {
       "**/.devenv/**": true,

@@ -29,6 +29,10 @@ public sealed partial class CSharpShapeGenerator
                 .Shapes.Values.Where(shape => ShouldGenerateClient(shape, options))
                 .OrderBy(shape => shape.Id.ToString(), StringComparer.Ordinal)
                 .Select(shape => GenerateClient(model, shape, options)),
+            .. model
+                .Shapes.Values.Where(shape => ShouldGenerateServer(shape, options))
+                .OrderBy(shape => shape.Id.ToString(), StringComparer.Ordinal)
+                .Select(shape => GenerateServer(model, shape, options)),
         ];
     }
 
@@ -50,6 +54,13 @@ public sealed partial class CSharpShapeGenerator
         return ShouldGenerateNamespace(shape, options)
             && shape.Kind == ShapeKind.Service
             && shape.Traits.Has(SmithyPrelude.RestJson1Trait);
+    }
+
+    private static bool ShouldGenerateServer(ModelShape shape, CSharpGenerationOptions options)
+    {
+        return ShouldGenerateNamespace(shape, options)
+            && shape.Kind == ShapeKind.Service
+            && shape.Traits.Has(SmithyPrelude.SimpleRestJsonTrait);
     }
 
     private static bool ShouldGenerateNamespace(ModelShape shape, CSharpGenerationOptions options)
@@ -385,6 +396,15 @@ public sealed partial class CSharpShapeGenerator
             shape.Id.Namespace.Split('.').Select(CSharpIdentifier.FileSegment)
         );
         return $"{namespacePath}/{GetTypeName(shape.Id)}Client.g.cs";
+    }
+
+    private static string GetServerPath(ModelShape shape)
+    {
+        var namespacePath = string.Join(
+            '/',
+            shape.Id.Namespace.Split('.').Select(CSharpIdentifier.FileSegment)
+        );
+        return $"{namespacePath}/{GetTypeName(shape.Id)}Server.g.cs";
     }
 
     private static string GetTypeName(ShapeId id)
