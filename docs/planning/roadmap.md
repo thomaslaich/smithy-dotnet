@@ -1,6 +1,6 @@
 # Plan: Build Smithy.NET
 
-Smithy.NET will be a .NET code generation and runtime toolkit for Smithy models. The first release should focus on a narrow, working vertical slice: validated Smithy model input, generated C# types, one JSON codec path, and one generated client path. Server runtime, AWS-specific protocols, and F# ergonomics should follow after the core generator is proven.
+Smithy.NET will be a .NET code generation and runtime toolkit for Smithy models. The first release should focus on a narrow, working vertical slice: validated Smithy model input, generated C# types, one JSON codec path, and one generated client path. Server runtime and F# ergonomics should follow after the core generator is proven.
 
 The architecture remains hybrid:
 
@@ -30,6 +30,11 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
 4. Treat protocol compliance as product scope, not polish:
    - Add Smithy protocol compliance tests as soon as the first protocol is implemented.
    - Do not declare protocol support until request/response/error edge cases are covered.
+
+5. Keep protocol support useful but opinionated:
+   - Generated clients should support both `aws.protocols#restJson1` and `alloy#simpleRestJson`.
+   - Generated servers should target `alloy#simpleRestJson` first.
+   - Do not prioritize `restJson1` server generation until there is concrete demand.
 
 ---
 
@@ -148,7 +153,7 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
    - `System.Formats.Cbor` requires explicit reader/writer logic.
    - Add CBOR later with protocol compliance tests.
 
-### Phase 5: First Client Protocol (Weeks 16-20)
+### Phase 5: First Client Protocols (Weeks 16-20)
 
 1. Create `SmithyNet.Http`:
    - `HttpClient` based transport.
@@ -161,21 +166,27 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
    - Error deserialization.
    - Retry hooks, but keep the first retry implementation minimal.
 
-3. Implement `restJson1` as the first protocol:
+3. Implement `restJson1` as the first client protocol:
    - Cover the HTTP/JSON request, response, and error paths needed for a generated client.
+   - Keep AWS-compatible client generation available for services that use `aws.protocols#restJson1`.
    - Keep Smithy RPC v2 CBOR as a later protocol once the HTTP/JSON path is proven.
 
-4. Generate service clients:
+4. Implement `alloy#simpleRestJson` as the second client protocol:
+   - Reuse the HTTP binding machinery from `restJson1` where the wire behavior is shared.
+   - Keep protocol-specific behavior isolated so client and server generation can share binding logic.
+
+5. Generate service clients:
    - service interface
    - concrete client
    - operation request/response types
    - error dispatch
    - endpoint/base URI configuration
 
-5. Add protocol compliance tests for `restJson1`:
+6. Add protocol compliance tests for generated clients:
    - request serialization
    - response deserialization
    - error deserialization and dispatch
+   - cover both `restJson1` and `simpleRestJson` as support is added
 
 ### Phase 6: Packaging and First Preview (Weeks 21-22)
 
@@ -204,7 +215,7 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
 
 1. Create `SmithyNet.Server`:
    - operation dispatcher
-   - protocol-aware request routing
+   - protocol-aware request routing for `alloy#simpleRestJson`
    - validation hooks
    - error serialization
 
@@ -218,12 +229,13 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
    - operation handler methods
    - request/response binding glue
    - error dispatch and serialization
+   - target `alloy#simpleRestJson` before any AWS-flavored server protocol
 
 4. Add an end-to-end example:
    - Smithy model library
    - generated ASP.NET Core server
    - generated client
-   - one JSON/HTTP round trip using the selected protocol
+   - one `alloy#simpleRestJson` HTTP/JSON round trip
 
 ### Phase 8: Additional Codecs and Protocols (Post-MVP)
 
@@ -239,7 +251,6 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
 
 3. Add protocol packages:
    - `SmithyNet.Protocols.RpcV2Cbor`
-   - `SmithyNet.Protocols.SimpleRestJson` for `alloy#simpleRestJson`
    - `SmithyNet.Protocols.AwsJson`
    - `SmithyNet.Protocols.RestJson`
    - `SmithyNet.Protocols.RestXml`
@@ -324,6 +335,7 @@ SmithyNet.Client                  - generated client runtime
 SmithyNet.Server                  - server dispatcher runtime
 SmithyNet.Server.AspNetCore       - ASP.NET Core integration
 SmithyNet.Protocols.RpcV2Cbor     - Smithy RPC v2 CBOR protocol
+SmithyNet.Protocols.SimpleRestJson - Alloy simpleRestJson protocol
 SmithyNet.Protocols.AwsJson       - AWS JSON 1.0/1.1 protocols
 SmithyNet.Protocols.RestJson      - AWS restJson1 protocol
 SmithyNet.Protocols.RestXml       - AWS restXml protocol
@@ -376,12 +388,13 @@ SmithyNet.FSharp                  - F# idiomatic wrappers
    - Use it for Roslyn-native work.
    - Keep model parsing and main type generation in MSBuild/codegen so external files, projections, and multiple generated files are handled predictably.
 
-4. First protocol:
-   - Use `restJson1` for the MVP HTTP/JSON target.
-   - Smithy RPC v2 CBOR is a strong second target once the first client/server path is stable.
+4. First protocols:
+   - Keep `aws.protocols#restJson1` as an AWS-compatible generated client target.
+   - Add `alloy#simpleRestJson` as the general-purpose HTTP/JSON target for generated clients and servers.
+   - Smithy RPC v2 CBOR is a strong later target once the HTTP/JSON client/server path is stable.
 
-5. Server before more protocols:
-   - After the first generated client protocol works, prioritize a generated server path and end-to-end example before expanding codec and protocol coverage.
+5. Server before more AWS protocol coverage:
+   - After the first generated client protocols work, prioritize a `simpleRestJson` generated server path and end-to-end example before expanding AWS-flavored protocol coverage.
    - This proves the core architecture with a full Smithy model to client/server round trip.
 
 6. F# support:
@@ -394,7 +407,7 @@ SmithyNet.FSharp                  - F# idiomatic wrappers
 
 1. Should the first public preview target `net10.0` only, or `net8.0;net10.0`?
 
-2. How much `restJson1` protocol compliance is required before the first preview?
+2. How much HTTP/JSON protocol compliance is required before declaring `simpleRestJson` server support?
 
 3. Should generated structure types prefer records everywhere, or sealed classes where constructor/default/nullability semantics are easier to control?
 

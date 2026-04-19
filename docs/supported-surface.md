@@ -70,6 +70,13 @@ serializer metadata is planned but not implemented.
 The implemented protocol slice is `aws.protocols#restJson1` for generated
 clients.
 
+The next protocol target is `alloy#simpleRestJson`. The intended split is:
+
+- generated clients support both `aws.protocols#restJson1` and
+  `alloy#simpleRestJson`
+- generated servers target `alloy#simpleRestJson` first
+- `restJson1` server generation is not planned for the initial server runtime
+
 Current generated request bindings include:
 
 - `@http`
