@@ -132,7 +132,10 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
         return NormalizeOptional(generatedNamespaces) is not { } value
             ? []
             : value
-                .Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Split(
+                    [';', ','],
+                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+                )
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
     }

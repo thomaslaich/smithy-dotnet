@@ -26,11 +26,10 @@ public sealed class CSharpShapeGeneratorTests
             """
         );
 
-        var generatedFiles = new CSharpShapeGenerator()
-            .Generate(
-                model,
-                new CSharpGenerationOptions(GeneratedNamespaces: ["example.weather"])
-            );
+        var generatedFiles = new CSharpShapeGenerator().Generate(
+            model,
+            new CSharpGenerationOptions(GeneratedNamespaces: ["example.weather"])
+        );
 
         var generatedFile = Assert.Single(generatedFiles);
         Assert.Equal("Example/Weather/Forecast.g.cs", generatedFile.Path);

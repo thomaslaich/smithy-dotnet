@@ -35,27 +35,25 @@ public sealed class CSharpShapeGenerator
     {
         return ShouldGenerateNamespace(shape, options)
             && shape.Kind
-            is ShapeKind.Structure
-                or ShapeKind.List
-                or ShapeKind.Set
-                or ShapeKind.Map
-                or ShapeKind.Enum
-                or ShapeKind.IntEnum
-                or ShapeKind.Union;
+                is ShapeKind.Structure
+                    or ShapeKind.List
+                    or ShapeKind.Set
+                    or ShapeKind.Map
+                    or ShapeKind.Enum
+                    or ShapeKind.IntEnum
+                    or ShapeKind.Union;
     }
 
     private static bool ShouldGenerateClient(ModelShape shape, CSharpGenerationOptions options)
     {
-        return
-            ShouldGenerateNamespace(shape, options)
+        return ShouldGenerateNamespace(shape, options)
             && shape.Kind == ShapeKind.Service
             && shape.Traits.Has(SmithyPrelude.RestJson1Trait);
     }
 
     private static bool ShouldGenerateNamespace(ModelShape shape, CSharpGenerationOptions options)
     {
-        return
-            options.GeneratedNamespaces is not { Count: > 0 } generatedNamespaces
+        return options.GeneratedNamespaces is not { Count: > 0 } generatedNamespaces
             || generatedNamespaces.Contains(shape.Id.Namespace, StringComparer.Ordinal);
     }
 
