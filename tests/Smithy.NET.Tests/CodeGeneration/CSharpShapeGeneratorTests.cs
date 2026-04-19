@@ -263,6 +263,20 @@ public sealed class CSharpShapeGeneratorTests
                 "example.weather#GetForecastOutput": {
                   "type": "structure",
                   "members": {
+                    "requestId": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpHeader": "x-request-id"
+                      }
+                    },
+                    "status": {
+                      "target": "smithy.api#Integer",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpResponseCode": {}
+                      }
+                    },
                     "summary": {
                       "target": "smithy.api#String",
                       "traits": {
@@ -274,7 +288,8 @@ public sealed class CSharpShapeGeneratorTests
                 "example.weather#BadRequest": {
                   "type": "structure",
                   "traits": {
-                    "smithy.api#error": "client"
+                    "smithy.api#error": "client",
+                    "smithy.api#httpError": 400
                   },
                   "members": {
                     "message": {
@@ -323,6 +338,7 @@ public sealed class CSharpShapeGeneratorTests
             using System.Net;
             using System.Text;
             using Example.Weather;
+            using Smithy.NET.Client;
 
             namespace GeneratedClientCompileTest;
 
@@ -330,10 +346,12 @@ public sealed class CSharpShapeGeneratorTests
             {
                 public static async Task<string> ReadAsync(CancellationToken cancellationToken)
                 {
-                    IWeatherClient client = new WeatherClient(new HttpClient(new Handler())
-                    {
-                        BaseAddress = new Uri("https://example.test")
-                    });
+                    IWeatherClient client = new WeatherClient(
+                        new HttpClient(new Handler()),
+                        new SmithyClientOptions
+                        {
+                            Endpoint = new Uri("https://example.test/api")
+                        });
                     var output = await client.GetForecastAsync(
                         new GetForecastInput(
                             "Zurich",
@@ -350,7 +368,7 @@ public sealed class CSharpShapeGeneratorTests
                         HttpRequestMessage request,
                         CancellationToken cancellationToken)
                     {
-                        if (request.Method != HttpMethod.Post || request.RequestUri?.PathAndQuery != "/forecast/Zurich?units=metric")
+                        if (request.Method != HttpMethod.Post || request.RequestUri?.PathAndQuery != "/api/forecast/Zurich?units=metric")
                         {
                             throw new InvalidOperationException("Unexpected request.");
                         }
@@ -366,8 +384,20 @@ public sealed class CSharpShapeGeneratorTests
                                 "{\"summary\":\"clear\"}",
                                 Encoding.UTF8,
                                 "application/json")
-                        });
+                        }.WithHeader("x-request-id", "response-1"));
                     }
+                }
+            }
+
+            internal static class ResponseExtensions
+            {
+                public static HttpResponseMessage WithHeader(
+                    this HttpResponseMessage response,
+                    string name,
+                    string value)
+                {
+                    response.Headers.Add(name, value);
+                    return response;
                 }
             }
             """
@@ -379,6 +409,102 @@ public sealed class CSharpShapeGeneratorTests
             result.ExitCode == 0,
             $"dotnet build failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}{Environment.NewLine}{result.Error}"
         );
+    }
+
+    [Fact]
+    public void GenerateClientBindsRestJsonHttpResponseMembersAndErrors()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "aws.protocols#restJson1": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "GET",
+                      "uri": "/forecast"
+                    }
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  },
+                  "errors": [
+                    "example.weather#BadRequest"
+                  ]
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "requestId": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpHeader": "x-request-id"
+                      }
+                    },
+                    "status": {
+                      "target": "smithy.api#Integer",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpResponseCode": {}
+                      }
+                    },
+                    "summary": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                },
+                "example.weather#BadRequest": {
+                  "type": "structure",
+                  "traits": {
+                    "smithy.api#error": "client",
+                    "smithy.api#httpError": 400
+                  },
+                  "members": {
+                    "message": {
+                      "target": "smithy.api#String"
+                    },
+                    "requestId": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#httpHeader": "x-request-id"
+                      }
+                    },
+                    "reason": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var client = new CSharpShapeGenerator()
+            .Generate(model)
+            .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
+            .Contents;
+
+        Assert.Contains("""GetHeader<string>(response.Headers, "x-request-id")""", client);
+        Assert.Contains("(int)response.StatusCode", client);
+        Assert.Contains("""DeserializeBodyMember<string>(response.Content, "summary")""", client);
+        Assert.Contains("if ((int)response.StatusCode == 400)", client);
+        Assert.Contains("""GetHeader<string?>(response.Headers, "x-request-id")""", client);
+        Assert.Contains("""DeserializeBodyMember<string?>(response.Content, "reason")""", client);
     }
 
     [Fact]
@@ -469,10 +595,7 @@ public sealed class CSharpShapeGeneratorTests
         );
         Assert.Contains("""AppendQuery(requestUriBuilder, "units", input.Units);""", client);
         Assert.Contains("""AddHeader(request.Headers, "x-request-id", input.RequestId);""", client);
-        Assert.Contains(
-            "request.Content = SmithyJsonSerializer.Serialize(input.Details);",
-            client
-        );
+        Assert.Contains("request.Content = SmithyJsonSerializer.Serialize(input.Details);", client);
     }
 
     [Fact]

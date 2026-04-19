@@ -2,19 +2,14 @@ using Smithy.NET.Http;
 
 namespace Smithy.NET.Client;
 
-public sealed class SmithyOperationInvoker
+public sealed class SmithyOperationInvoker(
+    IHttpTransport transport,
+    IEnumerable<ISmithyClientMiddleware>? middleware = null
+)
 {
-    private readonly IHttpTransport transport;
-    private readonly IReadOnlyList<ISmithyClientMiddleware> middleware;
-
-    public SmithyOperationInvoker(
-        IHttpTransport transport,
-        IEnumerable<ISmithyClientMiddleware>? middleware = null
-    )
-    {
-        this.transport = transport ?? throw new ArgumentNullException(nameof(transport));
-        this.middleware = [.. middleware ?? []];
-    }
+    private readonly IHttpTransport transport =
+        transport ?? throw new ArgumentNullException(nameof(transport));
+    private readonly IReadOnlyList<ISmithyClientMiddleware> middleware = [.. middleware ?? []];
 
     public async Task<SmithyHttpResponse> InvokeAsync(
         string serviceName,

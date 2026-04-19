@@ -86,6 +86,40 @@ public sealed class SmithyOperationInvokerTests
         Assert.Equal(HttpStatusCode.InternalServerError, error.StatusCode);
     }
 
+    [Fact]
+    public async Task InvokeAsyncCanRetryTransientResponsesWithMiddleware()
+    {
+        var transport = new SequenceTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.InternalServerError,
+                "Internal Server Error",
+                string.Empty,
+                EmptyHeaders,
+                EmptyHeaders
+            ),
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                """{"ok":true}""",
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var invoker = new SmithyOperationInvoker(
+            transport,
+            [new SmithyRetryMiddleware(maxAttempts: 2)]
+        );
+
+        var response = await invoker.InvokeAsync(
+            "Weather",
+            "GetForecast",
+            new SmithyHttpRequest(HttpMethod.Get, "/forecast")
+        );
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(2, transport.Attempts);
+    }
+
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> EmptyHeaders { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
@@ -116,6 +150,21 @@ public sealed class SmithyOperationInvokerTests
         {
             Request = request;
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class SequenceTransport(params SmithyHttpResponse[] responses) : IHttpTransport
+    {
+        public int Attempts { get; private set; }
+
+        public Task<SmithyHttpResponse> SendAsync(
+            SmithyHttpRequest request,
+            CancellationToken cancellationToken = default
+        )
+        {
+            var index = Math.Min(Attempts, responses.Length - 1);
+            Attempts++;
+            return Task.FromResult(responses[index]);
         }
     }
 }

@@ -30,6 +30,10 @@ public static class SmithyPrelude
 
     public static ShapeId HttpQueryTrait { get; } = new(Namespace, "httpQuery");
 
+    public static ShapeId HttpErrorTrait { get; } = new(Namespace, "httpError");
+
+    public static ShapeId HttpResponseCodeTrait { get; } = new(Namespace, "httpResponseCode");
+
     public static ShapeId RestJson1Trait { get; } = new(AwsProtocolsNamespace, "restJson1");
 
     public static ShapeId EnumValueTrait { get; } = new(Namespace, "enumValue");

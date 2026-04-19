@@ -5,10 +5,17 @@ namespace Smithy.NET.Http;
 public sealed class HttpClientTransport : IHttpTransport
 {
     private readonly HttpClient httpClient;
+    private readonly Uri? endpoint;
 
-    public HttpClientTransport(HttpClient httpClient)
+    public HttpClientTransport(HttpClient httpClient, Uri? endpoint = null)
     {
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        if (endpoint is not null && !endpoint.IsAbsoluteUri)
+        {
+            throw new ArgumentException("Endpoint must be an absolute URI.", nameof(endpoint));
+        }
+
+        this.endpoint = endpoint;
     }
 
     public Task<SmithyHttpResponse> SendAsync(
@@ -25,7 +32,10 @@ public sealed class HttpClientTransport : IHttpTransport
         CancellationToken cancellationToken
     )
     {
-        using var message = new HttpRequestMessage(request.Method, request.RequestUri);
+        using var message = new HttpRequestMessage(
+            request.Method,
+            ResolveRequestUri(request.RequestUri)
+        );
         foreach (var header in request.Headers)
         {
             message.Headers.TryAddWithoutValidation(header.Key, header.Value);
@@ -59,6 +69,25 @@ public sealed class HttpClientTransport : IHttpTransport
                 ? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
                 : ToHeaderDictionary(response.Content.Headers)
         );
+    }
+
+    private string ResolveRequestUri(string requestUri)
+    {
+        if (endpoint is null || IsHttpAbsoluteUri(requestUri))
+        {
+            return requestUri;
+        }
+
+        var endpointText = endpoint.ToString().TrimEnd('/');
+        var requestText = requestUri.TrimStart('/');
+        return $"{endpointText}/{requestText}";
+    }
+
+    private static bool IsHttpAbsoluteUri(string requestUri)
+    {
+        return Uri.TryCreate(requestUri, UriKind.Absolute, out var uri)
+            && uri.IsAbsoluteUri
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
     private static Dictionary<string, IReadOnlyList<string>> ToHeaderDictionary(
