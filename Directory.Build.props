@@ -13,8 +13,8 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageProjectUrl>https://github.com/thomaslaich/Smithy.NET</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/thomaslaich/Smithy.NET</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/thomaslaich/smithy-dotnet</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/thomaslaich/smithy-dotnet</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 

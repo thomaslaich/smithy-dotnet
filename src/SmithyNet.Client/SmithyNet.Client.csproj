@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../SmithyNet.Core/SmithyNet.Core.csproj" />
+    <ProjectReference Include="../SmithyNet.Http/SmithyNet.Http.csproj" />
+    <ProjectReference Include="../SmithyNet.Json/SmithyNet.Json.csproj" />
+  </ItemGroup>
+</Project>

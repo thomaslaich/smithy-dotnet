@@ -1,6 +1,6 @@
 # MSBuild Reference
 
-`Smithy.NET.MSBuild` runs before C# compilation when a project has either
+`SmithyNet.MSBuild` runs before C# compilation when a project has either
 `@(SmithyModel)` items or a `smithy-build.json` at the project root.
 
 The task:

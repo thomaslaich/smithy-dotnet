@@ -21,32 +21,32 @@ The preview package set is:
 
 | Package | Purpose |
 | --- | --- |
-| `Smithy.NET.Core` | Shared runtime primitives, generated-code attributes, Smithy IDs, and document values. |
-| `Smithy.NET.CodeGeneration` | Smithy JSON AST reader and C# generator. |
-| `Smithy.NET.MSBuild` | MSBuild integration that invokes Smithy build and adds generated C# to compilation. |
-| `Smithy.NET.Json` | Reflection-based JSON serializer for generated Smithy shapes. |
-| `Smithy.NET.Http` | HTTP transport abstractions and `HttpClient` transport. |
-| `Smithy.NET.Client` | Operation invoker, client middleware pipeline, errors, and retry middleware. |
-| `Smithy.NET.Generators` | Placeholder for future Roslyn/source-generation work. |
+| `SmithyNet.Core` | Shared runtime primitives, generated-code attributes, Smithy IDs, and document values. |
+| `SmithyNet.CodeGeneration` | Smithy JSON AST reader and C# generator. |
+| `SmithyNet.MSBuild` | MSBuild integration that invokes Smithy build and adds generated C# to compilation. |
+| `SmithyNet.Json` | Reflection-based JSON serializer for generated Smithy shapes. |
+| `SmithyNet.Http` | HTTP transport abstractions and `HttpClient` transport. |
+| `SmithyNet.Client` | Operation invoker, client middleware pipeline, errors, and retry middleware. |
+| `SmithyNet.Generators` | Placeholder for future Roslyn/source-generation work. |
 
 ## Quick Start
 
 Create local packages:
 
 ```bash
-dotnet pack Smithy.NET.slnx --configuration Release --output artifacts/packages
+dotnet pack SmithyNet.slnx --configuration Release --output artifacts/packages
 ```
 
 Create a consumer project that references the local package source and add
-`Smithy.NET.MSBuild` plus the runtime packages needed by generated clients:
+`SmithyNet.MSBuild` plus the runtime packages needed by generated clients:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Smithy.NET.Client" Version="1.0.0" />
-  <PackageReference Include="Smithy.NET.Core" Version="1.0.0" />
-  <PackageReference Include="Smithy.NET.Http" Version="1.0.0" />
-  <PackageReference Include="Smithy.NET.Json" Version="1.0.0" />
-  <PackageReference Include="Smithy.NET.MSBuild" Version="1.0.0" PrivateAssets="all" />
+  <PackageReference Include="SmithyNet.Client" Version="1.0.0" />
+  <PackageReference Include="SmithyNet.Core" Version="1.0.0" />
+  <PackageReference Include="SmithyNet.Http" Version="1.0.0" />
+  <PackageReference Include="SmithyNet.Json" Version="1.0.0" />
+  <PackageReference Include="SmithyNet.MSBuild" Version="1.0.0" PrivateAssets="all" />
 </ItemGroup>
 ```
 

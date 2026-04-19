@@ -8,7 +8,7 @@ are not assumed.
 From the repository root:
 
 ```bash
-dotnet pack Smithy.NET.slnx --configuration Release --output artifacts/packages
+dotnet pack SmithyNet.slnx --configuration Release --output artifacts/packages
 ```
 
 The generated packages are written to `artifacts/packages`.
@@ -34,11 +34,11 @@ Reference the packages needed by generated `restJson1` clients:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Smithy.NET.Client" Version="1.0.0" />
-  <PackageReference Include="Smithy.NET.Core" Version="1.0.0" />
-  <PackageReference Include="Smithy.NET.Http" Version="1.0.0" />
-  <PackageReference Include="Smithy.NET.Json" Version="1.0.0" />
-  <PackageReference Include="Smithy.NET.MSBuild" Version="1.0.0" PrivateAssets="all" />
+  <PackageReference Include="SmithyNet.Client" Version="1.0.0" />
+  <PackageReference Include="SmithyNet.Core" Version="1.0.0" />
+  <PackageReference Include="SmithyNet.Http" Version="1.0.0" />
+  <PackageReference Include="SmithyNet.Json" Version="1.0.0" />
+  <PackageReference Include="SmithyNet.MSBuild" Version="1.0.0" PrivateAssets="all" />
 </ItemGroup>
 ```
 
@@ -111,7 +111,7 @@ Generated service clients are named after the Smithy service:
 
 ```csharp
 using Example.Hello;
-using Smithy.NET.Client;
+using SmithyNet.Client;
 
 var client = new HelloServiceClient(
     new HttpClient(),

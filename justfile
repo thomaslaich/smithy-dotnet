@@ -4,7 +4,7 @@ default:
     just --list
 
 restore:
-    dotnet restore Smithy.NET.slnx
+    dotnet restore SmithyNet.slnx
 
 fmt:
     treefmt
@@ -13,12 +13,12 @@ check-format:
     treefmt --ci
 
 build:
-    dotnet build Smithy.NET.slnx --configuration Release --no-restore --disable-build-servers
+    dotnet build SmithyNet.slnx --configuration Release --no-restore --disable-build-servers
 
 test:
-    dotnet test Smithy.NET.slnx --configuration Release --no-build --disable-build-servers --verbosity minimal
+    dotnet test SmithyNet.slnx --configuration Release --no-build --disable-build-servers --verbosity minimal
 
 pack:
-    dotnet pack Smithy.NET.slnx --configuration Release --no-build --output artifacts/packages --verbosity minimal
+    dotnet pack SmithyNet.slnx --configuration Release --no-build --output artifacts/packages --verbosity minimal
 
 ci: restore check-format build test pack

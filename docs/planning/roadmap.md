@@ -38,13 +38,13 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
 ### Phase 0: Repository and Engineering Baseline (Week 1)
 
 1. Create solution and project layout:
-   - `src/Smithy.NET.Core`
-   - `src/Smithy.NET.CodeGeneration`
-   - `src/Smithy.NET.MSBuild`
-   - `src/Smithy.NET.Generators`
-   - `src/Smithy.NET.Json`
-   - `src/Smithy.NET.Http`
-   - `src/Smithy.NET.Client`
+   - `src/SmithyNet.Core`
+   - `src/SmithyNet.CodeGeneration`
+   - `src/SmithyNet.MSBuild`
+   - `src/SmithyNet.Generators`
+   - `src/SmithyNet.Json`
+   - `src/SmithyNet.Http`
+   - `src/SmithyNet.Client`
    - `tests/*`
 
 2. Add baseline engineering:
@@ -55,19 +55,20 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
    - CI for build, test, formatting, and package validation.
 
 3. Decide public naming:
-   - NuGet IDs can use `Smithy.NET.*`.
-   - Consider namespaces like `SmithyNet.*` if `Smithy.NET.*` feels awkward in C# source.
+   - Product name: Smithy.NET.
+   - Repository name: `smithy-dotnet`.
+   - NuGet IDs and C# namespaces: `SmithyNet.*`.
 
 ### Phase 1: Smithy Model Input and IR (Weeks 2-4)
 
-1. Create `Smithy.NET.Core`:
+1. Create `SmithyNet.Core`:
    - `ShapeId`
    - shape/type metadata used by generated code
    - trait metadata needed at runtime
    - protocol/codec abstractions
    - `Document` value type for Smithy `document`
 
-2. Create `Smithy.NET.CodeGeneration`:
+2. Create `SmithyNet.CodeGeneration`:
    - Read Smithy JSON AST/build output.
    - Convert it into a small internal representation (IR) for generation.
    - Preserve enough metadata for nullability, defaults, traits, service closure, errors, and protocols.
@@ -108,7 +109,7 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
 
 ### Phase 3: MSBuild Integration (Weeks 9-11)
 
-1. Create `Smithy.NET.MSBuild` NuGet package:
+1. Create `SmithyNet.MSBuild` NuGet package:
    - Add `build`/`buildTransitive` targets.
    - Expose `<SmithyModel Include="..." />`.
    - Expose optional properties:
@@ -132,12 +133,12 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
 
 ### Phase 4: JSON Codec and Serialization Generation (Weeks 12-15)
 
-1. Create `Smithy.NET.Json`:
+1. Create `SmithyNet.Json`:
    - Use `System.Text.Json`.
    - Implement Smithy-specific converters for timestamps, blobs, documents, enums, unions, sparse collections, and protocol-specific names.
    - Support traits such as `@jsonName` and `@timestampFormat`.
 
-2. Create `Smithy.NET.Generators` as an incremental generator:
+2. Create `SmithyNet.Generators` as an incremental generator:
    - Discover generated Smithy types from marker attributes.
    - Generate `JsonSerializerContext` partial types or registration glue for AOT-friendly serialization.
    - Emit diagnostics for unsupported shapes/traits.
@@ -148,12 +149,12 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
 
 ### Phase 5: First Client Protocol (Weeks 16-20)
 
-1. Create `Smithy.NET.Http`:
+1. Create `SmithyNet.Http`:
    - `HttpClient` based transport.
    - Request/response abstraction.
    - Cancellation and timeout flow.
 
-2. Create `Smithy.NET.Client`:
+2. Create `SmithyNet.Client`:
    - Operation invoker.
    - Middleware pipeline.
    - Error deserialization.
@@ -178,13 +179,13 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
 ### Phase 6: Packaging and First Preview (Weeks 21-22)
 
 1. Ship preview packages:
-   - `Smithy.NET.Core`
-   - `Smithy.NET.CodeGeneration`
-   - `Smithy.NET.MSBuild`
-   - `Smithy.NET.Generators`
-   - `Smithy.NET.Json`
-   - `Smithy.NET.Http`
-   - `Smithy.NET.Client`
+   - `SmithyNet.Core`
+   - `SmithyNet.CodeGeneration`
+   - `SmithyNet.MSBuild`
+   - `SmithyNet.Generators`
+   - `SmithyNet.Json`
+   - `SmithyNet.Http`
+   - `SmithyNet.Client`
 
 2. Add examples:
    - Generated model-only library.
@@ -200,13 +201,13 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
 
 ### Phase 7: Server Runtime and End-to-End Example (Post-MVP)
 
-1. Create `Smithy.NET.Server`:
+1. Create `SmithyNet.Server`:
    - operation dispatcher
    - protocol-aware request routing
    - validation hooks
    - error serialization
 
-2. Create `Smithy.NET.Server.AspNetCore`:
+2. Create `SmithyNet.Server.AspNetCore`:
    - endpoint routing integration
    - middleware integration
    - generated handler interfaces
@@ -225,26 +226,26 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
 
 ### Phase 8: Additional Codecs and Protocols (Post-MVP)
 
-1. Add `Smithy.NET.Cbor`:
+1. Add `SmithyNet.Cbor`:
    - Explicit `CborReader`/`CborWriter` codecs.
    - Required for Smithy RPC v2 CBOR.
 
-2. Add `Smithy.NET.Xml`:
+2. Add `SmithyNet.Xml`:
    - `@xmlName`
    - `@xmlAttribute`
    - `@xmlFlattened`
    - namespace handling
 
 3. Add protocol packages:
-   - `Smithy.NET.Protocols.RpcV2Cbor`
-   - `Smithy.NET.Protocols.SimpleRestJson` for `alloy#simpleRestJson`
-   - `Smithy.NET.Protocols.AwsJson`
-   - `Smithy.NET.Protocols.RestJson`
-   - `Smithy.NET.Protocols.RestXml`
+   - `SmithyNet.Protocols.RpcV2Cbor`
+   - `SmithyNet.Protocols.SimpleRestJson` for `alloy#simpleRestJson`
+   - `SmithyNet.Protocols.AwsJson`
+   - `SmithyNet.Protocols.RestJson`
+   - `SmithyNet.Protocols.RestXml`
 
 4. Add auth packages:
-   - `Smithy.NET.Auth`
-   - `Smithy.NET.Auth.SigV4`
+   - `SmithyNet.Auth`
+   - `SmithyNet.Auth.SigV4`
 
 ### Phase 9: F# Support (Post-MVP)
 
@@ -300,7 +301,7 @@ Generated C# under obj/<configuration>/<tfm>/Smithy/
   v
 Roslyn compilation
   |
-  | Smithy.NET.Generators emits serializer metadata/glue
+  | SmithyNet.Generators emits serializer metadata/glue
   v
 User assembly
 ```
@@ -310,24 +311,24 @@ User assembly
 ## Package Structure
 
 ```text
-Smithy.NET.Core                    - runtime metadata, core abstractions, Document
-Smithy.NET.CodeGeneration          - Smithy AST/build output to C# generator
-Smithy.NET.MSBuild                 - MSBuild targets and tasks
-Smithy.NET.Generators              - Roslyn incremental generators
-Smithy.NET.Json                    - JSON codec
-Smithy.NET.Cbor                    - CBOR codec
-Smithy.NET.Xml                     - XML codec
-Smithy.NET.Http                    - HTTP transport
-Smithy.NET.Client                  - generated client runtime
-Smithy.NET.Server                  - server dispatcher runtime
-Smithy.NET.Server.AspNetCore       - ASP.NET Core integration
-Smithy.NET.Protocols.RpcV2Cbor     - Smithy RPC v2 CBOR protocol
-Smithy.NET.Protocols.AwsJson       - AWS JSON 1.0/1.1 protocols
-Smithy.NET.Protocols.RestJson      - AWS restJson1 protocol
-Smithy.NET.Protocols.RestXml       - AWS restXml protocol
-Smithy.NET.Auth                    - authentication abstractions
-Smithy.NET.Auth.SigV4              - AWS Signature V4
-Smithy.NET.FSharp                  - F# idiomatic wrappers
+SmithyNet.Core                    - runtime metadata, core abstractions, Document
+SmithyNet.CodeGeneration          - Smithy AST/build output to C# generator
+SmithyNet.MSBuild                 - MSBuild targets and tasks
+SmithyNet.Generators              - Roslyn incremental generators
+SmithyNet.Json                    - JSON codec
+SmithyNet.Cbor                    - CBOR codec
+SmithyNet.Xml                     - XML codec
+SmithyNet.Http                    - HTTP transport
+SmithyNet.Client                  - generated client runtime
+SmithyNet.Server                  - server dispatcher runtime
+SmithyNet.Server.AspNetCore       - ASP.NET Core integration
+SmithyNet.Protocols.RpcV2Cbor     - Smithy RPC v2 CBOR protocol
+SmithyNet.Protocols.AwsJson       - AWS JSON 1.0/1.1 protocols
+SmithyNet.Protocols.RestJson      - AWS restJson1 protocol
+SmithyNet.Protocols.RestXml       - AWS restXml protocol
+SmithyNet.Auth                    - authentication abstractions
+SmithyNet.Auth.SigV4              - AWS Signature V4
+SmithyNet.FSharp                  - F# idiomatic wrappers
 ```
 
 ---

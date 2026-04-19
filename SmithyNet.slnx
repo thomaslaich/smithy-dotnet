@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SmithyNet.Client/SmithyNet.Client.csproj" />
+    <Project Path="src/SmithyNet.CodeGeneration/SmithyNet.CodeGeneration.csproj" />
+    <Project Path="src/SmithyNet.Core/SmithyNet.Core.csproj" />
+    <Project Path="src/SmithyNet.Generators/SmithyNet.Generators.csproj" />
+    <Project Path="src/SmithyNet.Http/SmithyNet.Http.csproj" />
+    <Project Path="src/SmithyNet.Json/SmithyNet.Json.csproj" />
+    <Project Path="src/SmithyNet.MSBuild/SmithyNet.MSBuild.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SmithyNet.Tests/SmithyNet.Tests.csproj" />
+  </Folder>
+</Solution>

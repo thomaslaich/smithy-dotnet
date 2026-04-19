@@ -13,7 +13,7 @@ package cache. The polyglot .NET example avoids the global cache with:
 ```
 
 If a local consumer keeps using stale package contents, clear that consumer's
-restored `Smithy.NET.*` package folders or use a new package version.
+restored `SmithyNet.*` package folders or use a new package version.
 
 ## Smithy CLI Acquisition
 
@@ -35,7 +35,7 @@ not yet support:
 
 ## Server Runtime
 
-There is no `Smithy.NET.Server` or ASP.NET Core integration yet. Generated
+There is no `SmithyNet.Server` or ASP.NET Core integration yet. Generated
 clients can call compatible services, but Smithy.NET cannot yet generate server
 handlers.
 

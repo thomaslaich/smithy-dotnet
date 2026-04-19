@@ -74,7 +74,7 @@ that the server registers an implementation for it.
 First create local NuGet packages from the repository root:
 
 ```bash
-dotnet pack Smithy.NET.slnx --configuration Release --output artifacts/packages
+dotnet pack SmithyNet.slnx --configuration Release --output artifacts/packages
 ```
 
 Then run the client against the Java service:

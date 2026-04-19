@@ -18,7 +18,7 @@
     }
   ],
   "settings": {
-    "dotnet.defaultSolution": "Smithy.NET.slnx",
+    "dotnet.defaultSolution": "SmithyNet.slnx",
     "files.exclude": {
       "**/.devenv": true,
       "**/.direnv": true,

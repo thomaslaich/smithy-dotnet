@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Build.Framework" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/SmithyNet.Client/SmithyNet.Client.csproj" />
+    <ProjectReference Include="../../src/SmithyNet.CodeGeneration/SmithyNet.CodeGeneration.csproj" />
+    <ProjectReference Include="../../src/SmithyNet.Core/SmithyNet.Core.csproj" />
+    <ProjectReference Include="../../src/SmithyNet.Generators/SmithyNet.Generators.csproj" />
+    <ProjectReference Include="../../src/SmithyNet.Http/SmithyNet.Http.csproj" />
+    <ProjectReference Include="../../src/SmithyNet.Json/SmithyNet.Json.csproj" />
+    <ProjectReference Include="../../src/SmithyNet.MSBuild/SmithyNet.MSBuild.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

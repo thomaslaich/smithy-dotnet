@@ -17,7 +17,7 @@ The C# generator emits files for:
 - Smithy error structures
 - `restJson1` services as typed clients
 
-Generated files include Smithy metadata attributes from `Smithy.NET.Core`.
+Generated files include Smithy metadata attributes from `SmithyNet.Core`.
 
 ## Nullability
 
@@ -30,7 +30,7 @@ MSBuild integration currently uses the default mode.
 
 ## JSON
 
-`Smithy.NET.Json` supports JSON serialization and deserialization for generated
+`SmithyNet.Json` supports JSON serialization and deserialization for generated
 Smithy shapes using generated metadata attributes.
 
 Covered shape kinds:
@@ -50,14 +50,14 @@ serializer metadata is planned but not implemented.
 
 ## HTTP Client Runtime
 
-`Smithy.NET.Http` provides:
+`SmithyNet.Http` provides:
 
 - `SmithyHttpRequest`
 - `SmithyHttpResponse`
 - `IHttpTransport`
 - `HttpClientTransport`
 
-`Smithy.NET.Client` provides:
+`SmithyNet.Client` provides:
 
 - `SmithyOperationInvoker`
 - client middleware
