@@ -179,6 +179,150 @@ public sealed class CSharpShapeGeneratorTests
     }
 
     [Fact]
+    public async Task GenerateEmitsCompilableClientForRestJsonService()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var projectDirectory = directory.Path;
+        Directory.CreateDirectory(projectDirectory);
+
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "aws.protocols#restJson1": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "POST",
+                      "uri": "/forecast"
+                    }
+                  },
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        foreach (var generatedFile in new CSharpShapeGenerator().Generate(model))
+        {
+            var path = Path.Combine(projectDirectory, generatedFile.Path);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, generatedFile.Contents);
+        }
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "GeneratedClientCompileTest.csproj"),
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <Nullable>enable</Nullable>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/Smithy.NET.Client/Smithy.NET.Client.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/Smithy.NET.Core/Smithy.NET.Core.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/Smithy.NET.Json/Smithy.NET.Json.csproj" />
+              </ItemGroup>
+            </Project>
+            """
+        );
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "Consumer.cs"),
+            """
+            using System.Net;
+            using System.Text;
+            using Example.Weather;
+
+            namespace GeneratedClientCompileTest;
+
+            public static class Consumer
+            {
+                public static async Task<string> ReadAsync(CancellationToken cancellationToken)
+                {
+                    var client = new WeatherClient(new HttpClient(new Handler())
+                    {
+                        BaseAddress = new Uri("https://example.test")
+                    });
+                    var output = await client.GetForecastAsync(
+                        new GetForecastInput("Zurich"),
+                        cancellationToken);
+                    return output.Summary;
+                }
+
+                private sealed class Handler : HttpMessageHandler
+                {
+                    protected override Task<HttpResponseMessage> SendAsync(
+                        HttpRequestMessage request,
+                        CancellationToken cancellationToken)
+                    {
+                        if (request.Method != HttpMethod.Post || request.RequestUri?.PathAndQuery != "/forecast")
+                        {
+                            throw new InvalidOperationException("Unexpected request.");
+                        }
+
+                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                        {
+                            Content = new StringContent(
+                                "{\"summary\":\"clear\"}",
+                                Encoding.UTF8,
+                                "application/json")
+                        });
+                    }
+                }
+            }
+            """
+        );
+
+        var result = await RunDotNetBuild(projectDirectory);
+
+        Assert.True(
+            result.ExitCode == 0,
+            $"dotnet build failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}{Environment.NewLine}{result.Error}"
+        );
+    }
+
+    [Fact]
     public void GenerateEmitsStructureWithRequiredOptionalAndDefaultMembers()
     {
         var model = SmithyJsonAstReader.Read(
@@ -726,7 +870,10 @@ public sealed class CSharpShapeGeneratorTests
     )
     {
         using var process = Process.Start(
-            new ProcessStartInfo("dotnet", ["build"])
+            new ProcessStartInfo(
+                "dotnet",
+                ["build", "-p:UseSharedCompilation=false", "--disable-build-servers"]
+            )
             {
                 WorkingDirectory = projectDirectory,
                 RedirectStandardOutput = true,

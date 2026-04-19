@@ -24,6 +24,10 @@ public sealed class CSharpShapeGenerator
                 .Shapes.Values.Where(ShouldGenerate)
                 .OrderBy(shape => shape.Id.ToString(), StringComparer.Ordinal)
                 .Select(shape => GenerateShape(model, shape, options)),
+            .. model
+                .Shapes.Values.Where(ShouldGenerateClient)
+                .OrderBy(shape => shape.Id.ToString(), StringComparer.Ordinal)
+                .Select(shape => GenerateClient(model, shape, options)),
         ];
     }
 
@@ -37,6 +41,11 @@ public sealed class CSharpShapeGenerator
                 or ShapeKind.Enum
                 or ShapeKind.IntEnum
                 or ShapeKind.Union;
+    }
+
+    private static bool ShouldGenerateClient(ModelShape shape)
+    {
+        return shape.Kind == ShapeKind.Service && shape.Traits.Has(SmithyPrelude.RestJson1Trait);
     }
 
     private static GeneratedCSharpFile GenerateShape(
@@ -64,6 +73,150 @@ public sealed class CSharpShapeGenerator
         };
 
         return new GeneratedCSharpFile(GetPath(shape), contents);
+    }
+
+    private static GeneratedCSharpFile GenerateClient(
+        SmithyModel model,
+        ModelShape service,
+        CSharpGenerationOptions options
+    )
+    {
+        var builder = CreateFileBuilder(
+            service,
+            options,
+            [
+                "System.Net.Http",
+                "System.Text",
+                "System.Threading",
+                "System.Threading.Tasks",
+                "Smithy.NET.Client",
+                "Smithy.NET.Json",
+            ]
+        );
+        var typeName = $"{GetTypeName(service.Id)}Client";
+        builder.Line($"public sealed class {typeName}");
+        builder.Block(() =>
+        {
+            builder.Line("private readonly HttpClient httpClient;");
+            builder.Line();
+            builder.Line($"public {typeName}(HttpClient httpClient)");
+            builder.Block(() =>
+            {
+                builder.Line(
+                    "this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));"
+                );
+            });
+            builder.Line();
+
+            foreach (
+                var operationId in service.Operations.OrderBy(
+                    id => id.ToString(),
+                    StringComparer.Ordinal
+                )
+            )
+            {
+                AppendOperationMethod(builder, model, service, operationId, options);
+            }
+        });
+
+        return new GeneratedCSharpFile(GetClientPath(service), builder.ToString());
+    }
+
+    private static void AppendOperationMethod(
+        CSharpWriter builder,
+        SmithyModel model,
+        ModelShape service,
+        ShapeId operationId,
+        CSharpGenerationOptions options
+    )
+    {
+        var operation = model.GetShape(operationId);
+        var httpBinding = ReadHttpBinding(operation);
+        var methodName = $"{CSharpIdentifier.PropertyName(operation.Id.Name)}Async";
+        var inputType = operation.Input is { } input
+            ? GetTypeReference(input, service.Id.Namespace, options.BaseNamespace)
+            : null;
+        var outputType = operation.Output is { } output
+            ? GetTypeReference(output, service.Id.Namespace, options.BaseNamespace)
+            : null;
+        var returnType = outputType is null ? "Task" : $"Task<{outputType}>";
+        var parameters = inputType is null
+            ? "CancellationToken cancellationToken = default"
+            : $"{inputType} input, CancellationToken cancellationToken = default";
+
+        builder.Line($"public async {returnType} {methodName}({parameters})");
+        builder.Block(() =>
+        {
+            if (inputType is not null)
+            {
+                builder.Line("ArgumentNullException.ThrowIfNull(input);");
+            }
+
+            builder.Line(
+                $"using var request = new HttpRequestMessage(new HttpMethod({FormatString(httpBinding.Method)}), {FormatString(httpBinding.Uri)});"
+            );
+            if (operation.Input is { } input && HasHttpBody(model.GetShape(input)))
+            {
+                builder.Line("request.Content = new StringContent(");
+                builder.Indented(() =>
+                {
+                    builder.Line("SmithyJsonSerializer.Serialize(input),");
+                    builder.Line("Encoding.UTF8,");
+                    builder.Line("\"application/json\");");
+                });
+            }
+
+            builder.Line();
+            builder.Line(
+                "using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);"
+            );
+            builder.Line("if (!response.IsSuccessStatusCode)");
+            builder.Block(() =>
+            {
+                builder.Line(
+                    "throw new SmithyClientException(response.StatusCode, response.ReasonPhrase);"
+                );
+            });
+
+            if (outputType is null)
+            {
+                builder.Line("return;");
+                return;
+            }
+
+            builder.Line();
+            builder.Line(
+                "var responseJson = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);"
+            );
+            builder.Line($"return SmithyJsonSerializer.Deserialize<{outputType}>(responseJson);");
+        });
+        builder.Line();
+    }
+
+    private static bool HasHttpBody(ModelShape input)
+    {
+        return input.Members.Count > 0;
+    }
+
+    private static HttpBinding ReadHttpBinding(ModelShape operation)
+    {
+        if (operation.Traits.GetValueOrDefault(SmithyPrelude.HttpTrait) is not { } value)
+        {
+            throw new SmithyException(
+                $"Operation '{operation.Id}' cannot be generated for restJson1 because it is missing the @http trait."
+            );
+        }
+
+        var properties = value.AsObject();
+        var method = properties.TryGetValue("method", out var methodValue)
+            ? methodValue.AsString()
+            : throw new SmithyException(
+                $"Operation '{operation.Id}' @http trait is missing method."
+            );
+        var uri = properties.TryGetValue("uri", out var uriValue)
+            ? uriValue.AsString()
+            : throw new SmithyException($"Operation '{operation.Id}' @http trait is missing uri.");
+        return new HttpBinding(method, uri);
     }
 
     private static string GenerateStructure(
@@ -833,7 +986,11 @@ public sealed class CSharpShapeGenerator
         };
     }
 
-    private static CSharpWriter CreateFileBuilder(ModelShape shape, CSharpGenerationOptions options)
+    private static CSharpWriter CreateFileBuilder(
+        ModelShape shape,
+        CSharpGenerationOptions options,
+        IReadOnlyList<string>? extraUsings = null
+    )
     {
         var builder = new CSharpWriter();
         builder.Line("// <auto-generated />");
@@ -844,6 +1001,11 @@ public sealed class CSharpShapeGenerator
         builder.Line("using System.Linq;");
         builder.Line("using Smithy.NET.Core;");
         builder.Line("using Smithy.NET.Core.Annotations;");
+        foreach (var @namespace in extraUsings ?? [])
+        {
+            builder.Line($"using {@namespace};");
+        }
+
         builder.Line();
         builder.Line(
             $"namespace {CSharpIdentifier.Namespace(shape.Id.Namespace, options.BaseNamespace)};"
@@ -859,6 +1021,15 @@ public sealed class CSharpShapeGenerator
             shape.Id.Namespace.Split('.').Select(CSharpIdentifier.FileSegment)
         );
         return $"{namespacePath}/{GetTypeName(shape.Id)}.g.cs";
+    }
+
+    private static string GetClientPath(ModelShape shape)
+    {
+        var namespacePath = string.Join(
+            '/',
+            shape.Id.Namespace.Split('.').Select(CSharpIdentifier.FileSegment)
+        );
+        return $"{namespacePath}/{GetTypeName(shape.Id)}Client.g.cs";
     }
 
     private static string GetTypeName(ShapeId id)
@@ -905,6 +1076,8 @@ public sealed class CSharpShapeGenerator
         builder.Append('"');
         return builder.ToString();
     }
+
+    private sealed record HttpBinding(string Method, string Uri);
 }
 
 #pragma warning restore CA1305
