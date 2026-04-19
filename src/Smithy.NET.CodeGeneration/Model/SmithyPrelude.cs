@@ -20,5 +20,7 @@ public static class SmithyPrelude
 
     public static ShapeId EnumValueTrait { get; } = new(Namespace, "enumValue");
 
+    public static ShapeId JsonNameTrait { get; } = new(Namespace, "jsonName");
+
     public static ShapeId SparseTrait { get; } = new(Namespace, "sparse");
 }

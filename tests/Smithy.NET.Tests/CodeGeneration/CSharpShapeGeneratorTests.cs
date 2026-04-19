@@ -230,9 +230,11 @@ public sealed class CSharpShapeGeneratorTests
             using System.Collections.Generic;
             using System.Linq;
             using Smithy.NET.Core;
+            using Smithy.NET.Core.Annotations;
 
             namespace Example.Weather;
 
+            [SmithyShape("example.weather#ForecastRequest", ShapeKind.Structure)]
             public sealed partial record class ForecastRequest
             {
                 public ForecastRequest(string city, int? days = null, int? retries = null, string? units = null)
@@ -243,9 +245,17 @@ public sealed class CSharpShapeGeneratorTests
                     Units = units;
                 }
 
+                [SmithyMember("city", "smithy.api#String", IsRequired = true)]
+                [SmithyTrait("smithy.api#required")]
                 public string City { get; }
+                [SmithyMember("days", "smithy.api#Integer")]
                 public int? Days { get; }
+                [SmithyMember("retries", "smithy.api#Integer")]
+                [SmithyTrait("smithy.api#default", Value = "3")]
                 public int Retries { get; }
+                [SmithyMember("units", "smithy.api#String")]
+                [SmithyTrait("smithy.api#clientOptional")]
+                [SmithyTrait("smithy.api#default", Value = "metric")]
                 public string? Units { get; }
             }
             """,
@@ -297,9 +307,12 @@ public sealed class CSharpShapeGeneratorTests
             using System.Collections.Generic;
             using System.Linq;
             using Smithy.NET.Core;
+            using Smithy.NET.Core.Annotations;
 
             namespace Example.Weather;
 
+            [SmithyShape("example.weather#ForecastInput", ShapeKind.Structure)]
+            [SmithyTrait("smithy.api#input")]
             public sealed partial record class ForecastInput
             {
                 public ForecastInput(string? city = null, string? units = null)
@@ -308,7 +321,11 @@ public sealed class CSharpShapeGeneratorTests
                     Units = units;
                 }
 
+                [SmithyMember("city", "smithy.api#String", IsRequired = true)]
+                [SmithyTrait("smithy.api#required")]
                 public string? City { get; }
+                [SmithyMember("units", "smithy.api#String")]
+                [SmithyTrait("smithy.api#default", Value = "metric")]
                 public string? Units { get; }
             }
             """,
@@ -365,9 +382,12 @@ public sealed class CSharpShapeGeneratorTests
             using System.Collections.Generic;
             using System.Linq;
             using Smithy.NET.Core;
+            using Smithy.NET.Core.Annotations;
 
             namespace Example.Weather;
 
+            [SmithyShape("example.weather#ForecastInput", ShapeKind.Structure)]
+            [SmithyTrait("smithy.api#input")]
             public sealed partial record class ForecastInput
             {
                 public ForecastInput(string city, string? units = null)
@@ -376,7 +396,11 @@ public sealed class CSharpShapeGeneratorTests
                     Units = units ?? "metric";
                 }
 
+                [SmithyMember("city", "smithy.api#String", IsRequired = true)]
+                [SmithyTrait("smithy.api#required")]
                 public string City { get; }
+                [SmithyMember("units", "smithy.api#String")]
+                [SmithyTrait("smithy.api#default", Value = "metric")]
                 public string Units { get; }
             }
             """,
@@ -474,9 +498,11 @@ public sealed class CSharpShapeGeneratorTests
             using System.Collections.Generic;
             using System.Linq;
             using Smithy.NET.Core;
+            using Smithy.NET.Core.Annotations;
 
             namespace Example.Weather;
 
+            [SmithyShape("example.weather#ForecastList", ShapeKind.List)]
             public sealed partial record class ForecastList
             {
                 public ForecastList(IEnumerable<string> values)
@@ -485,6 +511,7 @@ public sealed class CSharpShapeGeneratorTests
                     Values = Array.AsReadOnly(values.ToArray());
                 }
 
+                [SmithyMember("member", "smithy.api#String")]
                 public IReadOnlyList<string> Values { get; }
             }
             """,
@@ -500,9 +527,12 @@ public sealed class CSharpShapeGeneratorTests
             using System.Collections.Generic;
             using System.Linq;
             using Smithy.NET.Core;
+            using Smithy.NET.Core.Annotations;
 
             namespace Example.Weather;
 
+            [SmithyShape("example.weather#ForecastTags", ShapeKind.Map)]
+            [SmithyTrait("smithy.api#sparse")]
             public sealed partial record class ForecastTags
             {
                 public ForecastTags(IReadOnlyDictionary<string, string?> values)
@@ -511,6 +541,7 @@ public sealed class CSharpShapeGeneratorTests
                     Values = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string?>(new Dictionary<string, string?>(values));
                 }
 
+                [SmithyMember("value", "smithy.api#String", IsSparse = true)]
                 public IReadOnlyDictionary<string, string?> Values { get; }
             }
             """,
@@ -526,12 +557,16 @@ public sealed class CSharpShapeGeneratorTests
             using System.Collections.Generic;
             using System.Linq;
             using Smithy.NET.Core;
+            using Smithy.NET.Core.Annotations;
 
             namespace Example.Weather;
 
+            [SmithyShape("example.weather#WeatherKind", ShapeKind.Enum)]
             public readonly partial record struct WeatherKind(string Value)
             {
+                [SmithyEnumValue("rainy")]
                 public static WeatherKind Rainy { get; } = new("rainy");
+                [SmithyEnumValue("SUN")]
                 public static WeatherKind Sunny { get; } = new("SUN");
 
                 public override string ToString()
@@ -552,11 +587,14 @@ public sealed class CSharpShapeGeneratorTests
             using System.Collections.Generic;
             using System.Linq;
             using Smithy.NET.Core;
+            using Smithy.NET.Core.Annotations;
 
             namespace Example.Weather;
 
+            [SmithyShape("example.weather#WeatherCode", ShapeKind.IntEnum)]
             public enum WeatherCode
             {
+                [SmithyEnumValue("1")]
                 Ok = 1,
             }
             """,
@@ -572,13 +610,16 @@ public sealed class CSharpShapeGeneratorTests
             using System.Collections.Generic;
             using System.Linq;
             using Smithy.NET.Core;
+            using Smithy.NET.Core.Annotations;
 
             namespace Example.Weather;
 
+            [SmithyShape("example.weather#ForecastValue", ShapeKind.Union)]
             public abstract partial record class ForecastValue
             {
                 private protected ForecastValue() { }
 
+                [SmithyMember("code", "example.weather#WeatherCode")]
                 public sealed partial record class Code : ForecastValue
                 {
                     public Code(WeatherCode value)
@@ -594,6 +635,7 @@ public sealed class CSharpShapeGeneratorTests
                     return new Code(value);
                 }
 
+                [SmithyMember("text", "smithy.api#String")]
                 public sealed partial record class Text : ForecastValue
                 {
                     public Text(string value)
@@ -657,9 +699,12 @@ public sealed class CSharpShapeGeneratorTests
             using System.Collections.Generic;
             using System.Linq;
             using Smithy.NET.Core;
+            using Smithy.NET.Core.Annotations;
 
             namespace Example.Weather;
 
+            [SmithyShape("example.weather#BadRequest", ShapeKind.Structure)]
+            [SmithyTrait("smithy.api#error", Value = "client")]
             public sealed partial class BadRequest : Exception
             {
                 public BadRequest(string? message = null, string? reason = null)
@@ -668,6 +713,7 @@ public sealed class CSharpShapeGeneratorTests
                     Reason = reason;
                 }
 
+                [SmithyMember("reason", "smithy.api#String")]
                 public string? Reason { get; }
             }
             """,

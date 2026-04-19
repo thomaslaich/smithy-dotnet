@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using Smithy.NET.CodeGeneration.Model;
 using Smithy.NET.Core;
+using Smithy.NET.Core.Traits;
 
 namespace Smithy.NET.CodeGeneration.CSharp;
 
@@ -73,6 +74,7 @@ public sealed class CSharpShapeGenerator
     {
         var builder = CreateFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
+        AppendShapeAttributes(builder, shape);
         builder.Line($"public sealed partial record class {typeName}");
         builder.Block(() =>
         {
@@ -90,6 +92,7 @@ public sealed class CSharpShapeGenerator
     {
         var builder = CreateFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
+        AppendShapeAttributes(builder, shape);
         builder.Line($"public sealed partial class {typeName} : Exception");
         builder.Block(() =>
         {
@@ -118,6 +121,7 @@ public sealed class CSharpShapeGenerator
             currentNamespace: shape.Id.Namespace,
             baseNamespace: options.BaseNamespace
         );
+        AppendShapeAttributes(builder, shape);
         builder.Line($"public sealed partial record class {typeName}");
         builder.Block(() =>
         {
@@ -128,6 +132,11 @@ public sealed class CSharpShapeGenerator
                 builder.Line("Values = Array.AsReadOnly(values.ToArray());");
             });
             builder.Line();
+            AppendMemberAttributes(
+                builder,
+                member,
+                isSparse: shape.Traits.Has(SmithyPrelude.SparseTrait)
+            );
             builder.Line($"public IReadOnlyList<{memberType}> Values {{ get; }}");
         });
         return builder.ToString();
@@ -162,6 +171,7 @@ public sealed class CSharpShapeGenerator
             baseNamespace: options.BaseNamespace
         );
 
+        AppendShapeAttributes(builder, shape);
         builder.Line($"public sealed partial record class {typeName}");
         builder.Block(() =>
         {
@@ -174,6 +184,11 @@ public sealed class CSharpShapeGenerator
                 );
             });
             builder.Line();
+            AppendMemberAttributes(
+                builder,
+                value,
+                isSparse: shape.Traits.Has(SmithyPrelude.SparseTrait)
+            );
             builder.Line($"public IReadOnlyDictionary<{keyType}, {valueType}> Values {{ get; }}");
         });
         return builder.ToString();
@@ -183,6 +198,7 @@ public sealed class CSharpShapeGenerator
     {
         var builder = CreateFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
+        AppendShapeAttributes(builder, shape);
         builder.Line($"public readonly partial record struct {typeName}(string Value)");
         builder.Block(() =>
         {
@@ -197,6 +213,7 @@ public sealed class CSharpShapeGenerator
                 var value =
                     member.Traits.GetValueOrDefault(SmithyPrelude.EnumValueTrait)?.AsString()
                     ?? member.Name;
+                builder.Line($"[SmithyEnumValue({FormatString(value)})]");
                 builder.Line(
                     $"public static {typeName} {propertyName} {{ get; }} = new({FormatString(value)});"
                 );
@@ -216,6 +233,7 @@ public sealed class CSharpShapeGenerator
     {
         var builder = CreateFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
+        AppendShapeAttributes(builder, shape);
         builder.Line($"public enum {typeName}");
         builder.Block(() =>
         {
@@ -233,6 +251,13 @@ public sealed class CSharpShapeGenerator
                 var suffix = value is null
                     ? string.Empty
                     : string.Create(CultureInfo.InvariantCulture, $" = {(int)value.Value}");
+                if (value is not null)
+                {
+                    builder.Line(
+                        $"[SmithyEnumValue({FormatString(((int)value.Value).ToString(CultureInfo.InvariantCulture))})]"
+                    );
+                }
+
                 builder.Line($"{propertyName}{suffix},");
             }
         });
@@ -247,6 +272,7 @@ public sealed class CSharpShapeGenerator
     {
         var builder = CreateFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
+        AppendShapeAttributes(builder, shape);
         builder.Line($"public abstract partial record class {typeName}");
         var members = shape
             .Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal)
@@ -265,6 +291,7 @@ public sealed class CSharpShapeGenerator
                     currentNamespace: shape.Id.Namespace,
                     baseNamespace: options.BaseNamespace
                 );
+                AppendMemberAttributes(builder, member, isSparse: false);
                 builder.Line($"public sealed partial record class {variantName} : {typeName}");
                 builder.Block(() =>
                 {
@@ -487,8 +514,75 @@ public sealed class CSharpShapeGenerator
         {
             var propertyName = CSharpIdentifier.PropertyName(member.Name);
             var propertyType = GetMemberType(model, shape, member, shape.Id.Namespace, options);
+            AppendMemberAttributes(builder, member, isSparse: IsSparseTarget(model, member.Target));
             builder.Line($"public {propertyType} {propertyName} {{ get; }}");
         }
+    }
+
+    private static bool IsSparseTarget(SmithyModel model, ShapeId target)
+    {
+        return model.Shapes.TryGetValue(target, out var shape)
+            && shape.Traits.Has(SmithyPrelude.SparseTrait);
+    }
+
+    private static void AppendShapeAttributes(CSharpWriter builder, ModelShape shape)
+    {
+        builder.Line($"[SmithyShape({FormatString(shape.Id.ToString())}, ShapeKind.{shape.Kind})]");
+        AppendTraitAttributes(builder, shape.Traits);
+    }
+
+    private static void AppendMemberAttributes(
+        CSharpWriter builder,
+        MemberShape member,
+        bool isSparse
+    )
+    {
+        var arguments = new List<string>
+        {
+            FormatString(member.Name),
+            FormatString(member.Target.ToString()),
+        };
+        if (member.IsRequired)
+        {
+            arguments.Add("IsRequired = true");
+        }
+
+        if (isSparse)
+        {
+            arguments.Add("IsSparse = true");
+        }
+
+        if (member.Traits.GetValueOrDefault(SmithyPrelude.JsonNameTrait) is { } jsonName)
+        {
+            arguments.Add($"JsonName = {FormatString(jsonName.AsString())}");
+        }
+
+        builder.Line($"[SmithyMember({string.Join(", ", arguments)})]");
+        AppendTraitAttributes(builder, member.Traits);
+    }
+
+    private static void AppendTraitAttributes(CSharpWriter builder, TraitCollection traits)
+    {
+        foreach (var trait in traits.OrderBy(trait => trait.Key.ToString(), StringComparer.Ordinal))
+        {
+            var value = GetTraitAttributeValue(trait.Value);
+            var valueInitializer = value is null
+                ? string.Empty
+                : $", Value = {FormatString(value)}";
+            builder.Line($"[SmithyTrait({FormatString(trait.Key.ToString())}{valueInitializer})]");
+        }
+    }
+
+    private static string? GetTraitAttributeValue(Document value)
+    {
+        return value.Kind switch
+        {
+            DocumentKind.Null => null,
+            DocumentKind.Boolean => value.AsBoolean() ? "true" : "false",
+            DocumentKind.Number => value.AsNumber().ToString(CultureInfo.InvariantCulture),
+            DocumentKind.String => value.AsString(),
+            _ => null,
+        };
     }
 
     private static IEnumerable<MemberShape> GetSortedMembers(
@@ -749,6 +843,7 @@ public sealed class CSharpShapeGenerator
         builder.Line("using System.Collections.Generic;");
         builder.Line("using System.Linq;");
         builder.Line("using Smithy.NET.Core;");
+        builder.Line("using Smithy.NET.Core.Annotations;");
         builder.Line();
         builder.Line(
             $"namespace {CSharpIdentifier.Namespace(shape.Id.Namespace, options.BaseNamespace)};"

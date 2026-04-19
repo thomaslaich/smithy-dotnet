@@ -66,7 +66,8 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
         var dependencyManifest = NormalizeOptional(DependencyManifest) is { } dependencyManifestPath
             ? ResolveProjectPath(dependencyManifestPath)
             : null;
-        var dependencyInputFile = NormalizeOptional(DependencyInputFile) is { } dependencyInputFilePath
+        var dependencyInputFile = NormalizeOptional(DependencyInputFile)
+            is { } dependencyInputFilePath
             ? ResolveProjectPath(dependencyInputFilePath)
             : null;
         var buildFile = ResolveBuildFile(outputDirectory);
@@ -208,7 +209,8 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
                     CommentHandling = JsonCommentHandling.Skip,
                 }
             );
-            var buildFileDirectory = Path.GetDirectoryName(Path.GetFullPath(buildFile))
+            var buildFileDirectory =
+                Path.GetDirectoryName(Path.GetFullPath(buildFile))
                 ?? Directory.GetCurrentDirectory();
             return
             [
