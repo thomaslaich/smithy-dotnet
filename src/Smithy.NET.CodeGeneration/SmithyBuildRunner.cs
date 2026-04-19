@@ -2,14 +2,14 @@ using Smithy.NET.CodeGeneration.Model;
 
 namespace Smithy.NET.CodeGeneration;
 
-public sealed class SmithyCli
+public sealed class SmithyBuildRunner
 {
     private readonly ISmithyCliRunner runner;
 
-    public SmithyCli()
+    public SmithyBuildRunner()
         : this(new ProcessSmithyCliRunner()) { }
 
-    internal SmithyCli(ISmithyCliRunner runner)
+    internal SmithyBuildRunner(ISmithyCliRunner runner)
     {
         this.runner = runner;
     }

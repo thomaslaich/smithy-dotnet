@@ -1,8 +1,8 @@
-namespace Smithy.NET.Tests.GoldenFiles;
+namespace Smithy.NET.Tests.Assertions;
 
-internal static class GoldenFile
+internal static class NormalizedTextAssert
 {
-    public static void AssertMatches(string expected, string actual)
+    public static void Equal(string expected, string actual)
     {
         Assert.Equal(Normalize(expected), Normalize(actual));
     }

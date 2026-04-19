@@ -3,7 +3,7 @@ using Smithy.NET.Core;
 
 namespace Smithy.NET.Tests.CodeGeneration;
 
-public sealed class SmithyCliTests
+public sealed class SmithyBuildRunnerTests
 {
     [Fact]
     public async Task BuildAsyncRunsSmithyBuildWithProjectionAndReadsModelJson()
@@ -18,7 +18,7 @@ public sealed class SmithyCliTests
             File.WriteAllText(Path.Combine(modelDirectory, "model.json"), EmptyModelJson);
             return new SmithyCliRunResult(0, string.Empty, string.Empty);
         });
-        var cli = new SmithyCli(runner);
+        var cli = new SmithyBuildRunner(runner);
 
         var result = await cli.BuildAsync(
             new SmithyBuildOptions(
@@ -33,8 +33,7 @@ public sealed class SmithyCliTests
         Assert.Equal("/tools/smithy", runner.Invocation?.FileName);
         Assert.Equal(directory.Path, runner.Invocation?.WorkingDirectory);
         Assert.Equal(
-            new[]
-            {
+            [
                 "build",
                 "--config",
                 "smithy-build.json",
@@ -42,7 +41,7 @@ public sealed class SmithyCliTests
                 Path.Combine(directory.Path, "smithy-build"),
                 "--projection",
                 "sdk",
-            },
+            ],
             runner.Invocation?.Arguments
         );
         Assert.Equal(
@@ -64,7 +63,7 @@ public sealed class SmithyCliTests
             File.WriteAllText(Path.Combine(modelDirectory, "model.json"), EmptyModelJson);
             return new SmithyCliRunResult(0, string.Empty, string.Empty);
         });
-        var cli = new SmithyCli(runner);
+        var cli = new SmithyBuildRunner(runner);
 
         var result = await cli.BuildAsync(
             new SmithyBuildOptions(
@@ -87,7 +86,7 @@ public sealed class SmithyCliTests
     public async Task BuildAsyncThrowsClearDiagnosticWhenSmithyValidationFails()
     {
         using var directory = TemporaryDirectory.Create();
-        var cli = new SmithyCli(
+        var cli = new SmithyBuildRunner(
             new RecordingSmithyCliRunner(_ => new SmithyCliRunResult(
                 1,
                 string.Empty,
@@ -115,7 +114,7 @@ public sealed class SmithyCliTests
     public async Task BuildAsyncCallsOutJavaWhenSmithyCliReportsJavaFailure()
     {
         using var directory = TemporaryDirectory.Create();
-        var cli = new SmithyCli(
+        var cli = new SmithyBuildRunner(
             new RecordingSmithyCliRunner(_ => new SmithyCliRunResult(
                 1,
                 string.Empty,
@@ -142,7 +141,7 @@ public sealed class SmithyCliTests
     public async Task BuildAsyncThrowsWhenModelJsonIsMissing()
     {
         using var directory = TemporaryDirectory.Create();
-        var cli = new SmithyCli(
+        var cli = new SmithyBuildRunner(
             new RecordingSmithyCliRunner(_ => new SmithyCliRunResult(0, string.Empty, string.Empty))
         );
 
@@ -229,7 +228,7 @@ public sealed class SmithyCliTests
             """
         );
 
-        var result = await new SmithyCli().BuildAsync(
+        var result = await new SmithyBuildRunner().BuildAsync(
             new SmithyBuildOptions(
                 directory.Path,
                 "smithy-build.json",
