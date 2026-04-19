@@ -204,7 +204,7 @@ public sealed class CSharpShapeGeneratorTests
                   "traits": {
                     "smithy.api#http": {
                       "method": "POST",
-                      "uri": "/forecast"
+                      "uri": "/forecast/{city}"
                     }
                   },
                   "input": {
@@ -212,12 +212,47 @@ public sealed class CSharpShapeGeneratorTests
                   },
                   "output": {
                     "target": "example.weather#GetForecastOutput"
-                  }
+                  },
+                  "errors": [
+                    "example.weather#BadRequest"
+                  ]
                 },
                 "example.weather#GetForecastInput": {
                   "type": "structure",
                   "members": {
                     "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpLabel": {}
+                      }
+                    },
+                    "details": {
+                      "target": "example.weather#ForecastDetails",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpPayload": {}
+                      }
+                    },
+                    "requestId": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpHeader": "x-request-id"
+                      }
+                    },
+                    "units": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#httpQuery": "units"
+                      }
+                    }
+                  }
+                },
+                "example.weather#ForecastDetails": {
+                  "type": "structure",
+                  "members": {
+                    "note": {
                       "target": "smithy.api#String",
                       "traits": {
                         "smithy.api#required": {}
@@ -233,6 +268,20 @@ public sealed class CSharpShapeGeneratorTests
                       "traits": {
                         "smithy.api#required": {}
                       }
+                    }
+                  }
+                },
+                "example.weather#BadRequest": {
+                  "type": "structure",
+                  "traits": {
+                    "smithy.api#error": "client"
+                  },
+                  "members": {
+                    "message": {
+                      "target": "smithy.api#String"
+                    },
+                    "reason": {
+                      "target": "smithy.api#String"
                     }
                   }
                 }
@@ -261,6 +310,7 @@ public sealed class CSharpShapeGeneratorTests
               <ItemGroup>
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/Smithy.NET.Client/Smithy.NET.Client.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/Smithy.NET.Core/Smithy.NET.Core.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/Smithy.NET.Http/Smithy.NET.Http.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/Smithy.NET.Json/Smithy.NET.Json.csproj" />
               </ItemGroup>
             </Project>
@@ -280,12 +330,16 @@ public sealed class CSharpShapeGeneratorTests
             {
                 public static async Task<string> ReadAsync(CancellationToken cancellationToken)
                 {
-                    var client = new WeatherClient(new HttpClient(new Handler())
+                    IWeatherClient client = new WeatherClient(new HttpClient(new Handler())
                     {
                         BaseAddress = new Uri("https://example.test")
                     });
                     var output = await client.GetForecastAsync(
-                        new GetForecastInput("Zurich"),
+                        new GetForecastInput(
+                            "Zurich",
+                            new ForecastDetails("morning"),
+                            "request-1",
+                            "metric"),
                         cancellationToken);
                     return output.Summary;
                 }
@@ -296,7 +350,12 @@ public sealed class CSharpShapeGeneratorTests
                         HttpRequestMessage request,
                         CancellationToken cancellationToken)
                     {
-                        if (request.Method != HttpMethod.Post || request.RequestUri?.PathAndQuery != "/forecast")
+                        if (request.Method != HttpMethod.Post || request.RequestUri?.PathAndQuery != "/forecast/Zurich?units=metric")
+                        {
+                            throw new InvalidOperationException("Unexpected request.");
+                        }
+
+                        if (!request.Headers.TryGetValues("x-request-id", out var requestIds) || requestIds.Single() != "request-1")
                         {
                             throw new InvalidOperationException("Unexpected request.");
                         }
@@ -319,6 +378,100 @@ public sealed class CSharpShapeGeneratorTests
         Assert.True(
             result.ExitCode == 0,
             $"dotnet build failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}{Environment.NewLine}{result.Error}"
+        );
+    }
+
+    [Fact]
+    public void GenerateClientBindsRestJsonHttpRequestMembers()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "aws.protocols#restJson1": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "POST",
+                      "uri": "/forecast/{city}"
+                    }
+                  },
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  }
+                },
+                "example.weather#ForecastDetails": {
+                  "type": "structure",
+                  "members": {
+                    "note": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpLabel": {}
+                      }
+                    },
+                    "details": {
+                      "target": "example.weather#ForecastDetails",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpPayload": {}
+                      }
+                    },
+                    "requestId": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpHeader": "x-request-id"
+                      }
+                    },
+                    "units": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#httpQuery": "units"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var client = new CSharpShapeGenerator()
+            .Generate(model)
+            .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
+            .Contents;
+
+        Assert.Contains(
+            """requestUriBuilder.Replace("{city}", Uri.EscapeDataString(FormatHttpValue(input.City)));""",
+            client
+        );
+        Assert.Contains("""AppendQuery(requestUriBuilder, "units", input.Units);""", client);
+        Assert.Contains("""AddHeader(request.Headers, "x-request-id", input.RequestId);""", client);
+        Assert.Contains(
+            "request.Content = SmithyJsonSerializer.Serialize(input.Details);",
+            client
         );
     }
 
@@ -856,6 +1009,9 @@ public sealed class CSharpShapeGeneratorTests
                 {
                     Reason = reason;
                 }
+
+                [SmithyMember("message", "smithy.api#String")]
+                public override string Message => base.Message;
 
                 [SmithyMember("reason", "smithy.api#String")]
                 public string? Reason { get; }

@@ -85,25 +85,53 @@ public sealed class CSharpShapeGenerator
             service,
             options,
             [
+                "System.Collections",
+                "System.Globalization",
                 "System.Net.Http",
                 "System.Text",
                 "System.Threading",
                 "System.Threading.Tasks",
                 "Smithy.NET.Client",
+                "Smithy.NET.Http",
                 "Smithy.NET.Json",
             ]
         );
         var typeName = $"{GetTypeName(service.Id)}Client";
-        builder.Line($"public sealed class {typeName}");
+        var interfaceName = $"I{typeName}";
+        builder.Line($"public interface {interfaceName}");
         builder.Block(() =>
         {
-            builder.Line("private readonly HttpClient httpClient;");
+            foreach (
+                var operationId in service.Operations.OrderBy(
+                    id => id.ToString(),
+                    StringComparer.Ordinal
+                )
+            )
+            {
+                var operation = model.GetShape(operationId);
+                builder.Line($"{GetOperationSignature(model, service, operation, options)};");
+            }
+        });
+        builder.Line();
+        builder.Line($"public sealed class {typeName} : {interfaceName}");
+        builder.Block(() =>
+        {
+            builder.Line("private readonly SmithyOperationInvoker invoker;");
             builder.Line();
             builder.Line($"public {typeName}(HttpClient httpClient)");
+            builder.Indented(() =>
+            {
+                builder.Line(": this(new SmithyOperationInvoker(new HttpClientTransport(httpClient)))");
+            });
+            builder.Block(() =>
+            {
+            });
+            builder.Line();
+            builder.Line($"public {typeName}(SmithyOperationInvoker invoker)");
             builder.Block(() =>
             {
                 builder.Line(
-                    "this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));"
+                    "this.invoker = invoker ?? throw new ArgumentNullException(nameof(invoker));"
                 );
             });
             builder.Line();
@@ -117,6 +145,18 @@ public sealed class CSharpShapeGenerator
             {
                 AppendOperationMethod(builder, model, service, operationId, options);
             }
+
+            foreach (
+                var operationId in service.Operations.OrderBy(
+                    id => id.ToString(),
+                    StringComparer.Ordinal
+                )
+            )
+            {
+                AppendErrorDeserializer(builder, model, operationId, options);
+            }
+
+            AppendClientHelpers(builder);
         });
 
         return new GeneratedCSharpFile(GetClientPath(service), builder.ToString());
@@ -132,6 +172,176 @@ public sealed class CSharpShapeGenerator
     {
         var operation = model.GetShape(operationId);
         var httpBinding = ReadHttpBinding(operation);
+        var inputShape = operation.Input is { } operationInput ? model.GetShape(operationInput) : null;
+        var outputType = operation.Output is { } output
+            ? GetTypeReference(output, service.Id.Namespace, options.BaseNamespace)
+            : null;
+
+        builder.Line($"public async {GetOperationSignature(model, service, operation, options)}");
+        builder.Block(() =>
+        {
+            if (operation.Input is not null)
+            {
+                builder.Line("ArgumentNullException.ThrowIfNull(input);");
+            }
+
+            AppendRequestUriBuilder(builder, inputShape, httpBinding);
+            builder.Line(
+                $"var request = new SmithyHttpRequest(new HttpMethod({FormatString(httpBinding.Method)}), requestUri);"
+            );
+            if (inputShape is not null)
+            {
+                AppendRequestHeaders(builder, inputShape);
+            }
+
+            if (inputShape is not null && TryGetPayloadMember(inputShape, out var payloadMember))
+            {
+                var propertyName = CSharpIdentifier.PropertyName(payloadMember.Name);
+                builder.Line($"request.Content = SmithyJsonSerializer.Serialize(input.{propertyName});");
+                builder.Line("request.ContentType = \"application/json\";");
+            }
+            else if (inputShape is not null && HasHttpBody(inputShape))
+            {
+                AppendRequestBody(builder, inputShape);
+            }
+
+            builder.Line();
+            builder.Line(
+                $"var response = await invoker.InvokeAsync({FormatString(service.Id.Name)}, {FormatString(operation.Id.Name)}, request, Deserialize{CSharpIdentifier.TypeName(operation.Id.Name)}ErrorAsync, cancellationToken).ConfigureAwait(false);"
+            );
+
+            if (outputType is null)
+            {
+                builder.Line("return;");
+                return;
+            }
+
+            builder.Line();
+            builder.Line(
+                $"return SmithyJsonSerializer.Deserialize<{outputType}>(response.Content);"
+            );
+        });
+        builder.Line();
+    }
+
+    private static void AppendRequestUriBuilder(
+        CSharpWriter builder,
+        ModelShape? input,
+        HttpBinding httpBinding
+    )
+    {
+        builder.Line($"var requestUriBuilder = new StringBuilder({FormatString(httpBinding.Uri)});");
+        if (input is not null)
+        {
+            foreach (var member in GetSortedMembers(input).Where(IsHttpLabelMember))
+            {
+                var propertyName = CSharpIdentifier.PropertyName(member.Name);
+                builder.Line(
+                    $"requestUriBuilder.Replace({FormatString($"{{{member.Name}}}")}, Uri.EscapeDataString(FormatHttpValue(input.{propertyName})));"
+                );
+            }
+
+            foreach (var member in GetSortedMembers(input).Where(IsHttpQueryMember))
+            {
+                var queryName = member
+                    .Traits.GetValueOrDefault(SmithyPrelude.HttpQueryTrait)!
+                    .Value.AsString();
+                var propertyName = CSharpIdentifier.PropertyName(member.Name);
+                builder.Line($"AppendQuery(requestUriBuilder, {FormatString(queryName)}, input.{propertyName});");
+            }
+        }
+
+        builder.Line("var requestUri = requestUriBuilder.ToString();");
+    }
+
+    private static void AppendRequestHeaders(CSharpWriter builder, ModelShape input)
+    {
+        foreach (var member in GetSortedMembers(input).Where(IsHttpHeaderMember))
+        {
+            var headerName = member
+                .Traits.GetValueOrDefault(SmithyPrelude.HttpHeaderTrait)!
+                .Value.AsString();
+            var propertyName = CSharpIdentifier.PropertyName(member.Name);
+            builder.Line(
+                $"AddHeader(request.Headers, {FormatString(headerName)}, input.{propertyName});"
+            );
+        }
+    }
+
+    private static void AppendRequestBody(CSharpWriter builder, ModelShape input)
+    {
+        var bodyMembers = GetSortedMembers(input).Where(IsHttpBodyMember).ToArray();
+        if (bodyMembers.Length == 0)
+        {
+            return;
+        }
+
+        builder.Line("var requestBody = new Dictionary<string, object?>");
+        builder.Block(
+            () =>
+            {
+                foreach (var member in bodyMembers)
+                {
+                    var propertyName = CSharpIdentifier.PropertyName(member.Name);
+                    var jsonName =
+                        member.Traits.GetValueOrDefault(SmithyPrelude.JsonNameTrait)?.AsString()
+                        ?? member.Name;
+                    builder.Line($"[{FormatString(jsonName)}] = input.{propertyName},");
+                }
+            },
+            closingSuffix: ";"
+        );
+        builder.Line("request.Content = SmithyJsonSerializer.Serialize(requestBody);");
+        builder.Line("request.ContentType = \"application/json\";");
+    }
+
+    private static bool IsHttpBodyMember(MemberShape member)
+    {
+        return !IsHttpLabelMember(member)
+            && !IsHttpQueryMember(member)
+            && !IsHttpHeaderMember(member)
+            && !IsHttpPayloadMember(member);
+    }
+
+    private static bool IsHttpHeaderMember(MemberShape member)
+    {
+        return member.Traits.Has(SmithyPrelude.HttpHeaderTrait);
+    }
+
+    private static bool IsHttpLabelMember(MemberShape member)
+    {
+        return member.Traits.Has(SmithyPrelude.HttpLabelTrait);
+    }
+
+    private static bool IsHttpPayloadMember(MemberShape member)
+    {
+        return member.Traits.Has(SmithyPrelude.HttpPayloadTrait);
+    }
+
+    private static bool IsHttpQueryMember(MemberShape member)
+    {
+        return member.Traits.Has(SmithyPrelude.HttpQueryTrait);
+    }
+
+    private static bool TryGetPayloadMember(ModelShape input, out MemberShape payloadMember)
+    {
+        var payloadMembers = input.Members.Values.Where(IsHttpPayloadMember).ToArray();
+        if (payloadMembers.Length > 1)
+        {
+            throw new SmithyException($"Input shape '{input.Id}' has multiple @httpPayload members.");
+        }
+
+        payloadMember = payloadMembers.FirstOrDefault()!;
+        return payloadMember is not null;
+    }
+
+    private static string GetOperationSignature(
+        SmithyModel model,
+        ModelShape service,
+        ModelShape operation,
+        CSharpGenerationOptions options
+    )
+    {
         var methodName = $"{CSharpIdentifier.PropertyName(operation.Id.Name)}Async";
         var inputType = operation.Input is { } input
             ? GetTypeReference(input, service.Id.Namespace, options.BaseNamespace)
@@ -143,59 +353,130 @@ public sealed class CSharpShapeGenerator
         var parameters = inputType is null
             ? "CancellationToken cancellationToken = default"
             : $"{inputType} input, CancellationToken cancellationToken = default";
+        return $"{returnType} {methodName}({parameters})";
+    }
 
-        builder.Line($"public async {returnType} {methodName}({parameters})");
+    private static void AppendErrorDeserializer(
+        CSharpWriter builder,
+        SmithyModel model,
+        ShapeId operationId,
+        CSharpGenerationOptions options
+    )
+    {
+        var operation = model.GetShape(operationId);
+        var methodName = $"Deserialize{CSharpIdentifier.TypeName(operation.Id.Name)}ErrorAsync";
+        builder.Line(
+            $"private static ValueTask<Exception?> {methodName}(SmithyHttpResponse response, CancellationToken cancellationToken)"
+        );
         builder.Block(() =>
         {
-            if (inputType is not null)
-            {
-                builder.Line("ArgumentNullException.ThrowIfNull(input);");
-            }
-
-            builder.Line(
-                $"using var request = new HttpRequestMessage(new HttpMethod({FormatString(httpBinding.Method)}), {FormatString(httpBinding.Uri)});"
-            );
-            if (operation.Input is { } input && HasHttpBody(model.GetShape(input)))
-            {
-                builder.Line("request.Content = new StringContent(");
-                builder.Indented(() =>
-                {
-                    builder.Line("SmithyJsonSerializer.Serialize(input),");
-                    builder.Line("Encoding.UTF8,");
-                    builder.Line("\"application/json\");");
-                });
-            }
-
-            builder.Line();
-            builder.Line(
-                "using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);"
-            );
-            builder.Line("if (!response.IsSuccessStatusCode)");
+            builder.Line("if (string.IsNullOrWhiteSpace(response.Content))");
             builder.Block(() =>
             {
-                builder.Line(
-                    "throw new SmithyClientException(response.StatusCode, response.ReasonPhrase);"
-                );
+                builder.Line("return ValueTask.FromResult<Exception?>(null);");
             });
 
-            if (outputType is null)
+            if (operation.Errors.Count == 0)
             {
-                builder.Line("return;");
+                builder.Line();
+                builder.Line("return ValueTask.FromResult<Exception?>(null);");
                 return;
             }
 
+            var errorId = operation
+                .Errors.OrderBy(id => id.ToString(), StringComparer.Ordinal)
+                .First();
+            var errorType = GetTypeReference(
+                errorId,
+                operation.Id.Namespace,
+                options.BaseNamespace
+            );
             builder.Line();
             builder.Line(
-                "var responseJson = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);"
+                $"return ValueTask.FromResult<Exception?>(SmithyJsonSerializer.Deserialize<{errorType}>(response.Content));"
             );
-            builder.Line($"return SmithyJsonSerializer.Deserialize<{outputType}>(responseJson);");
         });
         builder.Line();
     }
 
     private static bool HasHttpBody(ModelShape input)
     {
-        return input.Members.Count > 0;
+        return input.Members.Values.Any(IsHttpBodyMember);
+    }
+
+    private static void AppendClientHelpers(CSharpWriter builder)
+    {
+        builder.Line(
+            "private static void AddHeader(IDictionary<string, IReadOnlyList<string>> headers, string name, object? value)"
+        );
+        builder.Block(() =>
+        {
+            builder.Line("if (value is null)");
+            builder.Block(() =>
+            {
+                builder.Line("return;");
+            });
+            builder.Line();
+            builder.Line("headers[name] = [FormatHttpValue(value)];");
+        });
+        builder.Line();
+
+        builder.Line("private static void AppendQuery(StringBuilder builder, string name, object? value)");
+        builder.Block(() =>
+        {
+            builder.Line("if (value is null)");
+            builder.Block(() =>
+            {
+                builder.Line("return;");
+            });
+            builder.Line();
+            builder.Line("if (value is IEnumerable values && value is not string)");
+            builder.Block(() =>
+            {
+                builder.Line("foreach (var item in values)");
+                builder.Block(() =>
+                {
+                    builder.Line("AppendQueryValue(builder, name, item);");
+                });
+                builder.Line();
+                builder.Line("return;");
+            });
+            builder.Line();
+            builder.Line("AppendQueryValue(builder, name, value);");
+        });
+        builder.Line();
+
+        builder.Line("private static void AppendQueryValue(StringBuilder builder, string name, object? value)");
+        builder.Block(() =>
+        {
+            builder.Line("if (value is null)");
+            builder.Block(() =>
+            {
+                builder.Line("return;");
+            });
+            builder.Line();
+            builder.Line("builder.Append(builder.ToString().Contains('?') ? '&' : '?');");
+            builder.Line("builder.Append(Uri.EscapeDataString(name));");
+            builder.Line("builder.Append('=');");
+            builder.Line("builder.Append(Uri.EscapeDataString(FormatHttpValue(value)));");
+        });
+        builder.Line();
+
+        builder.Line("private static string FormatHttpValue(object value)");
+        builder.Block(() =>
+        {
+            builder.Line("return value switch");
+            builder.Block(
+                () =>
+                {
+                    builder.Line("DateTimeOffset timestamp => timestamp.ToUniversalTime().ToString(\"O\", CultureInfo.InvariantCulture),");
+                    builder.Line("IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture) ?? string.Empty,");
+                    builder.Line("_ => value.ToString() ?? string.Empty,");
+                },
+                closingSuffix: ";"
+            );
+        });
+        builder.Line();
     }
 
     private static HttpBinding ReadHttpBinding(ModelShape operation)
@@ -251,6 +532,7 @@ public sealed class CSharpShapeGenerator
         {
             var messageMember = GetErrorMessageMember(shape);
             AppendErrorConstructor(builder, model, shape, typeName, options, messageMember);
+            AppendErrorMessageProperty(builder, messageMember);
             AppendProperties(builder, model, shape, options, messageMember);
         });
         return builder.ToString();
@@ -653,6 +935,18 @@ public sealed class CSharpShapeGenerator
         {
             builder.Line();
         }
+    }
+
+    private static void AppendErrorMessageProperty(CSharpWriter builder, MemberShape? messageMember)
+    {
+        if (messageMember is null)
+        {
+            return;
+        }
+
+        AppendMemberAttributes(builder, messageMember, isSparse: false);
+        builder.Line("public override string Message => base.Message;");
+        builder.Line();
     }
 
     private static void AppendProperties(

@@ -22,6 +22,14 @@ public static class SmithyPrelude
 
     public static ShapeId HttpTrait { get; } = new(Namespace, "http");
 
+    public static ShapeId HttpHeaderTrait { get; } = new(Namespace, "httpHeader");
+
+    public static ShapeId HttpLabelTrait { get; } = new(Namespace, "httpLabel");
+
+    public static ShapeId HttpPayloadTrait { get; } = new(Namespace, "httpPayload");
+
+    public static ShapeId HttpQueryTrait { get; } = new(Namespace, "httpQuery");
+
     public static ShapeId RestJson1Trait { get; } = new(AwsProtocolsNamespace, "restJson1");
 
     public static ShapeId EnumValueTrait { get; } = new(Namespace, "enumValue");

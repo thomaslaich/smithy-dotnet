@@ -1,0 +1,121 @@
+using System.Net;
+using Smithy.NET.Client;
+using Smithy.NET.Http;
+
+namespace Smithy.NET.Tests.Client;
+
+public sealed class SmithyOperationInvokerTests
+{
+    [Fact]
+    public async Task InvokeAsyncRunsMiddlewareBeforeTransport()
+    {
+        var transport = new RecordingTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                """{"ok":true}""",
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var middleware = new HeaderMiddleware();
+        var invoker = new SmithyOperationInvoker(transport, [middleware]);
+
+        var response = await invoker.InvokeAsync(
+            "Weather",
+            "GetForecast",
+            new SmithyHttpRequest(HttpMethod.Get, "/forecast")
+        );
+
+        Assert.Equal("""{"ok":true}""", response.Content);
+        Assert.True(middleware.WasCalled);
+        Assert.Equal(["middleware"], transport.Request.Headers["x-smithy-test"]);
+    }
+
+    [Fact]
+    public async Task InvokeAsyncThrowsDeserializedErrorForNonSuccessResponse()
+    {
+        var transport = new RecordingTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.BadRequest,
+                "Bad Request",
+                """{"message":"bad city"}""",
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var invoker = new SmithyOperationInvoker(transport);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            invoker.InvokeAsync(
+                "Weather",
+                "GetForecast",
+                new SmithyHttpRequest(HttpMethod.Get, "/forecast"),
+                static (response, _) =>
+                    ValueTask.FromResult<Exception?>(
+                        new InvalidOperationException(response.Content)
+                    )
+            )
+        );
+
+        Assert.Equal("""{"message":"bad city"}""", error.Message);
+    }
+
+    [Fact]
+    public async Task InvokeAsyncThrowsGenericClientExceptionWhenErrorCannotBeDeserialized()
+    {
+        var transport = new RecordingTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.InternalServerError,
+                "Internal Server Error",
+                string.Empty,
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var invoker = new SmithyOperationInvoker(transport);
+
+        var error = await Assert.ThrowsAsync<SmithyClientException>(() =>
+            invoker.InvokeAsync(
+                "Weather",
+                "GetForecast",
+                new SmithyHttpRequest(HttpMethod.Get, "/forecast")
+            )
+        );
+
+        Assert.Equal(HttpStatusCode.InternalServerError, error.StatusCode);
+    }
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> EmptyHeaders { get; } =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+
+    private sealed class HeaderMiddleware : ISmithyClientMiddleware
+    {
+        public bool WasCalled { get; private set; }
+
+        public Task<SmithyOperationResponse> InvokeAsync(
+            SmithyOperationRequest request,
+            SmithyOperationNext nextOperation,
+            CancellationToken cancellationToken = default
+        )
+        {
+            WasCalled = true;
+            request.Request.Headers["x-smithy-test"] = ["middleware"];
+            return nextOperation(request, cancellationToken);
+        }
+    }
+
+    private sealed class RecordingTransport(SmithyHttpResponse response) : IHttpTransport
+    {
+        public SmithyHttpRequest Request { get; private set; } = null!;
+
+        public Task<SmithyHttpResponse> SendAsync(
+            SmithyHttpRequest request,
+            CancellationToken cancellationToken = default
+        )
+        {
+            Request = request;
+            return Task.FromResult(response);
+        }
+    }
+}

@@ -159,9 +159,9 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
    - Error deserialization.
    - Retry hooks, but keep the first retry implementation minimal.
 
-3. Choose one first protocol:
-   - Recommended: `restJson1` for broad HTTP/JSON usefulness.
-   - Alternative: Smithy RPC v2 CBOR if the project goal is to align with newer Smithy protocol work first.
+3. Implement `restJson1` as the first protocol:
+   - Cover the HTTP/JSON request, response, and error paths needed for a generated client.
+   - Keep Smithy RPC v2 CBOR as a later protocol once the HTTP/JSON path is proven.
 
 4. Generate service clients:
    - service interface
@@ -170,7 +170,10 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
    - error dispatch
    - endpoint/base URI configuration
 
-5. Add protocol compliance tests for the chosen protocol.
+5. Add protocol compliance tests for `restJson1`:
+   - request serialization
+   - response deserialization
+   - error deserialization and dispatch
 
 ### Phase 6: Packaging and First Preview (Weeks 21-22)
 
@@ -195,7 +198,32 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
    - Supported protocols.
    - Known limitations.
 
-### Phase 7: Additional Codecs and Protocols (Post-MVP)
+### Phase 7: Server Runtime and End-to-End Example (Post-MVP)
+
+1. Create `Smithy.NET.Server`:
+   - operation dispatcher
+   - protocol-aware request routing
+   - validation hooks
+   - error serialization
+
+2. Create `Smithy.NET.Server.AspNetCore`:
+   - endpoint routing integration
+   - middleware integration
+   - generated handler interfaces
+
+3. Generate server surfaces:
+   - service handler interface
+   - operation handler methods
+   - request/response binding glue
+   - error dispatch and serialization
+
+4. Add an end-to-end example:
+   - Smithy model library
+   - generated ASP.NET Core server
+   - generated client
+   - one JSON/HTTP round trip using the selected protocol
+
+### Phase 8: Additional Codecs and Protocols (Post-MVP)
 
 1. Add `Smithy.NET.Cbor`:
    - Explicit `CborReader`/`CborWriter` codecs.
@@ -209,6 +237,7 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
 
 3. Add protocol packages:
    - `Smithy.NET.Protocols.RpcV2Cbor`
+   - `Smithy.NET.Protocols.SimpleRestJson` for `alloy#simpleRestJson`
    - `Smithy.NET.Protocols.AwsJson`
    - `Smithy.NET.Protocols.RestJson`
    - `Smithy.NET.Protocols.RestXml`
@@ -216,19 +245,6 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
 4. Add auth packages:
    - `Smithy.NET.Auth`
    - `Smithy.NET.Auth.SigV4`
-
-### Phase 8: Server Runtime (Post-MVP)
-
-1. Create `Smithy.NET.Server`:
-   - operation dispatcher
-   - protocol-aware request routing
-   - validation hooks
-   - error serialization
-
-2. Create `Smithy.NET.Server.AspNetCore`:
-   - endpoint routing integration
-   - middleware integration
-   - generated handler interfaces
 
 ### Phase 9: F# Support (Post-MVP)
 
@@ -358,11 +374,14 @@ Smithy.NET.FSharp                  - F# idiomatic wrappers
    - Keep model parsing and main type generation in MSBuild/codegen so external files, projections, and multiple generated files are handled predictably.
 
 4. First protocol:
-   - Pick exactly one for MVP.
-   - `restJson1` is likely the most useful first HTTP/JSON target.
-   - Smithy RPC v2 CBOR is a strong second target if CBOR is a priority.
+   - Use `restJson1` for the MVP HTTP/JSON target.
+   - Smithy RPC v2 CBOR is a strong second target once the first client/server path is stable.
 
-5. F# support:
+5. Server before more protocols:
+   - After the first generated client protocol works, prioritize a generated server path and end-to-end example before expanding codec and protocol coverage.
+   - This proves the core architecture with a full Smithy model to client/server round trip.
+
+6. F# support:
    - Defer until the C# model/client path is stable.
    - Start with library helpers before generated F# source.
 
@@ -372,7 +391,7 @@ Smithy.NET.FSharp                  - F# idiomatic wrappers
 
 1. Should the first public preview target `net10.0` only, or `net8.0;net10.0`?
 
-2. Which protocol should define the MVP acceptance tests: `restJson1` or Smithy RPC v2 CBOR?
+2. How much `restJson1` protocol compliance is required before the first preview?
 
 3. Should generated structure types prefer records everywhere, or sealed classes where constructor/default/nullability semantics are easier to control?
 
