@@ -387,7 +387,20 @@ public static class SmithyJsonSerializer
             }
 
             var value = ReadValue(jsonProperty.Value, GetUnionValueType(variantType), options);
-            return Activator.CreateInstance(variantType, value)!;
+            try
+            {
+                return Activator.CreateInstance(variantType, value)
+                    ?? throw new JsonException(
+                        $"Activator returned null for union variant '{variantType.Name}' of '{targetType.Name}'."
+                    );
+            }
+            catch (Exception ex) when (ex is not JsonException)
+            {
+                throw new JsonException(
+                    $"Failed to construct union variant '{variantType.Name}' of '{targetType.Name}'.",
+                    ex
+                );
+            }
         }
 
         var unknown =
@@ -395,11 +408,24 @@ public static class SmithyJsonSerializer
             ?? throw new JsonException(
                 $"Smithy union '{targetType}' does not support unknown variants."
             );
-        return Activator.CreateInstance(
-            unknown,
-            jsonProperty.Name,
-            Document.FromJsonElement(jsonProperty.Value)
-        )!;
+        try
+        {
+            return Activator.CreateInstance(
+                    unknown,
+                    jsonProperty.Name,
+                    Document.FromJsonElement(jsonProperty.Value)
+                )
+                ?? throw new JsonException(
+                    $"Activator returned null for unknown variant of '{targetType.Name}'."
+                );
+        }
+        catch (Exception ex) when (ex is not JsonException)
+        {
+            throw new JsonException(
+                $"Failed to construct unknown union variant of '{targetType.Name}'.",
+                ex
+            );
+        }
     }
 
     private static void WriteDocument(Utf8JsonWriter writer, Document value)

@@ -249,7 +249,12 @@ public static class SmithyJsonAstReader
             containerId.WithMember(memberName),
             memberName,
             targetProperty.ValueKind == JsonValueKind.String
-                ? ShapeId.Parse(targetProperty.GetString() ?? string.Empty)
+                ? ShapeId.Parse(
+                    targetProperty.GetString()
+                        ?? throw new SmithyException(
+                            $"Member '{containerId}${memberName}' has a null target shape ID."
+                        )
+                )
                 : GetSyntheticEnumMemberTarget(containerKind),
             traits,
             defaultValue
@@ -282,7 +287,10 @@ public static class SmithyJsonAstReader
     {
         if (value.ValueKind == JsonValueKind.String)
         {
-            return ShapeId.Parse(value.GetString() ?? string.Empty);
+            return ShapeId.Parse(
+                value.GetString()
+                    ?? throw new SmithyException("Encountered a null shape ID string.")
+            );
         }
 
         if (
@@ -291,7 +299,10 @@ public static class SmithyJsonAstReader
             && target.ValueKind == JsonValueKind.String
         )
         {
-            return ShapeId.Parse(target.GetString() ?? string.Empty);
+            return ShapeId.Parse(
+                target.GetString()
+                    ?? throw new SmithyException("Encountered a null shape ID string in 'target'.")
+            );
         }
 
         throw new SmithyException(

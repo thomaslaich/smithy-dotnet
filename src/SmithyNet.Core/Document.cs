@@ -64,7 +64,7 @@ public readonly record struct Document
             JsonValueKind.Null or JsonValueKind.Undefined => Null,
             JsonValueKind.True => From(true),
             JsonValueKind.False => From(false),
-            JsonValueKind.String => From(element.GetString() ?? string.Empty),
+            JsonValueKind.String => From(element.GetString()!),
             JsonValueKind.Number => From(ReadNumber(element)),
             JsonValueKind.Array => From(element.EnumerateArray().Select(FromJsonElement)),
             JsonValueKind.Object => From(
