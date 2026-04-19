@@ -67,10 +67,14 @@ Set `SmithyGeneratedNamespaces` to the API namespace or namespaces you own:
 </PropertyGroup>
 ```
 
-## External Tools
+## Smithy CLI
 
-The task currently requires the Smithy CLI to be installed. If the CLI
-distribution uses Java, Java must also be available in the build environment.
-Set `SmithyCliPath` when `smithy` is not on `PATH`.
+The task expects the Smithy CLI to be provided by the build environment. The
+recommended setup is to install `smithy-cli` in a managed project environment,
+such as Pixi with the conda-forge package, and run `dotnet build` through that
+environment. In that flow, `SmithyCliPath` can stay empty because MSBuild
+inherits `PATH` and resolves the environment's `smithy` executable.
 
-Bundled or pinned Smithy CLI acquisition is not implemented yet.
+Set `SmithyCliPath` only when `smithy` is not on `PATH` or when the build needs
+to force a specific executable. If the selected CLI distribution uses Java, Java
+must also be available in the same build environment.

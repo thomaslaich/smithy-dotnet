@@ -3,6 +3,27 @@
 This guide uses local packages from this repository. Published preview packages
 are not assumed.
 
+## Install The Smithy CLI
+
+`SmithyNet.MSBuild` invokes the Smithy CLI during `dotnet build`. The
+recommended setup is to install `smithy-cli` in a project environment, such as
+Pixi with the conda-forge package, and run builds through that environment:
+
+```bash
+pixi add smithy-cli
+pixi run dotnet build
+```
+
+When the environment is active, `smithy` is resolved from `PATH`. You only need
+to set `SmithyCliPath` when the build does not inherit the intended `PATH` or
+when you want to force a specific executable:
+
+```xml
+<PropertyGroup>
+  <SmithyCliPath>.pixi/envs/default/bin/smithy</SmithyCliPath>
+</PropertyGroup>
+```
+
 ## Create Local Packages
 
 From the repository root:

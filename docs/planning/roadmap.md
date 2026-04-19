@@ -77,7 +77,7 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
    - Support `smithy-build.json`.
    - Support projections.
    - Support `sources`, `imports`, and Maven dependencies through Smithy CLI behavior.
-   - Emit clear diagnostics when Java/Smithy CLI is missing or model validation fails.
+   - Emit clear diagnostics when the Smithy CLI, Java if required by the selected distribution, or model validation fails.
 
 ### Phase 2: C# Shape Generation (Weeks 5-8)
 
@@ -126,10 +126,11 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
    - Track `.smithy`, `.json`, `smithy-build.json`, imported model files, and generator version.
    - Write a dependency manifest for transitive model inputs discovered by Smithy.
 
-4. Package Smithy CLI carefully:
-   - Preferred developer experience: zero-config via a bundled or downloaded pinned Smithy CLI.
-   - Also support `SmithyCliPath` for locked-down build environments.
-   - Document Java requirements if a JAR is used.
+4. Rely on an external Smithy CLI:
+   - Preferred developer experience: install `smithy-cli` in a managed project environment such as Pixi with conda-forge.
+   - Resolve `smithy` from `PATH` by default.
+   - Keep `SmithyCliPath` as an explicit override for locked-down or non-standard build environments.
+   - Document Java requirements when they apply to the selected CLI distribution.
 
 ### Phase 4: JSON Codec and Serialization Generation (Weeks 12-15)
 
@@ -365,10 +366,11 @@ SmithyNet.FSharp                  - F# idiomatic wrappers
    - Default to `obj/`.
    - Provide opt-in emitted generated files for debugging or committed output.
 
-2. Smithy CLI distribution:
-   - Provide zero-config behavior where practical.
-   - Allow explicit `SmithyCliPath`.
-   - Pin the Smithy CLI version used by the MSBuild package.
+2. Smithy CLI environment:
+   - Do not bundle or download the Smithy CLI from the MSBuild package.
+   - Prefer a managed project environment, such as Pixi with conda-forge `smithy-cli`.
+   - Resolve `smithy` from `PATH` by default.
+   - Allow explicit `SmithyCliPath` for builds that need a fixed executable path.
 
 3. Source generator responsibility:
    - Use it for Roslyn-native work.
@@ -397,8 +399,6 @@ SmithyNet.FSharp                  - F# idiomatic wrappers
 3. Should generated structure types prefer records everywhere, or sealed classes where constructor/default/nullability semantics are easier to control?
 
 4. Should string enums be generated as custom value types from the start to preserve unknown values?
-
-5. Should the package bundle Smithy CLI, download a pinned CLI into an SDK cache, or require explicit installation in enterprise/offline environments?
 
 ---
 

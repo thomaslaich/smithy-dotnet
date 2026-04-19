@@ -11,9 +11,10 @@ The current preview slice focuses on one working path:
 - generate a typed `restJson1` client
 - serialize and deserialize JSON payloads through Smithy metadata
 
-Server generation, bundled Smithy CLI acquisition, additional protocols, and
-NativeAOT serializer generation are still planned work. See
-[the roadmap](docs/planning/roadmap.md) for the implementation plan.
+Server generation, additional protocols, and NativeAOT serializer generation are
+still planned work. The Smithy CLI is expected to come from the build
+environment. See [the roadmap](docs/planning/roadmap.md) for the implementation
+plan.
 
 ## Packages
 

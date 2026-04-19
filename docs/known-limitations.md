@@ -15,11 +15,13 @@ package cache. The polyglot .NET example avoids the global cache with:
 If a local consumer keeps using stale package contents, clear that consumer's
 restored `SmithyNet.*` package folders or use a new package version.
 
-## Smithy CLI Acquisition
+## Smithy CLI Environment
 
-The MSBuild task invokes an existing `smithy` executable. It does not download,
-pin, or bundle the Smithy CLI yet. Build environments need the Smithy CLI and,
-when applicable, Java.
+The MSBuild task invokes an existing `smithy` executable. Smithy.NET does not
+download, pin, or bundle the Smithy CLI; build environments are expected to
+provide it. The recommended setup is a managed project environment, such as Pixi
+with `smithy-cli` from conda-forge. `SmithyCliPath` remains available for builds
+that cannot rely on `PATH` or need to force a specific executable.
 
 ## Protocol Coverage
 
