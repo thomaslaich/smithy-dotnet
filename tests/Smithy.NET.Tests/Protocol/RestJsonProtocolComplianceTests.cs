@@ -370,10 +370,7 @@ public sealed class RestJsonProtocolComplianceTests
         );
     }
 
-    private static string CreateOperationCall(
-        SmithyModel model,
-        OperationComplianceCase testCase
-    )
+    private static string CreateOperationCall(SmithyModel model, OperationComplianceCase testCase)
     {
         var options = new CSharpGenerationOptions();
         var operation = model.GetShape(testCase.OperationId);
@@ -403,10 +400,7 @@ public sealed class RestJsonProtocolComplianceTests
             """;
     }
 
-    private static string CreateHandlerCase(
-        OperationComplianceCase testCase,
-        bool isFirst
-    )
+    private static string CreateHandlerCase(OperationComplianceCase testCase, bool isFirst)
     {
         var expectedRequestUri =
             testCase.Request.QueryParams.Count == 0
@@ -420,22 +414,32 @@ public sealed class RestJsonProtocolComplianceTests
         var responseHeaders = CreateResponseHeaders(testCase.Response.Headers);
         var conditionPrefix = isFirst ? "if" : "else if";
         return $$"""
-                    {{conditionPrefix}} (request.Method.Method == {{ComplianceCSharpLiterals.FormatString(testCase.Request.Method)}} && request.RequestUri?.PathAndQuery == {{ComplianceCSharpLiterals.FormatString(expectedRequestUri)}})
+                    {{conditionPrefix}} (request.Method.Method == {{ComplianceCSharpLiterals.FormatString(
+                testCase.Request.Method
+            )}} && request.RequestUri?.PathAndQuery == {{ComplianceCSharpLiterals.FormatString(
+                expectedRequestUri
+            )}})
                     {
                         {{requestHeaderAssertions}}
 
                         var body = request.Content is null
                             ? string.Empty
                             : await request.Content.ReadAsStringAsync(cancellationToken);
-                        if (body != {{ComplianceCSharpLiterals.FormatString(testCase.Request.Body ?? string.Empty)}})
+                        if (body != {{ComplianceCSharpLiterals.FormatString(
+                testCase.Request.Body ?? string.Empty
+            )}})
                         {
                             throw new InvalidOperationException($"Unexpected request body: {body}");
                         }
 
-                        return new HttpResponseMessage((HttpStatusCode){{testCase.Response.Code.ToString(CultureInfo.InvariantCulture)}})
+                        return new HttpResponseMessage((HttpStatusCode){{testCase.Response.Code.ToString(
+                CultureInfo.InvariantCulture
+            )}})
                         {
                             Content = new StringContent(
-                                {{ComplianceCSharpLiterals.FormatString(testCase.Response.Body ?? string.Empty)}},
+                                {{ComplianceCSharpLiterals.FormatString(
+                testCase.Response.Body ?? string.Empty
+            )}},
                                 Encoding.UTF8,
                                 "application/json")
                         }{{responseHeaders}};
@@ -451,13 +455,22 @@ public sealed class RestJsonProtocolComplianceTests
     {
         return string.Join(
             Environment.NewLine,
-            headers.Select((header, index) =>
-                $$"""
-                if (!{{headersExpression}}.TryGetValues({{ComplianceCSharpLiterals.FormatString(header.Key)}}, out var {{context}}Header{{index.ToString(CultureInfo.InvariantCulture)}}) || {{context}}Header{{index.ToString(CultureInfo.InvariantCulture)}}.Single() != {{ComplianceCSharpLiterals.FormatString(header.Value)}})
-                {
-                    throw new InvalidOperationException({{ComplianceCSharpLiterals.FormatString($"Unexpected {context} header: {header.Key}")}});
-                }
-                """
+            headers.Select(
+                (header, index) =>
+                    $$"""
+                    if (!{{headersExpression}}.TryGetValues({{ComplianceCSharpLiterals.FormatString(
+                        header.Key
+                    )}}, out var {{context}}Header{{index.ToString(
+                        CultureInfo.InvariantCulture
+                    )}}) || {{context}}Header{{index.ToString(
+                        CultureInfo.InvariantCulture
+                    )}}.Single() != {{ComplianceCSharpLiterals.FormatString(header.Value)}})
+                    {
+                        throw new InvalidOperationException({{ComplianceCSharpLiterals.FormatString(
+                        $"Unexpected {context} header: {header.Key}"
+                    )}});
+                    }
+                    """
             )
         );
     }

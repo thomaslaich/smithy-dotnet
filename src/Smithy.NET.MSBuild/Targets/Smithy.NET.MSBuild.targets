@@ -24,10 +24,6 @@
     TaskName="Smithy.NET.MSBuild.GenerateSmithyCode"
     AssemblyFile="$(MSBuildThisFileDirectory)../tasks/Smithy.NET.MSBuild.dll" />
 
-  <ItemGroup Condition="Exists('$(SmithyGeneratedOutputPath)')">
-    <Compile Include="$(SmithyGeneratedOutputPath)**/*.g.cs" />
-  </ItemGroup>
-
   <Target
     Name="_ReadSmithyDependencyInputs"
     Condition="Exists('$(SmithyDependencyInputFile)')">
@@ -43,6 +39,10 @@
     Condition="'@(SmithyModel)' != '' Or Exists('$(SmithyBuildFile)')"
     Inputs="@(SmithyModel);@(_SmithyProjectModelInput);@(_SmithyDependencyInput);@(_SmithyGeneratorInput)"
     Outputs="$(SmithyGeneratedOutputPath)Smithy.NET.Generated.stamp">
+    <ItemGroup>
+      <_SmithyExistingGeneratedCompile Include="$(SmithyGeneratedOutputPath)**/*.g.cs" />
+    </ItemGroup>
+
     <GenerateSmithyCode
       WorkingDirectory="$(MSBuildProjectDirectory)"
       BuildFile="$(SmithyBuildFile)"
@@ -54,13 +54,12 @@
       Projection="$(SmithyProjection)"
       SmithyCliPath="$(SmithyCliPath)"
       BaseNamespace="$(RootNamespace)"
+      GeneratedNamespaces="$(SmithyGeneratedNamespaces)"
       SmithyModel="@(SmithyModel)">
       <Output TaskParameter="GeneratedFiles" ItemName="_SmithyGeneratedCompile" />
     </GenerateSmithyCode>
 
     <ItemGroup>
-      <Compile Remove="$(SmithyGeneratedOutputPath)**/*.g.cs" />
-      <Compile Include="@(_SmithyGeneratedCompile)" Visible="$(SmithyEmitGeneratedFiles)" />
       <FileWrites Include="@(_SmithyGeneratedCompile)" />
       <FileWrites Include="$(SmithyGeneratedOutputPath)Smithy.NET.Generated.stamp" />
       <FileWrites Include="$(SmithyGeneratedFileManifest)" />
@@ -69,5 +68,18 @@
     </ItemGroup>
 
     <Touch Files="$(SmithyGeneratedOutputPath)Smithy.NET.Generated.stamp" AlwaysCreate="true" />
+  </Target>
+
+  <Target
+    Name="_AddSmithyGeneratedCompileItems"
+    DependsOnTargets="GenerateSmithyCode"
+    BeforeTargets="CoreCompile"
+    Condition="'@(SmithyModel)' != '' Or Exists('$(SmithyBuildFile)')">
+    <ItemGroup>
+      <Compile Remove="$(SmithyGeneratedOutputPath)**/*.g.cs" />
+      <Compile Remove="@(_SmithyExistingGeneratedCompile)" />
+      <Compile Include="$(SmithyGeneratedOutputPath)**/*.g.cs" Visible="$(SmithyEmitGeneratedFiles)" />
+      <FileWrites Include="$(SmithyGeneratedOutputPath)**/*.g.cs" />
+    </ItemGroup>
   </Target>
 </Project>

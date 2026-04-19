@@ -21,19 +21,20 @@ public sealed class CSharpShapeGenerator
         return
         [
             .. model
-                .Shapes.Values.Where(ShouldGenerate)
+                .Shapes.Values.Where(shape => ShouldGenerate(shape, options))
                 .OrderBy(shape => shape.Id.ToString(), StringComparer.Ordinal)
                 .Select(shape => GenerateShape(model, shape, options)),
             .. model
-                .Shapes.Values.Where(ShouldGenerateClient)
+                .Shapes.Values.Where(shape => ShouldGenerateClient(shape, options))
                 .OrderBy(shape => shape.Id.ToString(), StringComparer.Ordinal)
                 .Select(shape => GenerateClient(model, shape, options)),
         ];
     }
 
-    private static bool ShouldGenerate(ModelShape shape)
+    private static bool ShouldGenerate(ModelShape shape, CSharpGenerationOptions options)
     {
-        return shape.Kind
+        return ShouldGenerateNamespace(shape, options)
+            && shape.Kind
             is ShapeKind.Structure
                 or ShapeKind.List
                 or ShapeKind.Set
@@ -43,9 +44,19 @@ public sealed class CSharpShapeGenerator
                 or ShapeKind.Union;
     }
 
-    private static bool ShouldGenerateClient(ModelShape shape)
+    private static bool ShouldGenerateClient(ModelShape shape, CSharpGenerationOptions options)
     {
-        return shape.Kind == ShapeKind.Service && shape.Traits.Has(SmithyPrelude.RestJson1Trait);
+        return
+            ShouldGenerateNamespace(shape, options)
+            && shape.Kind == ShapeKind.Service
+            && shape.Traits.Has(SmithyPrelude.RestJson1Trait);
+    }
+
+    private static bool ShouldGenerateNamespace(ModelShape shape, CSharpGenerationOptions options)
+    {
+        return
+            options.GeneratedNamespaces is not { Count: > 0 } generatedNamespaces
+            || generatedNamespaces.Contains(shape.Id.Namespace, StringComparer.Ordinal);
     }
 
     private static GeneratedCSharpFile GenerateShape(
@@ -122,7 +133,9 @@ public sealed class CSharpShapeGenerator
             builder.Line($"public {typeName}(Uri endpoint)");
             builder.Indented(() =>
             {
-                builder.Line(": this(new HttpClient(), new SmithyClientOptions { Endpoint = endpoint })");
+                builder.Line(
+                    ": this(new HttpClient(), new SmithyClientOptions { Endpoint = endpoint })"
+                );
             });
             builder.Block(() => { });
             builder.Line();
@@ -329,8 +342,12 @@ public sealed class CSharpShapeGenerator
             foreach (var member in GetSortedMembers(input).Where(IsHttpLabelMember))
             {
                 var propertyName = CSharpIdentifier.PropertyName(member.Name);
+                var labelVariableName = $"{CSharpIdentifier.ParameterName(member.Name)}Label";
                 builder.Line(
-                    $"requestUriBuilder.Replace({FormatString($"{{{member.Name}}}")}, Uri.EscapeDataString(FormatHttpValue(input.{propertyName})));"
+                    $"var {labelVariableName} = input.{propertyName} ?? throw new ArgumentException({FormatString($"HTTP label '{member.Name}' is required.")}, nameof(input));"
+                );
+                builder.Line(
+                    $"requestUriBuilder.Replace({FormatString($"{{{member.Name}}}")}, Uri.EscapeDataString(FormatHttpValue({labelVariableName})));"
                 );
             }
 

@@ -10,7 +10,7 @@ public sealed class HttpClientTransportTests
     {
         using var httpClient = new HttpClient(new Handler())
         {
-            BaseAddress = new Uri("https://ignored.example")
+            BaseAddress = new Uri("https://ignored.example"),
         };
         var transport = new HttpClientTransport(httpClient, new Uri("https://example.test/base"));
 
@@ -24,7 +24,10 @@ public sealed class HttpClientTransportTests
             CancellationToken cancellationToken
         )
         {
-            Assert.Equal("https://example.test/base/forecast?units=metric", request.RequestUri?.ToString());
+            Assert.Equal(
+                "https://example.test/base/forecast?units=metric",
+                request.RequestUri?.ToString()
+            );
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
         }
     }

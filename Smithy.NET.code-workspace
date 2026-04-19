@@ -1,0 +1,61 @@
+{
+  "folders": [
+    {
+      "name": "Smithy.NET",
+      "path": "."
+    },
+    {
+      "name": "Polyglot Java",
+      "path": "examples/polyglot/java"
+    },
+    {
+      "name": "Polyglot Scala",
+      "path": "examples/polyglot/scala"
+    },
+    {
+      "name": "Polyglot .NET Client",
+      "path": "examples/polyglot/dotnet/client"
+    }
+  ],
+  "settings": {
+    "dotnet.defaultSolution": "Smithy.NET.slnx",
+    "files.exclude": {
+      "**/.devenv": true,
+      "**/.direnv": true,
+      "**/.gradle": true,
+      "**/artifacts": true,
+      "**/bin": true,
+      "**/obj": true,
+      "**/target": true
+    },
+    "files.watcherExclude": {
+      "**/.devenv/**": true,
+      "**/.direnv/**": true,
+      "**/.gradle/**": true,
+      "**/artifacts/**": true,
+      "**/bin/**": true,
+      "**/obj/**": true,
+      "**/target/**": true,
+      "**/target": true
+    },
+    "search.exclude": {
+      "**/.devenv": true,
+      "**/.direnv": true,
+      "**/.gradle": true,
+      "**/artifacts": true,
+      "**/bin": true,
+      "**/obj": true,
+      "**/target": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-dotnettools.csdevkit",
+      "ms-dotnettools.csharp",
+      "vscjava.vscode-java-pack",
+      "scalameta.metals",
+      "jnoortheen.nix-ide",
+      "mkhl.direnv"
+    ]
+  }
+}

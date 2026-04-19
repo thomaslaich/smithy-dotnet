@@ -2,6 +2,11 @@
   <PropertyGroup>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NoWarn>$(NoWarn);NU5100</NoWarn>
+    <TargetsForTfmSpecificContentInPackage>
+      $(TargetsForTfmSpecificContentInPackage);AddSmithyTaskFilesToPackage
+    </TargetsForTfmSpecificContentInPackage>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,11 +31,14 @@
     />
   </ItemGroup>
 
-  <Target Name="AddSmithyTaskFilesToPackage" BeforeTargets="Pack">
+  <Target Name="AddSmithyTaskFilesToPackage">
     <ItemGroup>
-      <None Include="$(TargetDir)Smithy.NET.MSBuild.dll" Pack="true" PackagePath="tasks/" />
-      <None Include="$(TargetDir)Smithy.NET.CodeGeneration.dll" Pack="true" PackagePath="tasks/" />
-      <None Include="$(TargetDir)Smithy.NET.Core.dll" Pack="true" PackagePath="tasks/" />
+      <TfmSpecificPackageFile Include="$(TargetDir)Smithy.NET.MSBuild.dll" PackagePath="tasks/" />
+      <TfmSpecificPackageFile
+        Include="$(TargetDir)Smithy.NET.CodeGeneration.dll"
+        PackagePath="tasks/"
+      />
+      <TfmSpecificPackageFile Include="$(TargetDir)Smithy.NET.Core.dll" PackagePath="tasks/" />
     </ItemGroup>
   </Target>
 </Project>

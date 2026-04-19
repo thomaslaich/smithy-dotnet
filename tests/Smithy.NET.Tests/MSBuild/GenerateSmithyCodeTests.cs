@@ -106,6 +106,66 @@ public sealed class GenerateSmithyCodeTests
     }
 
     [Fact]
+    public void ExecuteCanLimitGeneratedFilesToConfiguredNamespaces()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var modelDirectory = Path.Combine(directory.Path, "model");
+        var buildOutputDirectory = Path.Combine(directory.Path, "smithy-build");
+        var generatedOutputDirectory = Path.Combine(directory.Path, "generated");
+        Directory.CreateDirectory(modelDirectory);
+
+        File.WriteAllText(
+            Path.Combine(directory.Path, "smithy-build.json"),
+            """
+            {
+              "version": "1.0",
+              "sources": ["model"],
+              "projections": {
+                "source": {}
+              }
+            }
+            """
+        );
+        File.WriteAllText(
+            Path.Combine(modelDirectory, "weather.smithy"),
+            """
+            $version: "2"
+
+            namespace example.weather
+
+            structure Forecast {}
+            """
+        );
+        File.WriteAllText(
+            Path.Combine(modelDirectory, "aws.smithy"),
+            """
+            $version: "2"
+
+            namespace aws.api
+
+            structure Service {}
+            """
+        );
+
+        var task = new GenerateSmithyCode
+        {
+            WorkingDirectory = directory.Path,
+            BuildFile = "smithy-build.json",
+            OutputDirectory = buildOutputDirectory,
+            GeneratedOutputDirectory = generatedOutputDirectory,
+            GeneratedNamespaces = "example.weather",
+        };
+
+        Assert.True(task.Execute());
+
+        var generatedFile = Assert.Single(task.GeneratedFiles);
+        Assert.Equal(
+            Path.Combine(generatedOutputDirectory, "Example", "Weather", "Forecast.g.cs"),
+            generatedFile.ItemSpec
+        );
+    }
+
+    [Fact]
     public void ExecuteDeletesFilesFromPreviousGeneratedFileManifest()
     {
         using var directory = TemporaryDirectory.Create();
@@ -327,7 +387,7 @@ public sealed class GenerateSmithyCodeTests
             Path.Combine(packageDirectory, "build", "Smithy.NET.MSBuild.targets")
         );
         CopyAssemblyToTasks(typeof(GenerateSmithyCode).Assembly.Location, packageDirectory);
-        CopyAssemblyToTasks(typeof(SmithyCli).Assembly.Location, packageDirectory);
+        CopyAssemblyToTasks(typeof(SmithyBuildRunner).Assembly.Location, packageDirectory);
         CopyAssemblyToTasks(typeof(ShapeId).Assembly.Location, packageDirectory);
 
         File.WriteAllText(
@@ -403,6 +463,13 @@ public sealed class GenerateSmithyCodeTests
                     "Forecast.g.cs"
                 )
             )
+        );
+
+        var secondResult = await RunDotNetBuild(projectDirectory);
+
+        Assert.True(
+            secondResult.ExitCode == 0,
+            $"second dotnet build failed with exit code {secondResult.ExitCode}.{Environment.NewLine}{secondResult.Output}{Environment.NewLine}{secondResult.Error}"
         );
     }
 

@@ -11,6 +11,7 @@ call each other, but they are not treated as a shared source of truth.
 |---------|----------|------|------|
 | `scala-service` | Scala (Smithy4s + http4s) | 8081 | Reference server implementation |
 | `java-service` | Java (Smithy Java) | 8082 | Generated server implementation |
+| `dotnet-client` | .NET (Smithy.NET) | n/a | Generated client example |
 
 Each service implements `HelloService`:
 - `GET /hello/{name}` — returns a greeting and the name of the responding service
@@ -26,6 +27,9 @@ The services use separate Smithy models:
 - **Java**: Smithy Java reads `java/smithy/model/hello.smithy`, which uses
   `aws.protocols#restJson1`, and generates server stubs, request/response types,
   and a typed client used by the `Ping` operation.
+- **.NET client**: Smithy.NET reads the Java model from `dotnet/client`, generates
+  C# request/response types plus a typed `HelloServiceClient`, and calls the
+  Java service over `restJson1`.
 
 This mirrors a more realistic polyglot setup: services do not usually share a
 single in-repo Smithy file. They publish compatible HTTP APIs and generate local
@@ -65,6 +69,25 @@ The Java service generates sources from `java/smithy/model/hello.smithy` before
 compiling. If you add a new operation, the generated service builder will require
 that the server registers an implementation for it.
 
+### .NET — run the generated client
+
+First create local NuGet packages from the repository root:
+
+```bash
+dotnet pack Smithy.NET.slnx --configuration Release --output artifacts/packages
+```
+
+Then run the client against the Java service:
+
+```bash
+cd dotnet/client
+dotnet run -- http://localhost:8082 world
+```
+
+The .NET example restores packages from `artifacts/packages` first. It uses the
+MSBuild package to run the Smithy CLI, generate C# into `obj/`, and compile the
+typed client as part of the normal build.
+
 ### Run everything with Docker Compose
 
 ```bash
@@ -91,6 +114,10 @@ curl -X POST http://localhost:8081/ping \
 curl -X POST http://localhost:8082/ping \
   -H "Content-Type: application/json" \
   -d '{"targetUrl": "http://scala-service:8080", "name": "world"}'
+
+# Ask the generated .NET client to call Java
+cd dotnet/client
+dotnet run -- http://localhost:8082 world
 ```
 
 The outer `curl` runs on the host, so it uses the published ports (`8081` and
@@ -99,6 +126,6 @@ so it uses Docker Compose service DNS and the container port (`8080`).
 
 ## Adding the .NET service
 
-When Smithy.NET is ready, a `dotnet/` service will be added here. It will use the
-MSBuild integration to generate C# types, server handlers, and a typed HTTP
-client from its own model, while matching the same HTTP routes and payloads.
+The .NET side currently demonstrates generated client code against the Java API.
+A future `dotnet/` service can use the same MSBuild integration once server
+generation exists, while matching the same HTTP routes and payloads.

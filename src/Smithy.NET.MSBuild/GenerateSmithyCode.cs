@@ -31,6 +31,8 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
 
     public string? BaseNamespace { get; set; }
 
+    public string? GeneratedNamespaces { get; set; }
+
     public string? GeneratedFileManifest { get; set; }
 
     public string? DependencyManifest { get; set; }
@@ -71,7 +73,7 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
             ? ResolveProjectPath(dependencyInputFilePath)
             : null;
         var buildFile = ResolveBuildFile(outputDirectory);
-        var result = await new SmithyCli()
+        var result = await new SmithyBuildRunner()
             .BuildAsync(
                 new SmithyBuildOptions(
                     WorkingDirectory,
@@ -85,7 +87,10 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
 
         var files = new CSharpShapeGenerator().Generate(
             result.Model,
-            new CSharpGenerationOptions(BaseNamespace: NormalizeOptional(BaseNamespace))
+            new CSharpGenerationOptions(
+                BaseNamespace: NormalizeOptional(BaseNamespace),
+                GeneratedNamespaces: ParseGeneratedNamespaces(GeneratedNamespaces)
+            )
         );
         var generatedPaths = files
             .Select(file =>
@@ -120,6 +125,16 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
         WriteDependencyManifest(result, buildFile, dependencyInputs, dependencyManifest);
         WriteDependencyInputFile(dependencyInputs, dependencyInputFile);
         GeneratedFiles = generatedFiles.ToArray();
+    }
+
+    private static string[] ParseGeneratedNamespaces(string? generatedNamespaces)
+    {
+        return NormalizeOptional(generatedNamespaces) is not { } value
+            ? []
+            : value
+                .Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
     }
 
     private string[] GetDependencyInputs(SmithyBuildResult result, string buildFile)

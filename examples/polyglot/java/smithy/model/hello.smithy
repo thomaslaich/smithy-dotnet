@@ -7,7 +7,10 @@ use aws.protocols#restJson1
 @restJson1
 service HelloService {
     version: "2024-01-01"
-    operations: [SayHello, Ping]
+    operations: [
+        SayHello
+        Ping
+    ]
 }
 
 @http(method: "GET", uri: "/hello/{name}")
@@ -18,6 +21,7 @@ operation SayHello {
         @httpLabel
         name: String
     }
+
     output := {
         @required
         message: String
@@ -39,6 +43,7 @@ operation Ping {
         @required
         name: String
     }
+
     output := {
         @required
         message: String

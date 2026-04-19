@@ -1,36 +1,82 @@
 # Smithy.NET
 
-Smithy.NET is an early-stage .NET toolkit for generating C# code and runtime clients from Smithy models.
+Smithy.NET is an early-stage .NET toolkit for generating C# models and typed
+HTTP clients from Smithy models.
 
-Current status: C# model-shape generation and MSBuild integration are implemented for the first model-only slice. JSON codec and client generation are next on the roadmap. See `docs/planning/roadmap.md` for the implementation roadmap.
+The current preview slice focuses on one working path:
 
-## MSBuild integration
+- run the Smithy CLI from MSBuild
+- read the selected Smithy build projection JSON AST
+- generate C# model types into `obj/`
+- generate a typed `restJson1` client
+- serialize and deserialize JSON payloads through Smithy metadata
 
-The `Smithy.NET.MSBuild` package runs Smithy build before compilation, reads the selected projection's JSON AST, writes generated C# under `$(IntermediateOutputPath)Smithy/` by default, and adds those files to `Compile`.
+Server generation, bundled Smithy CLI acquisition, additional protocols, and
+NativeAOT serializer generation are still planned work. See
+[the roadmap](docs/planning/roadmap.md) for the implementation plan.
 
-Add Smithy model files to a project with:
+## Packages
+
+The preview package set is:
+
+| Package | Purpose |
+| --- | --- |
+| `Smithy.NET.Core` | Shared runtime primitives, generated-code attributes, Smithy IDs, and document values. |
+| `Smithy.NET.CodeGeneration` | Smithy JSON AST reader and C# generator. |
+| `Smithy.NET.MSBuild` | MSBuild integration that invokes Smithy build and adds generated C# to compilation. |
+| `Smithy.NET.Json` | Reflection-based JSON serializer for generated Smithy shapes. |
+| `Smithy.NET.Http` | HTTP transport abstractions and `HttpClient` transport. |
+| `Smithy.NET.Client` | Operation invoker, client middleware pipeline, errors, and retry middleware. |
+| `Smithy.NET.Generators` | Placeholder for future Roslyn/source-generation work. |
+
+## Quick Start
+
+Create local packages:
+
+```bash
+dotnet pack Smithy.NET.slnx --configuration Release --output artifacts/packages
+```
+
+Create a consumer project that references the local package source and add
+`Smithy.NET.MSBuild` plus the runtime packages needed by generated clients:
 
 ```xml
 <ItemGroup>
-  <SmithyModel Include="models/**/*.smithy" />
+  <PackageReference Include="Smithy.NET.Client" Version="1.0.0" />
+  <PackageReference Include="Smithy.NET.Core" Version="1.0.0" />
+  <PackageReference Include="Smithy.NET.Http" Version="1.0.0" />
+  <PackageReference Include="Smithy.NET.Json" Version="1.0.0" />
+  <PackageReference Include="Smithy.NET.MSBuild" Version="1.0.0" PrivateAssets="all" />
 </ItemGroup>
 ```
 
-Optional MSBuild properties:
+Add a Smithy model through either a `smithy-build.json` file or `SmithyModel`
+items. A `smithy-build.json` is recommended when the model has imports, Maven
+dependencies, or projections:
 
-| Property | Default | Description |
-| --- | --- | --- |
-| `SmithyBuildFile` | `$(MSBuildProjectDirectory)/smithy-build.json` | Smithy build configuration file. If it is missing and `SmithyModel` items are present, a minimal build file is generated under `obj`. |
-| `SmithyProjection` | `source` | Smithy build projection to compile. |
-| `SmithyGeneratedOutputPath` | `$(IntermediateOutputPath)Smithy/` | Directory for generated `.g.cs` files that are added to `Compile`. |
-| `SmithyBuildOutputPath` | `$(IntermediateOutputPath)SmithyBuild/` | Directory for Smithy build output and generated manifests. |
-| `SmithyGeneratedFileManifest` | `$(SmithyBuildOutputPath)generated-files.json` | Manifest used to delete stale generated `.g.cs` files when shapes are renamed or removed. |
-| `SmithyDependencyManifest` | `$(SmithyBuildOutputPath)dependencies.json` | Manifest recording the selected Smithy model output, configured model inputs, and Smithy source artifacts. |
-| `SmithyDependencyInputFile` | `$(SmithyBuildOutputPath)dependency-inputs.txt` | Newline-delimited dependency file read by MSBuild incremental inputs on later builds. |
-| `SmithyEmitGeneratedFiles` | `false` | Marks generated compile items as visible in IDE project views when set to `true`. |
-| `SmithyCliPath` | empty | Explicit Smithy CLI executable path. When omitted, `smithy` is resolved from `PATH`. |
+```json
+{
+  "version": "1.0",
+  "sources": ["model"],
+  "maven": {
+    "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.68.0"]
+  }
+}
+```
 
-The current MSBuild task requires the Smithy CLI to be installed. If the CLI distribution uses Java, Java must also be available in the build environment. Bundled or pinned Smithy CLI acquisition is still planned.
+Build the project. The MSBuild package runs `smithy build`, writes generated C#
+under `$(IntermediateOutputPath)Smithy/`, and adds those files to `Compile`.
+
+See [Quick Start](docs/quick-start.md) for a complete example project.
+
+## Documentation
+
+- [Quick Start](docs/quick-start.md)
+- [MSBuild Reference](docs/msbuild.md)
+- [Supported Surface](docs/supported-surface.md)
+- [Known Limitations](docs/known-limitations.md)
+- [Polyglot Example](examples/polyglot/README.md)
+- [Roadmap](docs/planning/roadmap.md)
 
 ## Development
 
