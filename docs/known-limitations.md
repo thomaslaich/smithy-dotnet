@@ -4,7 +4,7 @@ Smithy.NET is still a preview-stage implementation.
 
 ## Package Versioning
 
-Local packages currently use `1.0.0`. When repacking during development, NuGet
+Local packages currently use `0.1.0-preview.1`. When repacking during development, NuGet
 may keep an older restored copy of the same version in a consumer project's
 package cache. The polyglot .NET example avoids the global cache with:
 

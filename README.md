@@ -43,11 +43,11 @@ Create a consumer project that references the local package source and add
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="SmithyNet.Client" Version="1.0.0" />
-  <PackageReference Include="SmithyNet.Core" Version="1.0.0" />
-  <PackageReference Include="SmithyNet.Http" Version="1.0.0" />
-  <PackageReference Include="SmithyNet.Json" Version="1.0.0" />
-  <PackageReference Include="SmithyNet.MSBuild" Version="1.0.0" PrivateAssets="all" />
+  <PackageReference Include="SmithyNet.Client" Version="0.1.0-preview.1" />
+  <PackageReference Include="SmithyNet.Core" Version="0.1.0-preview.1" />
+  <PackageReference Include="SmithyNet.Http" Version="0.1.0-preview.1" />
+  <PackageReference Include="SmithyNet.Json" Version="0.1.0-preview.1" />
+  <PackageReference Include="SmithyNet.MSBuild" Version="0.1.0-preview.1" PrivateAssets="all" />
 </ItemGroup>
 ```
 
