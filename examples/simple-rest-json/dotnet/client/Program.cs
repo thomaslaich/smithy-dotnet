@@ -12,5 +12,5 @@ var client = new HelloServiceClient(
 var hello = await client.SayHelloAsync(new SayHelloInput(name));
 Console.WriteLine($"SayHello => {hello.Message} from {hello.From}");
 
-var ping = await client.PingAsync(new PingInput(name: name, targetUrl: endpoint));
+var ping = await client.PingAsync(new PingInput(name));
 Console.WriteLine($"Ping => {ping.Message} from {ping.From}");

@@ -33,9 +33,6 @@ operation SayHello {
 operation Ping {
     input := {
         @required
-        targetUrl: String
-
-        @required
         name: String
     }
 

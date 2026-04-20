@@ -45,7 +45,7 @@ You can also call the server directly:
 curl -i http://localhost:5000/hello/world
 curl -i -X POST http://localhost:5000/ping \
   -H "Content-Type: application/json" \
-  -d '{"targetUrl":"http://localhost:5000","name":"world"}'
+  -d '{"name":"world"}'
 ```
 
 Current preview note: `simpleRestJson` services generate both client and server

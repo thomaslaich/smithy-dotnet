@@ -1,5 +1,4 @@
 using Example.Hello;
-using SmithyNet.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<IHelloServiceHandler, HelloHandler>();
@@ -22,18 +21,13 @@ internal sealed class HelloHandler : IHelloServiceHandler
         );
     }
 
-    public async Task<PingOutput> PingAsync(
+    public Task<PingOutput> PingAsync(
         PingInput input,
         CancellationToken cancellationToken = default
     )
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(input.TargetUrl);
-
-        var client = new HelloServiceClient(
-            new HttpClient(),
-            new SmithyClientOptions { Endpoint = new Uri(input.TargetUrl) }
+        return Task.FromResult(
+            new PingOutput(ServiceName, $"Pong, {input.Name} from {ServiceName}.")
         );
-        var hello = await client.SayHelloAsync(new SayHelloInput(input.Name), cancellationToken);
-        return new PingOutput(ServiceName, $"Ping saw: {hello.Message}");
     }
 }
