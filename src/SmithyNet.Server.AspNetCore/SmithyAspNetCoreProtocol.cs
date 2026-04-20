@@ -115,9 +115,7 @@ public static class SmithyAspNetCoreProtocol
             .ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(content))
         {
-            throw new InvalidOperationException(
-                $"Missing JSON request body member '{name}'."
-            );
+            throw new InvalidOperationException($"Missing JSON request body member '{name}'.");
         }
 
         using var document = System.Text.Json.JsonDocument.Parse(content);
