@@ -41,6 +41,7 @@ internal static class ComplianceCSharpLiterals
         return shape.Kind switch
         {
             ShapeKind.Structure => CreateStructure(model, shape, value, currentNamespace, options),
+            ShapeKind.Map => CreateMap(model, shape, value, currentNamespace, options),
             ShapeKind.Enum =>
                 $"new {GetTypeReference(target, currentNamespace, options)}({FormatString(value.AsString())})",
             ShapeKind.IntEnum =>
@@ -78,6 +79,11 @@ internal static class ComplianceCSharpLiterals
         }
 
         var shape = model.GetShape(target);
+        if (shape.Kind == ShapeKind.Map)
+        {
+            return CreateMapEqualityAssertion(shape, actualExpression, expected, failureContext);
+        }
+
         if (shape.Kind != ShapeKind.Structure)
         {
             throw new NotSupportedException(
@@ -122,6 +128,47 @@ internal static class ComplianceCSharpLiterals
                     : "null"
             );
         return $"new {GetTypeReference(shape.Id, currentNamespace, options)}({string.Join(", ", arguments)})";
+    }
+
+    private static string CreateMap(
+        SmithyModel model,
+        ModelShape shape,
+        Document value,
+        string currentNamespace,
+        CSharpGenerationOptions options
+    )
+    {
+        var mapValue = shape.Members["value"];
+        var entries = value
+            .AsObject()
+            .Select(item =>
+                $"[{FormatString(item.Key)}] = {CreateValue(model, mapValue.Target, item.Value, shape.Id.Namespace, options)}"
+            );
+        return $"new {GetTypeReference(shape.Id, currentNamespace, options)}(new Dictionary<string, string> {{ {string.Join(", ", entries)} }})";
+    }
+
+    private static string CreateMapEqualityAssertion(
+        ModelShape shape,
+        string actualExpression,
+        Document expected,
+        string failureContext
+    )
+    {
+        if (shape.Members["value"].Target != ShapeId.Parse("smithy.api#String"))
+        {
+            throw new NotSupportedException(
+                $"Protocol test map assertion generation for '{shape.Id}' is not supported."
+            );
+        }
+
+        return string.Join(
+            Environment.NewLine,
+            expected
+                .AsObject()
+                .Select(item =>
+                    $"if (!{actualExpression}!.Values.TryGetValue({FormatString(item.Key)}, out var {CSharpIdentifier.ParameterName(item.Key)}Value) || {CSharpIdentifier.ParameterName(item.Key)}Value != {FormatString(item.Value.AsString())}) throw new InvalidOperationException({FormatString(failureContext)});"
+                )
+        );
     }
 
     private static string GetTypeReference(

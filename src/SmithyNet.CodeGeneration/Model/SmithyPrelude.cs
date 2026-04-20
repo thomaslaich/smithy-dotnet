@@ -30,7 +30,11 @@ public static class SmithyPrelude
 
     public static ShapeId HttpPayloadTrait { get; } = new(Namespace, "httpPayload");
 
+    public static ShapeId HttpPrefixHeadersTrait { get; } = new(Namespace, "httpPrefixHeaders");
+
     public static ShapeId HttpQueryTrait { get; } = new(Namespace, "httpQuery");
+
+    public static ShapeId HttpQueryParamsTrait { get; } = new(Namespace, "httpQueryParams");
 
     public static ShapeId HttpErrorTrait { get; } = new(Namespace, "httpError");
 
