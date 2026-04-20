@@ -13,6 +13,10 @@ generation are planned. See the
 [roadmap](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/planning/roadmap.md)
 for details.
 
+Smithy.NET tracks generated-client conformance against official Smithy/AWS and
+Alloy protocol test suites in
+[docs/generated/protocol-conformance.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/generated/protocol-conformance.md).
+
 ## Packages
 
 | Package | Purpose |

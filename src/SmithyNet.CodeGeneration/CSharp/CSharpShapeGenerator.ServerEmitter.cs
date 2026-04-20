@@ -447,6 +447,15 @@ public sealed partial class CSharpShapeGenerator
                 );
             }
 
+            foreach (var member in GetSortedMembers(output).Where(IsHttpPrefixHeadersMember))
+            {
+                var propertyName = CSharpIdentifier.PropertyName(member.Name);
+                var headerPrefix = member.Traits[SmithyPrelude.HttpPrefixHeadersTrait].AsString();
+                builder.Line(
+                    $"SmithyAspNetCoreProtocol.AddPrefixedResponseHeaders(httpContext, {FormatString(headerPrefix)}, output.{propertyName});"
+                );
+            }
+
             if (GetSortedMembers(output).FirstOrDefault(IsHttpPayloadMember) is { } payloadMember)
             {
                 var propertyName = CSharpIdentifier.PropertyName(payloadMember.Name);
@@ -538,12 +547,30 @@ public sealed partial class CSharpShapeGenerator
                 : $"SmithyAspNetCoreProtocol.GetQueryValue<{memberType}>(httpContext, {FormatString(queryName)})";
         }
 
+        if (IsHttpQueryParamsMember(member))
+        {
+            var excludedNames = GetSortedMembers(input)
+                .Where(IsHttpQueryMember)
+                .Select(queryMember => queryMember.Traits[SmithyPrelude.HttpQueryTrait].AsString());
+            var expression =
+                $"SmithyAspNetCoreProtocol.GetQueryParams<{memberType}>(httpContext, [{string.Join(", ", excludedNames.Select(FormatString))}])";
+            return required ? $"{expression}!" : expression;
+        }
+
         if (IsHttpHeaderMember(member))
         {
             var headerName = member.Traits[SmithyPrelude.HttpHeaderTrait].AsString();
             return required
                 ? $"SmithyAspNetCoreProtocol.GetRequiredHeaderValue<{memberType}>(httpContext, {FormatString(headerName)})"
                 : $"SmithyAspNetCoreProtocol.GetHeaderValue<{memberType}>(httpContext, {FormatString(headerName)})";
+        }
+
+        if (IsHttpPrefixHeadersMember(member))
+        {
+            var headerPrefix = member.Traits[SmithyPrelude.HttpPrefixHeadersTrait].AsString();
+            var expression =
+                $"SmithyAspNetCoreProtocol.GetPrefixedHeaders<{memberType}>(httpContext, {FormatString(headerPrefix)})";
+            return required ? $"{expression}!" : expression;
         }
 
         if (IsHttpPayloadMember(member))
