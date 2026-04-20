@@ -15,7 +15,7 @@
     <VersionSuffix>preview.1</VersionSuffix>
     <Authors>Thomas Laich</Authors>
     <Description>Smithy.NET — C# code generation and runtime toolkit for Smithy models.</Description>
-    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/thomaslaich/smithy-dotnet</PackageProjectUrl>
     <RepositoryUrl>https://github.com/thomaslaich/smithy-dotnet</RepositoryUrl>

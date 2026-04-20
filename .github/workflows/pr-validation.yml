@@ -1,10 +1,12 @@
-name: CI
+name: PR Validation
 on:
-  push:
-    branches:
-      - main
+  pull_request:
+
+permissions:
+  contents: read
+
 jobs:
-  build:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -17,5 +19,5 @@ jobs:
           name: devenv
       - name: Install devenv
         run: nix profile add nixpkgs#devenv
-      - name: Build and test
+      - name: Run CI validation
         run: devenv shell -- just ci
