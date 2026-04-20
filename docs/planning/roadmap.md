@@ -226,6 +226,9 @@ Target modern supported .NET versions. As of 2026, .NET 10 is the current LTS; k
 
 3. Generate server surfaces:
    - service handler interface
+   - operation-scoped handler interfaces as the primary runtime contract
+   - service-scoped aggregate handler interface for simple single-class implementations
+   - DI helpers that register one service handler implementation for all operation handler interfaces
    - operation handler methods
    - request/response binding glue
    - error dispatch and serialization
