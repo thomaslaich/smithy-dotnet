@@ -2,10 +2,10 @@
   "version": "1.0",
   "plugins": {
     "java-codegen": {
-      "service": "example.hello#HelloService",
+      "service": "example.java.hello#HelloService",
       "namespace": "example.hello.java",
       "protocol": "aws.protocols#restJson1",
-      "modes": ["client", "server"]
+      "modes": ["server"]
     }
   }
 }

@@ -1,39 +1,39 @@
 # Polyglot Example
 
-This example demonstrates a Smithy-defined service implemented in multiple languages.
-Each service owns its own Smithy model and code generation setup. The models
-intentionally expose the same HTTP routes and JSON payloads so the services can
-call each other, but they are not treated as a shared source of truth.
+This example demonstrates one .NET app calling Smithy-defined services from two
+other ecosystems. Each server owns its own Smithy model and code generation
+setup; the .NET client consumes both models in the same project.
 
 ## Services
 
 | Service | Language | Port | Role |
 |---------|----------|------|------|
-| `scala-service` | Scala (Smithy4s + http4s) | 8081 | Reference server implementation |
-| `java-service` | Java (Smithy Java) | 8082 | Generated server implementation |
-| `dotnet-client` | .NET (Smithy.NET) | n/a | Generated client example |
+| `scala-service` | Scala (Smithy4s + http4s) | 8081 | `simpleRestJson` server |
+| `java-service` | Java (Smithy Java) | 8082 | `restJson1` server |
+| `dotnet-client` | .NET (Smithy.NET) | n/a | Generated clients for both services |
 
-Each service implements `HelloService`:
-- `GET /hello/{name}` — returns a greeting and the name of the responding service
-- `POST /ping` — calls another service's `/hello` as a client and forwards the response
+Both services implement `GET /hello/{name}`. The models are intentionally not
+identical:
+
+- Java also implements `POST /shout`.
+- Scala also implements `POST /ping`.
 
 ## Model
 
 The services use separate Smithy models:
 
-- **Scala**: Smithy4s reads `scala/model/hello.smithy`, which uses
-  `alloy#simpleRestJson`, and generates server routes, client stubs, and
-  request/response types at compile time.
-- **Java**: Smithy Java reads `java/smithy/model/hello.smithy`, which uses
-  `aws.protocols#restJson1`, and generates server stubs, request/response types,
-  and a typed client used by the `Ping` operation.
-- **.NET client**: Smithy.NET reads the Java model from `dotnet/client`, generates
-  C# request/response types plus a typed `HelloServiceClient`, and calls the
-  Java service over `restJson1`.
+- **Scala**: Smithy4s reads `scala/model/scala-hello.smithy`, which uses
+  `alloy#simpleRestJson`, and generates server routes plus request/response
+  types at compile time. Its Smithy namespace is `example.scala.hello`.
+- **Java**: Smithy Java reads `java/smithy/model/java-hello.smithy`, which uses
+  `aws.protocols#restJson1`, and generates server stubs plus request/response
+  types. Its Smithy namespace is `example.java.hello`.
+- **.NET client**: Smithy.NET reads both server models, generates two typed C#
+  clients, and calls both services from one app.
 
-This mirrors a more realistic polyglot setup: services do not usually share a
-single in-repo Smithy file. They publish compatible HTTP APIs and generate local
-code from their own model.
+This mirrors a realistic polyglot setup: services do not usually share a single
+in-repo Smithy file. They publish their own Smithy models, and consumers generate
+local clients for the APIs they use.
 
 ## Development
 
@@ -49,11 +49,11 @@ devenv shell
 
 ```bash
 cd scala
-sbt compile   # regenerates Scala types from scala/model/hello.smithy
+sbt compile   # regenerates Scala types from scala/model/scala-hello.smithy
 sbt run       # starts the server on port 8080
 ```
 
-After editing `scala/model/hello.smithy`, run `sbt compile` again. Smithy4s
+After editing `scala/model/scala-hello.smithy`, run `sbt compile` again. Smithy4s
 regenerates all types, server routes, and client stubs. If you add a new
 operation, the compiler will tell you exactly which methods are missing from the
 `HelloService` implementation.
@@ -65,7 +65,7 @@ cd java
 gradle :server:run
 ```
 
-The Java service generates sources from `java/smithy/model/hello.smithy` before
+The Java service generates sources from `java/smithy/model/java-hello.smithy` before
 compiling. If you add a new operation, the generated service builder will require
 that the server registers an implementation for it.
 
@@ -77,16 +77,20 @@ First create local NuGet packages from the repository root:
 dotnet pack SmithyNet.slnx --configuration Release --output artifacts/packages
 ```
 
-Then run the client against the Java service:
+Then run the client against both services:
 
 ```bash
-cd dotnet/client
-dotnet run -- http://localhost:8082 world
+cd dotnet
+dotnet run -- world http://localhost:8082 http://localhost:8081
 ```
 
 The .NET example restores packages from `artifacts/packages` first. It uses the
 MSBuild package to run the Smithy CLI, generate C# into `obj/`, and compile the
-typed client as part of the normal build.
+typed clients as part of the normal build.
+
+Current preview note: `simpleRestJson` services generate both client and server
+surfaces, so the .NET consumer project also references the server runtime
+packages.
 
 ### Run everything with Docker Compose
 
@@ -105,27 +109,26 @@ curl http://localhost:8081/hello/world
 # Ask the Java service to say hello
 curl http://localhost:8082/hello/world
 
-# Ask Scala to ping Java (Scala acts as client, Java as server)
+# Ask Scala to handle its own Ping operation
 curl -X POST http://localhost:8081/ping \
   -H "Content-Type: application/json" \
-  -d '{"targetUrl": "http://java-service:8080", "name": "world"}'
+  -d '{"name": "world"}'
 
-# Ask Java to ping Scala (Java acts as client, Scala as server)
-curl -X POST http://localhost:8082/ping \
+# Ask Java to handle its own ShoutHello operation
+curl -X POST http://localhost:8082/shout \
   -H "Content-Type: application/json" \
-  -d '{"targetUrl": "http://scala-service:8080", "name": "world"}'
+  -d '{"name": "world"}'
 
-# Ask the generated .NET client to call Java
-cd dotnet/client
-dotnet run -- http://localhost:8082 world
+# Ask the generated .NET clients to call both services
+cd dotnet
+dotnet run -- world http://localhost:8082 http://localhost:8081
 ```
 
-The outer `curl` runs on the host, so it uses the published ports (`8081` and
-`8082`). The `targetUrl` is consumed inside the container that handles `/ping`,
-so it uses Docker Compose service DNS and the container port (`8080`).
+The outer `curl` and .NET client run on the host, so they use the published
+ports (`8081` and `8082`).
 
 ## Adding the .NET service
 
-The .NET side currently demonstrates generated client code against the Java API.
-A future `dotnet/` service can use the same MSBuild integration once server
-generation exists, while matching the same HTTP routes and payloads.
+The .NET side currently demonstrates generated client code against Java and
+Scala APIs. A future `dotnet/` service can use the same MSBuild integration once
+server generation exists.

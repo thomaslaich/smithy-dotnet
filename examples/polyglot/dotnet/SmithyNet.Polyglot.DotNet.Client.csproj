@@ -5,16 +5,19 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace></RootNamespace>
-    <SmithyGeneratedNamespaces>example.hello</SmithyGeneratedNamespaces>
+    <SmithyGeneratedNamespaces>example.java.hello;example.scala.hello</SmithyGeneratedNamespaces>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="SmithyNet.Client" Version="0.1.0-preview.1" />
     <PackageReference Include="SmithyNet.Core" Version="0.1.0-preview.1" />
     <PackageReference Include="SmithyNet.Http" Version="0.1.0-preview.1" />
     <PackageReference Include="SmithyNet.Json" Version="0.1.0-preview.1" />
     <PackageReference Include="SmithyNet.MSBuild" Version="0.1.0-preview.1" PrivateAssets="all" />
+    <PackageReference Include="SmithyNet.Server" Version="0.1.0-preview.1" />
+    <PackageReference Include="SmithyNet.Server.AspNetCore" Version="0.1.0-preview.1" />
   </ItemGroup>
 </Project>

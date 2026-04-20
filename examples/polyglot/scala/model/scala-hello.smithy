@@ -1,16 +1,13 @@
 $version: "2"
 
-namespace example.hello
+namespace example.scala.hello
 
-use aws.protocols#restJson1
+use alloy#simpleRestJson
 
-@restJson1
+@simpleRestJson
 service HelloService {
     version: "2024-01-01"
-    operations: [
-        SayHello
-        Ping
-    ]
+    operations: [SayHello, Ping]
 }
 
 @http(method: "GET", uri: "/hello/{name}")
@@ -21,7 +18,6 @@ operation SayHello {
         @httpLabel
         name: String
     }
-
     output := {
         @required
         message: String
@@ -35,15 +31,9 @@ operation SayHello {
 @http(method: "POST", uri: "/ping")
 operation Ping {
     input := {
-        /// Base URL of the target HelloService to call (e.g. "http://scala-service:8080").
-        @required
-        targetUrl: String
-
-        /// The name to pass to the target service's SayHello operation.
         @required
         name: String
     }
-
     output := {
         @required
         message: String

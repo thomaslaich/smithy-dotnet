@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "sources": [
+    "model/alloy.smithy",
+    "../java/smithy/model/java-hello.smithy",
+    "../scala/model/scala-hello.smithy"
+  ],
+  "maven": {
+    "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.68.0"]
+  }
+}

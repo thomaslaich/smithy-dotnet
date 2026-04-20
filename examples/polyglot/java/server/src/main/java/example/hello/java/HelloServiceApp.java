@@ -19,8 +19,8 @@ public final class HelloServiceApp implements Runnable {
         var server = Server.builder()
                 .endpoints(URI.create("http://0.0.0.0:8080"))
                 .addService(HelloService.builder()
-                        .addPingOperation(new Ping())
                         .addSayHelloOperation(new SayHello(serviceName))
+                        .addShoutHelloOperation(new ShoutHello(serviceName))
                         .build())
                 .build();
 

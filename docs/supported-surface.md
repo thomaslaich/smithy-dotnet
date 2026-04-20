@@ -128,10 +128,11 @@ cases are covered.
 The current end-to-end example is:
 
 - `examples/polyglot/java`: Java `restJson1` server
-- `examples/polyglot/dotnet/client`: generated .NET client using local
-  Smithy.NET packages
+- `examples/polyglot/scala`: Scala `simpleRestJson` server
+- `examples/polyglot/dotnet`: generated .NET clients using local Smithy.NET
+  packages
 
-Run the Java service first, then run the .NET client:
+Run the Java and Scala services first, then run the .NET client:
 
 ```bash
 cd examples/polyglot/java
@@ -139,6 +140,11 @@ gradle :server:run
 ```
 
 ```bash
-cd examples/polyglot/dotnet/client
-dotnet run -- http://localhost:8082 world
+cd examples/polyglot/scala
+sbt run
+```
+
+```bash
+cd examples/polyglot/dotnet
+dotnet run -- world http://localhost:8082 http://localhost:8081
 ```

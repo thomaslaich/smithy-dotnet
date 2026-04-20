@@ -5,19 +5,11 @@
       "path": "."
     },
     {
-      "name": "Polyglot Java",
-      "path": "examples/polyglot/java"
+      "name": "Example: Polyglot",
+      "path": "examples/polyglot"
     },
     {
-      "name": "Polyglot Scala",
-      "path": "examples/polyglot/scala"
-    },
-    {
-      "name": "Polyglot .NET",
-      "path": "examples/polyglot/dotnet"
-    },
-    {
-      "name": "SimpleRestJson .NET",
+      "name": "Example: SimpleRestJson",
       "path": "examples/simple-rest-json/dotnet"
     }
   ],

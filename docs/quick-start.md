@@ -152,9 +152,9 @@ var output = await client.SayHelloAsync(new SayHelloInput("world"));
 Console.WriteLine(output.Message);
 ```
 
-The polyglot example at `examples/polyglot/dotnet/client` is the current
-end-to-end consumer project. It generates a .NET client from the Java example
-model and calls the Java API.
+The polyglot example at `examples/polyglot/dotnet` is the current end-to-end
+consumer project. It generates .NET clients from the Java and Scala example
+models and calls both APIs.
 
 ## Use The Generated Server
 
