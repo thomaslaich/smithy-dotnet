@@ -181,7 +181,7 @@ public static class SmithyAspNetCoreProtocol
     {
         if (value is null)
         {
-            return default!;
+            return default;
         }
 
         var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
