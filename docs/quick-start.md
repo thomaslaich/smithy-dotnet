@@ -7,11 +7,13 @@ are not assumed.
 
 `SmithyNet.MSBuild` invokes the Smithy CLI during `dotnet build`. The
 recommended setup is to install `smithy-cli` in a project environment, such as
-Pixi with the conda-forge package, and run builds through that environment:
+[pixi](https://pixi.sh) with the conda-forge package, and run builds through that environment:
 
 ```bash
-pixi add smithy-cli
-pixi run dotnet build
+pixi init
+pixi add smithy dotnet # ... any more deps for your project
+pixi shell
+dotnet build
 ```
 
 When the environment is active, `smithy` is resolved from `PATH`. You only need

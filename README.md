@@ -55,11 +55,11 @@ For generated ASP.NET Core `simpleRestJson` servers, also add:
 
 `SmithyNet.MSBuild` invokes the Smithy CLI during `dotnet build`. The recommended
 setup is a managed project environment such as
-[Pixi](https://pixi.sh) with `smithy-cli` from conda-forge:
+[pixi](https://pixi.sh) with `smithy-cli` from conda-forge:
 
 ```bash
 pixi init
-pixi add smithy-cli
+pixi add smithy
 pixi shell
 dotnet build
 ```

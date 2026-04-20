@@ -59,6 +59,9 @@ in
           "*.cs"
           "*.csproj"
           "*.slnx"
+          "*.MSBuild.targets"
+          "Directory.Packages.props"
+          "Directory.Build.props"
         ];
       };
     };
