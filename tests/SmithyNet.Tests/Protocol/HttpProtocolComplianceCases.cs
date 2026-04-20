@@ -45,6 +45,7 @@ internal static class HttpProtocolComplianceCases
             ReadStringList(properties, "queryParams"),
             ReadStringMap(properties, "headers"),
             ReadOptionalString(properties, "body"),
+            ReadOptionalString(properties, "bodyMediaType"),
             properties.TryGetValue("params", out var parameters) ? parameters : Document.Null
         );
     }
@@ -58,6 +59,7 @@ internal static class HttpProtocolComplianceCases
             (int)ReadRequiredNumber(properties, "code"),
             ReadStringMap(properties, "headers"),
             ReadOptionalString(properties, "body"),
+            ReadOptionalString(properties, "bodyMediaType"),
             properties.TryGetValue("params", out var parameters) ? parameters : Document.Null
         );
     }
@@ -125,6 +127,7 @@ internal sealed record HttpRequestTestCase(
     IReadOnlyList<string> QueryParams,
     IReadOnlyDictionary<string, string> Headers,
     string? Body,
+    string? BodyMediaType,
     Document Parameters
 );
 
@@ -134,5 +137,6 @@ internal sealed record HttpResponseTestCase(
     int Code,
     IReadOnlyDictionary<string, string> Headers,
     string? Body,
+    string? BodyMediaType,
     Document Parameters
 );
