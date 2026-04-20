@@ -61,10 +61,9 @@ preview.
 
 ## Validation
 
-Generated constructors do not implement full Smithy validation. Required input
-members may still be nullable in the default generated mode. Generated clients
-perform targeted checks where required for HTTP binding safety, such as
-non-null HTTP labels.
+Generated constructors do not implement full Smithy validation. Generated C#
+nullability is authoritative, but external request binding and deserialization
+still need protocol-aware runtime validation.
 
 ## JSON Runtime
 
