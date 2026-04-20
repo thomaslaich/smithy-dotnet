@@ -104,6 +104,20 @@ public sealed class SimpleRestJsonServerProtocolTests
                         "smithy.api#httpHeader": "x-request-id"
                       }
                     },
+                    "metadata": {
+                      "target": "example.weather#ForecastMetadata",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpPrefixHeaders": "x-meta-"
+                      }
+                    },
+                    "tags": {
+                      "target": "example.weather#ForecastTags",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpQueryParams": {}
+                      }
+                    },
                     "units": {
                       "target": "smithy.api#String",
                       "traits": {
@@ -142,6 +156,28 @@ public sealed class SimpleRestJsonServerProtocolTests
                     }
                   }
                 },
+                "example.weather#ForecastMetadata": {
+                  "type": "map",
+                  "members": {
+                    "key": {
+                      "target": "smithy.api#String"
+                    },
+                    "value": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                },
+                "example.weather#ForecastTags": {
+                  "type": "map",
+                  "members": {
+                    "key": {
+                      "target": "smithy.api#String"
+                    },
+                    "value": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                },
                 "example.weather#PutForecastBodyInput": {
                   "type": "structure",
                   "members": {
@@ -167,6 +203,13 @@ public sealed class SimpleRestJsonServerProtocolTests
                       "traits": {
                         "smithy.api#required": {},
                         "smithy.api#httpHeader": "x-response-id"
+                      }
+                    },
+                    "metadata": {
+                      "target": "example.weather#ForecastMetadata",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpPrefixHeaders": "x-extra-"
                       }
                     },
                     "status": {
@@ -284,14 +327,16 @@ public sealed class SimpleRestJsonServerProtocolTests
                 BaseAddress = new Uri($"http://127.0.0.1:{port}")
             };
 
-            using var get = new HttpRequestMessage(HttpMethod.Get, "/forecast/Zurich?units=metric");
+            using var get = new HttpRequestMessage(HttpMethod.Get, "/forecast/Zurich?units=metric&source=radar");
             get.Headers.Add("x-request-id", "request-1");
+            get.Headers.Add("x-meta-trace", "trace-1");
             using var getResponse = await client.SendAsync(get);
             await AssertResponseAsync(
                 getResponse,
                 HttpStatusCode.Accepted,
                 "response-1",
-                "{\"summary\":\"Zurich:metric:request-1\"}");
+                "server",
+                "{\"summary\":\"Zurich:metric:request-1:trace-1:radar\"}");
 
             using var put = new HttpRequestMessage(HttpMethod.Post, "/forecast/Zurich")
             {
@@ -302,6 +347,7 @@ public sealed class SimpleRestJsonServerProtocolTests
                 putResponse,
                 HttpStatusCode.Created,
                 "response-2",
+                "server",
                 "{\"summary\":\"Zurich:storm\"}");
 
             using var putBody = new HttpRequestMessage(HttpMethod.Post, "/forecast-body")
@@ -316,12 +362,14 @@ public sealed class SimpleRestJsonServerProtocolTests
                 putBodyResponse,
                 HttpStatusCode.OK,
                 "response-3",
+                "server",
                 "{\"summary\":\"rain:high\"}");
 
             using var errorResponse = await client.GetAsync("/forecast/fail");
             await AssertResponseAsync(
                 errorResponse,
                 HttpStatusCode.BadRequest,
+                null,
                 null,
                 "{\"message\":\"bad forecast\",\"reason\":\"invalid\"}");
 
@@ -338,6 +386,7 @@ public sealed class SimpleRestJsonServerProtocolTests
                 HttpResponseMessage response,
                 HttpStatusCode expectedStatusCode,
                 string? expectedResponseId,
+                string? expectedExtraSource,
                 string expectedBody)
             {
                 var body = await response.Content.ReadAsStringAsync();
@@ -356,6 +405,15 @@ public sealed class SimpleRestJsonServerProtocolTests
                     }
                 }
 
+                if (expectedExtraSource is not null)
+                {
+                    if (!response.Headers.TryGetValues("x-extra-source", out var sources)
+                        || sources.Single() != expectedExtraSource)
+                    {
+                        throw new InvalidOperationException("Unexpected prefix response header.");
+                    }
+                }
+
                 if (!JsonNode.DeepEquals(JsonNode.Parse(body), JsonNode.Parse(expectedBody)))
                 {
                     throw new InvalidOperationException($"Unexpected body: {body}");
@@ -370,9 +428,10 @@ public sealed class SimpleRestJsonServerProtocolTests
                 {
                     return Task.FromResult(
                         new GetForecastOutput(
+                            new ForecastMetadata(new Dictionary<string, string> { ["source"] = "server" }),
                             "response-1",
                             202,
-                            $"{input.City}:{input.Units}:{input.RequestId}"));
+                            $"{input.City}:{input.Units}:{input.RequestId}:{input.Metadata.Values["trace"]}:{input.Tags.Values["source"]}"));
                 }
 
                 public Task<GetForecastOutput> PutForecastAsync(
@@ -381,6 +440,7 @@ public sealed class SimpleRestJsonServerProtocolTests
                 {
                     return Task.FromResult(
                         new GetForecastOutput(
+                            new ForecastMetadata(new Dictionary<string, string> { ["source"] = "server" }),
                             "response-2",
                             201,
                             $"{input.City}:{input.Details.Note}"));
@@ -392,6 +452,7 @@ public sealed class SimpleRestJsonServerProtocolTests
                 {
                     return Task.FromResult(
                         new GetForecastOutput(
+                            new ForecastMetadata(new Dictionary<string, string> { ["source"] = "server" }),
                             "response-3",
                             200,
                             $"{input.Note}:{input.Severity}"));
