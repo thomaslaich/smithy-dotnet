@@ -1,0 +1,48 @@
+using System.Text;
+using Microsoft.AspNetCore.Http;
+using SmithyNet.Server.AspNetCore;
+
+namespace SmithyNet.Tests.Server;
+
+public sealed class SmithyAspNetCoreProtocolTests
+{
+    [Fact]
+    public void GetRequiredQueryValueThrowsWhenMissing()
+    {
+        var httpContext = new DefaultHttpContext();
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            SmithyAspNetCoreProtocol.GetRequiredQueryValue<int>(httpContext, "retries")
+        );
+
+        Assert.Equal("Missing query value 'retries'.", error.Message);
+    }
+
+    [Fact]
+    public void GetRequiredHeaderValueThrowsWhenMissing()
+    {
+        var httpContext = new DefaultHttpContext();
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            SmithyAspNetCoreProtocol.GetRequiredHeaderValue<string>(httpContext, "x-request-id")
+        );
+
+        Assert.Equal("Missing header value 'x-request-id'.", error.Message);
+    }
+
+    [Fact]
+    public async Task ReadRequiredJsonRequestBodyMemberAsyncThrowsWhenMissing()
+    {
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes("{}"));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SmithyAspNetCoreProtocol.ReadRequiredJsonRequestBodyMemberAsync<string>(
+                httpContext,
+                "summary"
+            )
+        );
+
+        Assert.Equal("Missing JSON request body member 'summary'.", error.Message);
+    }
+}

@@ -22,7 +22,6 @@
     <ProjectReference Include="../../src/SmithyNet.Client/SmithyNet.Client.csproj" />
     <ProjectReference Include="../../src/SmithyNet.CodeGeneration/SmithyNet.CodeGeneration.csproj" />
     <ProjectReference Include="../../src/SmithyNet.Core/SmithyNet.Core.csproj" />
-    <ProjectReference Include="../../src/SmithyNet.Generators/SmithyNet.Generators.csproj" />
     <ProjectReference Include="../../src/SmithyNet.Http/SmithyNet.Http.csproj" />
     <ProjectReference Include="../../src/SmithyNet.Json/SmithyNet.Json.csproj" />
     <ProjectReference Include="../../src/SmithyNet.MSBuild/SmithyNet.MSBuild.csproj" />

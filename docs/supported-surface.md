@@ -23,12 +23,14 @@ Generated files include Smithy metadata attributes from `SmithyNet.Core`.
 
 ## Nullability
 
-The default generated input model is non-authoritative for nullable reference
-types. Required input members can still be nullable because remote callers may
-omit values and because client-side construction is not yet a validation layer.
+Generated C# nullability is authoritative.
 
-The generator also has an authoritative nullability mode used by tests, but the
-MSBuild integration currently uses the default mode.
+Required reference members are emitted as non-nullable and enforced through
+generated constructors. Optional members remain nullable unless a Smithy default
+applies.
+
+Runtime request binding and deserialization still validate external input, since
+remote callers can omit required data even when generated .NET types are strict.
 
 ## JSON
 

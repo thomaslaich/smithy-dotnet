@@ -524,6 +524,7 @@ public sealed partial class CSharpShapeGenerator
     )
     {
         var memberType = GetMemberParameterType(model, input, member, currentNamespace, options);
+        var required = IsRequiredHttpInputMember(input, member, options);
         if (IsHttpLabelMember(member))
         {
             return $"SmithyAspNetCoreProtocol.GetRouteValue<{memberType}>(httpContext, {FormatString(member.Name)})";
@@ -532,13 +533,17 @@ public sealed partial class CSharpShapeGenerator
         if (IsHttpQueryMember(member))
         {
             var queryName = member.Traits[SmithyPrelude.HttpQueryTrait].AsString();
-            return $"SmithyAspNetCoreProtocol.GetQueryValue<{memberType}>(httpContext, {FormatString(queryName)})";
+            return required
+                ? $"SmithyAspNetCoreProtocol.GetRequiredQueryValue<{memberType}>(httpContext, {FormatString(queryName)})"
+                : $"SmithyAspNetCoreProtocol.GetQueryValue<{memberType}>(httpContext, {FormatString(queryName)})";
         }
 
         if (IsHttpHeaderMember(member))
         {
             var headerName = member.Traits[SmithyPrelude.HttpHeaderTrait].AsString();
-            return $"SmithyAspNetCoreProtocol.GetHeaderValue<{memberType}>(httpContext, {FormatString(headerName)})";
+            return required
+                ? $"SmithyAspNetCoreProtocol.GetRequiredHeaderValue<{memberType}>(httpContext, {FormatString(headerName)})"
+                : $"SmithyAspNetCoreProtocol.GetHeaderValue<{memberType}>(httpContext, {FormatString(headerName)})";
         }
 
         if (IsHttpPayloadMember(member))
@@ -548,7 +553,23 @@ public sealed partial class CSharpShapeGenerator
 
         var jsonName =
             member.Traits.GetValueOrDefault(SmithyPrelude.JsonNameTrait)?.AsString() ?? member.Name;
-        return $"await SmithyAspNetCoreProtocol.ReadJsonRequestBodyMemberAsync<{memberType}>(httpContext, {FormatString(jsonName)}, cancellationToken).ConfigureAwait(false)";
+        return required
+            ? $"await SmithyAspNetCoreProtocol.ReadRequiredJsonRequestBodyMemberAsync<{memberType}>(httpContext, {FormatString(jsonName)}, cancellationToken).ConfigureAwait(false)"
+            : $"await SmithyAspNetCoreProtocol.ReadJsonRequestBodyMemberAsync<{memberType}>(httpContext, {FormatString(jsonName)}, cancellationToken).ConfigureAwait(false)";
+    }
+
+    private static bool IsRequiredHttpInputMember(
+        ModelShape container,
+        MemberShape member,
+        CSharpGenerationOptions options
+    )
+    {
+        if (IsHttpLabelMember(member))
+        {
+            return true;
+        }
+
+        return member.IsRequired && GetEffectiveDefaultValue(container, member, options) is null;
     }
 
     private static void AppendAspNetCoreErrorHandlers(

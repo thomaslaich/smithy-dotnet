@@ -215,14 +215,6 @@ public sealed partial class CSharpShapeGenerator
         CSharpGenerationOptions options
     )
     {
-        if (options.NullabilityMode == CSharpNullabilityMode.NonAuthoritative)
-        {
-            if (container.Traits.Has(SmithyPrelude.InputTrait) || member.IsClientOptional)
-            {
-                return true;
-            }
-        }
-
         return !member.IsRequired && GetEffectiveDefaultValue(container, member, options) is null;
     }
 
@@ -233,14 +225,6 @@ public sealed partial class CSharpShapeGenerator
     )
     {
         if (member.DefaultValue is not { Kind: not DocumentKind.Null } value)
-        {
-            return null;
-        }
-
-        if (
-            options.NullabilityMode == CSharpNullabilityMode.NonAuthoritative
-            && (container.Traits.Has(SmithyPrelude.InputTrait) || member.IsClientOptional)
-        )
         {
             return null;
         }

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.AspNetCore.Http;
 using SmithyNet.Json;
@@ -14,10 +15,11 @@ public static class SmithyAspNetCoreProtocol
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         return httpContext.Request.RouteValues.TryGetValue(name, out var value) && value is not null
-            ? ConvertHttpValue<T>(value.ToString())
+            ? ConvertHttpValue<T>(value.ToString())!
             : throw new InvalidOperationException($"Missing route value '{name}'.");
     }
 
+    [return: MaybeNull]
     public static T GetQueryValue<T>(HttpContext httpContext, string name)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
@@ -25,9 +27,23 @@ public static class SmithyAspNetCoreProtocol
 
         return httpContext.Request.Query.TryGetValue(name, out var values)
             ? ConvertHttpValue<T>(values.FirstOrDefault())
-            : default!;
+            : default;
     }
 
+    public static T GetRequiredQueryValue<T>(HttpContext httpContext, string name)
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        if (!httpContext.Request.Query.TryGetValue(name, out var values))
+        {
+            throw new InvalidOperationException($"Missing query value '{name}'.");
+        }
+
+        return ConvertHttpValue<T>(values.FirstOrDefault())!;
+    }
+
+    [return: MaybeNull]
     public static T GetHeaderValue<T>(HttpContext httpContext, string name)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
@@ -35,7 +51,20 @@ public static class SmithyAspNetCoreProtocol
 
         return httpContext.Request.Headers.TryGetValue(name, out var values)
             ? ConvertHttpValue<T>(values.FirstOrDefault())
-            : default!;
+            : default;
+    }
+
+    public static T GetRequiredHeaderValue<T>(HttpContext httpContext, string name)
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        if (!httpContext.Request.Headers.TryGetValue(name, out var values))
+        {
+            throw new InvalidOperationException($"Missing header value '{name}'.");
+        }
+
+        return ConvertHttpValue<T>(values.FirstOrDefault())!;
     }
 
     public static async Task<T> ReadJsonRequestBodyAsync<T>(
@@ -50,6 +79,7 @@ public static class SmithyAspNetCoreProtocol
         return SmithyJsonSerializer.Deserialize<T>(content);
     }
 
+    [return: MaybeNull]
     public static async Task<T> ReadJsonRequestBodyMemberAsync<T>(
         HttpContext httpContext,
         string name,
@@ -70,6 +100,30 @@ public static class SmithyAspNetCoreProtocol
         return document.RootElement.TryGetProperty(name, out var value)
             ? SmithyJsonSerializer.Deserialize<T>(value.GetRawText())
             : default!;
+    }
+
+    public static async Task<T> ReadRequiredJsonRequestBodyMemberAsync<T>(
+        HttpContext httpContext,
+        string name,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var content = await ReadJsonRequestBodyContentAsync(httpContext, cancellationToken)
+            .ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            throw new InvalidOperationException(
+                $"Missing JSON request body member '{name}'."
+            );
+        }
+
+        using var document = System.Text.Json.JsonDocument.Parse(content);
+        return document.RootElement.TryGetProperty(name, out var value)
+            ? SmithyJsonSerializer.Deserialize<T>(value.GetRawText())
+            : throw new InvalidOperationException($"Missing JSON request body member '{name}'.");
     }
 
     public static async Task WriteJsonResponseAsync<T>(
@@ -122,6 +176,7 @@ public static class SmithyAspNetCoreProtocol
         };
     }
 
+    [return: MaybeNull]
     public static T ConvertHttpValue<T>(string? value)
     {
         if (value is null)
