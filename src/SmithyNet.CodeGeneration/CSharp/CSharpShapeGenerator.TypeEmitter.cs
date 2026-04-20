@@ -218,9 +218,7 @@ public sealed partial class CSharpShapeGenerator
         var typeName = GetTypeName(shape.Id);
         AppendShapeAttributes(builder, shape);
         builder.Line($"public abstract partial record class {typeName}");
-        var members = shape
-            .Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal)
-            .ToArray();
+        var members = GetConstructorMembers(model, shape, options);
         builder.Block(() =>
         {
             builder.Line($"private protected {typeName}() {{ }}");
@@ -232,7 +230,7 @@ public sealed partial class CSharpShapeGenerator
                     model,
                     member.Target,
                     nullable: false,
-                    currentNamespace: shape.Id.Namespace,
+                    currentNamespace: string.Empty,
                     baseNamespace: options.BaseNamespace
                 );
                 AppendMemberAttributes(builder, member, isSparse: false);
@@ -289,7 +287,7 @@ public sealed partial class CSharpShapeGenerator
                         model,
                         member.Target,
                         nullable: false,
-                        currentNamespace: shape.Id.Namespace,
+                        currentNamespace: string.Empty,
                         baseNamespace: options.BaseNamespace
                     );
                     builder.Line($"Func<{valueType}, T> {parameterName},");
@@ -350,9 +348,7 @@ public sealed partial class CSharpShapeGenerator
         string? baseCall
     )
     {
-        var members = shape
-            .Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal)
-            .ToArray();
+        var members = GetConstructorMembers(model, shape, options);
         builder.Write($"public {typeName}(");
         if (baseCall is not null)
         {
@@ -407,8 +403,13 @@ public sealed partial class CSharpShapeGenerator
         MemberShape? messageMember
     )
     {
-        var members = GetSortedMembers(shape, excludedMember: messageMember).ToArray();
-        builder.Write($"public {typeName}(string? message = null");
+        var members = GetConstructorMembers(model, shape, options, messageMember);
+        var hasRequiredMembers = members.Any(member =>
+            !HasOptionalConstructorParameter(model, shape, member, options)
+        );
+        builder.Write(
+            $"public {typeName}(string? message{(hasRequiredMembers ? string.Empty : " = null")}"
+        );
         if (members.Length > 0)
         {
             builder.Write(", ");
@@ -456,6 +457,34 @@ public sealed partial class CSharpShapeGenerator
         AppendMemberAttributes(builder, messageMember, isSparse: false);
         builder.Line("public override string Message => base.Message;");
         builder.Line();
+    }
+
+    private static MemberShape[] GetConstructorMembers(
+        SmithyModel model,
+        ModelShape shape,
+        CSharpGenerationOptions options,
+        MemberShape? excludedMember = null
+    )
+    {
+        return shape
+            .Members.Values.Where(member => !ReferenceEquals(member, excludedMember))
+            .OrderBy(member =>
+                HasOptionalConstructorParameter(model, shape, member, options) ? 1 : 0
+            )
+            .ThenBy(member => member.Name, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool HasOptionalConstructorParameter(
+        SmithyModel model,
+        ModelShape container,
+        MemberShape member,
+        CSharpGenerationOptions options
+    )
+    {
+        _ = model;
+        return IsNullableMember(container, member, options)
+            || GetEffectiveDefaultValue(container, member, options) is not null;
     }
 
     private static void AppendProperties(
