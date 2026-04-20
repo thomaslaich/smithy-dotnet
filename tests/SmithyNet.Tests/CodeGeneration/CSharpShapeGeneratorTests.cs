@@ -1536,15 +1536,15 @@ public sealed class CSharpShapeGeneratorTests
                 [SmithyMember("code", "example.weather#WeatherCode")]
                 public sealed partial record class Code : ForecastValue
                 {
-                    public Code(WeatherCode value)
+                    public Code(global::Example.Weather.WeatherCode value)
                     {
                         Value = value;
                     }
 
-                    public WeatherCode Value { get; }
+                    public global::Example.Weather.WeatherCode Value { get; }
                 }
 
-                public static ForecastValue FromCode(WeatherCode value)
+                public static ForecastValue FromCode(global::Example.Weather.WeatherCode value)
                 {
                     return new Code(value);
                 }
@@ -1583,7 +1583,7 @@ public sealed class CSharpShapeGeneratorTests
                 }
 
                 public T Match<T>(
-                    Func<WeatherCode, T> code,
+                    Func<global::Example.Weather.WeatherCode, T> code,
                     Func<string, T> text,
                     Func<string, Document, T> unknown)
                 {
