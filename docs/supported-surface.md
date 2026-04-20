@@ -17,7 +17,7 @@ The C# generator emits files for:
 - Smithy error structures
 - `restJson1` services as typed clients
 - `simpleRestJson` services as typed clients
-- `simpleRestJson` services as typed server handler interfaces
+- `simpleRestJson` services as typed ASP.NET Core server surfaces
 
 Generated files include Smithy metadata attributes from `SmithyNet.Core`.
 
@@ -93,16 +93,13 @@ Response binding edge cases still need broader protocol tests.
 
 ## Protocols
 
-The implemented client protocol slices are `aws.protocols#restJson1` and
-`alloy#simpleRestJson`.
+The implemented protocol slices are:
 
-The next protocol target is broader `alloy#simpleRestJson` support. The
-intended split is:
+- generated clients for `aws.protocols#restJson1`
+- generated clients for `alloy#simpleRestJson`
+- generated ASP.NET Core servers for `alloy#simpleRestJson`
 
-- generated clients support both `aws.protocols#restJson1` and
-  `alloy#simpleRestJson`
-- generated servers target `alloy#simpleRestJson` first
-- `restJson1` server generation is not planned for the initial server runtime
+Generated `restJson1` servers are not part of this preview.
 
 Current generated request bindings include:
 

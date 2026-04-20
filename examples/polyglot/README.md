@@ -130,5 +130,6 @@ ports (`8081` and `8082`).
 ## Adding the .NET service
 
 The .NET side currently demonstrates generated client code against Java and
-Scala APIs. A future `dotnet/` service can use the same MSBuild integration once
-server generation exists.
+Scala APIs. A .NET service can use the same MSBuild integration with an
+`alloy#simpleRestJson` model; see `examples/simple-rest-json/dotnet` for the
+generated ASP.NET Core server path.

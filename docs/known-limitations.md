@@ -4,16 +4,21 @@ Smithy.NET is still a preview-stage implementation.
 
 ## Package Versioning
 
-Local packages currently use `0.1.0-preview.1`. When repacking during development, NuGet
-may keep an older restored copy of the same version in a consumer project's
-package cache. The polyglot .NET example avoids the global cache with:
+Local packages currently use `0.1.0-preview.1`. When repacking during
+development, NuGet may keep an older restored copy of the same version in a
+consumer project's package cache. The .NET examples avoid the global cache with:
 
 ```xml
 <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
 ```
 
-If a local consumer keeps using stale package contents, clear that consumer's
-restored `SmithyNet.*` package folders or use a new package version.
+If a local consumer keeps using stale package contents or stale generated
+source, clear that consumer's `obj` directory or use a new package version. For
+the repository examples, run:
+
+```bash
+just refresh-examples
+```
 
 ## Smithy CLI Environment
 
@@ -25,21 +30,34 @@ that cannot rely on `PATH` or need to force a specific executable.
 
 ## Protocol Coverage
 
-Only a narrow generated-client `restJson1` path is implemented. The project does
-not yet support:
+Only narrow HTTP/JSON protocol slices are implemented:
 
-- `alloy#simpleRestJson`
+- generated clients for `aws.protocols#restJson1`
+- generated clients for `alloy#simpleRestJson`
+- generated ASP.NET Core servers for `alloy#simpleRestJson`
+
+The project does not yet support:
+
 - Smithy RPC v2 CBOR
 - AWS JSON protocols
 - REST XML
 - EC2 Query or AWS Query
-- server-side protocol handling
+- `alloy#grpc` clients and servers
+
+`restJson1` server generation is not planned — the protocol carries AWS-specific
+authentication and error-envelope requirements that have no practical use case
+outside of mocking AWS services.
 
 ## Server Runtime
 
-There is no `SmithyNet.Server` or ASP.NET Core integration yet. Generated
-clients can call compatible services, but Smithy.NET cannot yet generate server
-handlers.
+Server support is currently limited to generated ASP.NET Core endpoints for
+`alloy#simpleRestJson`. Generated server surfaces include operation-scoped
+handler interfaces, an aggregate service handler interface, a DI helper for
+single-class handlers, and lower-level `SmithyServerDispatcher` registration
+extensions.
+
+Non-ASP.NET server adapters and `alloy#grpc` support are not part of this
+preview.
 
 ## Validation
 
@@ -53,6 +71,13 @@ non-null HTTP labels.
 The JSON implementation is reflection-based and intentionally small. It is not
 yet optimized for NativeAOT, source-generated metadata, or every Smithy edge
 case.
+
+## Server And Client Generation Coupling
+
+For `alloy#simpleRestJson`, the current generator emits both client and server
+surfaces for service shapes. Client-only projects that generate from
+`simpleRestJson` services currently need the server runtime references as well.
+This is expected to be split into more explicit generation modes later.
 
 ## Model Scope
 

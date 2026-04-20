@@ -67,6 +67,7 @@ For generated ASP.NET Core `simpleRestJson` servers, also reference:
 
 ```xml
 <ItemGroup>
+  <FrameworkReference Include="Microsoft.AspNetCore.App" />
   <PackageReference Include="SmithyNet.Server" Version="0.1.0-preview.1" />
   <PackageReference Include="SmithyNet.Server.AspNetCore" Version="0.1.0-preview.1" />
 </ItemGroup>
@@ -106,7 +107,7 @@ use aws.protocols#restJson1
 @restJson1
 service HelloService {
     version: "2024-01-01"
-    operations: [SayHello]
+    operations: [SayHello, Ping]
 }
 
 @http(method: "GET", uri: "/hello/{name}")
@@ -188,9 +189,23 @@ operation SayHello {
         message: String
     }
 }
+
+@http(method: "POST", uri: "/ping")
+operation Ping {
+    input := {
+        @required
+        name: String
+    }
+
+    output := {
+        @required
+        message: String
+    }
+}
 ```
 
-After generation, implement the handler and map the service:
+After generation, the compact path is one implementation of the aggregate
+service handler interface:
 
 ```csharp
 using Example.Hello;
@@ -209,6 +224,40 @@ internal sealed class HelloHandler : IHelloServiceHandler
         CancellationToken cancellationToken = default)
     {
         return Task.FromResult(new SayHelloOutput($"hello, {input.Name}"));
+    }
+
+    public Task<PingOutput> PingAsync(
+        PingInput input,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new PingOutput($"pong, {input.Name}"));
+    }
+}
+```
+
+For larger services, register operation handlers separately:
+
+```csharp
+builder.Services.AddSingleton<ISayHelloHandler, SayHelloHandler>();
+builder.Services.AddSingleton<IPingHandler, PingHandler>();
+
+internal sealed class SayHelloHandler : ISayHelloHandler
+{
+    public Task<SayHelloOutput> SayHelloAsync(
+        SayHelloInput input,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new SayHelloOutput($"hello, {input.Name}"));
+    }
+}
+
+internal sealed class PingHandler : IPingHandler
+{
+    public Task<PingOutput> PingAsync(
+        PingInput input,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new PingOutput($"pong, {input.Name}"));
     }
 }
 ```
