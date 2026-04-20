@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Text;
+using System.Text.Json.Nodes;
 using SmithyNet.CodeGeneration;
 using SmithyNet.CodeGeneration.CSharp;
 using SmithyNet.CodeGeneration.Model;
@@ -77,16 +78,35 @@ public sealed class OfficialProtocolSuiteTests(
             .Select(classification => $"{classification.Case.Kind}:{classification.Case.Id}")
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Equal(9, executableCases.Count);
+        Assert.Equal(28, executableCases.Count);
+        Assert.Contains("Request:AddMenuItem", executableCases);
+        Assert.Contains("Response:AddMenuItemResult", executableCases);
+        Assert.Contains("Request:CustomCodeInput", executableCases);
+        Assert.Contains("Response:CustomCodeOutput", executableCases);
+        Assert.Contains("Request:GetEnumInput", executableCases);
+        Assert.Contains("Response:GetEnumOutput", executableCases);
+        Assert.Contains("Request:GetIntEnumInput", executableCases);
+        Assert.Contains("Response:GetIntEnumOutput", executableCases);
+        Assert.Contains("Request:GetMenuRequest", executableCases);
+        Assert.Contains("Response:GetMenuResponse", executableCases);
+        Assert.Contains("Request:HeaderEndpointInput", executableCases);
         Assert.Contains("Request:HealthGet", executableCases);
+        Assert.Contains("Request:RoundTripRequest", executableCases);
         Assert.Contains("Request:RoutingAbc", executableCases);
         Assert.Contains("Request:RoutingAbcDef", executableCases);
         Assert.Contains("Request:RoutingAbcLabel", executableCases);
         Assert.Contains("Request:RoutingAbcXyz", executableCases);
         Assert.Contains("Response:headerEndpointResponse", executableCases);
+        Assert.Contains("Response:VersionOutput", executableCases);
         Assert.Contains("Request:RestJsonEmptyInputAndEmptyOutput", executableCases);
+        Assert.Contains("Request:RestJsonConstantQueryString", executableCases);
+        Assert.Contains("Request:HttpQueryParamsOnlyRequest", executableCases);
         Assert.Contains("Request:RestJsonHttpPrefixHeadersArePresent", executableCases);
+        Assert.Contains("Request:RestJsonHttpPayloadWithStructure", executableCases);
         Assert.Contains("Response:RestJsonHttpPrefixHeadersArePresent", executableCases);
+        Assert.Contains("Response:RestJsonHttpPayloadWithStructure", executableCases);
+        Assert.Contains("Response:RestJsonHttpResponseCode", executableCases);
+        Assert.Contains("Response:RestJsonHttpResponseCodeWithNoPayload", executableCases);
     }
 
     [Fact]
@@ -335,22 +355,45 @@ internal static class OfficialProtocolConformanceMatrix
         string Id
     )> ExecutableCases =
     [
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "AddMenuItem"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Response, "AddMenuItemResult"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "CustomCodeInput"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Response, "CustomCodeOutput"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "GetEnumInput"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Response, "GetEnumOutput"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "GetIntEnumInput"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Response, "GetIntEnumOutput"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "GetMenuRequest"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Response, "GetMenuResponse"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "HeaderEndpointInput"),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "HealthGet"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "RoundTripRequest"),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "RoutingAbc"),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "RoutingAbcDef"),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "RoutingAbcLabel"),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "RoutingAbcXyz"),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Response, "headerEndpointResponse"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Response, "VersionOutput"),
         (RestJson1Protocol, OfficialProtocolCaseKind.Request, "RestJsonEmptyInputAndEmptyOutput"),
+        (RestJson1Protocol, OfficialProtocolCaseKind.Request, "RestJsonConstantQueryString"),
+        (RestJson1Protocol, OfficialProtocolCaseKind.Request, "HttpQueryParamsOnlyRequest"),
         (
             RestJson1Protocol,
             OfficialProtocolCaseKind.Request,
             "RestJsonHttpPrefixHeadersArePresent"
         ),
+        (RestJson1Protocol, OfficialProtocolCaseKind.Request, "RestJsonHttpPayloadWithStructure"),
         (
             RestJson1Protocol,
             OfficialProtocolCaseKind.Response,
             "RestJsonHttpPrefixHeadersArePresent"
+        ),
+        (RestJson1Protocol, OfficialProtocolCaseKind.Response, "RestJsonHttpPayloadWithStructure"),
+        (RestJson1Protocol, OfficialProtocolCaseKind.Response, "RestJsonHttpResponseCode"),
+        (
+            RestJson1Protocol,
+            OfficialProtocolCaseKind.Response,
+            "RestJsonHttpResponseCodeWithNoPayload"
         ),
     ];
 
@@ -563,12 +606,24 @@ internal static class OfficialGeneratedClientConformanceRunner
         var suppressOutput =
             testCase.Kind == OfficialProtocolCaseKind.Request
             && testCase.Protocol == ShapeId.Parse("alloy#simpleRestJson");
-        var filteredModel = CreateSingleOperationModel(model, service, operation, suppressOutput);
+        var suppressInput = testCase.Kind == OfficialProtocolCaseKind.Response;
+        var filteredModel = CreateSingleOperationModel(
+            model,
+            service,
+            operation,
+            suppressInput,
+            suppressOutput
+        );
         operation = filteredModel.GetShape(operation.Id);
         service = filteredModel.GetShape(service.Id);
 
         foreach (var generatedFile in new CSharpShapeGenerator().Generate(filteredModel))
         {
+            if (generatedFile.Path.EndsWith("Server.g.cs", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             var path = Path.Combine(directory.Path, generatedFile.Path);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             await File.WriteAllTextAsync(path, generatedFile.Contents);
@@ -615,6 +670,7 @@ internal static class OfficialGeneratedClientConformanceRunner
         SmithyModel model,
         ModelShape service,
         ModelShape operation,
+        bool suppressInput,
         bool suppressOutput
     )
     {
@@ -622,8 +678,14 @@ internal static class OfficialGeneratedClientConformanceRunner
         var filteredOperation = operation with
         {
             Errors = [],
-            Input = operation.Input is { } input && IsUnit(input) ? null : operation.Input,
-            Output = suppressOutput ? null : operation.Output,
+            Input =
+                suppressInput || operation.Input is { } input && IsUnit(input)
+                    ? null
+                    : operation.Input,
+            Output =
+                suppressOutput || operation.Output is { } output && IsUnit(output)
+                    ? null
+                    : operation.Output,
         };
         AddShape(service with { Operations = [operation.Id] });
         AddShape(filteredOperation);
@@ -762,7 +824,9 @@ internal static class OfficialGeneratedClientConformanceRunner
             Path.Combine(projectDirectory, "Program.cs"),
             $$"""
             using System.Net;
+            using System.Net.Http.Headers;
             using System.Text;
+            using System.Text.Json.Nodes;
             using {{serviceNamespace}};
 
             {{interfaceName}} client = new {{clientTypeName}}(new HttpClient(new Handler())
@@ -798,6 +862,12 @@ internal static class OfficialGeneratedClientConformanceRunner
                     string name,
                     string value)
                 {
+                    if (string.Equals(name, "Content-Type", StringComparison.OrdinalIgnoreCase))
+                    {
+                        response.Content.Headers.ContentType = MediaTypeHeaderValue.Parse(value);
+                        return response;
+                    }
+
                     response.Headers.Add(name, value);
                     return response;
                 }
@@ -814,6 +884,7 @@ internal static class OfficialGeneratedClientConformanceRunner
                 requestTest?.Headers
                     ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 "{}",
+                "application/json",
                 Document.From(new Dictionary<string, Document>())
             );
         }
@@ -853,18 +924,19 @@ internal static class OfficialGeneratedClientConformanceRunner
             testCase.QueryParams.Count == 0
                 ? testCase.Uri
                 : $"{testCase.Uri}?{string.Join("&", testCase.QueryParams)}";
+        expectedRequestUri = expectedRequestUri.Replace(" ", "%20", StringComparison.Ordinal);
         var headerAssertions = string.Join(
             Environment.NewLine,
             testCase.Headers.Select(
                 (header, index) =>
                     $$"""
-                    if (!request.Headers.TryGetValues({{ComplianceCSharpLiterals.FormatString(
+                    if (!TryGetRequestHeader(request, {{ComplianceCSharpLiterals.FormatString(
                         header.Key
                     )}}, out var requestHeader{{index.ToString(
                         CultureInfo.InvariantCulture
-                    )}}) || requestHeader{{index.ToString(
+                    )}}) || !HeaderMatches({{ComplianceCSharpLiterals.FormatString(header.Key)}}, requestHeader{{index.ToString(
                         CultureInfo.InvariantCulture
-                    )}}.Single() != {{ComplianceCSharpLiterals.FormatString(header.Value)}})
+                    )}}.Single(), {{ComplianceCSharpLiterals.FormatString(header.Value)}}))
                     {
                         throw new InvalidOperationException({{ComplianceCSharpLiterals.FormatString(
                         $"Unexpected request header: {header.Key}"
@@ -873,6 +945,45 @@ internal static class OfficialGeneratedClientConformanceRunner
                     """
             )
         );
+        var requestHeaderHelper =
+            testCase.Headers.Count == 0
+                ? string.Empty
+                : """
+
+                            static bool TryGetRequestHeader(
+                                HttpRequestMessage request,
+                                string name,
+                                out IEnumerable<string> values)
+                            {
+                                if (request.Headers.TryGetValues(name, out values!))
+                                {
+                                    return true;
+                                }
+
+                                if (request.Content?.Headers.TryGetValues(name, out values!) == true)
+                                {
+                                    return true;
+                                }
+
+                                values = [];
+                                return false;
+                            }
+
+                            static bool HeaderMatches(string name, string actual, string expected)
+                            {
+                                if (!string.Equals(name, "Content-Type", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    return actual == expected;
+                                }
+
+                                return MediaTypeHeaderValue.TryParse(actual, out var actualMediaType)
+                                    && MediaTypeHeaderValue.TryParse(expected, out var expectedMediaType)
+                                    && string.Equals(
+                                        actualMediaType.MediaType,
+                                        expectedMediaType.MediaType,
+                                        StringComparison.OrdinalIgnoreCase);
+                            }
+                    """;
 
         return $$"""
                     if (request.Method.Method != {{ComplianceCSharpLiterals.FormatString(
@@ -889,12 +1000,28 @@ internal static class OfficialGeneratedClientConformanceRunner
                     var body = request.Content is null
                         ? string.Empty
                         : await request.Content.ReadAsStringAsync(cancellationToken);
-                    if (body != {{ComplianceCSharpLiterals.FormatString(
+                    if (!BodyMatches(body, {{ComplianceCSharpLiterals.FormatString(
                 testCase.Body ?? string.Empty
-            )}})
+            )}}, {{ComplianceCSharpLiterals.FormatString(testCase.BodyMediaType ?? string.Empty)}}))
                     {
                         throw new InvalidOperationException($"Unexpected request body: {body}");
                     }
+
+                    static bool BodyMatches(string actual, string expected, string bodyMediaType)
+                    {
+                        if (!string.Equals(bodyMediaType, "application/json", StringComparison.OrdinalIgnoreCase))
+                        {
+                            return actual == expected;
+                        }
+
+                        if (string.IsNullOrWhiteSpace(actual) || string.IsNullOrWhiteSpace(expected))
+                        {
+                            return string.IsNullOrWhiteSpace(actual) && string.IsNullOrWhiteSpace(expected);
+                        }
+
+                        return JsonNode.DeepEquals(JsonNode.Parse(actual), JsonNode.Parse(expected));
+                    }
+                    {{requestHeaderHelper}}
             """;
     }
 

@@ -28,7 +28,7 @@ public sealed class SmithyOperationInvoker(
             .Invoke(operationRequest, cancellationToken)
             .ConfigureAwait(false);
 
-        if (operationResponse.Response.IsSuccessStatusCode)
+        if ((int)operationResponse.Response.StatusCode < 400)
         {
             return operationResponse.Response;
         }

@@ -123,6 +123,15 @@ public sealed partial class CSharpShapeGenerator
     {
         var operation = model.GetShape(operationId);
         var httpBinding = ReadHttpBinding(operation);
+        if (
+            service.Traits.Has(SmithyPrelude.SimpleRestJsonTrait)
+            && httpBinding.Uri.Length > 1
+            && httpBinding.Uri.EndsWith('/')
+        )
+        {
+            httpBinding = httpBinding with { Uri = httpBinding.Uri.TrimEnd('/') };
+        }
+
         var inputShape = operation.Input is { } operationInput
             ? model.GetShape(operationInput)
             : null;
@@ -146,7 +155,7 @@ public sealed partial class CSharpShapeGenerator
                 builder.Line("ArgumentNullException.ThrowIfNull(input);");
             }
 
-            AppendRequestUriBuilder(builder, inputShape, httpBinding);
+            AppendRequestUriBuilder(builder, model, inputShape, httpBinding);
             builder.Line(
                 $"var request = new SmithyHttpRequest(new HttpMethod({FormatString(httpBinding.Method)}), requestUri);"
             );
@@ -262,6 +271,7 @@ public sealed partial class CSharpShapeGenerator
 
     private static void AppendRequestUriBuilder(
         CSharpWriter builder,
+        SmithyModel model,
         ModelShape? input,
         HttpBinding httpBinding
     )
@@ -275,9 +285,10 @@ public sealed partial class CSharpShapeGenerator
             {
                 var propertyName = CSharpIdentifier.PropertyName(member.Name);
                 var labelVariableName = $"{CSharpIdentifier.ParameterName(member.Name)}Label";
-                builder.Line(
-                    $"var {labelVariableName} = input.{propertyName} ?? throw new ArgumentException({FormatString($"HTTP label '{member.Name}' is required.")}, nameof(input));"
-                );
+                var labelExpression = IsReferenceType(model, member.Target)
+                    ? $"input.{propertyName} ?? throw new ArgumentException({FormatString($"HTTP label '{member.Name}' is required.")}, nameof(input))"
+                    : $"input.{propertyName}";
+                builder.Line($"var {labelVariableName} = {labelExpression};");
                 builder.Line(
                     $"requestUriBuilder.Replace({FormatString($"{{{member.Name}}}")}, Uri.EscapeDataString(FormatHttpValue({labelVariableName})));"
                 );
@@ -720,6 +731,9 @@ public sealed partial class CSharpShapeGenerator
                         "DateTimeOffset timestamp => timestamp.ToUniversalTime().ToString(\"O\", CultureInfo.InvariantCulture),"
                     );
                     builder.Line(
+                        "Enum enumValue => Convert.ToInt32(enumValue, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture),"
+                    );
+                    builder.Line(
                         "IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture) ?? string.Empty,"
                     );
                     builder.Line("_ => value.ToString() ?? string.Empty,");
@@ -859,6 +873,24 @@ public sealed partial class CSharpShapeGenerator
                     );
                 });
                 builder.Line("return (T)enumResult!;");
+            });
+            builder.Line();
+            builder.Line("if (targetType == typeof(DateTimeOffset))");
+            builder.Block(() =>
+            {
+                builder.Line(
+                    "if (long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var epochSeconds))"
+                );
+                builder.Block(() =>
+                {
+                    builder.Line(
+                        "return (T)(object)DateTimeOffset.FromUnixTimeSeconds(epochSeconds);"
+                    );
+                });
+                builder.Line();
+                builder.Line(
+                    "return (T)(object)DateTimeOffset.Parse(value, CultureInfo.InvariantCulture);"
+                );
             });
             builder.Line();
             builder.Line("var constructor = targetType.GetConstructor([typeof(string)]);");
