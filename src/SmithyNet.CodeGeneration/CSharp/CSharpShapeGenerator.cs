@@ -53,7 +53,10 @@ public sealed partial class CSharpShapeGenerator
     {
         return ShouldGenerateNamespace(shape, options)
             && shape.Kind == ShapeKind.Service
-            && shape.Traits.Has(SmithyPrelude.RestJson1Trait);
+            && (
+                shape.Traits.Has(SmithyPrelude.RestJson1Trait)
+                || shape.Traits.Has(SmithyPrelude.SimpleRestJsonTrait)
+            );
     }
 
     private static bool ShouldGenerateServer(ModelShape shape, CSharpGenerationOptions options)

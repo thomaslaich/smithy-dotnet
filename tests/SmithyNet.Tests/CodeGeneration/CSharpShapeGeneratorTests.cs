@@ -522,7 +522,9 @@ public sealed class CSharpShapeGeneratorTests
               </PropertyGroup>
               <ItemGroup>
                 <FrameworkReference Include="Microsoft.AspNetCore.App" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Json/SmithyNet.Json.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server/SmithyNet.Server.csproj" />
@@ -772,6 +774,78 @@ public sealed class CSharpShapeGeneratorTests
     }
 
     [Fact]
+    public void GenerateClientEmitsTypedClientForSimpleRestJsonService()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "alloy#simpleRestJson": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "GET",
+                      "uri": "/forecast/{city}"
+                    }
+                  },
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpLabel": {}
+                      }
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var files = new CSharpShapeGenerator()
+            .Generate(model)
+            .ToDictionary(file => file.Path, file => file.Contents);
+
+        Assert.Contains("Example/Weather/WeatherClient.g.cs", files.Keys);
+        Assert.Contains("Example/Weather/WeatherServer.g.cs", files.Keys);
+        Assert.Contains(
+            "public interface IWeatherClient",
+            files["Example/Weather/WeatherClient.g.cs"]
+        );
+    }
+
+    [Fact]
     public void GenerateServerEmitsHandlerInterfaceForSimpleRestJsonService()
     {
         var model = SmithyJsonAstReader.Read(
@@ -869,6 +943,69 @@ public sealed class CSharpShapeGeneratorTests
             """endpoints.MapMethods("/forecast/{city}", ["GET"], async (HttpContext httpContext, IWeatherServiceHandler handler, CancellationToken cancellationToken) =>""",
             server
         );
+    }
+
+    [Fact]
+    public void GenerateServerDoesNotDuplicateServiceSuffixForSimpleRestJsonService()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.hello#HelloService": {
+                  "type": "service",
+                  "traits": {
+                    "alloy#simpleRestJson": {}
+                  },
+                  "operations": [
+                    "example.hello#SayHello"
+                  ]
+                },
+                "example.hello#SayHello": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "POST",
+                      "uri": "/hello"
+                    }
+                  },
+                  "input": {
+                    "target": "example.hello#SayHelloInput"
+                  }
+                },
+                "example.hello#SayHelloInput": {
+                  "type": "structure",
+                  "members": {
+                    "name": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var files = new CSharpShapeGenerator()
+            .Generate(model)
+            .ToDictionary(file => file.Path, file => file.Contents);
+
+        Assert.Contains("Example/Hello/HelloServiceServer.g.cs", files.Keys);
+        var server = files["Example/Hello/HelloServiceServer.g.cs"];
+        Assert.Contains("public interface IHelloServiceHandler", server);
+        Assert.Contains(
+            "public static SmithyServerDispatcher RegisterHelloService(this SmithyServerDispatcher dispatcher, IHelloServiceHandler handler)",
+            server
+        );
+        Assert.Contains(
+            "public static IEndpointRouteBuilder MapHelloService(this IEndpointRouteBuilder endpoints)",
+            server
+        );
+        Assert.DoesNotContain("HelloServiceService", server);
     }
 
     [Fact]

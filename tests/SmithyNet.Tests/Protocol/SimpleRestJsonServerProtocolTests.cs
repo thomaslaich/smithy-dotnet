@@ -26,6 +26,7 @@ public sealed class SimpleRestJsonServerProtocolTests
                   "operations": [
                     "example.weather#GetForecast",
                     "example.weather#PutForecast",
+                    "example.weather#PutForecastBody",
                     "example.weather#FailForecast"
                   ]
                 },
@@ -70,6 +71,21 @@ public sealed class SimpleRestJsonServerProtocolTests
                   "errors": [
                     "example.weather#BadRequest"
                   ]
+                },
+                "example.weather#PutForecastBody": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "POST",
+                      "uri": "/forecast-body"
+                    }
+                  },
+                  "input": {
+                    "target": "example.weather#PutForecastBodyInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  }
                 },
                 "example.weather#GetForecastInput": {
                   "type": "structure",
@@ -119,6 +135,23 @@ public sealed class SimpleRestJsonServerProtocolTests
                   "type": "structure",
                   "members": {
                     "note": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                },
+                "example.weather#PutForecastBodyInput": {
+                  "type": "structure",
+                  "members": {
+                    "note": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    },
+                    "severity": {
                       "target": "smithy.api#String",
                       "traits": {
                         "smithy.api#required": {}
@@ -213,7 +246,9 @@ public sealed class SimpleRestJsonServerProtocolTests
                 <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
               </PropertyGroup>
               <ItemGroup>
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Json/SmithyNet.Json.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server/SmithyNet.Server.csproj" />
@@ -268,6 +303,20 @@ public sealed class SimpleRestJsonServerProtocolTests
                 HttpStatusCode.Created,
                 "response-2",
                 "{\"summary\":\"Zurich:storm\"}");
+
+            using var putBody = new HttpRequestMessage(HttpMethod.Post, "/forecast-body")
+            {
+                Content = new StringContent(
+                    "{\"note\":\"rain\",\"severity\":\"high\"}",
+                    Encoding.UTF8,
+                    "application/json")
+            };
+            using var putBodyResponse = await client.SendAsync(putBody);
+            await AssertResponseAsync(
+                putBodyResponse,
+                HttpStatusCode.OK,
+                "response-3",
+                "{\"summary\":\"rain:high\"}");
 
             using var errorResponse = await client.GetAsync("/forecast/fail");
             await AssertResponseAsync(
@@ -335,6 +384,17 @@ public sealed class SimpleRestJsonServerProtocolTests
                             "response-2",
                             201,
                             $"{input.City}:{input.Details.Note}"));
+                }
+
+                public Task<GetForecastOutput> PutForecastBodyAsync(
+                    PutForecastBodyInput input,
+                    CancellationToken cancellationToken = default)
+                {
+                    return Task.FromResult(
+                        new GetForecastOutput(
+                            "response-3",
+                            200,
+                            $"{input.Note}:{input.Severity}"));
                 }
 
                 public Task FailForecastAsync(CancellationToken cancellationToken = default)

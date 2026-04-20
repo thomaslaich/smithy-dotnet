@@ -63,6 +63,15 @@ Reference the packages needed by generated `restJson1` clients:
 </ItemGroup>
 ```
 
+For generated ASP.NET Core `simpleRestJson` servers, also reference:
+
+```xml
+<ItemGroup>
+  <PackageReference Include="SmithyNet.Server" Version="0.1.0-preview.1" />
+  <PackageReference Include="SmithyNet.Server.AspNetCore" Version="0.1.0-preview.1" />
+</ItemGroup>
+```
+
 If the repo-level `Directory.Packages.props` applies to the example project and
 you want explicit package versions in the project file, set:
 
@@ -146,3 +155,63 @@ Console.WriteLine(output.Message);
 The polyglot example at `examples/polyglot/dotnet/client` is the current
 end-to-end consumer project. It generates a .NET client from the Java example
 model and calls the Java API.
+
+## Use The Generated Server
+
+For `alloy#simpleRestJson`, generated services include a typed handler interface
+and an ASP.NET Core endpoint mapper:
+
+```smithy
+$version: "2"
+
+namespace example.hello
+
+use alloy#simpleRestJson
+
+@simpleRestJson
+service HelloService {
+    version: "2024-01-01"
+    operations: [SayHello]
+}
+
+@http(method: "GET", uri: "/hello/{name}")
+operation SayHello {
+    input := {
+        @required
+        @httpLabel
+        name: String
+    }
+
+    output := {
+        @required
+        message: String
+    }
+}
+```
+
+After generation, implement the handler and map the service:
+
+```csharp
+using Example.Hello;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddSingleton<IHelloServiceHandler, HelloHandler>();
+
+var app = builder.Build();
+app.MapHelloService();
+app.Run();
+
+internal sealed class HelloHandler : IHelloServiceHandler
+{
+    public Task<SayHelloOutput> SayHelloAsync(
+        SayHelloInput input,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new SayHelloOutput($"hello, {input.Name}"));
+    }
+}
+```
+
+The example at `examples/simple-rest-json/dotnet` shows a generated
+Smithy.NET ASP.NET Core server and a generated Smithy.NET client using the same
+`alloy#simpleRestJson` model.

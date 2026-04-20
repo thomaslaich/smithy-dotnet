@@ -13,8 +13,12 @@
       "path": "examples/polyglot/scala"
     },
     {
-      "name": "Polyglot .NET Client",
-      "path": "examples/polyglot/dotnet/client"
+      "name": "Polyglot .NET",
+      "path": "examples/polyglot/dotnet"
+    },
+    {
+      "name": "SimpleRestJson .NET",
+      "path": "examples/simple-rest-json/dotnet"
     }
   ],
   "settings": {

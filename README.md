@@ -79,6 +79,7 @@ See [Quick Start](docs/quick-start.md) for a complete example project.
 - [Supported Surface](docs/supported-surface.md)
 - [Known Limitations](docs/known-limitations.md)
 - [Polyglot Example](examples/polyglot/README.md)
+- [simpleRestJson .NET Example](examples/simple-rest-json/dotnet/README.md)
 - [Roadmap](docs/planning/roadmap.md)
 
 ## Development

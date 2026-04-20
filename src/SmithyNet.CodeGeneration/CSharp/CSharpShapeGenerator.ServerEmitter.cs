@@ -18,19 +18,18 @@ public sealed partial class CSharpShapeGenerator
             service,
             options,
             [
-                "System.Globalization",
-                "System.IO",
                 "Microsoft.AspNetCore.Builder",
                 "Microsoft.AspNetCore.Http",
                 "Microsoft.AspNetCore.Routing",
-                "SmithyNet.Json",
+                "SmithyNet.Server.AspNetCore",
                 "SmithyNet.Server",
                 "System.Threading",
                 "System.Threading.Tasks",
             ]
         );
         var serviceTypeName = GetTypeName(service.Id);
-        var interfaceName = $"I{serviceTypeName}ServiceHandler";
+        var serviceContractName = GetServiceContractName(serviceTypeName);
+        var interfaceName = $"I{serviceContractName}Handler";
         builder.Line($"public interface {interfaceName}");
         builder.Block(() =>
         {
@@ -50,7 +49,7 @@ public sealed partial class CSharpShapeGenerator
             builder,
             model,
             service,
-            serviceTypeName,
+            serviceContractName,
             interfaceName,
             options
         );
@@ -59,7 +58,7 @@ public sealed partial class CSharpShapeGenerator
             builder,
             model,
             service,
-            serviceTypeName,
+            serviceContractName,
             interfaceName,
             options
         );
@@ -67,20 +66,27 @@ public sealed partial class CSharpShapeGenerator
         return new GeneratedCSharpFile(GetServerPath(service), builder.ToString());
     }
 
+    private static string GetServiceContractName(string serviceTypeName)
+    {
+        return serviceTypeName.EndsWith("Service", StringComparison.Ordinal)
+            ? serviceTypeName
+            : $"{serviceTypeName}Service";
+    }
+
     private static void AppendServerRegistrationExtensions(
         CSharpWriter builder,
         SmithyModel model,
         ModelShape service,
-        string serviceTypeName,
+        string serviceContractName,
         string interfaceName,
         CSharpGenerationOptions options
     )
     {
-        builder.Line($"public static class {serviceTypeName}ServerExtensions");
+        builder.Line($"public static class {serviceContractName}ServerExtensions");
         builder.Block(() =>
         {
             builder.Line(
-                $"public static SmithyServerDispatcher Register{serviceTypeName}Service(this SmithyServerDispatcher dispatcher, {interfaceName} handler)"
+                $"public static SmithyServerDispatcher Register{serviceContractName}(this SmithyServerDispatcher dispatcher, {interfaceName} handler)"
             );
             builder.Block(() =>
             {
@@ -157,16 +163,16 @@ public sealed partial class CSharpShapeGenerator
         CSharpWriter builder,
         SmithyModel model,
         ModelShape service,
-        string serviceTypeName,
+        string serviceContractName,
         string interfaceName,
         CSharpGenerationOptions options
     )
     {
-        builder.Line($"public static class {serviceTypeName}AspNetCoreExtensions");
+        builder.Line($"public static class {serviceContractName}AspNetCoreExtensions");
         builder.Block(() =>
         {
             builder.Line(
-                $"public static IEndpointRouteBuilder Map{serviceTypeName}Service(this IEndpointRouteBuilder endpoints)"
+                $"public static IEndpointRouteBuilder Map{serviceContractName}(this IEndpointRouteBuilder endpoints)"
             );
             builder.Block(() =>
             {
@@ -193,10 +199,7 @@ public sealed partial class CSharpShapeGenerator
 
                 builder.Line("return endpoints;");
             });
-            builder.Line();
             AppendAspNetCoreBoundResponseWriters(builder, model, service, options);
-            builder.Line();
-            AppendAspNetCoreHelpers(builder);
         });
     }
 
@@ -307,7 +310,7 @@ public sealed partial class CSharpShapeGenerator
         var output = model.GetShape(outputId);
         return HasResponseBindings(output)
             ? "await WriteBoundResponseAsync(httpContext, output, cancellationToken).ConfigureAwait(false);"
-            : "await WriteJsonResponseAsync(httpContext, output, cancellationToken).ConfigureAwait(false);";
+            : "await SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, output, cancellationToken).ConfigureAwait(false);";
     }
 
     private static void AppendAspNetCoreBoundResponseWriters(
@@ -350,7 +353,7 @@ public sealed partial class CSharpShapeGenerator
             {
                 var propertyName = CSharpIdentifier.PropertyName(member.Name);
                 builder.Line(
-                    $"httpContext.Response.StatusCode = Convert.ToInt32(output.{propertyName}, CultureInfo.InvariantCulture);"
+                    $"SmithyAspNetCoreProtocol.SetStatusCode(httpContext, output.{propertyName});"
                 );
             }
 
@@ -359,7 +362,7 @@ public sealed partial class CSharpShapeGenerator
                 var propertyName = CSharpIdentifier.PropertyName(member.Name);
                 var headerName = member.Traits[SmithyPrelude.HttpHeaderTrait].AsString();
                 builder.Line(
-                    $"AddResponseHeader(httpContext, {FormatString(headerName)}, output.{propertyName});"
+                    $"SmithyAspNetCoreProtocol.AddResponseHeader(httpContext, {FormatString(headerName)}, output.{propertyName});"
                 );
             }
 
@@ -367,7 +370,7 @@ public sealed partial class CSharpShapeGenerator
             {
                 var propertyName = CSharpIdentifier.PropertyName(payloadMember.Name);
                 builder.Line(
-                    $"await WriteJsonResponseAsync(httpContext, output.{propertyName}, cancellationToken).ConfigureAwait(false);"
+                    $"await SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, output.{propertyName}, cancellationToken).ConfigureAwait(false);"
                 );
                 return;
             }
@@ -396,7 +399,7 @@ public sealed partial class CSharpShapeGenerator
                 closingSuffix: ";"
             );
             builder.Line(
-                "await WriteJsonResponseAsync(httpContext, responseBody, cancellationToken).ConfigureAwait(false);"
+                "await SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, responseBody, cancellationToken).ConfigureAwait(false);"
             );
         });
     }
@@ -442,29 +445,29 @@ public sealed partial class CSharpShapeGenerator
         var memberType = GetMemberParameterType(model, input, member, currentNamespace, options);
         if (IsHttpLabelMember(member))
         {
-            return $"GetRouteValue<{memberType}>(httpContext, {FormatString(member.Name)})";
+            return $"SmithyAspNetCoreProtocol.GetRouteValue<{memberType}>(httpContext, {FormatString(member.Name)})";
         }
 
         if (IsHttpQueryMember(member))
         {
             var queryName = member.Traits[SmithyPrelude.HttpQueryTrait].AsString();
-            return $"GetQueryValue<{memberType}>(httpContext, {FormatString(queryName)})";
+            return $"SmithyAspNetCoreProtocol.GetQueryValue<{memberType}>(httpContext, {FormatString(queryName)})";
         }
 
         if (IsHttpHeaderMember(member))
         {
             var headerName = member.Traits[SmithyPrelude.HttpHeaderTrait].AsString();
-            return $"GetHeaderValue<{memberType}>(httpContext, {FormatString(headerName)})";
+            return $"SmithyAspNetCoreProtocol.GetHeaderValue<{memberType}>(httpContext, {FormatString(headerName)})";
         }
 
         if (IsHttpPayloadMember(member))
         {
-            return $"await ReadJsonRequestBodyAsync<{memberType}>(httpContext, cancellationToken).ConfigureAwait(false)";
+            return $"await SmithyAspNetCoreProtocol.ReadJsonRequestBodyAsync<{memberType}>(httpContext, cancellationToken).ConfigureAwait(false)";
         }
 
         var jsonName =
             member.Traits.GetValueOrDefault(SmithyPrelude.JsonNameTrait)?.AsString() ?? member.Name;
-        return $"await ReadJsonRequestBodyMemberAsync<{memberType}>(httpContext, {FormatString(jsonName)}, cancellationToken).ConfigureAwait(false)";
+        return $"await SmithyAspNetCoreProtocol.ReadJsonRequestBodyMemberAsync<{memberType}>(httpContext, {FormatString(jsonName)}, cancellationToken).ConfigureAwait(false)";
     }
 
     private static void AppendAspNetCoreErrorHandlers(
@@ -493,7 +496,7 @@ public sealed partial class CSharpShapeGenerator
                     $"httpContext.Response.StatusCode = {statusCode.ToString(CultureInfo.InvariantCulture)};"
                 );
                 builder.Line(
-                    "await WriteJsonResponseAsync(httpContext, error, cancellationToken).ConfigureAwait(false);"
+                    "await SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, error, cancellationToken).ConfigureAwait(false);"
                 );
             });
         }
@@ -504,171 +507,6 @@ public sealed partial class CSharpShapeGenerator
         return operation.Errors.Any(errorId =>
             GetHttpErrorCode(model.GetShape(errorId)) is not null
         );
-    }
-
-    private static void AppendAspNetCoreHelpers(CSharpWriter builder)
-    {
-        builder.Line(
-            "private static async Task WriteBoundResponseAsync<T>(HttpContext httpContext, T output, CancellationToken cancellationToken)"
-        );
-        builder.Block(() =>
-        {
-            builder.Line("ArgumentNullException.ThrowIfNull(output);");
-            builder.Line(
-                "await WriteJsonResponseAsync(httpContext, output, cancellationToken).ConfigureAwait(false);"
-            );
-        });
-        builder.Line();
-        builder.Line("private static T GetRouteValue<T>(HttpContext httpContext, string name)");
-        builder.Block(() =>
-        {
-            builder.Line(
-                "return httpContext.Request.RouteValues.TryGetValue(name, out var value) && value is not null"
-            );
-            builder.Indented(() =>
-            {
-                builder.Line("? ConvertHttpValue<T>(value.ToString())");
-                builder.Line(
-                    ": throw new InvalidOperationException($\"Missing route value '{name}'.\");"
-                );
-            });
-        });
-        builder.Line();
-        builder.Line("private static T GetQueryValue<T>(HttpContext httpContext, string name)");
-        builder.Block(() =>
-        {
-            builder.Line("return httpContext.Request.Query.TryGetValue(name, out var values)");
-            builder.Indented(() =>
-            {
-                builder.Line("? ConvertHttpValue<T>(values.FirstOrDefault())");
-                builder.Line(": default!;");
-            });
-        });
-        builder.Line();
-        builder.Line("private static T GetHeaderValue<T>(HttpContext httpContext, string name)");
-        builder.Block(() =>
-        {
-            builder.Line("return httpContext.Request.Headers.TryGetValue(name, out var values)");
-            builder.Indented(() =>
-            {
-                builder.Line("? ConvertHttpValue<T>(values.FirstOrDefault())");
-                builder.Line(": default!;");
-            });
-        });
-        builder.Line();
-        builder.Line(
-            "private static async Task<T> ReadJsonRequestBodyAsync<T>(HttpContext httpContext, CancellationToken cancellationToken)"
-        );
-        builder.Block(() =>
-        {
-            builder.Line("using var reader = new StreamReader(httpContext.Request.Body);");
-            builder.Line(
-                "var content = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);"
-            );
-            builder.Line("return SmithyJsonSerializer.Deserialize<T>(content);");
-        });
-        builder.Line();
-        builder.Line(
-            "private static async Task<T> ReadJsonRequestBodyMemberAsync<T>(HttpContext httpContext, string name, CancellationToken cancellationToken)"
-        );
-        builder.Block(() =>
-        {
-            builder.Line("using var reader = new StreamReader(httpContext.Request.Body);");
-            builder.Line(
-                "var content = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);"
-            );
-            builder.Line("if (string.IsNullOrWhiteSpace(content))");
-            builder.Block(() =>
-            {
-                builder.Line("return default!;");
-            });
-            builder.Line();
-            builder.Line("using var document = System.Text.Json.JsonDocument.Parse(content);");
-            builder.Line("return document.RootElement.TryGetProperty(name, out var value)");
-            builder.Indented(() =>
-            {
-                builder.Line("? SmithyJsonSerializer.Deserialize<T>(value.GetRawText())");
-                builder.Line(": default!;");
-            });
-        });
-        builder.Line();
-        builder.Line(
-            "private static async Task WriteJsonResponseAsync<T>(HttpContext httpContext, T value, CancellationToken cancellationToken)"
-        );
-        builder.Block(() =>
-        {
-            builder.Line("httpContext.Response.ContentType = \"application/json\";");
-            builder.Line(
-                "await httpContext.Response.WriteAsync(SmithyJsonSerializer.Serialize(value), cancellationToken).ConfigureAwait(false);"
-            );
-        });
-        builder.Line();
-        builder.Line(
-            "private static void AddResponseHeader(HttpContext httpContext, string name, object? value)"
-        );
-        builder.Block(() =>
-        {
-            builder.Line("if (value is null)");
-            builder.Block(() =>
-            {
-                builder.Line("return;");
-            });
-            builder.Line();
-            builder.Line("httpContext.Response.Headers[name] = FormatHttpValue(value);");
-        });
-        builder.Line();
-        builder.Line("private static string FormatHttpValue(object value)");
-        builder.Block(() =>
-        {
-            builder.Line("return value switch");
-            builder.Block(
-                () =>
-                {
-                    builder.Line(
-                        "DateTimeOffset timestamp => timestamp.ToUniversalTime().ToString(\"O\", CultureInfo.InvariantCulture),"
-                    );
-                    builder.Line(
-                        "IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture) ?? string.Empty,"
-                    );
-                    builder.Line("_ => value.ToString() ?? string.Empty,");
-                },
-                closingSuffix: ";"
-            );
-        });
-        builder.Line();
-        builder.Line("private static T ConvertHttpValue<T>(string? value)");
-        builder.Block(() =>
-        {
-            builder.Line("if (value is null)");
-            builder.Block(() =>
-            {
-                builder.Line("return default!;");
-            });
-            builder.Line();
-            builder.Line("var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);");
-            builder.Line("if (targetType == typeof(string))");
-            builder.Block(() =>
-            {
-                builder.Line("return (T)(object)value;");
-            });
-            builder.Line();
-            builder.Line("if (targetType.IsEnum)");
-            builder.Block(() =>
-            {
-                builder.Line("return (T)Enum.Parse(targetType, value, ignoreCase: false);");
-            });
-            builder.Line();
-            builder.Line("var constructor = targetType.GetConstructor([typeof(string)]);");
-            builder.Line("if (constructor is not null)");
-            builder.Block(() =>
-            {
-                builder.Line("return (T)constructor.Invoke([value]);");
-            });
-            builder.Line();
-            builder.Line(
-                "return (T)Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture);"
-            );
-        });
     }
 
     private static string GetServerOperationSignature(
