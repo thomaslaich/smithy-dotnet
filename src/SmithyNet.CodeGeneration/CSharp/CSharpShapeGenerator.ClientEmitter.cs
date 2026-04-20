@@ -239,6 +239,12 @@ public sealed partial class CSharpShapeGenerator
             return $"GetHeader<{memberType}>(response.Headers, {FormatString(headerName)})";
         }
 
+        if (IsHttpPrefixHeadersMember(member))
+        {
+            var headerPrefix = member.Traits[SmithyPrelude.HttpPrefixHeadersTrait].AsString();
+            return $"GetPrefixedHeaders<{memberType}>(response.Headers, {FormatString(headerPrefix)})";
+        }
+
         if (IsHttpResponseCodeMember(member))
         {
             return $"({memberType})(int)response.StatusCode";
@@ -285,6 +291,12 @@ public sealed partial class CSharpShapeGenerator
                     $"AppendQuery(requestUriBuilder, {FormatString(queryName)}, input.{propertyName});"
                 );
             }
+
+            foreach (var member in GetSortedMembers(input).Where(IsHttpQueryParamsMember))
+            {
+                var propertyName = CSharpIdentifier.PropertyName(member.Name);
+                builder.Line($"AppendQueryMap(requestUriBuilder, input.{propertyName});");
+            }
         }
 
         builder.Line("var requestUri = requestUriBuilder.ToString();");
@@ -298,6 +310,15 @@ public sealed partial class CSharpShapeGenerator
             var propertyName = CSharpIdentifier.PropertyName(member.Name);
             builder.Line(
                 $"AddHeader(request.Headers, {FormatString(headerName)}, input.{propertyName});"
+            );
+        }
+
+        foreach (var member in GetSortedMembers(input).Where(IsHttpPrefixHeadersMember))
+        {
+            var headerPrefix = member.Traits[SmithyPrelude.HttpPrefixHeadersTrait].AsString();
+            var propertyName = CSharpIdentifier.PropertyName(member.Name);
+            builder.Line(
+                $"AddPrefixedHeaders(request.Headers, {FormatString(headerPrefix)}, input.{propertyName});"
             );
         }
     }
@@ -333,7 +354,9 @@ public sealed partial class CSharpShapeGenerator
     {
         return !IsHttpLabelMember(member)
             && !IsHttpQueryMember(member)
+            && !IsHttpQueryParamsMember(member)
             && !IsHttpHeaderMember(member)
+            && !IsHttpPrefixHeadersMember(member)
             && !IsHttpPayloadMember(member);
     }
 
@@ -346,8 +369,14 @@ public sealed partial class CSharpShapeGenerator
     private static bool IsHttpPayloadMember(MemberShape member) =>
         member.Traits.Has(SmithyPrelude.HttpPayloadTrait);
 
+    private static bool IsHttpPrefixHeadersMember(MemberShape member) =>
+        member.Traits.Has(SmithyPrelude.HttpPrefixHeadersTrait);
+
     private static bool IsHttpQueryMember(MemberShape member) =>
         member.Traits.Has(SmithyPrelude.HttpQueryTrait);
+
+    private static bool IsHttpQueryParamsMember(MemberShape member) =>
+        member.Traits.Has(SmithyPrelude.HttpQueryParamsTrait);
 
     private static bool IsHttpResponseCodeMember(MemberShape member) =>
         member.Traits.Has(SmithyPrelude.HttpResponseCodeTrait);
@@ -356,6 +385,7 @@ public sealed partial class CSharpShapeGenerator
     {
         return output.Members.Values.Any(member =>
             IsHttpHeaderMember(member)
+            || IsHttpPrefixHeadersMember(member)
             || IsHttpPayloadMember(member)
             || IsHttpResponseCodeMember(member)
         );
@@ -539,6 +569,31 @@ public sealed partial class CSharpShapeGenerator
         builder.Line();
 
         builder.Line(
+            "private static void AddPrefixedHeaders(IDictionary<string, IReadOnlyList<string>> headers, string prefix, object? value)"
+        );
+        builder.Block(() =>
+        {
+            builder.Line("if (value is null)");
+            builder.Block(() =>
+            {
+                builder.Line("return;");
+            });
+            builder.Line();
+            builder.Line("foreach (var item in EnumerateStringMap(value))");
+            builder.Block(() =>
+            {
+                builder.Line("if (item.Value is null)");
+                builder.Block(() =>
+                {
+                    builder.Line("continue;");
+                });
+                builder.Line();
+                builder.Line("headers[$\"{prefix}{item.Key}\"] = [FormatHttpValue(item.Value)];");
+            });
+        });
+        builder.Line();
+
+        builder.Line(
             "private static void AppendQuery(StringBuilder builder, string name, object? value)"
         );
         builder.Block(() =>
@@ -565,6 +620,23 @@ public sealed partial class CSharpShapeGenerator
         });
         builder.Line();
 
+        builder.Line("private static void AppendQueryMap(StringBuilder builder, object? value)");
+        builder.Block(() =>
+        {
+            builder.Line("if (value is null)");
+            builder.Block(() =>
+            {
+                builder.Line("return;");
+            });
+            builder.Line();
+            builder.Line("foreach (var item in EnumerateStringMap(value))");
+            builder.Block(() =>
+            {
+                builder.Line("AppendQueryValue(builder, item.Key, item.Value);");
+            });
+        });
+        builder.Line();
+
         builder.Line(
             "private static void AppendQueryValue(StringBuilder builder, string name, object? value)"
         );
@@ -580,6 +652,60 @@ public sealed partial class CSharpShapeGenerator
             builder.Line("builder.Append(Uri.EscapeDataString(name));");
             builder.Line("builder.Append('=');");
             builder.Line("builder.Append(Uri.EscapeDataString(FormatHttpValue(value)));");
+        });
+        builder.Line();
+
+        builder.Line(
+            "private static IEnumerable<KeyValuePair<string, object?>> EnumerateStringMap(object value)"
+        );
+        builder.Block(() =>
+        {
+            builder.Line(
+                "var values = value is IDictionary ? value : value.GetType().GetProperty(\"Values\")?.GetValue(value);"
+            );
+            builder.Line("if (values is not IEnumerable enumerable)");
+            builder.Block(() =>
+            {
+                builder.Line("yield break;");
+            });
+            builder.Line();
+            builder.Line("foreach (var item in enumerable)");
+            builder.Block(() =>
+            {
+                builder.Line("if (item is null)");
+                builder.Block(() =>
+                {
+                    builder.Line("continue;");
+                });
+                builder.Line();
+                builder.Line("if (item is DictionaryEntry dictionaryEntry)");
+                builder.Block(() =>
+                {
+                    builder.Line("if (dictionaryEntry.Key is not null)");
+                    builder.Block(() =>
+                    {
+                        builder.Line(
+                            "yield return new KeyValuePair<string, object?>(dictionaryEntry.Key.ToString() ?? string.Empty, dictionaryEntry.Value);"
+                        );
+                    });
+                    builder.Line();
+                    builder.Line("continue;");
+                });
+                builder.Line();
+                builder.Line("var itemType = item.GetType();");
+                builder.Line(
+                    "var key = itemType.GetProperty(\"Key\")?.GetValue(item)?.ToString();"
+                );
+                builder.Line("if (key is null)");
+                builder.Block(() =>
+                {
+                    builder.Line("continue;");
+                });
+                builder.Line();
+                builder.Line(
+                    "yield return new KeyValuePair<string, object?>(key, itemType.GetProperty(\"Value\")?.GetValue(item));"
+                );
+            });
         });
         builder.Line();
 
@@ -644,6 +770,68 @@ public sealed partial class CSharpShapeGenerator
             {
                 builder.Line("? ConvertHttpValue<T>(values[0])");
                 builder.Line(": default!;");
+            });
+        });
+        builder.Line();
+
+        builder.Line(
+            "private static T GetPrefixedHeaders<T>(IReadOnlyDictionary<string, IReadOnlyList<string>> headers, string prefix)"
+        );
+        builder.Block(() =>
+        {
+            builder.Line("var values = new Dictionary<string, string>(StringComparer.Ordinal);");
+            builder.Line("foreach (var header in headers)");
+            builder.Block(() =>
+            {
+                builder.Line(
+                    "if (!header.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) || header.Value.Count == 0)"
+                );
+                builder.Block(() =>
+                {
+                    builder.Line("continue;");
+                });
+                builder.Line();
+                builder.Line("values[header.Key[prefix.Length..]] = header.Value[0];");
+            });
+            builder.Line();
+            builder.Line("return CreateStringMap<T>(values);");
+        });
+        builder.Line();
+
+        builder.Line("private static T CreateStringMap<T>(Dictionary<string, string> values)");
+        builder.Block(() =>
+        {
+            builder.Line("if (values.Count == 0)");
+            builder.Block(() =>
+            {
+                builder.Line("return default!;");
+            });
+            builder.Line();
+            builder.Line("var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);");
+            builder.Line("if (targetType.IsAssignableFrom(values.GetType()))");
+            builder.Block(() =>
+            {
+                builder.Line("return (T)(object)values;");
+            });
+            builder.Line();
+            builder.Line(
+                "var constructor = targetType.GetConstructor([typeof(IReadOnlyDictionary<string, string>)]);"
+            );
+            builder.Line("if (constructor is null)");
+            builder.Block(() =>
+            {
+                builder.Line(
+                    "constructor = targetType.GetConstructor([typeof(Dictionary<string, string>)]);"
+                );
+            });
+            builder.Line();
+            builder.Line("return constructor is not null");
+            builder.Indented(() =>
+            {
+                builder.Line("? (T)constructor.Invoke([values])");
+                builder.Line(
+                    ": throw new InvalidOperationException($\"Cannot create string map type '{targetType}'.\");"
+                );
             });
         });
         builder.Line();

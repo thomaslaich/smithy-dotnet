@@ -108,7 +108,9 @@ Current generated request bindings include:
 - `@http`
 - `@httpLabel`
 - `@httpQuery`
+- `@httpQueryParams` for map-shaped dynamic query parameters
 - `@httpHeader`
+- `@httpPrefixHeaders` for map-shaped dynamic headers
 - `@httpPayload`
 - default JSON body serialization for unbound input members
 
@@ -116,12 +118,14 @@ Current generated response bindings include:
 
 - JSON body deserialization
 - `@httpHeader`
+- `@httpPrefixHeaders` for map-shaped dynamic headers
 - `@httpPayload`
 - `@httpResponseCode`
 - generated Smithy error dispatch using `@error` and `@httpError`
 
 Protocol support is intentionally narrow until more Smithy protocol compliance
-cases are covered.
+cases are covered. Dynamic query parameter and prefix-header support currently
+targets string-keyed, string-valued generated map shapes.
 
 ## Examples
 

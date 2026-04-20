@@ -45,10 +45,12 @@ public sealed class RestJsonProtocolComplianceTests
                         "method": "POST",
                         "uri": "/forecast/Zurich",
                         "queryParams": [
-                          "units=metric"
+                          "units=metric",
+                          "debug=true"
                         ],
                         "headers": {
-                          "x-request-id": "request-1"
+                          "x-request-id": "request-1",
+                          "x-meta-trace": "abc"
                         },
                         "body": "{\"note\":\"morning\"}",
                         "bodyMediaType": "application/json",
@@ -57,7 +59,13 @@ public sealed class RestJsonProtocolComplianceTests
                           "details": {
                             "note": "morning"
                           },
+                          "metadata": {
+                            "trace": "abc"
+                          },
                           "requestId": "request-1",
+                          "tags": {
+                            "debug": "true"
+                          },
                           "units": "metric"
                         }
                       }
@@ -68,11 +76,15 @@ public sealed class RestJsonProtocolComplianceTests
                         "protocol": "aws.protocols#restJson1",
                         "code": 200,
                         "headers": {
-                          "x-request-id": "response-1"
+                          "x-request-id": "response-1",
+                          "x-extra-source": "server"
                         },
                         "body": "{\"summary\":\"clear\"}",
                         "bodyMediaType": "application/json",
                         "params": {
+                          "metadata": {
+                            "source": "server"
+                          },
                           "requestId": "response-1",
                           "status": 200,
                           "summary": "clear"
@@ -98,6 +110,28 @@ public sealed class RestJsonProtocolComplianceTests
                     }
                   }
                 },
+                "example.weather#ForecastMetadata": {
+                  "type": "map",
+                  "members": {
+                    "key": {
+                      "target": "smithy.api#String"
+                    },
+                    "value": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                },
+                "example.weather#ForecastTags": {
+                  "type": "map",
+                  "members": {
+                    "key": {
+                      "target": "smithy.api#String"
+                    },
+                    "value": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                },
                 "example.weather#GetForecastInput": {
                   "type": "structure",
                   "members": {
@@ -115,11 +149,25 @@ public sealed class RestJsonProtocolComplianceTests
                         "smithy.api#httpPayload": {}
                       }
                     },
+                    "metadata": {
+                      "target": "example.weather#ForecastMetadata",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpPrefixHeaders": "x-meta-"
+                      }
+                    },
                     "requestId": {
                       "target": "smithy.api#String",
                       "traits": {
                         "smithy.api#required": {},
                         "smithy.api#httpHeader": "x-request-id"
+                      }
+                    },
+                    "tags": {
+                      "target": "example.weather#ForecastTags",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpQueryParams": {}
                       }
                     },
                     "units": {
@@ -133,6 +181,13 @@ public sealed class RestJsonProtocolComplianceTests
                 "example.weather#GetForecastOutput": {
                   "type": "structure",
                   "members": {
+                    "metadata": {
+                      "target": "example.weather#ForecastMetadata",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpPrefixHeaders": "x-extra-"
+                      }
+                    },
                     "requestId": {
                       "target": "smithy.api#String",
                       "traits": {
