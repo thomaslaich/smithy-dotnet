@@ -158,8 +158,9 @@ models and calls both APIs.
 
 ## Use The Generated Server
 
-For `alloy#simpleRestJson`, generated services include a typed handler interface
-and an ASP.NET Core endpoint mapper:
+For `alloy#simpleRestJson`, generated services include operation-scoped handler
+interfaces, an aggregate service handler interface, DI helpers, and an ASP.NET
+Core endpoint mapper:
 
 ```smithy
 $version: "2"
@@ -195,7 +196,7 @@ After generation, implement the handler and map the service:
 using Example.Hello;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddSingleton<IHelloServiceHandler, HelloHandler>();
+builder.Services.AddHelloServiceHandler<HelloHandler>();
 
 var app = builder.Build();
 app.MapHelloService();

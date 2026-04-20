@@ -25,9 +25,9 @@ refresh-examples:
     dotnet clean examples/simple-rest-json/dotnet/server/SmithyNet.Examples.SimpleRestJson.Server.csproj --verbosity minimal
     dotnet clean examples/simple-rest-json/dotnet/client/SmithyNet.Examples.SimpleRestJson.Client.csproj --verbosity minimal
     dotnet clean examples/polyglot/dotnet/SmithyNet.Polyglot.DotNet.Client.csproj --verbosity minimal
-    rm -rf examples/simple-rest-json/dotnet/server/obj/packages/smithynet.*
-    rm -rf examples/simple-rest-json/dotnet/client/obj/packages/smithynet.*
-    rm -rf examples/polyglot/dotnet/obj/packages/smithynet.*
+    rm -rf examples/simple-rest-json/dotnet/server/obj
+    rm -rf examples/simple-rest-json/dotnet/client/obj
+    rm -rf examples/polyglot/dotnet/obj
     dotnet restore examples/simple-rest-json/dotnet/server/SmithyNet.Examples.SimpleRestJson.Server.csproj --no-cache --force
     dotnet restore examples/simple-rest-json/dotnet/client/SmithyNet.Examples.SimpleRestJson.Client.csproj --no-cache --force
     dotnet restore examples/polyglot/dotnet/SmithyNet.Polyglot.DotNet.Client.csproj --no-cache --force

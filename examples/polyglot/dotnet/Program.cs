@@ -1,6 +1,6 @@
+using SmithyNet.Client;
 using JavaHello = Example.Java.Hello;
 using ScalaHello = Example.Scala.Hello;
-using SmithyNet.Client;
 
 var name = args.Length > 0 ? args[0] : "world";
 var javaEndpoint = args.Length > 1 ? args[1] : "http://localhost:8082";

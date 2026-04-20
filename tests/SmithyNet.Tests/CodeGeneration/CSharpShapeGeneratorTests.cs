@@ -921,7 +921,12 @@ public sealed class CSharpShapeGeneratorTests
 
         Assert.Contains("Example/Weather/WeatherServer.g.cs", files.Keys);
         var server = files["Example/Weather/WeatherServer.g.cs"];
-        Assert.Contains("public interface IWeatherServiceHandler", server);
+        Assert.Contains("public interface IGetForecastHandler", server);
+        Assert.Contains("public interface IPingHandler", server);
+        Assert.Contains(
+            "public interface IWeatherServiceHandler : IGetForecastHandler, IPingHandler",
+            server
+        );
         Assert.Contains(
             "Task<GetForecastOutput> GetForecastAsync(GetForecastInput input, CancellationToken cancellationToken = default);",
             server
@@ -932,7 +937,19 @@ public sealed class CSharpShapeGeneratorTests
             server
         );
         Assert.Contains(
+            "public static SmithyServerDispatcher RegisterGetForecast(this SmithyServerDispatcher dispatcher, IGetForecastHandler handler)",
+            server
+        );
+        Assert.Contains(
             """dispatcher.Register("Weather", "GetForecast", async (request, cancellationToken) =>""",
+            server
+        );
+        Assert.Contains(
+            "public static IServiceCollection AddWeatherServiceHandler<THandler>(this IServiceCollection services)",
+            server
+        );
+        Assert.Contains(
+            "services.AddSingleton<IGetForecastHandler>(serviceProvider => serviceProvider.GetRequiredService<THandler>());",
             server
         );
         Assert.Contains(
@@ -940,7 +957,7 @@ public sealed class CSharpShapeGeneratorTests
             server
         );
         Assert.Contains(
-            """endpoints.MapMethods("/forecast/{city}", ["GET"], async (HttpContext httpContext, IWeatherServiceHandler handler, CancellationToken cancellationToken) =>""",
+            """endpoints.MapMethods("/forecast/{city}", ["GET"], async (HttpContext httpContext, IGetForecastHandler handler, CancellationToken cancellationToken) =>""",
             server
         );
     }
@@ -996,7 +1013,8 @@ public sealed class CSharpShapeGeneratorTests
 
         Assert.Contains("Example/Hello/HelloServiceServer.g.cs", files.Keys);
         var server = files["Example/Hello/HelloServiceServer.g.cs"];
-        Assert.Contains("public interface IHelloServiceHandler", server);
+        Assert.Contains("public interface ISayHelloHandler", server);
+        Assert.Contains("public interface IHelloServiceHandler : ISayHelloHandler", server);
         Assert.Contains(
             "public static SmithyServerDispatcher RegisterHelloService(this SmithyServerDispatcher dispatcher, IHelloServiceHandler handler)",
             server

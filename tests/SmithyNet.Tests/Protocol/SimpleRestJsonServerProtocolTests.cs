@@ -273,7 +273,7 @@ public sealed class SimpleRestJsonServerProtocolTests
             var builder = WebApplication.CreateBuilder(args);
             builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
             builder.Logging.ClearProviders();
-            builder.Services.AddSingleton<IWeatherServiceHandler, Handler>();
+            builder.Services.AddWeatherServiceHandler<Handler>();
 
             await using var app = builder.Build();
             app.MapWeatherService();

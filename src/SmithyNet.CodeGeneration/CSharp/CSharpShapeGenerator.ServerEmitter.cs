@@ -21,6 +21,7 @@ public sealed partial class CSharpShapeGenerator
                 "Microsoft.AspNetCore.Builder",
                 "Microsoft.AspNetCore.Http",
                 "Microsoft.AspNetCore.Routing",
+                "Microsoft.Extensions.DependencyInjection",
                 "SmithyNet.Server.AspNetCore",
                 "SmithyNet.Server",
                 "System.Threading",
@@ -30,20 +31,25 @@ public sealed partial class CSharpShapeGenerator
         var serviceTypeName = GetTypeName(service.Id);
         var serviceContractName = GetServiceContractName(serviceTypeName);
         var interfaceName = $"I{serviceContractName}Handler";
-        builder.Line($"public interface {interfaceName}");
-        builder.Block(() =>
+        var operationIds = service
+            .Operations.OrderBy(id => id.ToString(), StringComparer.Ordinal)
+            .ToArray();
+        foreach (var operationId in operationIds)
         {
-            foreach (
-                var operationId in service.Operations.OrderBy(
-                    id => id.ToString(),
-                    StringComparer.Ordinal
-                )
-            )
-            {
-                var operation = model.GetShape(operationId);
-                builder.Line($"{GetServerOperationSignature(service, operation, options)};");
-            }
-        });
+            var operation = model.GetShape(operationId);
+            AppendServerOperationInterface(builder, service, operation, options);
+            builder.Line();
+        }
+
+        var operationInterfaceNames = operationIds
+            .Select(operationId => GetOperationHandlerInterfaceName(model.GetShape(operationId)))
+            .ToArray();
+        var inheritedInterfaces =
+            operationInterfaceNames.Length == 0
+                ? string.Empty
+                : $" : {string.Join(", ", operationInterfaceNames)}";
+        builder.Line($"public interface {interfaceName}{inheritedInterfaces}");
+        builder.Block(() => { });
         builder.Line();
         AppendServerRegistrationExtensions(
             builder,
@@ -54,16 +60,23 @@ public sealed partial class CSharpShapeGenerator
             options
         );
         builder.Line();
-        AppendAspNetCoreEndpointExtensions(
-            builder,
-            model,
-            service,
-            serviceContractName,
-            interfaceName,
-            options
-        );
+        AppendAspNetCoreEndpointExtensions(builder, model, service, serviceContractName, options);
 
         return new GeneratedCSharpFile(GetServerPath(service), builder.ToString());
+    }
+
+    private static void AppendServerOperationInterface(
+        CSharpWriter builder,
+        ModelShape service,
+        ModelShape operation,
+        CSharpGenerationOptions options
+    )
+    {
+        builder.Line($"public interface {GetOperationHandlerInterfaceName(operation)}");
+        builder.Block(() =>
+        {
+            builder.Line($"{GetServerOperationSignature(service, operation, options)};");
+        });
     }
 
     private static string GetServiceContractName(string serviceTypeName)
@@ -71,6 +84,11 @@ public sealed partial class CSharpShapeGenerator
         return serviceTypeName.EndsWith("Service", StringComparison.Ordinal)
             ? serviceTypeName
             : $"{serviceTypeName}Service";
+    }
+
+    private static string GetOperationHandlerInterfaceName(ModelShape operation)
+    {
+        return $"I{CSharpIdentifier.TypeName(operation.Id.Name)}Handler";
     }
 
     private static void AppendServerRegistrationExtensions(
@@ -101,12 +119,32 @@ public sealed partial class CSharpShapeGenerator
                 )
                 {
                     var operation = model.GetShape(operationId);
-                    AppendServerOperationRegistration(builder, service, operation, options);
-                    builder.Line();
+                    builder.Line(
+                        $"dispatcher.Register{CSharpIdentifier.TypeName(operation.Id.Name)}(handler);"
+                    );
                 }
 
                 builder.Line("return dispatcher;");
             });
+            builder.Line();
+            foreach (
+                var operationId in service.Operations.OrderBy(
+                    id => id.ToString(),
+                    StringComparer.Ordinal
+                )
+            )
+            {
+                var operation = model.GetShape(operationId);
+                AppendServerOperationRegistration(builder, service, operation, options);
+                builder.Line();
+            }
+            AppendServiceCollectionRegistration(
+                builder,
+                model,
+                service,
+                serviceContractName,
+                interfaceName
+            );
         });
     }
 
@@ -117,46 +155,97 @@ public sealed partial class CSharpShapeGenerator
         CSharpGenerationOptions options
     )
     {
+        var operationInterfaceName = GetOperationHandlerInterfaceName(operation);
         var methodName = $"{CSharpIdentifier.PropertyName(operation.Id.Name)}Async";
         builder.Line(
-            $"dispatcher.Register({FormatString(service.Id.Name)}, {FormatString(operation.Id.Name)}, async (request, cancellationToken) =>"
+            $"public static SmithyServerDispatcher Register{CSharpIdentifier.TypeName(operation.Id.Name)}(this SmithyServerDispatcher dispatcher, {operationInterfaceName} handler)"
         );
-        builder.Block(
-            () =>
-            {
-                var hasOutput = operation.Output is not null;
-                if (operation.Input is { } input)
+        builder.Block(() =>
+        {
+            builder.Line("ArgumentNullException.ThrowIfNull(dispatcher);");
+            builder.Line("ArgumentNullException.ThrowIfNull(handler);");
+            builder.Line();
+            builder.Line(
+                $"dispatcher.Register({FormatString(service.Id.Name)}, {FormatString(operation.Id.Name)}, async (request, cancellationToken) =>"
+            );
+            builder.Block(
+                () =>
                 {
-                    var inputType = GetTypeReference(
-                        input,
-                        service.Id.Namespace,
-                        options.BaseNamespace
-                    );
-                    builder.Line(
-                        $"var input = request.Input as {inputType} ?? throw new ArgumentException({FormatString($"Expected input type '{inputType}' for operation '{operation.Id.Name}'.")}, nameof(request));"
-                    );
-                    builder.Line(
-                        hasOutput
-                            ? $"var output = await handler.{methodName}(input, cancellationToken).ConfigureAwait(false);"
-                            : $"await handler.{methodName}(input, cancellationToken).ConfigureAwait(false);"
-                    );
-                }
-                else
-                {
-                    builder.Line(
-                        hasOutput
-                            ? $"var output = await handler.{methodName}(cancellationToken).ConfigureAwait(false);"
-                            : $"await handler.{methodName}(cancellationToken).ConfigureAwait(false);"
-                    );
-                }
+                    var hasOutput = operation.Output is not null;
+                    if (operation.Input is { } input)
+                    {
+                        var inputType = GetTypeReference(
+                            input,
+                            service.Id.Namespace,
+                            options.BaseNamespace
+                        );
+                        builder.Line(
+                            $"var input = request.Input as {inputType} ?? throw new ArgumentException({FormatString($"Expected input type '{inputType}' for operation '{operation.Id.Name}'.")}, nameof(request));"
+                        );
+                        builder.Line(
+                            hasOutput
+                                ? $"var output = await handler.{methodName}(input, cancellationToken).ConfigureAwait(false);"
+                                : $"await handler.{methodName}(input, cancellationToken).ConfigureAwait(false);"
+                        );
+                    }
+                    else
+                    {
+                        builder.Line(
+                            hasOutput
+                                ? $"var output = await handler.{methodName}(cancellationToken).ConfigureAwait(false);"
+                                : $"await handler.{methodName}(cancellationToken).ConfigureAwait(false);"
+                        );
+                    }
 
-                var outputExpression = hasOutput ? "output" : "null";
-                builder.Line(
-                    $"return new SmithyServerResponse(request.ServiceName, request.OperationName, {outputExpression});"
-                );
-            },
-            closingSuffix: ");"
+                    var outputExpression = hasOutput ? "output" : "null";
+                    builder.Line(
+                        $"return new SmithyServerResponse(request.ServiceName, request.OperationName, {outputExpression});"
+                    );
+                },
+                closingSuffix: ");"
+            );
+            builder.Line("return dispatcher;");
+        });
+    }
+
+    private static void AppendServiceCollectionRegistration(
+        CSharpWriter builder,
+        SmithyModel model,
+        ModelShape service,
+        string serviceContractName,
+        string interfaceName
+    )
+    {
+        builder.Line(
+            $"public static IServiceCollection Add{serviceContractName}Handler<THandler>(this IServiceCollection services)"
         );
+        builder.Indented(() =>
+        {
+            builder.Line($"where THandler : class, {interfaceName}");
+        });
+        builder.Block(() =>
+        {
+            builder.Line("ArgumentNullException.ThrowIfNull(services);");
+            builder.Line();
+            builder.Line("services.AddSingleton<THandler>();");
+            builder.Line(
+                $"services.AddSingleton<{interfaceName}>(serviceProvider => serviceProvider.GetRequiredService<THandler>());"
+            );
+            foreach (
+                var operationId in service.Operations.OrderBy(
+                    id => id.ToString(),
+                    StringComparer.Ordinal
+                )
+            )
+            {
+                var operation = model.GetShape(operationId);
+                var operationInterfaceName = GetOperationHandlerInterfaceName(operation);
+                builder.Line(
+                    $"services.AddSingleton<{operationInterfaceName}>(serviceProvider => serviceProvider.GetRequiredService<THandler>());"
+                );
+            }
+            builder.Line("return services;");
+        });
     }
 
     private static void AppendAspNetCoreEndpointExtensions(
@@ -164,7 +253,6 @@ public sealed partial class CSharpShapeGenerator
         SmithyModel model,
         ModelShape service,
         string serviceContractName,
-        string interfaceName,
         CSharpGenerationOptions options
     )
     {
@@ -186,14 +274,7 @@ public sealed partial class CSharpShapeGenerator
                 )
                 {
                     var operation = model.GetShape(operationId);
-                    AppendAspNetCoreOperationMap(
-                        builder,
-                        model,
-                        service,
-                        operation,
-                        interfaceName,
-                        options
-                    );
+                    AppendAspNetCoreOperationMap(builder, model, service, operation, options);
                     builder.Line();
                 }
 
@@ -208,14 +289,14 @@ public sealed partial class CSharpShapeGenerator
         SmithyModel model,
         ModelShape service,
         ModelShape operation,
-        string interfaceName,
         CSharpGenerationOptions options
     )
     {
         var httpBinding = ReadHttpBinding(operation);
         var methodName = $"{CSharpIdentifier.PropertyName(operation.Id.Name)}Async";
+        var operationInterfaceName = GetOperationHandlerInterfaceName(operation);
         builder.Line(
-            $"endpoints.MapMethods({FormatString(httpBinding.Uri)}, [{FormatString(httpBinding.Method)}], async (HttpContext httpContext, {interfaceName} handler, CancellationToken cancellationToken) =>"
+            $"endpoints.MapMethods({FormatString(httpBinding.Uri)}, [{FormatString(httpBinding.Method)}], async (HttpContext httpContext, {operationInterfaceName} handler, CancellationToken cancellationToken) =>"
         );
         builder.Block(
             () =>

@@ -1,7 +1,7 @@
 using Example.Hello;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddSingleton<IHelloServiceHandler, HelloHandler>();
+builder.Services.AddHelloServiceHandler<HelloHandler>();
 
 var app = builder.Build();
 app.MapHelloService();
