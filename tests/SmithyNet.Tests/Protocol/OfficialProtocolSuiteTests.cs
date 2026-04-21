@@ -198,7 +198,6 @@ public sealed class OfficialProtocolSuiteTests(
     {
         return value.ReplaceLineEndings("\n");
     }
-
 }
 
 public sealed class OfficialProtocolSuiteFixture : IAsyncLifetime
@@ -737,11 +736,7 @@ internal static class OfficialGeneratedClientConformanceRunner
         await WriteProjectAsync(directory.Path);
         await WriteProgramAsync(directory.Path, filteredModel, service, operation, owner, testCase);
 
-        var build = await RunDotNet(
-            directory.Path,
-            "build",
-            "--no-dependencies"
-        );
+        var build = await RunDotNet(directory.Path, "build", "--no-dependencies");
         Assert.True(
             build.ExitCode == 0,
             $"dotnet build failed for official protocol case '{testCase.Id}' with exit code {build.ExitCode}.{Environment.NewLine}{build.Output}{Environment.NewLine}{build.Error}"

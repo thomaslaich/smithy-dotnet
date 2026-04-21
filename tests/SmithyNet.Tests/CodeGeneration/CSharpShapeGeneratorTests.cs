@@ -672,7 +672,10 @@ public sealed class CSharpShapeGeneratorTests
 
         Assert.Contains("""GetRequiredHeader<string>(response.Headers, "x-request-id")""", client);
         Assert.Contains("(int)response.StatusCode", client);
-        Assert.Contains("""DeserializeRequiredBodyMember<string>(response.Content, "summary")""", client);
+        Assert.Contains(
+            """DeserializeRequiredBodyMember<string>(response.Content, "summary")""",
+            client
+        );
         Assert.Contains("if ((int)response.StatusCode == 400)", client);
         Assert.Contains("""GetHeader<string?>(response.Headers, "x-request-id")""", client);
         Assert.Contains("""DeserializeBodyMember<string?>(response.Content, "reason")""", client);
