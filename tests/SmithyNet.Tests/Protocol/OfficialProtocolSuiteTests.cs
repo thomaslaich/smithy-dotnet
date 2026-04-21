@@ -736,13 +736,27 @@ internal static class OfficialGeneratedClientConformanceRunner
         await WriteProjectAsync(directory.Path);
         await WriteProgramAsync(directory.Path, filteredModel, service, operation, owner, testCase);
 
-        var build = await RunDotNet(directory.Path, "build", "--no-dependencies");
+        var configuration = GetCurrentBuildConfiguration();
+        var build = await RunDotNet(
+            directory.Path,
+            "build",
+            "--configuration",
+            configuration,
+            "--no-dependencies"
+        );
         Assert.True(
             build.ExitCode == 0,
             $"dotnet build failed for official protocol case '{testCase.Id}' with exit code {build.ExitCode}.{Environment.NewLine}{build.Output}{Environment.NewLine}{build.Error}"
         );
 
-        var run = await RunDotNet(directory.Path, "run", "--no-build", "--no-restore");
+        var run = await RunDotNet(
+            directory.Path,
+            "run",
+            "--configuration",
+            configuration,
+            "--no-build",
+            "--no-restore"
+        );
         Assert.True(
             run.ExitCode == 0,
             $"dotnet run failed for official protocol case '{testCase.Id}' with exit code {run.ExitCode}.{Environment.NewLine}{run.Output}{Environment.NewLine}{run.Error}"
@@ -1399,6 +1413,20 @@ internal static class OfficialGeneratedClientConformanceRunner
         return (process.ExitCode, await outputTask, await errorTask);
     }
 
+    internal static string GetCurrentBuildConfiguration()
+    {
+        var baseDirectory = new DirectoryInfo(AppContext.BaseDirectory);
+        if (
+            baseDirectory.Parent is { Name: var configuration }
+            && baseDirectory.Parent.Parent is { Name: "bin" }
+        )
+        {
+            return configuration;
+        }
+
+        return "Debug";
+    }
+
     internal static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -1482,9 +1510,12 @@ internal static class OfficialGeneratedServerConformanceRunner
         await WriteProjectAsync(directory.Path);
         await WriteProgramAsync(directory.Path, filteredModel, service, operation, testCase);
 
+        var configuration = OfficialGeneratedClientConformanceRunner.GetCurrentBuildConfiguration();
         var build = await OfficialGeneratedClientConformanceRunner.RunDotNet(
             directory.Path,
             "build",
+            "--configuration",
+            configuration,
             "--no-dependencies"
         );
         Assert.True(
@@ -1495,6 +1526,8 @@ internal static class OfficialGeneratedServerConformanceRunner
         var run = await OfficialGeneratedClientConformanceRunner.RunDotNet(
             directory.Path,
             "run",
+            "--configuration",
+            configuration,
             "--no-build",
             "--no-restore"
         );
