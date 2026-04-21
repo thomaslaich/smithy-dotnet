@@ -29,7 +29,6 @@ Alloy protocol test suites in
 | `SmithyNet.Client` | Operation invoker, client middleware pipeline, errors, and retry middleware. |
 | `SmithyNet.Server` | Server dispatch primitives for generated service handlers and middleware. |
 | `SmithyNet.Server.AspNetCore` | ASP.NET Core integration package for generated server endpoints. |
-| `SmithyNet.Generators` | Placeholder for future Roslyn/source-generation work. |
 
 ## Install
 

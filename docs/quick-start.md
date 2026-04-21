@@ -5,13 +5,45 @@ are not assumed.
 
 ## Install The Smithy CLI
 
-`SmithyNet.MSBuild` invokes the Smithy CLI during `dotnet build`. The
-recommended setup is to install `smithy-cli` in a project environment, such as
-[pixi](https://pixi.sh) with the conda-forge package, and run builds through that environment:
+`SmithyNet.MSBuild` invokes the Smithy CLI during `dotnet build`. The CLI is a
+JVM tool, so Java must also be available. Two recommended approaches are shown
+below.
+
+### Using pixi (conda-forge)
+
+[pixi](https://pixi.sh) manages both the Smithy CLI and the JDK in a
+reproducible conda-forge environment.
+
+**1. Initialise the environment and add dependencies:**
 
 ```bash
 pixi init
-pixi add smithy dotnet # ... any more deps for your project
+pixi add smithy openjdk dotnet
+```
+
+**2. Wire up `JAVA_HOME`.**
+
+The `smithy` CLI needs `JAVA_HOME` to point at the JDK bundled inside the
+pixi environment. Add the following to `pixi.toml`:
+
+```toml
+[activation.env]
+JAVA_HOME = "$CONDA_PREFIX/lib/jvm"
+
+[activation]
+scripts = ["scripts/activate-java.sh"]
+```
+
+Create `scripts/activate-java.sh`:
+
+```bash
+#!/usr/bin/env bash
+export PATH="$JAVA_HOME/bin:$PATH"
+```
+
+**3. Enter the environment and build:**
+
+```bash
 pixi shell
 dotnet build
 ```
@@ -26,32 +58,16 @@ when you want to force a specific executable:
 </PropertyGroup>
 ```
 
-## Create Local Packages
+### Using devenv
 
-From the repository root:
-
-```bash
-dotnet pack SmithyNet.slnx --configuration Release --output artifacts/packages
-```
-
-The generated packages are written to `artifacts/packages`.
+[devenv](https://devenv.sh) is a Nix-based alternative. This repository itself
+uses devenv — see `devenv.nix` and `devenv.yaml` at the repo root for a working
+reference. The key pieces are enabling the `languages.java` and `languages.dotnet`
+options and adding a custom Nix derivation for the Smithy CLI; devenv then sets
+`JAVA_HOME` and `PATH` automatically when you enter the shell with
+`devenv shell` (or via direnv).
 
 ## Configure A Consumer Project
-
-Add a `NuGet.config` next to the consumer project:
-
-```xml
-<?xml version="1.0" encoding="utf-8"?>
-<configuration>
-  <packageSources>
-    <clear />
-    <add key="smithy-net-local" value="../../artifacts/packages" />
-    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-  </packageSources>
-</configuration>
-```
-
-Adjust the relative path for your project layout.
 
 Reference the packages needed by generated `restJson1` clients:
 

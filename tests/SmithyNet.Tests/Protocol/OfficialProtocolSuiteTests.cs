@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json.Nodes;
 using SmithyNet.CodeGeneration;
@@ -78,7 +79,7 @@ public sealed class OfficialProtocolSuiteTests(
             .Select(classification => $"{classification.Case.Kind}:{classification.Case.Id}")
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Equal(28, executableCases.Count);
+        Assert.Equal(40, executableCases.Count);
         Assert.Contains("Request:AddMenuItem", executableCases);
         Assert.Contains("Response:AddMenuItemResult", executableCases);
         Assert.Contains("Request:CustomCodeInput", executableCases);
@@ -92,10 +93,34 @@ public sealed class OfficialProtocolSuiteTests(
         Assert.Contains("Request:HeaderEndpointInput", executableCases);
         Assert.Contains("Request:HealthGet", executableCases);
         Assert.Contains("Request:RoundTripRequest", executableCases);
+        Assert.Contains("Response:RoundTripDataResponse", executableCases);
         Assert.Contains("Request:RoutingAbc", executableCases);
         Assert.Contains("Request:RoutingAbcDef", executableCases);
+        Assert.Contains("Request:RoutingAbcDefGreedy", executableCases);
         Assert.Contains("Request:RoutingAbcLabel", executableCases);
         Assert.Contains("Request:RoutingAbcXyz", executableCases);
+        Assert.Contains("Request:SimpleRestJsonNoneHttpPayloadWithDefault", executableCases);
+        Assert.Contains(
+            "Request:SimpleRestJsonNoneRequiredHttpPayloadWithDefault",
+            executableCases
+        );
+        Assert.Contains("Request:SimpleRestJsonSomeHttpPayloadWithDefault", executableCases);
+        Assert.Contains(
+            "Request:SimpleRestJsonSomeRequiredHttpPayloadWithDefault",
+            executableCases
+        );
+        Assert.Contains("Response:NotFoundError", executableCases);
+        Assert.Contains("Response:PriceErrorTest", executableCases);
+        Assert.Contains("Response:SimpleRestJsonNoneHttpPayloadWithDefault", executableCases);
+        Assert.Contains(
+            "Response:SimpleRestJsonNoneRequiredHttpPayloadWithDefault",
+            executableCases
+        );
+        Assert.Contains("Response:SimpleRestJsonSomeHttpPayloadWithDefault", executableCases);
+        Assert.Contains(
+            "Response:SimpleRestJsonSomeRequiredHttpPayloadWithDefault",
+            executableCases
+        );
         Assert.Contains("Response:headerEndpointResponse", executableCases);
         Assert.Contains("Response:VersionOutput", executableCases);
         Assert.Contains("Request:RestJsonEmptyInputAndEmptyOutput", executableCases);
@@ -124,6 +149,20 @@ public sealed class OfficialProtocolSuiteTests(
         foreach (var testCase in executableCases)
         {
             await OfficialGeneratedClientConformanceRunner.RunAsync(fixture.Model, testCase);
+        }
+    }
+
+    [Fact]
+    public async Task ExecutableSimpleRestJsonRequestCasesPassGeneratedServerConformance()
+    {
+        var executableCases = OfficialProtocolCase
+            .Enumerate(fixture.Model, SimpleRestJsonProtocol)
+            .Where(OfficialGeneratedServerConformanceRunner.CanRunAsync)
+            .ToArray();
+
+        foreach (var testCase in executableCases)
+        {
+            await OfficialGeneratedServerConformanceRunner.RunAsync(fixture.Model, testCase);
         }
     }
 
@@ -213,10 +252,6 @@ internal sealed record ProtocolSuiteInventory(
     IReadOnlySet<string> ResponseCaseIds
 )
 {
-    private static readonly ShapeId HttpMalformedRequestTestsTrait = ShapeId.Parse(
-        "smithy.test#httpMalformedRequestTests"
-    );
-
     public static ProtocolSuiteInventory Create(SmithyModel model, ShapeId protocol)
     {
         var requestCases = model
@@ -227,19 +262,17 @@ internal sealed record ProtocolSuiteInventory(
             .Where(testCase => testCase.Protocol == protocol)
             .ToArray();
         var responseCases = model
-            .Shapes.Values.SelectMany(operation =>
-                HttpProtocolComplianceCases.ReadResponseTests(model, operation.Id)
+            .Shapes.Values.SelectMany(shape =>
+                HttpProtocolComplianceCases.ReadResponseTests(model, shape.Id)
             )
             .Where(testCase => testCase.Protocol == protocol)
             .ToArray();
         var malformedRequestCaseCount = model
             .Shapes.Values.SelectMany(shape =>
-                shape.Traits.GetValueOrDefault(HttpMalformedRequestTestsTrait) is { } malformed
-                    ? malformed
-                        .AsArray()
-                        .Where(testCase =>
-                            ShapeId.Parse(testCase.AsObject()["protocol"].AsString()) == protocol
-                        )
+                shape.Kind == ShapeKind.Operation
+                    ? HttpProtocolComplianceCases
+                        .ReadMalformedRequestTests(model, shape.Id)
+                        .Where(testCase => testCase.Protocol == protocol)
                     : []
             )
             .Count();
@@ -275,10 +308,6 @@ internal sealed record OfficialProtocolCase(
     string Id
 )
 {
-    private static readonly ShapeId HttpMalformedRequestTestsTrait = ShapeId.Parse(
-        "smithy.test#httpMalformedRequestTests"
-    );
-
     public static IEnumerable<OfficialProtocolCase> Enumerate(SmithyModel model, ShapeId protocol)
     {
         foreach (var shape in model.Shapes.Values)
@@ -298,6 +327,20 @@ internal sealed record OfficialProtocolCase(
                         requestTest.Id
                     );
                 }
+
+                foreach (
+                    var malformedTest in HttpProtocolComplianceCases
+                        .ReadMalformedRequestTests(model, shape.Id)
+                        .Where(testCase => testCase.Protocol == protocol)
+                )
+                {
+                    yield return new OfficialProtocolCase(
+                        shape.Id,
+                        protocol,
+                        OfficialProtocolCaseKind.MalformedRequest,
+                        malformedTest.Id
+                    );
+                }
             }
 
             foreach (
@@ -311,27 +354,6 @@ internal sealed record OfficialProtocolCase(
                     protocol,
                     OfficialProtocolCaseKind.Response,
                     responseTest.Id
-                );
-            }
-
-            if (shape.Traits.GetValueOrDefault(HttpMalformedRequestTestsTrait) is not { } malformed)
-            {
-                continue;
-            }
-
-            foreach (var malformedTest in malformed.AsArray())
-            {
-                var properties = malformedTest.AsObject();
-                if (ShapeId.Parse(properties["protocol"].AsString()) != protocol)
-                {
-                    continue;
-                }
-
-                yield return new OfficialProtocolCase(
-                    shape.Id,
-                    protocol,
-                    OfficialProtocolCaseKind.MalformedRequest,
-                    properties["id"].AsString()
                 );
             }
         }
@@ -368,11 +390,55 @@ internal static class OfficialProtocolConformanceMatrix
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "HeaderEndpointInput"),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "HealthGet"),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "RoundTripRequest"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Response, "RoundTripDataResponse"),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "RoutingAbc"),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "RoutingAbcDef"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "RoutingAbcDefGreedy"),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "RoutingAbcLabel"),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Request, "RoutingAbcXyz"),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Response, "headerEndpointResponse"),
+        (
+            SimpleRestJsonProtocol,
+            OfficialProtocolCaseKind.Request,
+            "SimpleRestJsonNoneHttpPayloadWithDefault"
+        ),
+        (
+            SimpleRestJsonProtocol,
+            OfficialProtocolCaseKind.Request,
+            "SimpleRestJsonNoneRequiredHttpPayloadWithDefault"
+        ),
+        (
+            SimpleRestJsonProtocol,
+            OfficialProtocolCaseKind.Request,
+            "SimpleRestJsonSomeHttpPayloadWithDefault"
+        ),
+        (
+            SimpleRestJsonProtocol,
+            OfficialProtocolCaseKind.Request,
+            "SimpleRestJsonSomeRequiredHttpPayloadWithDefault"
+        ),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Response, "NotFoundError"),
+        (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Response, "PriceErrorTest"),
+        (
+            SimpleRestJsonProtocol,
+            OfficialProtocolCaseKind.Response,
+            "SimpleRestJsonNoneHttpPayloadWithDefault"
+        ),
+        (
+            SimpleRestJsonProtocol,
+            OfficialProtocolCaseKind.Response,
+            "SimpleRestJsonNoneRequiredHttpPayloadWithDefault"
+        ),
+        (
+            SimpleRestJsonProtocol,
+            OfficialProtocolCaseKind.Response,
+            "SimpleRestJsonSomeHttpPayloadWithDefault"
+        ),
+        (
+            SimpleRestJsonProtocol,
+            OfficialProtocolCaseKind.Response,
+            "SimpleRestJsonSomeRequiredHttpPayloadWithDefault"
+        ),
         (SimpleRestJsonProtocol, OfficialProtocolCaseKind.Response, "VersionOutput"),
         (RestJson1Protocol, OfficialProtocolCaseKind.Request, "RestJsonEmptyInputAndEmptyOutput"),
         (RestJson1Protocol, OfficialProtocolCaseKind.Request, "RestJsonConstantQueryString"),
@@ -557,6 +623,38 @@ internal static class OfficialProtocolConformanceMatrixRenderer
             );
         }
 
+        builder.AppendLine();
+        builder.AppendLine("## Skipped Cases By Reason");
+        builder.AppendLine();
+        foreach (
+            var group in classifications
+                .Where(classification =>
+                    classification.Status == OfficialProtocolCaseStatus.Skipped
+                )
+                .GroupBy(classification => classification.Reason ?? "Unspecified")
+                .OrderByDescending(group => group.Count())
+                .ThenBy(group => group.Key, StringComparer.Ordinal)
+        )
+        {
+            builder.AppendLine(CultureInfo.InvariantCulture, $"### {group.Key}");
+            builder.AppendLine();
+            builder.AppendLine(CultureInfo.InvariantCulture, $"- Count: {group.Count()}");
+            foreach (
+                var classification in group
+                    .OrderBy(item => item.Case.Protocol.ToString(), StringComparer.Ordinal)
+                    .ThenBy(item => item.Case.Kind)
+                    .ThenBy(item => item.Case.Id, StringComparer.Ordinal)
+            )
+            {
+                builder.AppendLine(
+                    CultureInfo.InvariantCulture,
+                    $"- `{classification.Case.Protocol}` `{classification.Case.Kind}` `{classification.Case.Id}`"
+                );
+            }
+
+            builder.AppendLine();
+        }
+
         return builder.ToString();
     }
 
@@ -601,8 +699,13 @@ internal static class OfficialGeneratedClientConformanceRunner
 
         using var directory = TemporaryDirectory.Create();
         Directory.CreateDirectory(directory.Path);
-        var operation = model.GetShape(testCase.Owner);
+        var owner = model.GetShape(testCase.Owner);
+        var operation = ResolveOperation(model, owner, testCase.Protocol);
         var service = FindContainingService(model, operation.Id, testCase.Protocol);
+        var retainedErrors =
+            owner.Kind == ShapeKind.Structure && owner.Traits.Has(SmithyPrelude.ErrorTrait)
+                ? new[] { owner.Id }
+                : [];
         var suppressOutput =
             testCase.Kind == OfficialProtocolCaseKind.Request
             && testCase.Protocol == ShapeId.Parse("alloy#simpleRestJson");
@@ -612,7 +715,8 @@ internal static class OfficialGeneratedClientConformanceRunner
             service,
             operation,
             suppressInput,
-            suppressOutput
+            suppressOutput,
+            retainedErrors
         );
         operation = filteredModel.GetShape(operation.Id);
         service = filteredModel.GetShape(service.Id);
@@ -630,27 +734,38 @@ internal static class OfficialGeneratedClientConformanceRunner
         }
 
         await WriteProjectAsync(directory.Path);
-        await WriteProgramAsync(directory.Path, filteredModel, service, operation, testCase);
+        await WriteProgramAsync(directory.Path, filteredModel, service, operation, owner, testCase);
 
+        var configuration = GetCurrentBuildConfiguration();
         var build = await RunDotNet(
             directory.Path,
+            TimeSpan.FromMinutes(5),
             "build",
-            "-p:UseSharedCompilation=false",
-            "--disable-build-servers"
+            "--configuration",
+            configuration,
+            "--no-dependencies"
         );
         Assert.True(
             build.ExitCode == 0,
             $"dotnet build failed for official protocol case '{testCase.Id}' with exit code {build.ExitCode}.{Environment.NewLine}{build.Output}{Environment.NewLine}{build.Error}"
         );
 
-        var run = await RunDotNet(directory.Path, "run", "--no-build");
+        var run = await RunDotNet(
+            directory.Path,
+            TimeSpan.FromMinutes(2),
+            "run",
+            "--configuration",
+            configuration,
+            "--no-build",
+            "--no-restore"
+        );
         Assert.True(
             run.ExitCode == 0,
             $"dotnet run failed for official protocol case '{testCase.Id}' with exit code {run.ExitCode}.{Environment.NewLine}{run.Output}{Environment.NewLine}{run.Error}"
         );
     }
 
-    private static ModelShape FindContainingService(
+    internal static ModelShape FindContainingService(
         SmithyModel model,
         ShapeId operationId,
         ShapeId protocol
@@ -666,18 +781,38 @@ internal static class OfficialGeneratedClientConformanceRunner
             .First();
     }
 
-    private static SmithyModel CreateSingleOperationModel(
+    internal static ModelShape ResolveOperation(
+        SmithyModel model,
+        ModelShape owner,
+        ShapeId protocol
+    )
+    {
+        if (owner.Kind == ShapeKind.Operation)
+        {
+            return owner;
+        }
+
+        return model
+            .Shapes.Values.Where(shape =>
+                shape.Kind == ShapeKind.Operation && shape.Errors.Any(error => error == owner.Id)
+            )
+            .OrderBy(shape => shape.Id.ToString(), StringComparer.Ordinal)
+            .First();
+    }
+
+    internal static SmithyModel CreateSingleOperationModel(
         SmithyModel model,
         ModelShape service,
         ModelShape operation,
         bool suppressInput,
-        bool suppressOutput
+        bool suppressOutput,
+        IReadOnlyList<ShapeId>? retainedErrors = null
     )
     {
         var shapes = new Dictionary<ShapeId, ModelShape>();
         var filteredOperation = operation with
         {
-            Errors = [],
+            Errors = retainedErrors is { Count: > 0 } ? [.. retainedErrors] : [],
             Input =
                 suppressInput || operation.Input is { } input && IsUnit(input)
                     ? null
@@ -693,6 +828,10 @@ internal static class OfficialGeneratedClientConformanceRunner
         if (!suppressOutput)
         {
             AddShapeClosure(operation.Output);
+        }
+        foreach (var error in filteredOperation.Errors)
+        {
+            AddShapeClosure(error);
         }
 
         return new SmithyModel(model.SmithyVersion, model.Metadata, shapes);
@@ -767,6 +906,7 @@ internal static class OfficialGeneratedClientConformanceRunner
         SmithyModel model,
         ModelShape service,
         ModelShape operation,
+        ModelShape owner,
         OfficialProtocolCase testCase
     )
     {
@@ -787,13 +927,41 @@ internal static class OfficialGeneratedClientConformanceRunner
         var responseTest =
             testCase.Kind == OfficialProtocolCaseKind.Response
                 ? HttpProtocolComplianceCases
-                    .ReadResponseTests(model, operation.Id)
+                    .ReadResponseTests(model, owner.Id)
                     .Single(item => item.Id == testCase.Id && item.Protocol == testCase.Protocol)
             : requestTest is not null ? CreateSuccessResponseForRequestTest()
             : null;
         var input = CreateClientInput(model, operation, requestTest?.Parameters ?? Document.Null);
+        var errorType =
+            testCase.Kind == OfficialProtocolCaseKind.Response
+            && owner.Kind == ShapeKind.Structure
+            && owner.Traits.Has(SmithyPrelude.ErrorTrait)
+                ? GetTypeReference(owner.Id, service.Id.Namespace)
+                : null;
         var call =
-            operation.Output is { } outputId && responseTest is not null
+            errorType is not null && responseTest is not null
+                ? $$"""
+            try
+            {
+                await client.{{methodName}}({{input}});
+                throw new InvalidOperationException({{ComplianceCSharpLiterals.FormatString(
+                    $"Expected {errorType} for {testCase.Id}"
+                )}});
+            }
+            catch ({{errorType}} error)
+            {
+                {{ComplianceCSharpLiterals.CreateEqualityAssertion(
+                    model,
+                    owner.Id,
+                    "error",
+                    responseTest.Parameters,
+                    operation.Id.Namespace,
+                    new CSharpGenerationOptions(),
+                    $"Unexpected error for {testCase.Id}"
+                )}}
+            }
+            """
+            : operation.Output is { } outputId && responseTest is not null
                 ? $$"""
             var output = await client.{{methodName}}({{input}});
             {{ComplianceCSharpLiterals.CreateEqualityAssertion(
@@ -806,7 +974,7 @@ internal static class OfficialGeneratedClientConformanceRunner
                 $"Unexpected output for {testCase.Id}"
             )}}
             """
-                : $"await client.{methodName}({input});";
+            : $"await client.{methodName}({input});";
         var handlerCase = requestTest is not null
             ? CreateRequestAssertions(requestTest)
             : string.Empty;
@@ -818,13 +986,17 @@ internal static class OfficialGeneratedClientConformanceRunner
             : responseTest is not null ? CreateResponseHeaders(responseTest.Headers)
             : string.Empty;
         var responseStatusCode = requestOnlyWithoutOutput ? 204 : responseTest?.Code ?? 200;
-        var responseBody = requestOnlyWithoutOutput ? string.Empty : responseTest?.Body ?? "{}";
+        var responseBody =
+            requestOnlyWithoutOutput ? string.Empty
+            : responseTest is not null ? responseTest.Body ?? string.Empty
+            : "{}";
 
         return File.WriteAllTextAsync(
             Path.Combine(projectDirectory, "Program.cs"),
             $$"""
             using System.Net;
             using System.Net.Http.Headers;
+            using System.Globalization;
             using System.Text;
             using System.Text.Json.Nodes;
             using {{serviceNamespace}};
@@ -879,6 +1051,7 @@ internal static class OfficialGeneratedClientConformanceRunner
         {
             return new HttpResponseTestCase(
                 $"{testCase.Id}SyntheticResponse",
+                $"Synthetic response for request conformance case '{testCase.Id}'.",
                 testCase.Protocol,
                 200,
                 requestTest?.Headers
@@ -920,11 +1093,6 @@ internal static class OfficialGeneratedClientConformanceRunner
 
     private static string CreateRequestAssertions(HttpRequestTestCase testCase)
     {
-        var expectedRequestUri =
-            testCase.QueryParams.Count == 0
-                ? testCase.Uri
-                : $"{testCase.Uri}?{string.Join("&", testCase.QueryParams)}";
-        expectedRequestUri = expectedRequestUri.Replace(" ", "%20", StringComparison.Ordinal);
         var headerAssertions = string.Join(
             Environment.NewLine,
             testCase.Headers.Select(
@@ -945,8 +1113,36 @@ internal static class OfficialGeneratedClientConformanceRunner
                     """
             )
         );
+        var requiredHeaderAssertions = string.Join(
+            Environment.NewLine,
+            testCase.RequireHeaders.Select(header =>
+                $$"""
+                    if (!TryGetRequestHeader(request, {{ComplianceCSharpLiterals.FormatString(header)}}, out _))
+                    {
+                        throw new InvalidOperationException({{ComplianceCSharpLiterals.FormatString(
+                        $"Missing required request header: {header}"
+                    )}});
+                    }
+                    """
+            )
+        );
+        var forbiddenHeaderAssertions = string.Join(
+            Environment.NewLine,
+            testCase.ForbidHeaders.Select(header =>
+                $$"""
+                    if (TryGetRequestHeader(request, {{ComplianceCSharpLiterals.FormatString(header)}}, out _))
+                    {
+                        throw new InvalidOperationException({{ComplianceCSharpLiterals.FormatString(
+                        $"Unexpected forbidden request header: {header}"
+                    )}});
+                    }
+                    """
+            )
+        );
         var requestHeaderHelper =
             testCase.Headers.Count == 0
+            && testCase.RequireHeaders.Count == 0
+            && testCase.ForbidHeaders.Count == 0
                 ? string.Empty
                 : """
 
@@ -962,6 +1158,17 @@ internal static class OfficialGeneratedClientConformanceRunner
 
                                 if (request.Content?.Headers.TryGetValues(name, out values!) == true)
                                 {
+                                    return true;
+                                }
+
+                                if (string.Equals(name, "Content-Length", StringComparison.OrdinalIgnoreCase)
+                                    && request.Content is not null)
+                                {
+                                    values =
+                                    [
+                                        request.Content.Headers.ContentLength?.ToString(CultureInfo.InvariantCulture)
+                                        ?? request.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult().Length.ToString(CultureInfo.InvariantCulture)
+                                    ];
                                     return true;
                                 }
 
@@ -984,18 +1191,57 @@ internal static class OfficialGeneratedClientConformanceRunner
                                         StringComparison.OrdinalIgnoreCase);
                             }
                     """;
+        var expectedAuthority = testCase.ResolvedHost ?? testCase.Host;
 
         return $$"""
                     if (request.Method.Method != {{ComplianceCSharpLiterals.FormatString(
                 testCase.Method
-            )}} || request.RequestUri?.PathAndQuery != {{ComplianceCSharpLiterals.FormatString(
-                expectedRequestUri
             )}})
                     {
-                        throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri?.PathAndQuery}");
+                        throw new InvalidOperationException($"Unexpected request method: {request.Method}");
+                    }
+
+                    if (request.RequestUri is null || request.RequestUri.AbsolutePath != {{ComplianceCSharpLiterals.FormatString(
+                testCase.Uri.Replace(" ", "%20", StringComparison.Ordinal)
+            )}})
+                    {
+                        throw new InvalidOperationException($"Unexpected request path: {request.RequestUri?.AbsolutePath}");
+                    }
+
+                    if (!QueryMatches(request.RequestUri, [{{string.Join(
+                ", ",
+                testCase.QueryParams.Select(ComplianceCSharpLiterals.FormatString)
+            )}}]))
+                    {
+                        throw new InvalidOperationException($"Unexpected request query: {request.RequestUri?.Query}");
+                    }
+
+                    if (!HasRequiredQueryParameters(request.RequestUri, [{{string.Join(
+                ", ",
+                testCase.RequireQueryParams.Select(ComplianceCSharpLiterals.FormatString)
+            )}}]))
+                    {
+                        throw new InvalidOperationException($"Missing required request query parameter in: {request.RequestUri?.Query}");
+                    }
+
+                    if (HasForbiddenQueryParameters(request.RequestUri, [{{string.Join(
+                ", ",
+                testCase.ForbidQueryParams.Select(ComplianceCSharpLiterals.FormatString)
+            )}}]))
+                    {
+                        throw new InvalidOperationException($"Unexpected forbidden request query parameter in: {request.RequestUri?.Query}");
+                    }
+
+                    if (!AuthorityMatches(request.RequestUri, {{ComplianceCSharpLiterals.FormatString(
+                expectedAuthority ?? string.Empty
+            )}}))
+                    {
+                        throw new InvalidOperationException($"Unexpected request authority: {request.RequestUri?.Authority}");
                     }
 
                     {{headerAssertions}}
+                    {{requiredHeaderAssertions}}
+                    {{forbiddenHeaderAssertions}}
 
                     var body = request.Content is null
                         ? string.Empty
@@ -1021,6 +1267,112 @@ internal static class OfficialGeneratedClientConformanceRunner
 
                         return JsonNode.DeepEquals(JsonNode.Parse(actual), JsonNode.Parse(expected));
                     }
+
+                    static bool QueryMatches(Uri? requestUri, string[] expectedParameters)
+                    {
+                        return CreateQueryMultiset(ParseQueryEntries(requestUri?.Query))
+                            == CreateQueryMultiset(expectedParameters);
+                    }
+
+                    static bool HasRequiredQueryParameters(Uri? requestUri, string[] requiredNames)
+                    {
+                        if (requiredNames.Length == 0)
+                        {
+                            return true;
+                        }
+
+                        var actualNames = GetQueryParameterNames(requestUri);
+                        return requiredNames.All(actualNames.Contains);
+                    }
+
+                    static bool HasForbiddenQueryParameters(Uri? requestUri, string[] forbiddenNames)
+                    {
+                        if (forbiddenNames.Length == 0)
+                        {
+                            return false;
+                        }
+
+                        var actualNames = GetQueryParameterNames(requestUri);
+                        return forbiddenNames.Any(actualNames.Contains);
+                    }
+
+                    static string CreateQueryMultiset(IEnumerable<string> parameters)
+                    {
+                        return string.Join(
+                            "\n",
+                            parameters
+                                .Where(parameter => !string.IsNullOrEmpty(parameter))
+                                .Select(NormalizeQueryParameter)
+                                .GroupBy(parameter => parameter, StringComparer.Ordinal)
+                                .OrderBy(group => group.Key, StringComparer.Ordinal)
+                                .Select(group => $"{group.Key}:{group.Count()}"));
+                    }
+
+                    static HashSet<string> GetQueryParameterNames(Uri? requestUri)
+                    {
+                        return ParseQueryEntries(requestUri?.Query)
+                            .Select(GetQueryParameterName)
+                            .ToHashSet(StringComparer.Ordinal);
+                    }
+
+                    static string[] ParseQueryEntries(string? query)
+                    {
+                        if (string.IsNullOrEmpty(query))
+                        {
+                            return [];
+                        }
+
+                        var trimmed = query[0] == '?' ? query[1..] : query;
+                        return string.IsNullOrEmpty(trimmed)
+                            ? []
+                            : trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries);
+                    }
+
+                    static string GetQueryParameterName(string parameter)
+                    {
+                        var separatorIndex = NormalizeQueryParameter(parameter).IndexOf('=');
+                        return separatorIndex >= 0
+                            ? NormalizeQueryParameter(parameter)[..separatorIndex]
+                            : NormalizeQueryParameter(parameter);
+                    }
+
+                    static string NormalizeQueryParameter(string parameter)
+                    {
+                        var separatorIndex = parameter.IndexOf('=');
+                        var name = separatorIndex >= 0 ? parameter[..separatorIndex] : parameter;
+                        var value = separatorIndex >= 0 ? parameter[(separatorIndex + 1)..] : string.Empty;
+                        return separatorIndex >= 0
+                            ? $"{DecodeQueryComponent(name)}={DecodeQueryComponent(value)}"
+                            : DecodeQueryComponent(name);
+                    }
+
+                    static string DecodeQueryComponent(string value)
+                    {
+                        return Uri.UnescapeDataString(value.Replace("+", "%20", StringComparison.Ordinal));
+                    }
+
+                    static bool AuthorityMatches(Uri? requestUri, string expectedAuthority)
+                    {
+                        if (string.IsNullOrEmpty(expectedAuthority))
+                        {
+                            return true;
+                        }
+
+                        if (requestUri is null)
+                        {
+                            return false;
+                        }
+
+                        var authority = expectedAuthority;
+                        var slashIndex = authority.IndexOf('/');
+                        if (slashIndex >= 0)
+                        {
+                            authority = authority[..slashIndex];
+                        }
+
+                        return string.Equals(requestUri.Authority, authority, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(requestUri.Host, authority, StringComparison.OrdinalIgnoreCase);
+                    }
                     {{requestHeaderHelper}}
             """;
     }
@@ -1034,7 +1386,7 @@ internal static class OfficialGeneratedClientConformanceRunner
         );
     }
 
-    private static string GetTypeReference(ShapeId id, string currentNamespace)
+    internal static string GetTypeReference(ShapeId id, string currentNamespace)
     {
         var typeName = CSharpIdentifier.TypeName(id.Name);
         return string.Equals(id.Namespace, currentNamespace, StringComparison.Ordinal)
@@ -1042,13 +1394,29 @@ internal static class OfficialGeneratedClientConformanceRunner
             : $"global::{CSharpIdentifier.Namespace(id.Namespace, baseNamespace: null)}.{typeName}";
     }
 
-    private static async Task<(int ExitCode, string Output, string Error)> RunDotNet(
+    internal static async Task<(int ExitCode, string Output, string Error)> RunDotNet(
         string projectDirectory,
+        TimeSpan timeout,
         params string[] arguments
     )
     {
+        var effectiveArguments = arguments;
+        if (
+            arguments.Length > 0
+            && string.Equals(arguments[0], "build", StringComparison.Ordinal)
+            && !arguments.Contains("--disable-build-servers", StringComparer.Ordinal)
+        )
+        {
+            effectiveArguments =
+            [
+                .. arguments,
+                "--disable-build-servers",
+                "-p:UseSharedCompilation=false",
+            ];
+        }
+
         using var process = Process.Start(
-            new ProcessStartInfo("dotnet", arguments)
+            new ProcessStartInfo("dotnet", effectiveArguments)
             {
                 WorkingDirectory = projectDirectory,
                 RedirectStandardOutput = true,
@@ -1059,11 +1427,51 @@ internal static class OfficialGeneratedClientConformanceRunner
         Assert.NotNull(process);
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
+        var waitForExitTask = process.WaitForExitAsync();
+        var completedTask = await Task.WhenAny(waitForExitTask, Task.Delay(timeout));
+        if (completedTask != waitForExitTask)
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // The child process may have exited between the timeout and the kill attempt.
+            }
+
+            var output = await outputTask;
+            var error = await errorTask;
+            return (
+                -1,
+                output,
+                string.Concat(
+                    $"dotnet {string.Join(" ", effectiveArguments)} timed out after {timeout}.",
+                    Environment.NewLine,
+                    error
+                )
+            );
+        }
+
+        await waitForExitTask;
         return (process.ExitCode, await outputTask, await errorTask);
     }
 
-    private static string FindRepositoryRoot()
+    internal static string GetCurrentBuildConfiguration()
+    {
+        var baseDirectory = new DirectoryInfo(AppContext.BaseDirectory);
+        if (
+            baseDirectory.Parent is { Name: var configuration }
+            && baseDirectory.Parent.Parent is { Name: "bin" }
+        )
+        {
+            return configuration;
+        }
+
+        return "Debug";
+    }
+
+    internal static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (
@@ -1078,6 +1486,276 @@ internal static class OfficialGeneratedClientConformanceRunner
             ?? throw new InvalidOperationException(
                 "Could not find the Smithy.NET repository root."
             );
+    }
+}
+
+internal static class OfficialGeneratedServerConformanceRunner
+{
+    private static readonly HashSet<string> ExecutableRequestCases =
+    [
+        "HeaderEndpointInput",
+        "HealthGet",
+        "RoundTripRequest",
+        "RoutingAbc",
+        "RoutingAbcDef",
+        "RoutingAbcLabel",
+        "RoutingAbcXyz",
+    ];
+
+    public static bool CanRunAsync(OfficialProtocolCase testCase)
+    {
+        return testCase.Protocol == ShapeId.Parse("alloy#simpleRestJson")
+            && testCase.Kind == OfficialProtocolCaseKind.Request
+            && OfficialProtocolConformanceMatrix.Classify(testCase).Status
+                == OfficialProtocolCaseStatus.Executable
+            && ExecutableRequestCases.Contains(testCase.Id);
+    }
+
+    public static async Task RunAsync(SmithyModel model, OfficialProtocolCase testCase)
+    {
+        if (testCase.Kind != OfficialProtocolCaseKind.Request)
+        {
+            throw new InvalidOperationException(
+                $"Generated server conformance only supports request cases. Received '{testCase.Kind}'."
+            );
+        }
+
+        using var directory = TemporaryDirectory.Create();
+        Directory.CreateDirectory(directory.Path);
+
+        var operation = model.GetShape(testCase.Owner);
+        var service = OfficialGeneratedClientConformanceRunner.FindContainingService(
+            model,
+            operation.Id,
+            testCase.Protocol
+        );
+        var filteredModel = OfficialGeneratedClientConformanceRunner.CreateSingleOperationModel(
+            model,
+            service,
+            operation,
+            suppressInput: false,
+            suppressOutput: true
+        );
+        operation = filteredModel.GetShape(operation.Id);
+        service = filteredModel.GetShape(service.Id);
+
+        foreach (var generatedFile in new CSharpShapeGenerator().Generate(filteredModel))
+        {
+            if (generatedFile.Path.EndsWith("Client.g.cs", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var path = Path.Combine(directory.Path, generatedFile.Path);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, generatedFile.Contents);
+        }
+
+        await WriteProjectAsync(directory.Path);
+        await WriteProgramAsync(directory.Path, filteredModel, service, operation, testCase);
+
+        var configuration = OfficialGeneratedClientConformanceRunner.GetCurrentBuildConfiguration();
+        var build = await OfficialGeneratedClientConformanceRunner.RunDotNet(
+            directory.Path,
+            TimeSpan.FromMinutes(5),
+            "build",
+            "--configuration",
+            configuration,
+            "--no-dependencies"
+        );
+        Assert.True(
+            build.ExitCode == 0,
+            $"dotnet build failed for generated server protocol case '{testCase.Id}' with exit code {build.ExitCode}.{Environment.NewLine}{build.Output}{Environment.NewLine}{build.Error}"
+        );
+
+        var run = await OfficialGeneratedClientConformanceRunner.RunDotNet(
+            directory.Path,
+            TimeSpan.FromMinutes(2),
+            "run",
+            "--configuration",
+            configuration,
+            "--no-build",
+            "--no-restore"
+        );
+        Assert.True(
+            run.ExitCode == 0,
+            $"dotnet run failed for generated server protocol case '{testCase.Id}' with exit code {run.ExitCode}.{Environment.NewLine}{run.Output}{Environment.NewLine}{run.Error}"
+        );
+    }
+
+    private static async Task WriteProjectAsync(string projectDirectory)
+    {
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "OfficialProtocolServerCase.csproj"),
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk.Web">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+                <Nullable>enable</Nullable>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <WarningsNotAsErrors>CS8602;CS8604</WarningsNotAsErrors>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
+                <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Json/SmithyNet.Json.csproj" />
+                <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
+                <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Server/SmithyNet.Server.csproj" />
+              </ItemGroup>
+            </Project>
+            """
+        );
+    }
+
+    private static Task WriteProgramAsync(
+        string projectDirectory,
+        SmithyModel model,
+        ModelShape service,
+        ModelShape operation,
+        OfficialProtocolCase testCase
+    )
+    {
+        var requestTest = HttpProtocolComplianceCases
+            .ReadRequestTests(model, operation.Id)
+            .Single(item => item.Id == testCase.Id && item.Protocol == testCase.Protocol);
+        var serviceNamespace = CSharpIdentifier.Namespace(
+            service.Id.Namespace,
+            baseNamespace: null
+        );
+        var serviceTypeName = CSharpIdentifier.TypeName(service.Id.Name);
+        var serviceContractName = serviceTypeName.EndsWith("Service", StringComparison.Ordinal)
+            ? serviceTypeName
+            : $"{serviceTypeName}Service";
+        var interfaceName = $"I{serviceContractName}Handler";
+        var methodName = $"{CSharpIdentifier.PropertyName(operation.Id.Name)}Async";
+        var inputAssertion = operation.Input is { } inputId
+            ? ComplianceCSharpLiterals.CreateEqualityAssertion(
+                model,
+                inputId,
+                "input",
+                requestTest.Parameters.Kind == DocumentKind.Null
+                    ? Document.From(new Dictionary<string, Document>())
+                    : requestTest.Parameters,
+                operation.Id.Namespace,
+                new CSharpGenerationOptions(),
+                $"Unexpected input for {testCase.Id}"
+            )
+            : string.Empty;
+        var requestPath =
+            requestTest.QueryParams.Count == 0
+                ? requestTest.Uri
+                : $"{requestTest.Uri}?{string.Join("&", requestTest.QueryParams)}";
+        var requestContent = CreateServerRequestContent(requestTest);
+
+        return File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "Program.cs"),
+            $$"""
+            using System.Net;
+            using System.Net.Sockets;
+            using System.Text;
+            using Microsoft.Extensions.Logging;
+            using {{serviceNamespace}};
+
+            var port = GetFreePort();
+            var builder = WebApplication.CreateBuilder(args);
+            builder.WebHost.UseUrls($"http://127.0.0.1:{port}");
+            builder.Logging.ClearProviders();
+            builder.Services.Add{{serviceContractName}}Handler<Handler>();
+
+            await using var app = builder.Build();
+            app.UseDeveloperExceptionPage();
+            app.Map{{serviceContractName}}();
+            await app.StartAsync();
+
+            using var client = new HttpClient
+            {
+                BaseAddress = new Uri($"http://127.0.0.1:{port}")
+            };
+            using var request = new HttpRequestMessage(new HttpMethod({{ComplianceCSharpLiterals.FormatString(
+                requestTest.Method
+            )}}), {{ComplianceCSharpLiterals.FormatString(requestPath)}});
+            {{requestContent}}
+            using var response = await client.SendAsync(request);
+            if (response.StatusCode != HttpStatusCode.NoContent)
+            {
+                var responseBody = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(
+                    "Expected 204 response for "
+                    + response.RequestMessage?.RequestUri
+                    + ", got "
+                    + (int)response.StatusCode
+                    + ": "
+                    + responseBody);
+            }
+
+            if (!Handler.Handled)
+            {
+                throw new InvalidOperationException("Generated server handler was not invoked.");
+            }
+
+            await app.StopAsync();
+
+            static int GetFreePort()
+            {
+                using var listener = new TcpListener(IPAddress.Loopback, 0);
+                listener.Start();
+                return ((IPEndPoint)listener.LocalEndpoint).Port;
+            }
+
+            internal sealed class Handler : {{interfaceName}}
+            {
+                public static bool Handled { get; private set; }
+
+                public Task {{methodName}}({{CreateHandlerParameters(model, operation)}})
+                {
+                    Handled = true;
+                    {{inputAssertion}}
+                    return Task.CompletedTask;
+                }
+            }
+            """
+        );
+    }
+
+    private static string CreateHandlerParameters(SmithyModel model, ModelShape operation)
+    {
+        if (operation.Input is not { } inputId)
+        {
+            return "CancellationToken cancellationToken = default";
+        }
+
+        var inputType = OfficialGeneratedClientConformanceRunner.GetTypeReference(
+            inputId,
+            operation.Id.Namespace
+        );
+        return $"{inputType} input, CancellationToken cancellationToken = default";
+    }
+
+    private static string CreateServerRequestContent(HttpRequestTestCase testCase)
+    {
+        var lines = new List<string>();
+        foreach (var header in testCase.Headers)
+        {
+            if (string.Equals(header.Key, "Content-Type", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            lines.Add(
+                $"request.Headers.TryAddWithoutValidation({ComplianceCSharpLiterals.FormatString(header.Key)}, {ComplianceCSharpLiterals.FormatString(header.Value)});"
+            );
+        }
+
+        if (testCase.Body is not null || testCase.BodyMediaType is not null)
+        {
+            var mediaType = testCase.BodyMediaType ?? "application/json";
+            lines.Add(
+                $"request.Content = new StringContent({ComplianceCSharpLiterals.FormatString(testCase.Body ?? string.Empty)}, Encoding.UTF8, {ComplianceCSharpLiterals.FormatString(mediaType)});"
+            );
+        }
+
+        return string.Join(Environment.NewLine, lines);
     }
 }
 

@@ -16,10 +16,10 @@ build:
     dotnet build SmithyNet.slnx --configuration Release --no-restore --disable-build-servers
 
 test:
-    dotnet test SmithyNet.slnx --configuration Release --no-build --disable-build-servers --verbosity minimal
+    dotnet test SmithyNet.slnx --configuration Release --no-build --disable-build-servers
 
 pack:
-    dotnet pack SmithyNet.slnx --configuration Release --no-build --output artifacts/packages --verbosity minimal
+    dotnet pack SmithyNet.slnx --configuration Release --no-build --output artifacts/packages
 
 refresh-examples:
     dotnet clean examples/simple-rest-json/dotnet/server/SmithyNet.Examples.SimpleRestJson.Server.csproj --verbosity minimal

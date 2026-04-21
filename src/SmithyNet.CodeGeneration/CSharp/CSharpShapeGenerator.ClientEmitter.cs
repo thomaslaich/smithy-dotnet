@@ -167,10 +167,42 @@ public sealed partial class CSharpShapeGenerator
             if (inputShape is not null && TryGetPayloadMember(inputShape, out var payloadMember))
             {
                 var propertyName = CSharpIdentifier.PropertyName(payloadMember.Name);
-                builder.Line(
-                    $"request.Content = SmithyJsonSerializer.Serialize(input.{propertyName});"
-                );
-                builder.Line("request.ContentType = \"application/json\";");
+                if (
+                    GetEffectiveDefaultValue(inputShape, payloadMember, options) is { } defaultValue
+                )
+                {
+                    var memberType = GetMemberType(
+                        model,
+                        inputShape,
+                        payloadMember,
+                        service.Id.Namespace,
+                        options
+                    );
+                    var defaultExpression = GetDefaultExpression(
+                        model,
+                        payloadMember.Target,
+                        defaultValue,
+                        service.Id.Namespace,
+                        options.BaseNamespace
+                    );
+                    builder.Line(
+                        $"if (!EqualityComparer<{memberType}>.Default.Equals(input.{propertyName}, {defaultExpression}))"
+                    );
+                    builder.Block(() =>
+                    {
+                        builder.Line(
+                            $"request.Content = SmithyJsonSerializer.Serialize(input.{propertyName});"
+                        );
+                        builder.Line("request.ContentType = \"application/json\";");
+                    });
+                }
+                else
+                {
+                    builder.Line(
+                        $"request.Content = SmithyJsonSerializer.Serialize(input.{propertyName});"
+                    );
+                    builder.Line("request.ContentType = \"application/json\";");
+                }
             }
             else if (inputShape is not null && HasHttpBody(inputShape))
             {
@@ -221,7 +253,7 @@ public sealed partial class CSharpShapeGenerator
         builder.Line($"return new {outputType}(");
         builder.Indented(() =>
         {
-            var members = GetSortedMembers(output).ToArray();
+            var members = GetConstructorMembers(model, output, options);
             for (var i = 0; i < members.Length; i++)
             {
                 var suffix = i == members.Length - 1 ? string.Empty : ",";
@@ -242,16 +274,21 @@ public sealed partial class CSharpShapeGenerator
     )
     {
         var memberType = GetMemberParameterType(model, output, member, currentNamespace, options);
+        var required = IsRequiredHttpOutputMember(output, member, options);
         if (IsHttpHeaderMember(member))
         {
             var headerName = member.Traits[SmithyPrelude.HttpHeaderTrait].AsString();
-            return $"GetHeader<{memberType}>(response.Headers, {FormatString(headerName)})";
+            return required
+                ? $"GetRequiredHeader<{memberType}>(response.Headers, {FormatString(headerName)})"
+                : $"GetHeader<{memberType}>(response.Headers, {FormatString(headerName)})";
         }
 
         if (IsHttpPrefixHeadersMember(member))
         {
             var headerPrefix = member.Traits[SmithyPrelude.HttpPrefixHeadersTrait].AsString();
-            return $"GetPrefixedHeaders<{memberType}>(response.Headers, {FormatString(headerPrefix)})";
+            return required
+                ? $"GetRequiredPrefixedHeaders<{memberType}>(response.Headers, {FormatString(headerPrefix)})"
+                : $"GetPrefixedHeaders<{memberType}>(response.Headers, {FormatString(headerPrefix)})";
         }
 
         if (IsHttpResponseCodeMember(member))
@@ -261,12 +298,25 @@ public sealed partial class CSharpShapeGenerator
 
         if (IsHttpPayloadMember(member))
         {
-            return $"DeserializeBody<{memberType}>(response.Content)";
+            return required
+                ? $"DeserializeRequiredBody<{memberType}>(response.Content)"
+                : $"DeserializeBody<{memberType}>(response.Content)";
         }
 
         var jsonName =
             member.Traits.GetValueOrDefault(SmithyPrelude.JsonNameTrait)?.AsString() ?? member.Name;
-        return $"DeserializeBodyMember<{memberType}>(response.Content, {FormatString(jsonName)})";
+        return required
+            ? $"DeserializeRequiredBodyMember<{memberType}>(response.Content, {FormatString(jsonName)})"
+            : $"DeserializeBodyMember<{memberType}>(response.Content, {FormatString(jsonName)})";
+    }
+
+    private static bool IsRequiredHttpOutputMember(
+        ModelShape container,
+        MemberShape member,
+        CSharpGenerationOptions options
+    )
+    {
+        return member.IsRequired && GetEffectiveDefaultValue(container, member, options) is null;
     }
 
     private static void AppendRequestUriBuilder(
@@ -289,6 +339,9 @@ public sealed partial class CSharpShapeGenerator
                     ? $"input.{propertyName} ?? throw new ArgumentException({FormatString($"HTTP label '{member.Name}' is required.")}, nameof(input))"
                     : $"input.{propertyName}";
                 builder.Line($"var {labelVariableName} = {labelExpression};");
+                builder.Line(
+                    $"requestUriBuilder.Replace({FormatString($"{{{member.Name}+}}")}, EscapeGreedyLabel({labelVariableName}));"
+                );
                 builder.Line(
                     $"requestUriBuilder.Replace({FormatString($"{{{member.Name}}}")}, Uri.EscapeDataString(FormatHttpValue({labelVariableName})));"
                 );
@@ -743,6 +796,15 @@ public sealed partial class CSharpShapeGenerator
         });
         builder.Line();
 
+        builder.Line("private static string EscapeGreedyLabel(object value)");
+        builder.Block(() =>
+        {
+            builder.Line(
+                "return string.Join(\"/\", FormatHttpValue(value).Split('/').Select(Uri.EscapeDataString));"
+            );
+        });
+        builder.Line();
+
         builder.Line("private static T DeserializeBody<T>(string content)");
         builder.Block(() =>
         {
@@ -752,6 +814,21 @@ public sealed partial class CSharpShapeGenerator
                 builder.Line("? default!");
                 builder.Line(": SmithyJsonSerializer.Deserialize<T>(content);");
             });
+        });
+        builder.Line();
+
+        builder.Line("private static T DeserializeRequiredBody<T>(string content)");
+        builder.Block(() =>
+        {
+            builder.Line("if (string.IsNullOrWhiteSpace(content))");
+            builder.Block(() =>
+            {
+                builder.Line(
+                    "throw new InvalidOperationException(\"Response body is required but was empty.\");"
+                );
+            });
+            builder.Line();
+            builder.Line("return SmithyJsonSerializer.Deserialize<T>(content);");
         });
         builder.Line();
 
@@ -775,6 +852,31 @@ public sealed partial class CSharpShapeGenerator
         builder.Line();
 
         builder.Line(
+            "private static T DeserializeRequiredBodyMember<T>(string content, string name)"
+        );
+        builder.Block(() =>
+        {
+            builder.Line("if (string.IsNullOrWhiteSpace(content))");
+            builder.Block(() =>
+            {
+                builder.Line(
+                    "throw new InvalidOperationException($\"Response body member '{name}' is required but the response body was empty.\");"
+                );
+            });
+            builder.Line();
+            builder.Line("using var document = JsonDocument.Parse(content);");
+            builder.Line("return document.RootElement.TryGetProperty(name, out var value)");
+            builder.Indented(() =>
+            {
+                builder.Line("? SmithyJsonSerializer.Deserialize<T>(value.GetRawText())");
+                builder.Line(
+                    ": throw new InvalidOperationException($\"Response body member '{name}' is required but was missing.\");"
+                );
+            });
+        });
+        builder.Line();
+
+        builder.Line(
             "private static T GetHeader<T>(IReadOnlyDictionary<string, IReadOnlyList<string>> headers, string name)"
         );
         builder.Block(() =>
@@ -784,6 +886,22 @@ public sealed partial class CSharpShapeGenerator
             {
                 builder.Line("? ConvertHttpValue<T>(values[0])");
                 builder.Line(": default!;");
+            });
+        });
+        builder.Line();
+
+        builder.Line(
+            "private static T GetRequiredHeader<T>(IReadOnlyDictionary<string, IReadOnlyList<string>> headers, string name)"
+        );
+        builder.Block(() =>
+        {
+            builder.Line("return headers.TryGetValue(name, out var values) && values.Count > 0");
+            builder.Indented(() =>
+            {
+                builder.Line("? ConvertHttpValue<T>(values[0])");
+                builder.Line(
+                    ": throw new InvalidOperationException($\"Required response header '{name}' was missing.\");"
+                );
             });
         });
         builder.Line();
@@ -809,6 +927,24 @@ public sealed partial class CSharpShapeGenerator
             });
             builder.Line();
             builder.Line("return CreateStringMap<T>(values);");
+        });
+        builder.Line();
+
+        builder.Line(
+            "private static T GetRequiredPrefixedHeaders<T>(IReadOnlyDictionary<string, IReadOnlyList<string>> headers, string prefix)"
+        );
+        builder.Block(() =>
+        {
+            builder.Line("var values = GetPrefixedHeaders<T>(headers, prefix);");
+            builder.Line("if (EqualityComparer<T>.Default.Equals(values, default!))");
+            builder.Block(() =>
+            {
+                builder.Line(
+                    "throw new InvalidOperationException($\"Required prefixed response headers '{prefix}' were missing.\");"
+                );
+            });
+            builder.Line();
+            builder.Line("return values;");
         });
         builder.Line();
 

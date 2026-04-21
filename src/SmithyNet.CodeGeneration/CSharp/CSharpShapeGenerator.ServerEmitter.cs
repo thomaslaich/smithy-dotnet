@@ -503,7 +503,7 @@ public sealed partial class CSharpShapeGenerator
         CSharpGenerationOptions options
     )
     {
-        var members = GetSortedMembers(input).ToArray();
+        var members = GetConstructorMembers(model, input, options);
         if (members.Length == 0)
         {
             builder.Line($"var input = new {inputType}();");
