@@ -52,9 +52,8 @@ outside of mocking AWS services.
 
 Server support is currently limited to generated ASP.NET Core endpoints for
 `alloy#simpleRestJson`. Generated server surfaces include operation-scoped
-handler interfaces, an aggregate service handler interface, a DI helper for
-single-class handlers, and lower-level `SmithyServerDispatcher` registration
-extensions.
+handler interfaces, an aggregate service handler interface, generated service
+and operation descriptors, and a DI helper for single-class handlers.
 
 Non-ASP.NET server adapters and `alloy#grpc` support are not part of this
 preview.

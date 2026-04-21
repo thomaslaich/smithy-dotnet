@@ -61,14 +61,7 @@ public sealed partial class CSharpShapeGenerator
             options
         );
         builder.Line();
-        AppendServerRegistrationExtensions(
-            builder,
-            model,
-            service,
-            serviceContractName,
-            interfaceName,
-            options
-        );
+        AppendServerExtensions(builder, model, service, serviceContractName, interfaceName);
         builder.Line();
         AppendAspNetCoreEndpointExtensions(builder, model, service, serviceContractName, options);
 
@@ -101,53 +94,17 @@ public sealed partial class CSharpShapeGenerator
         return $"I{CSharpIdentifier.TypeName(operation.Id.Name)}Handler";
     }
 
-    private static void AppendServerRegistrationExtensions(
+    private static void AppendServerExtensions(
         CSharpWriter builder,
         SmithyModel model,
         ModelShape service,
         string serviceContractName,
-        string interfaceName,
-        CSharpGenerationOptions options
+        string interfaceName
     )
     {
         builder.Line($"public static class {serviceContractName}ServerExtensions");
         builder.Block(() =>
         {
-            builder.Line(
-                $"public static SmithyServerDispatcher Register{serviceContractName}(this SmithyServerDispatcher dispatcher, {interfaceName} handler)"
-            );
-            builder.Block(() =>
-            {
-                builder.Line("ArgumentNullException.ThrowIfNull(dispatcher);");
-                builder.Line("ArgumentNullException.ThrowIfNull(handler);");
-                builder.Line();
-                foreach (
-                    var operationId in service.Operations.OrderBy(
-                        id => id.ToString(),
-                        StringComparer.Ordinal
-                    )
-                )
-                {
-                    var operation = model.GetShape(operationId);
-                    builder.Line(
-                        $"dispatcher.Register{CSharpIdentifier.TypeName(operation.Id.Name)}(handler);"
-                    );
-                }
-
-                builder.Line("return dispatcher;");
-            });
-            builder.Line();
-            foreach (
-                var operationId in service.Operations.OrderBy(
-                    id => id.ToString(),
-                    StringComparer.Ordinal
-                )
-            )
-            {
-                var operation = model.GetShape(operationId);
-                AppendServerOperationRegistration(builder, service, operation, options);
-                builder.Line();
-            }
             AppendServiceCollectionRegistration(
                 builder,
                 model,
@@ -302,66 +259,6 @@ public sealed partial class CSharpShapeGenerator
                     })
             )
             + "]";
-    }
-
-    private static void AppendServerOperationRegistration(
-        CSharpWriter builder,
-        ModelShape service,
-        ModelShape operation,
-        CSharpGenerationOptions options
-    )
-    {
-        var operationInterfaceName = GetOperationHandlerInterfaceName(operation);
-        var methodName = $"{CSharpIdentifier.PropertyName(operation.Id.Name)}Async";
-        builder.Line(
-            $"public static SmithyServerDispatcher Register{CSharpIdentifier.TypeName(operation.Id.Name)}(this SmithyServerDispatcher dispatcher, {operationInterfaceName} handler)"
-        );
-        builder.Block(() =>
-        {
-            builder.Line("ArgumentNullException.ThrowIfNull(dispatcher);");
-            builder.Line("ArgumentNullException.ThrowIfNull(handler);");
-            builder.Line();
-            builder.Line(
-                $"dispatcher.Register({FormatString(service.Id.Name)}, {FormatString(operation.Id.Name)}, async (request, cancellationToken) =>"
-            );
-            builder.Block(
-                () =>
-                {
-                    var hasOutput = operation.Output is not null;
-                    if (operation.Input is { } input)
-                    {
-                        var inputType = GetTypeReference(
-                            input,
-                            service.Id.Namespace,
-                            options.BaseNamespace
-                        );
-                        builder.Line(
-                            $"var input = request.Input as {inputType} ?? throw new ArgumentException({FormatString($"Expected input type '{inputType}' for operation '{operation.Id.Name}'.")}, nameof(request));"
-                        );
-                        builder.Line(
-                            hasOutput
-                                ? $"var output = await {GetServiceContractName(GetTypeName(service.Id))}Descriptor.{CSharpIdentifier.TypeName(operation.Id.Name)}.InvokeAsync(handler, input, cancellationToken).ConfigureAwait(false);"
-                                : $"await {GetServiceContractName(GetTypeName(service.Id))}Descriptor.{CSharpIdentifier.TypeName(operation.Id.Name)}.InvokeAsync(handler, input, cancellationToken).ConfigureAwait(false);"
-                        );
-                    }
-                    else
-                    {
-                        builder.Line(
-                            hasOutput
-                                ? $"var output = await {GetServiceContractName(GetTypeName(service.Id))}Descriptor.{CSharpIdentifier.TypeName(operation.Id.Name)}.InvokeAsync(handler, SmithyUnit.Value, cancellationToken).ConfigureAwait(false);"
-                                : $"await {GetServiceContractName(GetTypeName(service.Id))}Descriptor.{CSharpIdentifier.TypeName(operation.Id.Name)}.InvokeAsync(handler, SmithyUnit.Value, cancellationToken).ConfigureAwait(false);"
-                        );
-                    }
-
-                    var outputExpression = hasOutput ? "output" : "null";
-                    builder.Line(
-                        $"return new SmithyServerResponse(request.ServiceName, request.OperationName, {outputExpression});"
-                    );
-                },
-                closingSuffix: ");"
-            );
-            builder.Line("return dispatcher;");
-        });
     }
 
     private static void AppendServiceCollectionRegistration(
