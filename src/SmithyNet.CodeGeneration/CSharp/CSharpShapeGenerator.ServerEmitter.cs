@@ -1,6 +1,7 @@
 using System.Globalization;
 using SmithyNet.CodeGeneration.Model;
 using SmithyNet.Core;
+using SmithyNet.Core.Traits;
 
 namespace SmithyNet.CodeGeneration.CSharp;
 
@@ -50,6 +51,15 @@ public sealed partial class CSharpShapeGenerator
                 : $" : {string.Join(", ", operationInterfaceNames)}";
         builder.Line($"public interface {interfaceName}{inheritedInterfaces}");
         builder.Block(() => { });
+        builder.Line();
+        AppendServerDescriptors(
+            builder,
+            model,
+            service,
+            serviceContractName,
+            interfaceName,
+            options
+        );
         builder.Line();
         AppendServerRegistrationExtensions(
             builder,
@@ -148,6 +158,152 @@ public sealed partial class CSharpShapeGenerator
         });
     }
 
+    private static void AppendServerDescriptors(
+        CSharpWriter builder,
+        SmithyModel model,
+        ModelShape service,
+        string serviceContractName,
+        string interfaceName,
+        CSharpGenerationOptions options
+    )
+    {
+        builder.Line($"public static class {serviceContractName}Descriptor");
+        builder.Block(() =>
+        {
+            foreach (
+                var operationId in service.Operations.OrderBy(
+                    id => id.ToString(),
+                    StringComparer.Ordinal
+                )
+            )
+            {
+                AppendServerOperationDescriptor(
+                    builder,
+                    service,
+                    model.GetShape(operationId),
+                    options
+                );
+                builder.Line();
+            }
+
+            builder.Line(
+                $"public static SmithyServiceDescriptor<{interfaceName}> Service {{ get; }} = new("
+            );
+            builder.Indented(() =>
+            {
+                builder.Line($"{FormatString(service.Id.ToString())},");
+                builder.Line($"{FormatString(service.Id.Name)},");
+                builder.Line($"{FormatTraitDescriptors(service.Traits)},");
+                builder.Line("[");
+                builder.Indented(() =>
+                {
+                    foreach (
+                        var operationId in service.Operations.OrderBy(
+                            id => id.ToString(),
+                            StringComparer.Ordinal
+                        )
+                    )
+                    {
+                        builder.Line($"{CSharpIdentifier.TypeName(operationId.Name)},");
+                    }
+                });
+                builder.Line("]");
+            });
+            builder.Line(");");
+        });
+    }
+
+    private static void AppendServerOperationDescriptor(
+        CSharpWriter builder,
+        ModelShape service,
+        ModelShape operation,
+        CSharpGenerationOptions options
+    )
+    {
+        var descriptorName = CSharpIdentifier.TypeName(operation.Id.Name);
+        var methodName = $"{CSharpIdentifier.PropertyName(operation.Id.Name)}Async";
+        var operationInterfaceName = GetOperationHandlerInterfaceName(operation);
+        var inputType = operation.Input is { } input
+            ? GetTypeReference(input, service.Id.Namespace, options.BaseNamespace)
+            : "SmithyUnit";
+        var outputType = operation.Output is { } output
+            ? GetTypeReference(output, service.Id.Namespace, options.BaseNamespace)
+            : "SmithyUnit";
+
+        builder.Line(
+            $"public static SmithyOperationDescriptor<{operationInterfaceName}, {inputType}, {outputType}> {descriptorName} {{ get; }} = new("
+        );
+        builder.Indented(() =>
+        {
+            builder.Line($"{FormatString(operation.Id.ToString())},");
+            builder.Line($"{FormatString(operation.Id.Name)},");
+            builder.Line($"{FormatTraitDescriptors(operation.Traits)},");
+            if (operation.Input is not null && operation.Output is not null)
+            {
+                builder.Line(
+                    $"static (handler, input, cancellationToken) => handler.{methodName}(input, cancellationToken));"
+                );
+            }
+            else if (operation.Input is not null)
+            {
+                builder.Line("static async (handler, input, cancellationToken) =>");
+                builder.Block(
+                    () =>
+                    {
+                        builder.Line(
+                            $"await handler.{methodName}(input, cancellationToken).ConfigureAwait(false);"
+                        );
+                        builder.Line("return SmithyUnit.Value;");
+                    },
+                    closingSuffix: ");"
+                );
+            }
+            else if (operation.Output is not null)
+            {
+                builder.Line(
+                    $"static (handler, _, cancellationToken) => handler.{methodName}(cancellationToken));"
+                );
+            }
+            else
+            {
+                builder.Line("static async (handler, _, cancellationToken) =>");
+                builder.Block(
+                    () =>
+                    {
+                        builder.Line(
+                            $"await handler.{methodName}(cancellationToken).ConfigureAwait(false);"
+                        );
+                        builder.Line("return SmithyUnit.Value;");
+                    },
+                    closingSuffix: ");"
+                );
+            }
+        });
+    }
+
+    private static string FormatTraitDescriptors(TraitCollection traits)
+    {
+        if (traits.Count == 0)
+        {
+            return "[]";
+        }
+
+        return "["
+            + string.Join(
+                ", ",
+                traits
+                    .OrderBy(trait => trait.Key.ToString(), StringComparer.Ordinal)
+                    .Select(trait =>
+                    {
+                        var value = GetTraitAttributeValue(trait.Value);
+                        return value is null
+                            ? $"new SmithyTraitDescriptor({FormatString(trait.Key.ToString())})"
+                            : $"new SmithyTraitDescriptor({FormatString(trait.Key.ToString())}, {FormatString(value)})";
+                    })
+            )
+            + "]";
+    }
+
     private static void AppendServerOperationRegistration(
         CSharpWriter builder,
         ModelShape service,
@@ -184,16 +340,16 @@ public sealed partial class CSharpShapeGenerator
                         );
                         builder.Line(
                             hasOutput
-                                ? $"var output = await handler.{methodName}(input, cancellationToken).ConfigureAwait(false);"
-                                : $"await handler.{methodName}(input, cancellationToken).ConfigureAwait(false);"
+                                ? $"var output = await {GetServiceContractName(GetTypeName(service.Id))}Descriptor.{CSharpIdentifier.TypeName(operation.Id.Name)}.InvokeAsync(handler, input, cancellationToken).ConfigureAwait(false);"
+                                : $"await {GetServiceContractName(GetTypeName(service.Id))}Descriptor.{CSharpIdentifier.TypeName(operation.Id.Name)}.InvokeAsync(handler, input, cancellationToken).ConfigureAwait(false);"
                         );
                     }
                     else
                     {
                         builder.Line(
                             hasOutput
-                                ? $"var output = await handler.{methodName}(cancellationToken).ConfigureAwait(false);"
-                                : $"await handler.{methodName}(cancellationToken).ConfigureAwait(false);"
+                                ? $"var output = await {GetServiceContractName(GetTypeName(service.Id))}Descriptor.{CSharpIdentifier.TypeName(operation.Id.Name)}.InvokeAsync(handler, SmithyUnit.Value, cancellationToken).ConfigureAwait(false);"
+                                : $"await {GetServiceContractName(GetTypeName(service.Id))}Descriptor.{CSharpIdentifier.TypeName(operation.Id.Name)}.InvokeAsync(handler, SmithyUnit.Value, cancellationToken).ConfigureAwait(false);"
                         );
                     }
 
@@ -293,7 +449,6 @@ public sealed partial class CSharpShapeGenerator
     )
     {
         var httpBinding = ReadHttpBinding(operation);
-        var methodName = $"{CSharpIdentifier.PropertyName(operation.Id.Name)}Async";
         var operationInterfaceName = GetOperationHandlerInterfaceName(operation);
         builder.Line(
             $"endpoints.MapMethods({FormatString(httpBinding.Uri)}, [{FormatString(httpBinding.Method)}], async (HttpContext httpContext, {operationInterfaceName} handler, CancellationToken cancellationToken) =>"
@@ -309,14 +464,7 @@ public sealed partial class CSharpShapeGenerator
                     builder.Line("try");
                     builder.Block(() =>
                     {
-                        AppendAspNetCoreOperationBody(
-                            builder,
-                            model,
-                            service,
-                            operation,
-                            methodName,
-                            options
-                        );
+                        AppendAspNetCoreOperationBody(builder, model, service, operation, options);
                     });
                     AppendAspNetCoreErrorHandlers(
                         builder,
@@ -328,14 +476,7 @@ public sealed partial class CSharpShapeGenerator
                 }
                 else
                 {
-                    AppendAspNetCoreOperationBody(
-                        builder,
-                        model,
-                        service,
-                        operation,
-                        methodName,
-                        options
-                    );
+                    AppendAspNetCoreOperationBody(builder, model, service, operation, options);
                 }
             },
             closingSuffix: ");"
@@ -347,10 +488,11 @@ public sealed partial class CSharpShapeGenerator
         SmithyModel model,
         ModelShape service,
         ModelShape operation,
-        string methodName,
         CSharpGenerationOptions options
     )
     {
+        var descriptorAccess =
+            $"{GetServiceContractName(GetTypeName(service.Id))}Descriptor.{CSharpIdentifier.TypeName(operation.Id.Name)}";
         if (operation.Input is { } inputId)
         {
             var inputShape = model.GetShape(inputId);
@@ -358,16 +500,16 @@ public sealed partial class CSharpShapeGenerator
             AppendAspNetCoreInputBinding(builder, model, service, inputShape, inputType, options);
             builder.Line(
                 operation.Output is null
-                    ? $"await handler.{methodName}(input, cancellationToken).ConfigureAwait(false);"
-                    : $"var output = await handler.{methodName}(input, cancellationToken).ConfigureAwait(false);"
+                    ? $"await {descriptorAccess}.InvokeAsync(handler, input, cancellationToken).ConfigureAwait(false);"
+                    : $"var output = await {descriptorAccess}.InvokeAsync(handler, input, cancellationToken).ConfigureAwait(false);"
             );
         }
         else
         {
             builder.Line(
                 operation.Output is null
-                    ? $"await handler.{methodName}(cancellationToken).ConfigureAwait(false);"
-                    : $"var output = await handler.{methodName}(cancellationToken).ConfigureAwait(false);"
+                    ? $"await {descriptorAccess}.InvokeAsync(handler, SmithyUnit.Value, cancellationToken).ConfigureAwait(false);"
+                    : $"var output = await {descriptorAccess}.InvokeAsync(handler, SmithyUnit.Value, cancellationToken).ConfigureAwait(false);"
             );
         }
 

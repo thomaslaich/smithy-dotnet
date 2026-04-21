@@ -556,6 +556,14 @@ public sealed class CSharpShapeGeneratorTests
                         cancellationToken);
                 }
 
+                      public static Task<GetForecastOutput> InvokeDescriptorAsync(CancellationToken cancellationToken)
+                      {
+                        return WeatherServiceDescriptor.GetForecast.InvokeAsync(
+                          new Handler(),
+                          new GetForecastInput("Zurich"),
+                          cancellationToken);
+                      }
+
                 public static IEndpointRouteBuilder Map(IEndpointRouteBuilder endpoints)
                 {
                     return endpoints.MapWeatherService();
@@ -937,6 +945,23 @@ public sealed class CSharpShapeGeneratorTests
         Assert.Contains("Task PingAsync(CancellationToken cancellationToken = default);", server);
         Assert.Contains(
             "public static SmithyServerDispatcher RegisterWeatherService(this SmithyServerDispatcher dispatcher, IWeatherServiceHandler handler)",
+            server
+        );
+        Assert.Contains("public static class WeatherServiceDescriptor", server);
+        Assert.Contains(
+            "public static SmithyServiceDescriptor<IWeatherServiceHandler> Service { get; } = new(",
+            server
+        );
+        Assert.Contains(
+            "public static SmithyOperationDescriptor<IGetForecastHandler, GetForecastInput, GetForecastOutput> GetForecast { get; } = new(",
+            server
+        );
+        Assert.Contains(
+            "static (handler, input, cancellationToken) => handler.GetForecastAsync(input, cancellationToken));",
+            server
+        );
+        Assert.Contains(
+            "var output = await WeatherServiceDescriptor.GetForecast.InvokeAsync(handler, input, cancellationToken).ConfigureAwait(false);",
             server
         );
         Assert.Contains(
