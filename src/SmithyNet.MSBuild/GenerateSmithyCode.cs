@@ -3,6 +3,7 @@ using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using SmithyNet.CodeGeneration;
 using SmithyNet.CodeGeneration.CSharp;
+using SmithyNet.CodeGeneration.Proto;
 
 namespace SmithyNet.MSBuild;
 
@@ -25,6 +26,8 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
     [Required]
     public string GeneratedOutputDirectory { get; set; } = string.Empty;
 
+    public string? GeneratedProtoOutputDirectory { get; set; }
+
     public string? Projection { get; set; }
 
     public string? SmithyCliPath { get; set; }
@@ -44,6 +47,9 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
     [Output]
     public ITaskItem[] GeneratedFiles { get; private set; } = [];
 
+    [Output]
+    public ITaskItem[] GeneratedProtoFiles { get; private set; } = [];
+
     public override bool Execute()
     {
         try
@@ -62,6 +68,10 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
     {
         var outputDirectory = ResolveProjectPath(OutputDirectory);
         var generatedOutputDirectory = ResolveProjectPath(GeneratedOutputDirectory);
+        var generatedProtoOutputDirectory = NormalizeOptional(GeneratedProtoOutputDirectory)
+            is { } generatedProtoOutputPath
+            ? ResolveProjectPath(generatedProtoOutputPath)
+            : generatedOutputDirectory;
         var generatedFileManifest = NormalizeOptional(GeneratedFileManifest) is { } manifest
             ? ResolveProjectPath(manifest)
             : null;
@@ -85,14 +95,22 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
             )
             .ConfigureAwait(false);
 
-        var files = new CSharpShapeGenerator().Generate(
+        var generatedNamespaces = ParseGeneratedNamespaces(GeneratedNamespaces);
+        var csharpFiles = new CSharpShapeGenerator().Generate(
             result.Model,
             new CSharpGenerationOptions(
                 BaseNamespace: NormalizeOptional(BaseNamespace),
-                GeneratedNamespaces: ParseGeneratedNamespaces(GeneratedNamespaces)
+                GeneratedNamespaces: generatedNamespaces
             )
         );
-        var generatedPaths = files
+        var protoFiles = new ProtoShapeGenerator().Generate(
+            result.Model,
+            new ProtoGenerationOptions(
+                BaseNamespace: NormalizeOptional(BaseNamespace),
+                GeneratedNamespaces: generatedNamespaces
+            )
+        );
+        var generatedCSharpPaths = csharpFiles
             .Select(file =>
                 Path.GetFullPath(
                     Path.Combine(
@@ -102,22 +120,58 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
                 )
             )
             .ToArray();
+        var generatedProtoPaths = protoFiles
+            .Select(file =>
+                Path.GetFullPath(
+                    Path.Combine(
+                        generatedProtoOutputDirectory,
+                        file.Path.Replace('/', Path.DirectorySeparatorChar)
+                    )
+                )
+            )
+            .ToArray();
+        var generatedPaths = generatedCSharpPaths.Concat(generatedProtoPaths).ToArray();
         var generatedPathSet = generatedPaths.ToHashSet(StringComparer.Ordinal);
 
         Directory.CreateDirectory(generatedOutputDirectory);
+        Directory.CreateDirectory(generatedProtoOutputDirectory);
         DeleteStaleGeneratedFiles(
             generatedPathSet,
             generatedOutputDirectory,
             generatedFileManifest
         );
+        if (
+            !string.Equals(
+                generatedProtoOutputDirectory,
+                generatedOutputDirectory,
+                StringComparison.Ordinal
+            )
+        )
+        {
+            DeleteStaleGeneratedFiles(
+                generatedPathSet,
+                generatedProtoOutputDirectory,
+                generatedFileManifest
+            );
+        }
 
-        var generatedFiles = new List<ITaskItem>(files.Count);
+        var generatedFiles = new List<ITaskItem>(generatedPaths.Length);
+        var generatedProtoFiles = new List<ITaskItem>(generatedProtoPaths.Length);
 
-        foreach (var (file, destination) in files.Zip(generatedPaths))
+        foreach (var (file, destination) in csharpFiles.Zip(generatedCSharpPaths))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             File.WriteAllText(destination, file.Contents);
             generatedFiles.Add(new TaskItem(destination));
+        }
+
+        foreach (var (file, destination) in protoFiles.Zip(generatedProtoPaths))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.WriteAllText(destination, file.Contents);
+            var taskItem = new TaskItem(destination);
+            generatedFiles.Add(taskItem);
+            generatedProtoFiles.Add(taskItem);
         }
 
         WriteGeneratedFileManifest(generatedPaths, generatedFileManifest);
@@ -125,6 +179,7 @@ public sealed class GenerateSmithyCode : Microsoft.Build.Utilities.Task
         WriteDependencyManifest(result, buildFile, dependencyInputs, dependencyManifest);
         WriteDependencyInputFile(dependencyInputs, dependencyInputFile);
         GeneratedFiles = generatedFiles.ToArray();
+        GeneratedProtoFiles = generatedProtoFiles.ToArray();
     }
 
     private static string[] ParseGeneratedNamespaces(string? generatedNamespaces)

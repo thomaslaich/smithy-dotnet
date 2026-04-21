@@ -232,7 +232,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHelloServiceHandler<HelloHandler>();
 
 var app = builder.Build();
-app.MapHelloService();
+app.MapHelloServiceHttp();
 app.Run();
 
 internal sealed class HelloHandler : IHelloServiceHandler
@@ -283,3 +283,6 @@ internal sealed class PingHandler : IPingHandler
 The example at `examples/simple-rest-json/dotnet` shows a generated
 Smithy.NET ASP.NET Core server and a generated Smithy.NET client using the same
 `alloy#simpleRestJson` model.
+
+If you want to expose the same handler over both HTTP and gRPC, see
+`docs/multi-protocol.md` and `examples/grpc/dotnet`.

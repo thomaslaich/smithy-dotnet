@@ -11,6 +11,10 @@
     {
       "name": "Example: SimpleRestJson",
       "path": "examples/simple-rest-json/dotnet"
+    },
+    {
+      "name": "Example: gRPC",
+      "path": "examples/grpc/dotnet"
     }
   ],
   "settings": {
