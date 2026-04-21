@@ -33,6 +33,9 @@
       Include="$(MSBuildProjectDirectory)/**/*.smithy;$(MSBuildProjectDirectory)/**/*.json"
       Exclude="$(MSBuildProjectDirectory)/obj/**;$(MSBuildProjectDirectory)/bin/**;$(SmithyGeneratedOutputPath)**;$(SmithyBuildOutputPath)**"
     />
+    <!-- Ensure dotnet watch rebuilds when smithy model files change -->
+    <Watch Include="$(SmithyBuildFile)" />
+    <Watch Include="@(_SmithyProjectModelInput)" />
   </ItemGroup>
 
   <UsingTask
