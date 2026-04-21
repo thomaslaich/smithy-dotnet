@@ -670,9 +670,9 @@ public sealed class CSharpShapeGeneratorTests
             .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
             .Contents;
 
-        Assert.Contains("""GetHeader<string>(response.Headers, "x-request-id")""", client);
+        Assert.Contains("""GetRequiredHeader<string>(response.Headers, "x-request-id")""", client);
         Assert.Contains("(int)response.StatusCode", client);
-        Assert.Contains("""DeserializeBodyMember<string>(response.Content, "summary")""", client);
+        Assert.Contains("""DeserializeRequiredBodyMember<string>(response.Content, "summary")""", client);
         Assert.Contains("if ((int)response.StatusCode == 400)", client);
         Assert.Contains("""GetHeader<string?>(response.Headers, "x-request-id")""", client);
         Assert.Contains("""DeserializeBodyMember<string?>(response.Content, "reason")""", client);
@@ -1320,6 +1320,184 @@ public sealed class CSharpShapeGeneratorTests
             "SmithyAspNetCoreProtocol.GetQueryValue<string?>(httpContext, \"locale\")",
             server
         );
+    }
+
+    [Fact]
+    public void GenerateServerBindsInputMembersInConstructorOrder()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "alloy#simpleRestJson": {}
+                  },
+                  "operations": [
+                    "example.weather#RoundTrip"
+                  ]
+                },
+                "example.weather#RoundTrip": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "POST",
+                      "uri": "/round-trip/{label}"
+                    }
+                  },
+                  "input": {
+                    "target": "example.weather#RoundTripInput"
+                  }
+                },
+                "example.weather#RoundTripInput": {
+                  "type": "structure",
+                  "members": {
+                    "label": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpLabel": {}
+                      }
+                    },
+                    "header": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#httpHeader": "x-header"
+                      }
+                    },
+                    "query": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#httpQuery": "query"
+                      }
+                    },
+                    "body": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var server = new CSharpShapeGenerator()
+            .Generate(model)
+            .Single(file => file.Path == "Example/Weather/WeatherServer.g.cs")
+            .Contents;
+
+        var constructorStart = server.IndexOf(
+            "var input = new RoundTripInput(",
+            StringComparison.Ordinal
+        );
+        var labelBinding = server.IndexOf(
+            "SmithyAspNetCoreProtocol.GetRouteValue<string>(httpContext, \"label\")",
+            StringComparison.Ordinal
+        );
+        var bodyBinding = server.IndexOf(
+            "ReadJsonRequestBodyMemberAsync<string",
+            StringComparison.Ordinal
+        );
+        var headerBinding = server.IndexOf("GetHeaderValue<string", StringComparison.Ordinal);
+        var queryBinding = server.IndexOf("GetQueryValue<string", StringComparison.Ordinal);
+
+        Assert.True(constructorStart >= 0);
+        Assert.True(labelBinding > constructorStart);
+        Assert.True(bodyBinding > labelBinding);
+        Assert.True(headerBinding > bodyBinding);
+        Assert.True(queryBinding > headerBinding);
+    }
+
+    [Fact]
+    public void GenerateClientBindsResponseMembersInConstructorOrder()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "alloy#simpleRestJson": {}
+                  },
+                  "operations": [
+                    "example.weather#RoundTrip"
+                  ]
+                },
+                "example.weather#RoundTrip": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "POST",
+                      "uri": "/round-trip"
+                    }
+                  },
+                  "output": {
+                    "target": "example.weather#RoundTripOutput"
+                  }
+                },
+                "example.weather#RoundTripOutput": {
+                  "type": "structure",
+                  "members": {
+                    "label": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    },
+                    "header": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#httpHeader": "x-header"
+                      }
+                    },
+                    "query": {
+                      "target": "smithy.api#String"
+                    },
+                    "body": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var client = new CSharpShapeGenerator()
+            .Generate(model)
+            .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
+            .Contents;
+
+        var constructorStart = client.IndexOf(
+            "return new RoundTripOutput(",
+            StringComparison.Ordinal
+        );
+        var labelBinding = client.IndexOf(
+            "DeserializeRequiredBodyMember<string>(response.Content, \"label\")",
+            StringComparison.Ordinal
+        );
+        var bodyBinding = client.IndexOf(
+            "DeserializeBodyMember<string?>(response.Content, \"body\")",
+            StringComparison.Ordinal
+        );
+        var headerBinding = client.IndexOf(
+            "GetHeader<string?>(response.Headers, \"x-header\")",
+            StringComparison.Ordinal
+        );
+        var queryBinding = client.IndexOf(
+            "DeserializeBodyMember<string?>(response.Content, \"query\")",
+            StringComparison.Ordinal
+        );
+
+        Assert.True(constructorStart >= 0);
+        Assert.True(labelBinding > constructorStart);
+        Assert.True(bodyBinding > labelBinding);
+        Assert.True(headerBinding > bodyBinding);
+        Assert.True(queryBinding > headerBinding);
     }
 
     [Fact]
