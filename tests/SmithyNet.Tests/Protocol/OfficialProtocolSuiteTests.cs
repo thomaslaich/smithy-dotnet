@@ -739,6 +739,7 @@ internal static class OfficialGeneratedClientConformanceRunner
         var configuration = GetCurrentBuildConfiguration();
         var build = await RunDotNet(
             directory.Path,
+            TimeSpan.FromMinutes(5),
             "build",
             "--configuration",
             configuration,
@@ -751,6 +752,7 @@ internal static class OfficialGeneratedClientConformanceRunner
 
         var run = await RunDotNet(
             directory.Path,
+            TimeSpan.FromMinutes(2),
             "run",
             "--configuration",
             configuration,
@@ -1394,11 +1396,27 @@ internal static class OfficialGeneratedClientConformanceRunner
 
     internal static async Task<(int ExitCode, string Output, string Error)> RunDotNet(
         string projectDirectory,
+        TimeSpan timeout,
         params string[] arguments
     )
     {
+        var effectiveArguments = arguments;
+        if (
+            arguments.Length > 0
+            && string.Equals(arguments[0], "build", StringComparison.Ordinal)
+            && !arguments.Contains("--disable-build-servers", StringComparer.Ordinal)
+        )
+        {
+            effectiveArguments =
+            [
+                .. arguments,
+                "--disable-build-servers",
+                "-p:UseSharedCompilation=false",
+            ];
+        }
+
         using var process = Process.Start(
-            new ProcessStartInfo("dotnet", arguments)
+            new ProcessStartInfo("dotnet", effectiveArguments)
             {
                 WorkingDirectory = projectDirectory,
                 RedirectStandardOutput = true,
@@ -1409,7 +1427,33 @@ internal static class OfficialGeneratedClientConformanceRunner
         Assert.NotNull(process);
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
+        var waitForExitTask = process.WaitForExitAsync();
+        var completedTask = await Task.WhenAny(waitForExitTask, Task.Delay(timeout));
+        if (completedTask != waitForExitTask)
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException)
+            {
+                // The child process may have exited between the timeout and the kill attempt.
+            }
+
+            var output = await outputTask;
+            var error = await errorTask;
+            return (
+                -1,
+                output,
+                string.Concat(
+                    $"dotnet {string.Join(" ", effectiveArguments)} timed out after {timeout}.",
+                    Environment.NewLine,
+                    error
+                )
+            );
+        }
+
+        await waitForExitTask;
         return (process.ExitCode, await outputTask, await errorTask);
     }
 
@@ -1513,6 +1557,7 @@ internal static class OfficialGeneratedServerConformanceRunner
         var configuration = OfficialGeneratedClientConformanceRunner.GetCurrentBuildConfiguration();
         var build = await OfficialGeneratedClientConformanceRunner.RunDotNet(
             directory.Path,
+            TimeSpan.FromMinutes(5),
             "build",
             "--configuration",
             configuration,
@@ -1525,6 +1570,7 @@ internal static class OfficialGeneratedServerConformanceRunner
 
         var run = await OfficialGeneratedClientConformanceRunner.RunDotNet(
             directory.Path,
+            TimeSpan.FromMinutes(2),
             "run",
             "--configuration",
             configuration,
