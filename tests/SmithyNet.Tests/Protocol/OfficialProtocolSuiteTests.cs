@@ -1665,7 +1665,7 @@ internal static class OfficialGeneratedServerConformanceRunner
 
             await using var app = builder.Build();
             app.UseDeveloperExceptionPage();
-            app.Map{{serviceContractName}}();
+            app.Map{{serviceContractName}}Http();
             await app.StartAsync();
 
             using var client = new HttpClient

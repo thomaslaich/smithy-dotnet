@@ -151,7 +151,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHelloServiceHandler<HelloHandler>();
 
 var app = builder.Build();
-app.MapHelloService();
+app.MapHelloServiceHttp();
 app.Run();
 
 internal sealed class HelloHandler : IHelloServiceHandler
@@ -171,7 +171,9 @@ builder.Services.AddSingleton<ISayHelloHandler, SayHelloHandler>();
 
 ## Documentation
 
+- [Protocol Status](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/protocols/README.md)
 - [Quick Start](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/quick-start.md)
+- [Multi-Protocol Guide](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/multi-protocol.md)
 - [MSBuild Reference](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/msbuild.md)
 - [Supported Surface](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/supported-surface.md)
 - [Known Limitations](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/known-limitations.md)

@@ -366,6 +366,96 @@ public sealed class GenerateSmithyCodeTests
     }
 
     [Fact]
+    public void ExecuteWritesGeneratedProtoFilesForGrpcServices()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var buildOutputDirectory = Path.Combine(directory.Path, "smithy-build");
+        var generatedOutputDirectory = Path.Combine(directory.Path, "generated");
+        var generatedProtoOutputDirectory = Path.Combine(directory.Path, "generated-proto");
+        var traitModelFile = Path.Combine(directory.Path, "alloy-proto.smithy");
+        var modelFile = Path.Combine(directory.Path, "weather.smithy");
+
+        File.WriteAllText(
+            traitModelFile,
+            """
+            $version: "2"
+
+            namespace alloy.proto
+
+            @trait(selector: "service")
+            structure grpc {}
+
+            @trait(selector: "member")
+            integer protoIndex
+            """
+        );
+
+        File.WriteAllText(
+            modelFile,
+            """
+            $version: "2"
+
+            namespace example.weather
+
+            use alloy.proto#grpc
+            use alloy.proto#protoIndex
+
+            @grpc
+            service Weather {
+                operations: [GetForecast]
+            }
+
+            operation GetForecast {
+                input := {
+                    @protoIndex(1)
+                    city: String
+                }
+                output := {
+                    @protoIndex(1)
+                    summary: String
+                }
+            }
+            """
+        );
+
+        var task = new GenerateSmithyCode
+        {
+            WorkingDirectory = directory.Path,
+            BuildFile = "smithy-build.json",
+            OutputDirectory = buildOutputDirectory,
+            GeneratedOutputDirectory = generatedOutputDirectory,
+            GeneratedProtoOutputDirectory = generatedProtoOutputDirectory,
+            SmithyModel = [new TaskItem(traitModelFile), new TaskItem(modelFile)],
+        };
+
+        Assert.True(task.Execute());
+
+        var generatedFiles = task.GeneratedFiles.Select(file => file.ItemSpec).ToArray();
+        var generatedProtoFiles = task
+            .GeneratedFiles.Where(file => file.ItemSpec.Contains(".proto"))
+            .Select(file => file.ItemSpec)
+            .ToArray();
+        var generatedProto = Assert.Single(
+            generatedProtoFiles,
+            path =>
+                path.EndsWith(
+                    Path.Combine("example", "weather", "Weather.proto"),
+                    StringComparison.Ordinal
+                )
+        );
+        Assert.StartsWith(generatedProtoOutputDirectory, generatedProto, StringComparison.Ordinal);
+        Assert.Contains("service Weather {", File.ReadAllText(generatedProto));
+        Assert.Contains(
+            Path.Combine(generatedOutputDirectory, "Example", "Weather", "GetForecastInput.g.cs"),
+            generatedFiles
+        );
+        Assert.Contains(
+            Path.Combine(generatedOutputDirectory, "Example", "Weather", "GetForecastOutput.g.cs"),
+            generatedFiles
+        );
+    }
+
+    [Fact]
     public async System.Threading.Tasks.Task TargetsGenerateCompileItemsForConsumerProject()
     {
         using var directory = TemporaryDirectory.Create();
@@ -471,6 +561,127 @@ public sealed class GenerateSmithyCodeTests
             secondResult.ExitCode == 0,
             $"second dotnet build failed with exit code {secondResult.ExitCode}.{Environment.NewLine}{secondResult.Output}{Environment.NewLine}{secondResult.Error}"
         );
+    }
+
+    [Fact]
+    public async System.Threading.Tasks.Task TargetsExposeGeneratedProtoFilesAsProtobufItems()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var packageDirectory = Path.Combine(directory.Path, "package");
+        var projectDirectory = Path.Combine(directory.Path, "consumer");
+        var modelDirectory = Path.Combine(projectDirectory, "model");
+        var protobufItemsPath = Path.Combine(projectDirectory, "protobuf-items.txt");
+        Directory.CreateDirectory(Path.Combine(packageDirectory, "build"));
+        Directory.CreateDirectory(Path.Combine(packageDirectory, "tasks"));
+        Directory.CreateDirectory(modelDirectory);
+
+        File.Copy(
+            Path.Combine(
+                FindRepositoryRoot(),
+                "src",
+                "SmithyNet.MSBuild",
+                "Targets",
+                "SmithyNet.MSBuild.targets"
+            ),
+            Path.Combine(packageDirectory, "build", "SmithyNet.MSBuild.targets")
+        );
+        CopyAssemblyToTasks(typeof(GenerateSmithyCode).Assembly.Location, packageDirectory);
+        CopyAssemblyToTasks(typeof(SmithyBuildRunner).Assembly.Location, packageDirectory);
+        CopyAssemblyToTasks(typeof(ShapeId).Assembly.Location, packageDirectory);
+
+        File.WriteAllText(
+            Path.Combine(modelDirectory, "alloy-proto.smithy"),
+            """
+            $version: "2"
+
+            namespace alloy.proto
+
+            @trait(selector: "service")
+            structure grpc {}
+
+            @trait(selector: "member")
+            integer protoIndex
+            """
+        );
+        File.WriteAllText(
+            Path.Combine(modelDirectory, "weather.smithy"),
+            """
+            $version: "2"
+
+            namespace example.weather
+
+            use alloy.proto#grpc
+            use alloy.proto#protoIndex
+
+            @grpc
+            service Weather {
+                operations: [GetForecast]
+            }
+
+            operation GetForecast {
+                input := {
+                    @protoIndex(1)
+                    city: String
+                }
+                output := {
+                    @protoIndex(1)
+                    summary: String
+                }
+            }
+            """
+        );
+        File.WriteAllText(
+            Path.Combine(projectDirectory, "ConsumerProject.csproj"),
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <Nullable>enable</Nullable>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <SmithyGenerateClient>false</SmithyGenerateClient>
+                <SmithyGenerateServer>false</SmithyGenerateServer>
+                <SmithyGeneratedOutputPath>obj/Smithy/</SmithyGeneratedOutputPath>
+                <SmithyGeneratedProtoOutputPath>obj/SmithyProto/</SmithyGeneratedProtoOutputPath>
+                <SmithyBuildOutputPath>obj/SmithyBuild/</SmithyBuildOutputPath>
+              </PropertyGroup>
+
+              <ItemGroup>
+                <SmithyModel Include="model/**/*.smithy" />
+                                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
+              </ItemGroup>
+
+              <Import Project="{{Path.Combine(
+                packageDirectory,
+                "build",
+                "SmithyNet.MSBuild.targets"
+            )}}" />
+
+                            <Target Name="CaptureSmithyProtobufItems" AfterTargets="_AddSmithyGeneratedCompileItems">
+                <WriteLinesToFile
+                  File="{{protobufItemsPath}}"
+                  Lines="@(Protobuf->'%(Identity)|%(ProtoRoot)|%(GrpcServices)')"
+                  Overwrite="true"
+                />
+              </Target>
+            </Project>
+            """
+        );
+
+        var result = await RunDotNetBuild(projectDirectory);
+
+        Assert.True(
+            result.ExitCode == 0,
+            $"dotnet build failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}{Environment.NewLine}{result.Error}"
+        );
+        var protobufItems = File.ReadAllLines(protobufItemsPath);
+        Assert.Single(protobufItems);
+        Assert.Contains(
+            Path.Combine("obj", "SmithyProto", "example", "weather", "Weather.proto"),
+            protobufItems[0]
+        );
+        Assert.Contains(Path.Combine("obj", "SmithyProto"), protobufItems[0]);
+        Assert.EndsWith("|Both", protobufItems[0], StringComparison.Ordinal);
     }
 
     private static void CopyAssemblyToTasks(string assemblyPath, string packageDirectory)

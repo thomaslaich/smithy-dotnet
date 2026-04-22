@@ -10,6 +10,8 @@ public static class SmithyPrelude
 
     public const string AlloyNamespace = "alloy";
 
+    public const string AlloyProtoNamespace = "alloy.proto";
+
     public static ShapeId RequiredTrait { get; } = new(Namespace, "required");
 
     public static ShapeId DefaultTrait { get; } = new(Namespace, "default");
@@ -43,6 +45,12 @@ public static class SmithyPrelude
     public static ShapeId RestJson1Trait { get; } = new(AwsProtocolsNamespace, "restJson1");
 
     public static ShapeId SimpleRestJsonTrait { get; } = new(AlloyNamespace, "simpleRestJson");
+
+    public static ShapeId GrpcTrait { get; } = new(AlloyProtoNamespace, "grpc");
+
+    public static ShapeId ProtoEnabledTrait { get; } = new(AlloyProtoNamespace, "protoEnabled");
+
+    public static ShapeId ProtoIndexTrait { get; } = new(AlloyProtoNamespace, "protoIndex");
 
     public static ShapeId EnumValueTrait { get; } = new(Namespace, "enumValue");
 
