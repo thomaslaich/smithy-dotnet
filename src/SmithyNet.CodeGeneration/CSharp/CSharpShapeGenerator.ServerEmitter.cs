@@ -15,19 +15,35 @@ public sealed partial class CSharpShapeGenerator
         CSharpGenerationOptions options
     )
     {
+        var emitsAspNetCore = service.Traits.Has(SmithyPrelude.SimpleRestJsonTrait);
+        var emitsGrpc = service.Traits.Has(SmithyPrelude.GrpcTrait);
+        var extraUsings = new List<string>
+        {
+            "Microsoft.Extensions.DependencyInjection",
+            "SmithyNet.Server",
+            "System.Threading",
+            "System.Threading.Tasks",
+        };
+        if (emitsAspNetCore)
+        {
+            extraUsings.Add("Microsoft.AspNetCore.Builder");
+            extraUsings.Add("Microsoft.AspNetCore.Http");
+            extraUsings.Add("Microsoft.AspNetCore.Routing");
+            extraUsings.Add("SmithyNet.Server.AspNetCore");
+        }
+
+        if (emitsGrpc)
+        {
+            extraUsings.Add("Microsoft.AspNetCore.Builder");
+            extraUsings.Add("Microsoft.AspNetCore.Routing");
+            extraUsings.Add("Google.Protobuf.WellKnownTypes");
+            extraUsings.Add("Grpc.Core");
+        }
+
         var builder = CreateFileBuilder(
             service,
             options,
-            [
-                "Microsoft.AspNetCore.Builder",
-                "Microsoft.AspNetCore.Http",
-                "Microsoft.AspNetCore.Routing",
-                "Microsoft.Extensions.DependencyInjection",
-                "SmithyNet.Server.AspNetCore",
-                "SmithyNet.Server",
-                "System.Threading",
-                "System.Threading.Tasks",
-            ]
+            extraUsings.Distinct(StringComparer.Ordinal).ToArray()
         );
         var serviceTypeName = GetTypeName(service.Id);
         var serviceContractName = GetServiceContractName(serviceTypeName);
@@ -62,8 +78,33 @@ public sealed partial class CSharpShapeGenerator
         );
         builder.Line();
         AppendServerExtensions(builder, model, service, serviceContractName, interfaceName);
-        builder.Line();
-        AppendAspNetCoreEndpointExtensions(builder, model, service, serviceContractName, options);
+        if (emitsAspNetCore)
+        {
+            builder.Line();
+            AppendAspNetCoreEndpointExtensions(
+                builder,
+                model,
+                service,
+                serviceContractName,
+                options
+            );
+        }
+
+        if (emitsGrpc)
+        {
+            builder.Line();
+            AppendGrpcEndpointExtensions(builder, serviceContractName);
+            builder.Line();
+            AppendGrpcAdapter(
+                builder,
+                model,
+                service,
+                serviceTypeName,
+                serviceContractName,
+                interfaceName,
+                options
+            );
+        }
 
         return new GeneratedCSharpFile(GetServerPath(service), builder.ToString());
     }
@@ -313,7 +354,7 @@ public sealed partial class CSharpShapeGenerator
         builder.Block(() =>
         {
             builder.Line(
-                $"public static IEndpointRouteBuilder Map{serviceContractName}(this IEndpointRouteBuilder endpoints)"
+                $"public static IEndpointRouteBuilder Map{serviceContractName}Http(this IEndpointRouteBuilder endpoints)"
             );
             builder.Block(() =>
             {
@@ -695,6 +736,383 @@ public sealed partial class CSharpShapeGenerator
             ? "CancellationToken cancellationToken = default"
             : $"{inputType} input, CancellationToken cancellationToken = default";
         return $"{returnType} {methodName}({parameters})";
+    }
+
+    private static void AppendGrpcEndpointExtensions(
+        CSharpWriter builder,
+        string serviceContractName
+    )
+    {
+        builder.Line($"public static class {serviceContractName}GrpcExtensions");
+        builder.Block(() =>
+        {
+            builder.Line(
+                $"public static IEndpointRouteBuilder Map{serviceContractName}Grpc(this IEndpointRouteBuilder endpoints)"
+            );
+            builder.Block(() =>
+            {
+                builder.Line("ArgumentNullException.ThrowIfNull(endpoints);");
+                builder.Line();
+                builder.Line($"endpoints.MapGrpcService<{serviceContractName}GrpcAdapter>();");
+                builder.Line("return endpoints;");
+            });
+        });
+    }
+
+    private static void AppendGrpcAdapter(
+        CSharpWriter builder,
+        SmithyModel model,
+        ModelShape service,
+        string serviceTypeName,
+        string serviceContractName,
+        string interfaceName,
+        CSharpGenerationOptions options
+    )
+    {
+        var grpcNamespace = GetGrpcNamespace(service, options);
+        var grpcServiceBaseType =
+            $"global::{grpcNamespace}.{serviceTypeName}.{serviceTypeName}Base";
+        var adapterName = $"{serviceContractName}GrpcAdapter";
+
+        builder.Line($"public sealed class {adapterName} : {grpcServiceBaseType}");
+        builder.Block(() =>
+        {
+            builder.Line($"private readonly {interfaceName} _handler;");
+            builder.Line();
+            builder.Line($"public {adapterName}({interfaceName} handler)");
+            builder.Block(() =>
+            {
+                builder.Line(
+                    "_handler = handler ?? throw new ArgumentNullException(nameof(handler));"
+                );
+            });
+
+            foreach (
+                var operationId in service.Operations.OrderBy(
+                    id => id.ToString(),
+                    StringComparer.Ordinal
+                )
+            )
+            {
+                builder.Line();
+                AppendGrpcAdapterMethod(
+                    builder,
+                    model,
+                    service,
+                    model.GetShape(operationId),
+                    serviceTypeName,
+                    serviceContractName,
+                    options
+                );
+            }
+        });
+    }
+
+    private static void AppendGrpcAdapterMethod(
+        CSharpWriter builder,
+        SmithyModel model,
+        ModelShape service,
+        ModelShape operation,
+        string serviceTypeName,
+        string serviceContractName,
+        CSharpGenerationOptions options
+    )
+    {
+        var operationName = CSharpIdentifier.PropertyName(operation.Id.Name);
+        var grpcNamespace = GetGrpcNamespace(service, options);
+        var grpcInputType = GetGrpcOperationMessageType(operation.Input, grpcNamespace);
+        var grpcOutputType = GetGrpcOperationMessageType(operation.Output, grpcNamespace);
+        var descriptorAccess =
+            $"{serviceContractName}Descriptor.{CSharpIdentifier.TypeName(operation.Id.Name)}";
+        var smithyInputExpression = operation.Input is { } inputId
+            ? GetGrpcToSmithyValueExpression(
+                model,
+                inputId,
+                "request",
+                service.Id.Namespace,
+                options
+            )
+            : "SmithyUnit.Value";
+
+        builder.Line($"public override async Task<{grpcOutputType}> {operationName}(");
+        builder.Indented(() =>
+        {
+            builder.Line($"{grpcInputType} request,");
+            builder.Line("ServerCallContext context");
+        });
+        builder.Line(")");
+        builder.Block(() =>
+        {
+            if (operation.Output is { } outputId)
+            {
+                builder.Line(
+                    $"var output = await {descriptorAccess}.InvokeAsync(_handler, {smithyInputExpression}, context.CancellationToken).ConfigureAwait(false);"
+                );
+                builder.Line(
+                    $"return {GetSmithyToGrpcValueExpression(model, outputId, "output", service.Id.Namespace, options)};"
+                );
+            }
+            else
+            {
+                builder.Line(
+                    $"await {descriptorAccess}.InvokeAsync(_handler, {smithyInputExpression}, context.CancellationToken).ConfigureAwait(false);"
+                );
+                builder.Line("return new Empty();");
+            }
+        });
+    }
+
+    private static string GetGrpcNamespace(ModelShape service, CSharpGenerationOptions options)
+    {
+        return $"{CSharpIdentifier.Namespace(service.Id.Namespace, options.BaseNamespace)}.Grpc";
+    }
+
+    private static string GetGrpcOperationMessageType(ShapeId? shapeId, string grpcNamespace)
+    {
+        if (shapeId is not { } value)
+        {
+            return "global::Google.Protobuf.WellKnownTypes.Empty";
+        }
+
+        return $"global::{grpcNamespace}.{GetTypeName(value)}";
+    }
+
+    private static string GetGrpcToSmithyValueExpression(
+        SmithyModel model,
+        ShapeId target,
+        string sourceExpression,
+        string currentNamespace,
+        CSharpGenerationOptions options
+    )
+    {
+        if (target.Namespace == SmithyPrelude.Namespace)
+        {
+            return target.Name switch
+            {
+                "Blob" => $"{sourceExpression}.ToByteArray()",
+                "Boolean"
+                or "Byte"
+                or "Short"
+                or "Integer"
+                or "Long"
+                or "Float"
+                or "Double"
+                or "String" => sourceExpression,
+                _ => throw new SmithyException(
+                    $"gRPC server generation does not support Smithy target '{target}' yet."
+                ),
+            };
+        }
+
+        var shape = model.GetShape(target);
+        return shape.Kind switch
+        {
+            ShapeKind.Structure => GetGrpcToSmithyStructureExpression(
+                model,
+                shape,
+                sourceExpression,
+                currentNamespace,
+                options
+            ),
+            ShapeKind.IntEnum =>
+                $"({GetTypeReference(target, currentNamespace, options.BaseNamespace)}){sourceExpression}",
+            _ => throw new SmithyException(
+                $"gRPC server generation does not support shape '{target}' of kind '{shape.Kind}' yet."
+            ),
+        };
+    }
+
+    private static string GetGrpcToSmithyStructureExpression(
+        SmithyModel model,
+        ModelShape shape,
+        string sourceExpression,
+        string currentNamespace,
+        CSharpGenerationOptions options
+    )
+    {
+        var typeName = GetTypeReference(shape.Id, currentNamespace, options.BaseNamespace);
+        var members = GetConstructorMembers(model, shape, options);
+        if (members.Length == 0)
+        {
+            return $"new {typeName}()";
+        }
+
+        return $"new {typeName}({string.Join(", ", members.Select(member => GetGrpcToSmithyConstructorArgument(model, shape, member, sourceExpression, currentNamespace, options)))})";
+    }
+
+    private static string GetSmithyToGrpcValueExpression(
+        SmithyModel model,
+        ShapeId target,
+        string sourceExpression,
+        string currentNamespace,
+        CSharpGenerationOptions options
+    )
+    {
+        if (target.Namespace == SmithyPrelude.Namespace)
+        {
+            return target.Name switch
+            {
+                "Blob" =>
+                    $"global::Google.Protobuf.ByteString.CopyFrom({sourceExpression} ?? Array.Empty<byte>())",
+                "Boolean"
+                or "Byte"
+                or "Short"
+                or "Integer"
+                or "Long"
+                or "Float"
+                or "Double"
+                or "String" => sourceExpression,
+                _ => throw new SmithyException(
+                    $"gRPC server generation does not support Smithy target '{target}' yet."
+                ),
+            };
+        }
+
+        var shape = model.GetShape(target);
+        return shape.Kind switch
+        {
+            ShapeKind.Structure => GetSmithyToGrpcStructureExpression(
+                model,
+                shape,
+                sourceExpression,
+                currentNamespace,
+                options
+            ),
+            ShapeKind.IntEnum =>
+                $"(global::{GetGrpcNamespace(shape, options)}.{GetTypeName(shape.Id)}){sourceExpression}",
+            _ => throw new SmithyException(
+                $"gRPC server generation does not support shape '{target}' of kind '{shape.Kind}' yet."
+            ),
+        };
+    }
+
+    private static string GetSmithyToGrpcStructureExpression(
+        SmithyModel model,
+        ModelShape shape,
+        string sourceExpression,
+        string currentNamespace,
+        CSharpGenerationOptions options
+    )
+    {
+        var grpcType = $"global::{GetGrpcNamespace(shape, options)}.{GetTypeName(shape.Id)}";
+        var members = GetSortedMembers(shape).ToArray();
+        if (members.Length == 0)
+        {
+            return $"new {grpcType}()";
+        }
+
+        var lines = new List<string> { $"var message = new {grpcType}();" };
+        foreach (var member in members)
+        {
+            lines.AddRange(
+                GetSmithyToGrpcMemberAssignments(
+                    model,
+                    shape,
+                    member,
+                    sourceExpression,
+                    currentNamespace,
+                    options
+                )
+            );
+        }
+
+        lines.Add("return message;");
+        return $"new Func<{grpcType}>(() => {{ {string.Join(" ", lines)} }})()";
+    }
+
+    private static string GetGrpcToSmithyConstructorArgument(
+        SmithyModel model,
+        ModelShape container,
+        MemberShape member,
+        string sourceExpression,
+        string currentNamespace,
+        CSharpGenerationOptions options
+    )
+    {
+        var propertyName = CSharpIdentifier.PropertyName(member.Name);
+        var memberAccess = $"{sourceExpression}.{propertyName}";
+        if (!HasGrpcPresenceSensitiveConstructorParameter(container, member, model, options))
+        {
+            return GetGrpcToSmithyValueExpression(
+                model,
+                member.Target,
+                memberAccess,
+                currentNamespace,
+                options
+            );
+        }
+
+        if (SupportsProto3OptionalPresence(model, member.Target))
+        {
+            return $"{sourceExpression}.Has{propertyName} ? {GetGrpcToSmithyValueExpression(model, member.Target, memberAccess, currentNamespace, options)} : null";
+        }
+
+        var targetShape = model.GetShape(member.Target);
+        if (targetShape.Kind == ShapeKind.Structure)
+        {
+            return $"{memberAccess} is null ? null : {GetGrpcToSmithyValueExpression(model, member.Target, memberAccess, currentNamespace, options)}";
+        }
+
+        return GetGrpcToSmithyValueExpression(
+            model,
+            member.Target,
+            memberAccess,
+            currentNamespace,
+            options
+        );
+    }
+
+    private static IEnumerable<string> GetSmithyToGrpcMemberAssignments(
+        SmithyModel model,
+        ModelShape container,
+        MemberShape member,
+        string sourceExpression,
+        string currentNamespace,
+        CSharpGenerationOptions options
+    )
+    {
+        var propertyName = CSharpIdentifier.PropertyName(member.Name);
+        var memberAccess = $"{sourceExpression}.{propertyName}";
+        var assignment =
+            $"message.{propertyName} = {GetSmithyToGrpcValueExpression(model, member.Target, memberAccess, currentNamespace, options)};";
+        if (!IsNullableMember(container, member, options))
+        {
+            return [assignment];
+        }
+
+        return [$"if ({memberAccess} is not null)", "{", assignment, "}"];
+    }
+
+    private static bool HasGrpcPresenceSensitiveConstructorParameter(
+        ModelShape container,
+        MemberShape member,
+        SmithyModel model,
+        CSharpGenerationOptions options
+    )
+    {
+        _ = model;
+        return IsNullableMember(container, member, options)
+            || GetEffectiveDefaultValue(container, member, options) is not null;
+    }
+
+    private static bool SupportsProto3OptionalPresence(SmithyModel model, ShapeId target)
+    {
+        if (target.Namespace == SmithyPrelude.Namespace)
+        {
+            return target.Name
+                is "String"
+                    or "Boolean"
+                    or "Blob"
+                    or "Byte"
+                    or "Short"
+                    or "Integer"
+                    or "Long"
+                    or "Float"
+                    or "Double";
+        }
+
+        var shape = model.GetShape(target);
+        return shape.Kind is ShapeKind.Enum or ShapeKind.IntEnum;
     }
 }
 
