@@ -73,12 +73,9 @@ serializer metadata is planned but not implemented.
 
 `SmithyNet.Server` provides the first server-side runtime primitives:
 
-- `SmithyServerDispatcher`
-- operation handler registration and dispatch
-- server middleware
-- operation not-found errors
+- service and operation descriptors
 - generated operation handler interfaces and aggregate service handler interfaces
-- generated handler registration extensions and DI helpers
+- generated DI helpers
 - generated ASP.NET Core endpoint mapping extensions
 
 The generated ASP.NET Core mapping currently covers the first HTTP skeleton:
