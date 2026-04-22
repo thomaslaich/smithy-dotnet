@@ -937,8 +937,7 @@ public sealed partial class CSharpShapeGenerator
             return $"new {typeName}()";
         }
 
-        return
-            $"new {typeName}({string.Join(", ", members.Select(member => GetGrpcToSmithyConstructorArgument(model, shape, member, sourceExpression, currentNamespace, options)))})";
+        return $"new {typeName}({string.Join(", ", members.Select(member => GetGrpcToSmithyConstructorArgument(model, shape, member, sourceExpression, currentNamespace, options)))})";
     }
 
     private static string GetSmithyToGrpcValueExpression(
@@ -1081,13 +1080,7 @@ public sealed partial class CSharpShapeGenerator
             return [assignment];
         }
 
-        return
-        [
-            $"if ({memberAccess} is not null)",
-            "{",
-            assignment,
-            "}",
-        ];
+        return [$"if ({memberAccess} is not null)", "{", assignment, "}"];
     }
 
     private static bool HasGrpcPresenceSensitiveConstructorParameter(

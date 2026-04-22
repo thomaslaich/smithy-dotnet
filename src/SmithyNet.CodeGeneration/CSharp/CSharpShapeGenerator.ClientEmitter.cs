@@ -22,18 +22,16 @@ public sealed partial class CSharpShapeGenerator
         var extraUsings = new List<string> { "System.Threading", "System.Threading.Tasks" };
         if (emitsHttp)
         {
-            extraUsings.AddRange(
-                [
-                    "System.Collections",
-                    "System.Globalization",
-                    "System.Net.Http",
-                    "System.Text.Json",
-                    "System.Text",
-                    "SmithyNet.Client",
-                    "SmithyNet.Http",
-                    "SmithyNet.Json",
-                ]
-            );
+            extraUsings.AddRange([
+                "System.Collections",
+                "System.Globalization",
+                "System.Net.Http",
+                "System.Text.Json",
+                "System.Text",
+                "SmithyNet.Client",
+                "SmithyNet.Http",
+                "SmithyNet.Json",
+            ]);
         }
 
         if (emitsGrpc)
@@ -87,7 +85,9 @@ public sealed partial class CSharpShapeGenerator
                 });
                 builder.Block(() => { });
                 builder.Line();
-                builder.Line($"public {typeName}(HttpClient httpClient, SmithyClientOptions options)");
+                builder.Line(
+                    $"public {typeName}(HttpClient httpClient, SmithyClientOptions options)"
+                );
                 builder.Indented(() =>
                 {
                     builder.Line(
@@ -297,7 +297,9 @@ public sealed partial class CSharpShapeGenerator
             builder.Line($"public {grpcClientTypeName}({rawClientType} client)");
             builder.Block(() =>
             {
-                builder.Line("this.client = client ?? throw new ArgumentNullException(nameof(client));");
+                builder.Line(
+                    "this.client = client ?? throw new ArgumentNullException(nameof(client));"
+                );
             });
             builder.Line();
 
@@ -308,7 +310,13 @@ public sealed partial class CSharpShapeGenerator
                 )
             )
             {
-                AppendGrpcOperationMethod(builder, model, service, model.GetShape(operationId), options);
+                AppendGrpcOperationMethod(
+                    builder,
+                    model,
+                    service,
+                    model.GetShape(operationId),
+                    options
+                );
                 builder.Line();
             }
         });

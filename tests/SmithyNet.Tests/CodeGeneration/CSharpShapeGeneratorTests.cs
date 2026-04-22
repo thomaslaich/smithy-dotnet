@@ -1062,14 +1062,8 @@ public sealed class CSharpShapeGeneratorTests
             "var output = await HelloServiceDescriptor.SayHello.InvokeAsync(_handler, new SayHelloInput(request.Name), context.CancellationToken).ConfigureAwait(false);",
             server
         );
-        Assert.Contains(
-            "new Func<global::Example.Hello.Grpc.SayHelloOutput>(() =>",
-            server
-        );
-        Assert.Contains(
-            "message.Message = output.Message;",
-            server
-        );
+        Assert.Contains("new Func<global::Example.Hello.Grpc.SayHelloOutput>(() =>", server);
+        Assert.Contains("message.Message = output.Message;", server);
         Assert.Contains(
             "public override async Task<global::Example.Hello.Grpc.PingOutput> Ping(",
             server
@@ -1146,14 +1140,8 @@ public sealed class CSharpShapeGeneratorTests
             "new GetForecastInput(request.City, request.HasDays ? request.Days : null)",
             server
         );
-        Assert.Contains(
-            "if (output.Summary is not null)",
-            server
-        );
-        Assert.Contains(
-            "message.Summary = output.Summary;",
-            server
-        );
+        Assert.Contains("if (output.Summary is not null)", server);
+        Assert.Contains("message.Summary = output.Summary;", server);
     }
 
     [Fact]

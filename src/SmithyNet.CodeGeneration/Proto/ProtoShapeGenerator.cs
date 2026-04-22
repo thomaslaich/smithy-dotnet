@@ -197,8 +197,7 @@ public sealed class ProtoShapeGenerator
         var optionalKeyword = ShouldEmitProto3Optional(model, member) ? "optional " : string.Empty;
         var fieldType = FormatFieldType(model, member.Target, currentNamespace);
         var fieldNumber = GetFieldNumber(member, shape);
-        return
-            $"{optionalKeyword}{fieldType} {member.Name} = {fieldNumber.ToString(CultureInfo.InvariantCulture)}";
+        return $"{optionalKeyword}{fieldType} {member.Name} = {fieldNumber.ToString(CultureInfo.InvariantCulture)}";
     }
 
     private static int GetFieldNumber(MemberShape member, ModelShape shape)
@@ -247,7 +246,13 @@ public sealed class ProtoShapeGenerator
             return true;
         }
 
-        if (string.Equals(member.Target.Namespace, SmithyPrelude.Namespace, StringComparison.Ordinal))
+        if (
+            string.Equals(
+                member.Target.Namespace,
+                SmithyPrelude.Namespace,
+                StringComparison.Ordinal
+            )
+        )
         {
             return member.Target.Name
                 is "String"

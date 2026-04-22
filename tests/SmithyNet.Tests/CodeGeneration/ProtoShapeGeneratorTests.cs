@@ -173,7 +173,9 @@ public sealed class ProtoShapeGeneratorTests
             """
         );
 
-        var exception = Assert.Throws<SmithyException>(() => new ProtoShapeGenerator().Generate(model));
+        var exception = Assert.Throws<SmithyException>(() =>
+            new ProtoShapeGenerator().Generate(model)
+        );
         Assert.Contains("alloy.proto#protoIndex", exception.Message);
         Assert.Contains("example.weather#GetForecastInput$city", exception.Message);
     }
