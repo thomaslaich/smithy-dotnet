@@ -786,7 +786,7 @@ public sealed class CSharpShapeGeneratorTests
             server
         );
         Assert.Contains(
-          "public static IEndpointRouteBuilder MapWeatherServiceHttp(this IEndpointRouteBuilder endpoints)",
+            "public static IEndpointRouteBuilder MapWeatherServiceHttp(this IEndpointRouteBuilder endpoints)",
             server
         );
         Assert.Contains(
@@ -849,7 +849,7 @@ public sealed class CSharpShapeGeneratorTests
         Assert.Contains("public interface ISayHelloHandler", server);
         Assert.Contains("public interface IHelloServiceHandler : ISayHelloHandler", server);
         Assert.Contains(
-          "public static IEndpointRouteBuilder MapHelloServiceHttp(this IEndpointRouteBuilder endpoints)",
+            "public static IEndpointRouteBuilder MapHelloServiceHttp(this IEndpointRouteBuilder endpoints)",
             server
         );
         Assert.DoesNotContain("HelloServiceService", server);
@@ -974,40 +974,37 @@ public sealed class CSharpShapeGeneratorTests
         Assert.Contains("using Grpc.Core;", server);
         Assert.Contains("using Microsoft.AspNetCore.Builder;", server);
         Assert.Contains(
-          "public static IEndpointRouteBuilder MapHelloServiceGrpc(this IEndpointRouteBuilder endpoints)",
+            "public static IEndpointRouteBuilder MapHelloServiceGrpc(this IEndpointRouteBuilder endpoints)",
+            server
+        );
+        Assert.Contains("endpoints.MapGrpcService<HelloServiceGrpcAdapter>();", server);
+        Assert.Contains(
+            "public sealed class HelloServiceGrpcAdapter : global::Example.Hello.Grpc.Hello.HelloBase",
             server
         );
         Assert.Contains(
-          "endpoints.MapGrpcService<HelloServiceGrpcAdapter>();",
+            "public override async Task<global::Example.Hello.Grpc.SayHelloOutput> SayHello(",
             server
         );
         Assert.Contains(
-          "public sealed class HelloServiceGrpcAdapter : global::Example.Hello.Grpc.Hello.HelloBase",
+            "var output = await HelloServiceDescriptor.SayHello.InvokeAsync(_handler, new SayHelloInput(request.Name), context.CancellationToken).ConfigureAwait(false);",
             server
         );
         Assert.Contains(
-          "public override async Task<global::Example.Hello.Grpc.SayHelloOutput> SayHello(",
+            "return new global::Example.Hello.Grpc.SayHelloOutput { Message = output.Message };",
             server
         );
         Assert.Contains(
-          "var output = await HelloServiceDescriptor.SayHello.InvokeAsync(_handler, new SayHelloInput(request.Name), context.CancellationToken).ConfigureAwait(false);",
+            "public override async Task<global::Example.Hello.Grpc.PingOutput> Ping(",
             server
         );
         Assert.Contains(
-          "return new global::Example.Hello.Grpc.SayHelloOutput { Message = output.Message };",
-          server
-        );
-        Assert.Contains(
-          "public override async Task<global::Example.Hello.Grpc.PingOutput> Ping(",
-          server
-        );
-        Assert.Contains(
-          "await HelloServiceDescriptor.Ping.InvokeAsync(_handler, SmithyUnit.Value, context.CancellationToken).ConfigureAwait(false);",
+            "await HelloServiceDescriptor.Ping.InvokeAsync(_handler, SmithyUnit.Value, context.CancellationToken).ConfigureAwait(false);",
             server
         );
         Assert.DoesNotContain(
-          "public static IEndpointRouteBuilder MapHelloServiceHttp(this IEndpointRouteBuilder endpoints)",
-          server
+            "public static IEndpointRouteBuilder MapHelloServiceHttp(this IEndpointRouteBuilder endpoints)",
+            server
         );
     }
 

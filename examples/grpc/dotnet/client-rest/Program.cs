@@ -13,4 +13,3 @@ Console.WriteLine($"HTTP SayHello => {httpHello.Message} from {httpHello.From}")
 
 var httpPing = await httpClient.PingAsync(new PingInput(name));
 Console.WriteLine($"HTTP Ping => {httpPing.Message} from {httpPing.From}");
-
