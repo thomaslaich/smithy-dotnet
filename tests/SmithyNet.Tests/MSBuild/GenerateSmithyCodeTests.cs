@@ -624,6 +624,7 @@ public sealed class GenerateSmithyCodeTests
                 <Nullable>enable</Nullable>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <SmithyGenerateServer>false</SmithyGenerateServer>
                 <SmithyGeneratedOutputPath>obj/Smithy/</SmithyGeneratedOutputPath>
                 <SmithyGeneratedProtoOutputPath>obj/SmithyProto/</SmithyGeneratedProtoOutputPath>
                 <SmithyBuildOutputPath>obj/SmithyBuild/</SmithyBuildOutputPath>
