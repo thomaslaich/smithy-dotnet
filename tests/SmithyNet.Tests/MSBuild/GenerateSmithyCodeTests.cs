@@ -431,7 +431,10 @@ public sealed class GenerateSmithyCodeTests
         Assert.True(task.Execute());
 
         var generatedFiles = task.GeneratedFiles.Select(file => file.ItemSpec).ToArray();
-        var generatedProtoFiles = task.GeneratedProtoFiles.Select(file => file.ItemSpec).ToArray();
+        var generatedProtoFiles = task
+            .GeneratedFiles.Where(file => file.ItemSpec.Contains(".proto"))
+            .Select(file => file.ItemSpec)
+            .ToArray();
         var generatedProto = Assert.Single(
             generatedProtoFiles,
             path =>

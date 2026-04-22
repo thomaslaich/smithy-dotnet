@@ -294,15 +294,10 @@ public sealed class ProtoShapeGenerator
         }
 
         var shape = model.GetShape(target);
-        var collectionTarget =
-            shape.Target
-            ?? throw new NotSupportedException(
-                $"Collection shape '{shape.Id}' is missing its member target."
-            );
         return shape.Kind switch
         {
             ShapeKind.List or ShapeKind.Set =>
-                $"repeated {FormatFieldType(model, collectionTarget, currentNamespace)}",
+                $"repeated {FormatFieldType(model, shape.Members.TryGetValue("member", out var member) ? member.Target : throw new NotSupportedException($"Collection shape '{shape.Id}' is missing its member target."), currentNamespace)}",
             ShapeKind.Map =>
                 $"map<{FormatFieldType(model, shape.Members["key"].Target, currentNamespace)}, {FormatFieldType(model, shape.Members["value"].Target, currentNamespace)}>",
             ShapeKind.Structure or ShapeKind.Enum or ShapeKind.IntEnum => QualifyType(
