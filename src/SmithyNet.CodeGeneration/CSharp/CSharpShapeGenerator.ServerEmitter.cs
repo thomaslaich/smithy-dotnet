@@ -937,7 +937,8 @@ public sealed partial class CSharpShapeGenerator
             return $"new {typeName}()";
         }
 
-        return $"new {typeName}({string.Join(", ", members.Select(member => GetGrpcToSmithyValueExpression(model, member.Target, $"{sourceExpression}.{CSharpIdentifier.PropertyName(member.Name)}", currentNamespace, options)))})";
+        return
+            $"new {typeName}({string.Join(", ", members.Select(member => GetGrpcToSmithyConstructorArgument(model, shape, member, sourceExpression, currentNamespace, options)))})";
     }
 
     private static string GetSmithyToGrpcValueExpression(
@@ -1001,7 +1002,124 @@ public sealed partial class CSharpShapeGenerator
             return $"new {grpcType}()";
         }
 
-        return $"new {grpcType} {{ {string.Join(", ", members.Select(member => $"{CSharpIdentifier.PropertyName(member.Name)} = {GetSmithyToGrpcValueExpression(model, member.Target, $"{sourceExpression}.{CSharpIdentifier.PropertyName(member.Name)}", currentNamespace, options)}"))} }}";
+        var lines = new List<string> { $"var message = new {grpcType}();" };
+        foreach (var member in members)
+        {
+            lines.AddRange(
+                GetSmithyToGrpcMemberAssignments(
+                    model,
+                    shape,
+                    member,
+                    sourceExpression,
+                    currentNamespace,
+                    options
+                )
+            );
+        }
+
+        lines.Add("return message;");
+        return $"new Func<{grpcType}>(() => {{ {string.Join(" ", lines)} }})()";
+    }
+
+    private static string GetGrpcToSmithyConstructorArgument(
+        SmithyModel model,
+        ModelShape container,
+        MemberShape member,
+        string sourceExpression,
+        string currentNamespace,
+        CSharpGenerationOptions options
+    )
+    {
+        var propertyName = CSharpIdentifier.PropertyName(member.Name);
+        var memberAccess = $"{sourceExpression}.{propertyName}";
+        if (!HasGrpcPresenceSensitiveConstructorParameter(container, member, model, options))
+        {
+            return GetGrpcToSmithyValueExpression(
+                model,
+                member.Target,
+                memberAccess,
+                currentNamespace,
+                options
+            );
+        }
+
+        if (SupportsProto3OptionalPresence(model, member.Target))
+        {
+            return $"{sourceExpression}.Has{propertyName} ? {GetGrpcToSmithyValueExpression(model, member.Target, memberAccess, currentNamespace, options)} : null";
+        }
+
+        var targetShape = model.GetShape(member.Target);
+        if (targetShape.Kind == ShapeKind.Structure)
+        {
+            return $"{memberAccess} is null ? null : {GetGrpcToSmithyValueExpression(model, member.Target, memberAccess, currentNamespace, options)}";
+        }
+
+        return GetGrpcToSmithyValueExpression(
+            model,
+            member.Target,
+            memberAccess,
+            currentNamespace,
+            options
+        );
+    }
+
+    private static IEnumerable<string> GetSmithyToGrpcMemberAssignments(
+        SmithyModel model,
+        ModelShape container,
+        MemberShape member,
+        string sourceExpression,
+        string currentNamespace,
+        CSharpGenerationOptions options
+    )
+    {
+        var propertyName = CSharpIdentifier.PropertyName(member.Name);
+        var memberAccess = $"{sourceExpression}.{propertyName}";
+        var assignment =
+            $"message.{propertyName} = {GetSmithyToGrpcValueExpression(model, member.Target, memberAccess, currentNamespace, options)};";
+        if (!IsNullableMember(container, member, options))
+        {
+            return [assignment];
+        }
+
+        return
+        [
+            $"if ({memberAccess} is not null)",
+            "{",
+            assignment,
+            "}",
+        ];
+    }
+
+    private static bool HasGrpcPresenceSensitiveConstructorParameter(
+        ModelShape container,
+        MemberShape member,
+        SmithyModel model,
+        CSharpGenerationOptions options
+    )
+    {
+        _ = model;
+        return IsNullableMember(container, member, options)
+            || GetEffectiveDefaultValue(container, member, options) is not null;
+    }
+
+    private static bool SupportsProto3OptionalPresence(SmithyModel model, ShapeId target)
+    {
+        if (target.Namespace == SmithyPrelude.Namespace)
+        {
+            return target.Name
+                is "String"
+                    or "Boolean"
+                    or "Blob"
+                    or "Byte"
+                    or "Short"
+                    or "Integer"
+                    or "Long"
+                    or "Float"
+                    or "Double";
+        }
+
+        var shape = model.GetShape(target);
+        return shape.Kind is ShapeKind.Enum or ShapeKind.IntEnum;
     }
 }
 

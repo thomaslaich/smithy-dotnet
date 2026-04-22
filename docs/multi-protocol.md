@@ -25,6 +25,7 @@ namespace example.hello
 
 use alloy#simpleRestJson
 use alloy.proto#grpc
+use alloy.proto#protoIndex
 
 @simpleRestJson
 @grpc
@@ -32,12 +33,23 @@ service HelloService {
     version: "2026-04-21"
     operations: [SayHello, Ping]
 }
+
+@http(method: "GET", uri: "/hello/{name}")
+operation SayHello {
+    input := {
+        @required
+        @protoIndex(1)
+        @httpLabel
+        name: String
+    }
+}
 ```
 
 In the current preview:
 
 - `alloy#simpleRestJson` generates the HTTP client/server surfaces
 - `alloy.proto#grpc` generates `.proto` files that flow into `Grpc.Tools`
+- gRPC-exposed members currently need explicit `alloy.proto#protoIndex` traits
 - both transports still share the same Smithy-generated shapes, descriptors,
   and handler interfaces
 
@@ -104,25 +116,23 @@ the example uses:
 The same modeled service can also produce two client surfaces:
 
 - a generated Smithy HTTP client
-- a generated gRPC client from the emitted `.proto`
+- a generated Smithy-shaped gRPC adapter over the emitted `.proto`
 
 Example:
 
 ```csharp
 using Example.Hello;
 using Grpc.Net.Client;
-using SmithyNet.Client;
-using GrpcHello = Example.Hello.Grpc;
 
-var httpClient = new HelloServiceClient(
+IHelloServiceClient httpClient = new HelloServiceClient(
     new HttpClient(),
     new SmithyClientOptions { Endpoint = new Uri("http://localhost:5000") });
 
 var httpHello = await httpClient.SayHelloAsync(new SayHelloInput("world"));
 
 using var channel = GrpcChannel.ForAddress("http://localhost:5001");
-var grpcClient = new GrpcHello.HelloService.HelloServiceClient(channel);
-var grpcHello = await grpcClient.SayHelloAsync(new GrpcHello.SayHelloInput { Name = "world" });
+IHelloServiceClient grpcClient = new HelloServiceGrpcClient(channel);
+var grpcHello = await grpcClient.SayHelloAsync(new SayHelloInput("world"));
 ```
 
 Both clients call the same service semantics through different transports.

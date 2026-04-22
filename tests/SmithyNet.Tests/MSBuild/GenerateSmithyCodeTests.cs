@@ -384,6 +384,9 @@ public sealed class GenerateSmithyCodeTests
 
             @trait(selector: "service")
             structure grpc {}
+
+            @trait(selector: "member")
+            integer protoIndex
             """
         );
 
@@ -395,6 +398,7 @@ public sealed class GenerateSmithyCodeTests
             namespace example.weather
 
             use alloy.proto#grpc
+            use alloy.proto#protoIndex
 
             @grpc
             service Weather {
@@ -403,9 +407,11 @@ public sealed class GenerateSmithyCodeTests
 
             operation GetForecast {
                 input := {
+                    @protoIndex(1)
                     city: String
                 }
                 output := {
+                    @protoIndex(1)
                     summary: String
                 }
             }
@@ -589,6 +595,9 @@ public sealed class GenerateSmithyCodeTests
 
             @trait(selector: "service")
             structure grpc {}
+
+            @trait(selector: "member")
+            integer protoIndex
             """
         );
         File.WriteAllText(
@@ -599,6 +608,7 @@ public sealed class GenerateSmithyCodeTests
             namespace example.weather
 
             use alloy.proto#grpc
+            use alloy.proto#protoIndex
 
             @grpc
             service Weather {
@@ -607,9 +617,11 @@ public sealed class GenerateSmithyCodeTests
 
             operation GetForecast {
                 input := {
+                    @protoIndex(1)
                     city: String
                 }
                 output := {
+                    @protoIndex(1)
                     summary: String
                 }
             }
@@ -624,6 +636,7 @@ public sealed class GenerateSmithyCodeTests
                 <Nullable>enable</Nullable>
                 <ImplicitUsings>enable</ImplicitUsings>
                 <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <SmithyGenerateClient>false</SmithyGenerateClient>
                 <SmithyGenerateServer>false</SmithyGenerateServer>
                 <SmithyGeneratedOutputPath>obj/Smithy/</SmithyGeneratedOutputPath>
                 <SmithyGeneratedProtoOutputPath>obj/SmithyProto/</SmithyGeneratedProtoOutputPath>

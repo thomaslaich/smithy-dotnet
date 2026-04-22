@@ -177,13 +177,28 @@ public sealed class ProtoShapeGenerator
             .Members.Values.OrderBy(member => GetFieldNumber(member, shape), Comparer<int>.Default)
             .ThenBy(member => member.Name, StringComparer.Ordinal)
             .ToArray();
+        ValidateFieldNumbers(members, shape);
         foreach (var member in members)
         {
             builder.AppendLine(
-                $"  {FormatFieldType(model, member.Target, currentNamespace)} {member.Name} = {GetFieldNumber(member, shape).ToString(CultureInfo.InvariantCulture)};"
+                $"  {FormatFieldDeclaration(model, shape, member, currentNamespace)};"
             );
         }
         builder.AppendLine("}");
+    }
+
+    private static string FormatFieldDeclaration(
+        SmithyModel model,
+        ModelShape shape,
+        MemberShape member,
+        string currentNamespace
+    )
+    {
+        var optionalKeyword = ShouldEmitProto3Optional(model, member) ? "optional " : string.Empty;
+        var fieldType = FormatFieldType(model, member.Target, currentNamespace);
+        var fieldNumber = GetFieldNumber(member, shape);
+        return
+            $"{optionalKeyword}{fieldType} {member.Name} = {fieldNumber.ToString(CultureInfo.InvariantCulture)}";
     }
 
     private static int GetFieldNumber(MemberShape member, ModelShape shape)
@@ -193,10 +208,61 @@ public sealed class ProtoShapeGenerator
             return (int)value.AsNumber();
         }
 
-        var orderedMembers = shape
-            .Members.Values.OrderBy(candidate => candidate.Name, StringComparer.Ordinal)
-            .ToArray();
-        return Array.FindIndex(orderedMembers, candidate => candidate == member) + 1;
+        throw new SmithyException(
+            $"Proto generation requires alloy.proto#protoIndex on member '{member.Id}' to preserve stable field numbers."
+        );
+    }
+
+    private static void ValidateFieldNumbers(IReadOnlyList<MemberShape> members, ModelShape shape)
+    {
+        var fieldNumbers = new HashSet<int>();
+        foreach (var member in members)
+        {
+            var fieldNumber = GetFieldNumber(member, shape);
+            if (fieldNumber <= 0)
+            {
+                throw new SmithyException(
+                    $"Proto generation requires a positive alloy.proto#protoIndex on member '{member.Id}'."
+                );
+            }
+
+            if (!fieldNumbers.Add(fieldNumber))
+            {
+                throw new SmithyException(
+                    $"Proto generation found duplicate alloy.proto#protoIndex value '{fieldNumber}' in shape '{shape.Id}'."
+                );
+            }
+        }
+    }
+
+    private static bool ShouldEmitProto3Optional(SmithyModel model, MemberShape member)
+    {
+        if (member.IsRequired)
+        {
+            return false;
+        }
+
+        if (member.DefaultValue is not null)
+        {
+            return true;
+        }
+
+        if (string.Equals(member.Target.Namespace, SmithyPrelude.Namespace, StringComparison.Ordinal))
+        {
+            return member.Target.Name
+                is "String"
+                    or "Boolean"
+                    or "Blob"
+                    or "Byte"
+                    or "Short"
+                    or "Integer"
+                    or "Long"
+                    or "Float"
+                    or "Double";
+        }
+
+        var shape = model.GetShape(member.Target);
+        return shape.Kind is ShapeKind.Enum or ShapeKind.IntEnum;
     }
 
     private static string FormatFieldType(

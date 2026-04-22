@@ -56,6 +56,7 @@ public sealed partial class CSharpShapeGenerator
             && (
                 shape.Traits.Has(SmithyPrelude.RestJson1Trait)
                 || shape.Traits.Has(SmithyPrelude.SimpleRestJsonTrait)
+                || shape.Traits.Has(SmithyPrelude.GrpcTrait)
             );
     }
 

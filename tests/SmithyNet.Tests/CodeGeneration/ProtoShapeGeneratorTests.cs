@@ -1,6 +1,7 @@
 using SmithyNet.CodeGeneration;
 using SmithyNet.CodeGeneration.Model;
 using SmithyNet.CodeGeneration.Proto;
+using SmithyNet.Core;
 using SmithyNet.Tests.Assertions;
 
 namespace SmithyNet.Tests.CodeGeneration;
@@ -37,10 +38,16 @@ public sealed class ProtoShapeGeneratorTests
                   "type": "structure",
                   "members": {
                     "city": {
-                      "target": "smithy.api#String"
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "alloy.proto#protoIndex": 1
+                      }
                     },
                     "days": {
-                      "target": "smithy.api#Integer"
+                      "target": "smithy.api#Integer",
+                      "traits": {
+                        "alloy.proto#protoIndex": 2
+                      }
                     }
                   }
                 },
@@ -48,7 +55,10 @@ public sealed class ProtoShapeGeneratorTests
                   "type": "structure",
                   "members": {
                     "summary": {
-                      "target": "smithy.api#String"
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "alloy.proto#protoIndex": 1
+                      }
                     }
                   }
                 }
@@ -68,12 +78,12 @@ public sealed class ProtoShapeGeneratorTests
             package example.weather;
 
             message GetForecastInput {
-              string city = 1;
-              int32 days = 2;
+              optional string city = 1;
+              optional int32 days = 2;
             }
 
             message GetForecastOutput {
-              string summary = 1;
+              optional string summary = 1;
             }
 
             service Weather {
@@ -125,5 +135,46 @@ public sealed class ProtoShapeGeneratorTests
             """,
             file.Contents
         );
+    }
+
+    [Fact]
+    public void GenerateRequiresExplicitProtoFieldNumbersForMessageMembers()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "alloy.proto#grpc": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var exception = Assert.Throws<SmithyException>(() => new ProtoShapeGenerator().Generate(model));
+        Assert.Contains("alloy.proto#protoIndex", exception.Message);
+        Assert.Contains("example.weather#GetForecastInput$city", exception.Message);
     }
 }

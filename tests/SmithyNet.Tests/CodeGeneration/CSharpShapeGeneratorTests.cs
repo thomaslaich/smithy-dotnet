@@ -674,6 +674,78 @@ public sealed class CSharpShapeGeneratorTests
     }
 
     [Fact]
+    public void GenerateClientEmitsGrpcAdapterImplementingSharedClientInterface()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "alloy.proto#grpc": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var client = new CSharpShapeGenerator()
+            .Generate(model)
+            .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
+            .Contents;
+
+        Assert.Contains("public interface IWeatherClient", client);
+        Assert.Contains("public sealed class WeatherGrpcClient : IWeatherClient", client);
+        Assert.Contains("public WeatherGrpcClient(ChannelBase channel)", client);
+        Assert.Contains(
+            "private readonly global::Example.Weather.Grpc.Weather.WeatherClient client;",
+            client
+        );
+        Assert.Contains(
+            "var response = await client.GetForecastAsync(request, cancellationToken: cancellationToken).ResponseAsync.ConfigureAwait(false);",
+            client
+        );
+        Assert.Contains("return new GetForecastOutput(response.Summary);", client);
+    }
+
+    [Fact]
     public void GenerateServerEmitsHandlerInterfaceForSimpleRestJsonService()
     {
         var model = SmithyJsonAstReader.Read(
@@ -991,7 +1063,11 @@ public sealed class CSharpShapeGeneratorTests
             server
         );
         Assert.Contains(
-            "return new global::Example.Hello.Grpc.SayHelloOutput { Message = output.Message };",
+            "new Func<global::Example.Hello.Grpc.SayHelloOutput>(() =>",
+            server
+        );
+        Assert.Contains(
+            "message.Message = output.Message;",
             server
         );
         Assert.Contains(
@@ -1004,6 +1080,78 @@ public sealed class CSharpShapeGeneratorTests
         );
         Assert.DoesNotContain(
             "public static IEndpointRouteBuilder MapHelloServiceHttp(this IEndpointRouteBuilder endpoints)",
+            server
+        );
+    }
+
+    [Fact]
+    public void GenerateServerPreservesGrpcScalarPresenceForOptionalMembers()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "alloy.proto#grpc": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    },
+                    "days": {
+                      "target": "smithy.api#Integer"
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var files = new CSharpShapeGenerator()
+            .Generate(model)
+            .ToDictionary(file => file.Path, file => file.Contents);
+
+        var server = files["Example/Weather/WeatherServer.g.cs"];
+        Assert.Contains(
+            "new GetForecastInput(request.City, request.HasDays ? request.Days : null)",
+            server
+        );
+        Assert.Contains(
+            "if (output.Summary is not null)",
+            server
+        );
+        Assert.Contains(
+            "message.Summary = output.Summary;",
             server
         );
     }

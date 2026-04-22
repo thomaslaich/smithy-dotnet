@@ -4,6 +4,7 @@ namespace example.hello
 
 use alloy#simpleRestJson
 use alloy.proto#grpc
+use alloy.proto#protoIndex
 
 @simpleRestJson
 @grpc
@@ -17,16 +18,19 @@ service HelloService {
 operation SayHello {
     input := {
         @required
+        @protoIndex(1)
         @httpLabel
         name: String
     }
 
     output := {
         @required
+        @protoIndex(1)
         @httpHeader("x-smithy-service")
         from: String
 
         @required
+        @protoIndex(2)
         message: String
     }
 }
@@ -35,15 +39,18 @@ operation SayHello {
 operation Ping {
     input := {
         @required
+        @protoIndex(1)
         name: String
     }
 
     output := {
         @required
+        @protoIndex(1)
         @httpHeader("x-smithy-service")
         from: String
 
         @required
+        @protoIndex(2)
         message: String
     }
 }
