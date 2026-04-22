@@ -35,8 +35,12 @@
     <_SmithyGeneratorInput Include="$(MSBuildThisFileDirectory)../tasks/SmithyNet.CodeGeneration.dll" />
     <_SmithyGeneratorInput Include="$(MSBuildThisFileDirectory)../tasks/SmithyNet.Core.dll" />
     <_SmithyProjectModelInput
-      Include="$(MSBuildProjectDirectory)/**/*.smithy;$(MSBuildProjectDirectory)/**/*.json"
+      Include="$(MSBuildProjectDirectory)/**/*.smithy"
       Exclude="$(MSBuildProjectDirectory)/obj/**;$(MSBuildProjectDirectory)/bin/**;$(SmithyGeneratedOutputPath)**;$(SmithyGeneratedProtoOutputPath)**;$(SmithyBuildOutputPath)**"
+    />
+    <_SmithyProjectModelInput
+      Include="$(SmithyBuildFile)"
+      Condition="Exists('$(SmithyBuildFile)')"
     />
     <!-- Ensure dotnet watch rebuilds when smithy model files change -->
     <Watch Include="$(SmithyBuildFile)" />
@@ -62,10 +66,6 @@
     Inputs="@(SmithyModel);@(_SmithyProjectModelInput);@(_SmithyDependencyInput);@(_SmithyGeneratorInput)"
     Outputs="$(SmithyGeneratedOutputPath)SmithyNet.Generated.stamp"
   >
-    <ItemGroup>
-      <_SmithyExistingGeneratedCompile Include="$(SmithyGeneratedOutputPath)**/*.g.cs" />
-    </ItemGroup>
-
     <GenerateSmithyCode
       WorkingDirectory="$(MSBuildProjectDirectory)"
       BuildFile="$(SmithyBuildFile)"
@@ -82,7 +82,6 @@
       SmithyModel="@(SmithyModel)"
     >
       <Output TaskParameter="GeneratedFiles" ItemName="_SmithyGeneratedFiles" />
-      <Output TaskParameter="GeneratedProtoFiles" ItemName="_SmithyGeneratedProto" />
     </GenerateSmithyCode>
 
     <ItemGroup>
@@ -104,7 +103,6 @@
   >
     <ItemGroup>
       <Compile Remove="$(SmithyGeneratedOutputPath)**/*.g.cs" />
-      <Compile Remove="@(_SmithyExistingGeneratedCompile)" />
       <_SmithyExcludedGeneratedCompile
         Include="$(SmithyGeneratedOutputPath)**/*Client.g.cs"
         Condition="'$(SmithyGenerateClient)' != 'true'"

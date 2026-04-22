@@ -25,17 +25,20 @@ refresh-examples:
     dotnet clean examples/simple-rest-json/dotnet/server/SmithyNet.Examples.SimpleRestJson.Server.csproj --verbosity minimal
     dotnet clean examples/simple-rest-json/dotnet/client/SmithyNet.Examples.SimpleRestJson.Client.csproj --verbosity minimal
     dotnet clean examples/grpc/dotnet/server/SmithyNet.Examples.Grpc.Server.csproj --verbosity minimal
-    dotnet clean examples/grpc/dotnet/client/SmithyNet.Examples.Grpc.Client.csproj --verbosity minimal
+    dotnet clean examples/grpc/dotnet/client-rest/SmithyNet.Examples.Grpc.ClientRest.csproj --verbosity minimal
+    dotnet clean examples/grpc/dotnet/client-grpc/SmithyNet.Examples.Grpc.ClientGrpc.csproj --verbosity minimal
     dotnet clean examples/polyglot/dotnet/SmithyNet.Polyglot.DotNet.Client.csproj --verbosity minimal
     rm -rf examples/simple-rest-json/dotnet/server/obj
     rm -rf examples/simple-rest-json/dotnet/client/obj
     rm -rf examples/grpc/dotnet/server/obj
-    rm -rf examples/grpc/dotnet/client/obj
+    rm -rf examples/grpc/dotnet/client-rest/obj
+    rm -rf examples/grpc/dotnet/client-grpc/obj
     rm -rf examples/polyglot/dotnet/obj
     dotnet restore examples/simple-rest-json/dotnet/server/SmithyNet.Examples.SimpleRestJson.Server.csproj --no-cache --force
     dotnet restore examples/simple-rest-json/dotnet/client/SmithyNet.Examples.SimpleRestJson.Client.csproj --no-cache --force
     dotnet restore examples/grpc/dotnet/server/SmithyNet.Examples.Grpc.Server.csproj --no-cache --force
-    dotnet restore examples/grpc/dotnet/client/SmithyNet.Examples.Grpc.Client.csproj --no-cache --force
+    dotnet restore examples/grpc/dotnet/client-rest/SmithyNet.Examples.Grpc.ClientRest.csproj --no-cache --force
+    dotnet restore examples/grpc/dotnet/client-grpc/SmithyNet.Examples.Grpc.ClientGrpc.csproj --no-cache --force
     dotnet restore examples/polyglot/dotnet/SmithyNet.Polyglot.DotNet.Client.csproj --no-cache --force
 
 ci: restore check-format build test pack
