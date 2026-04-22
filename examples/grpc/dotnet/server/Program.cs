@@ -34,7 +34,7 @@ app.Run();
 
 internal sealed class HelloHandler : IHelloServiceHandler
 {
-    private const string ServiceName = "smithy-net-grpc-server";
+    private const string ServiceName = "smithy-net-server";
 
     public Task<SayHelloOutput> SayHelloAsync(
         SayHelloInput input,
