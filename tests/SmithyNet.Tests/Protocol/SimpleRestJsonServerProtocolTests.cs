@@ -319,7 +319,7 @@ public sealed class SimpleRestJsonServerProtocolTests
             builder.Services.AddWeatherServiceHandler<Handler>();
 
             await using var app = builder.Build();
-            app.MapWeatherService();
+            app.MapWeatherServiceHttp();
             await app.StartAsync();
 
             using var client = new HttpClient

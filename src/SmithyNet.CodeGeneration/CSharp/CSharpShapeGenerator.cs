@@ -56,6 +56,7 @@ public sealed partial class CSharpShapeGenerator
             && (
                 shape.Traits.Has(SmithyPrelude.RestJson1Trait)
                 || shape.Traits.Has(SmithyPrelude.SimpleRestJsonTrait)
+                || shape.Traits.Has(SmithyPrelude.GrpcTrait)
             );
     }
 
@@ -63,7 +64,10 @@ public sealed partial class CSharpShapeGenerator
     {
         return ShouldGenerateNamespace(shape, options)
             && shape.Kind == ShapeKind.Service
-            && shape.Traits.Has(SmithyPrelude.SimpleRestJsonTrait);
+            && (
+                shape.Traits.Has(SmithyPrelude.SimpleRestJsonTrait)
+                || shape.Traits.Has(SmithyPrelude.GrpcTrait)
+            );
     }
 
     private static bool ShouldGenerateNamespace(ModelShape shape, CSharpGenerationOptions options)

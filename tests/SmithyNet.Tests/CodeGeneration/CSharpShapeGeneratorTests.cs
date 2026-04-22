@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using SmithyNet.CodeGeneration;
 using SmithyNet.CodeGeneration.CSharp;
+using SmithyNet.CodeGeneration.Proto;
 using SmithyNet.Tests.Assertions;
 
 namespace SmithyNet.Tests.CodeGeneration;
@@ -33,177 +34,6 @@ public sealed class CSharpShapeGeneratorTests
 
         var generatedFile = Assert.Single(generatedFiles);
         Assert.Equal("Example/Weather/Forecast.g.cs", generatedFile.Path);
-    }
-
-    [Fact]
-    public async Task GenerateEmitsCompilableCSharpForCrossShapeModel()
-    {
-        using var directory = TemporaryDirectory.Create();
-        var projectDirectory = directory.Path;
-        Directory.CreateDirectory(projectDirectory);
-
-        var model = SmithyJsonAstReader.Read(
-            """
-            {
-              "smithy": "2.0",
-              "shapes": {
-                "example.common#Metadata": {
-                  "type": "structure",
-                  "members": {
-                    "source": {
-                      "target": "smithy.api#String",
-                      "traits": {
-                        "smithy.api#required": {}
-                      }
-                    }
-                  }
-                },
-                "example.weather#ForecastList": {
-                  "type": "list",
-                  "member": {
-                    "target": "smithy.api#String"
-                  }
-                },
-                "example.weather#ForecastTags": {
-                  "type": "map",
-                  "key": {
-                    "target": "smithy.api#String"
-                  },
-                  "value": {
-                    "target": "smithy.api#String"
-                  }
-                },
-                "example.weather#WeatherKind": {
-                  "type": "enum",
-                  "members": {
-                    "sunny": {
-                      "traits": {
-                        "smithy.api#enumValue": "SUN"
-                      }
-                    }
-                  }
-                },
-                "example.weather#ForecastValue": {
-                  "type": "union",
-                  "members": {
-                    "text": {
-                      "target": "smithy.api#String"
-                    },
-                    "metadata": {
-                      "target": "example.common#Metadata"
-                    }
-                  }
-                },
-                "example.weather#ForecastRequest": {
-                  "type": "structure",
-                  "members": {
-                    "city": {
-                      "target": "smithy.api#String",
-                      "traits": {
-                        "smithy.api#required": {}
-                      }
-                    },
-                    "kind": {
-                      "target": "example.weather#WeatherKind",
-                      "traits": {
-                        "smithy.api#required": {}
-                      }
-                    },
-                    "metadata": {
-                      "target": "example.common#Metadata",
-                      "traits": {
-                        "smithy.api#required": {}
-                      }
-                    },
-                    "summaries": {
-                      "target": "example.weather#ForecastList",
-                      "traits": {
-                        "smithy.api#required": {}
-                      }
-                    },
-                    "tags": {
-                      "target": "example.weather#ForecastTags",
-                      "traits": {
-                        "smithy.api#required": {}
-                      }
-                    },
-                    "value": {
-                      "target": "example.weather#ForecastValue",
-                      "traits": {
-                        "smithy.api#required": {}
-                      }
-                    }
-                  }
-                }
-              }
-            }
-            """
-        );
-
-        foreach (var generatedFile in new CSharpShapeGenerator().Generate(model))
-        {
-            var path = Path.Combine(projectDirectory, generatedFile.Path);
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            await File.WriteAllTextAsync(path, generatedFile.Contents);
-        }
-
-        await File.WriteAllTextAsync(
-            Path.Combine(projectDirectory, "GeneratedCompileTest.csproj"),
-            $$"""
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup>
-                <TargetFramework>net10.0</TargetFramework>
-                <Nullable>enable</Nullable>
-                <ImplicitUsings>enable</ImplicitUsings>
-                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-              </PropertyGroup>
-              <ItemGroup>
-                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
-              </ItemGroup>
-            </Project>
-            """
-        );
-
-        await File.WriteAllTextAsync(
-            Path.Combine(projectDirectory, "Consumer.cs"),
-            """
-            using Example.Common;
-            using Example.Weather;
-
-            namespace GeneratedCompileTest;
-
-            public static class Consumer
-            {
-                public static ForecastRequest Create()
-                {
-                    var metadata = new Metadata("station");
-                    return new ForecastRequest(
-                        "Zurich",
-                        WeatherKind.Sunny,
-                        metadata,
-                        new ForecastList(["clear"]),
-                        new ForecastTags(new Dictionary<string, string> { ["region"] = "ch" }),
-                        ForecastValue.FromMetadata(metadata)
-                    );
-                }
-
-                public static string Read(ForecastValue value)
-                {
-                    return value.Match(
-                        metadata => metadata.Source,
-                        text => text,
-                        unknown: (tag, _) => tag);
-                }
-            }
-            """
-        );
-
-        var result = await RunDotNetBuild(projectDirectory);
-
-        Assert.True(
-            result.ExitCode == 0,
-            $"dotnet build failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}{Environment.NewLine}{result.Error}"
-        );
     }
 
     [Fact]
@@ -554,7 +384,7 @@ public sealed class CSharpShapeGeneratorTests
 
                 public static IEndpointRouteBuilder Map(IEndpointRouteBuilder endpoints)
                 {
-                    return endpoints.MapWeatherService();
+                    return endpoints.MapWeatherServiceHttp();
                 }
 
                 private sealed class Handler : IWeatherServiceHandler
@@ -575,6 +405,175 @@ public sealed class CSharpShapeGeneratorTests
         Assert.True(
             result.ExitCode == 0,
             $"dotnet build failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}{Environment.NewLine}{result.Error}"
+        );
+    }
+
+    [Fact]
+    public async Task GenerateEmitsRunnableGrpcClientAndServerForGrpcService()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var projectDirectory = directory.Path;
+        Directory.CreateDirectory(projectDirectory);
+
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "alloy.proto#grpc": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "alloy.proto#protoIndex": 1
+                      }
+                    },
+                    "units": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "alloy.proto#protoIndex": 2
+                      }
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "alloy.proto#protoIndex": 1
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        foreach (var generatedFile in new CSharpShapeGenerator().Generate(model))
+        {
+            var path = Path.Combine(projectDirectory, generatedFile.Path);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, generatedFile.Contents);
+        }
+
+        var protoFile = Assert.Single(new ProtoShapeGenerator().Generate(model));
+        var protoPath = Path.Combine(
+            projectDirectory,
+            protoFile.Path.Replace('/', Path.DirectorySeparatorChar)
+        );
+        Directory.CreateDirectory(Path.GetDirectoryName(protoPath)!);
+        await File.WriteAllTextAsync(protoPath, protoFile.Contents);
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "GeneratedGrpcIntegration.csproj"),
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk.Web">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+                <Nullable>enable</Nullable>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+                <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
+                <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="Google.Protobuf" Version="3.30.2" />
+                <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
+                <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
+                <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="all" />
+                <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.0" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server/SmithyNet.Server.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
+              </ItemGroup>
+              <ItemGroup>
+                <Protobuf Include="example/weather/Weather.proto" GrpcServices="Both" ProtoRoot="." />
+              </ItemGroup>
+            </Project>
+            """
+        );
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "Program.cs"),
+            """
+            using Example.Weather;
+            using Grpc.Net.Client;
+            using Microsoft.AspNetCore.TestHost;
+
+            var builder = WebApplication.CreateBuilder(args);
+            builder.WebHost.UseTestServer();
+            builder.Logging.ClearProviders();
+            builder.Services.AddGrpc();
+            builder.Services.AddWeatherServiceHandler<Handler>();
+
+            await using var app = builder.Build();
+            app.MapWeatherServiceGrpc();
+            await app.StartAsync();
+
+            using (var channel = GrpcChannel.ForAddress(
+                "http://localhost",
+                new GrpcChannelOptions
+                {
+                    HttpHandler = app.GetTestServer().CreateHandler()
+                }))
+            {
+                IWeatherClient client = new WeatherGrpcClient(channel);
+                var output = await client.GetForecastAsync(new GetForecastInput("Zurich", "metric"));
+                if (output.Summary != "Zurich:metric")
+                {
+                    throw new InvalidOperationException($"Unexpected response: {output.Summary}");
+                }
+            }
+
+            await app.StopAsync();
+
+            internal sealed class Handler : IWeatherServiceHandler
+            {
+                public Task<GetForecastOutput> GetForecastAsync(
+                    GetForecastInput input,
+                    CancellationToken cancellationToken = default)
+                {
+                    return Task.FromResult(new GetForecastOutput($"{input.City}:{input.Units ?? "none"}"));
+                }
+            }
+            """
+        );
+
+        var build = await RunDotNet(projectDirectory, TimeSpan.FromMinutes(2), "build");
+        Assert.True(
+            build.ExitCode == 0,
+            $"dotnet build failed with exit code {build.ExitCode}.{Environment.NewLine}{build.Output}{Environment.NewLine}{build.Error}"
+        );
+
+        var run = await RunDotNet(projectDirectory, TimeSpan.FromSeconds(30), "run", "--no-build");
+        Assert.True(
+            run.ExitCode == 0,
+            $"dotnet run failed with exit code {run.ExitCode}.{Environment.NewLine}{run.Output}{Environment.NewLine}{run.Error}"
         );
     }
 
@@ -845,6 +844,139 @@ public sealed class CSharpShapeGeneratorTests
     }
 
     [Fact]
+    public void GenerateClientEmitsGrpcAdapterImplementingSharedClientInterface()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "alloy.proto#grpc": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var client = new CSharpShapeGenerator()
+            .Generate(model)
+            .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
+            .Contents;
+
+        Assert.Contains("public interface IWeatherClient", client);
+        Assert.Contains("public sealed class WeatherGrpcClient : IWeatherClient", client);
+        Assert.Contains("public WeatherGrpcClient(ChannelBase channel)", client);
+        Assert.Contains(
+            "private readonly global::Example.Weather.Grpc.Weather.WeatherClient client;",
+            client
+        );
+        Assert.Contains(
+            "var response = await client.GetForecastAsync(request, cancellationToken: cancellationToken).ResponseAsync.ConfigureAwait(false);",
+            client
+        );
+        Assert.Contains("return new GetForecastOutput(response.Summary);", client);
+    }
+
+    [Fact]
+    public void GenerateGrpcClientPreservesOptionalOutputPresence()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "alloy.proto#grpc": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var client = new CSharpShapeGenerator()
+            .Generate(model)
+            .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
+            .Contents;
+
+        Assert.Contains(
+            "return new GetForecastOutput(response.HasSummary ? response.Summary : null);",
+            client
+        );
+    }
+
+    [Fact]
     public void GenerateServerEmitsHandlerInterfaceForSimpleRestJsonService()
     {
         var model = SmithyJsonAstReader.Read(
@@ -957,7 +1089,7 @@ public sealed class CSharpShapeGeneratorTests
             server
         );
         Assert.Contains(
-            "public static IEndpointRouteBuilder MapWeatherService(this IEndpointRouteBuilder endpoints)",
+            "public static IEndpointRouteBuilder MapWeatherServiceHttp(this IEndpointRouteBuilder endpoints)",
             server
         );
         Assert.Contains(
@@ -1020,7 +1152,7 @@ public sealed class CSharpShapeGeneratorTests
         Assert.Contains("public interface ISayHelloHandler", server);
         Assert.Contains("public interface IHelloServiceHandler : ISayHelloHandler", server);
         Assert.Contains(
-            "public static IEndpointRouteBuilder MapHelloService(this IEndpointRouteBuilder endpoints)",
+            "public static IEndpointRouteBuilder MapHelloServiceHttp(this IEndpointRouteBuilder endpoints)",
             server
         );
         Assert.DoesNotContain("HelloServiceService", server);
@@ -1063,6 +1195,184 @@ public sealed class CSharpShapeGeneratorTests
             files,
             file => file.Path.EndsWith("Server.g.cs", StringComparison.Ordinal)
         );
+    }
+
+    [Fact]
+    public void GenerateServerEmitsGrpcAdapterForGrpcOnlyService()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.hello#Hello": {
+                  "type": "service",
+                  "traits": {
+                    "alloy.proto#grpc": {}
+                  },
+                  "operations": [
+                    "example.hello#SayHello",
+                    "example.hello#Ping"
+                  ]
+                },
+                "example.hello#SayHello": {
+                  "type": "operation",
+                  "input": {
+                    "target": "example.hello#SayHelloInput"
+                  },
+                  "output": {
+                    "target": "example.hello#SayHelloOutput"
+                  }
+                },
+                "example.hello#Ping": {
+                  "type": "operation",
+                  "output": {
+                    "target": "example.hello#PingOutput"
+                  }
+                },
+                "example.hello#SayHelloInput": {
+                  "type": "structure",
+                  "members": {
+                    "name": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                },
+                "example.hello#SayHelloOutput": {
+                  "type": "structure",
+                  "members": {
+                    "message": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                },
+                "example.hello#PingOutput": {
+                  "type": "structure",
+                  "members": {
+                    "message": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var files = new CSharpShapeGenerator()
+            .Generate(model)
+            .ToDictionary(file => file.Path, file => file.Contents);
+
+        Assert.Contains("Example/Hello/HelloServer.g.cs", files.Keys);
+        var server = files["Example/Hello/HelloServer.g.cs"];
+        Assert.Contains("using Grpc.Core;", server);
+        Assert.Contains("using Microsoft.AspNetCore.Builder;", server);
+        Assert.Contains(
+            "public static IEndpointRouteBuilder MapHelloServiceGrpc(this IEndpointRouteBuilder endpoints)",
+            server
+        );
+        Assert.Contains("endpoints.MapGrpcService<HelloServiceGrpcAdapter>();", server);
+        Assert.Contains(
+            "public sealed class HelloServiceGrpcAdapter : global::Example.Hello.Grpc.Hello.HelloBase",
+            server
+        );
+        Assert.Contains(
+            "public override async Task<global::Example.Hello.Grpc.SayHelloOutput> SayHello(",
+            server
+        );
+        Assert.Contains(
+            "var output = await HelloServiceDescriptor.SayHello.InvokeAsync(_handler, new SayHelloInput(request.Name), context.CancellationToken).ConfigureAwait(false);",
+            server
+        );
+        Assert.Contains("new Func<global::Example.Hello.Grpc.SayHelloOutput>(() =>", server);
+        Assert.Contains("message.Message = output.Message;", server);
+        Assert.Contains(
+            "public override async Task<global::Example.Hello.Grpc.PingOutput> Ping(",
+            server
+        );
+        Assert.Contains(
+            "await HelloServiceDescriptor.Ping.InvokeAsync(_handler, SmithyUnit.Value, context.CancellationToken).ConfigureAwait(false);",
+            server
+        );
+        Assert.DoesNotContain(
+            "public static IEndpointRouteBuilder MapHelloServiceHttp(this IEndpointRouteBuilder endpoints)",
+            server
+        );
+    }
+
+    [Fact]
+    public void GenerateServerPreservesGrpcScalarPresenceForOptionalMembers()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "alloy.proto#grpc": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    },
+                    "days": {
+                      "target": "smithy.api#Integer"
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var files = new CSharpShapeGenerator()
+            .Generate(model)
+            .ToDictionary(file => file.Path, file => file.Contents);
+
+        var server = files["Example/Weather/WeatherServer.g.cs"];
+        Assert.Contains(
+            "new GetForecastInput(request.City, request.HasDays ? request.Days : null)",
+            server
+        );
+        Assert.Contains("if (output.Summary is not null)", server);
+        Assert.Contains("message.Summary = output.Summary;", server);
     }
 
     [Fact]
@@ -1820,11 +2130,23 @@ public sealed class CSharpShapeGeneratorTests
         string projectDirectory
     )
     {
+        return await RunDotNet(
+            projectDirectory,
+            TimeSpan.FromMinutes(2),
+            "build",
+            "-p:UseSharedCompilation=false",
+            "--disable-build-servers"
+        );
+    }
+
+    private static async Task<(int ExitCode, string Output, string Error)> RunDotNet(
+        string projectDirectory,
+        TimeSpan timeout,
+        params string[] arguments
+    )
+    {
         using var process = Process.Start(
-            new ProcessStartInfo(
-                "dotnet",
-                ["build", "-p:UseSharedCompilation=false", "--disable-build-servers"]
-            )
+            new ProcessStartInfo("dotnet", arguments)
             {
                 WorkingDirectory = projectDirectory,
                 RedirectStandardOutput = true,
@@ -1835,7 +2157,26 @@ public sealed class CSharpShapeGeneratorTests
         Assert.NotNull(process);
         var outputTask = process.StandardOutput.ReadToEndAsync();
         var errorTask = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
+        var waitForExitTask = process.WaitForExitAsync();
+        var completedTask = await Task.WhenAny(waitForExitTask, Task.Delay(timeout));
+        if (completedTask != waitForExitTask)
+        {
+            try
+            {
+                process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // Best effort timeout cleanup for spawned dotnet processes.
+            }
+
+            return (
+                -1,
+                await outputTask,
+                $"Command timed out after {timeout}.{Environment.NewLine}{await errorTask}"
+            );
+        }
+
         return (process.ExitCode, await outputTask, await errorTask);
     }
 

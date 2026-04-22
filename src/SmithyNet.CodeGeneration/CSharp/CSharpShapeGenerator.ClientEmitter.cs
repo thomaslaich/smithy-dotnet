@@ -15,21 +15,34 @@ public sealed partial class CSharpShapeGenerator
         CSharpGenerationOptions options
     )
     {
-        var builder = CreateFileBuilder(
-            service,
-            options,
-            [
+        var emitsHttp =
+            service.Traits.Has(SmithyPrelude.RestJson1Trait)
+            || service.Traits.Has(SmithyPrelude.SimpleRestJsonTrait);
+        var emitsGrpc = service.Traits.Has(SmithyPrelude.GrpcTrait);
+        var extraUsings = new List<string> { "System.Threading", "System.Threading.Tasks" };
+        if (emitsHttp)
+        {
+            extraUsings.AddRange([
                 "System.Collections",
                 "System.Globalization",
                 "System.Net.Http",
                 "System.Text.Json",
                 "System.Text",
-                "System.Threading",
-                "System.Threading.Tasks",
                 "SmithyNet.Client",
                 "SmithyNet.Http",
                 "SmithyNet.Json",
-            ]
+            ]);
+        }
+
+        if (emitsGrpc)
+        {
+            extraUsings.Add("Grpc.Core");
+        }
+
+        var builder = CreateFileBuilder(
+            service,
+            options,
+            extraUsings.Distinct(StringComparer.Ordinal).ToArray()
         );
         var typeName = $"{GetTypeName(service.Id)}Client";
         var interfaceName = $"I{typeName}";
@@ -48,72 +61,84 @@ public sealed partial class CSharpShapeGenerator
             }
         });
         builder.Line();
-        builder.Line($"public sealed class {typeName} : {interfaceName}");
-        builder.Block(() =>
+
+        if (emitsHttp)
         {
-            builder.Line("private readonly SmithyOperationInvoker invoker;");
-            builder.Line();
-            builder.Line($"public {typeName}(Uri endpoint)");
-            builder.Indented(() =>
-            {
-                builder.Line(
-                    ": this(new HttpClient(), new SmithyClientOptions { Endpoint = endpoint })"
-                );
-            });
-            builder.Block(() => { });
-            builder.Line();
-            builder.Line($"public {typeName}(HttpClient httpClient)");
-            builder.Indented(() =>
-            {
-                builder.Line(": this(httpClient, SmithyClientOptions.Default)");
-            });
-            builder.Block(() => { });
-            builder.Line();
-            builder.Line($"public {typeName}(HttpClient httpClient, SmithyClientOptions options)");
-            builder.Indented(() =>
-            {
-                builder.Line(
-                    ": this(new SmithyOperationInvoker(new HttpClientTransport(httpClient, (options ?? throw new ArgumentNullException(nameof(options))).Endpoint), options.Middleware))"
-                );
-            });
-            builder.Block(() => { });
-            builder.Line();
-            builder.Line($"public {typeName}(SmithyOperationInvoker invoker)");
+            builder.Line($"public sealed class {typeName} : {interfaceName}");
             builder.Block(() =>
             {
+                builder.Line("private readonly SmithyOperationInvoker invoker;");
+                builder.Line();
+                builder.Line($"public {typeName}(Uri endpoint)");
+                builder.Indented(() =>
+                {
+                    builder.Line(
+                        ": this(new HttpClient(), new SmithyClientOptions { Endpoint = endpoint })"
+                    );
+                });
+                builder.Block(() => { });
+                builder.Line();
+                builder.Line($"public {typeName}(HttpClient httpClient)");
+                builder.Indented(() =>
+                {
+                    builder.Line(": this(httpClient, SmithyClientOptions.Default)");
+                });
+                builder.Block(() => { });
+                builder.Line();
                 builder.Line(
-                    "this.invoker = invoker ?? throw new ArgumentNullException(nameof(invoker));"
+                    $"public {typeName}(HttpClient httpClient, SmithyClientOptions options)"
                 );
+                builder.Indented(() =>
+                {
+                    builder.Line(
+                        ": this(new SmithyOperationInvoker(new HttpClientTransport(httpClient, (options ?? throw new ArgumentNullException(nameof(options))).Endpoint), options.Middleware))"
+                    );
+                });
+                builder.Block(() => { });
+                builder.Line();
+                builder.Line($"public {typeName}(SmithyOperationInvoker invoker)");
+                builder.Block(() =>
+                {
+                    builder.Line(
+                        "this.invoker = invoker ?? throw new ArgumentNullException(nameof(invoker));"
+                    );
+                });
+                builder.Line();
+
+                foreach (
+                    var operationId in service.Operations.OrderBy(
+                        id => id.ToString(),
+                        StringComparer.Ordinal
+                    )
+                )
+                {
+                    AppendHttpOperationMethod(builder, model, service, operationId, options);
+                }
+
+                foreach (
+                    var operationId in service.Operations.OrderBy(
+                        id => id.ToString(),
+                        StringComparer.Ordinal
+                    )
+                )
+                {
+                    AppendErrorDeserializer(builder, model, operationId, options);
+                }
+
+                AppendClientHelpers(builder);
             });
             builder.Line();
+        }
 
-            foreach (
-                var operationId in service.Operations.OrderBy(
-                    id => id.ToString(),
-                    StringComparer.Ordinal
-                )
-            )
-            {
-                AppendOperationMethod(builder, model, service, operationId, options);
-            }
-
-            foreach (
-                var operationId in service.Operations.OrderBy(
-                    id => id.ToString(),
-                    StringComparer.Ordinal
-                )
-            )
-            {
-                AppendErrorDeserializer(builder, model, operationId, options);
-            }
-
-            AppendClientHelpers(builder);
-        });
+        if (emitsGrpc)
+        {
+            AppendGrpcClient(builder, model, service, interfaceName, options);
+        }
 
         return new GeneratedCSharpFile(GetClientPath(service), builder.ToString());
     }
 
-    private static void AppendOperationMethod(
+    private static void AppendHttpOperationMethod(
         CSharpWriter builder,
         SmithyModel model,
         ModelShape service,
@@ -231,6 +256,113 @@ public sealed partial class CSharpShapeGenerator
             );
         });
         builder.Line();
+    }
+
+    private static void AppendGrpcClient(
+        CSharpWriter builder,
+        SmithyModel model,
+        ModelShape service,
+        string interfaceName,
+        CSharpGenerationOptions options
+    )
+    {
+        var serviceTypeName = GetTypeName(service.Id);
+        var grpcNamespace = GetGrpcNamespace(service, options);
+        var rawClientType = $"global::{grpcNamespace}.{serviceTypeName}.{serviceTypeName}Client";
+        var grpcClientTypeName = $"{serviceTypeName}GrpcClient";
+
+        builder.Line($"public sealed class {grpcClientTypeName} : {interfaceName}");
+        builder.Block(() =>
+        {
+            builder.Line($"private readonly {rawClientType} client;");
+            builder.Line();
+            builder.Line($"public {grpcClientTypeName}(ChannelBase channel)");
+            builder.Indented(() =>
+            {
+                builder.Line(
+                    $": this(new {rawClientType}(channel ?? throw new ArgumentNullException(nameof(channel))))"
+                );
+            });
+            builder.Block(() => { });
+            builder.Line();
+            builder.Line($"public {grpcClientTypeName}(CallInvoker callInvoker)");
+            builder.Indented(() =>
+            {
+                builder.Line(
+                    $": this(new {rawClientType}(callInvoker ?? throw new ArgumentNullException(nameof(callInvoker))))"
+                );
+            });
+            builder.Block(() => { });
+            builder.Line();
+            builder.Line($"public {grpcClientTypeName}({rawClientType} client)");
+            builder.Block(() =>
+            {
+                builder.Line(
+                    "this.client = client ?? throw new ArgumentNullException(nameof(client));"
+                );
+            });
+            builder.Line();
+
+            foreach (
+                var operationId in service.Operations.OrderBy(
+                    id => id.ToString(),
+                    StringComparer.Ordinal
+                )
+            )
+            {
+                AppendGrpcOperationMethod(
+                    builder,
+                    model,
+                    service,
+                    model.GetShape(operationId),
+                    options
+                );
+                builder.Line();
+            }
+        });
+    }
+
+    private static void AppendGrpcOperationMethod(
+        CSharpWriter builder,
+        SmithyModel model,
+        ModelShape service,
+        ModelShape operation,
+        CSharpGenerationOptions options
+    )
+    {
+        var operationName = CSharpIdentifier.PropertyName(operation.Id.Name);
+        var grpcNamespace = GetGrpcNamespace(service, options);
+        var grpcInputType = GetGrpcOperationMessageType(operation.Input, grpcNamespace);
+        var grpcInputExpression = operation.Input is { } inputId
+            ? GetSmithyToGrpcValueExpression(model, inputId, "input", service.Id.Namespace, options)
+            : "new global::Google.Protobuf.WellKnownTypes.Empty()";
+
+        builder.Line($"public async {GetOperationSignature(model, service, operation, options)}");
+        builder.Block(() =>
+        {
+            if (operation.Input is not null)
+            {
+                builder.Line("ArgumentNullException.ThrowIfNull(input);");
+                builder.Line();
+            }
+
+            builder.Line($"{grpcInputType} request = {grpcInputExpression};");
+            if (operation.Output is { } outputId)
+            {
+                builder.Line(
+                    $"var response = await client.{operationName}Async(request, cancellationToken: cancellationToken).ResponseAsync.ConfigureAwait(false);"
+                );
+                builder.Line(
+                    $"return {GetGrpcToSmithyValueExpression(model, outputId, "response", service.Id.Namespace, options)};"
+                );
+            }
+            else
+            {
+                builder.Line(
+                    $"await client.{operationName}Async(request, cancellationToken: cancellationToken).ResponseAsync.ConfigureAwait(false);"
+                );
+            }
+        });
     }
 
     private static void AppendResponseReturn(

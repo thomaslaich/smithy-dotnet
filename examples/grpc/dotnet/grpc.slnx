@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/client-grpc/">
+    <Project Path="client-grpc/SmithyNet.Examples.Grpc.ClientGrpc.csproj" />
+  </Folder>
+  <Folder Name="/client-rest/">
+    <Project Path="client-rest/SmithyNet.Examples.Grpc.ClientRest.csproj" />
+  </Folder>
+  <Folder Name="/server/">
+    <Project Path="server/SmithyNet.Examples.Grpc.Server.csproj" />
+  </Folder>
+</Solution>
