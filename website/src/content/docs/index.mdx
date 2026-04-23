@@ -1,0 +1,32 @@
+---
+title: Smithy.NET
+description: Generate C# models, typed HTTP clients, and ASP.NET Core servers from Smithy models.
+template: splash
+hero:
+  tagline: Generate C# models, typed HTTP clients, and ASP.NET Core servers from Smithy models.
+  actions:
+    - text: Quick Start
+      link: /smithy-dotnet/quick-start/
+      icon: right-arrow
+    - text: GitHub
+      link: https://github.com/thomaslaich/smithy-dotnet
+      icon: github
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+  <Card title="MSBuild Integration" icon="seti:xml">
+    Run the Smithy CLI from `dotnet build`. Generated C# files are added to compilation automatically.
+  </Card>
+  <Card title="HTTP Clients" icon="rocket">
+    Generate typed `restJson1` and `simpleRestJson` clients from your Smithy service models.
+  </Card>
+  <Card title="ASP.NET Core Servers" icon="laptop">
+    Generate handler interfaces, DI helpers, and endpoint mappers for `simpleRestJson` services.
+  </Card>
+  <Card title="Multi-Protocol" icon="puzzle">
+    Expose one service over both HTTP and gRPC with a single handler implementation.
+  </Card>
+</CardGrid>
