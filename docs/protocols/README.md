@@ -44,5 +44,6 @@ These protocols are not current Smithy.NET targets:
 - [Supported Surface](../supported-surface.md)
 - [Known Limitations](../known-limitations.md)
 - [Multi-Protocol Guide](../multi-protocol.md)
+- [Architecture](../architecture/hybrid-codegen.md)
 - [Protocol Conformance](../generated/protocol-conformance.md)
 - [Roadmap](../planning/roadmap.md)
