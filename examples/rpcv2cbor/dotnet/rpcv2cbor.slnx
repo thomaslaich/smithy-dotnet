@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/client/">
+    <Project Path="client/SmithyNet.Examples.RpcV2Cbor.Client.csproj" />
+  </Folder>
+</Solution>

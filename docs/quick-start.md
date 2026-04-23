@@ -284,5 +284,8 @@ The example at `examples/simple-rest-json/dotnet` shows a generated
 Smithy.NET ASP.NET Core server and a generated Smithy.NET client using the same
 `alloy#simpleRestJson` model.
 
+For the new binary codec path, `examples/rpcv2cbor/dotnet` shows a generated
+`smithy.protocols#rpcv2Cbor` client talking to an in-process mock transport.
+
 If you want to expose the same handler over both HTTP and gRPC, see
 `docs/multi-protocol.md` and `examples/grpc/dotnet`.

@@ -1,5 +1,3 @@
-using System.Text;
-
 namespace SmithyNet.Http;
 
 public sealed class HttpClientTransport : IHttpTransport
@@ -43,11 +41,13 @@ public sealed class HttpClientTransport : IHttpTransport
 
         if (request.Content is not null)
         {
-            message.Content = new StringContent(
-                request.Content,
-                Encoding.UTF8,
-                request.ContentType ?? "application/octet-stream"
-            );
+            message.Content = new ByteArrayContent(request.Content);
+            if (!string.IsNullOrWhiteSpace(request.ContentType))
+            {
+                message.Content.Headers.ContentType =
+                    new System.Net.Http.Headers.MediaTypeHeaderValue(request.ContentType);
+            }
+
             foreach (var header in request.ContentHeaders)
             {
                 message.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
@@ -58,8 +58,8 @@ public sealed class HttpClientTransport : IHttpTransport
             .SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
         var content = response.Content is null
-            ? string.Empty
-            : await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            ? []
+            : await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
         return new SmithyHttpResponse(
             response.StatusCode,
             response.ReasonPhrase,

@@ -10,7 +10,7 @@ public sealed class SmithyHttpRequest(HttpMethod method, string requestUri)
     public IDictionary<string, IReadOnlyList<string>> Headers { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
-    public string? Content { get; set; }
+    public byte[]? Content { get; set; }
 
     public string? ContentType { get; set; }
 

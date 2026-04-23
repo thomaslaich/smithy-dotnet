@@ -1,3 +1,4 @@
+using System.Text;
 using System.Net;
 using SmithyNet.Client;
 using SmithyNet.Http;
@@ -13,7 +14,7 @@ public sealed class SmithyOperationInvokerTests
             new SmithyHttpResponse(
                 HttpStatusCode.OK,
                 "OK",
-                """{"ok":true}""",
+                Encoding.UTF8.GetBytes("""{"ok":true}"""),
                 EmptyHeaders,
                 EmptyHeaders
             )
@@ -27,7 +28,7 @@ public sealed class SmithyOperationInvokerTests
             new SmithyHttpRequest(HttpMethod.Get, "/forecast")
         );
 
-        Assert.Equal("""{"ok":true}""", response.Content);
+        Assert.Equal("""{"ok":true}""", response.ContentText);
         Assert.True(middleware.WasCalled);
         Assert.Equal(["middleware"], transport.Request.Headers["x-smithy-test"]);
     }
@@ -39,7 +40,7 @@ public sealed class SmithyOperationInvokerTests
             new SmithyHttpResponse(
                 HttpStatusCode.BadRequest,
                 "Bad Request",
-                """{"message":"bad city"}""",
+                Encoding.UTF8.GetBytes("""{"message":"bad city"}"""),
                 EmptyHeaders,
                 EmptyHeaders
             )
@@ -53,7 +54,7 @@ public sealed class SmithyOperationInvokerTests
                 new SmithyHttpRequest(HttpMethod.Get, "/forecast"),
                 static (response, _) =>
                     ValueTask.FromResult<Exception?>(
-                        new InvalidOperationException(response.Content)
+                        new InvalidOperationException(response.ContentText)
                     )
             )
         );
@@ -68,7 +69,7 @@ public sealed class SmithyOperationInvokerTests
             new SmithyHttpResponse(
                 HttpStatusCode.InternalServerError,
                 "Internal Server Error",
-                string.Empty,
+                [],
                 EmptyHeaders,
                 EmptyHeaders
             )
@@ -93,14 +94,14 @@ public sealed class SmithyOperationInvokerTests
             new SmithyHttpResponse(
                 HttpStatusCode.InternalServerError,
                 "Internal Server Error",
-                string.Empty,
+                [],
                 EmptyHeaders,
                 EmptyHeaders
             ),
             new SmithyHttpResponse(
                 HttpStatusCode.OK,
                 "OK",
-                """{"ok":true}""",
+                Encoding.UTF8.GetBytes("""{"ok":true}"""),
                 EmptyHeaders,
                 EmptyHeaders
             )
