@@ -12,6 +12,34 @@ The task:
 5. adds the generated files to `Compile`
 6. writes dependency manifests for incremental builds
 
+## Build Flow
+
+```mermaid
+flowchart TD
+    A[dotnet build] --> B[MSBuild GenerateSmithyCode target]
+    C[smithy-build.json]
+    D[.smithy and .json model inputs]
+    E[Optional SmithyModel items]
+    C --> B
+    D --> B
+    E --> B
+    B --> F[Run smithy build]
+    F --> G[Projection output under SmithyBuildOutputPath]
+    G --> H[Read model/model.json]
+    H --> I[Generate C# and .proto files]
+    I --> J[Write generated files under intermediate output]
+    I --> K[Write generated-files and dependency manifests]
+    J --> L[Add .g.cs files to Compile]
+    J --> M[Add .proto files to Protobuf]
+    M --> N[Protobuf compile when supported]
+    L --> O[CoreCompile]
+    N --> O
+```
+
+This diagram is intentionally simplified. It shows the main build handoff and
+generated-file flow, not every manifest read, conditional target, or IDE
+integration detail.
+
 ## Model Inputs
 
 Use a `smithy-build.json` for non-trivial projects:
