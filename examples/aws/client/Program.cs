@@ -5,9 +5,15 @@ using SmithyNet.Core;
 using SmithyNet.Core.Annotations;
 
 var name = args.Length > 0 ? args[0] : "world";
+var httpClient = new HttpClient(new MockAwsProtocolsHandler());
 
 var client = new HelloServiceClient(
-    new HttpClient(new MockRpcV2CborHandler()),
+    httpClient,
+    new SmithyClientOptions { Endpoint = new Uri("https://example.test") }
+);
+
+var xmlClient = new HelloXmlServiceClient(
+    httpClient,
     new SmithyClientOptions { Endpoint = new Uri("https://example.test") }
 );
 
@@ -21,15 +27,35 @@ catch (InvalidName error)
     Console.WriteLine($"InvalidName => {error.Message}");
 }
 
-internal sealed class MockRpcV2CborHandler : HttpMessageHandler
+var xmlHello = await xmlClient.SayHelloXmlAsync(new SayHelloXmlInput(name));
+Console.WriteLine($"SayHelloXml => {xmlHello.Message} from {xmlHello.From}");
+
+internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
 {
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken
     )
     {
-        ValidateRequest(request);
+        return request.RequestUri?.PathAndQuery switch
+        {
+            "/service/HelloService/operation/SayHello" => HandleRpcV2CborAsync(
+                request,
+                cancellationToken
+            ),
+            "/xml/hello" => HandleRestXmlAsync(request, cancellationToken),
+            _ => throw new InvalidOperationException(
+                $"Unexpected request URI '{request.RequestUri?.PathAndQuery}'."
+            ),
+        };
+    }
 
+    private static Task<HttpResponseMessage> HandleRpcV2CborAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken
+    )
+    {
+        ValidateRpcV2CborRequest(request);
         var body = request.Content?.ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult()
             ?? [];
         var input = SmithyCborPayloadCodec.Default.Deserialize<SayHelloInput>(body);
@@ -58,18 +84,29 @@ internal sealed class MockRpcV2CborHandler : HttpMessageHandler
         );
     }
 
-    private static void ValidateRequest(HttpRequestMessage request)
+    private static Task<HttpResponseMessage> HandleRestXmlAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken
+    )
+    {
+        ValidateRestXmlRequest(request);
+        var body = request.Content?.ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult()
+            ?? [];
+        var input = SmithyXmlPayloadCodec.Default.Deserialize<SayHelloXmlInput>(body);
+        var output = new SayHelloXmlOutput("mock-restxml", $"Hello, {input.Name}!");
+        return Task.FromResult(
+            CreateXmlResponse(
+                HttpStatusCode.OK,
+                SmithyXmlPayloadCodec.Default.Serialize(output)
+            )
+        );
+    }
+
+    private static void ValidateRpcV2CborRequest(HttpRequestMessage request)
     {
         if (request.Method != HttpMethod.Post)
         {
             throw new InvalidOperationException("Expected POST.");
-        }
-
-        if (request.RequestUri?.PathAndQuery != "/service/HelloService/operation/SayHello")
-        {
-            throw new InvalidOperationException(
-                $"Unexpected request URI '{request.RequestUri?.PathAndQuery}'."
-            );
         }
 
         if (!request.Headers.TryGetValues("Smithy-Protocol", out var protocolValues))
@@ -83,6 +120,22 @@ internal sealed class MockRpcV2CborHandler : HttpMessageHandler
         }
     }
 
+    private static void ValidateRestXmlRequest(HttpRequestMessage request)
+    {
+        if (request.Method != HttpMethod.Post)
+        {
+            throw new InvalidOperationException("Expected POST.");
+        }
+
+        var contentType = request.Content?.Headers.ContentType?.MediaType;
+        if (!string.Equals(contentType, "application/xml", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Unexpected Content-Type '{contentType ?? "<missing>"}'."
+            );
+        }
+    }
+
     private static HttpResponseMessage CreateResponse(HttpStatusCode statusCode, byte[] body)
     {
         var response = new HttpResponseMessage(statusCode)
@@ -92,6 +145,17 @@ internal sealed class MockRpcV2CborHandler : HttpMessageHandler
         response.Headers.Add("Smithy-Protocol", "rpc-v2-cbor");
         response.Content.Headers.ContentType =
             new System.Net.Http.Headers.MediaTypeHeaderValue("application/cbor");
+        return response;
+    }
+
+    private static HttpResponseMessage CreateXmlResponse(HttpStatusCode statusCode, byte[] body)
+    {
+        var response = new HttpResponseMessage(statusCode)
+        {
+            Content = new ByteArrayContent(body)
+        };
+        response.Content.Headers.ContentType =
+            new System.Net.Http.Headers.MediaTypeHeaderValue("application/xml");
         return response;
     }
 }
