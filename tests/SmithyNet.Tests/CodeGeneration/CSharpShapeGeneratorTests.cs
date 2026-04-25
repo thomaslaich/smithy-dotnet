@@ -1009,14 +1009,20 @@ public sealed class CSharpShapeGeneratorTests
             .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
             .Contents;
 
-        Assert.Contains("private static readonly ISmithyPayloadCodec DocumentCodec = SmithyCborPayloadCodec.Default;", client);
+        Assert.Contains(
+            "private static readonly ISmithyPayloadCodec DocumentCodec = SmithyCborPayloadCodec.Default;",
+            client
+        );
         Assert.Contains("""var requestUri = "/service/Weather/operation/GetForecast";""", client);
         Assert.Contains("""request.Headers["Smithy-Protocol"] = ["rpc-v2-cbor"];""", client);
         Assert.Contains("""request.Headers["Accept"] = [DocumentCodec.MediaType];""", client);
         Assert.Contains("request.Content = DocumentCodec.Serialize(input);", client);
         Assert.Contains("EnsureRpcV2CborResponse(response);", client);
         Assert.Contains("if (response.StatusCode != HttpStatusCode.OK)", client);
-        Assert.Contains("""var errorType = DeserializeBodyMember<string?>(response.Content, "__type");""", client);
+        Assert.Contains(
+            """var errorType = DeserializeBodyMember<string?>(response.Content, "__type");""",
+            client
+        );
     }
 
     [Fact]
@@ -1110,7 +1116,7 @@ public sealed class CSharpShapeGeneratorTests
             client
         );
         Assert.Contains(
-            """request.Content = DocumentCodec.SerializeMembers("GetForecastInput", requestBody);""",
+          """request.Content = SmithyPayloadDocuments.SerializeMembers(DocumentCodec, "GetForecastInput", requestBody);""",
             client
         );
         Assert.Contains(

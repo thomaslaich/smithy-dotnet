@@ -1,5 +1,5 @@
-using System.Text;
 using System.Net;
+using System.Text;
 using SmithyNet.Client;
 using SmithyNet.Http;
 

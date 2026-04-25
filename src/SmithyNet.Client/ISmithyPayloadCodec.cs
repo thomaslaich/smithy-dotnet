@@ -6,9 +6,5 @@ public interface ISmithyPayloadCodec
 
     byte[] Serialize<T>(T value);
 
-    byte[] SerializeMembers(string rootName, IReadOnlyDictionary<string, object?> members);
-
     T Deserialize<T>(byte[] content);
-
-    T DeserializeMember<T>(byte[] content, string name);
 }

@@ -42,6 +42,6 @@ refresh-examples:
     dotnet restore examples/grpc/server/SmithyNet.Examples.Grpc.Server.csproj --no-cache --force
     dotnet restore examples/grpc/client-rest/SmithyNet.Examples.Grpc.ClientRest.csproj --no-cache --force
     dotnet restore examples/grpc/client-grpc/SmithyNet.Examples.Grpc.ClientGrpc.csproj --no-cache --force
-    dotnet restore examples/polyglot/SmithyNet.Polyglot.DotNet.Client.csproj --no-cache --force
+    dotnet restore examples/polyglot/dotnet/SmithyNet.Polyglot.DotNet.Client.csproj --no-cache --force
 
 ci: restore check-format build test pack

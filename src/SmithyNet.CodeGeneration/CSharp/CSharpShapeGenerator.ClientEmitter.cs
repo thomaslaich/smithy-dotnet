@@ -154,10 +154,12 @@ public sealed partial class CSharpShapeGenerator
         var httpBinding = isRpcV2Cbor
             ? new HttpBinding("POST", $"/service/{service.Id.Name}/operation/{operation.Id.Name}")
             : ReadHttpBinding(operation);
-        if (!isRpcV2Cbor
+        if (
+            !isRpcV2Cbor
             && service.Traits.Has(SmithyPrelude.SimpleRestJsonTrait)
             && httpBinding.Uri.Length > 1
-            && httpBinding.Uri.EndsWith('/'))
+            && httpBinding.Uri.EndsWith('/')
+        )
         {
             httpBinding = httpBinding with { Uri = httpBinding.Uri.TrimEnd('/') };
         }
@@ -215,7 +217,10 @@ public sealed partial class CSharpShapeGenerator
                     builder.Line("request.ContentType = DocumentCodec.MediaType;");
                 }
             }
-            else if (inputShape is not null && TryGetPayloadMember(inputShape, out var payloadMember))
+            else if (
+                inputShape is not null
+                && TryGetPayloadMember(inputShape, out var payloadMember)
+            )
             {
                 var propertyName = CSharpIdentifier.PropertyName(payloadMember.Name);
                 if (
@@ -241,13 +246,17 @@ public sealed partial class CSharpShapeGenerator
                     );
                     builder.Block(() =>
                     {
-                        builder.Line($"request.Content = DocumentCodec.Serialize(input.{propertyName});");
+                        builder.Line(
+                            $"request.Content = DocumentCodec.Serialize(input.{propertyName});"
+                        );
                         builder.Line("request.ContentType = DocumentCodec.MediaType;");
                     });
                 }
                 else
                 {
-                    builder.Line($"request.Content = DocumentCodec.Serialize(input.{propertyName});");
+                    builder.Line(
+                        $"request.Content = DocumentCodec.Serialize(input.{propertyName});"
+                    );
                     builder.Line("request.ContentType = DocumentCodec.MediaType;");
                 }
             }
@@ -563,7 +572,11 @@ public sealed partial class CSharpShapeGenerator
         }
     }
 
-    private static void AppendRequestBody(CSharpWriter builder, ModelShape input, ModelShape service)
+    private static void AppendRequestBody(
+        CSharpWriter builder,
+        ModelShape input,
+        ModelShape service
+    )
     {
         var bodyMembers = GetSortedMembers(input).Where(IsHttpBodyMember).ToArray();
         if (bodyMembers.Length == 0)
@@ -588,7 +601,7 @@ public sealed partial class CSharpShapeGenerator
         if (IsRestXmlService(service))
         {
             builder.Line(
-                $"request.Content = DocumentCodec.SerializeMembers({FormatString(GetDocumentRootName(input, service))}, requestBody);"
+                $"request.Content = SmithyPayloadDocuments.SerializeMembers(DocumentCodec, {FormatString(GetDocumentRootName(input, service))}, requestBody);"
             );
         }
         else
@@ -687,10 +700,9 @@ public sealed partial class CSharpShapeGenerator
     )
     {
         var operation = model.GetShape(operationId);
-        var service = model
-            .Shapes.Values.First(shape =>
-                shape.Kind == ShapeKind.Service && shape.Operations.Contains(operationId)
-            );
+        var service = model.Shapes.Values.First(shape =>
+            shape.Kind == ShapeKind.Service && shape.Operations.Contains(operationId)
+        );
         var isRpcV2Cbor = IsRpcV2CborService(service);
         var methodName = $"Deserialize{CSharpIdentifier.TypeName(operation.Id.Name)}ErrorAsync";
         builder.Line(
@@ -719,9 +731,14 @@ public sealed partial class CSharpShapeGenerator
                     builder.Line("return ValueTask.FromResult<Exception?>(null);");
                 });
                 builder.Line();
-                builder.Line("var errorType = DeserializeBodyMember<string?>(response.Content, \"__type\");");
+                builder.Line(
+                    "var errorType = DeserializeBodyMember<string?>(response.Content, \"__type\");"
+                );
                 foreach (
-                    var errorId in operation.Errors.OrderBy(id => id.ToString(), StringComparer.Ordinal)
+                    var errorId in operation.Errors.OrderBy(
+                        id => id.ToString(),
+                        StringComparer.Ordinal
+                    )
                 )
                 {
                     var error = model.GetShape(errorId);
@@ -741,7 +758,10 @@ public sealed partial class CSharpShapeGenerator
             {
                 builder.Line("var errorType = DeserializeRestXmlErrorCode(response.Content);");
                 foreach (
-                    var errorId in operation.Errors.OrderBy(id => id.ToString(), StringComparer.Ordinal)
+                    var errorId in operation.Errors.OrderBy(
+                        id => id.ToString(),
+                        StringComparer.Ordinal
+                    )
                 )
                 {
                     var error = model.GetShape(errorId);
@@ -760,7 +780,10 @@ public sealed partial class CSharpShapeGenerator
             else
             {
                 foreach (
-                    var errorId in operation.Errors.OrderBy(id => id.ToString(), StringComparer.Ordinal)
+                    var errorId in operation.Errors.OrderBy(
+                        id => id.ToString(),
+                        StringComparer.Ordinal
+                    )
                 )
                 {
                     var error = model.GetShape(errorId);
@@ -909,7 +932,8 @@ public sealed partial class CSharpShapeGenerator
     private static string GetDocumentRootName(ModelShape shape, ModelShape service)
     {
         return IsRestXmlService(service)
-            ? shape.Traits.GetValueOrDefault(SmithyPrelude.XmlNameTrait)?.AsString() ?? shape.Id.Name
+            ? shape.Traits.GetValueOrDefault(SmithyPrelude.XmlNameTrait)?.AsString()
+                ?? shape.Id.Name
             : shape.Id.Name;
     }
 
@@ -1146,11 +1170,13 @@ public sealed partial class CSharpShapeGenerator
                 builder.Line("return default!;");
             });
             builder.Line();
-            builder.Line("return DocumentCodec.DeserializeMember<T>(content, name);");
+            builder.Line("return SmithyPayloadDocuments.DeserializeMember<T>(DocumentCodec, content, name);");
         });
         builder.Line();
 
-        builder.Line("private static T DeserializeRequiredBodyMember<T>(byte[] content, string name)");
+        builder.Line(
+            "private static T DeserializeRequiredBodyMember<T>(byte[] content, string name)"
+        );
         builder.Block(() =>
         {
             builder.Line("if (IsEmptyContent(content))");
@@ -1161,7 +1187,7 @@ public sealed partial class CSharpShapeGenerator
                 );
             });
             builder.Line();
-            builder.Line("var value = DocumentCodec.DeserializeMember<T>(content, name);");
+            builder.Line("var value = SmithyPayloadDocuments.DeserializeMember<T>(DocumentCodec, content, name);");
             builder.Line("return EqualityComparer<T>.Default.Equals(value, default!)");
             builder.Indented(() =>
             {
@@ -1205,7 +1231,9 @@ public sealed partial class CSharpShapeGenerator
         });
         builder.Line();
 
-        builder.Line("private static T DeserializeRestXmlErrorBodyMember<T>(byte[] content, string name)");
+        builder.Line(
+            "private static T DeserializeRestXmlErrorBodyMember<T>(byte[] content, string name)"
+        );
         builder.Block(() =>
         {
             builder.Line("var root = GetRestXmlErrorRoot(content);");

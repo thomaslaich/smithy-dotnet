@@ -1,11 +1,11 @@
 using System.Globalization;
-using SmithyNet.Client;
 using SmithyNet.Core;
 using SmithyNet.Core.Annotations;
+using SmithyNet.Xml;
 
-namespace SmithyNet.Tests.Client;
+namespace SmithyNet.Tests.Xml;
 
-public sealed class SmithyXmlPayloadCodecTests
+public sealed class SmithyXmlSerializerTests
 {
     [Fact]
     public void SerializeUsesXmlMemberNamesAndFlattenedCollections()
@@ -16,9 +16,7 @@ public sealed class SmithyXmlPayloadCodecTests
             new ForecastTags(["north", "windy"])
         );
 
-        var xml = System.Text.Encoding.UTF8.GetString(
-            SmithyXmlPayloadCodec.Default.Serialize(payload)
-        );
+        var xml = SmithyXmlSerializer.Serialize(payload);
 
         Assert.Equal(
             "<ForecastResponse><Condition>clear</Condition><GeneratedAt>2026-04-23T10:15:30.0000000+00:00</GeneratedAt><Tag>north</Tag><Tag>windy</Tag></ForecastResponse>",
@@ -27,27 +25,13 @@ public sealed class SmithyXmlPayloadCodecTests
     }
 
     [Fact]
-    public void DeserializeRoundTripsStructuresWithXmlTraits()
+    public void DeserializeMembersReadsSingleMemberFromXmlDocument()
     {
-        var xml = """
-            <ForecastResponse>
-              <Condition>clear</Condition>
-              <GeneratedAt>2026-04-23T10:15:30.0000000+00:00</GeneratedAt>
-              <Tag>north</Tag>
-              <Tag>windy</Tag>
-            </ForecastResponse>
-            """;
+        var xml = "<ForecastResponse><Condition>clear</Condition><GeneratedAt>2026-04-23T10:15:30.0000000+00:00</GeneratedAt></ForecastResponse>";
 
-        var payload = SmithyXmlPayloadCodec.Default.Deserialize<ForecastResponse>(
-            System.Text.Encoding.UTF8.GetBytes(xml)
-        );
+        var summary = SmithyXmlSerializer.DeserializeMember<string>(xml, "Condition");
 
-        Assert.Equal("clear", payload.Summary);
-        Assert.Equal(
-            DateTimeOffset.Parse("2026-04-23T10:15:30.0000000+00:00", CultureInfo.InvariantCulture),
-            payload.GeneratedAt
-        );
-        Assert.Equal(["north", "windy"], payload.Tags.Values);
+        Assert.Equal("clear", summary);
     }
 
     [SmithyShape("example.weather#ForecastResponse", ShapeKind.Structure)]

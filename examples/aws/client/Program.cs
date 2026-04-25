@@ -56,8 +56,8 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
     )
     {
         ValidateRpcV2CborRequest(request);
-        var body = request.Content?.ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult()
-            ?? [];
+        var body =
+            request.Content?.ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult() ?? [];
         var input = SmithyCborPayloadCodec.Default.Deserialize<SayHelloInput>(body);
 
         if (string.Equals(input.Name, "error", StringComparison.OrdinalIgnoreCase))
@@ -77,10 +77,7 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
 
         var output = new SayHelloOutput("mock-rpcv2cbor", $"Hello, {input.Name}!");
         return Task.FromResult(
-            CreateResponse(
-                HttpStatusCode.OK,
-                SmithyCborPayloadCodec.Default.Serialize(output)
-            )
+            CreateResponse(HttpStatusCode.OK, SmithyCborPayloadCodec.Default.Serialize(output))
         );
     }
 
@@ -90,15 +87,12 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
     )
     {
         ValidateRestXmlRequest(request);
-        var body = request.Content?.ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult()
-            ?? [];
+        var body =
+            request.Content?.ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult() ?? [];
         var input = SmithyXmlPayloadCodec.Default.Deserialize<SayHelloXmlInput>(body);
         var output = new SayHelloXmlOutput("mock-restxml", $"Hello, {input.Name}!");
         return Task.FromResult(
-            CreateXmlResponse(
-                HttpStatusCode.OK,
-                SmithyXmlPayloadCodec.Default.Serialize(output)
-            )
+            CreateXmlResponse(HttpStatusCode.OK, SmithyXmlPayloadCodec.Default.Serialize(output))
         );
     }
 
@@ -138,24 +132,20 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
 
     private static HttpResponseMessage CreateResponse(HttpStatusCode statusCode, byte[] body)
     {
-        var response = new HttpResponseMessage(statusCode)
-        {
-            Content = new ByteArrayContent(body)
-        };
+        var response = new HttpResponseMessage(statusCode) { Content = new ByteArrayContent(body) };
         response.Headers.Add("Smithy-Protocol", "rpc-v2-cbor");
-        response.Content.Headers.ContentType =
-            new System.Net.Http.Headers.MediaTypeHeaderValue("application/cbor");
+        response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+            "application/cbor"
+        );
         return response;
     }
 
     private static HttpResponseMessage CreateXmlResponse(HttpStatusCode statusCode, byte[] body)
     {
-        var response = new HttpResponseMessage(statusCode)
-        {
-            Content = new ByteArrayContent(body)
-        };
-        response.Content.Headers.ContentType =
-            new System.Net.Http.Headers.MediaTypeHeaderValue("application/xml");
+        var response = new HttpResponseMessage(statusCode) { Content = new ByteArrayContent(body) };
+        response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(
+            "application/xml"
+        );
         return response;
     }
 }

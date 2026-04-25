@@ -20,14 +20,6 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
         return writer.ToArray();
     }
 
-    public byte[] SerializeMembers(string rootName, IReadOnlyDictionary<string, object?> members)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(rootName);
-        ArgumentNullException.ThrowIfNull(members);
-
-        return Serialize(members);
-    }
-
     public T Deserialize<T>(byte[] content)
     {
         var reader = new CborBufferReader(content);
@@ -36,14 +28,17 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
         return (T)ConvertValue(value, typeof(T))!;
     }
 
-    public T DeserializeMember<T>(byte[] content, string name)
+    internal static T DeserializeNamedMember<T>(byte[] content, string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         var reader = new CborBufferReader(content);
         var value = reader.ReadValue();
         reader.EnsureFullyConsumed();
-        if (value is not IReadOnlyDictionary<string, object?> map || !map.TryGetValue(name, out var member))
+        if (
+            value is not IReadOnlyDictionary<string, object?> map
+            || !map.TryGetValue(name, out var member)
+        )
         {
             return default!;
         }
@@ -62,7 +57,9 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
         var runtimeType = value.GetType();
         if (value is Document)
         {
-            throw new NotSupportedException("Smithy document values are not supported by rpcv2Cbor.");
+            throw new NotSupportedException(
+                "Smithy document values are not supported by rpcv2Cbor."
+            );
         }
 
         if (value is byte[] bytes)
@@ -109,9 +106,9 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
             case ShapeKind.Enum:
                 writer.WriteTextString(
                     value.GetType().GetProperty("Value")?.GetValue(value) as string
-                    ?? throw new NotSupportedException(
-                        $"Smithy string enum '{value.GetType()}' is missing a string Value property."
-                    )
+                        ?? throw new NotSupportedException(
+                            $"Smithy string enum '{value.GetType()}' is missing a string Value property."
+                        )
                 );
                 break;
             case ShapeKind.IntEnum:
@@ -174,7 +171,9 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
 
                 if (item is DictionaryEntry entry && entry.Key is not null)
                 {
-                    items.Add(new KeyValuePair<string, object?>(entry.Key.ToString()!, entry.Value));
+                    items.Add(
+                        new KeyValuePair<string, object?>(entry.Key.ToString()!, entry.Value)
+                    );
                     continue;
                 }
 
@@ -206,7 +205,9 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
     {
         if (string.Equals(runtimeType.Name, "Unknown", StringComparison.Ordinal))
         {
-            throw new NotSupportedException("Unknown union variants are not supported by rpcv2Cbor.");
+            throw new NotSupportedException(
+                "Unknown union variants are not supported by rpcv2Cbor."
+            );
         }
 
         var member =
@@ -266,7 +267,9 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
 
         if (targetType == typeof(Document))
         {
-            throw new NotSupportedException("Smithy document values are not supported by rpcv2Cbor.");
+            throw new NotSupportedException(
+                "Smithy document values are not supported by rpcv2Cbor."
+            );
         }
 
         if (targetType == typeof(byte[]))
@@ -274,7 +277,9 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
             return value switch
             {
                 byte[] bytes => bytes,
-                _ => throw new InvalidOperationException($"CBOR value cannot be assigned to '{targetType}'."),
+                _ => throw new InvalidOperationException(
+                    $"CBOR value cannot be assigned to '{targetType}'."
+                ),
             };
         }
 
@@ -285,7 +290,9 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
                 DateTimeOffset timestamp => timestamp,
                 long seconds => DateTimeOffset.FromUnixTimeSeconds(seconds),
                 double epochSeconds => DateTimeOffset.UnixEpoch.AddSeconds(epochSeconds),
-                _ => throw new InvalidOperationException($"CBOR value cannot be assigned to '{targetType}'."),
+                _ => throw new InvalidOperationException(
+                    $"CBOR value cannot be assigned to '{targetType}'."
+                ),
             };
         }
 
@@ -310,8 +317,14 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
             ShapeKind.Structure => ReadStructure(value, targetType),
             ShapeKind.List or ShapeKind.Set => ReadList(value, targetType),
             ShapeKind.Map => ReadMap(value, targetType),
-            ShapeKind.Enum => Activator.CreateInstance(targetType, Convert.ToString(value, CultureInfo.InvariantCulture)),
-            ShapeKind.IntEnum => Enum.ToObject(targetType, Convert.ToInt32(value, CultureInfo.InvariantCulture)),
+            ShapeKind.Enum => Activator.CreateInstance(
+                targetType,
+                Convert.ToString(value, CultureInfo.InvariantCulture)
+            ),
+            ShapeKind.IntEnum => Enum.ToObject(
+                targetType,
+                Convert.ToInt32(value, CultureInfo.InvariantCulture)
+            ),
             ShapeKind.Union => ReadUnion(value, targetType),
             _ => throw new NotSupportedException(
                 $"Smithy CBOR deserialization for shape kind '{shape.Kind}' is not supported."
@@ -323,7 +336,9 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
     {
         if (value is not IReadOnlyDictionary<string, object?> members)
         {
-            throw new InvalidOperationException($"Expected CBOR map for Smithy structure '{targetType}'.");
+            throw new InvalidOperationException(
+                $"Expected CBOR map for Smithy structure '{targetType}'."
+            );
         }
 
         var constructor = GetPrimaryConstructor(targetType);
@@ -352,7 +367,9 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
     {
         if (value is not IReadOnlyList<object?> items)
         {
-            throw new InvalidOperationException($"Expected CBOR array for Smithy list '{targetType}'.");
+            throw new InvalidOperationException(
+                $"Expected CBOR array for Smithy list '{targetType}'."
+            );
         }
 
         var valuesProperty = GetValuesProperty(targetType);
@@ -371,7 +388,9 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
     {
         if (value is not IReadOnlyDictionary<string, object?> entries)
         {
-            throw new InvalidOperationException($"Expected CBOR map for Smithy map '{targetType}'.");
+            throw new InvalidOperationException(
+                $"Expected CBOR map for Smithy map '{targetType}'."
+            );
         }
 
         var valuesProperty = GetValuesProperty(targetType);
@@ -390,7 +409,9 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
     {
         if (value is not IReadOnlyDictionary<string, object?> members)
         {
-            throw new InvalidOperationException($"Expected CBOR map for Smithy union '{targetType}'.");
+            throw new InvalidOperationException(
+                $"Expected CBOR map for Smithy union '{targetType}'."
+            );
         }
 
         foreach (var variantType in targetType.GetNestedTypes(BindingFlags.Public))
@@ -670,7 +691,9 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
                 5 => ReadMap(ReadUnsigned(additionalInfo)),
                 6 => ReadTaggedValue(ReadUnsigned(additionalInfo)),
                 7 => ReadSimple(additionalInfo),
-                _ => throw new InvalidOperationException($"Unsupported CBOR major type '{majorType}'."),
+                _ => throw new InvalidOperationException(
+                    $"Unsupported CBOR major type '{majorType}'."
+                ),
             };
         }
 
@@ -680,7 +703,9 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
             return tag switch
             {
                 1 when value is long seconds => DateTimeOffset.FromUnixTimeSeconds(seconds),
-                1 when value is double epochSeconds => DateTimeOffset.UnixEpoch.AddSeconds(epochSeconds),
+                1 when value is double epochSeconds => DateTimeOffset.UnixEpoch.AddSeconds(
+                    epochSeconds
+                ),
                 2 or 3 or 4 => throw new NotSupportedException(
                     "rpcv2Cbor big integer and big decimal values are not supported."
                 ),
@@ -736,7 +761,8 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
             var values = new Dictionary<string, object?>((int)length, StringComparer.Ordinal);
             for (ulong i = 0; i < length; i++)
             {
-                var key = ReadValue() as string
+                var key =
+                    ReadValue() as string
                     ?? throw new InvalidOperationException("CBOR map keys must be strings.");
                 values[key] = ReadValue();
             }

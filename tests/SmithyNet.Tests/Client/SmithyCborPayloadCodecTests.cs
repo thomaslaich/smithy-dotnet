@@ -33,11 +33,19 @@ public sealed class SmithyCborPayloadCodecTests
 
         Assert.Equal(
             "example.weather#BadRequest",
-            SmithyCborPayloadCodec.Default.DeserializeMember<string>(bytes, "__type")
+            SmithyPayloadDocuments.DeserializeMember<string>(
+                SmithyCborPayloadCodec.Default,
+                bytes,
+                "__type"
+            )
         );
         Assert.Equal(
             "bad city",
-            SmithyCborPayloadCodec.Default.DeserializeMember<string>(bytes, "message")
+            SmithyPayloadDocuments.DeserializeMember<string>(
+                SmithyCborPayloadCodec.Default,
+                bytes,
+                "message"
+            )
         );
     }
 

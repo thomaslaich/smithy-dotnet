@@ -27,6 +27,7 @@
     <ProjectReference Include="../../src/SmithyNet.MSBuild/SmithyNet.MSBuild.csproj" />
     <ProjectReference Include="../../src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
     <ProjectReference Include="../../src/SmithyNet.Server/SmithyNet.Server.csproj" />
+    <ProjectReference Include="../../src/SmithyNet.Xml/SmithyNet.Xml.csproj" />
   </ItemGroup>
 
   <ItemGroup>
