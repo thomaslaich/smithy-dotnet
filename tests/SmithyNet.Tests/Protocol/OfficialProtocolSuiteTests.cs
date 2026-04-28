@@ -18,6 +18,7 @@ public sealed class OfficialProtocolSuiteTests(
 ) : IClassFixture<OfficialProtocolSuiteFixture>
 {
     private static readonly ShapeId RestJson1Protocol = ShapeId.Parse("aws.protocols#restJson1");
+    private static readonly ShapeId RpcV2CborProtocol = ShapeId.Parse("smithy.protocols#rpcv2Cbor");
     private static readonly ShapeId SimpleRestJsonProtocol = ShapeId.Parse("alloy#simpleRestJson");
 
     [Fact]
@@ -47,15 +48,33 @@ public sealed class OfficialProtocolSuiteTests(
     }
 
     [Fact]
+    public void OfficialSmithyRpcV2CborSuiteIsAvailable()
+    {
+        var inventory = ProtocolSuiteInventory.Create(fixture.Model, RpcV2CborProtocol);
+
+        Assert.Equal(2, inventory.RequestCaseCount);
+        Assert.Equal(2, inventory.ResponseCaseCount);
+        Assert.Equal(0, inventory.MalformedRequestCaseCount);
+        Assert.Contains(
+            "NonQueryCompatibleRpcV2CborForbidsQueryModeHeader",
+            inventory.RequestCaseIds
+        );
+        Assert.Contains("QueryCompatibleRpcV2CborSendsQueryModeHeader", inventory.RequestCaseIds);
+        Assert.Contains("QueryCompatibleRpcV2CborNoCustomCodeError", inventory.ResponseCaseIds);
+        Assert.Contains("QueryCompatibleRpcV2CborCustomCodeError", inventory.ResponseCaseIds);
+    }
+
+    [Fact]
     public void OfficialProtocolCasesAreAllClassifiedForConformance()
     {
         var cases = OfficialProtocolCase
             .Enumerate(fixture.Model, RestJson1Protocol)
+            .Concat(OfficialProtocolCase.Enumerate(fixture.Model, RpcV2CborProtocol))
             .Concat(OfficialProtocolCase.Enumerate(fixture.Model, SimpleRestJsonProtocol))
             .ToArray();
         var classifications = cases.Select(OfficialProtocolConformanceMatrix.Classify).ToArray();
 
-        Assert.Equal(506, cases.Length);
+        Assert.Equal(510, cases.Length);
         Assert.DoesNotContain(
             classifications,
             classification => classification.Status == OfficialProtocolCaseStatus.Unknown
@@ -73,13 +92,14 @@ public sealed class OfficialProtocolSuiteTests(
     {
         var executableCases = OfficialProtocolCase
             .Enumerate(fixture.Model, RestJson1Protocol)
+            .Concat(OfficialProtocolCase.Enumerate(fixture.Model, RpcV2CborProtocol))
             .Concat(OfficialProtocolCase.Enumerate(fixture.Model, SimpleRestJsonProtocol))
             .Select(OfficialProtocolConformanceMatrix.Classify)
             .Where(classification => classification.Status == OfficialProtocolCaseStatus.Executable)
             .Select(classification => $"{classification.Case.Kind}:{classification.Case.Id}")
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Equal(40, executableCases.Count);
+        Assert.Equal(41, executableCases.Count);
         Assert.Contains("Request:AddMenuItem", executableCases);
         Assert.Contains("Response:AddMenuItemResult", executableCases);
         Assert.Contains("Request:CustomCodeInput", executableCases);
@@ -132,6 +152,10 @@ public sealed class OfficialProtocolSuiteTests(
         Assert.Contains("Response:RestJsonHttpPayloadWithStructure", executableCases);
         Assert.Contains("Response:RestJsonHttpResponseCode", executableCases);
         Assert.Contains("Response:RestJsonHttpResponseCodeWithNoPayload", executableCases);
+        Assert.Contains(
+            "Request:NonQueryCompatibleRpcV2CborForbidsQueryModeHeader",
+            executableCases
+        );
     }
 
     [Fact]
@@ -139,6 +163,7 @@ public sealed class OfficialProtocolSuiteTests(
     {
         var executableCases = OfficialProtocolCase
             .Enumerate(fixture.Model, RestJson1Protocol)
+            .Concat(OfficialProtocolCase.Enumerate(fixture.Model, RpcV2CborProtocol))
             .Concat(OfficialProtocolCase.Enumerate(fixture.Model, SimpleRestJsonProtocol))
             .Where(testCase =>
                 OfficialProtocolConformanceMatrix.Classify(testCase).Status
@@ -171,6 +196,7 @@ public sealed class OfficialProtocolSuiteTests(
     {
         var cases = OfficialProtocolCase
             .Enumerate(fixture.Model, RestJson1Protocol)
+            .Concat(OfficialProtocolCase.Enumerate(fixture.Model, RpcV2CborProtocol))
             .Concat(OfficialProtocolCase.Enumerate(fixture.Model, SimpleRestJsonProtocol));
         var markdown = OfficialProtocolConformanceMatrixRenderer.Render(cases);
         var snapshotPath = OfficialProtocolConformanceMatrixRenderer.GetRepositoryReportPath();
@@ -218,6 +244,7 @@ public sealed class OfficialProtocolSuiteFixture : IAsyncLifetime
               "maven": {
                 "dependencies": [
                   "software.amazon.smithy:smithy-aws-traits:1.68.0",
+                  "software.amazon.smithy:smithy-protocol-tests:1.68.0",
                   "software.amazon.smithy:smithy-aws-protocol-tests:1.68.0",
                   "com.disneystreaming.alloy:alloy-core:0.3.38",
                   "com.disneystreaming.alloy:alloy-protocol-tests:0.3.38"
@@ -369,6 +396,7 @@ internal sealed record OfficialProtocolCaseClassification(
 internal static class OfficialProtocolConformanceMatrix
 {
     private static readonly ShapeId RestJson1Protocol = ShapeId.Parse("aws.protocols#restJson1");
+    private static readonly ShapeId RpcV2CborProtocol = ShapeId.Parse("smithy.protocols#rpcv2Cbor");
     private static readonly ShapeId SimpleRestJsonProtocol = ShapeId.Parse("alloy#simpleRestJson");
 
     private static readonly HashSet<(
@@ -461,6 +489,11 @@ internal static class OfficialProtocolConformanceMatrix
             OfficialProtocolCaseKind.Response,
             "RestJsonHttpResponseCodeWithNoPayload"
         ),
+        (
+            RpcV2CborProtocol,
+            OfficialProtocolCaseKind.Request,
+            "NonQueryCompatibleRpcV2CborForbidsQueryModeHeader"
+        ),
     ];
 
     public static OfficialProtocolCaseClassification Classify(OfficialProtocolCase testCase)
@@ -488,6 +521,11 @@ internal static class OfficialProtocolConformanceMatrix
             return testCase.Protocol == RestJson1Protocol
                 ? "restJson1 server generation and malformed request rejection are not implemented."
                 : "Malformed request conformance execution is not implemented.";
+        }
+
+        if (testCase.Protocol == RpcV2CborProtocol)
+        {
+            return "rpcv2Cbor official conformance cases are loaded, but generated execution is not enabled yet.";
         }
 
         if (
@@ -889,12 +927,15 @@ internal static class OfficialGeneratedClientConformanceRunner
               </PropertyGroup>
               <ItemGroup>
                 <FrameworkReference Include="Microsoft.AspNetCore.App" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Cbor/SmithyNet.Codecs.Cbor.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
-                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Json/SmithyNet.Json.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Json/SmithyNet.Codecs.Json.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs/SmithyNet.Codecs.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server/SmithyNet.Server.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Xml/SmithyNet.Codecs.Xml.csproj" />
               </ItemGroup>
             </Project>
             """
@@ -990,6 +1031,10 @@ internal static class OfficialGeneratedClientConformanceRunner
             requestOnlyWithoutOutput ? string.Empty
             : responseTest is not null ? responseTest.Body ?? string.Empty
             : "{}";
+        var responseMediaType = requestOnlyWithoutOutput
+            ? string.Empty
+            : responseTest?.BodyMediaType ?? "application/json";
+        var responseContent = CreateResponseContentExpression(responseBody, responseMediaType);
 
         return File.WriteAllTextAsync(
             Path.Combine(projectDirectory, "Program.cs"),
@@ -1020,9 +1065,7 @@ internal static class OfficialGeneratedClientConformanceRunner
                 CultureInfo.InvariantCulture
             )}})
                     {
-                        Content = new StringContent({{ComplianceCSharpLiterals.FormatString(
-                responseBody
-            )}}, Encoding.UTF8, "application/json")
+                        Content = {{responseContent}}
                     }{{responseHeaders}};
                 }
             }
@@ -1056,11 +1099,31 @@ internal static class OfficialGeneratedClientConformanceRunner
                 200,
                 requestTest?.Headers
                     ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
-                "{}",
-                "application/json",
+                GetSyntheticSuccessBody(testCase.Protocol),
+                GetDefaultMediaTypeForProtocol(testCase.Protocol),
                 Document.From(new Dictionary<string, Document>())
             );
         }
+    }
+
+    private static string GetDefaultMediaTypeForProtocol(ShapeId protocol)
+    {
+        return protocol switch
+        {
+            var id when id == ShapeId.Parse("smithy.protocols#rpcv2Cbor") => "application/cbor",
+            var id when id == ShapeId.Parse("aws.protocols#restXml") => "application/xml",
+            _ => "application/json",
+        };
+    }
+
+    private static string GetSyntheticSuccessBody(ShapeId protocol)
+    {
+        return protocol switch
+        {
+            var id when id == ShapeId.Parse("smithy.protocols#rpcv2Cbor") => "oA==",
+            var id when id == ShapeId.Parse("aws.protocols#restXml") => "<SyntheticResponse/>",
+            _ => "{}",
+        };
     }
 
     private static string CreateClientInput(
@@ -1244,28 +1307,34 @@ internal static class OfficialGeneratedClientConformanceRunner
                     {{forbiddenHeaderAssertions}}
 
                     var body = request.Content is null
-                        ? string.Empty
-                        : await request.Content.ReadAsStringAsync(cancellationToken);
+                        ? []
+                        : await request.Content.ReadAsByteArrayAsync(cancellationToken);
                     if (!BodyMatches(body, {{ComplianceCSharpLiterals.FormatString(
                 testCase.Body ?? string.Empty
             )}}, {{ComplianceCSharpLiterals.FormatString(testCase.BodyMediaType ?? string.Empty)}}))
                     {
-                        throw new InvalidOperationException($"Unexpected request body: {body}");
+                        throw new InvalidOperationException($"Unexpected request body: {Convert.ToBase64String(body)}");
                     }
 
-                    static bool BodyMatches(string actual, string expected, string bodyMediaType)
+                    static bool BodyMatches(byte[] actual, string expected, string bodyMediaType)
                     {
                         if (!string.Equals(bodyMediaType, "application/json", StringComparison.OrdinalIgnoreCase))
                         {
-                            return actual == expected;
+                            if (string.Equals(bodyMediaType, "application/cbor", StringComparison.OrdinalIgnoreCase))
+                            {
+                                return Convert.ToBase64String(actual) == expected;
+                            }
+
+                            return Encoding.UTF8.GetString(actual) == expected;
                         }
 
-                        if (string.IsNullOrWhiteSpace(actual) || string.IsNullOrWhiteSpace(expected))
+                        var actualText = Encoding.UTF8.GetString(actual);
+                        if (string.IsNullOrWhiteSpace(actualText) || string.IsNullOrWhiteSpace(expected))
                         {
-                            return string.IsNullOrWhiteSpace(actual) && string.IsNullOrWhiteSpace(expected);
+                            return string.IsNullOrWhiteSpace(actualText) && string.IsNullOrWhiteSpace(expected);
                         }
 
-                        return JsonNode.DeepEquals(JsonNode.Parse(actual), JsonNode.Parse(expected));
+                        return JsonNode.DeepEquals(JsonNode.Parse(actualText), JsonNode.Parse(expected));
                     }
 
                     static bool QueryMatches(Uri? requestUri, string[] expectedParameters)
@@ -1383,6 +1452,22 @@ internal static class OfficialGeneratedClientConformanceRunner
             headers.Select(header =>
                 $".WithHeader({ComplianceCSharpLiterals.FormatString(header.Key)}, {ComplianceCSharpLiterals.FormatString(header.Value)})"
             )
+        );
+    }
+
+    private static string CreateResponseContentExpression(string body, string mediaType)
+    {
+        if (string.Equals(mediaType, "application/cbor", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"new ByteArrayContent(Convert.FromBase64String({ComplianceCSharpLiterals.FormatString(body)}))"
+            );
+        }
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"new StringContent({ComplianceCSharpLiterals.FormatString(body)}, Encoding.UTF8, {ComplianceCSharpLiterals.FormatString(mediaType)})"
         );
     }
 
@@ -1599,7 +1684,7 @@ internal static class OfficialGeneratedServerConformanceRunner
               </PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
-                <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Json/SmithyNet.Json.csproj" />
+                <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Codecs.Json/SmithyNet.Codecs.Json.csproj" />
                 <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
                 <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Server/SmithyNet.Server.csproj" />
               </ItemGroup>

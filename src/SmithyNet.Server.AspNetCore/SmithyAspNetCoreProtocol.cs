@@ -2,7 +2,7 @@ using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.AspNetCore.Http;
-using SmithyNet.Json;
+using SmithyNet.Codecs.Json;
 
 namespace SmithyNet.Server.AspNetCore;
 

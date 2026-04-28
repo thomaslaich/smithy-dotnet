@@ -1,4 +1,4 @@
-namespace SmithyNet.Client;
+namespace SmithyNet.Codecs;
 
 public interface ISmithyPayloadCodec
 {

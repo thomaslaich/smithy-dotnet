@@ -1,6 +1,6 @@
 using SmithyNet.Core;
 using SmithyNet.Core.Annotations;
-using SmithyNet.Json;
+using SmithyNet.Codecs.Json;
 
 namespace SmithyNet.Tests.Json;
 

@@ -1,7 +1,7 @@
 using System.Text;
-using SmithyNet.Xml;
+using SmithyNet.Codecs;
 
-namespace SmithyNet.Client;
+namespace SmithyNet.Codecs.Xml;
 
 public sealed class SmithyXmlPayloadCodec : ISmithyPayloadCodec
 {

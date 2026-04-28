@@ -4,8 +4,9 @@ using System.Reflection;
 using System.Text;
 using SmithyNet.Core;
 using SmithyNet.Core.Annotations;
+using SmithyNet.Codecs;
 
-namespace SmithyNet.Client;
+namespace SmithyNet.Codecs.Cbor;
 
 public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
 {
@@ -26,24 +27,6 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
         var value = reader.ReadValue();
         reader.EnsureFullyConsumed();
         return (T)ConvertValue(value, typeof(T))!;
-    }
-
-    internal static T DeserializeNamedMember<T>(byte[] content, string name)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
-        var reader = new CborBufferReader(content);
-        var value = reader.ReadValue();
-        reader.EnsureFullyConsumed();
-        if (
-            value is not IReadOnlyDictionary<string, object?> map
-            || !map.TryGetValue(name, out var member)
-        )
-        {
-            return default!;
-        }
-
-        return (T)ConvertValue(member, typeof(T))!;
     }
 
     private static void WriteValue(CborBufferWriter writer, object? value, Type declaredType)
@@ -635,8 +618,6 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
             WriteBigEndian(value);
         }
 
-        private void WriteBigEndian(short value) => WriteBigEndian((ushort)value);
-
         private void WriteBigEndian(ushort value)
         {
             stream.WriteByte((byte)(value >> 8));
@@ -797,8 +778,7 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
 
         private ushort ReadUInt16()
         {
-            var value = (ushort)((ReadByte() << 8) | ReadByte());
-            return value;
+            return (ushort)((ReadByte() << 8) | ReadByte());
         }
 
         private uint ReadUInt32()

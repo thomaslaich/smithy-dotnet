@@ -5,7 +5,7 @@ using System.Text.Json;
 using SmithyNet.Core;
 using SmithyNet.Core.Annotations;
 
-namespace SmithyNet.Json;
+namespace SmithyNet.Codecs.Json;
 
 public static class SmithyJsonSerializer
 {

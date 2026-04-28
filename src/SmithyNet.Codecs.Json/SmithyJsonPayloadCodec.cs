@@ -1,8 +1,7 @@
 using System.Text;
-using System.Text.Json;
-using SmithyNet.Json;
+using SmithyNet.Codecs;
 
-namespace SmithyNet.Client;
+namespace SmithyNet.Codecs.Json;
 
 public sealed class SmithyJsonPayloadCodec : ISmithyPayloadCodec
 {

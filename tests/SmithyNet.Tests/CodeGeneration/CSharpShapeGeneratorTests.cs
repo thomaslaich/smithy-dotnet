@@ -184,7 +184,7 @@ public sealed class CSharpShapeGeneratorTests
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
-                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Json/SmithyNet.Json.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Json/SmithyNet.Codecs.Json.csproj" />
               </ItemGroup>
             </Project>
             """
@@ -208,7 +208,7 @@ public sealed class CSharpShapeGeneratorTests
                         new HttpClient(new Handler()),
                         new SmithyClientOptions
                         {
-                            Endpoint = new Uri("https://example.test/api")
+                            Endpoint = new Uri("https://example.test/api"),
                         });
                     var output = await client.GetForecastAsync(
                         new GetForecastInput(
@@ -372,6 +372,7 @@ public sealed class CSharpShapeGeneratorTests
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Xml/SmithyNet.Codecs.Xml.csproj" />
               </ItemGroup>
             </Project>
             """
@@ -395,7 +396,7 @@ public sealed class CSharpShapeGeneratorTests
                         new HttpClient(new Handler()),
                         new SmithyClientOptions
                         {
-                            Endpoint = new Uri("https://example.test/api")
+                            Endpoint = new Uri("https://example.test/api"),
                         });
                     var output = await client.GetForecastAsync(
                         new GetForecastInput("Zurich", "metric"),
@@ -521,7 +522,7 @@ public sealed class CSharpShapeGeneratorTests
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
-                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Json/SmithyNet.Json.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Json/SmithyNet.Codecs.Json.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server/SmithyNet.Server.csproj" />
               </ItemGroup>
@@ -1116,11 +1117,11 @@ public sealed class CSharpShapeGeneratorTests
             client
         );
         Assert.Contains(
-          """request.Content = SmithyPayloadDocuments.SerializeMembers(DocumentCodec, "GetForecastInput", requestBody);""",
+            """request.Content = Encoding.UTF8.GetBytes(SmithyXmlSerializer.SerializeMembers("GetForecastInput", requestBody));""",
             client
         );
         Assert.Contains(
-            """DeserializeRequiredBodyMember<string>(response.Content, "Condition")""",
+            """return DeserializeRequiredBody<GetForecastOutput>(response.Content);""",
             client
         );
         Assert.Contains("var errorType = DeserializeRestXmlErrorCode(response.Content);", client);
@@ -1206,6 +1207,7 @@ public sealed class CSharpShapeGeneratorTests
               </PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Cbor/SmithyNet.Codecs.Cbor.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
               </ItemGroup>
@@ -1218,6 +1220,7 @@ public sealed class CSharpShapeGeneratorTests
             """
             using System.Net;
             using Example.Weather;
+            using SmithyNet.Codecs.Cbor;
             using SmithyNet.Client;
 
             namespace GeneratedRpcV2ClientCompileTest;
@@ -1230,7 +1233,7 @@ public sealed class CSharpShapeGeneratorTests
                         new HttpClient(new Handler()),
                         new SmithyClientOptions
                         {
-                            Endpoint = new Uri("https://example.test/api")
+                            Endpoint = new Uri("https://example.test/api"),
                         });
                     var output = await client.GetForecastAsync(
                         new GetForecastInput("Zurich"),

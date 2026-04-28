@@ -76,7 +76,7 @@ Reference the packages needed by generated `restJson1` clients:
   <PackageReference Include="SmithyNet.Client" Version="0.1.0-preview.2" />
   <PackageReference Include="SmithyNet.Core" Version="0.1.0-preview.2" />
   <PackageReference Include="SmithyNet.Http" Version="0.1.0-preview.2" />
-  <PackageReference Include="SmithyNet.Json" Version="0.1.0-preview.2" />
+  <PackageReference Include="SmithyNet.Codecs.Json" Version="0.1.0-preview.2" />
   <PackageReference Include="SmithyNet.MSBuild" Version="0.1.0-preview.2" PrivateAssets="all" />
 </ItemGroup>
 ```

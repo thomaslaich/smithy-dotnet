@@ -29,7 +29,21 @@ public sealed partial class CSharpShapeGenerator
                 "System.Xml.Linq",
                 "SmithyNet.Client",
                 "SmithyNet.Http",
+                "SmithyNet.Codecs",
             ]);
+
+            if (IsRestXmlService(service))
+            {
+                extraUsings.Add("SmithyNet.Codecs.Xml");
+            }
+            else if (IsRpcV2CborService(service))
+            {
+                extraUsings.Add("SmithyNet.Codecs.Cbor");
+            }
+            else
+            {
+                extraUsings.Add("SmithyNet.Codecs.Json");
+            }
         }
 
         if (emitsGrpc)
@@ -68,7 +82,6 @@ public sealed partial class CSharpShapeGenerator
                 builder.Line(
                     $"private static readonly ISmithyPayloadCodec DocumentCodec = {GetDocumentCodecExpression(service)};"
                 );
-                builder.Line();
                 builder.Line("private readonly SmithyOperationInvoker invoker;");
                 builder.Line();
                 builder.Line($"public {typeName}(Uri endpoint)");
@@ -127,7 +140,7 @@ public sealed partial class CSharpShapeGenerator
                     AppendErrorDeserializer(builder, model, operationId, options);
                 }
 
-                AppendClientHelpers(builder);
+                AppendClientHelpers(builder, service);
             });
             builder.Line();
         }
@@ -601,7 +614,7 @@ public sealed partial class CSharpShapeGenerator
         if (IsRestXmlService(service))
         {
             builder.Line(
-                $"request.Content = SmithyPayloadDocuments.SerializeMembers(DocumentCodec, {FormatString(GetDocumentRootName(input, service))}, requestBody);"
+                $"request.Content = Encoding.UTF8.GetBytes(SmithyXmlSerializer.SerializeMembers({FormatString(GetDocumentRootName(input, service))}, requestBody));"
             );
         }
         else
@@ -937,7 +950,7 @@ public sealed partial class CSharpShapeGenerator
             : shape.Id.Name;
     }
 
-    private static void AppendClientHelpers(CSharpWriter builder)
+    private static void AppendClientHelpers(CSharpWriter builder, ModelShape service)
     {
         builder.Line(
             "private static void AddHeader(IDictionary<string, IReadOnlyList<string>> headers, string name, object? value)"
@@ -1170,7 +1183,7 @@ public sealed partial class CSharpShapeGenerator
                 builder.Line("return default!;");
             });
             builder.Line();
-            builder.Line("return SmithyPayloadDocuments.DeserializeMember<T>(DocumentCodec, content, name);");
+            builder.Line(GetDeserializeBodyMemberExpression(service, required: false));
         });
         builder.Line();
 
@@ -1187,7 +1200,7 @@ public sealed partial class CSharpShapeGenerator
                 );
             });
             builder.Line();
-            builder.Line("var value = SmithyPayloadDocuments.DeserializeMember<T>(DocumentCodec, content, name);");
+            builder.Line($"var value = {GetDeserializeBodyMemberCall(service)};");
             builder.Line("return EqualityComparer<T>.Default.Equals(value, default!)");
             builder.Indented(() =>
             {
@@ -1464,6 +1477,40 @@ public sealed partial class CSharpShapeGenerator
             );
         });
         builder.Line();
+    }
+
+    private static string GetDeserializeBodyMemberExpression(ModelShape service, bool required)
+    {
+        if (IsRpcV2CborService(service))
+        {
+            return $"return {GetDeserializeBodyMemberCall(service)};";
+        }
+
+        if (IsRestXmlService(service))
+        {
+            return required
+                ? "return DeserializeRequiredXmlBodyMember<T>(content, name);"
+                : "return DeserializeXmlBodyMember<T>(content, name);";
+        }
+
+        return required
+            ? "return DeserializeRequiredJsonBodyMember<T>(content, name);"
+            : "return DeserializeJsonBodyMember<T>(content, name);";
+    }
+
+    private static string GetDeserializeBodyMemberCall(ModelShape service)
+    {
+        if (IsRpcV2CborService(service))
+        {
+            return "SmithyCborPayloadCodec.DeserializeMember<T>(content, name)";
+        }
+
+        if (IsRestXmlService(service))
+        {
+            return "DeserializeXmlBodyMember<T>(content, name)";
+        }
+
+        return "DeserializeJsonBodyMember<T>(content, name)";
     }
 }
 

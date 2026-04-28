@@ -1,7 +1,7 @@
 using System.Globalization;
-using SmithyNet.Client;
 using SmithyNet.Core;
 using SmithyNet.Core.Annotations;
+using SmithyNet.Codecs.Xml;
 
 namespace SmithyNet.Tests.Client;
 

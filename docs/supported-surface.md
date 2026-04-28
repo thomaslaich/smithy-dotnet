@@ -34,7 +34,7 @@ remote callers can omit required data even when generated .NET types are strict.
 
 ## JSON
 
-`SmithyNet.Json` supports JSON serialization and deserialization for generated
+`SmithyNet.Codecs.Json` supports JSON serialization and deserialization for generated
 Smithy shapes using generated metadata attributes.
 
 Covered shape kinds:

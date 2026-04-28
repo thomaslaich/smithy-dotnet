@@ -1,5 +1,5 @@
 using System.Globalization;
-using SmithyNet.Client;
+using SmithyNet.Codecs.Cbor;
 using SmithyNet.Core;
 using SmithyNet.Core.Annotations;
 
@@ -25,28 +25,15 @@ public sealed class SmithyCborPayloadCodecTests
     }
 
     [Fact]
-    public void DeserializeMemberReadsNamedMembersFromCborMaps()
+    public void DeserializeReadsNamedMembersFromCborMapsThroughWholeValueBinding()
     {
         var envelope = new ErrorEnvelope("example.weather#BadRequest", "bad city");
 
         var bytes = SmithyCborPayloadCodec.Default.Serialize(envelope);
+        var roundTrip = SmithyCborPayloadCodec.Default.Deserialize<ErrorEnvelope>(bytes);
 
-        Assert.Equal(
-            "example.weather#BadRequest",
-            SmithyPayloadDocuments.DeserializeMember<string>(
-                SmithyCborPayloadCodec.Default,
-                bytes,
-                "__type"
-            )
-        );
-        Assert.Equal(
-            "bad city",
-            SmithyPayloadDocuments.DeserializeMember<string>(
-                SmithyCborPayloadCodec.Default,
-                bytes,
-                "message"
-            )
-        );
+        Assert.Equal("example.weather#BadRequest", roundTrip.Type);
+        Assert.Equal("bad city", roundTrip.Message);
     }
 
     [SmithyShape("example.weather#ForecastRequest", ShapeKind.Structure)]

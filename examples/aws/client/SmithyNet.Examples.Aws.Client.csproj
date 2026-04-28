@@ -14,9 +14,15 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="SmithyNet.Client" Version="0.1.0-preview.2" />
-    <PackageReference Include="SmithyNet.Core" Version="0.1.0-preview.2" />
-    <PackageReference Include="SmithyNet.Http" Version="0.1.0-preview.2" />
-    <PackageReference Include="SmithyNet.MSBuild" Version="0.1.0-preview.2" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/SmithyNet.Codecs.Cbor/SmithyNet.Codecs.Cbor.csproj" />
+    <ProjectReference Include="../../../src/SmithyNet.Client/SmithyNet.Client.csproj" />
+    <ProjectReference Include="../../../src/SmithyNet.Core/SmithyNet.Core.csproj" />
+    <ProjectReference Include="../../../src/SmithyNet.Http/SmithyNet.Http.csproj" />
+    <ProjectReference Include="../../../src/SmithyNet.Codecs/SmithyNet.Codecs.csproj" />
+    <ProjectReference Include="../../../src/SmithyNet.MSBuild/SmithyNet.MSBuild.csproj" />
+    <ProjectReference Include="../../../src/SmithyNet.Codecs.Xml/SmithyNet.Codecs.Xml.csproj" />
   </ItemGroup>
 </Project>

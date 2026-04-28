@@ -5,7 +5,7 @@ using System.Xml.Linq;
 using SmithyNet.Core;
 using SmithyNet.Core.Annotations;
 
-namespace SmithyNet.Xml;
+namespace SmithyNet.Codecs.Xml;
 
 public static class SmithyXmlSerializer
 {
@@ -20,7 +20,10 @@ public static class SmithyXmlSerializer
         return SerializeElement(element);
     }
 
-    public static string SerializeMembers(string rootName, IReadOnlyDictionary<string, object?> members)
+    public static string SerializeMembers(
+        string rootName,
+        IReadOnlyDictionary<string, object?> members
+    )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rootName);
         ArgumentNullException.ThrowIfNull(members);

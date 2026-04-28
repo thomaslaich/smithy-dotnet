@@ -1,7 +1,7 @@
 using System.Globalization;
 using SmithyNet.Core;
 using SmithyNet.Core.Annotations;
-using SmithyNet.Xml;
+using SmithyNet.Codecs.Xml;
 
 namespace SmithyNet.Tests.Xml;
 
@@ -27,7 +27,8 @@ public sealed class SmithyXmlSerializerTests
     [Fact]
     public void DeserializeMembersReadsSingleMemberFromXmlDocument()
     {
-        var xml = "<ForecastResponse><Condition>clear</Condition><GeneratedAt>2026-04-23T10:15:30.0000000+00:00</GeneratedAt></ForecastResponse>";
+        var xml =
+            "<ForecastResponse><Condition>clear</Condition><GeneratedAt>2026-04-23T10:15:30.0000000+00:00</GeneratedAt></ForecastResponse>";
 
         var summary = SmithyXmlSerializer.DeserializeMember<string>(xml, "Condition");
 

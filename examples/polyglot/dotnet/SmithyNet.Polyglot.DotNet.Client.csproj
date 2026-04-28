@@ -6,16 +6,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace></RootNamespace>
     <SmithyGeneratedNamespaces>example.java.hello;example.scala.hello</SmithyGeneratedNamespaces>
+    <SmithyGenerateServer>false</SmithyGenerateServer>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
   </PropertyGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Google.Protobuf" Version="3.30.2" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="all" />
     <PackageReference Include="SmithyNet.Client" Version="0.1.0-preview.2" />
     <PackageReference Include="SmithyNet.Core" Version="0.1.0-preview.2" />
     <PackageReference Include="SmithyNet.Http" Version="0.1.0-preview.2" />
-    <PackageReference Include="SmithyNet.Json" Version="0.1.0-preview.2" />
+    <PackageReference Include="SmithyNet.Codecs.Json" Version="0.1.0-preview.2" />
     <PackageReference Include="SmithyNet.MSBuild" Version="0.1.0-preview.2" PrivateAssets="all" />
     <PackageReference Include="SmithyNet.Server" Version="0.1.0-preview.2" />
     <PackageReference Include="SmithyNet.Server.AspNetCore" Version="0.1.0-preview.2" />
