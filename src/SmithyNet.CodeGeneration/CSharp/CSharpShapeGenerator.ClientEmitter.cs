@@ -26,6 +26,7 @@ public sealed partial class CSharpShapeGenerator
                 "System.Net",
                 "System.Net.Http",
                 "System.Text",
+                "System.Text.Json",
                 "System.Xml.Linq",
                 "SmithyNet.Client",
                 "SmithyNet.Http",
@@ -1300,6 +1301,82 @@ public sealed partial class CSharpShapeGenerator
                 );
                 builder.Line(": root;");
             });
+        });
+        builder.Line();
+
+        builder.Line("private static T DeserializeJsonBodyMember<T>(byte[] content, string name)");
+        builder.Block(() =>
+        {
+            builder.Line("using var document = JsonDocument.Parse(content);");
+            builder.Line("return document.RootElement.TryGetProperty(name, out var element)");
+            builder.Indented(() =>
+            {
+                builder.Line("? DocumentCodec.Deserialize<T>(Encoding.UTF8.GetBytes(element.GetRawText()))");
+                builder.Line(": default!;");
+            });
+        });
+        builder.Line();
+
+        builder.Line(
+            "private static T DeserializeRequiredJsonBodyMember<T>(byte[] content, string name)"
+        );
+        builder.Block(() =>
+        {
+            builder.Line("using var document = JsonDocument.Parse(content);");
+            builder.Line("if (!document.RootElement.TryGetProperty(name, out var element))");
+            builder.Block(() =>
+            {
+                builder.Line(
+                    "throw new InvalidOperationException($\"Response body member '{name}' is required but was missing.\");"
+                );
+            });
+            builder.Line();
+            builder.Line(
+                "return DocumentCodec.Deserialize<T>(Encoding.UTF8.GetBytes(element.GetRawText()));"
+            );
+        });
+        builder.Line();
+
+        builder.Line("private static T DeserializeXmlBodyMember<T>(byte[] content, string name)");
+        builder.Block(() =>
+        {
+            builder.Line("var document = XDocument.Parse(Encoding.UTF8.GetString(content));");
+            builder.Line(
+                "var root = document.Root ?? throw new InvalidOperationException(\"Response body was missing an XML root element.\");"
+            );
+            builder.Line(
+                "var element = root.Elements().FirstOrDefault(child => child.Name.LocalName == name);"
+            );
+            builder.Line("return element is null");
+            builder.Indented(() =>
+            {
+                builder.Line("? default!");
+                builder.Line(": DeserializeXmlElement<T>(element);");
+            });
+        });
+        builder.Line();
+
+        builder.Line(
+            "private static T DeserializeRequiredXmlBodyMember<T>(byte[] content, string name)"
+        );
+        builder.Block(() =>
+        {
+            builder.Line("var document = XDocument.Parse(Encoding.UTF8.GetString(content));");
+            builder.Line(
+                "var root = document.Root ?? throw new InvalidOperationException(\"Response body was missing an XML root element.\");"
+            );
+            builder.Line(
+                "var element = root.Elements().FirstOrDefault(child => child.Name.LocalName == name);"
+            );
+            builder.Line("if (element is null)");
+            builder.Block(() =>
+            {
+                builder.Line(
+                    "throw new InvalidOperationException($\"Response body member '{name}' is required but was missing.\");"
+                );
+            });
+            builder.Line();
+            builder.Line("return DeserializeXmlElement<T>(element);");
         });
         builder.Line();
 

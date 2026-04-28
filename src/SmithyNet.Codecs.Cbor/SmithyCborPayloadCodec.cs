@@ -29,6 +29,25 @@ public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
         return (T)ConvertValue(value, typeof(T))!;
     }
 
+    public static T DeserializeMember<T>(byte[] content, string name)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var reader = new CborBufferReader(content);
+        var value = reader.ReadValue();
+        reader.EnsureFullyConsumed();
+        if (
+            value is not IReadOnlyDictionary<string, object?> map
+            || !map.TryGetValue(name, out var member)
+        )
+        {
+            return default!;
+        }
+
+        return (T)ConvertValue(member, typeof(T))!;
+    }
+
     private static void WriteValue(CborBufferWriter writer, object? value, Type declaredType)
     {
         if (value is null)
