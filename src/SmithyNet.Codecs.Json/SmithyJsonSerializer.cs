@@ -7,7 +7,7 @@ using SmithyNet.Core.Annotations;
 
 namespace SmithyNet.Codecs.Json;
 
-public static class SmithyJsonSerializer
+internal static class SmithyJsonSerializer
 {
     private static readonly JsonSerializerOptions DefaultOptions = new(JsonSerializerDefaults.Web);
 
@@ -28,6 +28,21 @@ public static class SmithyJsonSerializer
 
         using var document = JsonDocument.Parse(json);
         return (T)ReadValue(document.RootElement, typeof(T), options ?? DefaultOptions)!;
+    }
+
+    public static T DeserializeMember<T>(
+        byte[] content,
+        string name,
+        JsonSerializerOptions? options = null
+    )
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        using var document = JsonDocument.Parse(content);
+        return document.RootElement.TryGetProperty(name, out var element)
+            ? (T)ReadValue(element, typeof(T), options ?? DefaultOptions)!
+            : default!;
     }
 
     private static void WriteValue(

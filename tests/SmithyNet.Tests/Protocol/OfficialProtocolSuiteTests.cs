@@ -52,8 +52,8 @@ public sealed class OfficialProtocolSuiteTests(
     {
         var inventory = ProtocolSuiteInventory.Create(fixture.Model, RpcV2CborProtocol);
 
-        Assert.Equal(2, inventory.RequestCaseCount);
-        Assert.Equal(2, inventory.ResponseCaseCount);
+        Assert.Equal(43, inventory.RequestCaseCount);
+        Assert.Equal(45, inventory.ResponseCaseCount);
         Assert.Equal(0, inventory.MalformedRequestCaseCount);
         Assert.Contains(
             "NonQueryCompatibleRpcV2CborForbidsQueryModeHeader",
@@ -74,7 +74,7 @@ public sealed class OfficialProtocolSuiteTests(
             .ToArray();
         var classifications = cases.Select(OfficialProtocolConformanceMatrix.Classify).ToArray();
 
-        Assert.Equal(510, cases.Length);
+        Assert.Equal(594, cases.Length);
         Assert.DoesNotContain(
             classifications,
             classification => classification.Status == OfficialProtocolCaseStatus.Unknown
@@ -929,13 +929,14 @@ internal static class OfficialGeneratedClientConformanceRunner
                 <FrameworkReference Include="Microsoft.AspNetCore.App" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Cbor/SmithyNet.Codecs.Cbor.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client.RestJson/SmithyNet.Client.RestJson.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client.RestXml/SmithyNet.Client.RestXml.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client.RpcV2Cbor/SmithyNet.Client.RpcV2Cbor.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
-                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Json/SmithyNet.Codecs.Json.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs/SmithyNet.Codecs.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server/SmithyNet.Server.csproj" />
-                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Xml/SmithyNet.Codecs.Xml.csproj" />
               </ItemGroup>
             </Project>
             """
@@ -1465,6 +1466,14 @@ internal static class OfficialGeneratedClientConformanceRunner
             );
         }
 
+        if (string.IsNullOrEmpty(mediaType))
+        {
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"new StringContent({ComplianceCSharpLiterals.FormatString(body)}, Encoding.UTF8)"
+            );
+        }
+
         return string.Create(
             CultureInfo.InvariantCulture,
             $"new StringContent({ComplianceCSharpLiterals.FormatString(body)}, Encoding.UTF8, {ComplianceCSharpLiterals.FormatString(mediaType)})"
@@ -1683,6 +1692,9 @@ internal static class OfficialGeneratedServerConformanceRunner
                 <WarningsNotAsErrors>CS8602;CS8604</WarningsNotAsErrors>
               </PropertyGroup>
               <ItemGroup>
+                <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Client.RestJson/SmithyNet.Client.RestJson.csproj" />
+                <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Client.RestXml/SmithyNet.Client.RestXml.csproj" />
+                <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Client.RpcV2Cbor/SmithyNet.Client.RpcV2Cbor.csproj" />
                 <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
                 <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Codecs.Json/SmithyNet.Codecs.Json.csproj" />
                 <ProjectReference Include="{{OfficialGeneratedClientConformanceRunner.FindRepositoryRoot()}}/src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
@@ -1836,7 +1848,9 @@ internal static class OfficialGeneratedServerConformanceRunner
         {
             var mediaType = testCase.BodyMediaType ?? "application/json";
             lines.Add(
-                $"request.Content = new StringContent({ComplianceCSharpLiterals.FormatString(testCase.Body ?? string.Empty)}, Encoding.UTF8, {ComplianceCSharpLiterals.FormatString(mediaType)});"
+                string.IsNullOrEmpty(mediaType)
+                    ? $"request.Content = new StringContent({ComplianceCSharpLiterals.FormatString(testCase.Body ?? string.Empty)}, Encoding.UTF8);"
+                    : $"request.Content = new StringContent({ComplianceCSharpLiterals.FormatString(testCase.Body ?? string.Empty)}, Encoding.UTF8, {ComplianceCSharpLiterals.FormatString(mediaType)});"
             );
         }
 

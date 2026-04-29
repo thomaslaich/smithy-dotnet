@@ -7,7 +7,7 @@ using SmithyNet.Core.Annotations;
 
 namespace SmithyNet.Codecs.Xml;
 
-public static class SmithyXmlSerializer
+internal static class SmithyXmlSerializer
 {
     private const string XmlNameTraitId = "smithy.api#xmlName";
     private const string XmlFlattenedTraitId = "smithy.api#xmlFlattened";
@@ -69,6 +69,12 @@ public static class SmithyXmlSerializer
         var root = ParseRoot(xml);
         var member = root.Elements().FirstOrDefault(element => element.Name.LocalName == name);
         return member is null ? default! : (T)ReadValue(member, typeof(T), null)!;
+    }
+
+    public static T DeserializeMember<T>(byte[] content, string name)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        return DeserializeMember<T>(System.Text.Encoding.UTF8.GetString(content), name);
     }
 
     private static string SerializeElement(XElement element)

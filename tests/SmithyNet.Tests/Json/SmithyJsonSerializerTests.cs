@@ -1,11 +1,13 @@
+using SmithyNet.Codecs.Json;
 using SmithyNet.Core;
 using SmithyNet.Core.Annotations;
-using SmithyNet.Codecs.Json;
 
 namespace SmithyNet.Tests.Json;
 
-public sealed class SmithyJsonSerializerTests
+public sealed class SmithyJsonPayloadCodecTests
 {
+    private static readonly SmithyJsonPayloadCodec Codec = SmithyJsonPayloadCodec.Default;
+
     [Fact]
     public void SerializeUsesSmithyMemberNamesAndJsonNameTrait()
     {
@@ -17,7 +19,7 @@ public sealed class SmithyJsonSerializerTests
             Document.From(new Dictionary<string, Document> { ["source"] = Document.From("test") })
         );
 
-        var json = SmithyJsonSerializer.Serialize(payload);
+        var json = System.Text.Encoding.UTF8.GetString(Codec.Serialize(payload));
 
         Assert.Equal(
             """{"city":"Zurich","kind":"SUN","meta":{"source":"test"},"tags":{"region":"ch"},"value":{"text":"clear"}}""",
@@ -28,8 +30,10 @@ public sealed class SmithyJsonSerializerTests
     [Fact]
     public void DeserializeAppliesConstructorDefaultsAndPreservesUnknownUnionVariants()
     {
-        var request = SmithyJsonSerializer.Deserialize<ForecastRequest>(
-            """{"city":"Zurich","kind":"hail","value":{"radar":{"url":"example"}},"meta":null}"""
+        var request = Codec.Deserialize<ForecastRequest>(
+            System.Text.Encoding.UTF8.GetBytes(
+                """{"city":"Zurich","kind":"hail","value":{"radar":{"url":"example"}},"meta":null}"""
+            )
         );
 
         Assert.Equal("Zurich", request.City);

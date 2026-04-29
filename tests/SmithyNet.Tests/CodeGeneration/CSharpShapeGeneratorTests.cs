@@ -182,9 +182,9 @@ public sealed class CSharpShapeGeneratorTests
               </PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client.RestJson/SmithyNet.Client.RestJson.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
-                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Json/SmithyNet.Codecs.Json.csproj" />
               </ItemGroup>
             </Project>
             """
@@ -370,9 +370,9 @@ public sealed class CSharpShapeGeneratorTests
               </PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client.RestXml/SmithyNet.Client.RestXml.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
-                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Xml/SmithyNet.Codecs.Xml.csproj" />
               </ItemGroup>
             </Project>
             """
@@ -520,9 +520,9 @@ public sealed class CSharpShapeGeneratorTests
               <ItemGroup>
                 <FrameworkReference Include="Microsoft.AspNetCore.App" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client.RestJson/SmithyNet.Client.RestJson.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
-                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Json/SmithyNet.Codecs.Json.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server/SmithyNet.Server.csproj" />
               </ItemGroup>
@@ -832,15 +832,17 @@ public sealed class CSharpShapeGeneratorTests
             .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
             .Contents;
 
-        Assert.Contains("""GetRequiredHeader<string>(response.Headers, "x-request-id")""", client);
+        Assert.Contains("""RestJsonClientProtocol.GetRequiredHeader<string>(response.Headers, "x-request-id")""", client);
         Assert.Contains("(int)response.StatusCode", client);
         Assert.Contains(
-            """DeserializeRequiredBodyMember<string>(response.Content, "summary")""",
+            """var body = RestJsonClientProtocol.DeserializeRequiredBody<GetForecastOutputHttpBody>(DocumentCodec, response.Content);""",
             client
         );
+        Assert.Contains("body.Summary", client);
         Assert.Contains("if ((int)response.StatusCode == 400)", client);
-        Assert.Contains("""GetHeader<string?>(response.Headers, "x-request-id")""", client);
-        Assert.Contains("""DeserializeBodyMember<string?>(response.Content, "reason")""", client);
+        Assert.Contains("""RestJsonClientProtocol.GetHeader<string?>(response.Headers, "x-request-id")""", client);
+        Assert.Contains("""RestJsonClientProtocol.DeserializeBody<BadRequestHttpBody>(DocumentCodec, response.Content)""", client);
+        Assert.Contains("body.Reason", client);
     }
 
     [Fact]
@@ -930,11 +932,11 @@ public sealed class CSharpShapeGeneratorTests
             client
         );
         Assert.Contains(
-            """requestUriBuilder.Replace("{city}", Uri.EscapeDataString(FormatHttpValue(cityLabel)));""",
+            """requestUriBuilder.Replace("{city}", Uri.EscapeDataString(RestJsonClientProtocol.FormatHttpValue(cityLabel)));""",
             client
         );
-        Assert.Contains("""AppendQuery(requestUriBuilder, "units", input.Units);""", client);
-        Assert.Contains("""AddHeader(request.Headers, "x-request-id", input.RequestId);""", client);
+        Assert.Contains("""RestJsonClientProtocol.AppendQuery(requestUriBuilder, "units", input.Units);""", client);
+        Assert.Contains("""RestJsonClientProtocol.AddHeader(request.Headers, "x-request-id", input.RequestId);""", client);
         Assert.Contains("request.Content = DocumentCodec.Serialize(input.Details);", client);
     }
 
@@ -1018,10 +1020,10 @@ public sealed class CSharpShapeGeneratorTests
         Assert.Contains("""request.Headers["Smithy-Protocol"] = ["rpc-v2-cbor"];""", client);
         Assert.Contains("""request.Headers["Accept"] = [DocumentCodec.MediaType];""", client);
         Assert.Contains("request.Content = DocumentCodec.Serialize(input);", client);
-        Assert.Contains("EnsureRpcV2CborResponse(response);", client);
+        Assert.Contains("RpcV2CborClientProtocol.EnsureResponse(response);", client);
         Assert.Contains("if (response.StatusCode != HttpStatusCode.OK)", client);
         Assert.Contains(
-            """var errorType = DeserializeBodyMember<string?>(response.Content, "__type");""",
+            """var errorType = RpcV2CborClientProtocol.DeserializeErrorType(response.Content);""",
             client
         );
     }
@@ -1116,19 +1118,15 @@ public sealed class CSharpShapeGeneratorTests
             "private static readonly ISmithyPayloadCodec DocumentCodec = SmithyXmlPayloadCodec.Default;",
             client
         );
+        Assert.Contains("""var requestBody = new GetForecastInputHttpBody(""", client);
+        Assert.Contains("""request.Content = DocumentCodec.Serialize(requestBody);""", client);
         Assert.Contains(
-            """request.Content = Encoding.UTF8.GetBytes(SmithyXmlSerializer.SerializeMembers("GetForecastInput", requestBody));""",
+            """return RestXmlClientProtocol.DeserializeRequiredBody<GetForecastOutput>(DocumentCodec, response.Content);""",
             client
         );
-        Assert.Contains(
-            """return DeserializeRequiredBody<GetForecastOutput>(response.Content);""",
-            client
-        );
-        Assert.Contains("var errorType = DeserializeRestXmlErrorCode(response.Content);", client);
-        Assert.Contains(
-            """DeserializeRestXmlErrorBodyMember<string?>(response.Content, "message")""",
-            client
-        );
+        Assert.Contains("var errorType = RestXmlClientProtocol.DeserializeErrorCode(response.Content);", client);
+        Assert.Contains("""RestXmlClientProtocol.DeserializeBody<BadRequestHttpBody>(DocumentCodec, response.Content)""", client);
+        Assert.Contains("body.Message", client);
     }
 
     [Fact]
@@ -1207,7 +1205,7 @@ public sealed class CSharpShapeGeneratorTests
               </PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
-                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Codecs.Cbor/SmithyNet.Codecs.Cbor.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client.RpcV2Cbor/SmithyNet.Client.RpcV2Cbor.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
               </ItemGroup>
@@ -2151,9 +2149,10 @@ public sealed class CSharpShapeGeneratorTests
             server
         );
         Assert.Contains(
-            "await SmithyAspNetCoreProtocol.ReadRequiredJsonRequestBodyMemberAsync<string>(httpContext, \"summary\", cancellationToken).ConfigureAwait(false)",
+            "await SmithyAspNetCoreProtocol.ReadRequiredJsonRequestBodyAsync<GetForecastInputHttpBody>(httpContext, cancellationToken).ConfigureAwait(false)",
             server
         );
+        Assert.Contains("body.Summary", server);
         Assert.Contains(
             "SmithyAspNetCoreProtocol.GetQueryValue<string?>(httpContext, \"locale\")",
             server
@@ -2234,14 +2233,16 @@ public sealed class CSharpShapeGeneratorTests
             "SmithyAspNetCoreProtocol.GetRouteValue<string>(httpContext, \"label\")",
             StringComparison.Ordinal
         );
-        var bodyBinding = server.IndexOf(
-            "ReadJsonRequestBodyMemberAsync<string",
+        var bodyBinding = server.IndexOf("body.Body", StringComparison.Ordinal);
+        var bodyProjection = server.IndexOf(
+            "var body = await SmithyAspNetCoreProtocol.ReadJsonRequestBodyAsync<RoundTripInputHttpBody>(httpContext, cancellationToken).ConfigureAwait(false);",
             StringComparison.Ordinal
         );
         var headerBinding = server.IndexOf("GetHeaderValue<string", StringComparison.Ordinal);
         var queryBinding = server.IndexOf("GetQueryValue<string", StringComparison.Ordinal);
 
         Assert.True(constructorStart >= 0);
+        Assert.True(bodyProjection < constructorStart);
         Assert.True(labelBinding > constructorStart);
         Assert.True(bodyBinding > labelBinding);
         Assert.True(headerBinding > bodyBinding);
@@ -2314,24 +2315,20 @@ public sealed class CSharpShapeGeneratorTests
             "return new RoundTripOutput(",
             StringComparison.Ordinal
         );
-        var labelBinding = client.IndexOf(
-            "DeserializeRequiredBodyMember<string>(response.Content, \"label\")",
+        var bodyProjection = client.IndexOf(
+            "var body = RestJsonClientProtocol.DeserializeRequiredBody<RoundTripOutputHttpBody>(DocumentCodec, response.Content);",
             StringComparison.Ordinal
         );
-        var bodyBinding = client.IndexOf(
-            "DeserializeBodyMember<string?>(response.Content, \"body\")",
-            StringComparison.Ordinal
-        );
+        var labelBinding = client.IndexOf("body.Label", StringComparison.Ordinal);
+        var bodyBinding = client.IndexOf("body.Body", StringComparison.Ordinal);
         var headerBinding = client.IndexOf(
             "GetHeader<string?>(response.Headers, \"x-header\")",
             StringComparison.Ordinal
         );
-        var queryBinding = client.IndexOf(
-            "DeserializeBodyMember<string?>(response.Content, \"query\")",
-            StringComparison.Ordinal
-        );
+        var queryBinding = client.IndexOf("body.Query", StringComparison.Ordinal);
 
         Assert.True(constructorStart >= 0);
+        Assert.True(bodyProjection < constructorStart);
         Assert.True(labelBinding > constructorStart);
         Assert.True(bodyBinding > labelBinding);
         Assert.True(headerBinding > bodyBinding);

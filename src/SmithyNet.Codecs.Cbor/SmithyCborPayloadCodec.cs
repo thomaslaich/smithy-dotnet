@@ -2,9 +2,9 @@ using System.Collections;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using SmithyNet.Codecs;
 using SmithyNet.Core;
 using SmithyNet.Core.Annotations;
-using SmithyNet.Codecs;
 
 namespace SmithyNet.Codecs.Cbor;
 

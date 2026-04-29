@@ -15,8 +15,8 @@ GitHub release tags should match the package version with a `v` prefix.
 
 Example:
 
-- package version: `0.1.0-preview.2`
-- release tag: `v0.1.0-preview.2`
+- package version: `0.1.0-preview.3`
+- release tag: `v0.1.0-preview.3`
 
 ## GitHub Release Flow
 

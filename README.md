@@ -36,11 +36,11 @@ For generated clients, add:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="SmithyNet.Client" Version="0.1.0-preview.2" />
-  <PackageReference Include="SmithyNet.Core" Version="0.1.0-preview.2" />
-  <PackageReference Include="SmithyNet.Http" Version="0.1.0-preview.2" />
-  <PackageReference Include="SmithyNet.Codecs.Json" Version="0.1.0-preview.2" />
-  <PackageReference Include="SmithyNet.MSBuild" Version="0.1.0-preview.2" PrivateAssets="all" />
+  <PackageReference Include="SmithyNet.Client" Version="0.1.0-preview.3" />
+  <PackageReference Include="SmithyNet.Core" Version="0.1.0-preview.3" />
+  <PackageReference Include="SmithyNet.Http" Version="0.1.0-preview.3" />
+  <PackageReference Include="SmithyNet.Codecs.Json" Version="0.1.0-preview.3" />
+  <PackageReference Include="SmithyNet.MSBuild" Version="0.1.0-preview.3" PrivateAssets="all" />
 </ItemGroup>
 ```
 
@@ -49,8 +49,8 @@ For generated ASP.NET Core `simpleRestJson` servers, also add:
 ```xml
 <ItemGroup>
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="SmithyNet.Server" Version="0.1.0-preview.2" />
-  <PackageReference Include="SmithyNet.Server.AspNetCore" Version="0.1.0-preview.2" />
+  <PackageReference Include="SmithyNet.Server" Version="0.1.0-preview.3" />
+  <PackageReference Include="SmithyNet.Server.AspNetCore" Version="0.1.0-preview.3" />
 </ItemGroup>
 ```
 

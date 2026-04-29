@@ -1,12 +1,14 @@
 using System.Globalization;
+using SmithyNet.Codecs.Xml;
 using SmithyNet.Core;
 using SmithyNet.Core.Annotations;
-using SmithyNet.Codecs.Xml;
 
 namespace SmithyNet.Tests.Xml;
 
-public sealed class SmithyXmlSerializerTests
+public sealed class SmithyXmlPayloadCodecTests
 {
+    private static readonly SmithyXmlPayloadCodec Codec = SmithyXmlPayloadCodec.Default;
+
     [Fact]
     public void SerializeUsesXmlMemberNamesAndFlattenedCollections()
     {
@@ -16,7 +18,7 @@ public sealed class SmithyXmlSerializerTests
             new ForecastTags(["north", "windy"])
         );
 
-        var xml = SmithyXmlSerializer.Serialize(payload);
+        var xml = System.Text.Encoding.UTF8.GetString(Codec.Serialize(payload));
 
         Assert.Equal(
             "<ForecastResponse><Condition>clear</Condition><GeneratedAt>2026-04-23T10:15:30.0000000+00:00</GeneratedAt><Tag>north</Tag><Tag>windy</Tag></ForecastResponse>",
@@ -25,14 +27,14 @@ public sealed class SmithyXmlSerializerTests
     }
 
     [Fact]
-    public void DeserializeMembersReadsSingleMemberFromXmlDocument()
+    public void DeserializeReadsXmlDocument()
     {
         var xml =
             "<ForecastResponse><Condition>clear</Condition><GeneratedAt>2026-04-23T10:15:30.0000000+00:00</GeneratedAt></ForecastResponse>";
 
-        var summary = SmithyXmlSerializer.DeserializeMember<string>(xml, "Condition");
+        var response = Codec.Deserialize<ForecastResponse>(System.Text.Encoding.UTF8.GetBytes(xml));
 
-        Assert.Equal("clear", summary);
+        Assert.Equal("clear", response.Summary);
     }
 
     [SmithyShape("example.weather#ForecastResponse", ShapeKind.Structure)]

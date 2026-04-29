@@ -14,12 +14,11 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="SmithyNet.Client" Version="0.1.0-preview.2" />
-    <PackageReference Include="SmithyNet.Core" Version="0.1.0-preview.2" />
-    <PackageReference Include="SmithyNet.Http" Version="0.1.0-preview.2" />
-    <PackageReference Include="SmithyNet.Codecs" Version="0.1.0-preview.2" />
-    <PackageReference Include="SmithyNet.Codecs.Cbor" Version="0.1.0-preview.2" />
-    <PackageReference Include="SmithyNet.Codecs.Xml" Version="0.1.0-preview.2" />
-    <PackageReference Include="SmithyNet.MSBuild" Version="0.1.0-preview.2" PrivateAssets="all" />
+    <PackageReference Include="SmithyNet.Client" Version="0.1.0-preview.3" />
+    <PackageReference Include="SmithyNet.Client.RestXml" Version="0.1.0-preview.3" />
+    <PackageReference Include="SmithyNet.Client.RpcV2Cbor" Version="0.1.0-preview.3" />
+    <PackageReference Include="SmithyNet.Core" Version="0.1.0-preview.3" />
+    <PackageReference Include="SmithyNet.Http" Version="0.1.0-preview.3" />
+    <PackageReference Include="SmithyNet.MSBuild" Version="0.1.0-preview.3" PrivateAssets="all" />
   </ItemGroup>
 </Project>
