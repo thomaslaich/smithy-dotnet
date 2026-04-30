@@ -832,7 +832,10 @@ public sealed class CSharpShapeGeneratorTests
             .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
             .Contents;
 
-        Assert.Contains("""RestJsonClientProtocol.GetRequiredHeader<string>(response.Headers, "x-request-id")""", client);
+        Assert.Contains(
+            """RestJsonClientProtocol.GetRequiredHeader<string>(response.Headers, "x-request-id")""",
+            client
+        );
         Assert.Contains("(int)response.StatusCode", client);
         Assert.Contains(
             """var body = RestJsonClientProtocol.DeserializeRequiredBody<GetForecastOutputHttpBody>(DocumentCodec, response.Content);""",
@@ -840,8 +843,14 @@ public sealed class CSharpShapeGeneratorTests
         );
         Assert.Contains("body.Summary", client);
         Assert.Contains("if ((int)response.StatusCode == 400)", client);
-        Assert.Contains("""RestJsonClientProtocol.GetHeader<string?>(response.Headers, "x-request-id")""", client);
-        Assert.Contains("""RestJsonClientProtocol.DeserializeBody<BadRequestHttpBody>(DocumentCodec, response.Content)""", client);
+        Assert.Contains(
+            """RestJsonClientProtocol.GetHeader<string?>(response.Headers, "x-request-id")""",
+            client
+        );
+        Assert.Contains(
+            """RestJsonClientProtocol.DeserializeBody<BadRequestHttpBody>(DocumentCodec, response.Content)""",
+            client
+        );
         Assert.Contains("body.Reason", client);
     }
 
@@ -935,8 +944,14 @@ public sealed class CSharpShapeGeneratorTests
             """requestUriBuilder.Replace("{city}", Uri.EscapeDataString(RestJsonClientProtocol.FormatHttpValue(cityLabel)));""",
             client
         );
-        Assert.Contains("""RestJsonClientProtocol.AppendQuery(requestUriBuilder, "units", input.Units);""", client);
-        Assert.Contains("""RestJsonClientProtocol.AddHeader(request.Headers, "x-request-id", input.RequestId);""", client);
+        Assert.Contains(
+            """RestJsonClientProtocol.AppendQuery(requestUriBuilder, "units", input.Units);""",
+            client
+        );
+        Assert.Contains(
+            """RestJsonClientProtocol.AddHeader(request.Headers, "x-request-id", input.RequestId);""",
+            client
+        );
         Assert.Contains("request.Content = DocumentCodec.Serialize(input.Details);", client);
     }
 
@@ -1124,8 +1139,14 @@ public sealed class CSharpShapeGeneratorTests
             """return RestXmlClientProtocol.DeserializeRequiredBody<GetForecastOutput>(DocumentCodec, response.Content);""",
             client
         );
-        Assert.Contains("var errorType = RestXmlClientProtocol.DeserializeErrorCode(response.Content);", client);
-        Assert.Contains("""RestXmlClientProtocol.DeserializeBody<BadRequestHttpBody>(DocumentCodec, response.Content)""", client);
+        Assert.Contains(
+            "var errorType = RestXmlClientProtocol.DeserializeErrorCode(response.Content);",
+            client
+        );
+        Assert.Contains(
+            """RestXmlClientProtocol.DeserializeBody<BadRequestHttpBody>(DocumentCodec, response.Content)""",
+            client
+        );
         Assert.Contains("body.Message", client);
     }
 
