@@ -1,4 +1,4 @@
-using SmithyNet.Client;
+using NSmithy.Client;
 using JavaHello = Example.Java.Hello;
 using ScalaHello = Example.Scala.Hello;
 

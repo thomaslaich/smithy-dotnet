@@ -19,7 +19,7 @@ The C# generator emits files for:
 - `simpleRestJson` services as typed clients
 - `simpleRestJson` services as typed ASP.NET Core server surfaces
 
-Generated files include Smithy metadata attributes from `SmithyNet.Core`.
+Generated files include Smithy metadata attributes from `NSmithy.Core`.
 
 ## Nullability
 
@@ -34,7 +34,7 @@ remote callers can omit required data even when generated .NET types are strict.
 
 ## JSON
 
-`SmithyNet.Codecs.Json` supports JSON serialization and deserialization for generated
+`NSmithy.Codecs.Json` supports JSON serialization and deserialization for generated
 Smithy shapes using generated metadata attributes.
 
 Covered shape kinds:
@@ -54,14 +54,14 @@ serializer metadata is planned but not implemented.
 
 ## HTTP Client Runtime
 
-`SmithyNet.Http` provides:
+`NSmithy.Http` provides:
 
 - `SmithyHttpRequest`
 - `SmithyHttpResponse`
 - `IHttpTransport`
 - `HttpClientTransport`
 
-`SmithyNet.Client` provides:
+`NSmithy.Client` provides:
 
 - `SmithyOperationInvoker`
 - client middleware
@@ -71,7 +71,7 @@ serializer metadata is planned but not implemented.
 
 ## Server Runtime
 
-`SmithyNet.Server` provides the first server-side runtime primitives:
+`NSmithy.Server` provides the first server-side runtime primitives:
 
 - service and operation descriptors
 - generated operation handler interfaces and aggregate service handler interfaces
@@ -130,7 +130,7 @@ The current end-to-end example is:
 
 - `examples/polyglot/java`: Java `restJson1` server
 - `examples/polyglot/scala`: Scala `simpleRestJson` server
-- `examples/polyglot/dotnet`: generated .NET clients using local Smithy.NET
+- `examples/polyglot/dotnet`: generated .NET clients using local NSmithy
   packages
 - `examples/rpcv2cbor/dotnet`: generated .NET `rpcv2Cbor` client with an
   in-process mock peer

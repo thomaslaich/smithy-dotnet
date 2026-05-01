@@ -1,16 +1,16 @@
 # Roadmap
 
-This roadmap describes the current direction of Smithy.NET as the repository
+This roadmap describes the current direction of NSmithy as the repository
 exists today. It is intentionally shorter and more opinionated than the earlier
 phase-by-week plan.
 
 ## Architecture
 
-Smithy.NET keeps a hybrid boundary:
+NSmithy keeps a hybrid boundary:
 
 - Smithy CLI handles model assembly, validation, projections, imports, and Maven
   dependencies.
-- Smithy.NET reads the Smithy build output and performs C# and `.proto`
+- NSmithy reads the Smithy build output and performs C# and `.proto`
   generation inside the .NET build.
 
 The rationale is documented in [Hybrid Codegen Architecture](../architecture/hybrid-codegen.md).
@@ -23,7 +23,7 @@ evaluate if the semantic-model boundary becomes a larger cost.
 
 The repository already ships a working preview slice:
 
-- Smithy CLI integration through `SmithyNet.MSBuild`
+- Smithy CLI integration through `NSmithy.MSBuild`
 - Smithy JSON AST parsing and internal model loading
 - C# generation for core shapes
 - generated HTTP clients for `aws.protocols#restJson1`
@@ -39,7 +39,7 @@ the architecture from scratch.
 ## Principles
 
 1. Keep Smithy as the model front end.
-   Smithy.NET should continue to rely on Smithy CLI for model assembly and
+   NSmithy should continue to rely on Smithy CLI for model assembly and
    validation instead of reimplementing Smithy parsing and semantics in .NET.
 
 2. Keep the backend native to .NET.

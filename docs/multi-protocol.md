@@ -3,7 +3,7 @@
 This guide shows how to expose one Smithy service over both HTTP and gRPC while
 keeping a single service implementation.
 
-The important architectural boundary in Smithy.NET is:
+The important architectural boundary in NSmithy is:
 
 - one modeled service
 - one generated handler contract
@@ -147,7 +147,7 @@ and shows:
 - generated HTTP and gRPC server mappings
 - generated HTTP and gRPC clients
 
-If you are consuming Smithy.NET from NuGet, the important part is the hosting
+If you are consuming NSmithy from NuGet, the important part is the hosting
 shape, not the repository workflow:
 
 - run your ASP.NET Core application with the HTTP and gRPC mappings enabled

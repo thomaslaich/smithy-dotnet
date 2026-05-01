@@ -1,6 +1,6 @@
-# Smithy.NET
+# NSmithy
 
-Smithy.NET is a preview-stage .NET toolkit for generating C# models, typed HTTP
+NSmithy is a preview-stage .NET toolkit for generating C# models, typed HTTP
 clients, and ASP.NET Core server surfaces from [Smithy](https://smithy.io) models.
 
 - Run the Smithy CLI from MSBuild
@@ -13,22 +13,9 @@ generation are planned. See the
 [roadmap](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/planning/roadmap.md)
 for details.
 
-Smithy.NET tracks generated-client conformance against official Smithy/AWS and
+NSmithy tracks generated-client conformance against official Smithy/AWS and
 Alloy protocol test suites in
 [docs/generated/protocol-conformance.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/generated/protocol-conformance.md).
-
-## Packages
-
-| Package | Purpose |
-| --- | --- |
-| `SmithyNet.Core` | Shared runtime primitives, generated-code attributes, Smithy IDs, and document values. |
-| `SmithyNet.CodeGeneration` | Smithy JSON AST reader and C# generator. |
-| `SmithyNet.MSBuild` | MSBuild integration that invokes Smithy build and adds generated C# to compilation. |
-| `SmithyNet.Codecs.Json` | Reflection-based JSON serializer for generated Smithy shapes. |
-| `SmithyNet.Http` | HTTP transport abstractions and `HttpClient` transport. |
-| `SmithyNet.Client` | Operation invoker, client middleware pipeline, errors, and retry middleware. |
-| `SmithyNet.Server` | Server dispatch primitives for generated service handlers and middleware. |
-| `SmithyNet.Server.AspNetCore` | ASP.NET Core integration package for generated server endpoints. |
 
 ## Install
 
@@ -36,11 +23,11 @@ For generated clients, add:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="SmithyNet.Client" Version="0.1.0-preview.3" />
-  <PackageReference Include="SmithyNet.Core" Version="0.1.0-preview.3" />
-  <PackageReference Include="SmithyNet.Http" Version="0.1.0-preview.3" />
-  <PackageReference Include="SmithyNet.Codecs.Json" Version="0.1.0-preview.3" />
-  <PackageReference Include="SmithyNet.MSBuild" Version="0.1.0-preview.3" PrivateAssets="all" />
+  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.3" PrivateAssets="all" />
 </ItemGroup>
 ```
 
@@ -49,14 +36,14 @@ For generated ASP.NET Core `simpleRestJson` servers, also add:
 ```xml
 <ItemGroup>
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="SmithyNet.Server" Version="0.1.0-preview.3" />
-  <PackageReference Include="SmithyNet.Server.AspNetCore" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.3" />
 </ItemGroup>
 ```
 
 ## Smithy CLI
 
-`SmithyNet.MSBuild` invokes the Smithy CLI during `dotnet build`. The recommended
+`NSmithy.MSBuild` invokes the Smithy CLI during `dotnet build`. The recommended
 setup is a managed project environment such as
 [pixi](https://pixi.sh) with `smithy-cli` from conda-forge:
 
@@ -129,7 +116,7 @@ Build the project. Generated files appear under
 
 ```csharp
 using Example.Hello;
-using SmithyNet.Client;
+using NSmithy.Client;
 
 var client = new HelloServiceClient(
     new HttpClient(),

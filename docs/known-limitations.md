@@ -1,11 +1,11 @@
 # Known Limitations
 
-Smithy.NET is still a preview-stage implementation. This page tracks the main
+NSmithy is still a preview-stage implementation. This page tracks the main
 current limitations and rough edges rather than every missing feature.
 
 ## Smithy CLI And Build Environment
 
-`SmithyNet.MSBuild` invokes an existing `smithy` executable. Smithy.NET does
+`NSmithy.MSBuild` invokes an existing `smithy` executable. NSmithy does
 not download, bundle, or pin the Smithy CLI. Build environments are expected to
 provide it.
 
@@ -32,8 +32,6 @@ Current protocol support is intentionally selective:
 
 Not yet implemented:
 
-- Smithy RPC v2 CBOR
-- REST XML
 - AWS JSON protocols
 - EC2 Query and AWS Query
 
@@ -69,7 +67,7 @@ deserialization still need more protocol-aware runtime validation.
 
 ## Codec And Serialization Boundaries Are Still Maturing
 
-`SmithyNet.Codecs.Json` is reflection-based and intentionally small. It is not yet
+`NSmithy.Codecs.Json` is reflection-based and intentionally small. It is not yet
 optimized for:
 
 - NativeAOT
@@ -98,13 +96,13 @@ as C#.
 ## Architecture Boundary Still Carries Cost
 
 The current architecture keeps Smithy as the model front end and .NET as the
-main backend generator. That is working, but it also means Smithy.NET owns:
+main backend generator. That is working, but it also means NSmithy owns:
 
 - a Smithy JSON AST reader
 - its own internal model representation
 - a translation boundary between Smithy build output and generated C#
 
-This is a deliberate current tradeoff, not an accident. Smithy.NET may still
+This is a deliberate current tradeoff, not an accident. NSmithy may still
 experiment with moving selected parts of code generation into a Smithy Java
 plugin if that looks likely to simplify semantic-model handling without giving
 up the MSBuild-first workflow.
