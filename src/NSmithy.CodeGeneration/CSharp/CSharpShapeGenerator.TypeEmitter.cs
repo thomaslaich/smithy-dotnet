@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
+using Nest.Text;
 using NSmithy.CodeGeneration.Model;
 using NSmithy.Core;
 using NSmithy.Core.Traits;
@@ -15,16 +17,16 @@ public sealed partial class CSharpShapeGenerator
         CSharpGenerationOptions options
     )
     {
-        var builder = CreateFileBuilder(shape, options);
+        var _ = CreateTextFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
-        AppendShapeAttributes(builder, shape);
-        builder.Line($"public sealed partial record class {typeName}");
-        builder.Block(() =>
-        {
-            AppendConstructor(builder, model, shape, typeName, options, baseCall: null);
-            AppendProperties(builder, model, shape, options);
-        });
-        return builder.ToString();
+        AddShapeAttributes(_, shape);
+        _.L($"public sealed partial record class {typeName}")
+            .B(_ =>
+            {
+                AddConstructor(_, model, shape, typeName, options, baseCall: null);
+                AddProperties(_, model, shape, options);
+            });
+        return FormatGeneratedText(_);
     }
 
     private static string GenerateError(
@@ -33,18 +35,18 @@ public sealed partial class CSharpShapeGenerator
         CSharpGenerationOptions options
     )
     {
-        var builder = CreateFileBuilder(shape, options);
+        var _ = CreateTextFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
-        AppendShapeAttributes(builder, shape);
-        builder.Line($"public sealed partial class {typeName} : Exception");
-        builder.Block(() =>
-        {
-            var messageMember = GetErrorMessageMember(shape);
-            AppendErrorConstructor(builder, model, shape, typeName, options, messageMember);
-            AppendErrorMessageProperty(builder, messageMember);
-            AppendProperties(builder, model, shape, options, messageMember);
-        });
-        return builder.ToString();
+        AddShapeAttributes(_, shape);
+        _.L($"public sealed partial class {typeName} : Exception")
+            .B(_ =>
+            {
+                var messageMember = GetErrorMessageMember(shape);
+                AddErrorConstructor(_, model, shape, typeName, options, messageMember);
+                AddErrorMessageProperty(_, messageMember);
+                AddProperties(_, model, shape, options, messageMember);
+            });
+        return FormatGeneratedText(_);
     }
 
     private static string GenerateList(
@@ -53,7 +55,7 @@ public sealed partial class CSharpShapeGenerator
         CSharpGenerationOptions options
     )
     {
-        var builder = CreateFileBuilder(shape, options);
+        var _ = CreateTextFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
         var member = shape.Members.TryGetValue("member", out var value)
             ? value
@@ -65,25 +67,25 @@ public sealed partial class CSharpShapeGenerator
             currentNamespace: shape.Id.Namespace,
             baseNamespace: options.BaseNamespace
         );
-        AppendShapeAttributes(builder, shape);
-        builder.Line($"public sealed partial record class {typeName}");
-        builder.Block(() =>
-        {
-            builder.Line($"public {typeName}(IEnumerable<{memberType}> values)");
-            builder.Block(() =>
+        AddShapeAttributes(_, shape);
+        _.L($"public sealed partial record class {typeName}")
+            .B(_ =>
             {
-                builder.Line("ArgumentNullException.ThrowIfNull(values);");
-                builder.Line("Values = Array.AsReadOnly(values.ToArray());");
+                _.L($"public {typeName}(IEnumerable<{memberType}> values)")
+                    .B(_ =>
+                    {
+                        _.L("ArgumentNullException.ThrowIfNull(values);");
+                        _.L("Values = Array.AsReadOnly(values.ToArray());");
+                    });
+                _.L();
+                AddMemberAttributes(
+                    _,
+                    member,
+                    isSparse: shape.Traits.Has(SmithyPrelude.SparseTrait)
+                );
+                _.L($"public IReadOnlyList<{memberType}> Values {{ get; }}");
             });
-            builder.Line();
-            AppendMemberAttributes(
-                builder,
-                member,
-                isSparse: shape.Traits.Has(SmithyPrelude.SparseTrait)
-            );
-            builder.Line($"public IReadOnlyList<{memberType}> Values {{ get; }}");
-        });
-        return builder.ToString();
+        return FormatGeneratedText(_);
     }
 
     private static string GenerateMap(
@@ -92,7 +94,7 @@ public sealed partial class CSharpShapeGenerator
         CSharpGenerationOptions options
     )
     {
-        var builder = CreateFileBuilder(shape, options);
+        var _ = CreateTextFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
         var key = shape.Members.TryGetValue("key", out var keyValue)
             ? keyValue
@@ -115,97 +117,99 @@ public sealed partial class CSharpShapeGenerator
             baseNamespace: options.BaseNamespace
         );
 
-        AppendShapeAttributes(builder, shape);
-        builder.Line($"public sealed partial record class {typeName}");
-        builder.Block(() =>
-        {
-            builder.Line($"public {typeName}(IReadOnlyDictionary<{keyType}, {valueType}> values)");
-            builder.Block(() =>
+        AddShapeAttributes(_, shape);
+        _.L($"public sealed partial record class {typeName}")
+            .B(builder =>
             {
-                builder.Line("ArgumentNullException.ThrowIfNull(values);");
-                builder.Line(
-                    $"Values = new System.Collections.ObjectModel.ReadOnlyDictionary<{keyType}, {valueType}>(new Dictionary<{keyType}, {valueType}>(values));"
+                builder
+                    .L($"public {typeName}(IReadOnlyDictionary<{keyType}, {valueType}> values)")
+                    .B(_ =>
+                    {
+                        _.L("ArgumentNullException.ThrowIfNull(values);");
+                        _.L(
+                            $"Values = new System.Collections.ObjectModel.ReadOnlyDictionary<{keyType}, {valueType}>(new Dictionary<{keyType}, {valueType}>(values));"
+                        );
+                    });
+                builder.L();
+                AddMemberAttributes(
+                    builder,
+                    value,
+                    isSparse: shape.Traits.Has(SmithyPrelude.SparseTrait)
                 );
+                builder.L($"public IReadOnlyDictionary<{keyType}, {valueType}> Values {{ get; }}");
             });
-            builder.Line();
-            AppendMemberAttributes(
-                builder,
-                value,
-                isSparse: shape.Traits.Has(SmithyPrelude.SparseTrait)
-            );
-            builder.Line($"public IReadOnlyDictionary<{keyType}, {valueType}> Values {{ get; }}");
-        });
-        return builder.ToString();
+        return FormatGeneratedText(_);
     }
 
     private static string GenerateStringEnum(ModelShape shape, CSharpGenerationOptions options)
     {
-        var builder = CreateFileBuilder(shape, options);
+        var _ = CreateTextFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
-        AppendShapeAttributes(builder, shape);
-        builder.Line($"public readonly partial record struct {typeName}(string Value)");
-        builder.Block(() =>
-        {
-            foreach (
-                var member in shape.Members.Values.OrderBy(
-                    member => member.Name,
-                    StringComparer.Ordinal
+        AddShapeAttributes(_, shape);
+        _.L($"public readonly partial record struct {typeName}(string Value)")
+            .B(builder =>
+            {
+                foreach (
+                    var member in shape.Members.Values.OrderBy(
+                        member => member.Name,
+                        StringComparer.Ordinal
+                    )
                 )
-            )
-            {
-                var propertyName = CSharpIdentifier.PropertyName(member.Name);
-                var value =
-                    member.Traits.GetValueOrDefault(SmithyPrelude.EnumValueTrait)?.AsString()
-                    ?? member.Name;
-                builder.Line($"[SmithyEnumValue({FormatString(value)})]");
-                builder.Line(
-                    $"public static {typeName} {propertyName} {{ get; }} = new({FormatString(value)});"
-                );
-            }
+                {
+                    var propertyName = CSharpIdentifier.PropertyName(member.Name);
+                    var value =
+                        member.Traits.GetValueOrDefault(SmithyPrelude.EnumValueTrait)?.AsString()
+                        ?? member.Name;
+                    builder.L($"[SmithyEnumValue({FormatString(value)})]");
+                    builder.L(
+                        $"public static {typeName} {propertyName} {{ get; }} = new({FormatString(value)});"
+                    );
+                }
 
-            builder.Line();
-            builder.Line("public override string ToString()");
-            builder.Block(() =>
-            {
-                builder.Line("return Value;");
+                builder.L();
+                builder
+                    .L("public override string ToString()")
+                    .B(_ =>
+                    {
+                        _.L("return Value;");
+                    });
             });
-        });
-        return builder.ToString();
+        return FormatGeneratedText(_);
     }
 
     private static string GenerateIntEnum(ModelShape shape, CSharpGenerationOptions options)
     {
-        var builder = CreateFileBuilder(shape, options);
+        var _ = CreateTextFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
-        AppendShapeAttributes(builder, shape);
-        builder.Line($"public enum {typeName}");
-        builder.Block(() =>
-        {
-            foreach (
-                var member in shape.Members.Values.OrderBy(
-                    member => member.Name,
-                    StringComparer.Ordinal
-                )
-            )
+        AddShapeAttributes(_, shape);
+        _.L($"public enum {typeName}")
+            .B(builder =>
             {
-                var propertyName = CSharpIdentifier.PropertyName(member.Name);
-                var value = member
-                    .Traits.GetValueOrDefault(SmithyPrelude.EnumValueTrait)
-                    ?.AsNumber();
-                var suffix = value is null
-                    ? string.Empty
-                    : string.Create(CultureInfo.InvariantCulture, $" = {(int)value.Value}");
-                if (value is not null)
+                foreach (
+                    var member in shape.Members.Values.OrderBy(
+                        member => member.Name,
+                        StringComparer.Ordinal
+                    )
+                )
                 {
-                    builder.Line(
-                        $"[SmithyEnumValue({FormatString(((int)value.Value).ToString(CultureInfo.InvariantCulture))})]"
-                    );
-                }
+                    var propertyName = CSharpIdentifier.PropertyName(member.Name);
+                    var value = member
+                        .Traits.GetValueOrDefault(SmithyPrelude.EnumValueTrait)
+                        ?.AsNumber();
+                    var suffix = value is null
+                        ? string.Empty
+                        : string.Create(CultureInfo.InvariantCulture, $" = {(int)value.Value}");
+                    if (value is not null)
+                    {
+                        builder.L(
+                            $"[SmithyEnumValue({FormatString(((int)value.Value).ToString(CultureInfo.InvariantCulture))})]"
+                        );
+                    }
 
-                builder.Line($"{propertyName}{suffix},");
-            }
-        });
-        return builder.ToString();
+                    builder.L($"{propertyName}{suffix},");
+                }
+            });
+        return FormatGeneratedText(_);
     }
 
     private static string GenerateUnion(
@@ -214,118 +218,164 @@ public sealed partial class CSharpShapeGenerator
         CSharpGenerationOptions options
     )
     {
-        var builder = CreateFileBuilder(shape, options);
+        var _ = CreateTextFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
-        AppendShapeAttributes(builder, shape);
-        builder.Line($"public abstract partial record class {typeName}");
+        AddShapeAttributes(_, shape);
         var members = GetConstructorMembers(model, shape, options);
-        builder.Block(() =>
-        {
-            builder.Line($"private protected {typeName}() {{ }}");
-            builder.Line();
-            foreach (var member in members)
+        _.L($"public abstract partial record class {typeName}")
+            .B(builder =>
             {
-                var variantName = CSharpIdentifier.TypeName(member.Name);
-                var valueType = GetValueType(
-                    model,
-                    member.Target,
-                    nullable: false,
-                    currentNamespace: string.Empty,
-                    baseNamespace: options.BaseNamespace
-                );
-                AppendMemberAttributes(builder, member, isSparse: false);
-                builder.Line($"public sealed partial record class {variantName} : {typeName}");
-                builder.Block(() =>
+                builder.L($"private protected {typeName}() {{ }}");
+                builder.L();
+                foreach (var member in members)
                 {
-                    builder.Line($"public {variantName}({valueType} value)");
-                    builder.Block(() =>
+                    AddUnionVariant(builder, model, shape, member, options, typeName);
+                }
+
+                AddUnionUnknownVariant(builder, typeName);
+                builder.L();
+                AddUnionUnknownFactory(builder, typeName);
+                builder.L();
+                AddUnionMatchMethod(builder, model, members, options);
+            });
+        return FormatGeneratedText(_);
+    }
+
+    private static void AddUnionVariant(
+        ITextBuilder _,
+        SmithyModel model,
+        ModelShape shape,
+        MemberShape member,
+        CSharpGenerationOptions options,
+        string typeName
+    )
+    {
+        var variantName = CSharpIdentifier.TypeName(member.Name);
+        var valueType = GetValueType(
+            model,
+            member.Target,
+            nullable: false,
+            currentNamespace: string.Empty,
+            baseNamespace: options.BaseNamespace
+        );
+        AddMemberAttributes(_, member, isSparse: false);
+        _.L($"public sealed partial record class {variantName} : {typeName}")
+            .B(builder =>
+            {
+                builder
+                    .L($"public {variantName}({valueType} value)")
+                    .B(_ =>
                     {
-                        builder.Line(
-                            $"Value = {GetUnionValueAssignment(model, member.Target, "value")};"
-                        );
+                        _.L($"Value = {GetUnionValueAssignment(model, member.Target, "value")};");
                     });
-                    builder.Line();
-                    builder.Line($"public {valueType} Value {{ get; }}");
-                });
-                builder.Line();
-                builder.Line($"public static {typeName} From{variantName}({valueType} value)");
-                builder.Block(() =>
-                {
-                    builder.Line($"return new {variantName}(value);");
-                });
-                builder.Line();
-            }
-
-            builder.Line("public sealed partial record class Unknown : " + typeName);
-            builder.Block(() =>
-            {
-                builder.Line("public Unknown(string tag, Document value)");
-                builder.Block(() =>
-                {
-                    builder.Line("Tag = tag ?? throw new ArgumentNullException(nameof(tag));");
-                    builder.Line("Value = value;");
-                });
-                builder.Line();
-                builder.Line("public string Tag { get; }");
-                builder.Line("public Document Value { get; }");
+                builder.L();
+                builder.L($"public {valueType} Value {{ get; }}");
             });
-            builder.Line();
-            builder.Line($"public static {typeName} FromUnknown(string tag, Document value)");
-            builder.Block(() =>
+        _.L();
+        _.L($"public static {typeName} From{variantName}({valueType} value)")
+            .B(_ =>
             {
-                builder.Line("return new Unknown(tag, value);");
+                _.L($"return new {variantName}(value);");
             });
-            builder.Line();
+        _.L();
+    }
 
-            builder.Line("public T Match<T>(");
-            builder.Indented(() =>
+    private static void AddUnionUnknownVariant(ITextBuilder _, string typeName)
+    {
+        _.L($"public sealed partial record class Unknown : {typeName}")
+            .B(builder =>
             {
-                foreach (var member in members)
-                {
-                    var parameterName = CSharpIdentifier.ParameterName(member.Name);
-                    var valueType = GetValueType(
-                        model,
-                        member.Target,
-                        nullable: false,
-                        currentNamespace: string.Empty,
-                        baseNamespace: options.BaseNamespace
-                    );
-                    builder.Line($"Func<{valueType}, T> {parameterName},");
-                }
-
-                builder.Line("Func<string, Document, T> unknown)");
-            });
-            builder.Block(() =>
-            {
-                foreach (var member in members)
-                {
-                    var parameterName = CSharpIdentifier.ParameterName(member.Name);
-                    builder.Line($"ArgumentNullException.ThrowIfNull({parameterName});");
-                }
-
-                builder.Line("ArgumentNullException.ThrowIfNull(unknown);");
-                builder.Line();
-                builder.Line("return this switch");
-                builder.Block(
-                    () =>
+                builder
+                    .L("public Unknown(string tag, Document value)")
+                    .B(_ =>
                     {
-                        foreach (var member in members)
-                        {
-                            var variantName = CSharpIdentifier.TypeName(member.Name);
-                            var parameterName = CSharpIdentifier.ParameterName(member.Name);
-                            builder.Line($"{variantName} value => {parameterName}(value.Value),");
-                        }
-
-                        builder.Line("Unknown value => unknown(value.Tag, value.Value),");
-                        builder.Line(
-                            "_ => throw new InvalidOperationException(\"Unknown union variant.\"),"
-                        );
-                    },
-                    closingSuffix: ";"
-                );
+                        _.L("Tag = tag ?? throw new ArgumentNullException(nameof(tag));");
+                        _.L("Value = value;");
+                    });
+                builder.L();
+                builder.L("public string Tag { get; }");
+                builder.L("public Document Value { get; }");
             });
-        });
-        return builder.ToString();
+    }
+
+    private static void AddUnionUnknownFactory(ITextBuilder _, string typeName)
+    {
+        _.L($"public static {typeName} FromUnknown(string tag, Document value)")
+            .B(_ =>
+            {
+                _.L("return new Unknown(tag, value);");
+            });
+    }
+
+    private static void AddUnionMatchMethod(
+        ITextBuilder _,
+        SmithyModel model,
+        IReadOnlyList<MemberShape> members,
+        CSharpGenerationOptions options
+    )
+    {
+        _.L("public T Match<T>(")
+            .B(
+                builder =>
+                {
+                    foreach (var member in members)
+                    {
+                        var parameterName = CSharpIdentifier.ParameterName(member.Name);
+                        var valueType = GetValueType(
+                            model,
+                            member.Target,
+                            nullable: false,
+                            currentNamespace: string.Empty,
+                            baseNamespace: options.BaseNamespace
+                        );
+                        builder.L($"Func<{valueType}, T> {parameterName},");
+                    }
+
+                    builder.L("Func<string, Document, T> unknown)");
+                },
+                ConfigureTextBlock(BlockStyle.IndentOnly)
+            );
+        _.L("{")
+            .B(
+                builder =>
+                {
+                    foreach (var member in members)
+                    {
+                        var parameterName = CSharpIdentifier.ParameterName(member.Name);
+                        builder.L($"ArgumentNullException.ThrowIfNull({parameterName});");
+                    }
+
+                    builder.L("ArgumentNullException.ThrowIfNull(unknown);");
+                    builder.L();
+                    builder.L("return this switch");
+                    builder
+                        .L("{")
+                        .B(
+                            switchBuilder =>
+                            {
+                                foreach (var member in members)
+                                {
+                                    var variantName = CSharpIdentifier.TypeName(member.Name);
+                                    var parameterName = CSharpIdentifier.ParameterName(member.Name);
+                                    switchBuilder.L(
+                                        $"{variantName} value => {parameterName}(value.Value),"
+                                    );
+                                }
+
+                                switchBuilder.L(
+                                    "Unknown value => unknown(value.Tag, value.Value),"
+                                );
+                                switchBuilder.L(
+                                    "_ => throw new InvalidOperationException(\"Unknown union variant.\"),"
+                                );
+                            },
+                            ConfigureTextBlock(BlockStyle.IndentOnly)
+                        );
+                    builder.L("};");
+                },
+                ConfigureTextBlock(BlockStyle.IndentOnly)
+            );
+        _.L("}");
     }
 
     private static string GetUnionValueAssignment(
@@ -339,8 +389,8 @@ public sealed partial class CSharpShapeGenerator
             : parameterName;
     }
 
-    private static void AppendConstructor(
-        CSharpWriter builder,
+    private static void AddConstructor(
+        ITextBuilder _,
         SmithyModel model,
         ModelShape shape,
         string typeName,
@@ -349,53 +399,88 @@ public sealed partial class CSharpShapeGenerator
     )
     {
         var members = GetConstructorMembers(model, shape, options);
-        builder.Write($"public {typeName}(");
-        if (baseCall is not null)
+        if (members.Length == 0)
         {
-            builder.Write("string? message = null");
-            if (members.Length > 0)
-            {
-                builder.Write(", ");
-            }
+            _.L(BuildConstructorDeclaration(model, shape, typeName, members, options, baseCall));
+            _.L("{");
+            _.L("}");
+            return;
         }
 
-        builder.Write(
-            string.Join(
-                ", ",
-                members.Select(member =>
-                    GetParameter(model, shape, member, shape.Id.Namespace, options)
-                )
-            )
+        var constructor = _.L(
+            BuildConstructorDeclaration(model, shape, typeName, members, options, baseCall)
         );
-        builder.Line(")");
-        if (baseCall is not null)
-        {
-            builder.Indented(() =>
-            {
-                builder.Line($": {baseCall}");
-            });
-        }
 
-        builder.Block(() =>
-        {
-            foreach (var member in members)
-            {
-                var propertyName = CSharpIdentifier.PropertyName(member.Name);
-                var parameterName = CSharpIdentifier.ParameterName(member.Name);
-                builder.Line(
-                    $"{propertyName} = {GetAssignment(model, shape, member, parameterName, shape.Id.Namespace, options)};"
-                );
-            }
-        });
+        constructor.B(
+            builder =>
+                AddConstructorAssignments(
+                    builder,
+                    model,
+                    shape,
+                    members,
+                    shape.Id.Namespace,
+                    options
+                ),
+            options_act: null
+        );
 
         if (members.Length > 0)
         {
-            builder.Line();
+            _.L();
         }
     }
 
-    private static void AppendErrorConstructor(
-        CSharpWriter builder,
+    private static string BuildConstructorSignature(
+        SmithyModel model,
+        ModelShape shape,
+        string typeName,
+        IReadOnlyList<MemberShape> members,
+        CSharpGenerationOptions options,
+        string? baseCall
+    )
+    {
+        var signature = $"public {typeName}(";
+        if (baseCall is not null)
+        {
+            signature += "string? message = null";
+            if (members.Count > 0)
+            {
+                signature += ", ";
+            }
+        }
+
+        signature += string.Join(
+            ", ",
+            members.Select(member =>
+                GetParameter(model, shape, member, shape.Id.Namespace, options)
+            )
+        );
+        signature += ")";
+        return signature;
+    }
+
+    private static string BuildConstructorDeclaration(
+        SmithyModel model,
+        ModelShape shape,
+        string typeName,
+        IReadOnlyList<MemberShape> members,
+        CSharpGenerationOptions options,
+        string? baseCall
+    )
+    {
+        var signature = BuildConstructorSignature(
+            model,
+            shape,
+            typeName,
+            members,
+            options,
+            baseCall
+        );
+        return baseCall is null ? signature : $"{signature}{Environment.NewLine}    : {baseCall}";
+    }
+
+    private static void AddErrorConstructor(
+        ITextBuilder _,
         SmithyModel model,
         ModelShape shape,
         string typeName,
@@ -407,56 +492,68 @@ public sealed partial class CSharpShapeGenerator
         var hasRequiredMembers = members.Any(member =>
             !HasOptionalConstructorParameter(model, shape, member, options)
         );
-        builder.Write(
-            $"public {typeName}(string? message{(hasRequiredMembers ? string.Empty : " = null")}"
-        );
-        if (members.Length > 0)
+        if (members.Length == 0)
         {
-            builder.Write(", ");
+            _.L(
+                $"public {typeName}(string? message{(hasRequiredMembers ? string.Empty : " = null")})"
+            );
+            _.L("    : base(message)");
+            _.L("{");
+            _.L("}");
+            return;
         }
 
-        builder.Write(
-            string.Join(
-                ", ",
-                members.Select(member =>
-                    GetParameter(model, shape, member, shape.Id.Namespace, options)
-                )
-            )
+        var constructor = _.L(
+            $"public {typeName}(string? message{(hasRequiredMembers ? string.Empty : " = null")}{(members.Length > 0 ? ", " : string.Empty)}{string.Join(", ", members.Select(member => GetParameter(model, shape, member, shape.Id.Namespace, options)))}){Environment.NewLine}    : base(message)"
         );
-        builder.Line(")");
-        builder.Indented(() =>
-        {
-            builder.Line(": base(message)");
-        });
-
-        builder.Block(() =>
-        {
-            foreach (var member in members)
-            {
-                var propertyName = CSharpIdentifier.PropertyName(member.Name);
-                var parameterName = CSharpIdentifier.ParameterName(member.Name);
-                builder.Line(
-                    $"{propertyName} = {GetAssignment(model, shape, member, parameterName, shape.Id.Namespace, options)};"
-                );
-            }
-        });
+        constructor.B(
+            builder =>
+                AddConstructorAssignments(
+                    builder,
+                    model,
+                    shape,
+                    members,
+                    shape.Id.Namespace,
+                    options
+                ),
+            options_act: null
+        );
 
         if (members.Length > 0)
         {
-            builder.Line();
+            _.L();
         }
     }
 
-    private static void AppendErrorMessageProperty(CSharpWriter builder, MemberShape? messageMember)
+    private static void AddConstructorAssignments(
+        ITextBuilder _,
+        SmithyModel model,
+        ModelShape shape,
+        IReadOnlyList<MemberShape> members,
+        string currentNamespace,
+        CSharpGenerationOptions options
+    )
+    {
+        foreach (var member in members)
+        {
+            var propertyName = CSharpIdentifier.PropertyName(member.Name);
+            var parameterName = CSharpIdentifier.ParameterName(member.Name);
+            _.L(
+                $"{propertyName} = {GetAssignment(model, shape, member, parameterName, currentNamespace, options)};"
+            );
+        }
+    }
+
+    private static void AddErrorMessageProperty(ITextBuilder _, MemberShape? messageMember)
     {
         if (messageMember is null)
         {
             return;
         }
 
-        AppendMemberAttributes(builder, messageMember, isSparse: false);
-        builder.Line("public override string Message => base.Message;");
-        builder.Line();
+        AddMemberAttributes(_, messageMember, isSparse: false);
+        _.L("public override string Message => base.Message;");
+        _.L();
     }
 
     private static MemberShape[] GetConstructorMembers(
@@ -487,8 +584,8 @@ public sealed partial class CSharpShapeGenerator
             || GetEffectiveDefaultValue(container, member, options) is not null;
     }
 
-    private static void AppendProperties(
-        CSharpWriter builder,
+    private static void AddProperties(
+        ITextBuilder _,
         SmithyModel model,
         ModelShape shape,
         CSharpGenerationOptions options,
@@ -499,22 +596,18 @@ public sealed partial class CSharpShapeGenerator
         {
             var propertyName = CSharpIdentifier.PropertyName(member.Name);
             var propertyType = GetMemberType(model, shape, member, shape.Id.Namespace, options);
-            AppendMemberAttributes(builder, member, isSparse: IsSparseTarget(model, member.Target));
-            builder.Line($"public {propertyType} {propertyName} {{ get; }}");
+            AddMemberAttributes(_, member, isSparse: IsSparseTarget(model, member.Target));
+            _.L($"public {propertyType} {propertyName} {{ get; }}");
         }
     }
 
-    private static void AppendShapeAttributes(CSharpWriter builder, ModelShape shape)
+    private static void AddShapeAttributes(ITextBuilder _, ModelShape shape)
     {
-        builder.Line($"[SmithyShape({FormatString(shape.Id.ToString())}, ShapeKind.{shape.Kind})]");
-        AppendTraitAttributes(builder, shape.Traits);
+        _.L($"[SmithyShape({FormatString(shape.Id.ToString())}, ShapeKind.{shape.Kind})]");
+        AddTraitAttributes(_, shape.Traits);
     }
 
-    private static void AppendMemberAttributes(
-        CSharpWriter builder,
-        MemberShape member,
-        bool isSparse
-    )
+    private static void AddMemberAttributes(ITextBuilder _, MemberShape member, bool isSparse)
     {
         var arguments = new List<string>
         {
@@ -536,11 +629,11 @@ public sealed partial class CSharpShapeGenerator
             arguments.Add($"JsonName = {FormatString(jsonName.AsString())}");
         }
 
-        builder.Line($"[SmithyMember({string.Join(", ", arguments)})]");
-        AppendTraitAttributes(builder, member.Traits);
+        _.L($"[SmithyMember({string.Join(", ", arguments)})]");
+        AddTraitAttributes(_, member.Traits);
     }
 
-    private static void AppendTraitAttributes(CSharpWriter builder, TraitCollection traits)
+    private static void AddTraitAttributes(ITextBuilder _, TraitCollection traits)
     {
         foreach (var trait in traits.OrderBy(trait => trait.Key.ToString(), StringComparer.Ordinal))
         {
@@ -548,8 +641,59 @@ public sealed partial class CSharpShapeGenerator
             var valueInitializer = value is null
                 ? string.Empty
                 : $", Value = {FormatString(value)}";
-            builder.Line($"[SmithyTrait({FormatString(trait.Key.ToString())}{valueInitializer})]");
+            _.L($"[SmithyTrait({FormatString(trait.Key.ToString())}{valueInitializer})]");
         }
+    }
+
+    private static TextBuilder CreateTextFileBuilder(
+        ModelShape shape,
+        CSharpGenerationOptions options,
+        IReadOnlyList<string>? extraUsings = null
+    )
+    {
+        var _ = (TextBuilder)
+            TextBuilder.Create(
+                new TextBuilderOptions
+                {
+                    BlockStyle = BlockStyle.CurlyBraces,
+                    IndentChar = ' ',
+                    IndentSize = 4,
+                    AddImplicitLineBreaks = false,
+                }
+            );
+        _.L("// <auto-generated />");
+        _.L("#nullable enable");
+        _.L();
+        _.L("using System;");
+        _.L("using System.Collections.Generic;");
+        _.L("using System.Linq;");
+        _.L("using NSmithy.Core;");
+        _.L("using NSmithy.Core.Annotations;");
+        foreach (var @namespace in extraUsings ?? [])
+        {
+            _.L($"using {@namespace};");
+        }
+
+        _.L();
+        _.L($"namespace {CSharpIdentifier.Namespace(shape.Id.Namespace, options.BaseNamespace)};");
+        _.L();
+        return _;
+    }
+
+    private static string FormatGeneratedText(TextBuilder builder)
+    {
+        return Regex.Replace(builder.ToString(), "(?m)^[ \t]+$", string.Empty);
+    }
+
+    private static Action<TextBuilderOptions> ConfigureTextBlock(BlockStyle blockStyle)
+    {
+        return options =>
+        {
+            options.BlockStyle = blockStyle;
+            options.IndentChar = ' ';
+            options.IndentSize = 4;
+            options.AddImplicitLineBreaks = false;
+        };
     }
 
     private static string? GetTraitAttributeValue(Document value)

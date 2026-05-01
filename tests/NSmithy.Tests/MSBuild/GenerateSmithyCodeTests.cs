@@ -691,6 +691,18 @@ public sealed class GenerateSmithyCodeTests
             Path.Combine(packageDirectory, "tasks", Path.GetFileName(assemblyPath)),
             overwrite: true
         );
+
+        var assemblyDirectory = Path.GetDirectoryName(assemblyPath)
+            ?? throw new InvalidOperationException($"Assembly path '{assemblyPath}' has no directory.");
+        var nestTextPath = Path.Combine(assemblyDirectory, "Nest.Text.dll");
+        if (File.Exists(nestTextPath))
+        {
+            File.Copy(
+                nestTextPath,
+                Path.Combine(packageDirectory, "tasks", "Nest.Text.dll"),
+                overwrite: true
+            );
+        }
     }
 
     private static async System.Threading.Tasks.Task<(
