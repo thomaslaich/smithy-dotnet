@@ -10,11 +10,15 @@
     },
     {
       "name": "Example: SimpleRestJson",
-      "path": "examples/simple-rest-json/dotnet"
+      "path": "examples/simple-rest-json"
     },
     {
       "name": "Example: gRPC",
-      "path": "examples/grpc/dotnet"
+      "path": "examples/grpc"
+    },
+    {
+      "name": "Example: AWS clients",
+      "path": "examples/aws"
     }
   ],
   "settings": {

@@ -7,6 +7,8 @@
 | `aws.protocols#restJson1` | `Request` | 5 | 153 | 158 | 3.2% |
 | `aws.protocols#restJson1` | `Response` | 4 | 110 | 114 | 3.5% |
 | `aws.protocols#restJson1` | `MalformedRequest` | 0 | 191 | 191 | 0.0% |
+| `smithy.protocols#rpcv2Cbor` | `Request` | 1 | 42 | 43 | 2.3% |
+| `smithy.protocols#rpcv2Cbor` | `Response` | 0 | 45 | 45 | 0.0% |
 
 ## Executable Cases
 
@@ -50,6 +52,7 @@
 - `aws.protocols#restJson1` `Response` `RestJsonHttpPrefixHeadersArePresent`
 - `aws.protocols#restJson1` `Response` `RestJsonHttpResponseCode`
 - `aws.protocols#restJson1` `Response` `RestJsonHttpResponseCodeWithNoPayload`
+- `smithy.protocols#rpcv2Cbor` `Request` `NonQueryCompatibleRpcV2CborForbidsQueryModeHeader`
 
 ## Skipped Cases By Reason
 
@@ -476,6 +479,97 @@
 - `aws.protocols#restJson1` `Response` `RestJsonSupportsNegativeInfinityFloatInputs`
 - `aws.protocols#restJson1` `Response` `RestJsonTimestampFormatHeaders`
 - `aws.protocols#restJson1` `Response` `RestJsonUnitInputAndOutputNoOutput`
+
+### rpcv2Cbor official conformance cases are loaded, but generated execution is not enabled yet.
+
+- Count: 87
+- `smithy.protocols#rpcv2Cbor` `Request` `NoInputServerAllowsEmptyBody`
+- `smithy.protocols#rpcv2Cbor` `Request` `NoInputServerAllowsEmptyCbor`
+- `smithy.protocols#rpcv2Cbor` `Request` `QueryCompatibleRpcV2CborSendsQueryModeHeader`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborClientDoesntSerializeNullStructureValues`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborClientIgnoresNonTopLevelDefaultsOnMembersWithClientOptional`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborClientPopulatesDefaultValuesInInput`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborClientSkipsTopLevelDefaultValuesInInput`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborClientUsesExplicitlyProvidedMemberValuesOverDefaults`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborClientUsesExplicitlyProvidedValuesInTopLevel`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborExtraFieldsInTheBodyShouldBeSkippedByServers`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborIndefiniteLengthByteStringsCanBeDeserialized`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborIndefiniteLengthStringsCanBeDeserialized`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborIndefiniteStringInsideDefiniteList`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborIndefiniteStringInsideIndefiniteList`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborLists`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborListsEmpty`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborListsEmptyUsingDefiniteLength`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborMaps`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborRecursiveShapes`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSerializesDenseSetMap`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSerializesNullMapValues`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSerializesSparseSetMap`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSerializesSparseSetMapAndRetainsNull`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSerializesZeroValuesInMaps`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSerializesZeroValuesInSparseMaps`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborServerDoesntDeSerializeNullStructureValues`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborServerPopulatesDefaultsWhenMissingInRequestBody`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborServersShouldHandleNoAcceptHeader`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSimpleScalarProperties`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSimpleScalarPropertiesUsingIndefiniteLength`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSparseListsSerializeNull`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSparseMaps`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSparseMapsSerializeNullValues`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSupportsInfinityFloatInputs`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSupportsNaNFloatInputs`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSupportsNegativeInfinityFloatInputs`
+- `smithy.protocols#rpcv2Cbor` `Request` `RpcV2CborSupportsUpcastingData`
+- `smithy.protocols#rpcv2Cbor` `Request` `empty_input`
+- `smithy.protocols#rpcv2Cbor` `Request` `empty_input_no_body`
+- `smithy.protocols#rpcv2Cbor` `Request` `empty_input_no_body_has_accept`
+- `smithy.protocols#rpcv2Cbor` `Request` `no_input`
+- `smithy.protocols#rpcv2Cbor` `Request` `optional_input`
+- `smithy.protocols#rpcv2Cbor` `Response` `NoOutputClientAllowsEmptyBody`
+- `smithy.protocols#rpcv2Cbor` `Response` `NoOutputClientAllowsEmptyCbor`
+- `smithy.protocols#rpcv2Cbor` `Response` `QueryCompatibleRpcV2CborCustomCodeError`
+- `smithy.protocols#rpcv2Cbor` `Response` `QueryCompatibleRpcV2CborNoCustomCodeError`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborClientDoesntDeserializeNullStructureValues`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborClientIgnoresDefaultValuesIfMemberValuesArePresentInResponse`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborClientPopulatesDefaultsValuesWhenMissingInResponse`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborComplexError`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborDateTimeWithFractionalSeconds`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborDeserializesDenseSetMap`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborDeserializesNullMapValues`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborDeserializesSparseSetMap`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborDeserializesSparseSetMapAndRetainsNull`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborDeserializesZeroValuesInMaps`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborDeserializesZeroValuesInSparseMaps`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborEmptyComplexError`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborExtraFieldsInTheBodyShouldBeSkippedByClients`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborFloat16Inf`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborFloat16LSBNaN`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborFloat16MSBNaN`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborFloat16NegInf`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborFloat16Subnormal`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborIndefiniteStringInsideDefiniteListCanDeserialize`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborIndefiniteStringInsideIndefiniteListCanDeserialize`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborInvalidGreetingError`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborLists`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborListsEmpty`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborMaps`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborRecursiveShapes`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborRecursiveShapesUsingDefiniteLength`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborServerDoesntSerializeNullStructureValues`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborServerPopulatesDefaultsInResponseWhenMissingInParams`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborSimpleScalarProperties`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborSimpleScalarPropertiesUsingDefiniteLength`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborSparseJsonMaps`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborSparseListsDeserializeNull`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborSparseMapsDeserializeNullValues`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborSupportsInfinityFloatOutputs`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborSupportsNaNFloatOutputs`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborSupportsNegativeInfinityFloatOutputs`
+- `smithy.protocols#rpcv2Cbor` `Response` `RpcV2CborSupportsUpcastingDataOnDeserialize`
+- `smithy.protocols#rpcv2Cbor` `Response` `empty_output`
+- `smithy.protocols#rpcv2Cbor` `Response` `empty_output_no_body`
+- `smithy.protocols#rpcv2Cbor` `Response` `no_output`
+- `smithy.protocols#rpcv2Cbor` `Response` `optional_output`
 
 ### Full union protocol encodings are not implemented.
 

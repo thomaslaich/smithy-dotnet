@@ -1,13 +1,19 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/SmithyNet.Codecs.Cbor/SmithyNet.Codecs.Cbor.csproj" />
     <Project Path="src/SmithyNet.Client/SmithyNet.Client.csproj" />
+    <Project Path="src/SmithyNet.Client.RestJson/SmithyNet.Client.RestJson.csproj" />
+    <Project Path="src/SmithyNet.Client.RestXml/SmithyNet.Client.RestXml.csproj" />
+    <Project Path="src/SmithyNet.Client.RpcV2Cbor/SmithyNet.Client.RpcV2Cbor.csproj" />
     <Project Path="src/SmithyNet.CodeGeneration/SmithyNet.CodeGeneration.csproj" />
     <Project Path="src/SmithyNet.Core/SmithyNet.Core.csproj" />
     <Project Path="src/SmithyNet.Http/SmithyNet.Http.csproj" />
-    <Project Path="src/SmithyNet.Json/SmithyNet.Json.csproj" />
+    <Project Path="src/SmithyNet.Codecs.Json/SmithyNet.Codecs.Json.csproj" />
     <Project Path="src/SmithyNet.MSBuild/SmithyNet.MSBuild.csproj" />
+    <Project Path="src/SmithyNet.Codecs/SmithyNet.Codecs.csproj" />
     <Project Path="src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
     <Project Path="src/SmithyNet.Server/SmithyNet.Server.csproj" />
+    <Project Path="src/SmithyNet.Codecs.Xml/SmithyNet.Codecs.Xml.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SmithyNet.Tests/SmithyNet.Tests.csproj" />

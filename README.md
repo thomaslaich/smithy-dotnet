@@ -24,7 +24,7 @@ Alloy protocol test suites in
 | `SmithyNet.Core` | Shared runtime primitives, generated-code attributes, Smithy IDs, and document values. |
 | `SmithyNet.CodeGeneration` | Smithy JSON AST reader and C# generator. |
 | `SmithyNet.MSBuild` | MSBuild integration that invokes Smithy build and adds generated C# to compilation. |
-| `SmithyNet.Json` | Reflection-based JSON serializer for generated Smithy shapes. |
+| `SmithyNet.Codecs.Json` | Reflection-based JSON serializer for generated Smithy shapes. |
 | `SmithyNet.Http` | HTTP transport abstractions and `HttpClient` transport. |
 | `SmithyNet.Client` | Operation invoker, client middleware pipeline, errors, and retry middleware. |
 | `SmithyNet.Server` | Server dispatch primitives for generated service handlers and middleware. |
@@ -36,11 +36,11 @@ For generated clients, add:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="SmithyNet.Client" Version="0.1.0-preview.2" />
-  <PackageReference Include="SmithyNet.Core" Version="0.1.0-preview.2" />
-  <PackageReference Include="SmithyNet.Http" Version="0.1.0-preview.2" />
-  <PackageReference Include="SmithyNet.Json" Version="0.1.0-preview.2" />
-  <PackageReference Include="SmithyNet.MSBuild" Version="0.1.0-preview.2" PrivateAssets="all" />
+  <PackageReference Include="SmithyNet.Client" Version="0.1.0-preview.3" />
+  <PackageReference Include="SmithyNet.Core" Version="0.1.0-preview.3" />
+  <PackageReference Include="SmithyNet.Http" Version="0.1.0-preview.3" />
+  <PackageReference Include="SmithyNet.Codecs.Json" Version="0.1.0-preview.3" />
+  <PackageReference Include="SmithyNet.MSBuild" Version="0.1.0-preview.3" PrivateAssets="all" />
 </ItemGroup>
 ```
 
@@ -49,8 +49,8 @@ For generated ASP.NET Core `simpleRestJson` servers, also add:
 ```xml
 <ItemGroup>
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="SmithyNet.Server" Version="0.1.0-preview.2" />
-  <PackageReference Include="SmithyNet.Server.AspNetCore" Version="0.1.0-preview.2" />
+  <PackageReference Include="SmithyNet.Server" Version="0.1.0-preview.3" />
+  <PackageReference Include="SmithyNet.Server.AspNetCore" Version="0.1.0-preview.3" />
 </ItemGroup>
 ```
 

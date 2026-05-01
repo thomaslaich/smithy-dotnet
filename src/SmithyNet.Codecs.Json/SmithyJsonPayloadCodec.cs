@@ -1,39 +1,55 @@
 using System.Collections;
 using System.Globalization;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
+using SmithyNet.Codecs;
 using SmithyNet.Core;
 using SmithyNet.Core.Annotations;
 
-namespace SmithyNet.Json;
+namespace SmithyNet.Codecs.Json;
 
-public static class SmithyJsonSerializer
+public sealed class SmithyJsonPayloadCodec : ISmithyPayloadCodec
 {
     private static readonly JsonSerializerOptions DefaultOptions = new(JsonSerializerDefaults.Web);
 
-    public static string Serialize<T>(T value, JsonSerializerOptions? options = null)
+    public static SmithyJsonPayloadCodec Default { get; } = new();
+
+    public string MediaType => "application/json";
+
+    public byte[] Serialize<T>(T value)
+    {
+        return Encoding.UTF8.GetBytes(SerializeJson(value, DefaultOptions));
+    }
+
+    public T Deserialize<T>(byte[] content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        return DeserializeJson<T>(Encoding.UTF8.GetString(content), DefaultOptions);
+    }
+
+    private static string SerializeJson<T>(T value, JsonSerializerOptions options)
     {
         using var stream = new MemoryStream();
         using (var writer = new Utf8JsonWriter(stream))
         {
-            WriteValue(writer, value, typeof(T), options ?? DefaultOptions);
+            WriteValue(writer, value, options);
         }
 
-        return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+        return Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    public static T Deserialize<T>(string json, JsonSerializerOptions? options = null)
+    private static T DeserializeJson<T>(string json, JsonSerializerOptions options)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(json);
 
         using var document = JsonDocument.Parse(json);
-        return (T)ReadValue(document.RootElement, typeof(T), options ?? DefaultOptions)!;
+        return (T)ReadValue(document.RootElement, typeof(T), options)!;
     }
 
     private static void WriteValue(
         Utf8JsonWriter writer,
         object? value,
-        Type declaredType,
         JsonSerializerOptions options
     )
     {
@@ -62,10 +78,10 @@ public static class SmithyJsonSerializer
             return;
         }
 
-        var shape = GetShape(runtimeType) ?? GetShape(declaredType);
+        var shape = GetShape(runtimeType);
         if (shape is not null)
         {
-            WriteShape(writer, value, runtimeType, declaredType, shape, options);
+            WriteShape(writer, value, runtimeType, shape, options);
             return;
         }
 
@@ -76,7 +92,6 @@ public static class SmithyJsonSerializer
         Utf8JsonWriter writer,
         object value,
         Type runtimeType,
-        Type declaredType,
         SmithyShapeAttribute shape,
         JsonSerializerOptions options
     )
@@ -100,7 +115,7 @@ public static class SmithyJsonSerializer
                 JsonSerializer.Serialize(writer, value, runtimeType, options);
                 break;
             case ShapeKind.Union:
-                WriteUnion(writer, value, runtimeType, declaredType, options);
+                WriteUnion(writer, value, runtimeType, options);
                 break;
             default:
                 throw new NotSupportedException(
@@ -127,7 +142,7 @@ public static class SmithyJsonSerializer
             }
 
             writer.WritePropertyName(member.JsonName ?? member.Name);
-            WriteValue(writer, propertyValue, property.PropertyType, options);
+            WriteValue(writer, propertyValue, options);
         }
 
         writer.WriteEndObject();
@@ -144,7 +159,7 @@ public static class SmithyJsonSerializer
         {
             foreach (var item in enumerable)
             {
-                WriteValue(writer, item, item?.GetType() ?? typeof(object), options);
+                WriteValue(writer, item, options);
             }
         }
 
@@ -171,7 +186,7 @@ public static class SmithyJsonSerializer
 
                 var mapValue = itemType.GetProperty("Value")?.GetValue(item);
                 writer.WritePropertyName(key);
-                WriteValue(writer, mapValue, mapValue?.GetType() ?? typeof(object), options);
+                WriteValue(writer, mapValue, options);
             }
         }
 
@@ -193,7 +208,6 @@ public static class SmithyJsonSerializer
         Utf8JsonWriter writer,
         object value,
         Type runtimeType,
-        Type declaredType,
         JsonSerializerOptions options
     )
     {
@@ -205,7 +219,7 @@ public static class SmithyJsonSerializer
             writer.WritePropertyName(
                 tag ?? throw new InvalidOperationException("Unknown union tag is null.")
             );
-            WriteValue(writer, document, typeof(Document), options);
+            WriteValue(writer, document, options);
         }
         else
         {
@@ -216,7 +230,7 @@ public static class SmithyJsonSerializer
                 );
             var variantValue = runtimeType.GetProperty("Value")?.GetValue(value);
             writer.WritePropertyName(member.JsonName ?? member.Name);
-            WriteValue(writer, variantValue, GetUnionValueType(runtimeType), options);
+            WriteValue(writer, variantValue, options);
         }
 
         writer.WriteEndObject();

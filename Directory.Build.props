@@ -12,7 +12,7 @@
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <VersionPrefix>0.1.0</VersionPrefix>
-    <VersionSuffix>preview.2</VersionSuffix>
+    <VersionSuffix>preview.3</VersionSuffix>
     <Authors>Thomas Laich</Authors>
     <Description>Smithy.NET — C# code generation and runtime toolkit for Smithy models.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

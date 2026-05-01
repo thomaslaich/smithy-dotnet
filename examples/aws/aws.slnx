@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/client/">
+    <Project Path="client/SmithyNet.Examples.Aws.Client.csproj" />
+  </Folder>
+</Solution>

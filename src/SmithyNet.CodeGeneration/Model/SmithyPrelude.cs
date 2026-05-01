@@ -12,6 +12,8 @@ public static class SmithyPrelude
 
     public const string AlloyProtoNamespace = "alloy.proto";
 
+    public const string SmithyProtocolsNamespace = "smithy.protocols";
+
     public static ShapeId RequiredTrait { get; } = new(Namespace, "required");
 
     public static ShapeId DefaultTrait { get; } = new(Namespace, "default");
@@ -44,7 +46,11 @@ public static class SmithyPrelude
 
     public static ShapeId RestJson1Trait { get; } = new(AwsProtocolsNamespace, "restJson1");
 
+    public static ShapeId RestXmlTrait { get; } = new(AwsProtocolsNamespace, "restXml");
+
     public static ShapeId SimpleRestJsonTrait { get; } = new(AlloyNamespace, "simpleRestJson");
+
+    public static ShapeId RpcV2CborTrait { get; } = new(SmithyProtocolsNamespace, "rpcv2Cbor");
 
     public static ShapeId GrpcTrait { get; } = new(AlloyProtoNamespace, "grpc");
 
@@ -57,4 +63,14 @@ public static class SmithyPrelude
     public static ShapeId JsonNameTrait { get; } = new(Namespace, "jsonName");
 
     public static ShapeId SparseTrait { get; } = new(Namespace, "sparse");
+
+    public static ShapeId XmlNameTrait { get; } = new(Namespace, "xmlName");
+
+    public static ShapeId XmlFlattenedTrait { get; } = new(Namespace, "xmlFlattened");
+
+    public static ShapeId XmlAttributeTrait { get; } = new(Namespace, "xmlAttribute");
+
+    public static ShapeId XmlNamespaceTrait { get; } = new(Namespace, "xmlNamespace");
+
+    public static ShapeId TimestampFormatTrait { get; } = new(Namespace, "timestampFormat");
 }

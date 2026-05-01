@@ -2,6 +2,7 @@
   "version": "1.0",
   "sources": [
     "model/alloy.smithy",
+    "model/alloy-proto.smithy",
     "../java/smithy/model/java-hello.smithy",
     "../scala/model/scala-hello.smithy"
   ],

@@ -2,13 +2,14 @@ using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.AspNetCore.Http;
-using SmithyNet.Json;
+using SmithyNet.Codecs.Json;
 
 namespace SmithyNet.Server.AspNetCore;
 
 public static class SmithyAspNetCoreProtocol
 {
     private const string JsonRequestBodyItemKey = "SmithyNet.Server.AspNetCore.JsonRequestBody";
+    private static readonly SmithyJsonPayloadCodec JsonCodec = SmithyJsonPayloadCodec.Default;
 
     public static T GetRouteValue<T>(HttpContext httpContext, string name)
     {
@@ -122,52 +123,24 @@ public static class SmithyAspNetCoreProtocol
 
         var content = await ReadJsonRequestBodyContentAsync(httpContext, cancellationToken)
             .ConfigureAwait(false);
-        return SmithyJsonSerializer.Deserialize<T>(content);
+        return content.Length == 0 ? default! : JsonCodec.Deserialize<T>(content);
     }
 
-    [return: MaybeNull]
-    public static async Task<T> ReadJsonRequestBodyMemberAsync<T>(
+    public static async Task<T> ReadRequiredJsonRequestBodyAsync<T>(
         HttpContext httpContext,
-        string name,
         CancellationToken cancellationToken = default
     )
     {
         ArgumentNullException.ThrowIfNull(httpContext);
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         var content = await ReadJsonRequestBodyContentAsync(httpContext, cancellationToken)
             .ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(content))
+        if (content.Length == 0)
         {
-            return default!;
+            throw new InvalidOperationException("Missing JSON request body.");
         }
 
-        using var document = System.Text.Json.JsonDocument.Parse(content);
-        return document.RootElement.TryGetProperty(name, out var value)
-            ? SmithyJsonSerializer.Deserialize<T>(value.GetRawText())
-            : default!;
-    }
-
-    public static async Task<T> ReadRequiredJsonRequestBodyMemberAsync<T>(
-        HttpContext httpContext,
-        string name,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(httpContext);
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
-        var content = await ReadJsonRequestBodyContentAsync(httpContext, cancellationToken)
-            .ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(content))
-        {
-            throw new InvalidOperationException($"Missing JSON request body member '{name}'.");
-        }
-
-        using var document = System.Text.Json.JsonDocument.Parse(content);
-        return document.RootElement.TryGetProperty(name, out var value)
-            ? SmithyJsonSerializer.Deserialize<T>(value.GetRawText())
-            : throw new InvalidOperationException($"Missing JSON request body member '{name}'.");
+        return JsonCodec.Deserialize<T>(content);
     }
 
     public static async Task WriteJsonResponseAsync<T>(
@@ -179,8 +152,9 @@ public static class SmithyAspNetCoreProtocol
         ArgumentNullException.ThrowIfNull(httpContext);
 
         httpContext.Response.ContentType = "application/json";
+        var content = JsonCodec.Serialize(value);
         await httpContext
-            .Response.WriteAsync(SmithyJsonSerializer.Serialize(value), cancellationToken)
+            .Response.Body.WriteAsync(content, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -337,18 +311,19 @@ public static class SmithyAspNetCoreProtocol
         }
     }
 
-    private static async Task<string> ReadJsonRequestBodyContentAsync(
+    private static async Task<byte[]> ReadJsonRequestBodyContentAsync(
         HttpContext httpContext,
         CancellationToken cancellationToken
     )
     {
         if (httpContext.Items.TryGetValue(JsonRequestBodyItemKey, out var cached))
         {
-            return cached as string ?? string.Empty;
+            return cached as byte[] ?? [];
         }
 
-        using var reader = new StreamReader(httpContext.Request.Body);
-        var content = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+        using var stream = new MemoryStream();
+        await httpContext.Request.Body.CopyToAsync(stream, cancellationToken).ConfigureAwait(false);
+        var content = stream.ToArray();
         httpContext.Items[JsonRequestBodyItemKey] = content;
         return content;
     }
