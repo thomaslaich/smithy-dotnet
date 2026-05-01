@@ -209,6 +209,15 @@ public sealed partial class CSharpShapeGenerator
                                 _.L("request.ContentType = DocumentCodec.MediaType;");
                             });
                     }
+                    else if (IsNullableMember(inputShape, payloadMember, options))
+                    {
+                        _.L($"if (input.{propertyName} is not null)")
+                            .B(_ =>
+                            {
+                                _.L($"request.Content = DocumentCodec.Serialize(input.{propertyName});");
+                                _.L("request.ContentType = DocumentCodec.MediaType;");
+                            });
+                    }
                     else
                     {
                         _.L($"request.Content = DocumentCodec.Serialize(input.{propertyName});");
@@ -217,7 +226,7 @@ public sealed partial class CSharpShapeGenerator
                 }
                 else if (inputShape is not null && HasHttpBody(inputShape))
                 {
-                    AddRequestBody(_, inputShape, service);
+                    AddRequestBody(_, inputShape, service, options);
                 }
 
                 _.L();
@@ -341,6 +350,14 @@ public sealed partial class CSharpShapeGenerator
         var protocolRuntime = GetClientProtocolRuntimeType(service);
         if (useDocumentBindings || !HasResponseBindings(output))
         {
+            if (!useDocumentBindings && output.Kind == ShapeKind.Structure && output.Members.Count == 0)
+            {
+                _.L(
+                    $"return response.Content.Length == 0 ? new {outputType}() : {protocolRuntime}.DeserializeRequiredBody<{outputType}>(DocumentCodec, response.Content);"
+                );
+                return;
+            }
+
             _.L($"return {protocolRuntime}.DeserializeRequiredBody<{outputType}>(DocumentCodec, response.Content);");
             return;
         }
@@ -498,7 +515,7 @@ public sealed partial class CSharpShapeGenerator
         }
     }
 
-    private static void AddRequestBody(ITextBuilder _, ModelShape input, ModelShape service)
+    private static void AddRequestBody(ITextBuilder _, ModelShape input, ModelShape service, CSharpGenerationOptions options)
     {
         var __ = service.Id;
         var bodyMembers = GetSortedMembers(input).Where(IsHttpBodyMember).ToArray();
@@ -507,16 +524,34 @@ public sealed partial class CSharpShapeGenerator
             return;
         }
 
+        var omitEmptyBody = bodyMembers.All(member =>
+            IsNullableMember(input, member, options) && GetEffectiveDefaultValue(input, member, options) is null
+        );
+
         var bodyType = GetBodyProjectionTypeName(input);
+        if (omitEmptyBody)
+        {
+            _.L(
+                    $"if ({string.Join(" || ", bodyMembers.Select(member => $"input.{CSharpIdentifier.PropertyName(member.Name)} is not null"))})"
+                )
+                .B(_ => AddRequestBodySerialization(_, bodyType, bodyMembers));
+            return;
+        }
+
+        AddRequestBodySerialization(_, bodyType, bodyMembers);
+    }
+
+    private static void AddRequestBodySerialization(ITextBuilder _, string bodyType, IReadOnlyList<MemberShape> bodyMembers)
+    {
         _.L($"var requestBody = new {bodyType}(")
             .B(
                 _ =>
                 {
-                    for (var i = 0; i < bodyMembers.Length; i++)
+                    for (var i = 0; i < bodyMembers.Count; i++)
                     {
                         var member = bodyMembers[i];
                         var propertyName = CSharpIdentifier.PropertyName(member.Name);
-                        var suffix = i == bodyMembers.Length - 1 ? string.Empty : ",";
+                        var suffix = i == bodyMembers.Count - 1 ? string.Empty : ",";
                         _.L($"input.{propertyName}{suffix}");
                     }
                 },

@@ -99,7 +99,7 @@ public sealed class OfficialProtocolSuiteTests(
             .Select(classification => $"{classification.Case.Kind}:{classification.Case.Id}")
             .ToHashSet(StringComparer.Ordinal);
 
-        Assert.Equal(41, executableCases.Count);
+        Assert.Equal(48, executableCases.Count);
         Assert.Contains("Request:AddMenuItem", executableCases);
         Assert.Contains("Response:AddMenuItemResult", executableCases);
         Assert.Contains("Request:CustomCodeInput", executableCases);
@@ -146,8 +146,18 @@ public sealed class OfficialProtocolSuiteTests(
         Assert.Contains("Request:RestJsonEmptyInputAndEmptyOutput", executableCases);
         Assert.Contains("Request:RestJsonConstantQueryString", executableCases);
         Assert.Contains("Request:HttpQueryParamsOnlyRequest", executableCases);
+        Assert.Contains("Request:RestJsonHttpGetWithNoInput", executableCases);
+        Assert.Contains("Request:RestJsonHttpGetWithNoModeledBody", executableCases);
+        Assert.Contains("Request:RestJsonHttpPostWithNoInput", executableCases);
+        Assert.Contains("Request:RestJsonHttpPostWithNoModeledBody", executableCases);
+        Assert.Contains("Request:RestJsonNoInputAndNoOutput", executableCases);
         Assert.Contains("Request:RestJsonHttpPrefixHeadersArePresent", executableCases);
         Assert.Contains("Request:RestJsonHttpPayloadWithStructure", executableCases);
+        Assert.Contains("Response:RestJsonEmptyInputAndEmptyOutput", executableCases);
+        Assert.Contains(
+            "Response:RestJsonEmptyInputAndEmptyOutputJsonObjectOutput",
+            executableCases
+        );
         Assert.Contains("Response:RestJsonHttpPrefixHeadersArePresent", executableCases);
         Assert.Contains("Response:RestJsonHttpPayloadWithStructure", executableCases);
         Assert.Contains("Response:RestJsonHttpResponseCode", executableCases);
@@ -471,12 +481,23 @@ internal static class OfficialProtocolConformanceMatrix
         (RestJson1Protocol, OfficialProtocolCaseKind.Request, "RestJsonEmptyInputAndEmptyOutput"),
         (RestJson1Protocol, OfficialProtocolCaseKind.Request, "RestJsonConstantQueryString"),
         (RestJson1Protocol, OfficialProtocolCaseKind.Request, "HttpQueryParamsOnlyRequest"),
+        (RestJson1Protocol, OfficialProtocolCaseKind.Request, "RestJsonHttpGetWithNoInput"),
+        (RestJson1Protocol, OfficialProtocolCaseKind.Request, "RestJsonHttpGetWithNoModeledBody"),
+        (RestJson1Protocol, OfficialProtocolCaseKind.Request, "RestJsonHttpPostWithNoInput"),
+        (RestJson1Protocol, OfficialProtocolCaseKind.Request, "RestJsonHttpPostWithNoModeledBody"),
+        (RestJson1Protocol, OfficialProtocolCaseKind.Request, "RestJsonNoInputAndNoOutput"),
         (
             RestJson1Protocol,
             OfficialProtocolCaseKind.Request,
             "RestJsonHttpPrefixHeadersArePresent"
         ),
         (RestJson1Protocol, OfficialProtocolCaseKind.Request, "RestJsonHttpPayloadWithStructure"),
+        (RestJson1Protocol, OfficialProtocolCaseKind.Response, "RestJsonEmptyInputAndEmptyOutput"),
+        (
+            RestJson1Protocol,
+            OfficialProtocolCaseKind.Response,
+            "RestJsonEmptyInputAndEmptyOutputJsonObjectOutput"
+        ),
         (
             RestJson1Protocol,
             OfficialProtocolCaseKind.Response,
@@ -993,7 +1014,7 @@ internal static class OfficialGeneratedClientConformanceRunner
                     model,
                     owner.Id,
                     "error",
-                    responseTest.Parameters,
+                    NormalizeExpectedParameters(model, owner.Id, responseTest.Parameters),
                     operation.Id.Namespace,
                     new CSharpGenerationOptions(),
                     $"Unexpected error for {testCase.Id}"
@@ -1007,7 +1028,7 @@ internal static class OfficialGeneratedClientConformanceRunner
                 model,
                 outputId,
                 "output",
-                responseTest.Parameters,
+                NormalizeExpectedParameters(model, outputId, responseTest.Parameters),
                 operation.Id.Namespace,
                 new CSharpGenerationOptions(),
                 $"Unexpected output for {testCase.Id}"
@@ -1101,6 +1122,19 @@ internal static class OfficialGeneratedClientConformanceRunner
                 GetDefaultMediaTypeForProtocol(testCase.Protocol),
                 Document.From(new Dictionary<string, Document>())
             );
+        }
+
+        static Document NormalizeExpectedParameters(
+            SmithyModel model,
+            ShapeId target,
+            Document parameters
+        )
+        {
+            return
+                parameters.Kind == DocumentKind.Null
+                && model.GetShape(target).Kind == ShapeKind.Structure
+                ? Document.From(new Dictionary<string, Document>())
+                : parameters;
         }
     }
 
@@ -1205,7 +1239,7 @@ internal static class OfficialGeneratedClientConformanceRunner
             && testCase.RequireHeaders.Count == 0
             && testCase.ForbidHeaders.Count == 0
                 ? string.Empty
-                : """
+                : $$"""
 
                             static bool TryGetRequestHeader(
                                 HttpRequestMessage request,
@@ -1236,7 +1270,9 @@ internal static class OfficialGeneratedClientConformanceRunner
                                 values = [];
                                 return false;
                             }
-
+                    {{(testCase.Headers.Count == 0
+                        ? string.Empty
+                        : """
                             static bool HeaderMatches(string name, string actual, string expected)
                             {
                                 if (!string.Equals(name, "Content-Type", StringComparison.OrdinalIgnoreCase))
@@ -1251,6 +1287,7 @@ internal static class OfficialGeneratedClientConformanceRunner
                                         expectedMediaType.MediaType,
                                         StringComparison.OrdinalIgnoreCase);
                             }
+                        """)}}
                     """;
         var expectedAuthority = testCase.ResolvedHost ?? testCase.Host;
 

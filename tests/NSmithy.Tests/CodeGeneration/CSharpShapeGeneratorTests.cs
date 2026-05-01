@@ -855,6 +855,55 @@ public sealed class CSharpShapeGeneratorTests
     }
 
     [Fact]
+    public void GenerateClientAllowsEmptyRestJsonResponseForMemberlessStructureOutput()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "aws.protocols#restJson1": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "GET",
+                      "uri": "/forecast"
+                    }
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {}
+                }
+              }
+            }
+            """
+        );
+
+        var client = new CSharpShapeGenerator()
+            .Generate(model)
+            .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
+            .Contents;
+
+        Assert.Contains(
+            "return response.Content.Length == 0 ? new GetForecastOutput() : RestJsonClientProtocol.DeserializeRequiredBody<GetForecastOutput>(DocumentCodec, response.Content);",
+            client
+        );
+    }
+
+    [Fact]
     public void GenerateClientBindsRestJsonHttpRequestMembers()
     {
         var model = SmithyJsonAstReader.Read(
@@ -953,6 +1002,128 @@ public sealed class CSharpShapeGeneratorTests
             client
         );
         Assert.Contains("request.Content = DocumentCodec.Serialize(input.Details);", client);
+    }
+
+    [Fact]
+    public void GenerateClientOmitsOptionalRestJsonHttpPayloadBodyWhenNull()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "aws.protocols#restJson1": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "POST",
+                      "uri": "/forecast"
+                    }
+                  },
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  }
+                },
+                "example.weather#ForecastDetails": {
+                  "type": "structure",
+                  "members": {
+                    "note": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "details": {
+                      "target": "example.weather#ForecastDetails",
+                      "traits": {
+                        "smithy.api#httpPayload": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var client = new CSharpShapeGenerator()
+            .Generate(model)
+            .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
+            .Contents;
+
+        Assert.Contains("if (input.Details is not null)", client);
+        Assert.Contains("request.Content = DocumentCodec.Serialize(input.Details);", client);
+        Assert.Contains("request.ContentType = DocumentCodec.MediaType;", client);
+    }
+
+    [Fact]
+    public void GenerateClientOmitsOptionalRestJsonDocumentBodyWhenAllMembersAreNull()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "aws.protocols#restJson1": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "POST",
+                      "uri": "/forecast"
+                    }
+                  },
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "requestId": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#httpHeader": "x-request-id"
+                      }
+                    },
+                    "summary": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var client = new CSharpShapeGenerator()
+            .Generate(model)
+            .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
+            .Contents;
+
+        Assert.Contains("if (input.Summary is not null)", client);
+        Assert.Contains("var requestBody = new GetForecastInputHttpBody(", client);
+        Assert.Contains("request.Content = DocumentCodec.Serialize(requestBody);", client);
+        Assert.Contains("request.ContentType = DocumentCodec.MediaType;", client);
     }
 
     [Fact]
