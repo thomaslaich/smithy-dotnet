@@ -375,6 +375,7 @@ public sealed partial class CSharpShapeGenerator
                 builder.Line("return endpoints;");
             });
             AppendAspNetCoreBoundResponseWriters(builder, model, service, options);
+            AppendAspNetCoreBodyProjectionTypes(builder, model, service, options);
         });
     }
 
@@ -553,21 +554,18 @@ public sealed partial class CSharpShapeGenerator
                 return;
             }
 
-            builder.Line("var responseBody = new Dictionary<string, object?>");
-            builder.Block(
-                () =>
+            builder.Line($"var responseBody = new {GetBodyProjectionTypeName(output)}(");
+            builder.Indented(() =>
+            {
+                for (var i = 0; i < bodyMembers.Length; i++)
                 {
-                    foreach (var member in bodyMembers)
-                    {
-                        var propertyName = CSharpIdentifier.PropertyName(member.Name);
-                        var jsonName =
-                            member.Traits.GetValueOrDefault(SmithyPrelude.JsonNameTrait)?.AsString()
-                            ?? member.Name;
-                        builder.Line($"[{FormatString(jsonName)}] = output.{propertyName},");
-                    }
-                },
-                closingSuffix: ";"
-            );
+                    var member = bodyMembers[i];
+                    var propertyName = CSharpIdentifier.PropertyName(member.Name);
+                    var suffix = i == bodyMembers.Length - 1 ? string.Empty : ",";
+                    builder.Line($"output.{propertyName}{suffix}");
+                }
+            });
+            builder.Line(");");
             builder.Line(
                 "await SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, responseBody, cancellationToken).ConfigureAwait(false);"
             );
@@ -584,10 +582,26 @@ public sealed partial class CSharpShapeGenerator
     )
     {
         var members = GetConstructorMembers(model, input, options);
+        var bodyMembers = GetRequestBodyMembers(model, input, options);
+        var hasBody = bodyMembers.Length > 0;
         if (members.Length == 0)
         {
             builder.Line($"var input = new {inputType}();");
             return;
+        }
+
+        string? bodyVariable = null;
+        if (hasBody)
+        {
+            var requiresBody = bodyMembers.Any(member =>
+                IsRequiredHttpInputMember(input, member, options)
+            );
+            var bodyType = GetBodyProjectionTypeName(input);
+            builder.Line(
+                $"var body = await {(requiresBody ? $"SmithyAspNetCoreProtocol.ReadRequiredJsonRequestBodyAsync<{bodyType}>(httpContext, cancellationToken)" : $"SmithyAspNetCoreProtocol.ReadJsonRequestBodyAsync<{bodyType}>(httpContext, cancellationToken)")}.ConfigureAwait(false);"
+            );
+            builder.Line();
+            bodyVariable = "body";
         }
 
         builder.Line($"var input = new {inputType}(");
@@ -597,7 +611,7 @@ public sealed partial class CSharpShapeGenerator
             {
                 var suffix = i == members.Length - 1 ? string.Empty : ",";
                 builder.Line(
-                    $"{GetAspNetCoreInputMemberExpression(model, input, members[i], service.Id.Namespace, options)}{suffix}"
+                    $"{GetAspNetCoreInputMemberExpression(model, input, members[i], service.Id.Namespace, options, bodyVariable)}{suffix}"
                 );
             }
         });
@@ -609,7 +623,8 @@ public sealed partial class CSharpShapeGenerator
         ModelShape input,
         MemberShape member,
         string currentNamespace,
-        CSharpGenerationOptions options
+        CSharpGenerationOptions options,
+        string? bodyVariable = null
     )
     {
         var memberType = GetMemberParameterType(model, input, member, currentNamespace, options);
@@ -658,11 +673,71 @@ public sealed partial class CSharpShapeGenerator
             return $"await SmithyAspNetCoreProtocol.ReadJsonRequestBodyAsync<{memberType}>(httpContext, cancellationToken).ConfigureAwait(false)";
         }
 
-        var jsonName =
-            member.Traits.GetValueOrDefault(SmithyPrelude.JsonNameTrait)?.AsString() ?? member.Name;
-        return required
-            ? $"await SmithyAspNetCoreProtocol.ReadRequiredJsonRequestBodyMemberAsync<{memberType}>(httpContext, {FormatString(jsonName)}, cancellationToken).ConfigureAwait(false)"
-            : $"await SmithyAspNetCoreProtocol.ReadJsonRequestBodyMemberAsync<{memberType}>(httpContext, {FormatString(jsonName)}, cancellationToken).ConfigureAwait(false)";
+        if (bodyVariable is not null)
+        {
+            return $"{bodyVariable}.{CSharpIdentifier.PropertyName(member.Name)}";
+        }
+
+        throw new SmithyException(
+            $"HTTP document body member '{member.Name}' on shape '{input.Id}' was requested without a generated body projection."
+        );
+    }
+
+    private static void AppendAspNetCoreBodyProjectionTypes(
+        CSharpWriter builder,
+        SmithyModel model,
+        ModelShape service,
+        CSharpGenerationOptions options
+    )
+    {
+        var emitted = new HashSet<ShapeId>();
+        foreach (
+            var operationId in service.Operations.OrderBy(
+                id => id.ToString(),
+                StringComparer.Ordinal
+            )
+        )
+        {
+            var operation = model.GetShape(operationId);
+            if (operation.Input is { } inputId && emitted.Add(inputId))
+            {
+                var input = model.GetShape(inputId);
+                var inputBodyMembers = GetRequestBodyMembers(model, input, options);
+                if (inputBodyMembers.Length > 0)
+                {
+                    builder.Line();
+                    AppendBodyProjectionType(
+                        builder,
+                        model,
+                        service,
+                        input,
+                        inputBodyMembers,
+                        options
+                    );
+                }
+            }
+
+            if (operation.Output is { } outputId && emitted.Add(outputId))
+            {
+                var output = model.GetShape(outputId);
+                if (HasResponseBindings(output))
+                {
+                    var outputBodyMembers = GetResponseBodyMembers(model, output, options);
+                    if (outputBodyMembers.Length > 0)
+                    {
+                        builder.Line();
+                        AppendBodyProjectionType(
+                            builder,
+                            model,
+                            service,
+                            output,
+                            outputBodyMembers,
+                            options
+                        );
+                    }
+                }
+            }
+        }
     }
 
     private static bool IsRequiredHttpInputMember(

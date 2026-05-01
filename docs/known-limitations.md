@@ -69,7 +69,7 @@ deserialization still need more protocol-aware runtime validation.
 
 ## Codec And Serialization Boundaries Are Still Maturing
 
-`SmithyNet.Json` is reflection-based and intentionally small. It is not yet
+`SmithyNet.Codecs.Json` is reflection-based and intentionally small. It is not yet
 optimized for:
 
 - NativeAOT

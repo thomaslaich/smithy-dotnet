@@ -182,9 +182,9 @@ public sealed class CSharpShapeGeneratorTests
               </PropertyGroup>
               <ItemGroup>
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client.RestJson/SmithyNet.Client.RestJson.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
-                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Json/SmithyNet.Json.csproj" />
               </ItemGroup>
             </Project>
             """
@@ -208,7 +208,7 @@ public sealed class CSharpShapeGeneratorTests
                         new HttpClient(new Handler()),
                         new SmithyClientOptions
                         {
-                            Endpoint = new Uri("https://example.test/api")
+                            Endpoint = new Uri("https://example.test/api"),
                         });
                     var output = await client.GetForecastAsync(
                         new GetForecastInput(
@@ -256,6 +256,173 @@ public sealed class CSharpShapeGeneratorTests
                 {
                     response.Headers.Add(name, value);
                     return response;
+                }
+            }
+            """
+        );
+
+        var result = await RunDotNetBuild(projectDirectory);
+
+        Assert.True(
+            result.ExitCode == 0,
+            $"dotnet build failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}{Environment.NewLine}{result.Error}"
+        );
+    }
+
+    [Fact]
+    public async Task GenerateEmitsCompilableClientForRestXmlService()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var projectDirectory = directory.Path;
+        Directory.CreateDirectory(projectDirectory);
+
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "aws.protocols#restXml": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "POST",
+                      "uri": "/forecast/{city}"
+                    }
+                  },
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  },
+                  "errors": [
+                    "example.weather#BadRequest"
+                  ]
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpLabel": {}
+                      }
+                    },
+                    "units": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#xmlName": "Condition"
+                      }
+                    }
+                  }
+                },
+                "example.weather#BadRequest": {
+                  "type": "structure",
+                  "traits": {
+                    "smithy.api#error": "client"
+                  },
+                  "members": {
+                    "message": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        foreach (var generatedFile in new CSharpShapeGenerator().Generate(model))
+        {
+            var path = Path.Combine(projectDirectory, generatedFile.Path);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, generatedFile.Contents);
+        }
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "GeneratedRestXmlClientCompileTest.csproj"),
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <Nullable>enable</Nullable>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client.RestXml/SmithyNet.Client.RestXml.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
+              </ItemGroup>
+            </Project>
+            """
+        );
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "Consumer.cs"),
+            """
+            using System.Net;
+            using System.Text;
+            using Example.Weather;
+            using SmithyNet.Client;
+
+            namespace GeneratedRestXmlClientCompileTest;
+
+            public static class Consumer
+            {
+                public static async Task<string> ReadAsync(CancellationToken cancellationToken)
+                {
+                    IWeatherClient client = new WeatherClient(
+                        new HttpClient(new Handler()),
+                        new SmithyClientOptions
+                        {
+                            Endpoint = new Uri("https://example.test/api"),
+                        });
+                    var output = await client.GetForecastAsync(
+                        new GetForecastInput("Zurich", "metric"),
+                        cancellationToken);
+                    return output.Summary;
+                }
+
+                private sealed class Handler : HttpMessageHandler
+                {
+                    protected override Task<HttpResponseMessage> SendAsync(
+                        HttpRequestMessage request,
+                        CancellationToken cancellationToken)
+                    {
+                        if (request.Method != HttpMethod.Post || request.RequestUri?.PathAndQuery != "/api/forecast/Zurich")
+                        {
+                            throw new InvalidOperationException("Unexpected request.");
+                        }
+
+                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                        {
+                            Content = new StringContent(
+                                "<GetForecastOutput><Condition>clear</Condition></GetForecastOutput>",
+                                Encoding.UTF8,
+                                "application/xml")
+                        });
+                    }
                 }
             }
             """
@@ -353,9 +520,9 @@ public sealed class CSharpShapeGeneratorTests
               <ItemGroup>
                 <FrameworkReference Include="Microsoft.AspNetCore.App" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client.RestJson/SmithyNet.Client.RestJson.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
-                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Json/SmithyNet.Json.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
                 <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Server/SmithyNet.Server.csproj" />
               </ItemGroup>
@@ -665,15 +832,26 @@ public sealed class CSharpShapeGeneratorTests
             .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
             .Contents;
 
-        Assert.Contains("""GetRequiredHeader<string>(response.Headers, "x-request-id")""", client);
-        Assert.Contains("(int)response.StatusCode", client);
         Assert.Contains(
-            """DeserializeRequiredBodyMember<string>(response.Content, "summary")""",
+            """RestJsonClientProtocol.GetRequiredHeader<string>(response.Headers, "x-request-id")""",
             client
         );
+        Assert.Contains("(int)response.StatusCode", client);
+        Assert.Contains(
+            """var body = RestJsonClientProtocol.DeserializeRequiredBody<GetForecastOutputHttpBody>(DocumentCodec, response.Content);""",
+            client
+        );
+        Assert.Contains("body.Summary", client);
         Assert.Contains("if ((int)response.StatusCode == 400)", client);
-        Assert.Contains("""GetHeader<string?>(response.Headers, "x-request-id")""", client);
-        Assert.Contains("""DeserializeBodyMember<string?>(response.Content, "reason")""", client);
+        Assert.Contains(
+            """RestJsonClientProtocol.GetHeader<string?>(response.Headers, "x-request-id")""",
+            client
+        );
+        Assert.Contains(
+            """RestJsonClientProtocol.DeserializeBody<BadRequestHttpBody>(DocumentCodec, response.Content)""",
+            client
+        );
+        Assert.Contains("body.Reason", client);
     }
 
     [Fact]
@@ -763,12 +941,381 @@ public sealed class CSharpShapeGeneratorTests
             client
         );
         Assert.Contains(
-            """requestUriBuilder.Replace("{city}", Uri.EscapeDataString(FormatHttpValue(cityLabel)));""",
+            """requestUriBuilder.Replace("{city}", Uri.EscapeDataString(RestJsonClientProtocol.FormatHttpValue(cityLabel)));""",
             client
         );
-        Assert.Contains("""AppendQuery(requestUriBuilder, "units", input.Units);""", client);
-        Assert.Contains("""AddHeader(request.Headers, "x-request-id", input.RequestId);""", client);
-        Assert.Contains("request.Content = SmithyJsonSerializer.Serialize(input.Details);", client);
+        Assert.Contains(
+            """RestJsonClientProtocol.AppendQuery(requestUriBuilder, "units", input.Units);""",
+            client
+        );
+        Assert.Contains(
+            """RestJsonClientProtocol.AddHeader(request.Headers, "x-request-id", input.RequestId);""",
+            client
+        );
+        Assert.Contains("request.Content = DocumentCodec.Serialize(input.Details);", client);
+    }
+
+    [Fact]
+    public void GenerateClientBindsRpcV2CborRequestsAndResponses()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "smithy.protocols#rpcv2Cbor": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  },
+                  "errors": [
+                    "example.weather#BadRequest"
+                  ]
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                },
+                "example.weather#BadRequest": {
+                  "type": "structure",
+                  "traits": {
+                    "smithy.api#error": "client"
+                  },
+                  "members": {
+                    "message": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var client = new CSharpShapeGenerator()
+            .Generate(model)
+            .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
+            .Contents;
+
+        Assert.Contains(
+            "private static readonly ISmithyPayloadCodec DocumentCodec = SmithyCborPayloadCodec.Default;",
+            client
+        );
+        Assert.Contains("""var requestUri = "/service/Weather/operation/GetForecast";""", client);
+        Assert.Contains("""request.Headers["Smithy-Protocol"] = ["rpc-v2-cbor"];""", client);
+        Assert.Contains("""request.Headers["Accept"] = [DocumentCodec.MediaType];""", client);
+        Assert.Contains("request.Content = DocumentCodec.Serialize(input);", client);
+        Assert.Contains("RpcV2CborClientProtocol.EnsureResponse(response);", client);
+        Assert.Contains("if (response.StatusCode != HttpStatusCode.OK)", client);
+        Assert.Contains(
+            """var errorType = RpcV2CborClientProtocol.DeserializeErrorType(response.Content);""",
+            client
+        );
+    }
+
+    [Fact]
+    public void GenerateClientBindsRestXmlRequestsAndResponses()
+    {
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "aws.protocols#restXml": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "traits": {
+                    "smithy.api#http": {
+                      "method": "POST",
+                      "uri": "/forecast/{city}"
+                    }
+                  },
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  },
+                  "errors": [
+                    "example.weather#BadRequest"
+                  ]
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#httpLabel": {}
+                      }
+                    },
+                    "units": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#xmlName": "Unit"
+                      }
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {},
+                        "smithy.api#xmlName": "Condition"
+                      }
+                    }
+                  }
+                },
+                "example.weather#BadRequest": {
+                  "type": "structure",
+                  "traits": {
+                    "smithy.api#error": "client"
+                  },
+                  "members": {
+                    "message": {
+                      "target": "smithy.api#String"
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        var client = new CSharpShapeGenerator()
+            .Generate(model)
+            .Single(file => file.Path == "Example/Weather/WeatherClient.g.cs")
+            .Contents;
+
+        Assert.Contains(
+            "private static readonly ISmithyPayloadCodec DocumentCodec = SmithyXmlPayloadCodec.Default;",
+            client
+        );
+        Assert.Contains("""var requestBody = new GetForecastInputHttpBody(""", client);
+        Assert.Contains("""request.Content = DocumentCodec.Serialize(requestBody);""", client);
+        Assert.Contains(
+            """return RestXmlClientProtocol.DeserializeRequiredBody<GetForecastOutput>(DocumentCodec, response.Content);""",
+            client
+        );
+        Assert.Contains(
+            "var errorType = RestXmlClientProtocol.DeserializeErrorCode(response.Content);",
+            client
+        );
+        Assert.Contains(
+            """RestXmlClientProtocol.DeserializeBody<BadRequestHttpBody>(DocumentCodec, response.Content)""",
+            client
+        );
+        Assert.Contains("body.Message", client);
+    }
+
+    [Fact]
+    public async Task GenerateEmitsCompilableClientForRpcV2CborService()
+    {
+        using var directory = TemporaryDirectory.Create();
+        var projectDirectory = directory.Path;
+        Directory.CreateDirectory(projectDirectory);
+
+        var model = SmithyJsonAstReader.Read(
+            """
+            {
+              "smithy": "2.0",
+              "shapes": {
+                "example.weather#Weather": {
+                  "type": "service",
+                  "traits": {
+                    "smithy.protocols#rpcv2Cbor": {}
+                  },
+                  "operations": [
+                    "example.weather#GetForecast"
+                  ]
+                },
+                "example.weather#GetForecast": {
+                  "type": "operation",
+                  "input": {
+                    "target": "example.weather#GetForecastInput"
+                  },
+                  "output": {
+                    "target": "example.weather#GetForecastOutput"
+                  }
+                },
+                "example.weather#GetForecastInput": {
+                  "type": "structure",
+                  "members": {
+                    "city": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                },
+                "example.weather#GetForecastOutput": {
+                  "type": "structure",
+                  "members": {
+                    "summary": {
+                      "target": "smithy.api#String",
+                      "traits": {
+                        "smithy.api#required": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """
+        );
+
+        foreach (var generatedFile in new CSharpShapeGenerator().Generate(model))
+        {
+            var path = Path.Combine(projectDirectory, generatedFile.Path);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, generatedFile.Contents);
+        }
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "GeneratedRpcV2ClientCompileTest.csproj"),
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <Nullable>enable</Nullable>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client/SmithyNet.Client.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Client.RpcV2Cbor/SmithyNet.Client.RpcV2Cbor.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Core/SmithyNet.Core.csproj" />
+                <ProjectReference Include="{{FindRepositoryRoot()}}/src/SmithyNet.Http/SmithyNet.Http.csproj" />
+              </ItemGroup>
+            </Project>
+            """
+        );
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "Consumer.cs"),
+            """
+            using System.Net;
+            using Example.Weather;
+            using SmithyNet.Codecs.Cbor;
+            using SmithyNet.Client;
+
+            namespace GeneratedRpcV2ClientCompileTest;
+
+            public static class Consumer
+            {
+                public static async Task<string> ReadAsync(CancellationToken cancellationToken)
+                {
+                    IWeatherClient client = new WeatherClient(
+                        new HttpClient(new Handler()),
+                        new SmithyClientOptions
+                        {
+                            Endpoint = new Uri("https://example.test/api"),
+                        });
+                    var output = await client.GetForecastAsync(
+                        new GetForecastInput("Zurich"),
+                        cancellationToken);
+                    return output.Summary;
+                }
+
+                private sealed class Handler : HttpMessageHandler
+                {
+                    protected override Task<HttpResponseMessage> SendAsync(
+                        HttpRequestMessage request,
+                        CancellationToken cancellationToken)
+                    {
+                        if (request.Method != HttpMethod.Post || request.RequestUri?.PathAndQuery != "/api/service/Weather/operation/GetForecast")
+                        {
+                            throw new InvalidOperationException("Unexpected request.");
+                        }
+
+                        if (!request.Headers.TryGetValues("Smithy-Protocol", out var protocol) || protocol.Single() != "rpc-v2-cbor")
+                        {
+                            throw new InvalidOperationException("Unexpected request.");
+                        }
+
+                        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                        {
+                            Content = new ByteArrayContent(
+                                SmithyCborPayloadCodec.Default.Serialize(
+                                    new GetForecastOutput("clear")))
+                        }.WithHeader("Smithy-Protocol", "rpc-v2-cbor")
+                         .WithContentType("application/cbor"));
+                    }
+                }
+            }
+
+            internal static class ResponseExtensions
+            {
+                public static HttpResponseMessage WithHeader(
+                    this HttpResponseMessage response,
+                    string name,
+                    string value)
+                {
+                    response.Headers.Add(name, value);
+                    return response;
+                }
+
+                public static HttpResponseMessage WithContentType(
+                    this HttpResponseMessage response,
+                    string contentType)
+                {
+                    response.Content!.Headers.ContentType =
+                        new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+                    return response;
+                }
+            }
+            """
+        );
+
+        var result = await RunDotNetBuild(projectDirectory);
+
+        Assert.True(
+            result.ExitCode == 0,
+            $"dotnet build failed with exit code {result.ExitCode}.{Environment.NewLine}{result.Output}{Environment.NewLine}{result.Error}"
+        );
     }
 
     [Fact]
@@ -1623,9 +2170,10 @@ public sealed class CSharpShapeGeneratorTests
             server
         );
         Assert.Contains(
-            "await SmithyAspNetCoreProtocol.ReadRequiredJsonRequestBodyMemberAsync<string>(httpContext, \"summary\", cancellationToken).ConfigureAwait(false)",
+            "await SmithyAspNetCoreProtocol.ReadRequiredJsonRequestBodyAsync<GetForecastInputHttpBody>(httpContext, cancellationToken).ConfigureAwait(false)",
             server
         );
+        Assert.Contains("body.Summary", server);
         Assert.Contains(
             "SmithyAspNetCoreProtocol.GetQueryValue<string?>(httpContext, \"locale\")",
             server
@@ -1706,14 +2254,16 @@ public sealed class CSharpShapeGeneratorTests
             "SmithyAspNetCoreProtocol.GetRouteValue<string>(httpContext, \"label\")",
             StringComparison.Ordinal
         );
-        var bodyBinding = server.IndexOf(
-            "ReadJsonRequestBodyMemberAsync<string",
+        var bodyBinding = server.IndexOf("body.Body", StringComparison.Ordinal);
+        var bodyProjection = server.IndexOf(
+            "var body = await SmithyAspNetCoreProtocol.ReadJsonRequestBodyAsync<RoundTripInputHttpBody>(httpContext, cancellationToken).ConfigureAwait(false);",
             StringComparison.Ordinal
         );
         var headerBinding = server.IndexOf("GetHeaderValue<string", StringComparison.Ordinal);
         var queryBinding = server.IndexOf("GetQueryValue<string", StringComparison.Ordinal);
 
         Assert.True(constructorStart >= 0);
+        Assert.True(bodyProjection < constructorStart);
         Assert.True(labelBinding > constructorStart);
         Assert.True(bodyBinding > labelBinding);
         Assert.True(headerBinding > bodyBinding);
@@ -1786,24 +2336,20 @@ public sealed class CSharpShapeGeneratorTests
             "return new RoundTripOutput(",
             StringComparison.Ordinal
         );
-        var labelBinding = client.IndexOf(
-            "DeserializeRequiredBodyMember<string>(response.Content, \"label\")",
+        var bodyProjection = client.IndexOf(
+            "var body = RestJsonClientProtocol.DeserializeRequiredBody<RoundTripOutputHttpBody>(DocumentCodec, response.Content);",
             StringComparison.Ordinal
         );
-        var bodyBinding = client.IndexOf(
-            "DeserializeBodyMember<string?>(response.Content, \"body\")",
-            StringComparison.Ordinal
-        );
+        var labelBinding = client.IndexOf("body.Label", StringComparison.Ordinal);
+        var bodyBinding = client.IndexOf("body.Body", StringComparison.Ordinal);
         var headerBinding = client.IndexOf(
             "GetHeader<string?>(response.Headers, \"x-header\")",
             StringComparison.Ordinal
         );
-        var queryBinding = client.IndexOf(
-            "DeserializeBodyMember<string?>(response.Content, \"query\")",
-            StringComparison.Ordinal
-        );
+        var queryBinding = client.IndexOf("body.Query", StringComparison.Ordinal);
 
         Assert.True(constructorStart >= 0);
+        Assert.True(bodyProjection < constructorStart);
         Assert.True(labelBinding > constructorStart);
         Assert.True(bodyBinding > labelBinding);
         Assert.True(headerBinding > bodyBinding);

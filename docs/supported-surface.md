@@ -34,7 +34,7 @@ remote callers can omit required data even when generated .NET types are strict.
 
 ## JSON
 
-`SmithyNet.Json` supports JSON serialization and deserialization for generated
+`SmithyNet.Codecs.Json` supports JSON serialization and deserialization for generated
 Smithy shapes using generated metadata attributes.
 
 Covered shape kinds:
@@ -132,6 +132,8 @@ The current end-to-end example is:
 - `examples/polyglot/scala`: Scala `simpleRestJson` server
 - `examples/polyglot/dotnet`: generated .NET clients using local Smithy.NET
   packages
+- `examples/rpcv2cbor/dotnet`: generated .NET `rpcv2Cbor` client with an
+  in-process mock peer
 
 Run the Java and Scala services first, then run the .NET client:
 
@@ -148,4 +150,9 @@ sbt run
 ```bash
 cd examples/polyglot/dotnet
 dotnet run -- world http://localhost:8082 http://localhost:8081
+```
+
+```bash
+cd examples/rpcv2cbor/dotnet/client
+dotnet run -- world
 ```

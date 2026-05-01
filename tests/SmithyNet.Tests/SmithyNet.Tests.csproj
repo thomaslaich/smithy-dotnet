@@ -19,14 +19,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../src/SmithyNet.Codecs.Cbor/SmithyNet.Codecs.Cbor.csproj" />
     <ProjectReference Include="../../src/SmithyNet.Client/SmithyNet.Client.csproj" />
     <ProjectReference Include="../../src/SmithyNet.CodeGeneration/SmithyNet.CodeGeneration.csproj" />
     <ProjectReference Include="../../src/SmithyNet.Core/SmithyNet.Core.csproj" />
     <ProjectReference Include="../../src/SmithyNet.Http/SmithyNet.Http.csproj" />
-    <ProjectReference Include="../../src/SmithyNet.Json/SmithyNet.Json.csproj" />
+    <ProjectReference Include="../../src/SmithyNet.Codecs.Json/SmithyNet.Codecs.Json.csproj" />
     <ProjectReference Include="../../src/SmithyNet.MSBuild/SmithyNet.MSBuild.csproj" />
     <ProjectReference Include="../../src/SmithyNet.Server.AspNetCore/SmithyNet.Server.AspNetCore.csproj" />
     <ProjectReference Include="../../src/SmithyNet.Server/SmithyNet.Server.csproj" />
+    <ProjectReference Include="../../src/SmithyNet.Codecs/SmithyNet.Codecs.csproj" />
+    <ProjectReference Include="../../src/SmithyNet.Codecs.Xml/SmithyNet.Codecs.Xml.csproj" />
   </ItemGroup>
 
   <ItemGroup>

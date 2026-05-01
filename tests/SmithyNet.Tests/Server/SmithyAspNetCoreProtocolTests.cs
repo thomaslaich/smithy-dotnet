@@ -31,18 +31,15 @@ public sealed class SmithyAspNetCoreProtocolTests
     }
 
     [Fact]
-    public async Task ReadRequiredJsonRequestBodyMemberAsyncThrowsWhenMissing()
+    public async Task ReadRequiredJsonRequestBodyAsyncThrowsWhenMissing()
     {
         var httpContext = new DefaultHttpContext();
-        httpContext.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes("{}"));
+        httpContext.Request.Body = new MemoryStream([]);
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            SmithyAspNetCoreProtocol.ReadRequiredJsonRequestBodyMemberAsync<string>(
-                httpContext,
-                "summary"
-            )
+            SmithyAspNetCoreProtocol.ReadRequiredJsonRequestBodyAsync<string>(httpContext)
         );
 
-        Assert.Equal("Missing JSON request body member 'summary'.", error.Message);
+        Assert.Equal("Missing JSON request body.", error.Message);
     }
 }
