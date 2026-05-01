@@ -50,8 +50,8 @@ For generated ASP.NET Core `simpleRestJson` servers, also add:
 
 ## Add a Model
 
-Add a `smithy-build.json` at the project root and a model file. Here is a
-minimal `alloy#simpleRestJson` service:
+Add a `smithy-build.json` at the project root and a model file. Minimal
+`alloy#simpleRestJson` example:
 
 ```json
 {
@@ -100,8 +100,7 @@ when build dependencies include trait models that should not become C# types:
 </PropertyGroup>
 ```
 
-Build the project. Generated files appear under
-`obj/<configuration>/<tfm>/Smithy/`.
+Build the project. Generated files appear under `obj/<configuration>/<tfm>/Smithy/`.
 
 ## Generated Client
 
@@ -120,7 +119,7 @@ Console.WriteLine(output.Message);
 
 ## Generated Server
 
-The compact path implements the aggregate service handler interface:
+For smaller services, implement the aggregate service handler interface:
 
 ```csharp
 using Example.Hello;
@@ -149,25 +148,20 @@ builder.Services.AddSingleton<ISayHelloHandler, SayHelloHandler>();
 
 ## Why Smithy?
 
-In a large company, service definitions often become fragmented across teams,
-tools, and protocols. Different teams publish different styles of API descriptions,
-clients may be generated from hosted OpenAPI contracts or shipped as separate packages
-in specific languages, protocol choices vary across systems, and the organization becomes more
-polyglot over time. It is common to end up with a mix of handwritten clients,
-OpenAPI documents hosted somewhere, internal conventions that drift by team,
-and service definitions that are tightly coupled to one framework or transport.
+Service definitions tend to fragment over time. Teams publish different API
+descriptions, generate clients differently, adopt different protocols, and
+couple contracts to specific frameworks or transports. The result is usually a
+mix of handwritten clients, drifting conventions, and contracts that are hard
+to reuse across stacks.
 
-Smithy gives you a cleaner separation between service definition and service
-implementation. You define the contract once at the model layer, distribute it
-through normal package-manager workflows, and generate client and server
-surfaces across languages without tying the contract to one transport stack.
+Smithy separates the service contract from the implementation. You define the
+model once, distribute it like any other package, and generate client and
+server surfaces across languages without locking the contract to one transport
+stack.
 
-`gRPC` can solve some of these problems well, but it does so within a single
-protocol stack. Smithy works at a higher level: the model is not tied to one
-wire protocol, can target multiple protocols from the same contract, and can be
-extended with custom traits and protocols when the built-in ones are not
-enough. That flexibility is one of the reasons Smithy remains useful even when
-an organization is not standardizing on just one transport model.
+`gRPC` solves some of the same problems, but within a single protocol stack.
+Smithy works at a higher level: one model can target multiple protocols and be
+extended with custom traits and protocols when needed.
 
 That matters when you want:
 
@@ -178,13 +172,13 @@ That matters when you want:
 
 ## Why NSmithy?
 
-NSmithy takes that one step further for .NET. It aims to make Smithy feel
-native in the .NET ecosystem while also supporting [alloy](https://github.com/disneystreaming/alloy)
-traits and workflows that matter for practical service development beyond the
-core Smithy baseline.
+There is no official Smithy implementation for .NET today. NSmithy fills that
+gap by making Smithy feel native in the .NET ecosystem while supporting
+[alloy](https://github.com/disneystreaming/alloy) traits and workflows that
+matter in practice.
 
-In practice, that means bringing contract-first, protocol-aware generation to
-.NET with generated C# types, typed clients, ASP.NET Core server surfaces.
+In practice, that means contract-first, protocol-aware generation for .NET with
+generated C# types, typed clients, and ASP.NET Core server surfaces.
 
 
 ## Smithy CLI
@@ -193,10 +187,9 @@ In practice, that means bringing contract-first, protocol-aware generation to
 teams, the Java requirement around the Smithy toolchain is an adoption blocker,
 especially when the rest of the stack is otherwise entirely .NET.
 
-The most practical way to smooth that over is to use a managed project
-environment that installs both the Smithy CLI and its Java dependency together,
-so the toolchain is local to the project instead of becoming machine-level
-setup. The recommended option here is
+The easiest way to contain that is to use a project-local environment that
+installs both the Smithy CLI and Java together instead of relying on machine-
+level setup. The recommended option here is
 [pixi](https://pixi.sh) with `smithy-cli` from conda-forge:
 
 ```bash

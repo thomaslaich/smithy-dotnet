@@ -10,4 +10,8 @@
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Core/NSmithy.Core.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Nest.Text" />
+  </ItemGroup>
 </Project>
