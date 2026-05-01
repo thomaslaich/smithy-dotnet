@@ -29,6 +29,8 @@ The repository already ships a working preview slice:
 - generated HTTP clients for `aws.protocols#restJson1`
 - generated HTTP clients and ASP.NET Core server surfaces for
   `alloy#simpleRestJson`
+- early preview protocol slices for `smithy.protocols#rpcv2Cbor` and
+  `aws.protocols#restXml`
 - `.proto` generation and early gRPC support
 - runtime packages for core metadata, JSON, HTTP, client, and server paths
 - protocol compliance and end-to-end tests
@@ -77,39 +79,44 @@ the architecture from scratch.
   consumers.
 - Make generation switches and output shape easier to reason about.
 
-### 3. Improve generator clarity and diagnostics
+### 3. Add templated code generation deliberately
+
+- Introduce templated codegen only where it reduces duplication without hiding
+  protocol semantics.
+- Use templating to make repeated generated shapes easier to evolve and review.
+- Keep the semantic model and generation decisions explicit even if more of the
+  emitted source moves through templates.
+
+### 4. Improve generator clarity and diagnostics
 
 - Keep generated output predictable and easy to inspect.
 - Improve unsupported-shape and unsupported-trait diagnostics.
 - Continue simplifying internal generator structure where semantics become hard
   to follow.
 
-### 4. Mature the gRPC path deliberately
+### 5. Mature the gRPC path deliberately
 
 - Keep `.proto` generation and gRPC support as an explicit preview track.
 - Expand test coverage before broadening feature claims.
 - Clarify the model constraints required by the current generated path.
 
-### 5. Bring `rpcv2Cbor` and `restXml` forward
+### 6. Harden the `rpcv2Cbor` and `restXml` slices
 
-- Start prototyping these earlier than the old roadmap implied.
-- Use them to pressure-test codec and transport abstractions beyond the current
-  HTTP/JSON path.
-- Keep the initial scope narrow and compliance-driven rather than trying to
-  claim broad Smithy protocol coverage immediately.
+- Treat the current implementations as real preview slices, not future
+  prototypes.
+- Expand compliance and behavioral coverage so these paths reflect stable
+  codec and transport seams rather than one-off experiments.
+- Keep the scope narrow and compliance-driven instead of claiming broad Smithy
+  protocol coverage too early.
 
-### 6. Revisit serialization generation and AOT support
+### 7. Improve JSON serialization performance, generation, and AOT support
 
-- Decide whether a Roslyn incremental generator is still the right vehicle for
-  serializer metadata or registration glue.
-- Improve the story for NativeAOT and reflection trimming only once the main
-  generated HTTP/JSON path is stable.
-
-### 7. Tighten packaging and target framework support
-
-- Keep target frameworks aligned with supported .NET releases.
-- Avoid expanding package count or package layering without a strong reason.
-- Prefer fewer, clearer package boundaries over speculative future package trees.
+- Improve JSON serialization throughput and allocation behavior on the current
+  generated path.
+- Re-evaluate source-generator or incremental-generator approaches for
+  serializer metadata, registration glue, or generated fast paths.
+- Improve the story for NativeAOT and reflection trimming once the main
+  generated HTTP/JSON path is stable enough to optimize intentionally.
 
 ### 8. Experiment with Java-side Smithy plugin integration
 
@@ -128,26 +135,18 @@ These are plausible future areas, but they are not the current focus:
 - EC2 Query and AWS Query
 - F#-specific generation
 
-## Non-Goals For Now
-
-- Rewriting the main generator as a Smithy Java plugin
-- Bundling or downloading Smithy CLI from the MSBuild package
-- Targeting `restJson1` server generation as a primary roadmap item
-
 ## Open Questions
 
 1. How far should `alloy#simpleRestJson` server compliance go before the project
    changes its recommendation level from "preview" to a stronger claim?
 
-2. Should serializer generation return as a distinct package, or should AOT-
-   oriented support stay integrated with existing runtime/codegen packages?
+2. Should higher-performance JSON serialization come from source generation,
+  generated serializer glue, runtime specialization, or some hybrid of those
+  approaches?
 
 3. What is the smallest package and API surface that cleanly supports the gRPC
    path without overfitting to the current preview implementation?
 
-4. When `net8.0` reaches end of support in November 2026, should the project
-   drop it immediately and simplify around newer TFMs?
-
-5. Would a Smithy Java plugin, still invoked through the current MSBuild plus
+4. Would a Smithy Java plugin, still invoked through the current MSBuild plus
    Smithy CLI flow, actually reduce semantic-model complexity enough to justify
    the additional packaging and testing cost?
