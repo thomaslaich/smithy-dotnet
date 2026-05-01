@@ -11,11 +11,7 @@ namespace NSmithy.CodeGeneration.CSharp;
 
 public sealed partial class CSharpShapeGenerator
 {
-    private static string GenerateStructure(
-        SmithyModel model,
-        ModelShape shape,
-        CSharpGenerationOptions options
-    )
+    private static string GenerateStructure(SmithyModel model, ModelShape shape, CSharpGenerationOptions options)
     {
         var _ = CreateTextFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
@@ -29,11 +25,7 @@ public sealed partial class CSharpShapeGenerator
         return FormatGeneratedText(_);
     }
 
-    private static string GenerateError(
-        SmithyModel model,
-        ModelShape shape,
-        CSharpGenerationOptions options
-    )
+    private static string GenerateError(SmithyModel model, ModelShape shape, CSharpGenerationOptions options)
     {
         var _ = CreateTextFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
@@ -49,11 +41,7 @@ public sealed partial class CSharpShapeGenerator
         return FormatGeneratedText(_);
     }
 
-    private static string GenerateList(
-        SmithyModel model,
-        ModelShape shape,
-        CSharpGenerationOptions options
-    )
+    private static string GenerateList(SmithyModel model, ModelShape shape, CSharpGenerationOptions options)
     {
         var _ = CreateTextFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
@@ -78,21 +66,13 @@ public sealed partial class CSharpShapeGenerator
                         _.L("Values = Array.AsReadOnly(values.ToArray());");
                     });
                 _.L();
-                AddMemberAttributes(
-                    _,
-                    member,
-                    isSparse: shape.Traits.Has(SmithyPrelude.SparseTrait)
-                );
+                AddMemberAttributes(_, member, isSparse: shape.Traits.Has(SmithyPrelude.SparseTrait));
                 _.L($"public IReadOnlyList<{memberType}> Values {{ get; }}");
             });
         return FormatGeneratedText(_);
     }
 
-    private static string GenerateMap(
-        SmithyModel model,
-        ModelShape shape,
-        CSharpGenerationOptions options
-    )
+    private static string GenerateMap(SmithyModel model, ModelShape shape, CSharpGenerationOptions options)
     {
         var _ = CreateTextFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
@@ -131,11 +111,7 @@ public sealed partial class CSharpShapeGenerator
                         );
                     });
                 builder.L();
-                AddMemberAttributes(
-                    builder,
-                    value,
-                    isSparse: shape.Traits.Has(SmithyPrelude.SparseTrait)
-                );
+                AddMemberAttributes(builder, value, isSparse: shape.Traits.Has(SmithyPrelude.SparseTrait));
                 builder.L($"public IReadOnlyDictionary<{keyType}, {valueType}> Values {{ get; }}");
             });
         return FormatGeneratedText(_);
@@ -149,21 +125,12 @@ public sealed partial class CSharpShapeGenerator
         _.L($"public readonly partial record struct {typeName}(string Value)")
             .B(builder =>
             {
-                foreach (
-                    var member in shape.Members.Values.OrderBy(
-                        member => member.Name,
-                        StringComparer.Ordinal
-                    )
-                )
+                foreach (var member in shape.Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal))
                 {
                     var propertyName = CSharpIdentifier.PropertyName(member.Name);
-                    var value =
-                        member.Traits.GetValueOrDefault(SmithyPrelude.EnumValueTrait)?.AsString()
-                        ?? member.Name;
+                    var value = member.Traits.GetValueOrDefault(SmithyPrelude.EnumValueTrait)?.AsString() ?? member.Name;
                     builder.L($"[SmithyEnumValue({FormatString(value)})]");
-                    builder.L(
-                        $"public static {typeName} {propertyName} {{ get; }} = new({FormatString(value)});"
-                    );
+                    builder.L($"public static {typeName} {propertyName} {{ get; }} = new({FormatString(value)});");
                 }
 
                 builder.L();
@@ -185,25 +152,14 @@ public sealed partial class CSharpShapeGenerator
         _.L($"public enum {typeName}")
             .B(builder =>
             {
-                foreach (
-                    var member in shape.Members.Values.OrderBy(
-                        member => member.Name,
-                        StringComparer.Ordinal
-                    )
-                )
+                foreach (var member in shape.Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal))
                 {
                     var propertyName = CSharpIdentifier.PropertyName(member.Name);
-                    var value = member
-                        .Traits.GetValueOrDefault(SmithyPrelude.EnumValueTrait)
-                        ?.AsNumber();
-                    var suffix = value is null
-                        ? string.Empty
-                        : string.Create(CultureInfo.InvariantCulture, $" = {(int)value.Value}");
+                    var value = member.Traits.GetValueOrDefault(SmithyPrelude.EnumValueTrait)?.AsNumber();
+                    var suffix = value is null ? string.Empty : string.Create(CultureInfo.InvariantCulture, $" = {(int)value.Value}");
                     if (value is not null)
                     {
-                        builder.L(
-                            $"[SmithyEnumValue({FormatString(((int)value.Value).ToString(CultureInfo.InvariantCulture))})]"
-                        );
+                        builder.L($"[SmithyEnumValue({FormatString(((int)value.Value).ToString(CultureInfo.InvariantCulture))})]");
                     }
 
                     builder.L($"{propertyName}{suffix},");
@@ -212,11 +168,7 @@ public sealed partial class CSharpShapeGenerator
         return FormatGeneratedText(_);
     }
 
-    private static string GenerateUnion(
-        SmithyModel model,
-        ModelShape shape,
-        CSharpGenerationOptions options
-    )
+    private static string GenerateUnion(SmithyModel model, ModelShape shape, CSharpGenerationOptions options)
     {
         var _ = CreateTextFileBuilder(shape, options);
         var typeName = GetTypeName(shape.Id);
@@ -357,17 +309,11 @@ public sealed partial class CSharpShapeGenerator
                                 {
                                     var variantName = CSharpIdentifier.TypeName(member.Name);
                                     var parameterName = CSharpIdentifier.ParameterName(member.Name);
-                                    switchBuilder.L(
-                                        $"{variantName} value => {parameterName}(value.Value),"
-                                    );
+                                    switchBuilder.L($"{variantName} value => {parameterName}(value.Value),");
                                 }
 
-                                switchBuilder.L(
-                                    "Unknown value => unknown(value.Tag, value.Value),"
-                                );
-                                switchBuilder.L(
-                                    "_ => throw new InvalidOperationException(\"Unknown union variant.\"),"
-                                );
+                                switchBuilder.L("Unknown value => unknown(value.Tag, value.Value),");
+                                switchBuilder.L("_ => throw new InvalidOperationException(\"Unknown union variant.\"),");
                             },
                             ConfigureTextBlock(BlockStyle.IndentOnly)
                         );
@@ -378,11 +324,7 @@ public sealed partial class CSharpShapeGenerator
         _.L("}");
     }
 
-    private static string GetUnionValueAssignment(
-        SmithyModel model,
-        ShapeId target,
-        string parameterName
-    )
+    private static string GetUnionValueAssignment(SmithyModel model, ShapeId target, string parameterName)
     {
         return IsReferenceType(model, target)
             ? $"{parameterName} ?? throw new ArgumentNullException(nameof({parameterName}))"
@@ -407,22 +349,9 @@ public sealed partial class CSharpShapeGenerator
             return;
         }
 
-        var constructor = _.L(
-            BuildConstructorDeclaration(model, shape, typeName, members, options, baseCall)
-        );
+        var constructor = _.L(BuildConstructorDeclaration(model, shape, typeName, members, options, baseCall));
 
-        constructor.B(
-            builder =>
-                AddConstructorAssignments(
-                    builder,
-                    model,
-                    shape,
-                    members,
-                    shape.Id.Namespace,
-                    options
-                ),
-            options_act: null
-        );
+        constructor.B(builder => AddConstructorAssignments(builder, model, shape, members, shape.Id.Namespace, options), options_act: null);
 
         if (members.Length > 0)
         {
@@ -449,12 +378,7 @@ public sealed partial class CSharpShapeGenerator
             }
         }
 
-        signature += string.Join(
-            ", ",
-            members.Select(member =>
-                GetParameter(model, shape, member, shape.Id.Namespace, options)
-            )
-        );
+        signature += string.Join(", ", members.Select(member => GetParameter(model, shape, member, shape.Id.Namespace, options)));
         signature += ")";
         return signature;
     }
@@ -468,14 +392,7 @@ public sealed partial class CSharpShapeGenerator
         string? baseCall
     )
     {
-        var signature = BuildConstructorSignature(
-            model,
-            shape,
-            typeName,
-            members,
-            options,
-            baseCall
-        );
+        var signature = BuildConstructorSignature(model, shape, typeName, members, options, baseCall);
         return baseCall is null ? signature : $"{signature}{Environment.NewLine}    : {baseCall}";
     }
 
@@ -489,14 +406,10 @@ public sealed partial class CSharpShapeGenerator
     )
     {
         var members = GetConstructorMembers(model, shape, options, messageMember);
-        var hasRequiredMembers = members.Any(member =>
-            !HasOptionalConstructorParameter(model, shape, member, options)
-        );
+        var hasRequiredMembers = members.Any(member => !HasOptionalConstructorParameter(model, shape, member, options));
         if (members.Length == 0)
         {
-            _.L(
-                $"public {typeName}(string? message{(hasRequiredMembers ? string.Empty : " = null")})"
-            );
+            _.L($"public {typeName}(string? message{(hasRequiredMembers ? string.Empty : " = null")})");
             _.L("    : base(message)");
             _.L("{");
             _.L("}");
@@ -506,18 +419,7 @@ public sealed partial class CSharpShapeGenerator
         var constructor = _.L(
             $"public {typeName}(string? message{(hasRequiredMembers ? string.Empty : " = null")}{(members.Length > 0 ? ", " : string.Empty)}{string.Join(", ", members.Select(member => GetParameter(model, shape, member, shape.Id.Namespace, options)))}){Environment.NewLine}    : base(message)"
         );
-        constructor.B(
-            builder =>
-                AddConstructorAssignments(
-                    builder,
-                    model,
-                    shape,
-                    members,
-                    shape.Id.Namespace,
-                    options
-                ),
-            options_act: null
-        );
+        constructor.B(builder => AddConstructorAssignments(builder, model, shape, members, shape.Id.Namespace, options), options_act: null);
 
         if (members.Length > 0)
         {
@@ -538,9 +440,7 @@ public sealed partial class CSharpShapeGenerator
         {
             var propertyName = CSharpIdentifier.PropertyName(member.Name);
             var parameterName = CSharpIdentifier.ParameterName(member.Name);
-            _.L(
-                $"{propertyName} = {GetAssignment(model, shape, member, parameterName, currentNamespace, options)};"
-            );
+            _.L($"{propertyName} = {GetAssignment(model, shape, member, parameterName, currentNamespace, options)};");
         }
     }
 
@@ -565,9 +465,7 @@ public sealed partial class CSharpShapeGenerator
     {
         return shape
             .Members.Values.Where(member => !ReferenceEquals(member, excludedMember))
-            .OrderBy(member =>
-                HasOptionalConstructorParameter(model, shape, member, options) ? 1 : 0
-            )
+            .OrderBy(member => HasOptionalConstructorParameter(model, shape, member, options) ? 1 : 0)
             .ThenBy(member => member.Name, StringComparer.Ordinal)
             .ToArray();
     }
@@ -580,8 +478,7 @@ public sealed partial class CSharpShapeGenerator
     )
     {
         _ = model;
-        return IsNullableMember(container, member, options)
-            || GetEffectiveDefaultValue(container, member, options) is not null;
+        return IsNullableMember(container, member, options) || GetEffectiveDefaultValue(container, member, options) is not null;
     }
 
     private static void AddProperties(
@@ -609,11 +506,7 @@ public sealed partial class CSharpShapeGenerator
 
     private static void AddMemberAttributes(ITextBuilder _, MemberShape member, bool isSparse)
     {
-        var arguments = new List<string>
-        {
-            FormatString(member.Name),
-            FormatString(member.Target.ToString()),
-        };
+        var arguments = new List<string> { FormatString(member.Name), FormatString(member.Target.ToString()) };
         if (member.IsRequired)
         {
             arguments.Add("IsRequired = true");
@@ -638,9 +531,7 @@ public sealed partial class CSharpShapeGenerator
         foreach (var trait in traits.OrderBy(trait => trait.Key.ToString(), StringComparer.Ordinal))
         {
             var value = GetTraitAttributeValue(trait.Value);
-            var valueInitializer = value is null
-                ? string.Empty
-                : $", Value = {FormatString(value)}";
+            var valueInitializer = value is null ? string.Empty : $", Value = {FormatString(value)}";
             _.L($"[SmithyTrait({FormatString(trait.Key.ToString())}{valueInitializer})]");
         }
     }

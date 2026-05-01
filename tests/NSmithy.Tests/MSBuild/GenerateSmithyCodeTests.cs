@@ -692,8 +692,11 @@ public sealed class GenerateSmithyCodeTests
             overwrite: true
         );
 
-        var assemblyDirectory = Path.GetDirectoryName(assemblyPath)
-            ?? throw new InvalidOperationException($"Assembly path '{assemblyPath}' has no directory.");
+        var assemblyDirectory =
+            Path.GetDirectoryName(assemblyPath)
+            ?? throw new InvalidOperationException(
+                $"Assembly path '{assemblyPath}' has no directory."
+            );
         var nestTextPath = Path.Combine(assemblyDirectory, "Nest.Text.dll");
         if (File.Exists(nestTextPath))
         {

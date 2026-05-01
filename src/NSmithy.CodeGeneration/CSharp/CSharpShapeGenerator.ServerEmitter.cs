@@ -326,8 +326,8 @@ public sealed partial class CSharpShapeGenerator
         var httpBinding = ReadHttpBinding(operation);
         var operationInterfaceName = GetOperationHandlerInterfaceName(operation);
         _.L(
-            $"endpoints.MapMethods({FormatString(httpBinding.Uri)}, [{FormatString(httpBinding.Method)}], async (HttpContext httpContext, {operationInterfaceName} handler, CancellationToken cancellationToken) =>"
-        )
+                $"endpoints.MapMethods({FormatString(httpBinding.Uri)}, [{FormatString(httpBinding.Method)}], async (HttpContext httpContext, {operationInterfaceName} handler, CancellationToken cancellationToken) =>"
+            )
             .B(_ =>
             {
                 _.L("ArgumentNullException.ThrowIfNull(httpContext);");
