@@ -1,3 +1,10 @@
+*Work in Progress: NSmithy is preview-stage software. Public APIs, generated
+code shape, package boundaries, and code generation behavior may change. The
+current C# code generator is implemented in this repository so the runtime,
+generation model, and generated surface can evolve together; once the design is
+more stable, the code generation layer will likely move to a Java-based Smithy
+plugin to align more closely with the broader Smithy ecosystem.*
+
 # NSmithy
 
 NSmithy is a preview-stage .NET toolkit for generating C# models, typed HTTP
