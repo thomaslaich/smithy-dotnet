@@ -39,6 +39,7 @@
         PackagePath="tasks/"
       />
       <TfmSpecificPackageFile Include="$(TargetDir)NSmithy.Core.dll" PackagePath="tasks/" />
+      <TfmSpecificPackageFile Include="$(TargetDir)Nest.Text.dll" PackagePath="tasks/" />
     </ItemGroup>
   </Target>
 </Project>
