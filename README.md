@@ -1,9 +1,9 @@
-*Work in Progress: NSmithy is preview-stage software. Public APIs, generated
+_Work in Progress: NSmithy is preview-stage software. Public APIs, generated
 code shape, package boundaries, and code generation behavior may change. The
 current C# code generator is implemented in this repository so the runtime,
 generation model, and generated surface can evolve together; once the design is
 more stable, the code generation layer will likely move to a Java-based Smithy
-plugin to align more closely with the broader Smithy ecosystem.*
+plugin to align more closely with the broader Smithy ecosystem._
 
 # NSmithy
 
@@ -21,7 +21,7 @@ generation are planned. See the
 for details.
 
 NSmithy tracks generated-client conformance against official Smithy/AWS and
-Alloy protocol test suites in
+[alloy](https://github.com/disneystreaming/alloy) protocol test suites in
 [docs/generated/protocol-conformance.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/generated/protocol-conformance.md).
 
 ## Install
@@ -47,22 +47,6 @@ For generated ASP.NET Core `simpleRestJson` servers, also add:
   <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.3" />
 </ItemGroup>
 ```
-
-## Smithy CLI
-
-`NSmithy.MSBuild` invokes the Smithy CLI during `dotnet build`. The recommended
-setup is a managed project environment such as
-[pixi](https://pixi.sh) with `smithy-cli` from conda-forge:
-
-```bash
-pixi init
-pixi add smithy
-pixi shell
-dotnet build
-```
-
-When the environment is active, `smithy` is resolved from `PATH`. Set
-`SmithyCliPath` to force a specific executable when needed.
 
 ## Add a Model
 
@@ -162,6 +146,69 @@ For larger services, register operation handlers individually:
 ```csharp
 builder.Services.AddSingleton<ISayHelloHandler, SayHelloHandler>();
 ```
+
+### Why Smithy?
+
+In a large company, service definitions often become fragmented across teams,
+tools, and protocols. Different teams publish different styles of API descriptions,
+clients may be generated from hosted OpenAPI contracts or shipped as separate packages
+in specific languages, protocol choices vary across systems, and the organization becomes more
+polyglot over time. It is common to end up with a mix of handwritten clients,
+OpenAPI documents hosted somewhere, internal conventions that drift by team,
+and service definitions that are tightly coupled to one framework or transport.
+
+Smithy gives you a cleaner separation between service definition and service
+implementation. You define the contract once at the model layer, distribute it
+through normal package-manager workflows, and generate client and server
+surfaces across languages without tying the contract to one transport stack.
+
+`gRPC` can solve some of these problems well, but it does so within a single
+protocol stack. Smithy works at a higher level: the model is not tied to one
+wire protocol, can target multiple protocols from the same contract, and can be
+extended with custom traits and protocols when the built-in ones are not
+enough. That flexibility is one of the reasons Smithy remains useful even when
+an organization is not standardizing on just one transport model.
+
+That matters when you want:
+
+- a stable contract that is not tied to one framework or HTTP stack
+- room to evolve protocols and implementations without redefining the service
+- consistent client, server, and documentation surfaces across languages
+- less hand-written protocol glue repeated in every application
+
+### Why NSmithy?
+
+NSmithy takes that one step further for .NET. It aims to make Smithy feel
+native in the .NET ecosystem while also supporting [alloy](https://github.com/disneystreaming/alloy)
+traits and workflows that matter for practical service development beyond the
+core Smithy baseline.
+
+In practice, that means bringing contract-first, protocol-aware generation to
+.NET with generated C# types, typed clients, ASP.NET Core server surfaces.
+
+
+## Smithy CLI
+
+`NSmithy.MSBuild` invokes the Smithy CLI during `dotnet build`. For some .NET
+teams, the Java requirement around the Smithy toolchain is an adoption blocker,
+especially when the rest of the stack is otherwise entirely .NET.
+
+The most practical way to smooth that over is to use a managed project
+environment that installs both the Smithy CLI and its Java dependency together,
+so the toolchain is local to the project instead of becoming machine-level
+setup. The recommended option here is
+[pixi](https://pixi.sh) with `smithy-cli` from conda-forge:
+
+```bash
+pixi init
+pixi add smithy openjdk dotnet
+pixi shell
+dotnet build
+```
+
+When the environment is active, `smithy` is resolved from `PATH`. Set
+`SmithyCliPath` to force a specific executable when needed.
+
 
 ## Documentation
 
