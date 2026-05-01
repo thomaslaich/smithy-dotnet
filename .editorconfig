@@ -18,7 +18,10 @@ dotnet_style_qualification_for_property = false:warning
 dotnet_style_predefined_type_for_locals_parameters_members = true:warning
 dotnet_style_predefined_type_for_member_access = true:warning
 
-[CSharpShapeGenerator*.cs]
+[CSharpShapeGenerator.*.cs]
+max_line_length = 140
+
+[CSharpShapeGenerator.cs]
 max_line_length = 140
 
 [*.{csproj,props,targets,slnx,yml,json,md}]

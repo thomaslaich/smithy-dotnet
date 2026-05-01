@@ -150,7 +150,7 @@ public sealed partial class CSharpShapeGenerator
         var typeName = GetTypeName(shape.Id);
         AddShapeAttributes(_, shape);
         _.L($"public enum {typeName}")
-            .B(builder =>
+            .B(_ =>
             {
                 foreach (var member in shape.Members.Values.OrderBy(member => member.Name, StringComparer.Ordinal))
                 {
@@ -159,10 +159,10 @@ public sealed partial class CSharpShapeGenerator
                     var suffix = value is null ? string.Empty : string.Create(CultureInfo.InvariantCulture, $" = {(int)value.Value}");
                     if (value is not null)
                     {
-                        builder.L($"[SmithyEnumValue({FormatString(((int)value.Value).ToString(CultureInfo.InvariantCulture))})]");
+                        _.L($"[SmithyEnumValue({FormatString(((int)value.Value).ToString(CultureInfo.InvariantCulture))})]");
                     }
 
-                    builder.L($"{propertyName}{suffix},");
+                    _.L($"{propertyName}{suffix},");
                 }
             });
         return FormatGeneratedText(_);
@@ -266,62 +266,50 @@ public sealed partial class CSharpShapeGenerator
         CSharpGenerationOptions options
     )
     {
-        _.L("public T Match<T>(")
-            .B(
-                builder =>
-                {
-                    foreach (var member in members)
-                    {
-                        var parameterName = CSharpIdentifier.ParameterName(member.Name);
-                        var valueType = GetValueType(
-                            model,
-                            member.Target,
-                            nullable: false,
-                            currentNamespace: string.Empty,
-                            baseNamespace: options.BaseNamespace
-                        );
-                        builder.L($"Func<{valueType}, T> {parameterName},");
-                    }
-
-                    builder.L("Func<string, Document, T> unknown)");
-                },
-                ConfigureTextBlock(BlockStyle.IndentOnly)
+        _.L("public T Match<T>(");
+        foreach (var member in members)
+        {
+            var parameterName = CSharpIdentifier.ParameterName(member.Name);
+            var valueType = GetValueType(
+                model,
+                member.Target,
+                nullable: false,
+                currentNamespace: string.Empty,
+                baseNamespace: options.BaseNamespace
             );
-        _.L("{")
-            .B(
-                builder =>
-                {
-                    foreach (var member in members)
-                    {
-                        var parameterName = CSharpIdentifier.ParameterName(member.Name);
-                        builder.L($"ArgumentNullException.ThrowIfNull({parameterName});");
-                    }
+            _.L($"    Func<{valueType}, T> {parameterName},");
+        }
 
-                    builder.L("ArgumentNullException.ThrowIfNull(unknown);");
-                    builder.L();
-                    builder.L("return this switch");
-                    builder
-                        .L("{")
-                        .B(
-                            switchBuilder =>
+        _.L("    Func<string, Document, T> unknown)")
+            .B(_ =>
+            {
+                foreach (var member in members)
+                {
+                    var parameterName = CSharpIdentifier.ParameterName(member.Name);
+                    _.L($"ArgumentNullException.ThrowIfNull({parameterName});");
+                }
+
+                _.L("ArgumentNullException.ThrowIfNull(unknown);");
+                _.L();
+                _.L("return this switch");
+                _.L("{")
+                    .B(
+                        switchBuilder =>
+                        {
+                            foreach (var member in members)
                             {
-                                foreach (var member in members)
-                                {
-                                    var variantName = CSharpIdentifier.TypeName(member.Name);
-                                    var parameterName = CSharpIdentifier.ParameterName(member.Name);
-                                    switchBuilder.L($"{variantName} value => {parameterName}(value.Value),");
-                                }
+                                var variantName = CSharpIdentifier.TypeName(member.Name);
+                                var parameterName = CSharpIdentifier.ParameterName(member.Name);
+                                switchBuilder.L($"{variantName} value => {parameterName}(value.Value),");
+                            }
 
-                                switchBuilder.L("Unknown value => unknown(value.Tag, value.Value),");
-                                switchBuilder.L("_ => throw new InvalidOperationException(\"Unknown union variant.\"),");
-                            },
-                            ConfigureTextBlock(BlockStyle.IndentOnly)
-                        );
-                    builder.L("};");
-                },
-                ConfigureTextBlock(BlockStyle.IndentOnly)
-            );
-        _.L("}");
+                            switchBuilder.L("Unknown value => unknown(value.Tag, value.Value),");
+                            switchBuilder.L("_ => throw new InvalidOperationException(\"Unknown union variant.\"),");
+                        },
+                        ConfigureTextBlock(BlockStyle.IndentOnly)
+                    );
+                _.L("};");
+            });
     }
 
     private static string GetUnionValueAssignment(SmithyModel model, ShapeId target, string parameterName)
@@ -343,9 +331,7 @@ public sealed partial class CSharpShapeGenerator
         var members = GetConstructorMembers(model, shape, options);
         if (members.Length == 0)
         {
-            _.L(BuildConstructorDeclaration(model, shape, typeName, members, options, baseCall));
-            _.L("{");
-            _.L("}");
+            _.L(BuildConstructorDeclaration(model, shape, typeName, members, options, baseCall)).L("{ }");
             return;
         }
 
@@ -410,9 +396,7 @@ public sealed partial class CSharpShapeGenerator
         if (members.Length == 0)
         {
             _.L($"public {typeName}(string? message{(hasRequiredMembers ? string.Empty : " = null")})");
-            _.L("    : base(message)");
-            _.L("{");
-            _.L("}");
+            _.L("    : base(message) { }");
             return;
         }
 

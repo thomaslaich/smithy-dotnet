@@ -53,9 +53,7 @@ public sealed partial class CSharpShapeGenerator
             .Select(operationId => GetOperationHandlerInterfaceName(model.GetShape(operationId)))
             .ToArray();
         var inheritedInterfaces = operationInterfaceNames.Length == 0 ? string.Empty : $" : {string.Join(", ", operationInterfaceNames)}";
-        _.L($"public interface {interfaceName}{inheritedInterfaces}");
-        _.L("{");
-        _.L("}");
+        _.L($"public interface {interfaceName}{inheritedInterfaces} {{ }}");
         _.L();
         AddServerDescriptors(_, model, service, serviceContractName, interfaceName, options);
         _.L();
@@ -65,7 +63,6 @@ public sealed partial class CSharpShapeGenerator
             _.L();
             AddAspNetCoreEndpointExtensions(_, model, service, serviceContractName, options);
         }
-
         if (emitsGrpc)
         {
             _.L();
@@ -254,35 +251,24 @@ public sealed partial class CSharpShapeGenerator
         string interfaceName
     )
     {
-        _.L($"public static IServiceCollection Add{serviceContractName}Handler<THandler>(this IServiceCollection services)")
-            .B(
-                _ =>
+        _.L($"public static IServiceCollection Add{serviceContractName}Handler<THandler>(this IServiceCollection services)");
+        _.L($"    where THandler : class, {interfaceName}")
+            .B(_ =>
+            {
+                _.L("ArgumentNullException.ThrowIfNull(services);");
+                _.L();
+                _.L("services.AddSingleton<THandler>();");
+                _.L($"services.AddSingleton<{interfaceName}>(serviceProvider => serviceProvider.GetRequiredService<THandler>());");
+                foreach (var operationId in service.Operations.OrderBy(id => id.ToString(), StringComparer.Ordinal))
                 {
-                    _.L($"where THandler : class, {interfaceName}");
-                },
-                ConfigureTextBlock(BlockStyle.IndentOnly)
-            );
-        _.L("{")
-            .B(
-                _ =>
-                {
-                    _.L("ArgumentNullException.ThrowIfNull(services);");
-                    _.L();
-                    _.L("services.AddSingleton<THandler>();");
-                    _.L($"services.AddSingleton<{interfaceName}>(serviceProvider => serviceProvider.GetRequiredService<THandler>());");
-                    foreach (var operationId in service.Operations.OrderBy(id => id.ToString(), StringComparer.Ordinal))
-                    {
-                        var operation = model.GetShape(operationId);
-                        var operationInterfaceName = GetOperationHandlerInterfaceName(operation);
-                        _.L(
-                            $"services.AddSingleton<{operationInterfaceName}>(serviceProvider => serviceProvider.GetRequiredService<THandler>());"
-                        );
-                    }
-                    _.L("return services;");
-                },
-                ConfigureTextBlock(BlockStyle.IndentOnly)
-            );
-        _.L("}");
+                    var operation = model.GetShape(operationId);
+                    var operationInterfaceName = GetOperationHandlerInterfaceName(operation);
+                    _.L(
+                        $"services.AddSingleton<{operationInterfaceName}>(serviceProvider => serviceProvider.GetRequiredService<THandler>());"
+                    );
+                }
+                _.L("return services;");
+            });
     }
 
     private static void AddAspNetCoreEndpointExtensions(
