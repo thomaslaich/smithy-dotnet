@@ -4,12 +4,12 @@ namespace SmithyNet.Client;
 
 public sealed class SmithyOperationInvoker(
     IHttpTransport transport,
-    IEnumerable<ISmithyClientMiddleware>? middleware = null
+    IEnumerable<ISmithyClientMiddleware>? middlewares = null
 )
 {
     private readonly IHttpTransport transport =
         transport ?? throw new ArgumentNullException(nameof(transport));
-    private readonly IReadOnlyList<ISmithyClientMiddleware> middleware = [.. middleware ?? []];
+    private readonly IReadOnlyList<ISmithyClientMiddleware> middlewares = [.. middlewares ?? []];
 
     public async Task<SmithyHttpResponse> InvokeAsync(
         string serviceName,
@@ -51,7 +51,7 @@ public sealed class SmithyOperationInvoker(
 
     private SmithyOperationNext BuildPipeline(int index)
     {
-        if (index >= middleware.Count)
+        if (index >= middlewares.Count)
         {
             return async (request, cancellationToken) =>
             {
@@ -66,7 +66,7 @@ public sealed class SmithyOperationInvoker(
             };
         }
 
-        var current = middleware[index];
+        var current = middlewares[index];
         var next = BuildPipeline(index + 1);
         return (request, cancellationToken) =>
             current.InvokeAsync(request, next, cancellationToken);
