@@ -42,7 +42,6 @@ These protocols are not current NSmithy targets:
 
 ## Related Docs
 
-- [Supported Surface](../supported-surface.md)
 - [Known Limitations](../known-limitations.md)
 - [Multi-Protocol Guide](../multi-protocol.md)
 - [Architecture](../architecture/hybrid-codegen.md)
