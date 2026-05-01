@@ -45,8 +45,9 @@ the architecture from scratch.
    validation instead of reimplementing Smithy parsing and semantics in .NET.
 
 2. Keep the backend native to .NET.
-   The main generator, build integration, and tests should stay in the .NET
-   toolchain because the generated artifacts are consumed there.
+  The main user-facing build flow, package story, and generated-artifact
+  consumption should remain natural for .NET users, even if parts of the
+  generator eventually move closer to Smithy's Java tooling.
 
 3. Prefer narrower supported slices over broad but unstable claims.
    Protocol support should grow where the repo already has useful runtime and
