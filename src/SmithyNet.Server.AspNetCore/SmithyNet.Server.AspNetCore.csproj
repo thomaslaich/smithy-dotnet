@@ -1,7 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <ProjectReference Include="../SmithyNet.Codecs.Json/SmithyNet.Codecs.Json.csproj" />
-    <ProjectReference Include="../SmithyNet.Server/SmithyNet.Server.csproj" />
-  </ItemGroup>
-</Project>

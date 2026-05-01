@@ -1,4 +1,4 @@
-# Smithy.NET AWS Protocol Example
+# NSmithy AWS Protocol Example
 
 This example now groups the current AWS-focused client paths in one place.
 

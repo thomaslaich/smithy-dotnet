@@ -1,17 +1,17 @@
 # Hybrid Codegen Architecture
 
-Smithy.NET uses Smithy and .NET at different layers of the pipeline.
+NSmithy uses Smithy and .NET at different layers of the pipeline.
 
 ## Decision
 
-Today, Smithy.NET does not implement its primary C# generator as a Smithy Java
+Today, NSmithy does not implement its primary C# generator as a Smithy Java
 plugin.
 
 Instead:
 
 - Smithy CLI is responsible for model assembly, validation, projections, imports,
   prelude resolution, and Maven dependency handling.
-- Smithy.NET reads the resulting Smithy JSON AST/build artifacts and performs C#
+- NSmithy reads the resulting Smithy JSON AST/build artifacts and performs C#
   and `.proto` generation inside the .NET toolchain.
 
 This is the current architecture and the working default for the project today.
@@ -57,7 +57,7 @@ Smithy already solves the hard model-front-end problems:
 - Maven dependency resolution
 - compatibility with the broader Smithy ecosystem
 
-Smithy.NET intentionally reuses that front end rather than reimplementing it.
+NSmithy intentionally reuses that front end rather than reimplementing it.
 
 ## Tradeoffs
 
@@ -65,7 +65,7 @@ This architecture is not free.
 
 Current costs:
 
-- Smithy.NET owns a JSON AST reader and its own internal model representation
+- NSmithy owns a JSON AST reader and its own internal model representation
 - there is an extra boundary between Smithy semantic model handling and C#
   emission
 - some Smithy semantics may require additional mapping work in .NET that a Java
@@ -87,7 +87,7 @@ shape well:
 - a more complex handoff from Java-generated artifacts back into `dotnet build`
 - slower backend iteration for a C#-focused project
 
-For Smithy.NET today, that is not yet proven to be a net simplification.
+For NSmithy today, that is not yet proven to be a net simplification.
 
 ## Scope Of The Decision
 
@@ -111,7 +111,7 @@ not "replace MSBuild with Gradle."
 
 A more realistic option would be:
 
-- keep `dotnet build` and `SmithyNet.MSBuild` as the main user experience
+- keep `dotnet build` and `NSmithy.MSBuild` as the main user experience
 - keep invoking Smithy CLI from the .NET build
 - let Smithy run a custom Java plugin for the part of the pipeline where direct
   access to Smithy's semantic model might help

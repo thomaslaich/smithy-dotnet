@@ -5,7 +5,7 @@ are not assumed.
 
 ## Install The Smithy CLI
 
-`SmithyNet.MSBuild` invokes the Smithy CLI during `dotnet build`. The CLI is a
+`NSmithy.MSBuild` invokes the Smithy CLI during `dotnet build`. The CLI is a
 JVM tool, so Java must also be available. Two recommended approaches are shown
 below.
 
@@ -73,11 +73,11 @@ Reference the packages needed by generated `restJson1` clients:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="SmithyNet.Client" Version="0.1.0-preview.3" />
-  <PackageReference Include="SmithyNet.Core" Version="0.1.0-preview.3" />
-  <PackageReference Include="SmithyNet.Http" Version="0.1.0-preview.3" />
-  <PackageReference Include="SmithyNet.Codecs.Json" Version="0.1.0-preview.3" />
-  <PackageReference Include="SmithyNet.MSBuild" Version="0.1.0-preview.3" PrivateAssets="all" />
+  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.3" PrivateAssets="all" />
 </ItemGroup>
 ```
 
@@ -86,8 +86,8 @@ For generated ASP.NET Core `simpleRestJson` servers, also reference:
 ```xml
 <ItemGroup>
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="SmithyNet.Server" Version="0.1.0-preview.3" />
-  <PackageReference Include="SmithyNet.Server.AspNetCore" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.3" />
 </ItemGroup>
 ```
 
@@ -160,7 +160,7 @@ Generated service clients are named after the Smithy service:
 
 ```csharp
 using Example.Hello;
-using SmithyNet.Client;
+using NSmithy.Client;
 
 var client = new HelloServiceClient(
     new HttpClient(),
@@ -281,7 +281,7 @@ internal sealed class PingHandler : IPingHandler
 ```
 
 The example at `examples/simple-rest-json/dotnet` shows a generated
-Smithy.NET ASP.NET Core server and a generated Smithy.NET client using the same
+NSmithy ASP.NET Core server and a generated NSmithy client using the same
 `alloy#simpleRestJson` model.
 
 For the new binary codec path, `examples/rpcv2cbor/dotnet` shows a generated

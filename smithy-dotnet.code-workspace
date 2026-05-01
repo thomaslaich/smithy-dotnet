@@ -1,7 +1,7 @@
 {
   "folders": [
     {
-      "name": "Smithy.NET",
+      "name": "NSmithy",
       "path": "."
     },
     {
@@ -22,7 +22,7 @@
     }
   ],
   "settings": {
-    "dotnet.defaultSolution": "SmithyNet.slnx",
+    "dotnet.defaultSolution": "NSmithy.slnx",
     "files.exclude": {
       "examples": true,
     },

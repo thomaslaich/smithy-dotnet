@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../NSmithy.Codecs/NSmithy.Codecs.csproj" />
+    <ProjectReference Include="../NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
+    <ProjectReference Include="../NSmithy.Http/NSmithy.Http.csproj" />
+  </ItemGroup>
+</Project>

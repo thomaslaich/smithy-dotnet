@@ -10,7 +10,7 @@ setup; the .NET client consumes both models in the same project.
 |---------|----------|------|------|
 | `scala-service` | Scala (Smithy4s + http4s) | 8081 | `simpleRestJson` server |
 | `java-service` | Java (Smithy Java) | 8082 | `restJson1` server |
-| `dotnet-client` | .NET (Smithy.NET) | n/a | Generated clients for both services |
+| `dotnet-client` | .NET (NSmithy) | n/a | Generated clients for both services |
 
 Both services implement `GET /hello/{name}`. The models are intentionally not
 identical:
@@ -28,7 +28,7 @@ The services use separate Smithy models:
 - **Java**: Smithy Java reads `java/smithy/model/java-hello.smithy`, which uses
   `aws.protocols#restJson1`, and generates server stubs plus request/response
   types. Its Smithy namespace is `example.java.hello`.
-- **.NET client**: Smithy.NET reads both server models, generates two typed C#
+- **.NET client**: NSmithy reads both server models, generates two typed C#
   clients, and calls both services from one app.
 
 This mirrors a realistic polyglot setup: services do not usually share a single
@@ -74,7 +74,7 @@ that the server registers an implementation for it.
 First create local NuGet packages from the repository root:
 
 ```bash
-dotnet pack SmithyNet.slnx --configuration Release --output artifacts/packages
+dotnet pack NSmithy.slnx --configuration Release --output artifacts/packages
 ```
 
 Then run the client against both services:

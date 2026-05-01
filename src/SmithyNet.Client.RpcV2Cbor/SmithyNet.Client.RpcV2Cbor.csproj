@@ -1,7 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../SmithyNet.Codecs/SmithyNet.Codecs.csproj" />
-    <ProjectReference Include="../SmithyNet.Codecs.Cbor/SmithyNet.Codecs.Cbor.csproj" />
-    <ProjectReference Include="../SmithyNet.Http/SmithyNet.Http.csproj" />
-  </ItemGroup>
-</Project>

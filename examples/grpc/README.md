@@ -1,9 +1,9 @@
-# Smithy.NET Dual-Protocol Walking Skeleton
+# NSmithy Dual-Protocol Walking Skeleton
 
 For the full walkthrough, see `docs/multi-protocol.md`.
 
 This example shows one Smithy service exposed over both HTTP and gRPC in the
-current Smithy.NET preview.
+current NSmithy preview.
 
 The model carries both `alloy#simpleRestJson` and `alloy.proto#grpc` on the same
 service:
@@ -30,7 +30,7 @@ gRPC client against the same running server.
 
 ## Run
 
-This example assumes you already have the local Smithy.NET packages available,
+This example assumes you already have the local NSmithy packages available,
 either from a repository checkout or from published NuGet packages.
 
 Start the dual-protocol server:
