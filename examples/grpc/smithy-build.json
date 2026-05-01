@@ -7,7 +7,7 @@
       { "url": "https://repo.maven.apache.org/maven2/" }
     ],
     "dependencies": [
-      "io.github.thomaslaich.smithy:smithy-csharp-codegen:0.1.0-SNAPSHOT"
+      "io.github.thomaslaich.smithy:csharp:0.1.0-SNAPSHOT"
     ]
   },
   "plugins": {
