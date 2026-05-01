@@ -19,17 +19,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
-    <ProjectReference Include="../../src/NSmithy.Client/NSmithy.Client.csproj" />
-    <ProjectReference Include="../../src/NSmithy.CodeGeneration/NSmithy.CodeGeneration.csproj" />
-    <ProjectReference Include="../../src/NSmithy.Core/NSmithy.Core.csproj" />
-    <ProjectReference Include="../../src/NSmithy.Http/NSmithy.Http.csproj" />
-    <ProjectReference Include="../../src/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
-    <ProjectReference Include="../../src/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
-    <ProjectReference Include="../../src/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
-    <ProjectReference Include="../../src/NSmithy.Server/NSmithy.Server.csproj" />
-    <ProjectReference Include="../../src/NSmithy.Codecs/NSmithy.Codecs.csproj" />
-    <ProjectReference Include="../../src/NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Client/NSmithy.Client.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Core/NSmithy.Core.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Http/NSmithy.Http.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Server/NSmithy.Server.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Codecs/NSmithy.Codecs.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
   </ItemGroup>
 
   <ItemGroup>

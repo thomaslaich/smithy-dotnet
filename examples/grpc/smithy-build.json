@@ -1,4 +1,19 @@
 {
   "version": "1.0",
-  "sources": ["model"]
+  "sources": ["model"],
+  "maven": {
+    "repositories": [
+      { "url": "file://~/.m2/repository" },
+      { "url": "https://repo.maven.apache.org/maven2/" }
+    ],
+    "dependencies": [
+      "io.github.thomaslaich.smithy:smithy-csharp-codegen:0.1.0-SNAPSHOT"
+    ]
+  },
+  "plugins": {
+    "csharp-codegen": {
+      "service": "example.hello#HelloService",
+      "baseNamespace": ""
+    }
+  }
 }

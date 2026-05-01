@@ -1,19 +1,18 @@
 <Solution>
-  <Folder Name="/src/">
-    <Project Path="src/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
-    <Project Path="src/NSmithy.Client/NSmithy.Client.csproj" />
-    <Project Path="src/NSmithy.Client.RestJson/NSmithy.Client.RestJson.csproj" />
-    <Project Path="src/NSmithy.Client.RestXml/NSmithy.Client.RestXml.csproj" />
-    <Project Path="src/NSmithy.Client.RpcV2Cbor/NSmithy.Client.RpcV2Cbor.csproj" />
-    <Project Path="src/NSmithy.CodeGeneration/NSmithy.CodeGeneration.csproj" />
-    <Project Path="src/NSmithy.Core/NSmithy.Core.csproj" />
-    <Project Path="src/NSmithy.Http/NSmithy.Http.csproj" />
-    <Project Path="src/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
-    <Project Path="src/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
-    <Project Path="src/NSmithy.Codecs/NSmithy.Codecs.csproj" />
-    <Project Path="src/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
-    <Project Path="src/NSmithy.Server/NSmithy.Server.csproj" />
-    <Project Path="src/NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
+  <Folder Name="/packages/">
+    <Project Path="packages/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
+    <Project Path="packages/NSmithy.Client/NSmithy.Client.csproj" />
+    <Project Path="packages/NSmithy.Client.RestJson/NSmithy.Client.RestJson.csproj" />
+    <Project Path="packages/NSmithy.Client.RestXml/NSmithy.Client.RestXml.csproj" />
+    <Project Path="packages/NSmithy.Client.RpcV2Cbor/NSmithy.Client.RpcV2Cbor.csproj" />
+    <Project Path="packages/NSmithy.Core/NSmithy.Core.csproj" />
+    <Project Path="packages/NSmithy.Http/NSmithy.Http.csproj" />
+    <Project Path="packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
+    <Project Path="packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+    <Project Path="packages/NSmithy.Codecs/NSmithy.Codecs.csproj" />
+    <Project Path="packages/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
+    <Project Path="packages/NSmithy.Server/NSmithy.Server.csproj" />
+    <Project Path="packages/NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/NSmithy.Tests/NSmithy.Tests.csproj" />

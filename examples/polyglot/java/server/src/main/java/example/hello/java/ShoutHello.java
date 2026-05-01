@@ -7,17 +7,17 @@ import java.util.Locale;
 import software.amazon.smithy.java.server.RequestContext;
 
 final class ShoutHello implements ShoutHelloOperation {
-    private final String serviceName;
+  private final String serviceName;
 
-    ShoutHello(String serviceName) {
-        this.serviceName = serviceName;
-    }
+  ShoutHello(String serviceName) {
+    this.serviceName = serviceName;
+  }
 
-    @Override
-    public ShoutHelloOutput shoutHello(ShoutHelloInput input, RequestContext context) {
-        return ShoutHelloOutput.builder()
-                .message(("HELLO, " + input.getName() + "!").toUpperCase(Locale.ROOT))
-                .from(serviceName)
-                .build();
-    }
+  @Override
+  public ShoutHelloOutput shoutHello(ShoutHelloInput input, RequestContext context) {
+    return ShoutHelloOutput.builder()
+        .message(("HELLO, " + input.getName() + "!").toUpperCase(Locale.ROOT))
+        .from(serviceName)
+        .build();
+  }
 }

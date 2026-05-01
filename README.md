@@ -30,11 +30,11 @@ For generated clients, add:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.3" />
-  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.3" />
-  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.3" />
-  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.3" />
-  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.3" PrivateAssets="all" />
+  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.4" />
+  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.4" />
+  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.4" />
+  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.4" />
+  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.4" PrivateAssets="all" />
 </ItemGroup>
 ```
 
@@ -43,8 +43,8 @@ For generated ASP.NET Core `simpleRestJson` servers, also add:
 ```xml
 <ItemGroup>
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.3" />
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.4" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.4" />
 </ItemGroup>
 ```
 
