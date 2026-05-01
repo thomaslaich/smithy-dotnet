@@ -147,7 +147,7 @@ For larger services, register operation handlers individually:
 builder.Services.AddSingleton<ISayHelloHandler, SayHelloHandler>();
 ```
 
-### Why Smithy?
+## Why Smithy?
 
 In a large company, service definitions often become fragmented across teams,
 tools, and protocols. Different teams publish different styles of API descriptions,
@@ -176,7 +176,7 @@ That matters when you want:
 - consistent client, server, and documentation surfaces across languages
 - less hand-written protocol glue repeated in every application
 
-### Why NSmithy?
+## Why NSmithy?
 
 NSmithy takes that one step further for .NET. It aims to make Smithy feel
 native in the .NET ecosystem while also supporting [alloy](https://github.com/disneystreaming/alloy)
