@@ -1,10 +1,10 @@
 using System.Net;
 using Example.Hello;
-using SmithyNet.Client;
-using SmithyNet.Core;
-using SmithyNet.Core.Annotations;
-using RealCborPayloadCodec = SmithyNet.Codecs.Cbor.SmithyCborPayloadCodec;
-using RealXmlPayloadCodec = SmithyNet.Codecs.Xml.SmithyXmlPayloadCodec;
+using NSmithy.Client;
+using NSmithy.Core;
+using NSmithy.Core.Annotations;
+using RealCborPayloadCodec = NSmithy.Codecs.Cbor.SmithyCborPayloadCodec;
+using RealXmlPayloadCodec = NSmithy.Codecs.Xml.SmithyXmlPayloadCodec;
 
 var name = args.Length > 0 ? args[0] : "world";
 var httpClient = new HttpClient(new MockAwsProtocolsHandler());

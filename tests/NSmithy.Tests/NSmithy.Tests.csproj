@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Build.Framework" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
+    <ProjectReference Include="../../src/NSmithy.Client/NSmithy.Client.csproj" />
+    <ProjectReference Include="../../src/NSmithy.CodeGeneration/NSmithy.CodeGeneration.csproj" />
+    <ProjectReference Include="../../src/NSmithy.Core/NSmithy.Core.csproj" />
+    <ProjectReference Include="../../src/NSmithy.Http/NSmithy.Http.csproj" />
+    <ProjectReference Include="../../src/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
+    <ProjectReference Include="../../src/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+    <ProjectReference Include="../../src/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
+    <ProjectReference Include="../../src/NSmithy.Server/NSmithy.Server.csproj" />
+    <ProjectReference Include="../../src/NSmithy.Codecs/NSmithy.Codecs.csproj" />
+    <ProjectReference Include="../../src/NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace></RootNamespace>
+    <SmithyBuildFile>../smithy-build.json</SmithyBuildFile>
+    <SmithyGeneratedNamespaces>example.hello</SmithyGeneratedNamespaces>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.3" />
+    <PackageReference Include="NSmithy.Client.RestJson" Version="0.1.0-preview.3" />
+    <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.3" />
+    <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.3" />
+    <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.3" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.3" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.3" />
+    <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.3" />
+  </ItemGroup>
+</Project>

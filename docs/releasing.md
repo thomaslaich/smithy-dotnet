@@ -1,6 +1,6 @@
 # Releasing
 
-Smithy.NET releases are published by creating a GitHub release.
+NSmithy releases are published by creating a GitHub release.
 
 ## Version
 

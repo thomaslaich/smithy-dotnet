@@ -1,5 +1,5 @@
 using Example.Hello;
-using SmithyNet.Client;
+using NSmithy.Client;
 
 var endpoint = args.Length > 0 ? args[0] : "http://localhost:5000";
 var name = args.Length > 1 ? args[1] : "world";

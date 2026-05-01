@@ -1,6 +1,6 @@
-# Smithy.NET simpleRestJson Example
+# NSmithy simpleRestJson Example
 
-This example uses Smithy.NET for both sides of an `alloy#simpleRestJson` HTTP
+This example uses NSmithy for both sides of an `alloy#simpleRestJson` HTTP
 API:
 
 - `server`: generated ASP.NET Core endpoints and a handwritten
@@ -21,7 +21,7 @@ just pack
 just refresh-examples
 ```
 
-`just refresh-examples` clears the example projects' local `SmithyNet.*`
+`just refresh-examples` clears the example projects' local `NSmithy.*`
 package cache. This matters while developing with a fixed preview version,
 because NuGet otherwise keeps using the older extracted package contents.
 

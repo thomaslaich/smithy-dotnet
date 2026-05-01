@@ -1,5 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../SmithyNet.Core/SmithyNet.Core.csproj" />
-  </ItemGroup>
-</Project>

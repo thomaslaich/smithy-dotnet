@@ -2,7 +2,7 @@
 
 This page is the short version of where protocol support stands today.
 
-Smithy.NET is still preview-stage. "Supported" here means there is working
+NSmithy is still preview-stage. "Supported" here means there is working
 generator and runtime support for a usable slice, not that the protocol is
 complete or fully conformant across the Smithy surface.
 
@@ -34,7 +34,7 @@ In practice, earlier-stage protocols may still have one or more of these traits:
 
 ## Not Supported Yet
 
-These protocols are not current Smithy.NET targets:
+These protocols are not current NSmithy targets:
 
 - AWS JSON protocols
 - REST XML
@@ -42,7 +42,6 @@ These protocols are not current Smithy.NET targets:
 
 ## Related Docs
 
-- [Supported Surface](../supported-surface.md)
 - [Known Limitations](../known-limitations.md)
 - [Multi-Protocol Guide](../multi-protocol.md)
 - [Architecture](../architecture/hybrid-codegen.md)

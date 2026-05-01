@@ -1,8 +1,8 @@
 <Solution>
   <Folder Name="/client/">
-    <Project Path="client/SmithyNet.Examples.SimpleRestJson.Client.csproj" />
+    <Project Path="client/NSmithy.Examples.SimpleRestJson.Client.csproj" />
   </Folder>
   <Folder Name="/server/">
-    <Project Path="server/SmithyNet.Examples.SimpleRestJson.Server.csproj" />
+    <Project Path="server/NSmithy.Examples.SimpleRestJson.Server.csproj" />
   </Folder>
 </Solution>

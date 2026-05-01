@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
+    <Project Path="src/NSmithy.Client/NSmithy.Client.csproj" />
+    <Project Path="src/NSmithy.Client.RestJson/NSmithy.Client.RestJson.csproj" />
+    <Project Path="src/NSmithy.Client.RestXml/NSmithy.Client.RestXml.csproj" />
+    <Project Path="src/NSmithy.Client.RpcV2Cbor/NSmithy.Client.RpcV2Cbor.csproj" />
+    <Project Path="src/NSmithy.CodeGeneration/NSmithy.CodeGeneration.csproj" />
+    <Project Path="src/NSmithy.Core/NSmithy.Core.csproj" />
+    <Project Path="src/NSmithy.Http/NSmithy.Http.csproj" />
+    <Project Path="src/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
+    <Project Path="src/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+    <Project Path="src/NSmithy.Codecs/NSmithy.Codecs.csproj" />
+    <Project Path="src/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
+    <Project Path="src/NSmithy.Server/NSmithy.Server.csproj" />
+    <Project Path="src/NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NSmithy.Tests/NSmithy.Tests.csproj" />
+  </Folder>
+</Solution>
