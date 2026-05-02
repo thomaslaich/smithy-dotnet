@@ -17,6 +17,8 @@ internal sealed class SmithyTestModel
         this.shapes = shapes;
     }
 
+    public JsonObject RawShapes => shapes;
+
     public static SmithyTestModel Load()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "smithy-model.json");

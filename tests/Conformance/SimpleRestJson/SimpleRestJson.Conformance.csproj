@@ -59,7 +59,7 @@
   >
     <ItemGroup>
       <Content
-        Include="$(SmithyBuildOutputPath)pizza/model/model.json"
+        Include="$(SmithyBuildOutputPath)source/model/model.json"
         Link="smithy-model.json"
         CopyToOutputDirectory="PreserveNewest"
         Visible="false"

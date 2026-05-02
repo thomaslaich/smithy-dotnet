@@ -25,11 +25,37 @@ internal static class SimpleRestJsonAllowlist
         "SimpleRestJsonSomeHttpPayloadWithDefault",
         "SimpleRestJsonSomeRequiredHttpPayloadWithDefault",
         "PrimitivesEncodingRequest",
-        // PreserveKeyOrderRequest takes a Document map and exercises insertion-order
-        // semantics — the binder doesn’t support Document yet.
-        // Routing* cases live on a separate test service, not on PizzaAdminService.
-        // OpenUnions* require open-union codegen support which we haven't validated yet.
-        // SimpleRestJsonNoneHttpPayloadWithDefault* expect default-valued payloads to be
-        // omitted from the wire — current codegen always serializes them. Tracked separately.
+        "RoutingAbc",
+        "RoutingAbcDef",
+        "RoutingAbcLabel",
+        "RoutingAbcXyz",
+        // Known codegen issues (excluded until fixed) — each is a real bug, not a harness gap:
+        //   * RoutingAbcDefGreedy — greedy label URI expansion is not implemented.
+        //   * SimpleRestJsonNoneHttpPayloadWithDefault*  — default-valued payloads are not omitted.
+        //   * PreserveKeyOrderRequest — Document type binding/serialization not validated yet.
+        // OpenUnions* require open-union codegen support which we haven’t validated yet.
+    };
+
+    public static readonly IReadOnlySet<string> ExecutableResponseCases = new HashSet<string>(
+        StringComparer.Ordinal
+    )
+    {
+        "AddMenuItemResult",
+        "CustomCodeOutput",
+        "GetEnumOutput",
+        "GetIntEnumOutput",
+        "GetMenuResponse",
+        "headerEndpointResponse",
+        "NotFoundError",
+        "PriceErrorTest",
+        "RoundTripDataResponse",
+        "SimpleRestJsonSomeHttpPayloadWithDefault",
+        "SimpleRestJsonSomeRequiredHttpPayloadWithDefault",
+        "VersionOutput",
+        // Known codegen issues (excluded until fixed):
+        //   * SimpleRestJsonNone*HttpPayloadWithDefault* — default-payload omission.
+        //   * PrimitivesEncodingResponse — covered by request side; response not yet handled.
+        //   * PreserveKeyOrderResponse — Document support pending.
+        // OpenUnions* require open-union codegen support.
     };
 }

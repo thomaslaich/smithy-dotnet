@@ -74,7 +74,12 @@ public sealed class SmithyJsonPayloadCodec : ISmithyPayloadCodec
 
         if (value is DateTimeOffset timestamp)
         {
-            writer.WriteStringValue(timestamp.ToUniversalTime());
+            // Smithy date-time uses RFC 3339 / ISO 8601 with `Z` for UTC, not `+00:00`.
+            var utc = timestamp.ToUniversalTime();
+            writer.WriteStringValue(
+                utc.ToString("yyyy-MM-ddTHH:mm:ss.FFFFFFFK", System.Globalization.CultureInfo.InvariantCulture)
+                    .Replace("+00:00", "Z", StringComparison.Ordinal)
+            );
             return;
         }
 

@@ -17,22 +17,50 @@ namespace SimpleRestJson.Conformance;
 /// </summary>
 internal static class HttpRequestRunner
 {
-    private const string ClientFullName = "Alloy.Test.PizzaAdminServiceClient";
     private static readonly Uri Endpoint = new("http://localhost");
+
+    /// <summary>
+    /// Generated client types in the test assembly. We discover these once via reflection so the
+    /// runner can dispatch to whichever service owns each protocol-test case.
+    /// </summary>
+    private static readonly IReadOnlyList<Type> ClientTypes =
+    [
+        .. typeof(AddMenuItemInput)
+            .Assembly.GetTypes()
+            .Where(t =>
+                t is { IsClass: true, IsAbstract: false }
+                && t.Name.EndsWith("Client", StringComparison.Ordinal)
+                && t.GetConstructors()
+                    .Any(c =>
+                    {
+                        var ps = c.GetParameters();
+                        return ps.Length == 2 && ps[0].ParameterType == typeof(HttpClient);
+                    })
+            ),
+    ];
 
     public static async Task RunAsync(HttpRequestTestCase testCase)
     {
-        var clientType =
-            typeof(AddMenuItemInput).Assembly.GetType(ClientFullName)
-            ?? throw new InvalidOperationException($"Client type {ClientFullName} not found.");
-        var method =
-            clientType.GetMethod(
-                testCase.OperationName + "Async",
-                BindingFlags.Public | BindingFlags.Instance
-            )
-            ?? throw new InvalidOperationException(
-                $"Operation method {testCase.OperationName}Async not found on {ClientFullName}."
+        var operationName = testCase.OperationName + "Async";
+        MethodInfo? method = null;
+        Type? clientType = null;
+        foreach (var t in ClientTypes)
+        {
+            method = t.GetMethod(operationName, BindingFlags.Public | BindingFlags.Instance);
+            if (method is not null)
+            {
+                clientType = t;
+                break;
+            }
+        }
+        if (method is null || clientType is null)
+        {
+            throw new InvalidOperationException(
+                $"Operation method {operationName} not found on any generated client ("
+                    + string.Join(", ", ClientTypes.Select(t => t.FullName))
+                    + ")."
             );
+        }
         var inputType = method.GetParameters()[0].ParameterType;
         var input = ParamBinder.Bind(inputType, testCase.Params ?? new JsonObject())!;
 

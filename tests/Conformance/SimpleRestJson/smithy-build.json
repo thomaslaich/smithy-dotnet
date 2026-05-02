@@ -27,6 +27,22 @@
           "baseNamespace": ""
         }
       }
+    },
+    "routing": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": ["alloy.test.routing#RoutingService"]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "alloy.test.routing#RoutingService",
+          "baseNamespace": ""
+        }
+      }
     }
   }
 }
