@@ -47,11 +47,15 @@ public final class ShapeSupport {
     return !isRequired(member) && !hasDefault(member);
   }
 
-  /** True for C# reference types (need null-check / null-throw). */
+  /**
+   * True for C# reference types (need null-check / null-throw). Note that smithy DOCUMENT maps to
+   * {@code NSmithy.Core.Document}, which is a {@code readonly record struct} (value type), so it is
+   * intentionally excluded — the C# {@code ?? throw} pattern is illegal on structs.
+   */
   public static boolean isReferenceType(Model model, MemberShape member) {
     Shape target = model.expectShape(member.getTarget());
     return switch (target.getType()) {
-      case BLOB, STRING, DOCUMENT, STRUCTURE, UNION, LIST, SET, MAP -> true;
+      case BLOB, STRING, STRUCTURE, UNION, LIST, SET, MAP -> true;
       default -> false;
     };
   }

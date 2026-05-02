@@ -17,4 +17,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/NSmithy.Tests/NSmithy.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/Conformance/">
+    <Project Path="tests/Conformance/SimpleRestJson/SimpleRestJson.Conformance.csproj" />
+  </Folder>
 </Solution>

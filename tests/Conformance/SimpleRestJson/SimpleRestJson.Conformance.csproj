@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace></RootNamespace>
+    <IsPackable>false</IsPackable>
+    <SmithyBuildFile>smithy-build.json</SmithyBuildFile>
+    <SmithyProjection>pizza</SmithyProjection>
+    <!--
+      Pin the smithy build output under obj/. The default in NSmithy.MSBuild.targets uses
+      $(IntermediateOutputPath) which is only set by the SDK targets — those run AFTER our
+      explicit <Import> at the bottom of this file, so without this override the property
+      would resolve to a bare "Smithy/" inside the source tree. $(BaseIntermediateOutputPath)
+      defaults to "obj/" early in evaluation.
+    -->
+    <SmithyBuildOutputPath>$(BaseIntermediateOutputPath)Smithy/</SmithyBuildOutputPath>
+    <SmithyGeneratedNamespaces>alloy.test</SmithyGeneratedNamespaces>
+    <SmithyGenerateServer>false</SmithyGenerateServer>
+    <!-- Many alloy protocol-test fixtures emit warnings (unused traits etc.) -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../packages/NSmithy.Client/NSmithy.Client.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Client.RestJson/NSmithy.Client.RestJson.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Codecs/NSmithy.Codecs.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Core/NSmithy.Core.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Http/NSmithy.Http.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+  </ItemGroup>
+
+  <!-- ProjectReference doesn't auto-import the .targets file; do so explicitly. -->
+  <Import Project="../../../packages/NSmithy.MSBuild/Targets/NSmithy.MSBuild.targets" />
+
+  <!--
+    Expose the assembled smithy model so the test harness can read protocol-test traits.
+    Has to run AFTER smithy build (model.json doesn't exist before then) and BEFORE the
+    standard CopyFilesToOutputDirectory step.
+  -->
+  <Target
+    Name="_CopySmithyModelJsonToOutput"
+    DependsOnTargets="GenerateSmithyCode"
+    BeforeTargets="AssignTargetPaths;CopyFilesToOutputDirectory"
+  >
+    <ItemGroup>
+      <Content
+        Include="$(SmithyBuildOutputPath)pizza/model/model.json"
+        Link="smithy-model.json"
+        CopyToOutputDirectory="PreserveNewest"
+        Visible="false"
+      />
+    </ItemGroup>
+  </Target>
+</Project>

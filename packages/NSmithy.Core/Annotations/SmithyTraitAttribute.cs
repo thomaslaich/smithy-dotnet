@@ -3,6 +3,7 @@ namespace NSmithy.Core.Annotations;
 [AttributeUsage(
     AttributeTargets.Class
         | AttributeTargets.Struct
+        | AttributeTargets.Enum
         | AttributeTargets.Property
         | AttributeTargets.Field,
     AllowMultiple = true

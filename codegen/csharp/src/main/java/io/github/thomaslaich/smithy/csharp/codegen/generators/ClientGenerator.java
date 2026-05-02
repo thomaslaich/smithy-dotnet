@@ -494,11 +494,7 @@ public final class ClientGenerator implements Runnable {
                     "}",
                     CSharpNaming.formatString(errId.getName()),
                     CSharpNaming.formatString(errId.toString()),
-                    () ->
-                        writer.write(
-                            "return"
-                                + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>($L);",
-                            errorConstruction(sp, err)));
+                    () -> writeErrorReturn(sp, err));
               }
             }
             case REST_XML -> {
@@ -510,11 +506,7 @@ public final class ClientGenerator implements Runnable {
                     "if (string.Equals(errorType, $L, System.StringComparison.Ordinal)) {",
                     "}",
                     CSharpNaming.formatString(errId.getName()),
-                    () ->
-                        writer.write(
-                            "return"
-                                + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>($L);",
-                            errorConstruction(sp, err)));
+                    () -> writeErrorReturn(sp, err));
               }
             }
             case REST_JSON -> {
@@ -527,43 +519,68 @@ public final class ClientGenerator implements Runnable {
                     "if ((int)response.StatusCode == $L) {",
                     "}",
                     status,
-                    () ->
-                        writer.write(
-                            "return"
-                                + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>($L);",
-                            errorConstruction(sp, err)));
+                    () -> writeErrorReturn(sp, err));
               }
             }
           }
-          // fallback: first error
+          // fallback: first error. Wrap in an explicit block so the inner `var errorBody`
+          // doesn't collide with the per-status branches above (CS0136).
           ShapeId fallback = errorIds.get(0);
           StructureShape err = model.expectShape(fallback, StructureShape.class);
           writer.write("");
-          writer.write(
-              "return System.Threading.Tasks.ValueTask.FromResult<System.Exception?>($L);",
-              errorConstruction(sp, err));
+          writer.openBlock("{", "}", () -> writeErrorReturn(sp, err));
         });
     writer.write("");
   }
 
-  private String errorConstruction(SymbolProvider sp, StructureShape err) {
+  private String errorConstruction(SymbolProvider sp, StructureShape err, String bodyVar) {
     if (ProtocolSupport.useDocumentBindings(kind)) {
       // Whole error body is a single document.
       String t = CSharpSymbolProvider.qualified(sp.toSymbol(err));
       return runtime + ".DeserializeRequiredBody<" + t + ">(DocumentCodec, response.Content)";
     }
+    // Mirror ErrorGenerator's ctor signature: leading `string? message` (always present, even
+    // when the shape has no `message` member — that's how System.Exception.Message is wired)
+    // followed by the remaining members in constructor order (required first, then optional,
+    // each alphabetical) — NOT sortedMembers order, which would mis-align args with parameters.
     Optional<MemberShape> mm = ShapeSupport.errorMessageMember(err);
-    List<MemberShape> sorted = ShapeSupport.sortedMembers(err, mm.orElse(null));
+    List<MemberShape> ctor = ShapeSupport.constructorMembers(err, mm.orElse(null));
     StringBuilder sb =
         new StringBuilder("new ")
             .append(CSharpSymbolProvider.qualified(sp.toSymbol(err)))
             .append("(");
-    sb.append(mm.isPresent() ? responseMemberExpression(sp, mm.get(), null) : "null");
-    for (MemberShape m : sorted) {
-      sb.append(", ").append(responseMemberExpression(sp, m, null));
+    sb.append(mm.isPresent() ? responseMemberExpression(sp, mm.get(), bodyVar) : "null");
+    for (MemberShape m : ctor) {
+      sb.append(", ").append(responseMemberExpression(sp, m, bodyVar));
     }
     sb.append(")");
     return sb.toString();
+  }
+
+  /**
+   * Emits the body deserialization (when needed) plus the {@code return
+   * ValueTask.FromResult<Exception?>(new ErrorXyz(...));} line for an error shape. For
+   * REST_JSON/REST_XML the error body is decoded into the error's body-projection type so that
+   * body-bound members can be projected onto the user-facing error constructor arguments.
+   */
+  private void writeErrorReturn(SymbolProvider sp, StructureShape err) {
+    String bodyVar = null;
+    if (!ProtocolSupport.useDocumentBindings(kind)) {
+      List<MemberShape> bodyMembers = responseBodyMembers(err);
+      if (!bodyMembers.isEmpty()) {
+        String bodyType = bodyProjectionName(err);
+        boolean requiresBody = bodyMembers.stream().anyMatch(ShapeSupport::isRequired);
+        writer.write(
+            "var errorBody = $L.$L<$L>(DocumentCodec, response.Content);",
+            runtime,
+            requiresBody ? "DeserializeRequiredBody" : "DeserializeBody",
+            bodyType);
+        bodyVar = "errorBody";
+      }
+    }
+    writer.write(
+        "return System.Threading.Tasks.ValueTask.FromResult<System.Exception?>($L);",
+        errorConstruction(sp, err, bodyVar));
   }
 
   private static Integer httpErrorCode(StructureShape err) {
