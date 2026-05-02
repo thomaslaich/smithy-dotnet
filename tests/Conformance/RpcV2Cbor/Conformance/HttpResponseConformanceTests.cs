@@ -6,16 +6,26 @@ public sealed class HttpResponseConformanceTests
 {
     private static readonly SmithyTestModel Model = SmithyTestModel.Load();
 
-    public static IEnumerable<object[]> ExecutableCases() =>
-        Model
+    private const string EmptyAllowlistSentinel = "(no executable response cases)";
+
+    public static IEnumerable<object[]> ExecutableCases()
+    {
+        var ids = Model
             .EnumerateHttpResponseTests(RpcV2CborAllowlist.Protocol)
             .Where(tc => RpcV2CborAllowlist.ExecutableResponseCases.Contains(tc.Id))
-            .Select(tc => new object[] { tc.Id });
+            .Select(tc => new object[] { tc.Id })
+            .ToList();
+        if (ids.Count == 0)
+            ids.Add(new object[] { EmptyAllowlistSentinel });
+        return ids;
+    }
 
     [Theory]
     [MemberData(nameof(ExecutableCases))]
     public async Task ExecutableHttpResponseCasePassesGeneratedClientConformance(string caseId)
     {
+        if (caseId == EmptyAllowlistSentinel)
+            return;
         var testCase = Model
             .EnumerateHttpResponseTests(RpcV2CborAllowlist.Protocol)
             .Single(tc => tc.Id == caseId);

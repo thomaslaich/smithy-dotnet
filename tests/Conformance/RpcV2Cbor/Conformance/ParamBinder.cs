@@ -78,6 +78,11 @@ internal static class ParamBinder
             return BindShapeList(targetType, value);
         }
 
+        if (shape?.Kind == ShapeKind.Map)
+        {
+            return BindShapeMap(targetType, value);
+        }
+
         if (
             targetType.IsGenericType
             && (
@@ -142,6 +147,15 @@ internal static class ParamBinder
         // paramType is IEnumerable<T> (or similar). Recurse via the generic list path.
         var items = BindList(paramType, value);
         return ctor.Invoke([items]);
+    }
+
+    private static object BindShapeMap(Type mapShape, JsonNode value)
+    {
+        var ctor = SelectConstructor(mapShape);
+        var paramType = ctor.GetParameters()[0].ParameterType;
+        // paramType is IReadOnlyDictionary<TK,TV> (or similar). Recurse via the generic map path.
+        var entries = BindMap(paramType, value);
+        return ctor.Invoke([entries]);
     }
 
     private static object BindIntEnum(Type enumType, JsonNode value)
