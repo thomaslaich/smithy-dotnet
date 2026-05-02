@@ -78,7 +78,7 @@ public final class StructureGenerator implements Runnable {
           for (MemberShape m : ctorMembers) {
             String prop = CSharpNaming.propertyName(m.getMemberName());
             String param = CSharpNaming.parameterName(m.getMemberName());
-            String defaultExpr = ShapeSupport.defaultValueExpression(m);
+            String defaultExpr = ShapeSupport.defaultValueExpression(model, sp, m);
             if (defaultExpr != null) {
               writer.write("$L = $L ?? $L;", prop, param, defaultExpr);
             } else if (!ShapeSupport.isNullable(m) && ShapeSupport.isReferenceType(model, m)) {

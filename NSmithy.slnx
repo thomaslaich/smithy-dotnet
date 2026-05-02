@@ -18,6 +18,9 @@
     <Project Path="tests/NSmithy.Tests/NSmithy.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Conformance/">
+    <Project Path="tests/Conformance/RestJson1/RestJson1.Conformance.csproj" />
+    <Project Path="tests/Conformance/RestXml/RestXml.Conformance.csproj" />
+    <Project Path="tests/Conformance/RpcV2Cbor/RpcV2Cbor.Conformance.csproj" />
     <Project Path="tests/Conformance/SimpleRestJson/SimpleRestJson.Conformance.csproj" />
   </Folder>
 </Solution>

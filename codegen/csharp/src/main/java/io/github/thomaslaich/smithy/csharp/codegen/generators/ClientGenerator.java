@@ -236,7 +236,7 @@ public final class ClientGenerator implements Runnable {
             if (payload.isPresent()) {
               MemberShape pm = payload.get();
               String prop = CSharpNaming.propertyName(pm.getMemberName());
-              String defaultExpr = ShapeSupport.defaultValueExpression(pm);
+              String defaultExpr = ShapeSupport.defaultValueExpression(model, sp, pm);
               if (defaultExpr != null) {
                 // alloy semantics: omit the body when the user-provided value equals the
                 // member's @default. Mirrors the SimpleRestJsonNoneHttpPayloadWithDefault tests.

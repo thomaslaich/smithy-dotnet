@@ -44,15 +44,93 @@ public final class ShapeSupport {
 
   /**
    * Returns the C# literal expression for a member's @default value, or null if the member has
-   * no default or the default is the type's zero value (which we don't need to materialize).
-   * Currently supports string, boolean, and numeric defaults — sufficient for the simpleRestJson
-   * conformance fixtures.
+   * no default. Target-aware so the produced literal type matches the parameter type:
+   *   * BLOB defaults are base64 strings → emit {@code System.Convert.FromBase64String("…")};
+   *   * TIMESTAMP defaults are epoch seconds → emit
+   *     {@code System.DateTimeOffset.FromUnixTimeSeconds(N)};
+   *   * FLOAT defaults need an {@code f} suffix to avoid double-to-float conversion errors;
+   *   * ENUM (string-enum) defaults wrap the literal in the generated {@code (string)} ctor;
+   *   * INT_ENUM defaults cast the integer to the generated enum type.
+   * Anything else falls through to a plain literal (string/bool/numeric).
    */
-  public static String defaultValueExpression(MemberShape member) {
+  public static String defaultValueExpression(Model model, SymbolProvider sp, MemberShape member) {
     var trait = member.getTrait(DefaultTrait.class).orElse(null);
     if (trait == null) return null;
     var node = trait.toNode();
+    Shape target = model.expectShape(member.getTarget());
+    // Document defaults can legally be the JSON literal null — that maps to Document.Null
+    // (the document type's "absent" sentinel value), not to a missing default. Handle this
+    // first so the generic null-check below doesn't drop the trait.
+    if (target.getType() == ShapeType.DOCUMENT) {
+      return documentLiteral(node);
+    }
     if (node.isNullNode()) return null;
+    String typeName = CSharpSymbolProvider.qualified(sp.toSymbol(member));
+    return switch (target.getType()) {
+      case BLOB -> node.isStringNode()
+          ? "System.Convert.FromBase64String(\"" + node.expectStringNode().getValue() + "\")"
+          : null;
+      case TIMESTAMP -> node.isNumberNode()
+          ? "System.DateTimeOffset.FromUnixTimeSeconds("
+              + node.expectNumberNode().getValue().longValue()
+              + ")"
+          : null;
+      case FLOAT -> node.isNumberNode()
+          ? node.expectNumberNode().getValue().floatValue() + "f"
+          : null;
+      case ENUM -> node.isStringNode()
+          ? "new " + typeName + "(\""
+              + node.expectStringNode().getValue().replace("\\", "\\\\").replace("\"", "\\\"")
+              + "\")"
+          : null;
+      case INT_ENUM -> node.isNumberNode()
+          ? "(" + typeName + ")" + node.expectNumberNode().getValue().longValue()
+          : null;
+      default -> defaultLiteral(node);
+    };
+  }
+
+  private static String documentLiteral(software.amazon.smithy.model.node.Node node) {
+    if (node.isNullNode()) return "NSmithy.Core.Document.Null";
+    if (node.isBooleanNode())
+      return "NSmithy.Core.Document.From(" + node.expectBooleanNode().getValue() + ")";
+    if (node.isStringNode()) {
+      String s = node.expectStringNode().getValue().replace("\\", "\\\\").replace("\"", "\\\"");
+      return "NSmithy.Core.Document.From(\"" + s + "\")";
+    }
+    if (node.isNumberNode()) {
+      return "NSmithy.Core.Document.From((decimal)" + node.expectNumberNode().getValue() + ")";
+    }
+    if (node.isArrayNode()) {
+      StringBuilder sb = new StringBuilder("NSmithy.Core.Document.From(new NSmithy.Core.Document[] {");
+      boolean first = true;
+      for (var el : node.expectArrayNode().getElements()) {
+        if (!first) sb.append(", ");
+        first = false;
+        sb.append(documentLiteral(el));
+      }
+      return sb.append("})").toString();
+    }
+    if (node.isObjectNode()) {
+      StringBuilder sb = new StringBuilder(
+          "NSmithy.Core.Document.From(new System.Collections.Generic.Dictionary<string,"
+              + " NSmithy.Core.Document> {");
+      boolean first = true;
+      for (var entry : node.expectObjectNode().getStringMap().entrySet()) {
+        if (!first) sb.append(", ");
+        first = false;
+        sb.append("{ \"")
+            .append(entry.getKey().replace("\\", "\\\\").replace("\"", "\\\""))
+            .append("\", ")
+            .append(documentLiteral(entry.getValue()))
+            .append(" }");
+      }
+      return sb.append("})").toString();
+    }
+    return "NSmithy.Core.Document.Null";
+  }
+
+  private static String defaultLiteral(software.amazon.smithy.model.node.Node node) {
     if (node.isStringNode()) {
       String s = node.expectStringNode().getValue();
       return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
@@ -64,7 +142,6 @@ public final class ShapeSupport {
       var num = node.expectNumberNode().getValue();
       return num.toString();
     }
-    // Arrays / objects (e.g. empty list/map defaults) not yet supported here.
     return null;
   }
 
@@ -120,11 +197,17 @@ public final class ShapeSupport {
     return isNullable(member) || hasDefault(member);
   }
 
-  /** The "message" member if present and targets smithy.api#String. */
+  /**
+   * The conventional error "message" member if present and targets smithy.api#String. The
+   * lookup is case-insensitive because Smithy permits any casing for the member name and a
+   * member whose camelCase parameter form would be {@code message} still collides with the
+   * always-emitted base-class message parameter on the generated constructor.
+   */
   public static Optional<MemberShape> errorMessageMember(StructureShape shape) {
-    return shape
-        .getMember("message")
-        .filter(m -> m.getTarget().toString().equals("smithy.api#String"));
+    return shape.members().stream()
+        .filter(m -> m.getMemberName().equalsIgnoreCase("message"))
+        .filter(m -> m.getTarget().toString().equals("smithy.api#String"))
+        .findFirst();
   }
 
   /** Member type for property emission: type symbol + optional `?` suffix. */

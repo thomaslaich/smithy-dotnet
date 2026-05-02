@@ -12,7 +12,13 @@ fmt:
 check-format:
     treefmt --ci
 
-build:
+# Build & publish the Smithy → C# codegen JAR to the local Maven cache so that
+# `smithy build` (invoked from each .csproj via NSmithy.MSBuild) can resolve
+# `io.github.thomaslaich.smithy:csharp:0.1.0-SNAPSHOT` from ~/.m2.
+codegen:
+    cd codegen && gradle :csharp:publishToMavenLocal
+
+build: codegen restore
     dotnet build NSmithy.slnx --configuration Release --no-restore --disable-build-servers
 
 test:
@@ -44,4 +50,4 @@ refresh-examples:
     dotnet restore examples/grpc/client-grpc/NSmithy.Examples.Grpc.ClientGrpc.csproj --no-cache --force
     dotnet restore examples/polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj --no-cache --force
 
-ci: restore check-format build test pack
+ci: check-format build test pack

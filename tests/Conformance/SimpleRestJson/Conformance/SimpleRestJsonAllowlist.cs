@@ -29,10 +29,10 @@ internal static class SimpleRestJsonAllowlist
         "PrimitivesEncodingRequest",
         "RoutingAbc",
         "RoutingAbcDef",
+        "RoutingAbcDefGreedy",
         "RoutingAbcLabel",
         "RoutingAbcXyz",
         // Known codegen issues (excluded until fixed) — each is a real bug, not a harness gap:
-        //   * RoutingAbcDefGreedy — greedy label URI expansion is not implemented.
         //   * PreserveKeyOrderRequest — Document type binding/serialization not validated yet.
         // OpenUnions* require open-union codegen support which we haven’t validated yet.
     };
