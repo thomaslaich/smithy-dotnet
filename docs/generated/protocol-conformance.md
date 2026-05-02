@@ -4,8 +4,8 @@
 | --- | ---: | ---: | ---: | ---: | ---: |
 | `alloy#simpleRestJson` | `Request` | 17 | 6 | 23 | 73.9% |
 | `alloy#simpleRestJson` | `Response` | 14 | 6 | 20 | 70.0% |
-| `aws.protocols#restJson1` | `Request` | 5 | 153 | 158 | 3.2% |
-| `aws.protocols#restJson1` | `Response` | 4 | 110 | 114 | 3.5% |
+| `aws.protocols#restJson1` | `Request` | 10 | 148 | 158 | 6.3% |
+| `aws.protocols#restJson1` | `Response` | 6 | 108 | 114 | 5.3% |
 | `aws.protocols#restJson1` | `MalformedRequest` | 0 | 191 | 191 | 0.0% |
 | `smithy.protocols#rpcv2Cbor` | `Request` | 1 | 42 | 43 | 2.3% |
 | `smithy.protocols#rpcv2Cbor` | `Response` | 0 | 45 | 45 | 0.0% |
@@ -46,8 +46,15 @@
 - `aws.protocols#restJson1` `Request` `HttpQueryParamsOnlyRequest`
 - `aws.protocols#restJson1` `Request` `RestJsonConstantQueryString`
 - `aws.protocols#restJson1` `Request` `RestJsonEmptyInputAndEmptyOutput`
+- `aws.protocols#restJson1` `Request` `RestJsonHttpGetWithNoInput`
+- `aws.protocols#restJson1` `Request` `RestJsonHttpGetWithNoModeledBody`
 - `aws.protocols#restJson1` `Request` `RestJsonHttpPayloadWithStructure`
+- `aws.protocols#restJson1` `Request` `RestJsonHttpPostWithNoInput`
+- `aws.protocols#restJson1` `Request` `RestJsonHttpPostWithNoModeledBody`
 - `aws.protocols#restJson1` `Request` `RestJsonHttpPrefixHeadersArePresent`
+- `aws.protocols#restJson1` `Request` `RestJsonNoInputAndNoOutput`
+- `aws.protocols#restJson1` `Response` `RestJsonEmptyInputAndEmptyOutput`
+- `aws.protocols#restJson1` `Response` `RestJsonEmptyInputAndEmptyOutputJsonObjectOutput`
 - `aws.protocols#restJson1` `Response` `RestJsonHttpPayloadWithStructure`
 - `aws.protocols#restJson1` `Response` `RestJsonHttpPrefixHeadersArePresent`
 - `aws.protocols#restJson1` `Response` `RestJsonHttpResponseCode`
@@ -253,7 +260,7 @@
 
 ### Official request conformance execution is not yet enabled for this case.
 
-- Count: 125
+- Count: 120
 - `alloy#simpleRestJson` `Request` `PrimitivesEncodingRequest`
 - `aws.protocols#restJson1` `Request` `DocumentInputWithBoolean`
 - `aws.protocols#restJson1` `Request` `DocumentInputWithList`
@@ -280,16 +287,12 @@
 - `aws.protocols#restJson1` `Request` `RestJsonHttpEmptyPrefixHeadersRequestClient`
 - `aws.protocols#restJson1` `Request` `RestJsonHttpEmptyPrefixHeadersRequestServer`
 - `aws.protocols#restJson1` `Request` `RestJsonHttpGetWithHeaderMemberNoModeledBody`
-- `aws.protocols#restJson1` `Request` `RestJsonHttpGetWithNoInput`
-- `aws.protocols#restJson1` `Request` `RestJsonHttpGetWithNoModeledBody`
 - `aws.protocols#restJson1` `Request` `RestJsonHttpPayloadTraitsWithBlob`
 - `aws.protocols#restJson1` `Request` `RestJsonHttpPayloadTraitsWithBlobAcceptsAllAccepts`
 - `aws.protocols#restJson1` `Request` `RestJsonHttpPayloadTraitsWithBlobAcceptsAllContentTypes`
 - `aws.protocols#restJson1` `Request` `RestJsonHttpPayloadTraitsWithBlobAcceptsNoContentType`
 - `aws.protocols#restJson1` `Request` `RestJsonHttpPayloadTraitsWithMediaTypeWithBlob`
 - `aws.protocols#restJson1` `Request` `RestJsonHttpPayloadTraitsWithNoBlobBody`
-- `aws.protocols#restJson1` `Request` `RestJsonHttpPostWithNoInput`
-- `aws.protocols#restJson1` `Request` `RestJsonHttpPostWithNoModeledBody`
 - `aws.protocols#restJson1` `Request` `RestJsonHttpPrefixEmptyHeaders`
 - `aws.protocols#restJson1` `Request` `RestJsonHttpPrefixHeadersAreNotPresent`
 - `aws.protocols#restJson1` `Request` `RestJsonHttpRequestLabelEscaping`
@@ -322,7 +325,6 @@
 - `aws.protocols#restJson1` `Request` `RestJsonListsEmpty`
 - `aws.protocols#restJson1` `Request` `RestJsonMustSupportParametersInContentType`
 - `aws.protocols#restJson1` `Request` `RestJsonNoInputAllowsAccept`
-- `aws.protocols#restJson1` `Request` `RestJsonNoInputAndNoOutput`
 - `aws.protocols#restJson1` `Request` `RestJsonNoInputAndOutput`
 - `aws.protocols#restJson1` `Request` `RestJsonNoInputAndOutputAllowsAccept`
 - `aws.protocols#restJson1` `Request` `RestJsonNullAndEmptyHeaders`
@@ -382,7 +384,7 @@
 
 ### Official response conformance execution is not yet enabled for this case.
 
-- Count: 96
+- Count: 94
 - `alloy#simpleRestJson` `Response` `PrimitivesEncodingResponse`
 - `aws.protocols#restJson1` `Response` `DocumentOutput`
 - `aws.protocols#restJson1` `Response` `DocumentOutputArray`
@@ -410,8 +412,6 @@
 - `aws.protocols#restJson1` `Response` `RestJsonDeserializesZeroValuesInSparseMaps`
 - `aws.protocols#restJson1` `Response` `RestJsonDoesntDeserializeNullStructureValues`
 - `aws.protocols#restJson1` `Response` `RestJsonEmptyComplexErrorWithNoMessage`
-- `aws.protocols#restJson1` `Response` `RestJsonEmptyInputAndEmptyOutput`
-- `aws.protocols#restJson1` `Response` `RestJsonEmptyInputAndEmptyOutputJsonObjectOutput`
 - `aws.protocols#restJson1` `Response` `RestJsonEnumPayloadResponse`
 - `aws.protocols#restJson1` `Response` `RestJsonFooErrorUsingCode`
 - `aws.protocols#restJson1` `Response` `RestJsonFooErrorUsingCodeAndNamespace`
