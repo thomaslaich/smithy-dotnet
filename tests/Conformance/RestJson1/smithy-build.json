@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "maven": {
+    "repositories": [
+      {
+        "url": "file://~/.m2/repository"
+      },
+      {
+        "url": "https://repo.maven.apache.org/maven2/"
+      }
+    ],
+    "dependencies": [
+      "io.github.thomaslaich.smithy:csharp:0.1.0-SNAPSHOT",
+      "software.amazon.smithy:smithy-aws-traits:1.68.0",
+      "software.amazon.smithy:smithy-aws-protocol-tests:1.68.0"
+    ]
+  },
+  "projections": {
+    "restjson1": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "aws.protocoltests.restjson#RestJson"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "aws.protocoltests.restjson#RestJson",
+          "baseNamespace": ""
+        }
+      }
+    }
+  }
+}

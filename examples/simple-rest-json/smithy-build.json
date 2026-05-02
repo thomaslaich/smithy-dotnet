@@ -1,4 +1,18 @@
 {
   "version": "1.0",
-  "sources": ["model"]
+  "sources": ["model"],
+  "maven": {
+    "repositories": [
+      { "url": "file://~/.m2/repository" }
+    ],
+    "dependencies": [
+      "io.github.thomaslaich.smithy:csharp:0.1.0-SNAPSHOT"
+    ]
+  },
+  "plugins": {
+    "csharp-codegen": {
+      "service": "example.hello#HelloService",
+      "baseNamespace": ""
+    }
+  }
 }

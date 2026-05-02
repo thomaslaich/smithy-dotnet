@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None
+      Include="Targets/NSmithy.MSBuild.targets"
+      Pack="true"
+      PackagePath="build/NSmithy.MSBuild.targets"
+    />
+    <None
+      Include="Targets/NSmithy.MSBuild.targets"
+      Pack="true"
+      PackagePath="buildTransitive/NSmithy.MSBuild.targets"
+    />
+  </ItemGroup>
+</Project>

@@ -7,22 +7,48 @@ plugin to align more closely with the broader Smithy ecosystem._
 
 # NSmithy
 
-NSmithy is a preview-stage .NET toolkit for generating C# models, typed HTTP
-clients, and ASP.NET Core server surfaces from [Smithy](https://smithy.io) models.
+NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io)
+model into idiomatic C# at build time. From a single contract you get the same
+model types, typed clients, and server scaffolding that any other Smithy
+language would produce — driven from MSBuild, with no hand-written protocol
+glue.
 
-- Run the Smithy CLI from MSBuild
-- Generate C# model types, typed `restJson1` and `simpleRestJson` clients, and
-  `simpleRestJson` ASP.NET Core server endpoints and handler interfaces
-- Serialize and deserialize JSON payloads through Smithy metadata
+What you get out of the model:
+
+- **Code generation from MSBuild.** `NSmithy.MSBuild` invokes the Smithy CLI
+  and the C# code generator during `dotnet build`. Generated files land under
+  `obj/.../Smithy/` and are compiled into your project automatically.
+- **C# model types.** Records for structures, discriminated unions for unions,
+  string- and int-enum types, and runtime `Document` values for open content —
+  all annotated with Smithy shape metadata so they round-trip through the
+  serializers.
+- **Typed protocol-aware clients.** Generated `I{Service}Client` interface and
+  implementation for `alloy#simpleRestJson`, `aws.protocols#restJson1`,
+  `aws.protocols#restXml`, and `smithy.protocols#rpcv2Cbor`, including HTTP
+  binding (path, query, headers, payload), error deserialization, and a
+  middleware pipeline for retries and customization.
+- **ASP.NET Core server surfaces.** For `alloy#simpleRestJson` services,
+  generated endpoint mapping (`MapXxxHttp`) plus per-operation and aggregate
+  handler interfaces you implement against typed inputs and outputs.
+- **JSON, XML, and CBOR payload codecs.** `NSmithy.Codecs.{Json,Xml,Cbor}`
+  serialize and deserialize payloads using Smithy member metadata
+  (`@jsonName`, `@xmlName`, sparse maps, default values, timestamp formats,
+  etc.).
+- **Conformance against official protocol tests.** Generated clients are
+  exercised against the upstream Smithy/AWS and alloy `httpRequestTests` /
+  `httpResponseTests` fixtures (see [tests/Conformance](https://github.com/thomaslaich/smithy-dotnet/tree/main/tests/Conformance)),
+  so coverage is measured against the same suite that other Smithy
+  implementations use.
 
 Additional protocols, broader protocol compliance, and NativeAOT serializer
 generation are planned. See the
 [roadmap](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/planning/roadmap.md)
 for details.
 
-NSmithy tracks generated-client conformance against official Smithy/AWS and
-[alloy](https://github.com/disneystreaming/alloy) protocol test suites in
-[docs/generated/protocol-conformance.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/generated/protocol-conformance.md).
+Generated-client conformance against the official Smithy/AWS and
+[alloy](https://github.com/disneystreaming/alloy) protocol test suites is
+exercised per protocol under [tests/Conformance](https://github.com/thomaslaich/smithy-dotnet/tree/main/tests/Conformance).
+Each suite emits its current pass rate as part of `dotnet test` output.
 
 ## Install
 
@@ -30,11 +56,11 @@ For generated clients, add:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.3" />
-  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.3" />
-  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.3" />
-  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.3" />
-  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.3" PrivateAssets="all" />
+  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.4" />
+  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.4" />
+  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.4" />
+  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.4" />
+  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.4" PrivateAssets="all" />
 </ItemGroup>
 ```
 
@@ -43,8 +69,8 @@ For generated ASP.NET Core `simpleRestJson` servers, also add:
 ```xml
 <ItemGroup>
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.3" />
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.3" />
+  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.4" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.4" />
 </ItemGroup>
 ```
 

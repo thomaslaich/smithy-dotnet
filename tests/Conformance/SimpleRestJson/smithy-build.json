@@ -1,0 +1,48 @@
+{
+  "version": "1.0",
+  "maven": {
+    "repositories": [
+      { "url": "file://~/.m2/repository" },
+      { "url": "https://repo.maven.apache.org/maven2/" }
+    ],
+    "dependencies": [
+      "io.github.thomaslaich.smithy:csharp:0.1.0-SNAPSHOT",
+      "com.disneystreaming.alloy:alloy-core:0.3.38",
+      "com.disneystreaming.alloy:alloy-protocol-tests:0.3.38"
+    ]
+  },
+  "projections": {
+    "pizza": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": ["alloy.test#PizzaAdminService"]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "alloy.test#PizzaAdminService",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "routing": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": ["alloy.test.routing#RoutingService"]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "alloy.test.routing#RoutingService",
+          "baseNamespace": ""
+        }
+      }
+    }
+  }
+}

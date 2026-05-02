@@ -38,6 +38,7 @@ in
     config = {
       programs = {
         csharpier.enable = true;
+        google-java-format.enable = true;
         just.enable = true;
         nixfmt.enable = true;
         yamlfmt.enable = true;

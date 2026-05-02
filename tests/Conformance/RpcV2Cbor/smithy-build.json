@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "maven": {
+    "repositories": [
+      {
+        "url": "file://~/.m2/repository"
+      },
+      {
+        "url": "https://repo.maven.apache.org/maven2/"
+      }
+    ],
+    "dependencies": [
+      "io.github.thomaslaich.smithy:csharp:0.1.0-SNAPSHOT",
+      "software.amazon.smithy:smithy-protocol-traits:1.68.0",
+      "software.amazon.smithy:smithy-protocol-tests:1.68.0"
+    ]
+  },
+  "projections": {
+    "rpcv2cbor": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
+          "baseNamespace": ""
+        }
+      }
+    }
+  }
+}

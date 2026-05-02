@@ -16,3 +16,10 @@ artifacts/
 # because of examples
 .metals/
 .scala-build/
+
+# Gradle / Java codegen PoC
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+*.class
+

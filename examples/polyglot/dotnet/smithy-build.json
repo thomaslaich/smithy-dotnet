@@ -7,6 +7,37 @@
     "../scala/model/scala-hello.smithy"
   ],
   "maven": {
-    "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.68.0"]
+    "repositories": [
+      { "url": "file://~/.m2/repository" },
+      { "url": "https://repo.maven.apache.org/maven2/" }
+    ],
+    "dependencies": [
+      "software.amazon.smithy:smithy-aws-traits:1.68.0",
+      "io.github.thomaslaich.smithy:csharp:0.1.0-SNAPSHOT"
+    ]
+  },
+  "projections": {
+    "java": {
+      "transforms": [
+        { "name": "includeServices", "args": { "services": ["example.java.hello#HelloService"] } }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "example.java.hello#HelloService",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "scala": {
+      "transforms": [
+        { "name": "includeServices", "args": { "services": ["example.scala.hello#HelloService"] } }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "example.scala.hello#HelloService",
+          "baseNamespace": ""
+        }
+      }
+    }
   }
 }
