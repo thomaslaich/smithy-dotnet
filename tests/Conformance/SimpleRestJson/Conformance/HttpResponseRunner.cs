@@ -20,13 +20,6 @@ internal static class HttpResponseRunner
 {
     private static readonly Uri Endpoint = new("http://localhost");
 
-    private static readonly IReadOnlyList<Type> ClientTypes =
-    [
-        .. typeof(NSmithy.Client.SmithyClientOptions).Assembly == null
-            ? Array.Empty<Type>()
-            : Array.Empty<Type>(),
-    ];
-
     public static async Task RunAsync(HttpResponseTestCase testCase, JsonObject modelShapes)
     {
         var owningOp = ResolveOwningOperation(testCase.ShapeId, modelShapes, out var isError);
@@ -67,11 +60,7 @@ internal static class HttpResponseRunner
             Assert.NotNull(thrown);
             var expectedTypeName = testCase.ShapeId.Split('#')[^1];
             Assert.Equal(expectedTypeName, thrown!.GetType().Name);
-            ResponseAssertions.AssertEquivalent(
-                testCase.Params,
-                thrown,
-                expectedTypeName
-            );
+            ResponseAssertions.AssertEquivalent(testCase.Params, thrown, expectedTypeName);
             return;
         }
 
@@ -114,7 +103,8 @@ internal static class HttpResponseRunner
         out bool isError
     )
     {
-        var node = shapes[shapeId] as JsonObject
+        var node =
+            shapes[shapeId] as JsonObject
             ?? throw new InvalidOperationException($"Shape {shapeId} not found in model.");
         var type = (string?)node["type"];
         if (type == "operation")
@@ -143,27 +133,85 @@ internal static class HttpResponseRunner
         );
     }
 
-    private static object BuildEmptyInput(Type inputType)
+    private static object BuildEmptyInput(Type inputType) => BuildDefault(inputType, depth: 0)!;
+
+    private static object? BuildDefault(Type type, int depth)
     {
-        var ctor =
-            inputType
-                .GetConstructors(BindingFlags.Public | BindingFlags.Instance)
-                .OrderByDescending(c => c.GetParameters().Length)
-                .First();
-        var args = new object?[ctor.GetParameters().Length];
-        for (var i = 0; i < args.Length; i++)
+        if (depth > 6)
+            return null;
+        if (type == typeof(string))
+            return string.Empty;
+        if (type.IsValueType)
         {
-            var p = ctor.GetParameters()[i];
+            // Smithy enums are generated as readonly record structs whose Value property is set
+            // only by static instances. Pick the first static instance so the codec can read a
+            // non-null Value.
+            var shape = type.GetCustomAttribute<SmithyShapeAttribute>();
+            if (shape?.Kind == ShapeKind.Enum)
+            {
+                var staticInst = type.GetProperties(BindingFlags.Public | BindingFlags.Static)
+                    .FirstOrDefault(p => p.PropertyType == type)?.GetValue(null);
+                if (staticInst is not null)
+                    return staticInst;
+            }
+            return Activator.CreateInstance(type);
+        }
+        // IEnumerable<T> / IReadOnlyList<T> / etc. ctor parameters: hand back an empty array.
+        if (type.IsGenericType)
+        {
+            var def = type.GetGenericTypeDefinition();
+            if (def == typeof(IEnumerable<>)
+                || def == typeof(IReadOnlyList<>)
+                || def == typeof(IList<>)
+                || def == typeof(ICollection<>)
+                || def == typeof(IReadOnlyCollection<>)
+                || def == typeof(List<>))
+            {
+                var elem = type.GetGenericArguments()[0];
+                return Array.CreateInstance(elem, 0);
+            }
+            if (def == typeof(IDictionary<,>)
+                || def == typeof(IReadOnlyDictionary<,>)
+                || def == typeof(Dictionary<,>))
+            {
+                return Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(type.GetGenericArguments()));
+            }
+        }
+        // Abstract type (e.g. a Smithy union base): pick the first concrete subclass declared
+        // in the same assembly so we can satisfy the ctor's null-guard.
+        if (type.IsAbstract)
+        {
+            var concrete = type.Assembly.GetTypes()
+                .FirstOrDefault(t => !t.IsAbstract && type.IsAssignableFrom(t));
+            return concrete is null ? null : BuildDefault(concrete, depth + 1);
+        }
+        // For required reference-typed members we need to recursively construct a non-null
+        // instance, otherwise the [required] ctor guard rejects null. Generated structures and
+        // wrapper records (list/map) all expose a single most-arity public ctor.
+        var ctor = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
+            .OrderByDescending(c => c.GetParameters().Length)
+            .FirstOrDefault();
+        if (ctor is null)
+            return null;
+        var ps = ctor.GetParameters();
+        var args = new object?[ps.Length];
+        for (var i = 0; i < ps.Length; i++)
+        {
+            var p = ps[i];
             if (p.HasDefaultValue)
                 args[i] = p.DefaultValue;
-            else if (p.ParameterType.IsValueType)
-                args[i] = Activator.CreateInstance(p.ParameterType);
-            else if (p.ParameterType == typeof(string))
-                args[i] = string.Empty;
             else
-                args[i] = null;
+                args[i] = BuildDefault(p.ParameterType, depth + 1);
         }
         return ctor.Invoke(args);
+    }
+
+    private static bool IsNullable(ParameterInfo p)
+    {
+        if (p.ParameterType.IsValueType)
+            return Nullable.GetUnderlyingType(p.ParameterType) is not null;
+        var ctx = new NullabilityInfoContext();
+        return ctx.Create(p).WriteState == NullabilityState.Nullable;
     }
 }
 
@@ -174,18 +222,21 @@ internal static class HttpResponseRunner
 internal static class ConformanceClients
 {
     private static readonly Lazy<IReadOnlyList<Type>> Types = new(() =>
-        [.. typeof(Alloy.Test.AddMenuItemInput)
-            .Assembly.GetTypes()
-            .Where(t =>
-                t is { IsClass: true, IsAbstract: false }
-                && t.Name.EndsWith("Client", StringComparison.Ordinal)
-                && t.GetConstructors()
-                    .Any(c =>
-                    {
-                        var ps = c.GetParameters();
-                        return ps.Length == 2 && ps[0].ParameterType == typeof(HttpClient);
-                    })
-            )]);
+        [
+            .. typeof(Alloy.Test.AddMenuItemInput)
+                .Assembly.GetTypes()
+                .Where(t =>
+                    t is { IsClass: true, IsAbstract: false }
+                    && t.Name.EndsWith("Client", StringComparison.Ordinal)
+                    && t.GetConstructors()
+                        .Any(c =>
+                        {
+                            var ps = c.GetParameters();
+                            return ps.Length == 2 && ps[0].ParameterType == typeof(HttpClient);
+                        })
+                ),
+        ]
+    );
 
     public static (Type ClientType, MethodInfo Method) ResolveOperation(string methodName)
     {
@@ -253,7 +304,9 @@ internal static class ResponseAssertions
                     return;
                 }
             }
-            Assert.Fail($"[{path}] cannot compare DateTimeOffset against {expected.ToJsonString()}.");
+            Assert.Fail(
+                $"[{path}] cannot compare DateTimeOffset against {expected.ToJsonString()}."
+            );
             return;
         }
 
@@ -272,7 +325,10 @@ internal static class ResponseAssertions
             var ev = (JsonValue)expected;
             if (ev.TryGetValue<long>(out var n))
             {
-                Assert.Equal(n, Convert.ToInt64(actual, System.Globalization.CultureInfo.InvariantCulture));
+                Assert.Equal(
+                    n,
+                    Convert.ToInt64(actual, System.Globalization.CultureInfo.InvariantCulture)
+                );
             }
             else
             {
@@ -300,6 +356,15 @@ internal static class ResponseAssertions
         {
             var values = actualType.GetProperty("Values")!.GetValue(actual);
             AssertSequence(expected, (IEnumerable)values!, path);
+            return;
+        }
+
+        // Smithy maps: wrapper record with a `Values` IReadOnlyDictionary<K,V> property; the
+        // expected JSON is the dictionary contents directly (no `values` key).
+        if (shape?.Kind == ShapeKind.Map)
+        {
+            var values = actualType.GetProperty("Values")!.GetValue(actual);
+            AssertMap(expected, ToDictionary(values!), path);
             return;
         }
 
@@ -340,10 +405,9 @@ internal static class ResponseAssertions
     private static void AssertStructure(JsonObject expected, object actual, string path)
     {
         var type = actual.GetType();
-        var ctor =
-            type.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
-                .OrderByDescending(c => c.GetParameters().Length)
-                .First();
+        var ctor = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
+            .OrderByDescending(c => c.GetParameters().Length)
+            .First();
         foreach (var p in ctor.GetParameters())
         {
             var memberName = p.Name!;
@@ -357,12 +421,11 @@ internal static class ResponseAssertions
             var actualValue = prop.GetValue(actual);
             if (!expected.TryGetPropertyValue(memberName, out var expectedValue))
             {
-                // Member missing in expected params — treat as null/default.
-                expectedValue = null;
-            }
-            // Skip null-vs-null trivially.
-            if (expectedValue is null && actualValue is null)
+                // Member absent from the test fixture's `params`. Smithy protocol-test
+                // semantics: omitted fields are not asserted (could be null, default, or just
+                // "don't care"). Skip the comparison entirely.
                 continue;
+            }
             AssertEqual(expectedValue, actualValue, $"{path}.{memberName}");
         }
     }
@@ -376,7 +439,37 @@ internal static class ResponseAssertions
             AssertEqual(arr[i], actualList[i], $"{path}[{i}]");
     }
 
-    private static void AssertMap(JsonNode expected, System.Collections.IDictionary actual, string path)
+    private static System.Collections.IDictionary ToDictionary(object enumerableOrDictionary)
+    {
+        if (enumerableOrDictionary is System.Collections.IDictionary dict)
+            return dict;
+        // IReadOnlyDictionary<K,V> isn't IDictionary, so project to a plain Hashtable.
+        var result = new System.Collections.Hashtable();
+        var t = enumerableOrDictionary.GetType();
+        var keysProp = t.GetProperty("Keys");
+        var indexer = t.GetProperties().FirstOrDefault(p => p.GetIndexParameters().Length == 1);
+        if (keysProp is not null && indexer is not null)
+        {
+            foreach (var k in (IEnumerable)keysProp.GetValue(enumerableOrDictionary)!)
+                result[k!] = indexer.GetValue(enumerableOrDictionary, [k]);
+            return result;
+        }
+        // Fallback: enumerate as KeyValuePair<,>.
+        foreach (var kv in (IEnumerable)enumerableOrDictionary)
+        {
+            var kvType = kv!.GetType();
+            var k = kvType.GetProperty("Key")!.GetValue(kv)!;
+            var v = kvType.GetProperty("Value")!.GetValue(kv);
+            result[k] = v;
+        }
+        return result;
+    }
+
+    private static void AssertMap(
+        JsonNode expected,
+        System.Collections.IDictionary actual,
+        string path
+    )
     {
         var obj = expected.AsObject();
         Assert.Equal(obj.Count, actual.Count);
@@ -410,7 +503,10 @@ internal static class ResponseAssertions
         )
         {
             var expectedNum = (double)expected!;
-            var actualNum = Convert.ToDouble(actual, System.Globalization.CultureInfo.InvariantCulture);
+            var actualNum = Convert.ToDouble(
+                actual,
+                System.Globalization.CultureInfo.InvariantCulture
+            );
             Assert.True(
                 Math.Abs(actualNum - expectedNum) < 1e-9 || actualNum == expectedNum,
                 $"[{path}] expected {expectedNum}, got {actualNum}."

@@ -584,8 +584,14 @@ public final class ClientGenerator implements Runnable {
   }
 
   private static Integer httpErrorCode(StructureShape err) {
-    return err.getTrait(software.amazon.smithy.model.traits.HttpErrorTrait.class)
-        .map(t -> t.getCode())
+    Integer explicit =
+        err.getTrait(software.amazon.smithy.model.traits.HttpErrorTrait.class)
+            .map(t -> t.getCode())
+            .orElse(null);
+    if (explicit != null) return explicit;
+    // Smithy default: @error("client") → 400, @error("server") → 500.
+    return err.getTrait(software.amazon.smithy.model.traits.ErrorTrait.class)
+        .map(t -> t.isClientError() ? 400 : 500)
         .orElse(null);
   }
 

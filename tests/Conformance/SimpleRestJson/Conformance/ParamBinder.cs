@@ -108,7 +108,10 @@ internal static class ParamBinder
             var ticks = (long)(epoch * TimeSpan.TicksPerSecond);
             return new DateTimeOffset(DateTime.UnixEpoch.AddTicks(ticks), TimeSpan.Zero);
         }
-        return DateTimeOffset.Parse((string)value!, System.Globalization.CultureInfo.InvariantCulture);
+        return DateTimeOffset.Parse(
+            (string)value!,
+            System.Globalization.CultureInfo.InvariantCulture
+        );
     }
 
     private static object BindUnion(Type unionType, JsonNode value)
@@ -123,10 +126,7 @@ internal static class ParamBinder
         var (memberName, inner) = obj.First();
         var pascalName = char.ToUpperInvariant(memberName[0]) + memberName[1..];
         var factory =
-            unionType.GetMethod(
-                "From" + pascalName,
-                BindingFlags.Public | BindingFlags.Static
-            )
+            unionType.GetMethod("From" + pascalName, BindingFlags.Public | BindingFlags.Static)
             ?? throw new InvalidOperationException(
                 $"Union {unionType.FullName} has no factory From{pascalName}."
             );
