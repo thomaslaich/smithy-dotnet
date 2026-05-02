@@ -20,9 +20,10 @@ generation are planned. See the
 [roadmap](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/planning/roadmap.md)
 for details.
 
-NSmithy tracks generated-client conformance against official Smithy/AWS and
-[alloy](https://github.com/disneystreaming/alloy) protocol test suites in
-[docs/generated/protocol-conformance.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/generated/protocol-conformance.md).
+Generated-client conformance against the official Smithy/AWS and
+[alloy](https://github.com/disneystreaming/alloy) protocol test suites is
+exercised per protocol under [tests/Conformance](https://github.com/thomaslaich/smithy-dotnet/tree/main/tests/Conformance).
+Each suite emits its current pass rate as part of `dotnet test` output.
 
 ## Install
 

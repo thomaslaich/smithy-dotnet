@@ -90,7 +90,10 @@ public static class RestJsonClientProtocol
     {
         if (content.Length == 0)
         {
-            throw new InvalidOperationException("Response body is required but was empty.");
+            // Per smithy.test convention (e.g. RestJsonEmptyInputAndEmptyOutputJsonObjectOutput),
+            // clients should gracefully handle a service that omits the JSON payload entirely.
+            // Generated output records always expose a parameterless ctor, so default-construct.
+            return Activator.CreateInstance<T>();
         }
 
         return codec.Deserialize<T>(content);

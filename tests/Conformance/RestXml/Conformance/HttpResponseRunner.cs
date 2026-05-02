@@ -272,6 +272,10 @@ internal static class ResponseAssertions
 {
     public static void AssertEquivalent(JsonNode? expected, object actual, string ownerLabel)
     {
+        // A missing `params` field on the test case means "no expected output" — the operation
+        // simply has to succeed.
+        if (expected is null)
+            return;
         AssertEqual(expected, actual, ownerLabel);
     }
 

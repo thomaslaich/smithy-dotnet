@@ -16,14 +16,21 @@ internal static class RestJson1Allowlist
         "HttpQueryParamsOnlyRequest",
         "RestJsonConstantQueryString",
         "RestJsonEmptyInputAndEmptyOutput",
+        "RestJsonHttpGetWithNoInput",
+        "RestJsonHttpGetWithNoModeledBody",
         "RestJsonHttpPayloadWithStructure",
+        "RestJsonHttpPostWithNoInput",
+        "RestJsonHttpPostWithNoModeledBody",
         "RestJsonHttpPrefixHeadersArePresent",
+        "RestJsonNoInputAndNoOutput",
     };
 
     public static readonly IReadOnlySet<string> ExecutableResponseCases = new HashSet<string>(
         StringComparer.Ordinal
     )
     {
+        "RestJsonEmptyInputAndEmptyOutput",
+        "RestJsonEmptyInputAndEmptyOutputJsonObjectOutput",
         "RestJsonHttpPayloadWithStructure",
         "RestJsonHttpPrefixHeadersArePresent",
         "RestJsonHttpResponseCode",
