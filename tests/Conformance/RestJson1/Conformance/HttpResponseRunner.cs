@@ -150,7 +150,8 @@ internal static class HttpResponseRunner
             if (shape?.Kind == ShapeKind.Enum)
             {
                 var staticInst = type.GetProperties(BindingFlags.Public | BindingFlags.Static)
-                    .FirstOrDefault(p => p.PropertyType == type)?.GetValue(null);
+                    .FirstOrDefault(p => p.PropertyType == type)
+                    ?.GetValue(null);
                 if (staticInst is not null)
                     return staticInst;
             }
@@ -160,28 +161,35 @@ internal static class HttpResponseRunner
         if (type.IsGenericType)
         {
             var def = type.GetGenericTypeDefinition();
-            if (def == typeof(IEnumerable<>)
+            if (
+                def == typeof(IEnumerable<>)
                 || def == typeof(IReadOnlyList<>)
                 || def == typeof(IList<>)
                 || def == typeof(ICollection<>)
                 || def == typeof(IReadOnlyCollection<>)
-                || def == typeof(List<>))
+                || def == typeof(List<>)
+            )
             {
                 var elem = type.GetGenericArguments()[0];
                 return Array.CreateInstance(elem, 0);
             }
-            if (def == typeof(IDictionary<,>)
+            if (
+                def == typeof(IDictionary<,>)
                 || def == typeof(IReadOnlyDictionary<,>)
-                || def == typeof(Dictionary<,>))
+                || def == typeof(Dictionary<,>)
+            )
             {
-                return Activator.CreateInstance(typeof(Dictionary<,>).MakeGenericType(type.GetGenericArguments()));
+                return Activator.CreateInstance(
+                    typeof(Dictionary<,>).MakeGenericType(type.GetGenericArguments())
+                );
             }
         }
         // Abstract type (e.g. a Smithy union base): pick the first concrete subclass declared
         // in the same assembly so we can satisfy the ctor's null-guard.
         if (type.IsAbstract)
         {
-            var concrete = type.Assembly.GetTypes()
+            var concrete = type
+                .Assembly.GetTypes()
                 .FirstOrDefault(t => !t.IsAbstract && type.IsAssignableFrom(t));
             return concrete is null ? null : BuildDefault(concrete, depth + 1);
         }

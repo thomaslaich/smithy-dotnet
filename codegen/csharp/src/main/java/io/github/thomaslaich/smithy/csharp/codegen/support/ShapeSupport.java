@@ -43,15 +43,14 @@ public final class ShapeSupport {
   }
 
   /**
-   * Returns the C# literal expression for a member's @default value, or null if the member has
-   * no default. Target-aware so the produced literal type matches the parameter type:
-   *   * BLOB defaults are base64 strings → emit {@code System.Convert.FromBase64String("…")};
-   *   * TIMESTAMP defaults are epoch seconds → emit
-   *     {@code System.DateTimeOffset.FromUnixTimeSeconds(N)};
-   *   * FLOAT defaults need an {@code f} suffix to avoid double-to-float conversion errors;
-   *   * ENUM (string-enum) defaults wrap the literal in the generated {@code (string)} ctor;
-   *   * INT_ENUM defaults cast the integer to the generated enum type.
-   * Anything else falls through to a plain literal (string/bool/numeric).
+   * Returns the C# literal expression for a member's @default value, or null if the member has no
+   * default. Target-aware so the produced literal type matches the parameter type: * BLOB defaults
+   * are base64 strings → emit {@code System.Convert.FromBase64String("…")}; * TIMESTAMP defaults
+   * are epoch seconds → emit {@code System.DateTimeOffset.FromUnixTimeSeconds(N)}; * FLOAT defaults
+   * need an {@code f} suffix to avoid double-to-float conversion errors; * ENUM (string-enum)
+   * defaults wrap the literal in the generated {@code (string)} ctor; * INT_ENUM defaults cast the
+   * integer to the generated enum type. Anything else falls through to a plain literal
+   * (string/bool/numeric).
    */
   public static String defaultValueExpression(Model model, SymbolProvider sp, MemberShape member) {
     var trait = member.getTrait(DefaultTrait.class).orElse(null);
@@ -67,25 +66,30 @@ public final class ShapeSupport {
     if (node.isNullNode()) return null;
     String typeName = CSharpSymbolProvider.qualified(sp.toSymbol(member));
     return switch (target.getType()) {
-      case BLOB -> node.isStringNode()
-          ? "System.Convert.FromBase64String(\"" + node.expectStringNode().getValue() + "\")"
-          : null;
-      case TIMESTAMP -> node.isNumberNode()
-          ? "System.DateTimeOffset.FromUnixTimeSeconds("
-              + node.expectNumberNode().getValue().longValue()
-              + ")"
-          : null;
-      case FLOAT -> node.isNumberNode()
-          ? node.expectNumberNode().getValue().floatValue() + "f"
-          : null;
-      case ENUM -> node.isStringNode()
-          ? "new " + typeName + "(\""
-              + node.expectStringNode().getValue().replace("\\", "\\\\").replace("\"", "\\\"")
-              + "\")"
-          : null;
-      case INT_ENUM -> node.isNumberNode()
-          ? "(" + typeName + ")" + node.expectNumberNode().getValue().longValue()
-          : null;
+      case BLOB ->
+          node.isStringNode()
+              ? "System.Convert.FromBase64String(\"" + node.expectStringNode().getValue() + "\")"
+              : null;
+      case TIMESTAMP ->
+          node.isNumberNode()
+              ? "System.DateTimeOffset.FromUnixTimeSeconds("
+                  + node.expectNumberNode().getValue().longValue()
+                  + ")"
+              : null;
+      case FLOAT ->
+          node.isNumberNode() ? node.expectNumberNode().getValue().floatValue() + "f" : null;
+      case ENUM ->
+          node.isStringNode()
+              ? "new "
+                  + typeName
+                  + "(\""
+                  + node.expectStringNode().getValue().replace("\\", "\\\\").replace("\"", "\\\"")
+                  + "\")"
+              : null;
+      case INT_ENUM ->
+          node.isNumberNode()
+              ? "(" + typeName + ")" + node.expectNumberNode().getValue().longValue()
+              : null;
       default -> defaultLiteral(node);
     };
   }
@@ -102,7 +106,8 @@ public final class ShapeSupport {
       return "NSmithy.Core.Document.From((decimal)" + node.expectNumberNode().getValue() + ")";
     }
     if (node.isArrayNode()) {
-      StringBuilder sb = new StringBuilder("NSmithy.Core.Document.From(new NSmithy.Core.Document[] {");
+      StringBuilder sb =
+          new StringBuilder("NSmithy.Core.Document.From(new NSmithy.Core.Document[] {");
       boolean first = true;
       for (var el : node.expectArrayNode().getElements()) {
         if (!first) sb.append(", ");
@@ -112,9 +117,10 @@ public final class ShapeSupport {
       return sb.append("})").toString();
     }
     if (node.isObjectNode()) {
-      StringBuilder sb = new StringBuilder(
-          "NSmithy.Core.Document.From(new System.Collections.Generic.Dictionary<string,"
-              + " NSmithy.Core.Document> {");
+      StringBuilder sb =
+          new StringBuilder(
+              "NSmithy.Core.Document.From(new System.Collections.Generic.Dictionary<string,"
+                  + " NSmithy.Core.Document> {");
       boolean first = true;
       for (var entry : node.expectObjectNode().getStringMap().entrySet()) {
         if (!first) sb.append(", ");
@@ -198,10 +204,10 @@ public final class ShapeSupport {
   }
 
   /**
-   * The conventional error "message" member if present and targets smithy.api#String. The
-   * lookup is case-insensitive because Smithy permits any casing for the member name and a
-   * member whose camelCase parameter form would be {@code message} still collides with the
-   * always-emitted base-class message parameter on the generated constructor.
+   * The conventional error "message" member if present and targets smithy.api#String. The lookup is
+   * case-insensitive because Smithy permits any casing for the member name and a member whose
+   * camelCase parameter form would be {@code message} still collides with the always-emitted
+   * base-class message parameter on the generated constructor.
    */
   public static Optional<MemberShape> errorMessageMember(StructureShape shape) {
     return shape.members().stream()

@@ -11,12 +11,10 @@ internal static class RestXmlAllowlist
     public static readonly IReadOnlySet<string> ExecutableRequestCases = new HashSet<string>(
         StringComparer.Ordinal
     )
-    {
-    };
+    { };
 
     public static readonly IReadOnlySet<string> ExecutableResponseCases = new HashSet<string>(
         StringComparer.Ordinal
     )
-    {
-    };
+    { };
 }

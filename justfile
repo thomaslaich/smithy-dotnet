@@ -14,6 +14,7 @@ check-format:
 
 # Build & publish the Smithy → C# codegen JAR to the local Maven cache so that
 # `smithy build` (invoked from each .csproj via NSmithy.MSBuild) can resolve
+
 # `io.github.thomaslaich.smithy:csharp:0.1.0-SNAPSHOT` from ~/.m2.
 codegen:
     cd codegen && gradle :csharp:publishToMavenLocal
