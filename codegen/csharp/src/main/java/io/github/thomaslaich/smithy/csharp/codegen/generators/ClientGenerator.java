@@ -234,9 +234,27 @@ public final class ClientGenerator implements Runnable {
                     ? Optional.empty()
                     : input.members().stream().filter(ShapeSupport::isHttpPayload).findFirst();
             if (payload.isPresent()) {
-              String prop = CSharpNaming.propertyName(payload.get().getMemberName());
-              writer.write("request.Content = DocumentCodec.Serialize(input.$L);", prop);
-              writer.write("request.ContentType = DocumentCodec.MediaType;");
+              MemberShape pm = payload.get();
+              String prop = CSharpNaming.propertyName(pm.getMemberName());
+              String defaultExpr = ShapeSupport.defaultValueExpression(pm);
+              if (defaultExpr != null) {
+                // alloy semantics: omit the body when the user-provided value equals the
+                // member's @default. Mirrors the SimpleRestJsonNoneHttpPayloadWithDefault tests.
+                writer.openBlock(
+                    "if (!System.Collections.Generic.EqualityComparer<$L>.Default.Equals(input.$L,"
+                        + " $L)) {",
+                    "}",
+                    ShapeSupport.parameterTypeExpr(sp, pm),
+                    prop,
+                    defaultExpr,
+                    () -> {
+                      writer.write("request.Content = DocumentCodec.Serialize(input.$L);", prop);
+                      writer.write("request.ContentType = DocumentCodec.MediaType;");
+                    });
+              } else {
+                writer.write("request.Content = DocumentCodec.Serialize(input.$L);", prop);
+                writer.write("request.ContentType = DocumentCodec.MediaType;");
+              }
             } else if (input != null && hasHttpBody(input)) {
               writeRequestBody(input);
             }
@@ -433,7 +451,10 @@ public final class ClientGenerator implements Runnable {
       return "(" + memberType + ")(int)response.StatusCode";
     }
     if (ShapeSupport.isHttpPayload(m)) {
-      return required
+      // When the member has @default, fall back to non-required deserialization so an empty
+      // body returns null and the output ctor substitutes the default value.
+      boolean hasDefault = ShapeSupport.hasDefault(m);
+      return (required && !hasDefault)
           ? runtime
               + ".DeserializeRequiredBody<"
               + memberType

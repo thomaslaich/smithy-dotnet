@@ -42,6 +42,32 @@ public final class ShapeSupport {
     return member.hasTrait(DefaultTrait.class);
   }
 
+  /**
+   * Returns the C# literal expression for a member's @default value, or null if the member has
+   * no default or the default is the type's zero value (which we don't need to materialize).
+   * Currently supports string, boolean, and numeric defaults — sufficient for the simpleRestJson
+   * conformance fixtures.
+   */
+  public static String defaultValueExpression(MemberShape member) {
+    var trait = member.getTrait(DefaultTrait.class).orElse(null);
+    if (trait == null) return null;
+    var node = trait.toNode();
+    if (node.isNullNode()) return null;
+    if (node.isStringNode()) {
+      String s = node.expectStringNode().getValue();
+      return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+    if (node.isBooleanNode()) {
+      return node.expectBooleanNode().getValue() ? "true" : "false";
+    }
+    if (node.isNumberNode()) {
+      var num = node.expectNumberNode().getValue();
+      return num.toString();
+    }
+    // Arrays / objects (e.g. empty list/map defaults) not yet supported here.
+    return null;
+  }
+
   /** A member is nullable iff not @required AND has no @default. */
   public static boolean isNullable(MemberShape member) {
     return !isRequired(member) && !hasDefault(member);

@@ -24,6 +24,8 @@ internal static class SimpleRestJsonAllowlist
         "GetMenuRequest",
         "SimpleRestJsonSomeHttpPayloadWithDefault",
         "SimpleRestJsonSomeRequiredHttpPayloadWithDefault",
+        "SimpleRestJsonNoneHttpPayloadWithDefault",
+        "SimpleRestJsonNoneRequiredHttpPayloadWithDefault",
         "PrimitivesEncodingRequest",
         "RoutingAbc",
         "RoutingAbcDef",
@@ -31,7 +33,6 @@ internal static class SimpleRestJsonAllowlist
         "RoutingAbcXyz",
         // Known codegen issues (excluded until fixed) — each is a real bug, not a harness gap:
         //   * RoutingAbcDefGreedy — greedy label URI expansion is not implemented.
-        //   * SimpleRestJsonNoneHttpPayloadWithDefault*  — default-valued payloads are not omitted.
         //   * PreserveKeyOrderRequest — Document type binding/serialization not validated yet.
         // OpenUnions* require open-union codegen support which we haven’t validated yet.
     };
@@ -49,11 +50,12 @@ internal static class SimpleRestJsonAllowlist
         "NotFoundError",
         "PriceErrorTest",
         "RoundTripDataResponse",
+        "SimpleRestJsonNoneHttpPayloadWithDefault",
+        "SimpleRestJsonNoneRequiredHttpPayloadWithDefault",
+        "SimpleRestJsonSomeHttpPayloadWithDefault",
+        "SimpleRestJsonSomeRequiredHttpPayloadWithDefault",
         "VersionOutput",
         // Known codegen issues (excluded until fixed):
-        //   * SimpleRestJsonSome*HttpPayloadWithDefault — input ctor codegen ignores @default,
-        //     so we can't even build a synthetic request to drive the response decode path.
-        //   * SimpleRestJsonNone*HttpPayloadWithDefault — default-payload omission.
         //   * PrimitivesEncodingResponse — covered by request side; response not yet handled.
         //   * PreserveKeyOrderResponse — Document support pending.
         // OpenUnions* require open-union codegen support.
