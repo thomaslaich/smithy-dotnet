@@ -100,15 +100,23 @@ you want explicit package versions in the project file, set:
 
 ## Add A Model
 
-For `restJson1`, the Smithy CLI needs the AWS protocol trait model. Add a
-`smithy-build.json`:
+For NSmithy code generation, add a `smithy-build.json` like this:
 
 ```json
 {
   "version": "1.0",
   "sources": ["model"],
   "maven": {
-    "dependencies": ["software.amazon.smithy:smithy-aws-traits:1.68.0"]
+    "dependencies": [
+      "software.amazon.smithy:smithy-aws-traits:1.68.0",
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.4"
+    ]
+  },
+  "plugins": {
+    "csharp-codegen": {
+      "service": "example.hello#HelloService",
+      "baseNamespace": ""
+    }
   }
 }
 ```
