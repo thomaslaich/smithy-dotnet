@@ -42,7 +42,7 @@ mavenPublishing {
         name.set("NSmithy csharp-codegen Smithy plugin")
         description.set("Smithy build plugin that generates C# client/server code for Smithy models. Consumed by NSmithy.MSBuild via the Smithy CLI.")
         url.set("https://github.com/thomaslaich/smithy-dotnet")
-        inceptionYear.set("2025")
+        inceptionYear.set("2026")
         licenses {
             license {
                 name.set("MIT License")
