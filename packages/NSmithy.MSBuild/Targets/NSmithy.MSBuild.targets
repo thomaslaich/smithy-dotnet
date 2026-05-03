@@ -1,0 +1,113 @@
+<Project>
+  <PropertyGroup>
+    <SmithyBuildFile Condition="'$(SmithyBuildFile)' == ''"
+      >$(MSBuildProjectDirectory)/smithy-build.json</SmithyBuildFile
+    >
+    <SmithyProjection Condition="'$(SmithyProjection)' == ''">source</SmithyProjection>
+    <SmithyPlugin Condition="'$(SmithyPlugin)' == ''">csharp-codegen</SmithyPlugin>
+    <SmithyBuildOutputPath Condition="'$(SmithyBuildOutputPath)' == ''"
+      >$(IntermediateOutputPath)Smithy/</SmithyBuildOutputPath
+    >
+    <SmithyGeneratedOutputPath Condition="'$(SmithyGeneratedOutputPath)' == ''"
+      >$(SmithyBuildOutputPath)$(SmithyProjection)/$(SmithyPlugin)/</SmithyGeneratedOutputPath
+    >
+    <!-- Glob pattern matching every projection's csharp-codegen output. Lets a single
+         project consume multiple projections (e.g. restxml + rpcv2cbor) without manual config. -->
+    <SmithyAllProjectionsGlob Condition="'$(SmithyAllProjectionsGlob)' == ''"
+      >$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.g.cs</SmithyAllProjectionsGlob
+    >
+    <!-- Glob pattern matching every projection's generated .proto files. Picked up by
+         Grpc.Tools when the project references it (Grpc.AspNetCore / Grpc.Net.Client). -->
+    <SmithyAllProtosGlob Condition="'$(SmithyAllProtosGlob)' == ''"
+      >$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.proto</SmithyAllProtosGlob
+    >
+    <SmithyGrpcServices Condition="'$(SmithyGrpcServices)' == ''">Both</SmithyGrpcServices>
+    <SmithyCliPath Condition="'$(SmithyCliPath)' == ''">smithy</SmithyCliPath>
+    <SmithyGenerateClient Condition="'$(SmithyGenerateClient)' == ''">true</SmithyGenerateClient>
+    <SmithyGenerateServer Condition="'$(SmithyGenerateServer)' == ''">true</SmithyGenerateServer>
+    <SmithyEmitGeneratedFiles Condition="'$(SmithyEmitGeneratedFiles)' == ''"
+      >false</SmithyEmitGeneratedFiles
+    >
+    <SmithyStampFile Condition="'$(SmithyStampFile)' == ''"
+      >$(SmithyBuildOutputPath)NSmithy.Generated.stamp</SmithyStampFile
+    >
+  </PropertyGroup>
+
+  <ItemGroup>
+    <_SmithyGeneratorInput
+      Include="$(MSBuildProjectDirectory)/**/*.smithy"
+      Exclude="$(MSBuildProjectDirectory)/obj/**;$(MSBuildProjectDirectory)/bin/**;$(SmithyBuildOutputPath)**"
+    />
+    <_SmithyGeneratorInput Include="$(SmithyBuildFile)" Condition="Exists('$(SmithyBuildFile)')" />
+    <!-- Ensure dotnet watch rebuilds when smithy model files change -->
+    <Watch Include="$(SmithyBuildFile)" />
+    <Watch Include="@(_SmithyGeneratorInput)" />
+  </ItemGroup>
+
+  <Target
+    Name="GenerateSmithyCode"
+    BeforeTargets="CoreCompile"
+    Condition="Exists('$(SmithyBuildFile)')"
+    Inputs="@(_SmithyGeneratorInput)"
+    Outputs="$(SmithyStampFile)"
+  >
+    <MakeDir Directories="$(SmithyBuildOutputPath)" />
+    <Exec
+      Command="&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\\'))&quot;"
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+    />
+    <Touch Files="$(SmithyStampFile)" AlwaysCreate="true" />
+
+    <ItemGroup>
+      <FileWrites Include="$(SmithyAllProjectionsGlob)" />
+      <FileWrites Include="$(SmithyStampFile)" />
+    </ItemGroup>
+  </Target>
+
+  <Target
+    Name="_AddSmithyGeneratedCompileItems"
+    DependsOnTargets="GenerateSmithyCode"
+    BeforeTargets="CoreCompile"
+    Condition="Exists('$(SmithyBuildFile)')"
+  >
+    <ItemGroup>
+      <Compile Remove="$(SmithyAllProjectionsGlob)" />
+      <_SmithyExcludedGeneratedCompile
+        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*Client.g.cs"
+        Condition="'$(SmithyGenerateClient)' != 'true'"
+      />
+      <_SmithyExcludedGeneratedCompile
+        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*Server.g.cs"
+        Condition="'$(SmithyGenerateServer)' != 'true'"
+      />
+      <Compile
+        Include="$(SmithyAllProjectionsGlob)"
+        Exclude="@(_SmithyExcludedGeneratedCompile)"
+        Visible="$(SmithyEmitGeneratedFiles)"
+      />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    Register generated .proto files with Grpc.Tools so protoc emits the matching C# stubs.
+    Must run before Protobuf_PrepareCompile (the Grpc.Tools entry point that walks @(Protobuf)).
+    The target is a no-op when Grpc.Tools is not referenced.
+  -->
+  <Target
+    Name="_AddSmithyGeneratedProtoItems"
+    DependsOnTargets="GenerateSmithyCode"
+    BeforeTargets="Protobuf_BeforeCompile;Protobuf_PrepareCompile;BeforeBuild"
+    Condition="Exists('$(SmithyBuildFile)')"
+  >
+    <ItemGroup>
+      <Protobuf
+        Include="$(SmithyAllProtosGlob)"
+        GrpcServices="$(SmithyGrpcServices)"
+        ProtoRoot="$(SmithyBuildOutputPath)"
+        Access="Public"
+        Visible="$(SmithyEmitGeneratedFiles)"
+      />
+    </ItemGroup>
+    <Message Importance="high" Text="NSmithy: registered Protobuf items: @(Protobuf)" />
+  </Target>
+</Project>

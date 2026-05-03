@@ -12,14 +12,29 @@ fmt:
 check-format:
     treefmt --ci
 
-build:
-    dotnet build NSmithy.slnx --configuration Release --no-restore --disable-build-servers
+# Build & publish the Smithy → C# codegen JAR to the local Maven cache so that
+# `smithy build` (invoked from each .csproj via NSmithy.MSBuild) can resolve
+
+# `io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-SNAPSHOT` from ~/.m2.
+codegen:
+    cd codegen && gradle :smithy-csharp-codegen:publishToMavenLocal
+
+# Publish the codegen JAR to Maven Central via the Sonatype Central Portal.
+# Used by the release workflow; expects MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD
+# and ORG_GRADLE_PROJECT_signingInMemoryKey / ORG_GRADLE_PROJECT_signingInMemoryKeyPassword
+
+# to be set in the environment.
+publish-codegen VERSION:
+    cd codegen && gradle -Pversion={{ VERSION }} :smithy-csharp-codegen:publishAndReleaseToMavenCentral
+
+build: codegen restore
+    dotnet build NSmithy.slnx --configuration Release --no-restore --disable-build-servers ${VERSION:+-p:Version=$VERSION}
 
 test:
     dotnet test NSmithy.slnx --configuration Release --no-build --disable-build-servers
 
 pack:
-    dotnet pack NSmithy.slnx --configuration Release --no-build --output artifacts/packages
+    dotnet pack NSmithy.slnx --configuration Release --no-build --output artifacts/packages ${VERSION:+-p:Version=$VERSION}
 
 refresh-examples:
     dotnet clean examples/simple-rest-json/server/NSmithy.Examples.SimpleRestJson.Server.csproj --verbosity minimal
@@ -44,4 +59,4 @@ refresh-examples:
     dotnet restore examples/grpc/client-grpc/NSmithy.Examples.Grpc.ClientGrpc.csproj --no-cache --force
     dotnet restore examples/polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj --no-cache --force
 
-ci: restore check-format build test pack
+ci: check-format build test pack

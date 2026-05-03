@@ -45,5 +45,4 @@ These protocols are not current NSmithy targets:
 - [Known Limitations](../known-limitations.md)
 - [Multi-Protocol Guide](../multi-protocol.md)
 - [Architecture](../architecture/hybrid-codegen.md)
-- [Protocol Conformance](../generated/protocol-conformance.md)
 - [Roadmap](../planning/roadmap.md)
