@@ -7,11 +7,16 @@
 
 plugins {
     `java-library`
+    id("com.vanniktech.maven.publish") version "0.30.0" apply false
 }
 
 allprojects {
-    group = "io.github.thomaslaich.smithy"
-    version = "0.1.0-SNAPSHOT"
+    group = "io.github.thomaslaich.nsmithy"
+    // Default to a SNAPSHOT version for local dev (`gradle :csharp:publishToMavenLocal`).
+    // The release pipeline overrides this with `-Pversion=<x.y.z>` so the published
+    // Maven Central artifact carries the matching release version.
+    version = (findProperty("version") as String?).takeUnless { it.isNullOrBlank() || it == "unspecified" }
+        ?: "0.1.0-SNAPSHOT"
 }
 
 subprojects {
