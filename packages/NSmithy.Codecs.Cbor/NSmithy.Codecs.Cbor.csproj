@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Core/NSmithy.Core.csproj" />
+    <PackageReference Include="System.Formats.Cbor" />
   </ItemGroup>
 </Project>

@@ -12,9 +12,9 @@ public final class RuntimeTypes {
   public static final String NSMITHY_CORE_ANNOTATIONS = "NSmithy.Core.Annotations";
   public static final String NSMITHY_CORE_SERDE = "NSmithy.Core.Serde";
   public static final String NSMITHY_CLIENT = "NSmithy.Client";
-  public static final String NSMITHY_CLIENT_RESTJSON = "NSmithy.Client.RestJson";
-  public static final String NSMITHY_CLIENT_RESTXML = "NSmithy.Client.RestXml";
-  public static final String NSMITHY_CLIENT_RPCV2CBOR = "NSmithy.Client.RpcV2Cbor";
+  public static final String NSMITHY_PROTOCOLS_RESTJSON = "NSmithy.Protocols.RestJson";
+  public static final String NSMITHY_PROTOCOLS_RESTXML = "NSmithy.Protocols.RestXml";
+  public static final String NSMITHY_PROTOCOLS_RPCV2CBOR = "NSmithy.Protocols.RpcV2Cbor";
   public static final String NSMITHY_HTTP = "NSmithy.Http";
   public static final String NSMITHY_CODECS_JSON = "NSmithy.Codecs.Json";
   public static final String NSMITHY_CODECS_XML = "NSmithy.Codecs.Xml";

@@ -61,27 +61,32 @@ public final class ProtocolSupport {
   /** C# class name of the protocol runtime helper. */
   public static String runtimeProtocolType(Kind kind) {
     return switch (kind) {
-      case REST_JSON -> "RestJsonClientProtocol";
-      case REST_XML -> "RestXmlClientProtocol";
-      case RPC_V2_CBOR -> "RpcV2CborClientProtocol";
+      case REST_JSON -> "RestJsonProtocol";
+      case REST_XML -> "RestXmlProtocol";
+      case RPC_V2_CBOR -> "RpcV2CborProtocol";
     };
   }
 
   /** Static expression yielding the document codec singleton. */
   public static String codecExpression(Kind kind) {
     return switch (kind) {
-      case REST_JSON -> "SmithyJsonPayloadCodec.Default";
-      case REST_XML -> "SmithyXmlPayloadCodec.Default";
-      case RPC_V2_CBOR -> "SmithyCborPayloadCodec.Default";
+      case REST_JSON -> "SmithyJsonCodec.Default";
+      case REST_XML -> "SmithyXmlCodec.Default";
+      case RPC_V2_CBOR -> "SmithyCborCodec.Default";
     };
+  }
+
+  /** Codec interface type used by generated clients for the given protocol. */
+  public static String codecType(Kind kind) {
+    return "ISmithyCodec";
   }
 
   /** Runtime namespace housing the protocol class. */
   public static String runtimeProtocolNamespace(Kind kind) {
     return switch (kind) {
-      case REST_JSON -> RuntimeTypes.NSMITHY_CLIENT_RESTJSON;
-      case REST_XML -> RuntimeTypes.NSMITHY_CLIENT_RESTXML;
-      case RPC_V2_CBOR -> RuntimeTypes.NSMITHY_CLIENT_RPCV2CBOR;
+      case REST_JSON -> RuntimeTypes.NSMITHY_PROTOCOLS_RESTJSON;
+      case REST_XML -> RuntimeTypes.NSMITHY_PROTOCOLS_RESTXML;
+      case RPC_V2_CBOR -> RuntimeTypes.NSMITHY_PROTOCOLS_RPCV2CBOR;
     };
   }
 

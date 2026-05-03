@@ -1,11 +1,12 @@
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 using NSmithy.Core.Serde;
 
-namespace NSmithy.Client.RestJson;
+namespace NSmithy.Protocols.RestJson;
 
-public static class RestJsonClientProtocol
+public static class RestJsonProtocol
 {
     public static void AddHeader(
         IDictionary<string, IReadOnlyList<string>> headers,
@@ -81,24 +82,51 @@ public static class RestJsonClientProtocol
         return string.Join("/", FormatHttpValue(value).Split('/').Select(Uri.EscapeDataString));
     }
 
-    public static T DeserializeBody<T>(ISmithyPayloadCodec codec, byte[] content)
+    public static T DeserializeBody<T>(ISmithyCodec codec, byte[] content)
+        where T : IDeserializableShape<T>
     {
         return content.Length == 0 ? default! : codec.Deserialize<T>(content);
     }
 
-    public static T DeserializeRequiredBody<T>(ISmithyPayloadCodec codec, byte[] content)
+    public static T DeserializeBody<T>(
+        ISmithyCodec codec,
+        byte[] content,
+        Func<IShapeDeserializer, T> read
+    )
+    {
+        ArgumentNullException.ThrowIfNull(codec);
+        ArgumentNullException.ThrowIfNull(read);
+        return content.Length == 0 ? default! : codec.Deserialize(content, read);
+    }
+
+    public static T DeserializeRequiredBody<T>(ISmithyCodec codec, byte[] content)
+        where T : IDeserializableShape<T>
     {
         if (content.Length == 0)
         {
-            // Per smithy.test convention (e.g. RestJsonEmptyInputAndEmptyOutputJsonObjectOutput),
-            // clients should gracefully handle a service that omits the JSON payload entirely.
-            // Generated output records always expose a parameterless ctor, so default-construct.
             return Activator.CreateInstance<T>();
         }
 
         return codec.Deserialize<T>(content);
     }
 
+    public static T DeserializeRequiredBody<T>(
+        ISmithyCodec codec,
+        byte[] content,
+        Func<IShapeDeserializer, T> read
+    )
+    {
+        ArgumentNullException.ThrowIfNull(codec);
+        ArgumentNullException.ThrowIfNull(read);
+        if (content.Length == 0)
+        {
+            return Activator.CreateInstance<T>();
+        }
+
+        return codec.Deserialize(content, read);
+    }
+
+    [return: MaybeNull]
     public static T GetHeader<T>(
         IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
         string name
@@ -115,12 +143,13 @@ public static class RestJsonClientProtocol
     )
     {
         return headers.TryGetValue(name, out var values) && values.Count > 0
-            ? ConvertHttpValue<T>(values[0])
+            ? ConvertHttpValue<T>(values[0])!
             : throw new InvalidOperationException(
                 $"Required response header '{name}' was missing."
             );
     }
 
+    [return: MaybeNull]
     public static T GetPrefixedHeaders<T>(
         IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
         string prefix
@@ -156,7 +185,103 @@ public static class RestJsonClientProtocol
             );
         }
 
-        return values;
+        return values!;
+    }
+
+    [return: MaybeNull]
+    public static T ConvertHttpValue<T>(string? value)
+    {
+        if (value is null)
+        {
+            return default;
+        }
+
+        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+        if (targetType == typeof(string))
+        {
+            return (T)(object)value;
+        }
+
+        if (targetType.IsEnum)
+        {
+            return (T)
+                Enum.ToObject(
+                    targetType,
+                    Convert.ChangeType(
+                        value,
+                        Enum.GetUnderlyingType(targetType),
+                        CultureInfo.InvariantCulture
+                    )!
+                );
+        }
+
+        var constructor = targetType.GetConstructor([typeof(string)]);
+        if (constructor is not null)
+        {
+            return (T)constructor.Invoke([value]);
+        }
+
+        if (targetType == typeof(DateTimeOffset))
+        {
+            if (
+                decimal.TryParse(
+                    value,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var epochSeconds
+                )
+            )
+            {
+                var wholeSeconds = decimal.Truncate(epochSeconds);
+                var fractionalSeconds = epochSeconds - wholeSeconds;
+                var ticks = (long)(fractionalSeconds * TimeSpan.TicksPerSecond);
+                return (T)
+                    (object)
+                        new DateTimeOffset(
+                            DateTime.UnixEpoch.AddSeconds((double)wholeSeconds).AddTicks(ticks),
+                            TimeSpan.Zero
+                        );
+            }
+
+            return (T)
+                (object)
+                    DateTimeOffset.Parse(
+                        value,
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.RoundtripKind
+                    );
+        }
+
+        return (T)Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture);
+    }
+
+    [return: MaybeNull]
+    public static T CreateStringMap<T>(IReadOnlyDictionary<string, string> values)
+    {
+        if (values.Count == 0)
+        {
+            return default;
+        }
+
+        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+        if (targetType.IsAssignableFrom(values.GetType()))
+        {
+            return (T)(object)new Dictionary<string, string>(values, StringComparer.Ordinal);
+        }
+
+        var constructor = targetType.GetConstructor([typeof(IReadOnlyDictionary<string, string>)]);
+        constructor ??= targetType.GetConstructor([typeof(Dictionary<string, string>)]);
+        return constructor is not null
+            ? (T)
+                constructor.Invoke([new Dictionary<string, string>(values, StringComparer.Ordinal)])
+            : throw new InvalidOperationException($"Cannot create string map type '{targetType}'.");
+    }
+
+    public static IEnumerable<KeyValuePair<string, object?>> EnumerateStringMap(object value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        return EnumerateStringMapCore(value);
     }
 
     private static void AppendQueryValue(StringBuilder builder, string name, object? value)
@@ -172,7 +297,7 @@ public static class RestJsonClientProtocol
         builder.Append(Uri.EscapeDataString(FormatHttpValue(value)));
     }
 
-    private static IEnumerable<KeyValuePair<string, object?>> EnumerateStringMap(object value)
+    private static IEnumerable<KeyValuePair<string, object?>> EnumerateStringMapCore(object value)
     {
         var values =
             value is IDictionary ? value : value.GetType().GetProperty("Values")?.GetValue(value);
@@ -217,6 +342,8 @@ public static class RestJsonClientProtocol
 
     public static string FormatHttpValue(object value)
     {
+        ArgumentNullException.ThrowIfNull(value);
+
         return value switch
         {
             DateTimeOffset timestamp => timestamp
@@ -229,71 +356,5 @@ public static class RestJsonClientProtocol
                 ?? string.Empty,
             _ => value.ToString() ?? string.Empty,
         };
-    }
-
-    private static T CreateStringMap<T>(Dictionary<string, string> values)
-    {
-        if (values.Count == 0)
-        {
-            return default!;
-        }
-
-        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-        if (targetType.IsAssignableFrom(values.GetType()))
-        {
-            return (T)(object)values;
-        }
-
-        var constructor = targetType.GetConstructor([typeof(IReadOnlyDictionary<string, string>)]);
-        constructor ??= targetType.GetConstructor([typeof(Dictionary<string, string>)]);
-        return constructor is not null
-            ? (T)constructor.Invoke([values])
-            : throw new InvalidOperationException($"Cannot create string map type '{targetType}'.");
-    }
-
-    private static T ConvertHttpValue<T>(string value)
-    {
-        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-        if (targetType == typeof(string))
-        {
-            return (T)(object)value;
-        }
-
-        if (targetType.IsEnum)
-        {
-            if (!Enum.TryParse(targetType, value, ignoreCase: false, out var enumResult))
-            {
-                throw new InvalidOperationException(
-                    $"Unknown enum value '{value}' for type '{targetType.Name}'."
-                );
-            }
-
-            return (T)enumResult!;
-        }
-
-        if (targetType == typeof(DateTimeOffset))
-        {
-            if (
-                long.TryParse(
-                    value,
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out var epochSeconds
-                )
-            )
-            {
-                return (T)(object)DateTimeOffset.FromUnixTimeSeconds(epochSeconds);
-            }
-
-            return (T)(object)DateTimeOffset.Parse(value, CultureInfo.InvariantCulture);
-        }
-
-        var constructor = targetType.GetConstructor([typeof(string)]);
-        if (constructor is not null)
-        {
-            return (T)constructor.Invoke([value]);
-        }
-
-        return (T)Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture);
     }
 }
