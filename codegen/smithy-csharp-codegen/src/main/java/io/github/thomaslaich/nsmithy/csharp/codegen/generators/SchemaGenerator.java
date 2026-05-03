@@ -77,7 +77,7 @@ public final class SchemaGenerator {
 
     SymbolProvider symbolProvider = context.symbolProvider();
     Symbol symbol = symbolProvider.toSymbol(shape);
-    return CSharpSymbolProvider.qualified(symbol) + ".Schema";
+    return CSharpSymbolProvider.qualified(symbol) + ".Schema!";
   }
 
   public static String shapeIdExpr(ShapeId id) {

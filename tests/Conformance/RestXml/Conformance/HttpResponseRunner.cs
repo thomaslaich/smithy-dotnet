@@ -275,6 +275,12 @@ internal static class ConformanceClients
 /// </summary>
 internal static class ResponseAssertions
 {
+    private static ShapeKind? GetSchemaKind(Type type)
+    {
+        var schemaProp = type.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static);
+        return (schemaProp?.GetValue(null) as Schema)?.Kind;
+    }
+
     public static void AssertEquivalent(JsonNode? expected, object actual, string ownerLabel)
     {
         // A missing `params` field on the test case means "no expected output" — the operation
