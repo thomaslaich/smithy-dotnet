@@ -116,7 +116,7 @@ For NSmithy code generation, add a `smithy-build.json` like this:
   "sources": ["model"],
   "maven": {
     "dependencies": [
-      "software.amazon.smithy:smithy-aws-traits:1.68.0",
+      "com.disneystreaming.alloy:alloy-core:0.3.38",
       "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.5"
     ]
   },
@@ -130,72 +130,6 @@ For NSmithy code generation, add a `smithy-build.json` like this:
 ```
 
 Example model:
-
-```smithy
-$version: "2"
-
-namespace example.hello
-
-use aws.protocols#restJson1
-
-@restJson1
-service HelloService {
-    version: "2024-01-01"
-    operations: [SayHello, Ping]
-}
-
-@http(method: "GET", uri: "/hello/{name}")
-operation SayHello {
-    input := {
-        @required
-        @httpLabel
-        name: String
-    }
-
-    output := {
-        @required
-        message: String
-    }
-}
-```
-
-Limit generated C# to your service namespace when build dependencies contain
-trait models that should not become C# types:
-
-```xml
-<PropertyGroup>
-  <SmithyGeneratedNamespaces>example.hello</SmithyGeneratedNamespaces>
-</PropertyGroup>
-```
-
-## Use The Generated Client
-
-After `dotnet build`, generated files are under `obj/<configuration>/<tfm>/Smithy/`.
-
-Generated service clients are named after the Smithy service:
-
-```csharp
-using Example.Hello;
-using NSmithy.Client;
-
-var client = new HelloServiceClient(
-    new HttpClient(),
-    new SmithyClientOptions { Endpoint = new Uri("http://localhost:8082") }
-);
-
-var output = await client.SayHelloAsync(new SayHelloInput("world"));
-Console.WriteLine(output.Message);
-```
-
-The polyglot example at `examples/polyglot/dotnet` is the current end-to-end
-consumer project. It generates .NET clients from the Java and Scala example
-models and calls both APIs.
-
-## Use The Generated Server
-
-For `alloy#simpleRestJson`, generated services include operation-scoped handler
-interfaces, an aggregate service handler interface, DI helpers, and an ASP.NET
-Core endpoint mapper:
 
 ```smithy
 $version: "2"
@@ -238,7 +172,34 @@ operation Ping {
 }
 ```
 
-After generation, the compact path is one implementation of the aggregate
+## Use The Generated Client
+
+After `dotnet build`, generated files are under `obj/<configuration>/<tfm>/Smithy/`.
+
+Generated service clients are named after the Smithy service:
+
+```csharp
+using Example.Hello;
+using NSmithy.Client;
+
+var client = new HelloServiceClient(
+    new HttpClient(),
+    new SmithyClientOptions { Endpoint = new Uri("http://localhost:8082") }
+);
+
+var output = await client.SayHelloAsync(new SayHelloInput("world"));
+Console.WriteLine(output.Message);
+```
+
+The polyglot example at `examples/polyglot/dotnet` is the current end-to-end
+consumer project. It generates .NET clients from the Java and Scala example
+models and calls both APIs.
+
+## Use The Generated Server
+
+For `alloy#simpleRestJson`, generated services include operation-scoped handler
+interfaces, an aggregate service handler interface, DI helpers, and an ASP.NET
+Core endpoint mapper. After generation, the compact path is one implementation of the aggregate
 service handler interface:
 
 ```csharp
