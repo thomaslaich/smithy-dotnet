@@ -6,11 +6,23 @@ on:
 permissions:
   contents: read
 jobs:
-  package:
+  release:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+      - name: Resolve release version
+        id: version
+        # Strip a leading `v` from the release tag (e.g. v0.1.0 -> 0.1.0).
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          version="${tag#v}"
+          if [ -z "$version" ]; then
+            echo "::error::Release tag '${tag}' did not yield a version."
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Release version: ${version}"
       - name: Install Nix
         uses: cachix/install-nix-action@v31
       - name: Configure devenv cache
@@ -19,7 +31,21 @@ jobs:
           name: devenv
       - name: Install devenv
         run: nix profile add nixpkgs#devenv
+      - name: Publish codegen JAR to Maven Central
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: devenv shell -- just publish-codegen "${{ steps.version.outputs.version }}"
       - name: Build, test, and pack
+        # NSmithy.* .nupkg version comes from the release tag (overrides
+        # VersionPrefix/VersionSuffix in Directory.Build.props). Tests still
+        # build against the local SNAPSHOT codegen JAR published to ~/.m2 by
+        # `just codegen` so test smithy-build.json files don't need to be
+        # rewritten at release time.
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: devenv shell -- just ci
       - name: Upload packages
         uses: actions/upload-artifact@v4

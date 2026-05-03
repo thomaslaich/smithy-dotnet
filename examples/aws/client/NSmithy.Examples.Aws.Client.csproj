@@ -14,11 +14,11 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.3" />
-    <PackageReference Include="NSmithy.Client.RestXml" Version="0.1.0-preview.3" />
-    <PackageReference Include="NSmithy.Client.RpcV2Cbor" Version="0.1.0-preview.3" />
-    <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.3" />
-    <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.3" />
-    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.3" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.4" />
+    <PackageReference Include="NSmithy.Client.RestXml" Version="0.1.0-preview.4" />
+    <PackageReference Include="NSmithy.Client.RpcV2Cbor" Version="0.1.0-preview.4" />
+    <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.4" />
+    <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.4" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.4" PrivateAssets="all" />
   </ItemGroup>
 </Project>

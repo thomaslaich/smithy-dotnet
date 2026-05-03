@@ -5,6 +5,10 @@
       "path": "."
     },
     {
+      "name": "Codegen (Java)",
+      "path": "codegen"
+    },
+    {
       "name": "Example: Polyglot",
       "path": "examples/polyglot"
     },

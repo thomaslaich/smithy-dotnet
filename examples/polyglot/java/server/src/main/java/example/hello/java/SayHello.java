@@ -6,17 +6,17 @@ import example.hello.java.service.SayHelloOperation;
 import software.amazon.smithy.java.server.RequestContext;
 
 final class SayHello implements SayHelloOperation {
-    private final String serviceName;
+  private final String serviceName;
 
-    SayHello(String serviceName) {
-        this.serviceName = serviceName;
-    }
+  SayHello(String serviceName) {
+    this.serviceName = serviceName;
+  }
 
-    @Override
-    public SayHelloOutput sayHello(SayHelloInput input, RequestContext context) {
-        return SayHelloOutput.builder()
-                .message("Hello, " + input.getName() + "!")
-                .from(serviceName)
-                .build();
-    }
+  @Override
+  public SayHelloOutput sayHello(SayHelloInput input, RequestContext context) {
+    return SayHelloOutput.builder()
+        .message("Hello, " + input.getName() + "!")
+        .from(serviceName)
+        .build();
+  }
 }
