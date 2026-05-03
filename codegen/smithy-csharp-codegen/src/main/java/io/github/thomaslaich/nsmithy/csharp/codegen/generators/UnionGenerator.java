@@ -53,6 +53,7 @@ public final class UnionGenerator implements Runnable {
           writer.write("private protected $L() { }", typeName);
           writer.write("");
           writer.write("public abstract void Serialize(IShapeSerializer serializer);");
+          writer.write("public abstract void Serialize(IShapeSerializer serializer, Schema schema);");
           writer.write("");
           for (MemberShape m : members) {
             String variantName = CSharpNaming.typeName(m.getMemberName());
@@ -83,9 +84,15 @@ public final class UnionGenerator implements Runnable {
                   writer.openBlock(
                       "{",
                       "}",
+                      () -> writer.write("Serialize(serializer, Schema);"));
+                  writer.write("");
+                  writer.write("public override void Serialize(IShapeSerializer serializer, Schema schema)");
+                  writer.openBlock(
+                      "{",
+                      "}",
                       () -> {
                         writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
-                        writer.write("serializer.WriteStruct(Schema, new UnionMembers(this));");
+                        writer.write("serializer.WriteStruct(schema, new UnionMembers(this));");
                       });
                   writer.write("");
                   writer.write(
@@ -143,9 +150,15 @@ public final class UnionGenerator implements Runnable {
                 writer.openBlock(
                     "{",
                     "}",
+                    () -> writer.write("Serialize(serializer, Schema);"));
+                writer.write("");
+                writer.write("public override void Serialize(IShapeSerializer serializer, Schema schema)");
+                writer.openBlock(
+                    "{",
+                    "}",
                     () -> {
                       writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
-                      writer.write("serializer.WriteStruct(Schema, new UnionMembers(this));");
+                      writer.write("serializer.WriteStruct(schema, new UnionMembers(this));");
                     });
                 writer.write("");
                 writer.write(
@@ -292,7 +305,9 @@ public final class UnionGenerator implements Runnable {
       case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ");";
       case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ");";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";
-      case STRUCTURE, UNION, LIST, SET, MAP -> valueExpr + ".Serialize(" + serializerVar + ");";
+      case STRUCTURE -> serializerVar + ".WriteStruct(" + schemaVar + ", " + valueExpr + ");";
+      case UNION, LIST, SET, MAP ->
+          valueExpr + ".Serialize(" + serializerVar + ", " + schemaVar + ");";
       default ->
           throw new IllegalArgumentException("Unsupported union member shape: " + target.getId());
     };

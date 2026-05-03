@@ -272,7 +272,9 @@ public final class ErrorGenerator implements Runnable {
       case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ");";
       case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ");";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";
-      case STRUCTURE, UNION, LIST, SET, MAP -> valueExpr + ".Serialize(" + serializerVar + ");";
+      case STRUCTURE -> serializerVar + ".WriteStruct(" + schemaVar + ", " + valueExpr + ");";
+      case UNION, LIST, SET, MAP ->
+          valueExpr + ".Serialize(" + serializerVar + ", " + schemaVar + ");";
       default ->
           throw new IllegalArgumentException("Unsupported error member shape: " + target.getId());
     };

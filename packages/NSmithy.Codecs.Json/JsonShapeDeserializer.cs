@@ -160,14 +160,24 @@ internal sealed class JsonShapeDeserializer : IShapeDeserializer
 
     public DateTimeOffset ReadTimestamp(Schema schema)
     {
-        // Default ISO-8601 / RFC-3339 format. timestampFormat trait support to be added once
-        // generators emit it on member schemas.
-        var raw = ReadString(schema);
-        return DateTimeOffset.Parse(
-            raw,
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.RoundtripKind
-        );
+        switch (GetTimestampFormat(schema))
+        {
+            case "epoch-seconds":
+                return ReadEpochSecondsTimestamp();
+            case "http-date":
+                return DateTimeOffset.ParseExact(
+                    ReadString(schema),
+                    "r",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal
+                );
+            default:
+                return DateTimeOffset.Parse(
+                    ReadString(schema),
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind
+                );
+        }
     }
 
     public Document ReadDocument(Schema schema) => Document.FromJsonElement(current);
@@ -207,4 +217,31 @@ internal sealed class JsonShapeDeserializer : IShapeDeserializer
 
     private InvalidOperationException UnexpectedKind(params JsonValueKind[] expected) =>
         new($"Expected JSON {string.Join("/", expected)} but found {current.ValueKind}.");
+
+    private static string GetTimestampFormat(Schema schema)
+    {
+        var trait = schema.GetTrait(JsonTraits.TimestampFormat);
+        return trait?.Value.AsString() ?? "date-time";
+    }
+
+    private DateTimeOffset ReadEpochSecondsTimestamp()
+    {
+        decimal seconds =
+            current.ValueKind switch
+            {
+                JsonValueKind.Number => decimal.Parse(
+                    current.GetRawText(),
+                    CultureInfo.InvariantCulture
+                ),
+                JsonValueKind.String => decimal.Parse(
+                    current.GetString()
+                        ?? throw new InvalidOperationException("Expected non-null JSON string."),
+                    CultureInfo.InvariantCulture
+                ),
+                _ => throw UnexpectedKind(JsonValueKind.Number, JsonValueKind.String),
+            };
+
+        long ticks = DateTimeOffset.UnixEpoch.Ticks + decimal.ToInt64(seconds * TimeSpan.TicksPerSecond);
+        return new DateTimeOffset(ticks, TimeSpan.Zero);
+    }
 }

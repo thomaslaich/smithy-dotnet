@@ -76,12 +76,15 @@ public final class ListGenerator implements Runnable {
     boolean memberIsValueType =
         memberSym.getProperty(SymbolProperties.IS_VALUE_TYPE, Boolean.class).orElse(false);
     writer.write("public void Serialize(IShapeSerializer serializer)");
+    writer.openBlock("{", "}", () -> writer.write("Serialize(serializer, Schema);"));
+    writer.write("");
+    writer.write("public void Serialize(IShapeSerializer serializer, Schema schema)");
     writer.openBlock(
         "{",
         "}",
         () -> {
           writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
-          writer.write("serializer.WriteList(Schema, Values, Values.Count, static (values, w) =>");
+          writer.write("serializer.WriteList(schema, Values, Values.Count, static (values, w) =>");
           writer.openBlock(
               "{",
               "});",
@@ -173,7 +176,9 @@ public final class ListGenerator implements Runnable {
       case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ");";
       case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ");";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";
-      case STRUCTURE, UNION, LIST, SET, MAP -> valueExpr + ".Serialize(" + serializerVar + ");";
+      case STRUCTURE -> serializerVar + ".WriteStruct(" + schemaVar + ", " + valueExpr + ");";
+      case UNION, LIST, SET, MAP ->
+          valueExpr + ".Serialize(" + serializerVar + ", " + schemaVar + ");";
       default ->
           throw new IllegalArgumentException("Unsupported list member shape: " + target.getId());
     };

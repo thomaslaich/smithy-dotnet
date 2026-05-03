@@ -13,6 +13,7 @@ internal sealed class XmlShapeSerializer : IShapeSerializer
 {
     private readonly Stream sink;
     private XElement? rootElement;
+    private bool flushed;
 
     public XmlShapeSerializer(Stream sink)
     {
@@ -28,18 +29,15 @@ internal sealed class XmlShapeSerializer : IShapeSerializer
 
     public void Dispose()
     {
-        if (rootElement is not null && sink is not null)
-        {
-            Flush();
-        }
+        sink?.Flush();
     }
 
     public void Flush()
     {
-        if (rootElement is not null && sink is not null)
+        if (!flushed && rootElement is not null && sink is not null)
         {
-            var doc = new XDocument(rootElement);
-            doc.Save(sink, SaveOptions.DisableFormatting);
+            rootElement.Save(sink, SaveOptions.DisableFormatting);
+            flushed = true;
         }
         else
         {

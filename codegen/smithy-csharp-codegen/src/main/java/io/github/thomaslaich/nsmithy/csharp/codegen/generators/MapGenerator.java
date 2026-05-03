@@ -90,12 +90,15 @@ public final class MapGenerator implements Runnable {
         valueSym.getProperty(SymbolProperties.IS_VALUE_TYPE, Boolean.class).orElse(false);
     String valueTypeName = CSharpSymbolProvider.qualified(valueSym);
     writer.write("public void Serialize(IShapeSerializer serializer)");
+    writer.openBlock("{", "}", () -> writer.write("Serialize(serializer, Schema);"));
+    writer.write("");
+    writer.write("public void Serialize(IShapeSerializer serializer, Schema schema)");
     writer.openBlock(
         "{",
         "}",
         () -> {
           writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
-          writer.write("serializer.WriteMap(Schema, Values, Values.Count, static (values, m) =>");
+          writer.write("serializer.WriteMap(schema, Values, Values.Count, static (values, m) =>");
           writer.openBlock(
               "{",
               "});",
@@ -212,7 +215,9 @@ public final class MapGenerator implements Runnable {
       case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ")";
       case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ")";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ")";
-      case STRUCTURE, UNION, LIST, SET, MAP -> valueExpr + ".Serialize(" + serializerVar + ");";
+      case STRUCTURE -> serializerVar + ".WriteStruct(" + schemaVar + ", " + valueExpr + ")";
+      case UNION, LIST, SET, MAP ->
+          valueExpr + ".Serialize(" + serializerVar + ", " + schemaVar + ")";
       default ->
           throw new IllegalArgumentException("Unsupported map value shape: " + target.getId());
     };

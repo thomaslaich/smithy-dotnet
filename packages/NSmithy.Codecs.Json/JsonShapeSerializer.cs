@@ -103,8 +103,26 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
     public void WriteBlob(Schema schema, ReadOnlySpan<byte> value) =>
         writer.WriteBase64StringValue(value);
 
-    public void WriteTimestamp(Schema schema, DateTimeOffset value) =>
-        writer.WriteStringValue(value.UtcDateTime.ToString("O", CultureInfo.InvariantCulture));
+    public void WriteTimestamp(Schema schema, DateTimeOffset value)
+    {
+        switch (GetTimestampFormat(schema))
+        {
+            case "epoch-seconds":
+                writer.WriteRawValue(
+                    FormatEpochSeconds(value),
+                    skipInputValidation: true
+                );
+                break;
+            case "http-date":
+                writer.WriteStringValue(
+                    value.ToUniversalTime().ToString("r", CultureInfo.InvariantCulture)
+                );
+                break;
+            default:
+                writer.WriteStringValue(FormatDateTime(value));
+                break;
+        }
+    }
 
     public void WriteDocument(Schema schema, Document value) =>
         DocumentJsonWriter.Write(writer, value);
@@ -231,7 +249,23 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
         public void WriteTimestamp(Schema schema, DateTimeOffset value)
         {
             WritePropertyName(schema);
-            writer.WriteStringValue(value.UtcDateTime.ToString("O", CultureInfo.InvariantCulture));
+            switch (GetTimestampFormat(schema))
+            {
+                case "epoch-seconds":
+                    writer.WriteRawValue(
+                        FormatEpochSeconds(value),
+                        skipInputValidation: true
+                    );
+                    break;
+                case "http-date":
+                    writer.WriteStringValue(
+                        value.ToUniversalTime().ToString("r", CultureInfo.InvariantCulture)
+                    );
+                    break;
+                default:
+                    writer.WriteStringValue(FormatDateTime(value));
+                    break;
+            }
         }
 
         public void WriteDocument(Schema schema, Document value)
@@ -248,5 +282,33 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
 
         private void WritePropertyName(Schema memberSchema) =>
             writer.WritePropertyName(JsonNameResolver.Resolve(memberSchema));
+    }
+
+    private static string GetTimestampFormat(Schema schema)
+    {
+        var trait = schema.GetTrait(JsonTraits.TimestampFormat);
+        return trait?.Value.AsString() ?? "date-time";
+    }
+
+    private static string FormatDateTime(DateTimeOffset value)
+    {
+        var utc = value.ToUniversalTime();
+        var wholeSeconds = utc.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
+        var fractionalTicks = utc.Ticks % TimeSpan.TicksPerSecond;
+        if (fractionalTicks == 0)
+        {
+            return wholeSeconds + "Z";
+        }
+
+        var fractional = fractionalTicks.ToString("D7", CultureInfo.InvariantCulture).TrimEnd('0');
+        return $"{wholeSeconds}.{fractional}Z";
+    }
+
+    private static string FormatEpochSeconds(DateTimeOffset value)
+    {
+        decimal seconds =
+            (value.ToUniversalTime().Ticks - DateTimeOffset.UnixEpoch.Ticks)
+            / (decimal)TimeSpan.TicksPerSecond;
+        return seconds.ToString(CultureInfo.InvariantCulture);
     }
 }
