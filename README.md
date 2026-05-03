@@ -1,9 +1,7 @@
 _Work in Progress: NSmithy is a proof of concept. The current implementation
 demonstrates that Smithy models can drive idiomatic C# clients and ASP.NET Core
 servers end-to-end, but the protocol implementations are not yet on par with
-the [Smithy reference implementations](https://github.com/smithy-lang/smithy).
-A near-term focus is closing that gap before the public API surface, package
-boundaries, and generated code shape are stabilized._
+the [Smithy reference implementations](https://github.com/smithy-lang/smithy)._
 
 # NSmithy
 
@@ -42,11 +40,11 @@ The fastest way to try NSmithy is with the [smithy-dotnet-minimal-pixi](https://
 
    ```xml
    <ItemGroup>
-     <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.4" />
-     <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.4" />
-     <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.4" />
-     <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.4" />
-     <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.4" PrivateAssets="all" />
+     <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.5" />
+     <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.5" />
+     <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.5" />
+     <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.5" />
+     <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.5" PrivateAssets="all" />
    </ItemGroup>
    ```
 
@@ -90,7 +88,7 @@ The fastest way to try NSmithy is with the [smithy-dotnet-minimal-pixi](https://
      "maven": {
        "dependencies": [
          "com.disneystreaming.alloy:alloy-core:0.3.38",
-         "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.4"
+         "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.5"
        ]
      },
      "plugins": {
@@ -110,18 +108,18 @@ The fastest way to try NSmithy is with the [smithy-dotnet-minimal-pixi](https://
 
 5. **Use the generated client/server code in your app.**
 
-```csharp
-using Example.Hello;
-using NSmithy.Client;
+   ```csharp
+   using Example.Hello;
+   using NSmithy.Client;
 
-var client = new HelloServiceClient(
-    new HttpClient(),
-    new SmithyClientOptions { Endpoint = new Uri("http://localhost:8082") }
-);
+   var client = new HelloServiceClient(
+       new HttpClient(),
+       new SmithyClientOptions { Endpoint = new Uri("http://localhost:8082") }
+   );
 
-var output = await client.SayHelloAsync(new SayHelloInput("world"));
-Console.WriteLine(output.Message);
-```
+   var output = await client.SayHelloAsync(new SayHelloInput("world"));
+   Console.WriteLine(output.Message);
+   ```
 
 ---
 
