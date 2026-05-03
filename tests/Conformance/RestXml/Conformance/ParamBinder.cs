@@ -242,7 +242,10 @@ internal static class ParamBinder
 
     private static ShapeKind? GetSchemaKind(Type targetType)
     {
-        var schemaProp = targetType.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static);
+        var schemaProp = targetType.GetProperty(
+            "Schema",
+            BindingFlags.Public | BindingFlags.Static
+        );
         return (schemaProp?.GetValue(null) as Schema)?.Kind;
     }
 }

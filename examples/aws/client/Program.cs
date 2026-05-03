@@ -154,7 +154,8 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
 /// Used by the mock handler to serialize error payloads.
 /// </summary>
 internal sealed record class RpcV2ErrorEnvelope(string Type, string? Message)
-    : ISerializableStruct, IDeserializableShape<RpcV2ErrorEnvelope>
+    : ISerializableStruct,
+        IDeserializableShape<RpcV2ErrorEnvelope>
 {
     private static readonly Schema TypeSchema = Schema.CreateMember(
         ShapeId.Parse("example.transport#RpcV2ErrorEnvelope$__type"),
@@ -166,10 +167,11 @@ internal sealed record class RpcV2ErrorEnvelope(string Type, string? Message)
         () => PreludeSchemas.String
     );
 
-    public static Schema Schema { get; } = Schema.CreateStructure(
-        ShapeId.Parse("example.transport#RpcV2ErrorEnvelope"),
-        [TypeSchema, MessageSchema]
-    );
+    public static Schema Schema { get; } =
+        Schema.CreateStructure(
+            ShapeId.Parse("example.transport#RpcV2ErrorEnvelope"),
+            [TypeSchema, MessageSchema]
+        );
 
     Schema ISerializableShape.Schema => Schema;
 
@@ -197,13 +199,15 @@ internal sealed record class RpcV2ErrorEnvelope(string Type, string? Message)
         deserializer.ReadStruct<object?>(
             Schema,
             null,
-            new StructMemberConsumer<object?>(Member: (_, member, reader) =>
-            {
-                if (member.MemberName == "__type")
-                    type = reader.ReadString(member);
-                else if (member.MemberName == "message")
-                    message = reader.ReadString(member);
-            })
+            new StructMemberConsumer<object?>(
+                Member: (_, member, reader) =>
+                {
+                    if (member.MemberName == "__type")
+                        type = reader.ReadString(member);
+                    else if (member.MemberName == "message")
+                        message = reader.ReadString(member);
+                }
+            )
         );
         return new RpcV2ErrorEnvelope(
             type ?? throw new InvalidOperationException("Missing required member '__type'."),

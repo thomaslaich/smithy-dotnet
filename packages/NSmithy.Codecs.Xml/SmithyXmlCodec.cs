@@ -57,8 +57,7 @@ internal static class XmlTraits
     public static string ElementName(Schema memberSchema) =>
         GetXmlName(memberSchema) ?? memberSchema.MemberName!;
 
-    public static string RootElementName(Schema schema) =>
-        GetXmlName(schema) ?? schema.Id.Name;
+    public static string RootElementName(Schema schema) => GetXmlName(schema) ?? schema.Id.Name;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -175,8 +174,7 @@ internal sealed class XmlShapeSerializer : IShapeSerializer
     public void WriteBigDecimal(Schema schema, decimal value) =>
         SetRootText(schema, value.ToString(CultureInfo.InvariantCulture));
 
-    public void WriteString(Schema schema, string value) =>
-        SetRootText(schema, value);
+    public void WriteString(Schema schema, string value) => SetRootText(schema, value);
 
     public void WriteBlob(Schema schema, ReadOnlySpan<byte> value) =>
         SetRootText(schema, Convert.ToBase64String(value));

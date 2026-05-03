@@ -40,11 +40,16 @@ public static class RpcV2CborClientProtocol
 
     public static string? DeserializeErrorType(byte[] content)
     {
-        if (content.Length == 0) return null;
+        if (content.Length == 0)
+            return null;
         try
         {
-            var reader = new System.Formats.Cbor.CborReader(content, System.Formats.Cbor.CborConformanceMode.Lax);
-            if (reader.PeekState() != System.Formats.Cbor.CborReaderState.StartMap) return null;
+            var reader = new System.Formats.Cbor.CborReader(
+                content,
+                System.Formats.Cbor.CborConformanceMode.Lax
+            );
+            if (reader.PeekState() != System.Formats.Cbor.CborReaderState.StartMap)
+                return null;
             reader.ReadStartMap();
             while (reader.PeekState() != System.Formats.Cbor.CborReaderState.EndMap)
             {
@@ -55,6 +60,9 @@ public static class RpcV2CborClientProtocol
             }
             return null;
         }
-        catch { return null; }
+        catch
+        {
+            return null;
+        }
     }
 }

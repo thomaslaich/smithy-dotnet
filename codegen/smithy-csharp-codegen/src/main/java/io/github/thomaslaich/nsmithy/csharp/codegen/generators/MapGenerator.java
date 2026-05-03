@@ -7,9 +7,9 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
+import io.github.thomaslaich.nsmithy.csharp.codegen.SymbolProperties;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
-import io.github.thomaslaich.nsmithy.csharp.codegen.SymbolProperties;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.shapes.MapShape;
@@ -121,7 +121,8 @@ public final class MapGenerator implements Runnable {
                             "}",
                             () -> {
                               // For nullable value types (structs) in sparse maps, we must cast
-                              // entry.Value (T?) to T explicitly so the generic lambda types correctly.
+                              // entry.Value (T?) to T explicitly so the generic lambda types
+                              // correctly.
                               String stateExpr =
                                   valueIsValueType
                                       ? "(" + valueTypeName + ")entry.Value!"

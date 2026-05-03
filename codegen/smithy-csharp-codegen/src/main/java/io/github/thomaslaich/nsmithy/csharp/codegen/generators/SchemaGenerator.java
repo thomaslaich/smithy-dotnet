@@ -239,8 +239,8 @@ public final class SchemaGenerator {
   }
 
   /**
-   * Returns the PreludeSchemas accessor for built-in primitive ShapeTypes that map to C#
-   * primitives (which have no .Schema property), or null if the type is a user-defined shape.
+   * Returns the PreludeSchemas accessor for built-in primitive ShapeTypes that map to C# primitives
+   * (which have no .Schema property), or null if the type is a user-defined shape.
    */
   private static String primitiveTypeToPreludeSchema(ShapeType t) {
     return switch (t) {

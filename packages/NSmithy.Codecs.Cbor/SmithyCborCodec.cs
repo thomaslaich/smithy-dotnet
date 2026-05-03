@@ -116,11 +116,9 @@ internal sealed class CborShapeSerializer : IShapeSerializer
 
     public void WriteDouble(Schema schema, double value) => writer.WriteDouble(value);
 
-    public void WriteBigInteger(Schema schema, BigInteger value) =>
-        writer.WriteInt64((long)value);
+    public void WriteBigInteger(Schema schema, BigInteger value) => writer.WriteInt64((long)value);
 
-    public void WriteBigDecimal(Schema schema, decimal value) =>
-        writer.WriteDouble((double)value);
+    public void WriteBigDecimal(Schema schema, decimal value) => writer.WriteDouble((double)value);
 
     public void WriteString(Schema schema, string value)
     {
@@ -128,8 +126,7 @@ internal sealed class CborShapeSerializer : IShapeSerializer
         writer.WriteTextString(value);
     }
 
-    public void WriteBlob(Schema schema, ReadOnlySpan<byte> value) =>
-        writer.WriteByteString(value);
+    public void WriteBlob(Schema schema, ReadOnlySpan<byte> value) => writer.WriteByteString(value);
 
     public void WriteTimestamp(Schema schema, DateTimeOffset value)
     {
@@ -147,9 +144,7 @@ internal sealed class CborShapeSerializer : IShapeSerializer
     }
 
     public void WriteDocument(Schema schema, Document value) =>
-        throw new NotSupportedException(
-            "Smithy Document values are not supported by rpcv2Cbor."
-        );
+        throw new NotSupportedException("Smithy Document values are not supported by rpcv2Cbor.");
 
     public void WriteNull(Schema schema) => writer.WriteNull();
 
@@ -474,17 +469,13 @@ internal sealed class CborShapeDeserializer : IShapeDeserializer
     public bool ReadBoolean(Schema schema) =>
         Convert.ToBoolean(current, CultureInfo.InvariantCulture);
 
-    public sbyte ReadByte(Schema schema) =>
-        Convert.ToSByte(current, CultureInfo.InvariantCulture);
+    public sbyte ReadByte(Schema schema) => Convert.ToSByte(current, CultureInfo.InvariantCulture);
 
-    public short ReadShort(Schema schema) =>
-        Convert.ToInt16(current, CultureInfo.InvariantCulture);
+    public short ReadShort(Schema schema) => Convert.ToInt16(current, CultureInfo.InvariantCulture);
 
-    public int ReadInteger(Schema schema) =>
-        Convert.ToInt32(current, CultureInfo.InvariantCulture);
+    public int ReadInteger(Schema schema) => Convert.ToInt32(current, CultureInfo.InvariantCulture);
 
-    public long ReadLong(Schema schema) =>
-        Convert.ToInt64(current, CultureInfo.InvariantCulture);
+    public long ReadLong(Schema schema) => Convert.ToInt64(current, CultureInfo.InvariantCulture);
 
     public float ReadFloat(Schema schema) =>
         Convert.ToSingle(current, CultureInfo.InvariantCulture);
@@ -514,17 +505,20 @@ internal sealed class CborShapeDeserializer : IShapeDeserializer
         {
             DateTimeOffset dto => dto,
             long l => DateTimeOffset.FromUnixTimeSeconds(l),
-            double d =>
-                DateTimeOffset.FromUnixTimeMilliseconds((long)(d * 1000)),
-            string s => DateTimeOffset.Parse(s, CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind),
-            _ => throw new InvalidOperationException($"Cannot convert {current?.GetType().Name} to DateTimeOffset."),
+            double d => DateTimeOffset.FromUnixTimeMilliseconds((long)(d * 1000)),
+            string s => DateTimeOffset.Parse(
+                s,
+                CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind
+            ),
+            _ => throw new InvalidOperationException(
+                $"Cannot convert {current?.GetType().Name} to DateTimeOffset."
+            ),
         };
     }
 
     public Document ReadDocument(Schema schema) =>
-        throw new NotSupportedException(
-            "Smithy Document values are not supported by rpcv2Cbor."
-        );
+        throw new NotSupportedException("Smithy Document values are not supported by rpcv2Cbor.");
 
     // ── CBOR value parser ─────────────────────────────────────────────────────
 
