@@ -39,6 +39,32 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
     return this;
   }
 
+  /**
+   * Override of {@code openBlock} that emits Allman-style braces for C#: a header ending with
+   * {@code " {"} is split so the opening brace appears on its own line. Lambda bodies (ending with
+   * {@code "=> {"}) and headers that don't end with {@code " {"} are left untouched.
+   *
+   * <p>All other {@code openBlock} overloads in {@code AbstractCodeWriter} delegate to this one.
+   */
+  @Override
+  public CSharpWriter openBlock(
+      String textBeforeNewline, String textAfterNewline, Object[] args, Runnable f) {
+    if (shouldSplitBrace(textBeforeNewline)) {
+      String header = textBeforeNewline.substring(0, textBeforeNewline.length() - 2);
+      write(header, args);
+      return super.openBlock("{", textAfterNewline, new Object[] {}, f);
+    }
+    return super.openBlock(textBeforeNewline, textAfterNewline, args, f);
+  }
+
+  private static boolean shouldSplitBrace(String text) {
+    if (text == null || !text.endsWith(" {")) {
+      return false;
+    }
+    // Preserve K&R-style braces for lambda bodies (e.g. "x => {").
+    return !text.endsWith("=> {");
+  }
+
   /** Factory used by WriterDelegator. */
   public static final class CSharpWriterFactory implements SymbolWriter.Factory<CSharpWriter> {
     @Override
