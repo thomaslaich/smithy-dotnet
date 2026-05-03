@@ -1,5 +1,6 @@
 using System.Text;
 using System.Xml.Linq;
+using System.Diagnostics.CodeAnalysis;
 using NSmithy.Core.Serde;
 
 namespace NSmithy.Protocols.RestXml;
@@ -69,6 +70,7 @@ public static class RestXmlClientProtocol
         return root.Elements().FirstOrDefault(element => element.Name.LocalName == "Code")?.Value;
     }
 
+    [return: MaybeNull]
     public static T GetHeader<T>(
         IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
         string name
@@ -88,6 +90,7 @@ public static class RestXmlClientProtocol
         );
     }
 
+    [return: MaybeNull]
     public static T GetPrefixedHeaders<T>(
         IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
         string prefix

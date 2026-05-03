@@ -1,5 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../NSmithy.Protocols.RestXml/NSmithy.Protocols.RestXml.csproj" />
-  </ItemGroup>
-</Project>

@@ -1,5 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <ItemGroup>
-    <ProjectReference Include="../NSmithy.Protocols.RpcV2Cbor/NSmithy.Protocols.RpcV2Cbor.csproj" />
-  </ItemGroup>
-</Project>

@@ -223,6 +223,26 @@ public static class RestJsonClientProtocol
 
         if (targetType == typeof(DateTimeOffset))
         {
+            if (
+                decimal.TryParse(
+                    value,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var epochSeconds
+                )
+            )
+            {
+                var wholeSeconds = decimal.Truncate(epochSeconds);
+                var fractionalSeconds = epochSeconds - wholeSeconds;
+                var ticks = (long)(fractionalSeconds * TimeSpan.TicksPerSecond);
+                return (T)
+                    (object)
+                        new DateTimeOffset(
+                            DateTime.UnixEpoch.AddSeconds((double)wholeSeconds).AddTicks(ticks),
+                            TimeSpan.Zero
+                        );
+            }
+
             return (T)
                 (object)
                     DateTimeOffset.Parse(
