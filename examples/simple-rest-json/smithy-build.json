@@ -1,11 +1,19 @@
 {
   "version": "1.0",
-  "sources": ["model"],
+  "sources": [
+    "model"
+  ],
   "maven": {
     "repositories": [
-      { "url": "file://~/.m2/repository" }
+      {
+        "url": "file://~/.m2/repository"
+      },
+      {
+        "url": "https://repo.maven.apache.org/maven2/"
+      }
     ],
     "dependencies": [
+      "com.disneystreaming.alloy:alloy-core:0.3.38",
       "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-SNAPSHOT"
     ]
   },

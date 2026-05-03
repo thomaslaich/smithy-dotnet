@@ -1,56 +1,90 @@
-_Work in Progress: NSmithy is a proof of concept. The current implementation
-demonstrates that Smithy models can drive idiomatic C# clients and ASP.NET Core
-servers end-to-end, but the protocol implementations are not yet on par with
-the [Smithy reference implementations](https://github.com/smithy-lang/smithy).
-A near-term focus is closing that gap — aligning serialization, HTTP binding,
-and error handling behavior with the reference implementations and the
 official protocol test suites — before the public API surface, package
 boundaries, and generated code shape are stabilized._
 
+
 # NSmithy
 
-NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io)
-model into idiomatic C# at build time. From a single contract you get the same
-model types, typed clients, and server scaffolding that any other Smithy
-language would produce — driven from MSBuild, with no hand-written protocol
 glue.
 
-What you get out of the model:
+**NSmithy** is a .NET toolkit that turns a [Smithy](https://smithy.io) model into idiomatic C# at build time. It generates model types, typed clients, and ASP.NET Core server scaffolding from a single contract—no hand-written protocol glue required.
 
-- **Code generation from MSBuild.** `NSmithy.MSBuild` invokes the Smithy CLI
-  and the C# code generator during `dotnet build`. Generated files land under
-  `obj/.../Smithy/` and are compiled into your project automatically.
-- **C# model types.** Records for structures, discriminated unions for unions,
-  string- and int-enum types, and runtime `Document` values for open content —
-  all annotated with Smithy shape metadata so they round-trip through the
-  serializers.
-- **Typed protocol-aware clients.** Generated `I{Service}Client` interface and
-  implementation for `alloy#simpleRestJson`, `aws.protocols#restJson1`,
-  `aws.protocols#restXml`, and `smithy.protocols#rpcv2Cbor`, including HTTP
-  binding (path, query, headers, payload), error deserialization, and a
-  middleware pipeline for retries and customization.
-- **ASP.NET Core server surfaces.** For `alloy#simpleRestJson` services,
-  generated endpoint mapping (`MapXxxHttp`) plus per-operation and aggregate
-  handler interfaces you implement against typed inputs and outputs.
-- **JSON, XML, and CBOR payload codecs.** `NSmithy.Codecs.{Json,Xml,Cbor}`
-  serialize and deserialize payloads using Smithy member metadata
-  (`@jsonName`, `@xmlName`, sparse maps, default values, timestamp formats,
-  etc.).
-- **Conformance against official protocol tests.** Generated clients are
-  exercised against the upstream Smithy/AWS and alloy `httpRequestTests` /
-  `httpResponseTests` fixtures (see [tests/Conformance](https://github.com/thomaslaich/smithy-dotnet/tree/main/tests/Conformance)),
-  so coverage is measured against the same suite that other Smithy
-  implementations use.
+> **Minimal Example:**
+> See a minimal NSmithy + pixi setup here: [smithy-dotnet-minimal-pixi](https://github.com/thomaslaich/smithy-dotnet-minimal-pixi)
 
-Additional protocols, broader protocol compliance, and NativeAOT serializer
-generation are planned. See the
-[roadmap](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/planning/roadmap.md)
-for details.
 
-Generated-client conformance against the official Smithy/AWS and
-[alloy](https://github.com/disneystreaming/alloy) protocol test suites is
-exercised per protocol under [tests/Conformance](https://github.com/thomaslaich/smithy-dotnet/tree/main/tests/Conformance).
-Each suite emits its current pass rate as part of `dotnet test` output.
+## Quick Start
+
+The fastest way to try NSmithy is with the [smithy-dotnet-minimal-pixi](https://github.com/thomaslaich/smithy-dotnet-minimal-pixi) example. It shows a minimal project using NSmithy and [pixi](https://pixi.sh) for environment management.
+
+---
+
+
+### Or, set up manually:
+
+1. **Create a new .NET project:**
+   ```bash
+   dotnet new console -n MySmithyApp
+   cd MySmithyApp
+   ```
+
+2. **Add NSmithy dependencies:**
+   Edit your `.csproj` to include:
+   ```xml
+   <ItemGroup>
+     <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.4" />
+     <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.4" />
+     <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.4" />
+     <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.4" />
+     <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.4" PrivateAssets="all" />
+   </ItemGroup>
+   ```
+
+
+3. **Add a Smithy model and smithy-build.json:**
+   - Create a `model/hello.smithy` file (see example below).
+   - Create a `smithy-build.json` at the project root:
+     ```json
+     {
+       "version": "1.0",
+       "sources": [
+         "model"
+       ],
+       "maven": {
+         "dependencies": [
+           "com.disneystreaming.alloy:alloy-core:0.3.38",
+           "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.4"
+         ]
+       },
+       "plugins": {
+         "csharp-codegen": {
+           "service": "example.hello#HelloService",
+           "baseNamespace": ""
+         }
+       }
+     }
+     ```
+
+4. **Build the project:**
+   ```bash
+   dotnet build
+   ```
+
+5. **Use the generated client/server code in your app.**
+
+See the minimal example for a working reference: [smithy-dotnet-minimal-pixi](https://github.com/thomaslaich/smithy-dotnet-minimal-pixi)
+
+
+## Features
+
+- **Code generation from MSBuild**: Generates C# types, clients, and ASP.NET Core server scaffolding from Smithy models during `dotnet build`.
+- **Typed protocol-aware clients**: Supports `alloy#simpleRestJson`, `aws.protocols#restJson1`, `aws.protocols#restXml`, and `smithy.protocols#rpcv2Cbor`.
+- **ASP.NET Core server surfaces**: Implements Smithy services as ASP.NET Core endpoints with minimal boilerplate.
+- **Conformance**: Protocols are tested against the official Smithy/AWS and alloy protocol test suites.
+
+
+See the [roadmap](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/planning/roadmap.md) for planned features.
+
+
 
 ## Install
 
@@ -66,7 +100,8 @@ For generated clients, add:
 </ItemGroup>
 ```
 
-For generated ASP.NET Core `simpleRestJson` servers, also add:
+
+For ASP.NET Core `simpleRestJson` servers, also add:
 
 ```xml
 <ItemGroup>
@@ -76,17 +111,29 @@ For generated ASP.NET Core `simpleRestJson` servers, also add:
 </ItemGroup>
 ```
 
+
 ## Add a Model
 
-Add a `smithy-build.json` at the project root and a model file. Minimal
-`alloy#simpleRestJson` example:
+
+Add a `smithy-build.json` at the project root and a model file. Example:
 
 ```json
 {
   "version": "1.0",
-  "sources": ["model"],
+  "sources": [
+    "model"
+  ],
   "maven": {
-    "dependencies": ["com.disneystreaming.alloy:alloy-core:0.3.38"]
+    "dependencies": [
+      "com.disneystreaming.alloy:alloy-core:0.3.38",
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.4"
+    ]
+  },
+  "plugins": {
+    "csharp-codegen": {
+      "service": "example.hello#HelloService",
+      "baseNamespace": ""
+    }
   }
 }
 ```
@@ -119,8 +166,8 @@ operation SayHello {
 }
 ```
 
-Set `SmithyGeneratedNamespaces` to limit generated C# to your service namespace
-when build dependencies include trait models that should not become C# types:
+
+Set `SmithyGeneratedNamespaces` to limit generated C# to your service namespace if needed:
 
 ```xml
 <PropertyGroup>
@@ -128,9 +175,11 @@ when build dependencies include trait models that should not become C# types:
 </PropertyGroup>
 ```
 
+
 Build the project. Generated files appear under `obj/<configuration>/<tfm>/Smithy/`.
 
-## Generated Client
+
+## Example Usage
 
 ```csharp
 using Example.Hello;
@@ -145,7 +194,8 @@ var output = await client.SayHelloAsync(new SayHelloInput("world"));
 Console.WriteLine(output.Message);
 ```
 
-## Generated Server
+
+### Generated Server
 
 For smaller services, implement the aggregate service handler interface:
 
@@ -173,6 +223,9 @@ For larger services, register operation handlers individually:
 ```csharp
 builder.Services.AddSingleton<ISayHelloHandler, SayHelloHandler>();
 ```
+
+
+---
 
 ## Why Smithy?
 
@@ -209,16 +262,11 @@ In practice, that means contract-first, protocol-aware generation for .NET with
 generated C# types, typed clients, and ASP.NET Core server surfaces.
 
 
-## Smithy CLI
 
-`NSmithy.MSBuild` invokes the Smithy CLI during `dotnet build`. For some .NET
-teams, the Java requirement around the Smithy toolchain is an adoption blocker,
-especially when the rest of the stack is otherwise entirely .NET.
+## Smithy CLI & Environment
 
-The easiest way to contain that is to use a project-local environment that
-installs both the Smithy CLI and Java together instead of relying on machine-
-level setup. The recommended option here is
-[pixi](https://pixi.sh) with `smithy-cli` from conda-forge:
+
+The easiest way to get started is with [pixi](https://pixi.sh) and the minimal example linked above. This sets up Smithy CLI, Java, and .NET in a project-local environment:
 
 ```bash
 pixi init
@@ -227,8 +275,8 @@ pixi shell
 dotnet build
 ```
 
-When the environment is active, `smithy` is resolved from `PATH`. Set
-`SmithyCliPath` to force a specific executable when needed.
+When the environment is active, `smithy` is resolved from `PATH`. Set `SmithyCliPath` to force a specific executable if needed.
+
 
 
 ## Documentation
