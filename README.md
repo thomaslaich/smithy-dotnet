@@ -1,9 +1,11 @@
-_Work in Progress: NSmithy is preview-stage software. Public APIs, generated
-code shape, package boundaries, and code generation behavior may change. The
-current C# code generator is implemented in this repository so the runtime,
-generation model, and generated surface can evolve together; once the design is
-more stable, the code generation layer will likely move to a Java-based Smithy
-plugin to align more closely with the broader Smithy ecosystem._
+_Work in Progress: NSmithy is a proof of concept. The current implementation
+demonstrates that Smithy models can drive idiomatic C# clients and ASP.NET Core
+servers end-to-end, but the protocol implementations are not yet on par with
+the [Smithy reference implementations](https://github.com/smithy-lang/smithy).
+A near-term focus is closing that gap — aligning serialization, HTTP binding,
+and error handling behavior with the reference implementations and the
+official protocol test suites — before the public API surface, package
+boundaries, and generated code shape are stabilized._
 
 # NSmithy
 
