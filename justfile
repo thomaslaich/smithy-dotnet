@@ -22,9 +22,10 @@ codegen:
 # Publish the codegen JAR to Maven Central via the Sonatype Central Portal.
 # Used by the release workflow; expects MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD
 # and ORG_GRADLE_PROJECT_signingInMemoryKey / ORG_GRADLE_PROJECT_signingInMemoryKeyPassword
+
 # to be set in the environment.
 publish-codegen VERSION:
-    cd codegen && gradle -Pversion={{VERSION}} :codegen-csharp:publishAndReleaseToMavenCentral
+    cd codegen && gradle -Pversion={{ VERSION }} :codegen-csharp:publishAndReleaseToMavenCentral
 
 build: codegen restore
     dotnet build NSmithy.slnx --configuration Release --no-restore --disable-build-servers ${VERSION:+-p:Version=$VERSION}
