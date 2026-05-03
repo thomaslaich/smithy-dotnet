@@ -1,15 +1,16 @@
-using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.AspNetCore.Http;
 using NSmithy.Codecs.Json;
+using NSmithy.Core.Serde;
+using NSmithy.Protocols.RestJson;
 
 namespace NSmithy.Server.AspNetCore;
 
 public static class SmithyAspNetCoreProtocol
 {
     private const string JsonRequestBodyItemKey = "NSmithy.Server.AspNetCore.JsonRequestBody";
-    private static readonly SmithyJsonPayloadCodec JsonCodec = SmithyJsonPayloadCodec.Default;
+    private static readonly SmithyJsonCodec JsonCodec = SmithyJsonCodec.Default;
 
     public static T GetRouteValue<T>(HttpContext httpContext, string name)
     {
@@ -17,7 +18,7 @@ public static class SmithyAspNetCoreProtocol
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         return httpContext.Request.RouteValues.TryGetValue(name, out var value) && value is not null
-            ? ConvertHttpValue<T>(value.ToString())!
+            ? RestJsonProtocol.ConvertHttpValue<T>(value.ToString())!
             : throw new InvalidOperationException($"Missing route value '{name}'.");
     }
 
@@ -28,7 +29,7 @@ public static class SmithyAspNetCoreProtocol
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         return httpContext.Request.Query.TryGetValue(name, out var values)
-            ? ConvertHttpValue<T>(values.FirstOrDefault())
+            ? RestJsonProtocol.ConvertHttpValue<T>(values.FirstOrDefault())
             : default;
     }
 
@@ -42,7 +43,7 @@ public static class SmithyAspNetCoreProtocol
             throw new InvalidOperationException($"Missing query value '{name}'.");
         }
 
-        return ConvertHttpValue<T>(values.FirstOrDefault())!;
+        return RestJsonProtocol.ConvertHttpValue<T>(values.FirstOrDefault())!;
     }
 
     [return: MaybeNull]
@@ -66,7 +67,7 @@ public static class SmithyAspNetCoreProtocol
             }
         }
 
-        return CreateStringMap<T>(values);
+        return RestJsonProtocol.CreateStringMap<T>(values);
     }
 
     [return: MaybeNull]
@@ -76,7 +77,7 @@ public static class SmithyAspNetCoreProtocol
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         return httpContext.Request.Headers.TryGetValue(name, out var values)
-            ? ConvertHttpValue<T>(values.FirstOrDefault())
+            ? RestJsonProtocol.ConvertHttpValue<T>(values.FirstOrDefault())
             : default;
     }
 
@@ -90,7 +91,7 @@ public static class SmithyAspNetCoreProtocol
             throw new InvalidOperationException($"Missing header value '{name}'.");
         }
 
-        return ConvertHttpValue<T>(values.FirstOrDefault())!;
+        return RestJsonProtocol.ConvertHttpValue<T>(values.FirstOrDefault())!;
     }
 
     [return: MaybeNull]
@@ -111,13 +112,14 @@ public static class SmithyAspNetCoreProtocol
             }
         }
 
-        return CreateStringMap<T>(values);
+        return RestJsonProtocol.CreateStringMap<T>(values);
     }
 
     public static async Task<T> ReadJsonRequestBodyAsync<T>(
         HttpContext httpContext,
         CancellationToken cancellationToken = default
     )
+        where T : IDeserializableShape<T>
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
@@ -126,10 +128,25 @@ public static class SmithyAspNetCoreProtocol
         return content.Length == 0 ? default! : JsonCodec.Deserialize<T>(content);
     }
 
+    public static async Task<T> ReadJsonRequestBodyAsync<T>(
+        HttpContext httpContext,
+        Func<IShapeDeserializer, T> read,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(read);
+
+        var content = await ReadJsonRequestBodyContentAsync(httpContext, cancellationToken)
+            .ConfigureAwait(false);
+        return content.Length == 0 ? default! : JsonCodec.Deserialize(content, read);
+    }
+
     public static async Task<T> ReadRequiredJsonRequestBodyAsync<T>(
         HttpContext httpContext,
         CancellationToken cancellationToken = default
     )
+        where T : IDeserializableShape<T>
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
@@ -143,16 +160,52 @@ public static class SmithyAspNetCoreProtocol
         return JsonCodec.Deserialize<T>(content);
     }
 
+    public static async Task<T> ReadRequiredJsonRequestBodyAsync<T>(
+        HttpContext httpContext,
+        Func<IShapeDeserializer, T> read,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(read);
+
+        var content = await ReadJsonRequestBodyContentAsync(httpContext, cancellationToken)
+            .ConfigureAwait(false);
+        if (content.Length == 0)
+        {
+            throw new InvalidOperationException("Missing JSON request body.");
+        }
+
+        return JsonCodec.Deserialize(content, read);
+    }
+
     public static async Task WriteJsonResponseAsync<T>(
         HttpContext httpContext,
         T value,
         CancellationToken cancellationToken = default
     )
+        where T : ISerializableShape
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
         httpContext.Response.ContentType = "application/json";
         var content = JsonCodec.Serialize(value);
+        await httpContext
+            .Response.Body.WriteAsync(content, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public static async Task WriteJsonResponseAsync(
+        HttpContext httpContext,
+        Action<IShapeSerializer> write,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(write);
+
+        httpContext.Response.ContentType = "application/json";
+        var content = JsonCodec.Serialize(write);
         await httpContext
             .Response.Body.WriteAsync(content, cancellationToken)
             .ConfigureAwait(false);
@@ -168,7 +221,7 @@ public static class SmithyAspNetCoreProtocol
             return;
         }
 
-        httpContext.Response.Headers[name] = FormatHttpValue(value);
+        httpContext.Response.Headers[name] = RestJsonProtocol.FormatHttpValue(value);
     }
 
     public static void AddPrefixedResponseHeaders(
@@ -185,14 +238,16 @@ public static class SmithyAspNetCoreProtocol
             return;
         }
 
-        foreach (var item in EnumerateStringMap(value))
+        foreach (var item in RestJsonProtocol.EnumerateStringMap(value))
         {
             if (item.Value is null)
             {
                 continue;
             }
 
-            httpContext.Response.Headers[$"{prefix}{item.Key}"] = FormatHttpValue(item.Value);
+            httpContext.Response.Headers[$"{prefix}{item.Key}"] = RestJsonProtocol.FormatHttpValue(
+                item.Value
+            );
         }
     }
 
@@ -202,113 +257,6 @@ public static class SmithyAspNetCoreProtocol
         ArgumentNullException.ThrowIfNull(value);
 
         httpContext.Response.StatusCode = Convert.ToInt32(value, CultureInfo.InvariantCulture);
-    }
-
-    public static string FormatHttpValue(object value)
-    {
-        ArgumentNullException.ThrowIfNull(value);
-
-        return value switch
-        {
-            DateTimeOffset timestamp => timestamp
-                .ToUniversalTime()
-                .ToString("O", CultureInfo.InvariantCulture),
-            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture)
-                ?? string.Empty,
-            _ => value.ToString() ?? string.Empty,
-        };
-    }
-
-    [return: MaybeNull]
-    public static T ConvertHttpValue<T>(string? value)
-    {
-        if (value is null)
-        {
-            return default;
-        }
-
-        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-        if (targetType == typeof(string))
-        {
-            return (T)(object)value;
-        }
-
-        if (targetType.IsEnum)
-        {
-            return (T)Enum.Parse(targetType, value, ignoreCase: false);
-        }
-
-        var constructor = targetType.GetConstructor([typeof(string)]);
-        if (constructor is not null)
-        {
-            return (T)constructor.Invoke([value]);
-        }
-
-        return (T)Convert.ChangeType(value, targetType, CultureInfo.InvariantCulture);
-    }
-
-    [return: MaybeNull]
-    private static T CreateStringMap<T>(Dictionary<string, string> values)
-    {
-        if (values.Count == 0)
-        {
-            return default;
-        }
-
-        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
-        if (targetType.IsAssignableFrom(values.GetType()))
-        {
-            return (T)(object)values;
-        }
-
-        var constructor = targetType.GetConstructor([typeof(IReadOnlyDictionary<string, string>)]);
-        constructor ??= targetType.GetConstructor([typeof(Dictionary<string, string>)]);
-        return constructor is not null
-            ? (T)constructor.Invoke([values])
-            : throw new InvalidOperationException($"Cannot create string map type '{targetType}'.");
-    }
-
-    private static IEnumerable<KeyValuePair<string, object?>> EnumerateStringMap(object value)
-    {
-        var values =
-            value is IDictionary ? value : value.GetType().GetProperty("Values")?.GetValue(value);
-        if (values is not IEnumerable enumerable)
-        {
-            yield break;
-        }
-
-        foreach (var item in enumerable)
-        {
-            if (item is null)
-            {
-                continue;
-            }
-
-            if (item is DictionaryEntry dictionaryEntry)
-            {
-                if (dictionaryEntry.Key is not null)
-                {
-                    yield return new KeyValuePair<string, object?>(
-                        dictionaryEntry.Key.ToString() ?? string.Empty,
-                        dictionaryEntry.Value
-                    );
-                }
-
-                continue;
-            }
-
-            var itemType = item.GetType();
-            var key = itemType.GetProperty("Key")?.GetValue(item)?.ToString();
-            if (key is null)
-            {
-                continue;
-            }
-
-            yield return new KeyValuePair<string, object?>(
-                key,
-                itemType.GetProperty("Value")?.GetValue(item)
-            );
-        }
     }
 
     private static async Task<byte[]> ReadJsonRequestBodyContentAsync(

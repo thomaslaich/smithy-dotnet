@@ -27,7 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../packages/NSmithy.Client/NSmithy.Client.csproj" />
-    <ProjectReference Include="../../../packages/NSmithy.Client.RestXml/NSmithy.Client.RestXml.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Protocols.RestXml/NSmithy.Protocols.RestXml.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Core/NSmithy.Core.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Http/NSmithy.Http.csproj" />

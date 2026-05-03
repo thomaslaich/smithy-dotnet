@@ -1,8 +1,17 @@
-_Work in Progress: NSmithy is a proof of concept. The current implementation demonstrates that Smithy models can drive idiomatic C# clients and ASP.NET Core servers end-to-end, but the protocol implementations are not yet on par with the [Smithy reference implementations](https://github.com/smithy-lang/smithy). A near-term focus is closing that gap — aligning serialization, HTTP binding, and error handling behavior with the reference implementations and the official protocol test suites — before the public API surface, package boundaries, and generated code shape are stabilized._
+_Work in Progress: NSmithy is a proof of concept. The current implementation
+demonstrates that Smithy models can drive idiomatic C# clients and ASP.NET Core
+servers end-to-end, but the protocol implementations are not yet on par with
+the [Smithy reference implementations](https://github.com/smithy-lang/smithy).
+A near-term focus is closing that gap before the public API surface, package
+boundaries, and generated code shape are stabilized._
 
 # NSmithy
 
-**NSmithy** is a .NET toolkit that turns a [Smithy](https://smithy.io) model into idiomatic C# at build time. It generates model types, typed clients, and ASP.NET Core server scaffolding from a single contract, and integrates into your msbuild workflow seamlessly.
+NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io)
+model into idiomatic C# at build time. From a single contract you get the same
+model types, typed clients, and server scaffolding that any other Smithy
+language would produce. NSmithy aims to fully integrate into your MSBuild workflow,
+in order to make code generation as seemless as possible.
 
 ## Features
 

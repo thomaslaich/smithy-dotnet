@@ -14,7 +14,6 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.AttributeEmitter;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
@@ -30,6 +29,7 @@ import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
+import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.model.traits.HttpHeaderTrait;
@@ -66,6 +66,7 @@ public final class ServerGenerator implements Runnable {
 
     writer.addImport(RuntimeTypes.NSMITHY_CORE);
     writer.addImport(RuntimeTypes.NSMITHY_SERVER);
+    writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     writer.addImport(RuntimeTypes.MS_EXT_DI);
     if (emitsAspNet) {
       writer.addImport(RuntimeTypes.NSMITHY_SERVER_ASPNETCORE);
@@ -597,9 +598,7 @@ public final class ServerGenerator implements Runnable {
       return required ? expr + "!" : expr;
     }
     if (ShapeSupport.isHttpPayload(m)) {
-      return "await SmithyAspNetCoreProtocol.ReadJsonRequestBodyAsync<"
-          + memberType
-          + ">(httpContext, cancellationToken).ConfigureAwait(false)";
+      return deserializePayloadExpression(m, required);
     }
     if (bodyVar != null) {
       return bodyVar + "." + CSharpNaming.propertyName(m.getMemberName());
@@ -650,9 +649,10 @@ public final class ServerGenerator implements Runnable {
                   .findFirst();
           if (payload.isPresent()) {
             writer.write(
-                "await SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, output.$L,"
-                    + " cancellationToken).ConfigureAwait(false);",
-                CSharpNaming.propertyName(payload.get().getMemberName()));
+                "await $L.ConfigureAwait(false);",
+                serializePayloadResponseExpression(
+                    payload.get(),
+                    "output." + CSharpNaming.propertyName(payload.get().getMemberName())));
             return;
           }
           List<MemberShape> bodyMembers =
@@ -712,12 +712,17 @@ public final class ServerGenerator implements Runnable {
   private void writeBodyProjectionType(
       SymbolProvider sp, StructureShape shape, List<MemberShape> bodyMembers) {
     String typeName = ClientGenerator.bodyProjectionName(shape);
-    AttributeEmitter.writeShapeAttributes(writer, shape);
-    writer.write("private sealed class $L", typeName);
+    writer.write(
+        "private sealed class $L : ISerializableStruct, IDeserializableShape<$L>",
+        typeName,
+        typeName);
     writer.openBlock(
         "{",
         "}",
         () -> {
+          writer.write("");
+          SchemaGenerator.writeStructureSchema(writer, context, shape, bodyMembers);
+          writer.write("Schema ISerializableShape.Schema => Schema;");
           writer.write("");
           writer.openBlock(
               "public $L(",
@@ -747,13 +752,230 @@ public final class ServerGenerator implements Runnable {
           writer.write("");
           for (MemberShape m : bodyMembers) {
             String type = ShapeSupport.memberTypeExpr(sp, m, ShapeSupport.isNullable(m));
-            AttributeEmitter.writeMemberAttributes(
-                writer, m, ShapeSupport.isSparseTarget(context.model(), m));
             writer.write(
                 "public $L $L { get; }", type, CSharpNaming.propertyName(m.getMemberName()));
             writer.write("");
           }
+          writer.write("public void Serialize(IShapeSerializer serializer)");
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
+                writer.write("serializer.WriteStruct(Schema, this);");
+              });
+          writer.write("");
+          writer.write("public void SerializeMembers(IShapeSerializer serializer)");
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                for (MemberShape m : bodyMembers) {
+                  String prop = CSharpNaming.propertyName(m.getMemberName());
+                  String schema = SchemaGenerator.memberSchemaFieldName(m);
+                  Shape target = context.model().expectShape(m.getTarget());
+                  if (ShapeSupport.isNullable(m)) {
+                    String local = CSharpNaming.parameterName(m.getMemberName());
+                    writer.write("if ($L is { } $L)", prop, local);
+                    writer.openBlock(
+                        "{",
+                        "}",
+                        () ->
+                            writer.write(writeValueStatement(target, "serializer", schema, local)));
+                  } else {
+                    writer.write(writeValueStatement(target, "serializer", schema, prop));
+                  }
+                }
+              });
+          writer.write("");
+          writer.write("public static $L Deserialize(IShapeDeserializer deserializer)", typeName);
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                writer.write("System.ArgumentNullException.ThrowIfNull(deserializer);");
+                for (MemberShape m : bodyMembers) {
+                  writer.write(
+                      "$L $L = null;",
+                      ShapeSupport.memberTypeExpr(sp, m, true),
+                      CSharpNaming.parameterName(m.getMemberName()));
+                }
+                writer.write("");
+                writer.write(
+                    "deserializer.ReadStruct<object?>(Schema, null, new"
+                        + " StructMemberConsumer<object?>(");
+                writer.write("Member: (_, field, reader) =>");
+                writer.openBlock(
+                    "{",
+                    "}",
+                    () -> {
+                      for (int i = 0; i < bodyMembers.size(); i++) {
+                        MemberShape m = bodyMembers.get(i);
+                        String local = CSharpNaming.parameterName(m.getMemberName());
+                        String schema = SchemaGenerator.memberSchemaFieldName(m);
+                        Shape target = context.model().expectShape(m.getTarget());
+                        String keyword = i == 0 ? "if" : "else if";
+                        writer.write(
+                            keyword + " (field.MemberName == $L)",
+                            CSharpNaming.formatString(m.getMemberName()));
+                        writer.openBlock(
+                            "{",
+                            "}",
+                            () -> {
+                              if (ShapeSupport.isNullable(m)) {
+                                writer.write("if (reader.IsNull())");
+                                writer.openBlock(
+                                    "{", "}", () -> writer.write("reader.ReadNull();"));
+                                writer.write("else");
+                                writer.openBlock(
+                                    "{",
+                                    "}",
+                                    () ->
+                                        writer.write(
+                                            local
+                                                + " = "
+                                                + readValueExpression(target, "reader", schema)
+                                                + ";"));
+                              } else {
+                                writer.write(
+                                    local
+                                        + " = "
+                                        + readValueExpression(target, "reader", schema)
+                                        + ";");
+                              }
+                            });
+                      }
+                    });
+                writer.write("));");
+                writer.write("");
+                writer.write(
+                    "return new $L($L);",
+                    typeName,
+                    bodyProjectionConstructorArguments(bodyMembers));
+              });
         });
+  }
+
+  private String serializePayloadValue(MemberShape member, String serializerVar, String valueExpr) {
+    Shape target = context.model().expectShape(member.getTarget());
+    return writeValueStatement(
+        target, serializerVar, SchemaGenerator.memberSchemaExpr(context, member), valueExpr);
+  }
+
+  private String deserializePayloadValue(MemberShape member, String deserializerVar) {
+    Shape target = context.model().expectShape(member.getTarget());
+    return readValueExpression(
+        target, deserializerVar, SchemaGenerator.memberSchemaExpr(context, member));
+  }
+
+  private String deserializePayloadExpression(MemberShape member, boolean required) {
+    Shape target = context.model().expectShape(member.getTarget());
+    if (ShapeSupport.usesShapeSerde(target)) {
+      String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target));
+      return "await SmithyAspNetCoreProtocol."
+          + (required ? "ReadRequiredJsonRequestBodyAsync<" : "ReadJsonRequestBodyAsync<")
+          + type
+          + ">(httpContext, cancellationToken).ConfigureAwait(false)";
+    }
+    return "await SmithyAspNetCoreProtocol."
+        + (required ? "ReadRequiredJsonRequestBodyAsync(" : "ReadJsonRequestBodyAsync(")
+        + "httpContext, reader => "
+        + deserializePayloadValue(member, "reader")
+        + ", cancellationToken).ConfigureAwait(false)";
+  }
+
+  private String serializePayloadResponseExpression(MemberShape member, String valueExpr) {
+    Shape target = context.model().expectShape(member.getTarget());
+    if (ShapeSupport.usesShapeSerde(target)) {
+      return "SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, "
+          + valueExpr
+          + ", cancellationToken)";
+    }
+    return "SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, serializer => "
+        + stripTrailingSemicolon(serializePayloadValue(member, "serializer", valueExpr))
+        + ", cancellationToken)";
+  }
+
+  private String bodyProjectionConstructorArguments(List<MemberShape> bodyMembers) {
+    List<String> args = new java.util.ArrayList<>();
+    for (MemberShape m : bodyMembers) {
+      String local = CSharpNaming.parameterName(m.getMemberName());
+      if (ShapeSupport.isOptionalParameter(m)) {
+        args.add(local);
+      } else {
+        args.add(
+            local
+                + " ?? throw new System.InvalidOperationException("
+                + CSharpNaming.formatString("Missing required member '" + m.getMemberName() + "'.")
+                + ")");
+      }
+    }
+    return String.join(", ", args);
+  }
+
+  private String writeValueStatement(
+      Shape target, String serializerVar, String schemaVar, String valueExpr) {
+    return switch (target.getType()) {
+      case BOOLEAN -> serializerVar + ".WriteBoolean(" + schemaVar + ", " + valueExpr + ");";
+      case BYTE -> serializerVar + ".WriteByte(" + schemaVar + ", " + valueExpr + ");";
+      case SHORT -> serializerVar + ".WriteShort(" + schemaVar + ", " + valueExpr + ");";
+      case INTEGER -> serializerVar + ".WriteInteger(" + schemaVar + ", " + valueExpr + ");";
+      case LONG -> serializerVar + ".WriteLong(" + schemaVar + ", " + valueExpr + ");";
+      case FLOAT -> serializerVar + ".WriteFloat(" + schemaVar + ", " + valueExpr + ");";
+      case DOUBLE -> serializerVar + ".WriteDouble(" + schemaVar + ", " + valueExpr + ");";
+      case BIG_INTEGER -> serializerVar + ".WriteBigInteger(" + schemaVar + ", " + valueExpr + ");";
+      case BIG_DECIMAL -> serializerVar + ".WriteBigDecimal(" + schemaVar + ", " + valueExpr + ");";
+      case TIMESTAMP -> serializerVar + ".WriteTimestamp(" + schemaVar + ", " + valueExpr + ");";
+      case STRING -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ".Value);";
+      case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ");";
+      case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ");";
+      case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";
+      case STRUCTURE -> serializerVar + ".WriteStruct(" + schemaVar + ", " + valueExpr + ");";
+      case UNION, LIST, SET, MAP ->
+          valueExpr + ".Serialize(" + serializerVar + ", " + schemaVar + ");";
+      default ->
+          throw new IllegalArgumentException(
+              "Unsupported body projection member shape: " + target.getId());
+    };
+  }
+
+  private static String stripTrailingSemicolon(String statement) {
+    return statement.endsWith(";") ? statement.substring(0, statement.length() - 1) : statement;
+  }
+
+  private String readValueExpression(Shape target, String deserializerVar, String schemaVar) {
+    return switch (target.getType()) {
+      case BOOLEAN -> deserializerVar + ".ReadBoolean(" + schemaVar + ")";
+      case BYTE -> deserializerVar + ".ReadByte(" + schemaVar + ")";
+      case SHORT -> deserializerVar + ".ReadShort(" + schemaVar + ")";
+      case INTEGER -> deserializerVar + ".ReadInteger(" + schemaVar + ")";
+      case LONG -> deserializerVar + ".ReadLong(" + schemaVar + ")";
+      case FLOAT -> deserializerVar + ".ReadFloat(" + schemaVar + ")";
+      case DOUBLE -> deserializerVar + ".ReadDouble(" + schemaVar + ")";
+      case BIG_INTEGER -> deserializerVar + ".ReadBigInteger(" + schemaVar + ")";
+      case BIG_DECIMAL -> deserializerVar + ".ReadBigDecimal(" + schemaVar + ")";
+      case TIMESTAMP -> deserializerVar + ".ReadTimestamp(" + schemaVar + ")";
+      case STRING -> deserializerVar + ".ReadString(" + schemaVar + ")";
+      case BLOB -> deserializerVar + ".ReadBlob(" + schemaVar + ")";
+      case DOCUMENT -> deserializerVar + ".ReadDocument(" + schemaVar + ")";
+      case ENUM, STRUCTURE, UNION, LIST, SET, MAP ->
+          CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target))
+              + ".Deserialize("
+              + deserializerVar
+              + ")";
+      case INT_ENUM ->
+          "("
+              + CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target))
+              + ")"
+              + deserializerVar
+              + ".ReadInteger("
+              + schemaVar
+              + ")";
+      default ->
+          throw new IllegalArgumentException(
+              "Unsupported body projection member shape: " + target.getId());
+    };
   }
 
   // ---------------- helpers ----------------

@@ -1,5 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Http;
+using NSmithy.Core;
+using NSmithy.Core.Serde;
 using NSmithy.Server.AspNetCore;
 
 namespace NSmithy.Tests.Server;
@@ -37,7 +39,10 @@ public sealed class SmithyAspNetCoreProtocolTests
         httpContext.Request.Body = new MemoryStream([]);
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            SmithyAspNetCoreProtocol.ReadRequiredJsonRequestBodyAsync<string>(httpContext)
+            SmithyAspNetCoreProtocol.ReadRequiredJsonRequestBodyAsync(
+                httpContext,
+                static reader => reader.ReadString(PreludeSchemas.String)
+            )
         );
 
         Assert.Equal("Missing JSON request body.", error.Message);
