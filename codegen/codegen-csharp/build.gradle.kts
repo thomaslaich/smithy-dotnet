@@ -36,7 +36,7 @@ mavenPublishing {
 
     configure(JavaLibrary(javadocJar = JavadocJar.Empty(), sourcesJar = true))
 
-    coordinates(group.toString(), "csharp", version.toString())
+    coordinates(group.toString(), "codegen-csharp", version.toString())
 
     pom {
         name.set("NSmithy csharp-codegen Smithy plugin")

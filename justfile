@@ -15,16 +15,16 @@ check-format:
 # Build & publish the Smithy → C# codegen JAR to the local Maven cache so that
 # `smithy build` (invoked from each .csproj via NSmithy.MSBuild) can resolve
 
-# `io.github.thomaslaich.nsmithy:csharp:0.1.0-SNAPSHOT` from ~/.m2.
+# `io.github.thomaslaich.nsmithy:codegen-csharp:0.1.0-SNAPSHOT` from ~/.m2.
 codegen:
-    cd codegen && gradle :csharp:publishToMavenLocal
+    cd codegen && gradle :codegen-csharp:publishToMavenLocal
 
 # Publish the codegen JAR to Maven Central via the Sonatype Central Portal.
 # Used by the release workflow; expects MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD
 # and ORG_GRADLE_PROJECT_signingInMemoryKey / ORG_GRADLE_PROJECT_signingInMemoryKeyPassword
 # to be set in the environment.
 publish-codegen VERSION:
-    cd codegen && gradle -Pversion={{VERSION}} :csharp:publishAndReleaseToMavenCentral
+    cd codegen && gradle -Pversion={{VERSION}} :codegen-csharp:publishAndReleaseToMavenCentral
 
 build: codegen restore
     dotnet build NSmithy.slnx --configuration Release --no-restore --disable-build-servers ${VERSION:+-p:Version=$VERSION}
