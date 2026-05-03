@@ -3,13 +3,14 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.AspNetCore.Http;
 using NSmithy.Codecs.Json;
+using NSmithy.Core.Serde;
 
 namespace NSmithy.Server.AspNetCore;
 
 public static class SmithyAspNetCoreProtocol
 {
     private const string JsonRequestBodyItemKey = "NSmithy.Server.AspNetCore.JsonRequestBody";
-    private static readonly SmithyJsonPayloadCodec JsonCodec = SmithyJsonPayloadCodec.Default;
+    private static readonly SmithyJsonCodec JsonCodec = SmithyJsonCodec.Default;
 
     public static T GetRouteValue<T>(HttpContext httpContext, string name)
     {
@@ -118,6 +119,7 @@ public static class SmithyAspNetCoreProtocol
         HttpContext httpContext,
         CancellationToken cancellationToken = default
     )
+        where T : IDeserializableShape<T>
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
@@ -126,10 +128,25 @@ public static class SmithyAspNetCoreProtocol
         return content.Length == 0 ? default! : JsonCodec.Deserialize<T>(content);
     }
 
+    public static async Task<T> ReadJsonRequestBodyAsync<T>(
+        HttpContext httpContext,
+        Func<IShapeDeserializer, T> read,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(read);
+
+        var content = await ReadJsonRequestBodyContentAsync(httpContext, cancellationToken)
+            .ConfigureAwait(false);
+        return content.Length == 0 ? default! : JsonCodec.Deserialize(content, read);
+    }
+
     public static async Task<T> ReadRequiredJsonRequestBodyAsync<T>(
         HttpContext httpContext,
         CancellationToken cancellationToken = default
     )
+        where T : IDeserializableShape<T>
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
@@ -143,16 +160,52 @@ public static class SmithyAspNetCoreProtocol
         return JsonCodec.Deserialize<T>(content);
     }
 
+    public static async Task<T> ReadRequiredJsonRequestBodyAsync<T>(
+        HttpContext httpContext,
+        Func<IShapeDeserializer, T> read,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(read);
+
+        var content = await ReadJsonRequestBodyContentAsync(httpContext, cancellationToken)
+            .ConfigureAwait(false);
+        if (content.Length == 0)
+        {
+            throw new InvalidOperationException("Missing JSON request body.");
+        }
+
+        return JsonCodec.Deserialize(content, read);
+    }
+
     public static async Task WriteJsonResponseAsync<T>(
         HttpContext httpContext,
         T value,
         CancellationToken cancellationToken = default
     )
+        where T : ISerializableShape
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
         httpContext.Response.ContentType = "application/json";
         var content = JsonCodec.Serialize(value);
+        await httpContext
+            .Response.Body.WriteAsync(content, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public static async Task WriteJsonResponseAsync(
+        HttpContext httpContext,
+        Action<IShapeSerializer> write,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(write);
+
+        httpContext.Response.ContentType = "application/json";
+        var content = JsonCodec.Serialize(write);
         await httpContext
             .Response.Body.WriteAsync(content, cancellationToken)
             .ConfigureAwait(false);

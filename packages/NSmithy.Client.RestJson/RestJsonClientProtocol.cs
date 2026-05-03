@@ -81,12 +81,25 @@ public static class RestJsonClientProtocol
         return string.Join("/", FormatHttpValue(value).Split('/').Select(Uri.EscapeDataString));
     }
 
-    public static T DeserializeBody<T>(ISmithyPayloadCodec codec, byte[] content)
+    public static T DeserializeBody<T>(ISmithyCodec codec, byte[] content)
+        where T : IDeserializableShape<T>
     {
         return content.Length == 0 ? default! : codec.Deserialize<T>(content);
     }
 
-    public static T DeserializeRequiredBody<T>(ISmithyPayloadCodec codec, byte[] content)
+    public static T DeserializeBody<T>(
+        ISmithyCodec codec,
+        byte[] content,
+        Func<IShapeDeserializer, T> read
+    )
+    {
+        ArgumentNullException.ThrowIfNull(codec);
+        ArgumentNullException.ThrowIfNull(read);
+        return content.Length == 0 ? default! : codec.Deserialize(content, read);
+    }
+
+    public static T DeserializeRequiredBody<T>(ISmithyCodec codec, byte[] content)
+        where T : IDeserializableShape<T>
     {
         if (content.Length == 0)
         {
@@ -97,6 +110,22 @@ public static class RestJsonClientProtocol
         }
 
         return codec.Deserialize<T>(content);
+    }
+
+    public static T DeserializeRequiredBody<T>(
+        ISmithyCodec codec,
+        byte[] content,
+        Func<IShapeDeserializer, T> read
+    )
+    {
+        ArgumentNullException.ThrowIfNull(codec);
+        ArgumentNullException.ThrowIfNull(read);
+        if (content.Length == 0)
+        {
+            return Activator.CreateInstance<T>();
+        }
+
+        return codec.Deserialize(content, read);
     }
 
     public static T GetHeader<T>(

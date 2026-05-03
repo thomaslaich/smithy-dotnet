@@ -9,40 +9,59 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Xml;
 
-public sealed class SmithyXmlPayloadCodec : ISmithyPayloadCodec
+public static class XmlReflectionCodec
 {
     private const string XmlNameTraitId = "smithy.api#xmlName";
     private const string XmlFlattenedTraitId = "smithy.api#xmlFlattened";
     private const string XmlAttributeTraitId = "smithy.api#xmlAttribute";
     private const string TimestampFormatTraitId = "smithy.api#timestampFormat";
 
-    public static SmithyXmlPayloadCodec Default { get; } = new();
-
-    public string MediaType => "application/xml";
-
-    public byte[] Serialize<T>(T value)
+    public static byte[] Serialize<T>(T value)
     {
         return Encoding.UTF8.GetBytes(SerializeXml(value));
     }
 
-    public T Deserialize<T>(byte[] content)
+    internal static byte[] SerializeObject(object? value, Type declaredType)
+    {
+        return Encoding.UTF8.GetBytes(SerializeXmlObject(value, declaredType));
+    }
+
+    public static T Deserialize<T>(byte[] content)
     {
         ArgumentNullException.ThrowIfNull(content);
         return DeserializeXml<T>(Encoding.UTF8.GetString(content));
     }
 
+    internal static object? DeserializeObject(byte[] content, Type declaredType)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        return DeserializeXmlObject(Encoding.UTF8.GetString(content), declaredType);
+    }
+
     private static string SerializeXml<T>(T value)
     {
-        var element = CreateTopLevelElement(value, typeof(T));
-        return SerializeElement(element);
+        return SerializeXmlObject(value, typeof(T));
     }
 
     private static T DeserializeXml<T>(string xml)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(xml);
 
+        return (T)DeserializeXmlObject(xml, typeof(T))!;
+    }
+
+    private static string SerializeXmlObject(object? value, Type declaredType)
+    {
+        var element = CreateTopLevelElement(value, declaredType);
+        return SerializeElement(element);
+    }
+
+    private static object? DeserializeXmlObject(string xml, Type declaredType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(xml);
+
         var root = ParseRoot(xml);
-        return (T)ReadValue(root, typeof(T), null)!;
+        return ReadValue(root, declaredType, null);
     }
 
     private static string SerializeElement(XElement element)

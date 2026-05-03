@@ -6,12 +6,14 @@ namespace NSmithy.Client.RpcV2Cbor;
 
 public static class RpcV2CborClientProtocol
 {
-    public static T DeserializeBody<T>(ISmithyPayloadCodec codec, byte[] content)
+    public static T DeserializeBody<T>(ISmithyCodec codec, byte[] content)
+        where T : IDeserializableShape<T>
     {
         return content.Length == 0 ? default! : codec.Deserialize<T>(content);
     }
 
-    public static T DeserializeRequiredBody<T>(ISmithyPayloadCodec codec, byte[] content)
+    public static T DeserializeRequiredBody<T>(ISmithyCodec codec, byte[] content)
+        where T : IDeserializableShape<T>
     {
         if (content.Length == 0)
         {
@@ -39,6 +41,6 @@ public static class RpcV2CborClientProtocol
 
     public static string? DeserializeErrorType(byte[] content)
     {
-        return SmithyCborPayloadCodec.DeserializeMember<string?>(content, "__type");
+        return CborReflectionCodec.DeserializeMember<string?>(content, "__type");
     }
 }

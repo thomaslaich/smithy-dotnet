@@ -70,10 +70,15 @@ public final class ProtocolSupport {
   /** Static expression yielding the document codec singleton. */
   public static String codecExpression(Kind kind) {
     return switch (kind) {
-      case REST_JSON -> "SmithyJsonPayloadCodec.Default";
-      case REST_XML -> "SmithyXmlPayloadCodec.Default";
-      case RPC_V2_CBOR -> "SmithyCborPayloadCodec.Default";
+      case REST_JSON -> "SmithyJsonCodec.Default";
+      case REST_XML -> "SmithyXmlCodec.Default";
+      case RPC_V2_CBOR -> "SmithyCborCodec.Default";
     };
+  }
+
+  /** Codec interface type used by generated clients for the given protocol. */
+  public static String codecType(Kind kind) {
+    return "ISmithyCodec";
   }
 
   /** Runtime namespace housing the protocol class. */

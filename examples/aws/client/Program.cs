@@ -1,10 +1,11 @@
 using System.Net;
 using Example.Hello;
 using NSmithy.Client;
+using NSmithy.Codecs.Cbor;
+using NSmithy.Codecs.Xml;
 using NSmithy.Core;
 using NSmithy.Core.Annotations;
-using RealCborPayloadCodec = NSmithy.Codecs.Cbor.SmithyCborPayloadCodec;
-using RealXmlPayloadCodec = NSmithy.Codecs.Xml.SmithyXmlPayloadCodec;
+using NSmithy.Core.Serde;
 
 var name = args.Length > 0 ? args[0] : "world";
 var httpClient = new HttpClient(new MockAwsProtocolsHandler());
@@ -60,7 +61,7 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
         ValidateRpcV2CborRequest(request);
         var body =
             request.Content?.ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult() ?? [];
-        var input = RealCborPayloadCodec.Default.Deserialize<SayHelloInput>(body);
+        var input = SmithyCborCodec.Default.Deserialize<SayHelloInput>(body);
 
         if (string.Equals(input.Name, "error", StringComparison.OrdinalIgnoreCase))
         {
@@ -72,14 +73,14 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
             return Task.FromResult(
                 CreateResponse(
                     HttpStatusCode.BadRequest,
-                    RealCborPayloadCodec.Default.Serialize(error)
+                    SmithyCborCodec.Default.Serialize(error)
                 )
             );
         }
 
         var output = new SayHelloOutput("mock-rpcv2cbor", $"Hello, {input.Name}!");
         return Task.FromResult(
-            CreateResponse(HttpStatusCode.OK, RealCborPayloadCodec.Default.Serialize(output))
+            CreateResponse(HttpStatusCode.OK, SmithyCborCodec.Default.Serialize(output))
         );
     }
 
@@ -91,10 +92,10 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
         ValidateRestXmlRequest(request);
         var body =
             request.Content?.ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult() ?? [];
-        var input = RealXmlPayloadCodec.Default.Deserialize<SayHelloXmlInput>(body);
+        var input = SmithyXmlCodec.Default.Deserialize<SayHelloXmlInput>(body);
         var output = new SayHelloXmlOutput("mock-restxml", $"Hello, {input.Name}!");
         return Task.FromResult(
-            CreateXmlResponse(HttpStatusCode.OK, RealXmlPayloadCodec.Default.Serialize(output))
+            CreateXmlResponse(HttpStatusCode.OK, SmithyXmlCodec.Default.Serialize(output))
         );
     }
 

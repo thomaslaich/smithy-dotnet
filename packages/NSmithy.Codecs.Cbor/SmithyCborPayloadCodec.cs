@@ -8,25 +8,36 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Cbor;
 
-public sealed class SmithyCborPayloadCodec : ISmithyPayloadCodec
+public static class CborReflectionCodec
 {
-    public static SmithyCborPayloadCodec Default { get; } = new();
-
-    public string MediaType => "application/cbor";
-
-    public byte[] Serialize<T>(T value)
+    public static byte[] Serialize<T>(T value)
     {
         using var writer = new CborBufferWriter();
         WriteValue(writer, value, typeof(T));
         return writer.ToArray();
     }
 
-    public T Deserialize<T>(byte[] content)
+    internal static byte[] SerializeObject(object? value, Type declaredType)
+    {
+        using var writer = new CborBufferWriter();
+        WriteValue(writer, value, declaredType);
+        return writer.ToArray();
+    }
+
+    public static T Deserialize<T>(byte[] content)
     {
         var reader = new CborBufferReader(content);
         var value = reader.ReadValue();
         reader.EnsureFullyConsumed();
         return (T)ConvertValue(value, typeof(T))!;
+    }
+
+    internal static object? DeserializeObject(byte[] content, Type declaredType)
+    {
+        var reader = new CborBufferReader(content);
+        var value = reader.ReadValue();
+        reader.EnsureFullyConsumed();
+        return ConvertValue(value, declaredType);
     }
 
     public static T DeserializeMember<T>(byte[] content, string name)

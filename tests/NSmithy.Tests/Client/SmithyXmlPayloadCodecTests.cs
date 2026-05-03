@@ -5,7 +5,7 @@ using NSmithy.Core.Annotations;
 
 namespace NSmithy.Tests.Client;
 
-public sealed class SmithyXmlPayloadCodecTests
+public sealed class SmithyXmlCodecTests
 {
     [Fact]
     public void SerializeUsesXmlMemberNamesAndFlattenedCollections()
@@ -16,9 +16,7 @@ public sealed class SmithyXmlPayloadCodecTests
             new ForecastTags(["north", "windy"])
         );
 
-        var xml = System.Text.Encoding.UTF8.GetString(
-            SmithyXmlPayloadCodec.Default.Serialize(payload)
-        );
+        var xml = System.Text.Encoding.UTF8.GetString(XmlReflectionCodec.Serialize(payload));
 
         Assert.Equal(
             "<ForecastResponse><Condition>clear</Condition><GeneratedAt>2026-04-23T10:15:30.0000000+00:00</GeneratedAt><Tag>north</Tag><Tag>windy</Tag></ForecastResponse>",
@@ -38,7 +36,7 @@ public sealed class SmithyXmlPayloadCodecTests
             </ForecastResponse>
             """;
 
-        var payload = SmithyXmlPayloadCodec.Default.Deserialize<ForecastResponse>(
+        var payload = XmlReflectionCodec.Deserialize<ForecastResponse>(
             System.Text.Encoding.UTF8.GetBytes(xml)
         );
 

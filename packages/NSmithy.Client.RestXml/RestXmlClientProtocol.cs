@@ -46,12 +46,14 @@ public static class RestXmlClientProtocol
         return RestJson.RestJsonClientProtocol.FormatHttpValue(value);
     }
 
-    public static T DeserializeBody<T>(ISmithyPayloadCodec codec, byte[] content)
+    public static T DeserializeBody<T>(ISmithyCodec codec, byte[] content)
+        where T : IDeserializableShape<T>
     {
         return RestJson.RestJsonClientProtocol.DeserializeBody<T>(codec, content);
     }
 
-    public static T DeserializeRequiredBody<T>(ISmithyPayloadCodec codec, byte[] content)
+    public static T DeserializeRequiredBody<T>(ISmithyCodec codec, byte[] content)
+        where T : IDeserializableShape<T>
     {
         return RestJson.RestJsonClientProtocol.DeserializeRequiredBody<T>(codec, content);
     }

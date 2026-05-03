@@ -5,7 +5,7 @@ using NSmithy.Core.Annotations;
 
 namespace NSmithy.Tests.Client;
 
-public sealed class SmithyCborPayloadCodecTests
+public sealed class SmithyCborCodecTests
 {
     [Fact]
     public void SerializeAndDeserializeRoundTripsSmithyShapes()
@@ -16,8 +16,8 @@ public sealed class SmithyCborPayloadCodecTests
             new ForecastValues([1, 2, 3])
         );
 
-        var bytes = SmithyCborPayloadCodec.Default.Serialize(payload);
-        var roundTrip = SmithyCborPayloadCodec.Default.Deserialize<ForecastRequest>(bytes);
+        var bytes = CborReflectionCodec.Serialize(payload);
+        var roundTrip = CborReflectionCodec.Deserialize<ForecastRequest>(bytes);
 
         Assert.Equal(payload.City, roundTrip.City);
         Assert.Equal(payload.At, roundTrip.At);
@@ -29,8 +29,8 @@ public sealed class SmithyCborPayloadCodecTests
     {
         var envelope = new ErrorEnvelope("example.weather#BadRequest", "bad city");
 
-        var bytes = SmithyCborPayloadCodec.Default.Serialize(envelope);
-        var roundTrip = SmithyCborPayloadCodec.Default.Deserialize<ErrorEnvelope>(bytes);
+        var bytes = CborReflectionCodec.Serialize(envelope);
+        var roundTrip = CborReflectionCodec.Deserialize<ErrorEnvelope>(bytes);
 
         Assert.Equal("example.weather#BadRequest", roundTrip.Type);
         Assert.Equal("bad city", roundTrip.Message);
