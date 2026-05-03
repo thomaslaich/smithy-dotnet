@@ -4,7 +4,7 @@
 // SymbolProvider, SymbolWriter, WriterDelegator, CodegenContext and a
 // SmithyIntegration SPI hook all wired up.
 //
-// Plugin name registered with smithy-build: `csharp-client-codegen`.
+// Plugin name registered with smithy-build: `csharp-codegen`.
 
 import com.vanniktech.maven.publish.JavaLibrary
 import com.vanniktech.maven.publish.JavadocJar

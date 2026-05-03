@@ -33,10 +33,10 @@ public final class StringEnumGenerator implements Runnable {
     writer.addImport(RuntimeTypes.NSMITHY_CORE_ANNOTATIONS);
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     AttributeEmitter.writeShapeAttributes(writer, shape);
+    writer.write("public readonly partial record struct $L(string Value)", typeName);
     writer.openBlock(
-        "public readonly partial record struct $L(string Value) {",
+        "{",
         "}",
-        typeName,
         () -> {
           for (MemberShape m : ShapeSupport.sortedMembers(shape)) {
             String prop = CSharpNaming.propertyName(m.getMemberName());
@@ -52,8 +52,8 @@ public final class StringEnumGenerator implements Runnable {
                 CSharpNaming.formatString(value));
           }
           writer.write("");
-          writer.openBlock(
-              "public override string ToString() {", "}", () -> writer.write("return Value;"));
+          writer.write("public override string ToString()");
+          writer.openBlock("{", "}", () -> writer.write("return Value;"));
         });
   }
 }

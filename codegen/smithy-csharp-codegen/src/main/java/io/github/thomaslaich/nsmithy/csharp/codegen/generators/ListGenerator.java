@@ -36,17 +36,19 @@ public final class ListGenerator implements Runnable {
         CSharpSymbolProvider.qualified(member) + (ShapeSupport.isSparse(shape) ? "?" : "");
 
     AttributeEmitter.writeShapeAttributes(writer, shape);
+    writer.write("public sealed partial record class $L", typeName);
     writer.openBlock(
-        "public sealed partial record class $L {",
+        "{",
         "}",
-        typeName,
         () -> {
           writer.write("");
-          writer.openBlock(
-              "public $L(System.Collections.Generic.IEnumerable<$L> values) {",
-              "}",
+          writer.write(
+              "public $L(System.Collections.Generic.IEnumerable<$L> values)",
               typeName,
-              memberType,
+              memberType);
+          writer.openBlock(
+              "{",
+              "}",
               () -> {
                 writer.write("System.ArgumentNullException.ThrowIfNull(values);");
                 writer.write(

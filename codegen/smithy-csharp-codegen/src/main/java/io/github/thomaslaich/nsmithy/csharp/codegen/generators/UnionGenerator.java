@@ -38,10 +38,10 @@ public final class UnionGenerator implements Runnable {
     List<MemberShape> members = ShapeSupport.sortedMembers(shape);
 
     AttributeEmitter.writeShapeAttributes(writer, shape);
+    writer.write("public abstract partial record class $L", typeName);
     writer.openBlock(
-        "public abstract partial record class $L {",
+        "{",
         "}",
-        typeName,
         () -> {
           writer.write("private protected $L() { }", typeName);
           writer.write("");
@@ -49,17 +49,16 @@ public final class UnionGenerator implements Runnable {
             String variantName = CSharpNaming.typeName(m.getMemberName());
             String valueType = ShapeSupport.memberTypeExpr(sp, m, false);
             AttributeEmitter.writeMemberAttributes(writer, m, false);
+            writer.write(
+                "public sealed partial record class $L : $L", variantName, typeName);
             writer.openBlock(
-                "public sealed partial record class $L : $L {",
+                "{",
                 "}",
-                variantName,
-                typeName,
                 () -> {
+                  writer.write("public $L($L value)", variantName, valueType);
                   writer.openBlock(
-                      "public $L($L value) {",
+                      "{",
                       "}",
-                      variantName,
-                      valueType,
                       () -> {
                         if (ShapeSupport.isReferenceType(model, m)) {
                           writer.write(
@@ -73,24 +72,22 @@ public final class UnionGenerator implements Runnable {
                   writer.write("public $L Value { get; }", valueType);
                 });
             writer.write("");
+            writer.write(
+                "public static $L From$L($L value)", typeName, variantName, valueType);
             writer.openBlock(
-                "public static $L From$L($L value) {",
-                "}",
-                typeName,
-                variantName,
-                valueType,
-                () -> writer.write("return new $L(value);", variantName));
+                "{", "}", () -> writer.write("return new $L(value);", variantName));
             writer.write("");
           }
 
           writer.addImport(RuntimeTypes.NSMITHY_CORE);
+          writer.write("public sealed partial record class Unknown : $L", typeName);
           writer.openBlock(
-              "public sealed partial record class Unknown : $L {",
+              "{",
               "}",
-              typeName,
               () -> {
+                writer.write("public Unknown(string tag, Document value)");
                 writer.openBlock(
-                    "public Unknown(string tag, Document value) {",
+                    "{",
                     "}",
                     () -> {
                       writer.write(
@@ -102,11 +99,8 @@ public final class UnionGenerator implements Runnable {
                 writer.write("public Document Value { get; }");
               });
           writer.write("");
-          writer.openBlock(
-              "public static $L FromUnknown(string tag, Document value) {",
-              "}",
-              typeName,
-              () -> writer.write("return new Unknown(tag, value);"));
+          writer.write("public static $L FromUnknown(string tag, Document value)", typeName);
+          writer.openBlock("{", "}", () -> writer.write("return new Unknown(tag, value);"));
           writer.write("");
 
           // Match method
@@ -117,8 +111,9 @@ public final class UnionGenerator implements Runnable {
             header.append("System.Func<").append(vt).append(", T> ").append(pn).append(", ");
           }
           header.append("System.Func<string, Document, T> unknown)");
+          writer.write(header.toString());
           writer.openBlock(
-              header.toString() + " {",
+              "{",
               "}",
               () -> {
                 for (MemberShape m : members) {

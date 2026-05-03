@@ -38,18 +38,20 @@ public final class MapGenerator implements Runnable {
         CSharpSymbolProvider.qualified(value) + (ShapeSupport.isSparse(shape) ? "?" : "");
 
     AttributeEmitter.writeShapeAttributes(writer, shape);
+    writer.write("public sealed partial record class $L", typeName);
     writer.openBlock(
-        "public sealed partial record class $L {",
+        "{",
         "}",
-        typeName,
         () -> {
           writer.write("");
-          writer.openBlock(
-              "public $L(System.Collections.Generic.IReadOnlyDictionary<$L, $L> values) {",
-              "}",
+          writer.write(
+              "public $L(System.Collections.Generic.IReadOnlyDictionary<$L, $L> values)",
               typeName,
               keyType,
-              valueType,
+              valueType);
+          writer.openBlock(
+              "{",
+              "}",
               () -> {
                 writer.write("System.ArgumentNullException.ThrowIfNull(values);");
                 writer.write(

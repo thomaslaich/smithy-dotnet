@@ -39,10 +39,10 @@ public final class ErrorGenerator implements Runnable {
     Optional<MemberShape> messageMember = ShapeSupport.errorMessageMember(shape);
 
     AttributeEmitter.writeShapeAttributes(writer, shape);
+    writer.write("public sealed partial class $L : System.Exception", typeName);
     writer.openBlock(
-        "public sealed partial class $L : System.Exception {",
+        "{",
         "}",
-        typeName,
         () -> {
           writer.write("");
           writeConstructor(typeName, messageMember.orElse(null));

@@ -87,10 +87,10 @@ public final class ClientGenerator implements Runnable {
     String interfaceName = "I" + typeName;
 
     // Interface
+    writer.write("public interface $L", interfaceName);
     writer.openBlock(
-        "public interface $L {",
+        "{",
         "}",
-        interfaceName,
         () -> {
           writer.write("");
           for (OperationShape op : operations) {
@@ -125,11 +125,10 @@ public final class ClientGenerator implements Runnable {
       List<OperationShape> operations,
       String typeName,
       String interfaceName) {
+    writer.write("public sealed class $L : $L", typeName, interfaceName);
     writer.openBlock(
-        "public sealed class $L : $L {",
+        "{",
         "}",
-        typeName,
-        interfaceName,
         () -> {
           writer.write(
               "private static readonly ISmithyPayloadCodec DocumentCodec = $L;",
@@ -155,10 +154,10 @@ public final class ClientGenerator implements Runnable {
                   + " options.Middleware))");
           writer.write("{ }");
           writer.write("");
+          writer.write("public $L(SmithyOperationInvoker invoker)", typeName);
           writer.openBlock(
-              "public $L(SmithyOperationInvoker invoker) {",
+              "{",
               "}",
-              typeName,
               () ->
                   writer.write(
                       "this.invoker = invoker ?? throw new"
@@ -198,10 +197,10 @@ public final class ClientGenerator implements Runnable {
     String opName = CSharpNaming.typeName(op.getId().getName());
     String deserName = "Deserialize" + opName + "ErrorAsync";
 
+    writer.write("public async $L", operationSignature(sp, op));
     writer.openBlock(
-        "public async $L {",
+        "{",
         "}",
-        operationSignature(sp, op),
         () -> {
           if (input != null) writer.write("System.ArgumentNullException.ThrowIfNull(input);");
 
@@ -240,13 +239,15 @@ public final class ClientGenerator implements Runnable {
               if (defaultExpr != null) {
                 // alloy semantics: omit the body when the user-provided value equals the
                 // member's @default. Mirrors the SimpleRestJsonNoneHttpPayloadWithDefault tests.
-                writer.openBlock(
+                writer.write(
                     "if (!System.Collections.Generic.EqualityComparer<$L>.Default.Equals(input.$L,"
-                        + " $L)) {",
-                    "}",
+                        + " $L))",
                     ShapeSupport.parameterTypeExpr(sp, pm),
                     prop,
-                    defaultExpr,
+                    defaultExpr);
+                writer.openBlock(
+                    "{",
+                    "}",
                     () -> {
                       writer.write("request.Content = DocumentCodec.Serialize(input.$L);", prop);
                       writer.write("request.ContentType = DocumentCodec.MediaType;");
@@ -475,14 +476,17 @@ public final class ClientGenerator implements Runnable {
     List<ShapeId> errorIds = new ArrayList<>(op.getErrors());
     errorIds.sort(Comparator.comparing(ShapeId::toString));
 
-    writer.openBlock(
+    writer.write(
         "private static System.Threading.Tasks.ValueTask<System.Exception?> $L(SmithyHttpResponse"
-            + " response, System.Threading.CancellationToken cancellationToken) {",
+            + " response, System.Threading.CancellationToken cancellationToken)",
+        methodName);
+    writer.openBlock(
+        "{",
         "}",
-        methodName,
         () -> {
+          writer.write("if (response.Content.Length == 0)");
           writer.openBlock(
-              "if (response.Content.Length == 0) {",
+              "{",
               "}",
               () ->
                   writer.write(
@@ -496,10 +500,10 @@ public final class ClientGenerator implements Runnable {
           }
           switch (kind) {
             case RPC_V2_CBOR -> {
+              writer.write("if (!$L.HasResponse(response))", runtime);
               writer.openBlock(
-                  "if (!$L.HasResponse(response)) {",
+                  "{",
                   "}",
-                  runtime,
                   () ->
                       writer.write(
                           "return"
@@ -509,13 +513,12 @@ public final class ClientGenerator implements Runnable {
               for (ShapeId errId : errorIds) {
                 StructureShape err = model.expectShape(errId, StructureShape.class);
                 writer.write("");
-                writer.openBlock(
+                writer.write(
                     "if (string.Equals(errorType, $L, System.StringComparison.Ordinal)"
-                        + " || string.Equals(errorType, $L, System.StringComparison.Ordinal)) {",
-                    "}",
+                        + " || string.Equals(errorType, $L, System.StringComparison.Ordinal))",
                     CSharpNaming.formatString(errId.getName()),
-                    CSharpNaming.formatString(errId.toString()),
-                    () -> writeErrorReturn(sp, err));
+                    CSharpNaming.formatString(errId.toString()));
+                writer.openBlock("{", "}", () -> writeErrorReturn(sp, err));
               }
             }
             case REST_XML -> {
@@ -523,11 +526,10 @@ public final class ClientGenerator implements Runnable {
               for (ShapeId errId : errorIds) {
                 StructureShape err = model.expectShape(errId, StructureShape.class);
                 writer.write("");
-                writer.openBlock(
-                    "if (string.Equals(errorType, $L, System.StringComparison.Ordinal)) {",
-                    "}",
-                    CSharpNaming.formatString(errId.getName()),
-                    () -> writeErrorReturn(sp, err));
+                writer.write(
+                    "if (string.Equals(errorType, $L, System.StringComparison.Ordinal))",
+                    CSharpNaming.formatString(errId.getName()));
+                writer.openBlock("{", "}", () -> writeErrorReturn(sp, err));
               }
             }
             case REST_JSON -> {
@@ -536,11 +538,8 @@ public final class ClientGenerator implements Runnable {
                 Integer status = httpErrorCode(err);
                 if (status == null) continue;
                 writer.write("");
-                writer.openBlock(
-                    "if ((int)response.StatusCode == $L) {",
-                    "}",
-                    status,
-                    () -> writeErrorReturn(sp, err));
+                writer.write("if ((int)response.StatusCode == $L)", status);
+                writer.openBlock("{", "}", () -> writeErrorReturn(sp, err));
               }
             }
           }
@@ -655,15 +654,15 @@ public final class ClientGenerator implements Runnable {
       SymbolProvider sp, StructureShape shape, List<MemberShape> bodyMembers) {
     String typeName = bodyProjectionName(shape);
     AttributeEmitter.writeShapeAttributes(writer, shape);
+    writer.write("private sealed class $L", typeName);
     writer.openBlock(
-        "private sealed class $L {",
+        "{",
         "}",
-        typeName,
         () -> {
           writer.write("");
           writer.openBlock(
               "public $L(",
-              ") {",
+              ")",
               typeName,
               () -> {
                 for (int i = 0; i < bodyMembers.size(); i++) {
@@ -676,6 +675,7 @@ public final class ClientGenerator implements Runnable {
                       i == bodyMembers.size() - 1 ? "" : ",");
                 }
               });
+          writer.write("{");
           writer.indent();
           for (MemberShape m : bodyMembers) {
             String prop = CSharpNaming.propertyName(m.getMemberName());
@@ -708,11 +708,10 @@ public final class ClientGenerator implements Runnable {
     String rawClientType = "global::" + grpcNs + "." + svcName + "." + svcName + "Client";
     String clientTypeName = svcName + "GrpcClient";
 
+    writer.write("public sealed class $L : $L", clientTypeName, interfaceName);
     writer.openBlock(
-        "public sealed class $L : $L {",
+        "{",
         "}",
-        clientTypeName,
-        interfaceName,
         () -> {
           writer.write("private readonly $L client;", rawClientType);
           writer.write("");
@@ -728,11 +727,10 @@ public final class ClientGenerator implements Runnable {
                   + " System.ArgumentNullException(nameof(callInvoker)))) { }",
               rawClientType);
           writer.write("");
+          writer.write("public $L($L client)", clientTypeName, rawClientType);
           writer.openBlock(
-              "public $L($L client) {",
+              "{",
               "}",
-              clientTypeName,
-              rawClientType,
               () ->
                   writer.write(
                       "this.client = client ?? throw new"
@@ -756,10 +754,10 @@ public final class ClientGenerator implements Runnable {
                 sp, model.expectShape(op.getInputShape()), "input", grpcNamespace())
             : "new Google.Protobuf.WellKnownTypes.Empty()";
 
+    writer.write("public async $L", operationSignature(sp, op));
     writer.openBlock(
-        "public async $L {",
+        "{",
         "}",
-        operationSignature(sp, op),
         () -> {
           if (hasInput) {
             writer.write("System.ArgumentNullException.ThrowIfNull(input);");

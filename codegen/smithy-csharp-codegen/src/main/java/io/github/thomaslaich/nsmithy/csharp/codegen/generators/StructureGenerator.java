@@ -37,10 +37,10 @@ public final class StructureGenerator implements Runnable {
     String typeName = CSharpNaming.typeName(shape.getId().getName());
 
     AttributeEmitter.writeShapeAttributes(writer, shape);
+    writer.write("public sealed partial record class $L", typeName);
     writer.openBlock(
-        "public sealed partial record class $L {",
+        "{",
         "}",
-        typeName,
         () -> {
           writer.write("");
           writeConstructor(typeName);
@@ -71,8 +71,9 @@ public final class StructureGenerator implements Runnable {
     }
     sig.append(")");
 
+    writer.write(sig.toString());
     writer.openBlock(
-        sig.toString() + " {",
+        "{",
         "}",
         () -> {
           for (MemberShape m : ctorMembers) {

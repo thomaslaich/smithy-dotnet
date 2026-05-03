@@ -1,11 +1,3 @@
-/*
- * DirectedCodegen implementation. CodegenDirector dispatches here once it has
- * assembled model + settings + integrations + symbol provider.
- *
- * Wires the per-shape generators (Structure / Error / List / Map / String enum
- * / Int enum / Union) and emits a Client.cs + Server.cs pair per service for
- * alloy#simpleRestJson services.
- */
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ClientGenerator;

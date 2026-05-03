@@ -85,11 +85,9 @@ public final class ServerGenerator implements Runnable {
 
     // Per-operation handler interfaces
     for (OperationShape op : ops) {
+      writer.write("public interface $L", opHandlerName(op));
       writer.openBlock(
-          "public interface $L {",
-          "}",
-          opHandlerName(op),
-          () -> writer.write("$L;", serverOperationSignature(sp, op)));
+          "{", "}", () -> writer.write("$L;", serverOperationSignature(sp, op)));
       writer.write("");
     }
 
@@ -131,19 +129,17 @@ public final class ServerGenerator implements Runnable {
     String grpcNs = grpcNamespace();
     String baseType = "global::" + grpcNs + "." + svcName + "." + svcName + "Base";
     String adapterName = svcName + "GrpcAdapter";
+    writer.write("public sealed class $L : $L", adapterName, baseType);
     writer.openBlock(
-        "public sealed class $L : $L {",
+        "{",
         "}",
-        adapterName,
-        baseType,
         () -> {
           writer.write("private readonly $L handler;", aggInterface);
           writer.write("");
+          writer.write("public $L($L handler)", adapterName, aggInterface);
           writer.openBlock(
-              "public $L($L handler) {",
+              "{",
               "}",
-              adapterName,
-              aggInterface,
               () ->
                   writer.write(
                       "this.handler = handler ?? throw new"
@@ -162,13 +158,15 @@ public final class ServerGenerator implements Runnable {
     boolean hasOutput = !op.getOutputShape().equals(ShapeId.from("smithy.api#Unit"));
     String grpcInputType = grpcMessageType(op.getInputShape());
     String grpcOutputType = grpcMessageType(op.getOutputShape());
-    writer.openBlock(
+    writer.write(
         "public override async System.Threading.Tasks.Task<$L> $L($L request,"
-            + " ServerCallContext context) {",
-        "}",
+            + " ServerCallContext context)",
         grpcOutputType,
         operationName,
-        grpcInputType,
+        grpcInputType);
+    writer.openBlock(
+        "{",
+        "}",
         () -> {
           writer.write("System.ArgumentNullException.ThrowIfNull(request);");
           writer.write("System.ArgumentNullException.ThrowIfNull(context);");
@@ -202,21 +200,24 @@ public final class ServerGenerator implements Runnable {
 
   private void writeGrpcMapExtensions(String contract, String serviceTypeName) {
     String adapterName = serviceTypeName + "GrpcAdapter";
+    writer.write("public static class $LGrpcExtensions", contract);
     writer.openBlock(
-        "public static class $LGrpcExtensions {",
+        "{",
         "}",
-        contract,
-        () ->
-            writer.openBlock(
-                "public static IEndpointRouteBuilder Map$LGrpc(this IEndpointRouteBuilder"
-                    + " endpoints) {",
-                "}",
-                contract,
-                () -> {
-                  writer.write("System.ArgumentNullException.ThrowIfNull(endpoints);");
-                  writer.write("endpoints.MapGrpcService<$L>();", adapterName);
-                  writer.write("return endpoints;");
-                }));
+        () -> {
+          writer.write(
+              "public static IEndpointRouteBuilder Map$LGrpc(this IEndpointRouteBuilder"
+                  + " endpoints)",
+              contract);
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                writer.write("System.ArgumentNullException.ThrowIfNull(endpoints);");
+                writer.write("endpoints.MapGrpcService<$L>();", adapterName);
+                writer.write("return endpoints;");
+              });
+        });
   }
 
   private String grpcMessageType(ShapeId id) {
@@ -234,10 +235,10 @@ public final class ServerGenerator implements Runnable {
 
   private void writeDescriptor(
       SymbolProvider sp, List<OperationShape> ops, String contract, String aggInterface) {
+    writer.write("public static class $LDescriptor", contract);
     writer.openBlock(
-        "public static class $LDescriptor {",
+        "{",
         "}",
-        contract,
         () -> {
           for (OperationShape op : ops) {
             writeOperationDescriptor(sp, op);
@@ -359,10 +360,10 @@ public final class ServerGenerator implements Runnable {
 
   private void writeServerExtensions(
       List<OperationShape> ops, String contract, String aggInterface) {
+    writer.write("public static class $LServerExtensions", contract);
     writer.openBlock(
-        "public static class $LServerExtensions {",
+        "{",
         "}",
-        contract,
         () -> {
           writer.write(
               "public static IServiceCollection Add$LHandler<THandler>(this IServiceCollection"
@@ -395,16 +396,17 @@ public final class ServerGenerator implements Runnable {
 
   private void writeAspNetCoreExtensions(
       SymbolProvider sp, List<OperationShape> ops, String contract) {
+    writer.write("public static class $LAspNetCoreExtensions", contract);
     writer.openBlock(
-        "public static class $LAspNetCoreExtensions {",
+        "{",
         "}",
-        contract,
         () -> {
+          writer.write(
+              "public static IEndpointRouteBuilder Map$LHttp(this IEndpointRouteBuilder endpoints)",
+              contract);
           writer.openBlock(
-              "public static IEndpointRouteBuilder Map$LHttp(this IEndpointRouteBuilder endpoints)"
-                  + " {",
+              "{",
               "}",
-              contract,
               () -> {
                 writer.write("System.ArgumentNullException.ThrowIfNull(endpoints);");
                 writer.write("");
@@ -608,11 +610,13 @@ public final class ServerGenerator implements Runnable {
 
   private void writeBoundResponseWriter(SymbolProvider sp, StructureShape output) {
     String outputType = CSharpSymbolProvider.qualified(sp.toSymbol(output));
-    writer.openBlock(
+    writer.write(
         "private static async System.Threading.Tasks.Task WriteBoundResponseAsync(HttpContext"
-            + " httpContext, $L output, System.Threading.CancellationToken cancellationToken) {",
+            + " httpContext, $L output, System.Threading.CancellationToken cancellationToken)",
+        outputType);
+    writer.openBlock(
+        "{",
         "}",
-        outputType,
         () -> {
           writer.write("System.ArgumentNullException.ThrowIfNull(output);");
           for (MemberShape m : ShapeSupport.sortedMembers(output)) {
@@ -710,15 +714,15 @@ public final class ServerGenerator implements Runnable {
       SymbolProvider sp, StructureShape shape, List<MemberShape> bodyMembers) {
     String typeName = ClientGenerator.bodyProjectionName(shape);
     AttributeEmitter.writeShapeAttributes(writer, shape);
+    writer.write("private sealed class $L", typeName);
     writer.openBlock(
-        "private sealed class $L {",
+        "{",
         "}",
-        typeName,
         () -> {
           writer.write("");
           writer.openBlock(
               "public $L(",
-              ") {",
+              ")",
               typeName,
               () -> {
                 for (int i = 0; i < bodyMembers.size(); i++) {
@@ -731,6 +735,7 @@ public final class ServerGenerator implements Runnable {
                       i == bodyMembers.size() - 1 ? "" : ",");
                 }
               });
+          writer.write("{");
           writer.indent();
           for (MemberShape m : bodyMembers) {
             writer.write(

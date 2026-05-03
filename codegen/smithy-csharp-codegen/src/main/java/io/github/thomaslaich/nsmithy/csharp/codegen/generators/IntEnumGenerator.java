@@ -32,10 +32,10 @@ public final class IntEnumGenerator implements Runnable {
     writer.addImport(RuntimeTypes.NSMITHY_CORE_ANNOTATIONS);
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     AttributeEmitter.writeShapeAttributes(writer, shape);
+    writer.write("public enum $L", typeName);
     writer.openBlock(
-        "public enum $L {",
+        "{",
         "}",
-        typeName,
         () -> {
           for (MemberShape m : ShapeSupport.sortedMembers(shape)) {
             String prop = CSharpNaming.propertyName(m.getMemberName());

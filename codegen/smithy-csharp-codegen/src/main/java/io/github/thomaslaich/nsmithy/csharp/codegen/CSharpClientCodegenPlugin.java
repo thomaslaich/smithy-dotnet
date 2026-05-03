@@ -1,9 +1,3 @@
-/*
- * SmithyBuildPlugin entry point. This is intentionally tiny - the heavy
- * lifting lives in DirectedCSharpClientCodegen. Mirrors PythonClientCodegenPlugin
- * and TypeScriptClientCodegenPlugin: parse settings, build a CodegenDirector,
- * and call run().
- */
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
