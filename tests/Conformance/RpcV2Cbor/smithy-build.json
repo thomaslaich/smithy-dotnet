@@ -10,7 +10,7 @@
       }
     ],
     "dependencies": [
-      "io.github.thomaslaich.nsmithy:codegen-csharp:0.1.0-SNAPSHOT",
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-SNAPSHOT",
       "software.amazon.smithy:smithy-protocol-traits:1.68.0",
       "software.amazon.smithy:smithy-protocol-tests:1.68.0"
     ]

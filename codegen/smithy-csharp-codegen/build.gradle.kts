@@ -36,10 +36,10 @@ mavenPublishing {
 
     configure(JavaLibrary(javadocJar = JavadocJar.Empty(), sourcesJar = true))
 
-    coordinates(group.toString(), "codegen-csharp", version.toString())
+    coordinates(group.toString(), "smithy-csharp-codegen", version.toString())
 
     pom {
-        name.set("NSmithy csharp-codegen Smithy plugin")
+        name.set("NSmithy smithy-csharp-codegen Smithy plugin")
         description.set("Smithy build plugin that generates C# client/server code for Smithy models. Consumed by NSmithy.MSBuild via the Smithy CLI.")
         url.set("https://github.com/thomaslaich/smithy-dotnet")
         inceptionYear.set("2026")

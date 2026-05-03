@@ -1,3 +1,3 @@
 rootProject.name = "smithy-codegen"
 
-include(":codegen-csharp")
+include(":smithy-csharp-codegen")
