@@ -1,8 +1,8 @@
 using System.Text;
 using Microsoft.AspNetCore.Http;
 using NSmithy.Core;
-using NSmithy.Server.AspNetCore;
 using NSmithy.Core.Serde;
+using NSmithy.Server.AspNetCore;
 
 namespace NSmithy.Tests.Server;
 

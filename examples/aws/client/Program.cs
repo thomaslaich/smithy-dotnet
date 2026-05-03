@@ -4,7 +4,6 @@ using NSmithy.Client;
 using NSmithy.Codecs.Cbor;
 using NSmithy.Codecs.Xml;
 using NSmithy.Core;
-using NSmithy.Core.Annotations;
 using NSmithy.Core.Serde;
 
 var name = args.Length > 0 ? args[0] : "world";
@@ -71,10 +70,7 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
             );
 
             return Task.FromResult(
-                CreateResponse(
-                    HttpStatusCode.BadRequest,
-                    SmithyCborCodec.Default.Serialize(error)
-                )
+                CreateResponse(HttpStatusCode.BadRequest, SmithyCborCodec.Default.Serialize(error))
             );
         }
 
@@ -153,8 +149,65 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
     }
 }
 
-[SmithyShape("example.transport#RpcV2ErrorEnvelope", ShapeKind.Structure)]
-internal sealed record class RpcV2ErrorEnvelope(
-    [property: SmithyMember("__type", "smithy.api#String", IsRequired = true)] string Type,
-    [property: SmithyMember("message", "smithy.api#String")] string? Message
-);
+/// <summary>
+/// A minimal schema-driven error envelope for rpcv2Cbor error responses.
+/// Used by the mock handler to serialize error payloads.
+/// </summary>
+internal sealed record class RpcV2ErrorEnvelope(string Type, string? Message)
+    : ISerializableStruct, IDeserializableShape<RpcV2ErrorEnvelope>
+{
+    private static readonly Schema TypeSchema = Schema.CreateMember(
+        ShapeId.Parse("example.transport#RpcV2ErrorEnvelope$__type"),
+        () => PreludeSchemas.String
+    );
+
+    private static readonly Schema MessageSchema = Schema.CreateMember(
+        ShapeId.Parse("example.transport#RpcV2ErrorEnvelope$message"),
+        () => PreludeSchemas.String
+    );
+
+    public static Schema Schema { get; } = Schema.CreateStructure(
+        ShapeId.Parse("example.transport#RpcV2ErrorEnvelope"),
+        [TypeSchema, MessageSchema]
+    );
+
+    Schema ISerializableShape.Schema => Schema;
+
+    public void Serialize(IShapeSerializer serializer)
+    {
+        ArgumentNullException.ThrowIfNull(serializer);
+        serializer.WriteStruct(Schema, this);
+    }
+
+    public void SerializeMembers(IShapeSerializer serializer)
+    {
+        ArgumentNullException.ThrowIfNull(serializer);
+        serializer.WriteString(TypeSchema, Type);
+        if (Message is { } msg)
+        {
+            serializer.WriteString(MessageSchema, msg);
+        }
+    }
+
+    public static RpcV2ErrorEnvelope Deserialize(IShapeDeserializer deserializer)
+    {
+        ArgumentNullException.ThrowIfNull(deserializer);
+        string? type = null;
+        string? message = null;
+        deserializer.ReadStruct<object?>(
+            Schema,
+            null,
+            new StructMemberConsumer<object?>(Member: (_, member, reader) =>
+            {
+                if (member.MemberName == "__type")
+                    type = reader.ReadString(member);
+                else if (member.MemberName == "message")
+                    message = reader.ReadString(member);
+            })
+        );
+        return new RpcV2ErrorEnvelope(
+            type ?? throw new InvalidOperationException("Missing required member '__type'."),
+            message
+        );
+    }
+}

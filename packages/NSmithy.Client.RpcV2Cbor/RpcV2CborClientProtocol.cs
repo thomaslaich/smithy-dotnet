@@ -1,4 +1,3 @@
-using NSmithy.Codecs.Cbor;
 using NSmithy.Core.Serde;
 using NSmithy.Http;
 
@@ -41,6 +40,21 @@ public static class RpcV2CborClientProtocol
 
     public static string? DeserializeErrorType(byte[] content)
     {
-        return CborReflectionCodec.DeserializeMember<string?>(content, "__type");
+        if (content.Length == 0) return null;
+        try
+        {
+            var reader = new System.Formats.Cbor.CborReader(content, System.Formats.Cbor.CborConformanceMode.Lax);
+            if (reader.PeekState() != System.Formats.Cbor.CborReaderState.StartMap) return null;
+            reader.ReadStartMap();
+            while (reader.PeekState() != System.Formats.Cbor.CborReaderState.EndMap)
+            {
+                var key = reader.ReadTextString();
+                if (string.Equals(key, "__type", StringComparison.Ordinal))
+                    return reader.ReadTextString();
+                reader.SkipValue();
+            }
+            return null;
+        }
+        catch { return null; }
     }
 }

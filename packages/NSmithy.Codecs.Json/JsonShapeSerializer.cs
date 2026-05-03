@@ -74,7 +74,7 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
 
     public void WriteBoolean(Schema schema, bool value) => writer.WriteBooleanValue(value);
 
-    public void WriteByte(Schema schema, byte value) => writer.WriteNumberValue(value);
+    public void WriteByte(Schema schema, sbyte value) => writer.WriteNumberValue(value);
 
     public void WriteShort(Schema schema, short value) => writer.WriteNumberValue(value);
 
@@ -164,7 +164,7 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
             writer.WriteBooleanValue(value);
         }
 
-        public void WriteByte(Schema schema, byte value)
+        public void WriteByte(Schema schema, sbyte value)
         {
             WritePropertyName(schema);
             writer.WriteNumberValue(value);

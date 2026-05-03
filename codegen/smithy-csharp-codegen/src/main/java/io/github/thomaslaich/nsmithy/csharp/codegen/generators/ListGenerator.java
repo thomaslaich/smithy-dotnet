@@ -7,7 +7,6 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.AttributeEmitter;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -38,7 +37,6 @@ public final class ListGenerator implements Runnable {
     String memberType =
         CSharpSymbolProvider.qualified(member) + (ShapeSupport.isSparse(shape) ? "?" : "");
 
-    AttributeEmitter.writeShapeAttributes(writer, shape);
     writer.write(
         "public sealed partial record class $L : ISerializableShape, IDeserializableShape<$L>",
         typeName,
@@ -62,8 +60,6 @@ public final class ListGenerator implements Runnable {
                     "Values = System.Array.AsReadOnly(System.Linq.Enumerable.ToArray(values));");
               });
           writer.write("");
-          AttributeEmitter.writeMemberAttributes(
-              writer, shape.getMember(), ShapeSupport.isSparse(shape));
           writer.write(
               "public System.Collections.Generic.IReadOnlyList<$L> Values { get; }", memberType);
           writer.write("");
@@ -81,8 +77,7 @@ public final class ListGenerator implements Runnable {
         "}",
         () -> {
           writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
-          writer.write(
-              "serializer.WriteList(Schema, Values, Values.Count, static (values, w) =>");
+          writer.write("serializer.WriteList(Schema, Values, Values.Count, static (values, w) =>");
           writer.openBlock(
               "{",
               "});",
@@ -95,14 +90,14 @@ public final class ListGenerator implements Runnable {
                       if (ShapeSupport.isSparse(shape)) {
                         writer.write("if (item is null)");
                         writer.openBlock(
-                            "{",
-                            "}",
-                            () -> writer.write("w.WriteNull(MemberSchema);"));
+                            "{", "}", () -> writer.write("w.WriteNull(MemberSchema);"));
                         writer.write("else");
                         writer.openBlock(
                             "{",
                             "}",
-                            () -> writer.write(writeValueStatement(target, "w", "MemberSchema", "item")));
+                            () ->
+                                writer.write(
+                                    writeValueStatement(target, "w", "MemberSchema", "item")));
                       } else {
                         writer.write(writeValueStatement(target, "w", "MemberSchema", "item"));
                       }
@@ -138,16 +133,22 @@ public final class ListGenerator implements Runnable {
                   writer.openBlock(
                       "{",
                       "}",
-                      () -> writer.write("list.Add(" + readValueExpression(target, "r", "MemberSchema") + ");"));
+                      () ->
+                          writer.write(
+                              "list.Add("
+                                  + readValueExpression(target, "r", "MemberSchema")
+                                  + ");"));
                 } else {
-                  writer.write("list.Add(" + readValueExpression(target, "r", "MemberSchema") + ");");
+                  writer.write(
+                      "list.Add(" + readValueExpression(target, "r", "MemberSchema") + ");");
                 }
               });
           writer.write("return new $L(values);", typeName);
         });
   }
 
-  private String writeValueStatement(Shape target, String serializerVar, String schemaVar, String valueExpr) {
+  private String writeValueStatement(
+      Shape target, String serializerVar, String schemaVar, String valueExpr) {
     return switch (target.getType()) {
       case BOOLEAN -> serializerVar + ".WriteBoolean(" + schemaVar + ", " + valueExpr + ");";
       case BYTE -> serializerVar + ".WriteByte(" + schemaVar + ", " + valueExpr + ");";
@@ -197,7 +198,8 @@ public final class ListGenerator implements Runnable {
               + ".ReadInteger("
               + schemaVar
               + ")";
-      default -> throw new IllegalArgumentException("Unsupported list member shape: " + target.getId());
+      default ->
+          throw new IllegalArgumentException("Unsupported list member shape: " + target.getId());
     };
   }
 }

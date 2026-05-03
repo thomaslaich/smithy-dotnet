@@ -1,361 +1,686 @@
 using System.Buffers;
-using System.Collections;
-using System.Collections.Concurrent;
 using System.Globalization;
-using System.Reflection;
+using System.Numerics;
+using System.Xml.Linq;
 using NSmithy.Core;
-using NSmithy.Core.Annotations;
 using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Xml;
 
+/// <summary>
+/// XML codec that walks shapes via the <see cref="IShapeSerializer"/> /
+/// <see cref="IShapeDeserializer"/> visitor interfaces. No reflection; no annotation-based type
+/// resolution.
+/// </summary>
 public sealed class SmithyXmlCodec : ISmithyCodec
 {
     public static SmithyXmlCodec Default { get; } = new();
 
     public string MediaType => "application/xml";
 
-    public IShapeSerializer CreateSerializer(Stream sink) => new TopLevelSerializer(sink);
+    public IShapeSerializer CreateSerializer(Stream sink) => new XmlShapeSerializer(sink);
 
-    public IShapeDeserializer CreateDeserializer(ReadOnlySequence<byte> source) =>
-        new ReflectionDeserializer(source.ToArray());
-
-    private sealed class TopLevelSerializer(Stream sink) : IShapeSerializer
+    public IShapeDeserializer CreateDeserializer(ReadOnlySequence<byte> source)
     {
-        private readonly Stream sink = sink;
-        private bool written;
-
-        public void WriteStruct(Schema schema, ISerializableStruct value) =>
-            WriteObject(value, value.GetType());
-
-        public void WriteList<TState>(
-            Schema schema,
-            TState state,
-            int size,
-            Action<TState, IShapeSerializer> consumer
-        ) => WriteObject(state, state?.GetType() ?? ResolveType(schema));
-
-        public void WriteMap<TState>(
-            Schema schema,
-            TState state,
-            int size,
-            Action<TState, IMapSerializer> consumer
-        ) => WriteObject(state, state?.GetType() ?? ResolveType(schema));
-
-        public void WriteBoolean(Schema schema, bool value) => WriteObject(value, typeof(bool));
-
-        public void WriteByte(Schema schema, byte value) => WriteObject(value, typeof(byte));
-
-        public void WriteShort(Schema schema, short value) => WriteObject(value, typeof(short));
-
-        public void WriteInteger(Schema schema, int value) => WriteObject(value, typeof(int));
-
-        public void WriteLong(Schema schema, long value) => WriteObject(value, typeof(long));
-
-        public void WriteFloat(Schema schema, float value) => WriteObject(value, typeof(float));
-
-        public void WriteDouble(Schema schema, double value) => WriteObject(value, typeof(double));
-
-        public void WriteBigInteger(Schema schema, System.Numerics.BigInteger value) =>
-            WriteObject(value, typeof(System.Numerics.BigInteger));
-
-        public void WriteBigDecimal(Schema schema, decimal value) =>
-            WriteObject(value, typeof(decimal));
-
-        public void WriteString(Schema schema, string value) => WriteObject(value, typeof(string));
-
-        public void WriteBlob(Schema schema, ReadOnlySpan<byte> value) =>
-            WriteObject(value.ToArray(), typeof(byte[]));
-
-        public void WriteTimestamp(Schema schema, DateTimeOffset value) =>
-            WriteObject(value, typeof(DateTimeOffset));
-
-        public void WriteDocument(Schema schema, Document value) => WriteObject(value, typeof(Document));
-
-        public void WriteNull(Schema schema) => WriteObject(null, ResolveType(schema));
-
-        public void Flush() => sink.Flush();
-
-        public void Dispose() { }
-
-        private void WriteObject(object? value, Type declaredType)
+        var bytes = source.ToArray();
+        if (bytes.Length == 0)
         {
-            if (written)
-            {
-                throw new InvalidOperationException("Codec serializer only supports a single top-level value.");
-            }
+            return new XmlShapeDeserializer(null);
+        }
 
-            var content = XmlReflectionCodec.SerializeObject(value, declaredType);
-            sink.Write(content, 0, content.Length);
-            written = true;
+        var doc = XDocument.Load(new System.IO.MemoryStream(bytes));
+        return new XmlShapeDeserializer(doc.Root);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Trait helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+internal static class XmlTraits
+{
+    private static readonly ShapeId XmlNameId = ShapeId.Parse("smithy.api#xmlName");
+    private static readonly ShapeId XmlAttributeId = ShapeId.Parse("smithy.api#xmlAttribute");
+    private static readonly ShapeId XmlFlattenedId = ShapeId.Parse("smithy.api#xmlFlattened");
+    private static readonly ShapeId TimestampFormatId = ShapeId.Parse("smithy.api#timestampFormat");
+
+    public static string? GetXmlName(Schema schema) =>
+        schema.GetTrait(XmlNameId) is { HasValue: true } t ? t.Value.AsString() : null;
+
+    public static bool IsXmlAttribute(Schema schema) => schema.HasTrait(XmlAttributeId);
+
+    public static bool IsXmlFlattened(Schema schema) => schema.HasTrait(XmlFlattenedId);
+
+    public static string? GetTimestampFormat(Schema schema) =>
+        schema.GetTrait(TimestampFormatId) is { HasValue: true } t ? t.Value.AsString() : null;
+
+    public static string ElementName(Schema memberSchema) =>
+        GetXmlName(memberSchema) ?? memberSchema.MemberName!;
+
+    public static string RootElementName(Schema schema) =>
+        GetXmlName(schema) ?? schema.Id.Name;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Serializer (top-level / value-context)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Top-level XML serializer. Writes a single root element to the sink stream.
+/// </summary>
+internal sealed class XmlShapeSerializer : IShapeSerializer
+{
+    private readonly Stream sink;
+    private XElement? rootElement;
+
+    public XmlShapeSerializer(Stream sink)
+    {
+        this.sink = sink;
+    }
+
+    // Value-context ctor used by nested serializers sharing a parent element
+    internal XmlShapeSerializer(XElement parent)
+    {
+        sink = null!;
+        rootElement = parent;
+    }
+
+    public void Dispose()
+    {
+        if (rootElement is not null && sink is not null)
+        {
+            Flush();
         }
     }
 
-    private sealed class ReflectionDeserializer(byte[] content) : IShapeDeserializer
+    public void Flush()
     {
-        private readonly byte[] content = content;
-        private object? value = RootSentinel.Instance;
-
-        public void ReadStruct<TState>(Schema schema, TState state, StructMemberConsumer<TState> consumer)
+        if (rootElement is not null && sink is not null)
         {
-            var current = EnsureValue(schema);
-            if (schema.Kind == ShapeKind.Union)
-            {
-                ReadUnion(schema, current, state, consumer);
-                return;
-            }
+            var doc = new XDocument(rootElement);
+            doc.Save(sink, SaveOptions.DisableFormatting);
+        }
+        else
+        {
+            sink?.Flush();
+        }
+    }
 
-            if (current is null)
-            {
-                return;
-            }
+    public void WriteStruct(Schema schema, ISerializableStruct value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var element = new XElement(XmlTraits.RootElementName(schema));
+        SetRoot(element);
+        var memberSerializer = new XmlStructMemberSerializer(element);
+        value.SerializeMembers(memberSerializer);
+    }
 
-            foreach (var member in schema.Members)
+    public void WriteList<TState>(
+        Schema schema,
+        TState state,
+        int size,
+        Action<TState, IShapeSerializer> consumer
+    )
+    {
+        ArgumentNullException.ThrowIfNull(consumer);
+        // Top-level list: wrap in an element named by the schema
+        var element = new XElement(XmlTraits.RootElementName(schema));
+        SetRoot(element);
+        consumer(state, new XmlListItemSerializer(element, schema));
+    }
+
+    public void WriteMap<TState>(
+        Schema schema,
+        TState state,
+        int size,
+        Action<TState, IMapSerializer> consumer
+    )
+    {
+        ArgumentNullException.ThrowIfNull(consumer);
+        var element = new XElement(XmlTraits.RootElementName(schema));
+        SetRoot(element);
+        consumer(state, new XmlMapSerializer(element));
+    }
+
+    private void SetRoot(XElement element)
+    {
+        rootElement = element;
+    }
+
+    // Scalar write methods at top level — just serialize as root element content
+    public void WriteBoolean(Schema schema, bool value) =>
+        SetRootText(schema, value ? "true" : "false");
+
+    public void WriteByte(Schema schema, sbyte value) =>
+        SetRootText(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteShort(Schema schema, short value) =>
+        SetRootText(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteInteger(Schema schema, int value) =>
+        SetRootText(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteLong(Schema schema, long value) =>
+        SetRootText(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteFloat(Schema schema, float value) =>
+        SetRootText(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteDouble(Schema schema, double value) =>
+        SetRootText(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteBigInteger(Schema schema, BigInteger value) =>
+        SetRootText(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteBigDecimal(Schema schema, decimal value) =>
+        SetRootText(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteString(Schema schema, string value) =>
+        SetRootText(schema, value);
+
+    public void WriteBlob(Schema schema, ReadOnlySpan<byte> value) =>
+        SetRootText(schema, Convert.ToBase64String(value));
+
+    public void WriteTimestamp(Schema schema, DateTimeOffset value) =>
+        SetRootText(schema, FormatTimestamp(schema, value));
+
+    public void WriteDocument(Schema schema, Document value) =>
+        throw new NotSupportedException("Smithy Document values are not supported in XML.");
+
+    public void WriteNull(Schema schema) { }
+
+    private void SetRootText(Schema schema, string text)
+    {
+        var element = new XElement(XmlTraits.RootElementName(schema), text);
+        SetRoot(element);
+    }
+
+    internal static string FormatTimestamp(Schema schema, DateTimeOffset value)
+    {
+        var fmt = XmlTraits.GetTimestampFormat(schema?.Target ?? schema!);
+        return fmt switch
+        {
+            "epoch-seconds" => (value.ToUnixTimeMilliseconds() / 1000.0).ToString(
+                CultureInfo.InvariantCulture
+            ),
+            "http-date" => value.ToString("r", CultureInfo.InvariantCulture),
+            _ => value.UtcDateTime.ToString("O", CultureInfo.InvariantCulture), // date-time / default
+        };
+    }
+
+    internal static DateTimeOffset ParseTimestamp(Schema schema, string text)
+    {
+        var fmt = XmlTraits.GetTimestampFormat(schema?.Target ?? schema!);
+        return fmt switch
+        {
+            "epoch-seconds" => DateTimeOffset.FromUnixTimeMilliseconds(
+                (long)(double.Parse(text, CultureInfo.InvariantCulture) * 1000)
+            ),
+            "http-date" => DateTimeOffset.ParseExact(
+                text,
+                "r",
+                CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None
+            ),
+            _ => DateTimeOffset.Parse(
+                text,
+                CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind
+            ),
+        };
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Member-context serializer
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Member-context serializer. Each Write* call creates an XElement (or XAttribute) named by
+/// the member schema and adds it to the parent element.
+/// </summary>
+internal sealed class XmlStructMemberSerializer(XElement parent) : IShapeSerializer
+{
+    public void Dispose() { }
+
+    public void Flush() { }
+
+    public void WriteStruct(Schema schema, ISerializableStruct value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var child = new XElement(XmlTraits.ElementName(schema));
+        parent.Add(child);
+        value.SerializeMembers(new XmlStructMemberSerializer(child));
+    }
+
+    public void WriteList<TState>(
+        Schema schema,
+        TState state,
+        int size,
+        Action<TState, IShapeSerializer> consumer
+    )
+    {
+        ArgumentNullException.ThrowIfNull(consumer);
+        if (XmlTraits.IsXmlFlattened(schema))
+        {
+            // Flattened: each item becomes a direct child of the parent named by member's xmlName
+            consumer(state, new XmlListItemSerializer(parent, schema));
+        }
+        else
+        {
+            // Wrapped: items go inside a container element
+            var container = new XElement(XmlTraits.ElementName(schema));
+            parent.Add(container);
+            consumer(state, new XmlListItemSerializer(container, schema));
+        }
+    }
+
+    public void WriteMap<TState>(
+        Schema schema,
+        TState state,
+        int size,
+        Action<TState, IMapSerializer> consumer
+    )
+    {
+        ArgumentNullException.ThrowIfNull(consumer);
+        if (XmlTraits.IsXmlFlattened(schema))
+        {
+            consumer(state, new XmlMapSerializer(parent, XmlTraits.ElementName(schema)));
+        }
+        else
+        {
+            var container = new XElement(XmlTraits.ElementName(schema));
+            parent.Add(container);
+            consumer(state, new XmlMapSerializer(container));
+        }
+    }
+
+    public void WriteBoolean(Schema schema, bool value) =>
+        WriteScalar(schema, value ? "true" : "false");
+
+    public void WriteByte(Schema schema, sbyte value) =>
+        WriteScalar(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteShort(Schema schema, short value) =>
+        WriteScalar(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteInteger(Schema schema, int value) =>
+        WriteScalar(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteLong(Schema schema, long value) =>
+        WriteScalar(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteFloat(Schema schema, float value) =>
+        WriteScalar(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteDouble(Schema schema, double value) =>
+        WriteScalar(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteBigInteger(Schema schema, BigInteger value) =>
+        WriteScalar(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteBigDecimal(Schema schema, decimal value) =>
+        WriteScalar(schema, value.ToString(CultureInfo.InvariantCulture));
+
+    public void WriteString(Schema schema, string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        WriteScalar(schema, value);
+    }
+
+    public void WriteBlob(Schema schema, ReadOnlySpan<byte> value) =>
+        WriteScalar(schema, Convert.ToBase64String(value));
+
+    public void WriteTimestamp(Schema schema, DateTimeOffset value) =>
+        WriteScalar(schema, XmlShapeSerializer.FormatTimestamp(schema, value));
+
+    public void WriteDocument(Schema schema, Document value) =>
+        throw new NotSupportedException("Smithy Document values are not supported in XML.");
+
+    public void WriteNull(Schema schema) { }
+
+    private void WriteScalar(Schema memberSchema, string text)
+    {
+        if (XmlTraits.IsXmlAttribute(memberSchema))
+        {
+            parent.SetAttributeValue(XmlTraits.ElementName(memberSchema), text);
+        }
+        else
+        {
+            parent.Add(new XElement(XmlTraits.ElementName(memberSchema), text));
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// List item serializer
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Writes each list item as a child element of <paramref name="parent"/>.
+/// The element name comes from the list member schema's xmlName or the member name "member".
+/// </summary>
+internal sealed class XmlListItemSerializer(XElement parent, Schema listSchema) : IShapeSerializer
+{
+    private string ItemElementName()
+    {
+        // For flattened lists the item name is the member's xmlName
+        // For wrapped lists it's the list's member element name (usually "member")
+        var memberSchema = listSchema.ListMember;
+        if (memberSchema is not null)
+        {
+            return XmlTraits.GetXmlName(memberSchema) ?? memberSchema.MemberName ?? "member";
+        }
+
+        // Fallback: use the member schema's xmlName trait or "member"
+        return XmlTraits.GetXmlName(listSchema) ?? "member";
+    }
+
+    public void Dispose() { }
+
+    public void Flush() { }
+
+    public void WriteStruct(Schema schema, ISerializableStruct value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var child = new XElement(ItemElementName());
+        parent.Add(child);
+        value.SerializeMembers(new XmlStructMemberSerializer(child));
+    }
+
+    public void WriteList<TState>(
+        Schema schema,
+        TState state,
+        int size,
+        Action<TState, IShapeSerializer> consumer
+    )
+    {
+        ArgumentNullException.ThrowIfNull(consumer);
+        var child = new XElement(ItemElementName());
+        parent.Add(child);
+        consumer(state, new XmlListItemSerializer(child, schema));
+    }
+
+    public void WriteMap<TState>(
+        Schema schema,
+        TState state,
+        int size,
+        Action<TState, IMapSerializer> consumer
+    )
+    {
+        ArgumentNullException.ThrowIfNull(consumer);
+        var child = new XElement(ItemElementName());
+        parent.Add(child);
+        consumer(state, new XmlMapSerializer(child));
+    }
+
+    public void WriteBoolean(Schema schema, bool value) =>
+        parent.Add(new XElement(ItemElementName(), value ? "true" : "false"));
+
+    public void WriteByte(Schema schema, sbyte value) =>
+        parent.Add(new XElement(ItemElementName(), value.ToString(CultureInfo.InvariantCulture)));
+
+    public void WriteShort(Schema schema, short value) =>
+        parent.Add(new XElement(ItemElementName(), value.ToString(CultureInfo.InvariantCulture)));
+
+    public void WriteInteger(Schema schema, int value) =>
+        parent.Add(new XElement(ItemElementName(), value.ToString(CultureInfo.InvariantCulture)));
+
+    public void WriteLong(Schema schema, long value) =>
+        parent.Add(new XElement(ItemElementName(), value.ToString(CultureInfo.InvariantCulture)));
+
+    public void WriteFloat(Schema schema, float value) =>
+        parent.Add(new XElement(ItemElementName(), value.ToString(CultureInfo.InvariantCulture)));
+
+    public void WriteDouble(Schema schema, double value) =>
+        parent.Add(new XElement(ItemElementName(), value.ToString(CultureInfo.InvariantCulture)));
+
+    public void WriteBigInteger(Schema schema, BigInteger value) =>
+        parent.Add(new XElement(ItemElementName(), value.ToString(CultureInfo.InvariantCulture)));
+
+    public void WriteBigDecimal(Schema schema, decimal value) =>
+        parent.Add(new XElement(ItemElementName(), value.ToString(CultureInfo.InvariantCulture)));
+
+    public void WriteString(Schema schema, string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        parent.Add(new XElement(ItemElementName(), value));
+    }
+
+    public void WriteBlob(Schema schema, ReadOnlySpan<byte> value) =>
+        parent.Add(new XElement(ItemElementName(), Convert.ToBase64String(value)));
+
+    public void WriteTimestamp(Schema schema, DateTimeOffset value) =>
+        parent.Add(
+            new XElement(ItemElementName(), XmlShapeSerializer.FormatTimestamp(schema, value))
+        );
+
+    public void WriteDocument(Schema schema, Document value) =>
+        throw new NotSupportedException("Smithy Document values are not supported in XML.");
+
+    public void WriteNull(Schema schema) { }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Map serializer
+// ─────────────────────────────────────────────────────────────────────────────
+
+internal sealed class XmlMapSerializer : IMapSerializer
+{
+    private readonly XElement parent;
+    private readonly string entryElementName;
+
+    public XmlMapSerializer(XElement parent, string entryElementName = "entry")
+    {
+        this.parent = parent;
+        this.entryElementName = entryElementName;
+    }
+
+    public void Entry<TState>(
+        string key,
+        TState state,
+        Action<TState, IShapeSerializer> valueWriter
+    )
+    {
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentNullException.ThrowIfNull(valueWriter);
+        var entry = new XElement(entryElementName);
+        entry.Add(new XElement("key", key));
+        var valueElement = new XElement("value");
+        entry.Add(valueElement);
+        parent.Add(entry);
+        valueWriter(state, new XmlShapeSerializer(valueElement));
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Deserializer
+// ─────────────────────────────────────────────────────────────────────────────
+
+internal sealed class XmlShapeDeserializer : IShapeDeserializer
+{
+    private XElement? current;
+
+    public XmlShapeDeserializer(XElement? root)
+    {
+        current = root;
+    }
+
+    public void Dispose() { }
+
+    public bool IsNull() => current is null;
+
+    public void ReadNull() { }
+
+    public int ContainerSize() => current?.Elements().Count() ?? 0;
+
+    public void ReadStruct<TState>(
+        Schema schema,
+        TState state,
+        StructMemberConsumer<TState> consumer
+    )
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        ArgumentNullException.ThrowIfNull(consumer.Member);
+
+        if (current is null)
+        {
+            return;
+        }
+
+        var saved = current;
+        try
+        {
+            // Read attributes first
+            foreach (var attr in saved.Attributes())
             {
-                var memberValue = GetStructMemberValue(current, member.MemberName!);
-                if (memberValue is MissingMember)
+                var memberSchema = ResolveMember(schema, attr.Name.LocalName);
+                if (memberSchema is null)
                 {
                     continue;
                 }
 
-                consumer.Member(state, member, new ReflectionDeserializer(memberValue is NullValue ? [] : content) { value = Unwrap(memberValue) });
-            }
-        }
-
-        public void ReadList<TState>(Schema schema, TState state, ListMemberConsumer<TState> consumer)
-        {
-            var current = EnsureValue(schema);
-            if (current is not IEnumerable values || current is string)
-            {
-                return;
+                // Create a pseudo-element for the attribute value
+                current = new XElement(attr.Name.LocalName, attr.Value);
+                consumer.Member(state, memberSchema, this);
             }
 
-            foreach (var item in values)
+            // Read child elements
+            foreach (var child in saved.Elements())
             {
-                consumer(state, new ReflectionDeserializer(item is null ? [] : content) { value = item });
-            }
-        }
-
-        public void ReadMap<TState>(Schema schema, TState state, MapMemberConsumer<TState> consumer)
-        {
-            var current = EnsureValue(schema);
-            foreach (var item in EnumerateMap(current))
-            {
-                consumer(state, item.Key, new ReflectionDeserializer(item.Value is null ? [] : content) { value = item.Value });
-            }
-        }
-
-        public bool ReadBoolean(Schema schema) =>
-            Convert.ToBoolean(EnsureValue(schema), CultureInfo.InvariantCulture);
-
-        public byte ReadByte(Schema schema) =>
-            Convert.ToByte(EnsureValue(schema), CultureInfo.InvariantCulture);
-
-        public short ReadShort(Schema schema) =>
-            Convert.ToInt16(EnsureValue(schema), CultureInfo.InvariantCulture);
-
-        public int ReadInteger(Schema schema) =>
-            Convert.ToInt32(EnsureValue(schema), CultureInfo.InvariantCulture);
-
-        public long ReadLong(Schema schema) =>
-            Convert.ToInt64(EnsureValue(schema), CultureInfo.InvariantCulture);
-
-        public float ReadFloat(Schema schema) =>
-            Convert.ToSingle(EnsureValue(schema), CultureInfo.InvariantCulture);
-
-        public double ReadDouble(Schema schema) =>
-            Convert.ToDouble(EnsureValue(schema), CultureInfo.InvariantCulture);
-
-        public System.Numerics.BigInteger ReadBigInteger(Schema schema) =>
-            EnsureValue(schema) switch
-            {
-                System.Numerics.BigInteger bigInteger => bigInteger,
-                var scalar => new System.Numerics.BigInteger(Convert.ToInt64(scalar, CultureInfo.InvariantCulture)),
-            };
-
-        public decimal ReadBigDecimal(Schema schema) =>
-            Convert.ToDecimal(EnsureValue(schema), CultureInfo.InvariantCulture);
-
-        public string ReadString(Schema schema) => (string)EnsureValue(schema)!;
-
-        public byte[] ReadBlob(Schema schema) => (byte[])EnsureValue(schema)!;
-
-        public DateTimeOffset ReadTimestamp(Schema schema) => (DateTimeOffset)EnsureValue(schema)!;
-
-        public Document ReadDocument(Schema schema) => (Document)EnsureValue(schema)!;
-
-        public bool IsNull() => value is null || value is NullValue;
-
-        public void ReadNull() { }
-
-        public int ContainerSize()
-        {
-            return value switch
-            {
-                ICollection collection => collection.Count,
-                IEnumerable enumerable => enumerable.Cast<object?>().Count(),
-                _ => -1,
-            };
-        }
-
-        public void Dispose() { }
-
-        private object? EnsureValue(Schema schema)
-        {
-            if (!ReferenceEquals(value, RootSentinel.Instance))
-            {
-                return value;
-            }
-
-            value = XmlReflectionCodec.DeserializeObject(content, ResolveType(schema));
-            return value;
-        }
-
-        private static void ReadUnion<TState>(
-            Schema schema,
-            object? current,
-            TState state,
-            StructMemberConsumer<TState> consumer
-        )
-        {
-            if (current is null)
-            {
-                return;
-            }
-
-            var runtimeType = current.GetType();
-            if (string.Equals(runtimeType.Name, "Unknown", StringComparison.Ordinal))
-            {
-                var tag = runtimeType.GetProperty("Tag")?.GetValue(current)?.ToString();
-                var rawValue = runtimeType.GetProperty("Value")?.GetValue(current);
-                if (tag is not null)
+                var memberSchema = ResolveMember(schema, child.Name.LocalName);
+                current = child;
+                if (memberSchema is null)
                 {
-                    consumer.UnknownMember?.Invoke(
-                        state,
-                        tag,
-                        new ReflectionDeserializer(rawValue is null ? [] : Array.Empty<byte>()) { value = rawValue }
-                    );
+                    consumer.UnknownMember?.Invoke(state, child.Name.LocalName, this);
                 }
-
-                return;
+                else
+                {
+                    consumer.Member(state, memberSchema, this);
+                }
             }
-
-            var member = runtimeType.GetCustomAttribute<SmithyMemberAttribute>();
-            if (member is null)
-            {
-                return;
-            }
-
-            var memberSchema = schema.GetMember(member.Name);
-            if (memberSchema is null)
-            {
-                return;
-            }
-
-            var unionValue = runtimeType.GetProperty("Value")?.GetValue(current);
-            consumer.Member(
-                state,
-                memberSchema,
-                new ReflectionDeserializer(unionValue is null ? [] : Array.Empty<byte>()) { value = unionValue }
-            );
         }
-
-        private static object? GetStructMemberValue(object current, string memberName)
+        finally
         {
-            var property =
-                current.GetType()
-                    .GetProperties(BindingFlags.Instance | BindingFlags.Public)
-                    .FirstOrDefault(p =>
-                        string.Equals(
-                            p.GetCustomAttribute<SmithyMemberAttribute>()?.Name ?? p.Name,
-                            memberName,
-                            StringComparison.Ordinal
-                        )
-                    );
-
-            if (property is null)
-            {
-                return MissingMember.Instance;
-            }
-
-            return property.GetValue(current) ?? NullValue.Instance;
-        }
-
-        private static object? Unwrap(object? value) =>
-            value is NullValue or MissingMember ? null : value;
-    }
-
-    private static IEnumerable<KeyValuePair<string, object?>> EnumerateMap(object? value)
-    {
-        if (value is not IEnumerable enumerable)
-        {
-            yield break;
-        }
-
-        foreach (var item in enumerable)
-        {
-            if (item is null)
-            {
-                continue;
-            }
-
-            if (item is DictionaryEntry entry && entry.Key is not null)
-            {
-                yield return new(entry.Key.ToString() ?? string.Empty, entry.Value);
-                continue;
-            }
-
-            var itemType = item.GetType();
-            var key = itemType.GetProperty("Key")?.GetValue(item)?.ToString();
-            if (key is null)
-            {
-                continue;
-            }
-
-            yield return new(key, itemType.GetProperty("Value")?.GetValue(item));
+            current = saved;
         }
     }
 
-    private static readonly ConcurrentDictionary<ShapeId, Type> TypeCache = new();
-
-    private static Type ResolveType(Schema schema) =>
-        TypeCache.GetOrAdd(
-            schema.Id,
-            id =>
-                AppDomain.CurrentDomain
-                    .GetAssemblies()
-                    .SelectMany(GetTypes)
-                    .FirstOrDefault(type =>
-                        type.GetCustomAttribute<SmithyShapeAttribute>() is { } shape
-                        && string.Equals(shape.Id, id.ToString(), StringComparison.Ordinal)
-                    )
-                ?? throw new InvalidOperationException($"Unable to resolve CLR type for shape '{id}'.")
-        );
-
-    private static IEnumerable<Type> GetTypes(Assembly assembly)
+    public void ReadList<TState>(Schema schema, TState state, ListMemberConsumer<TState> consumer)
     {
+        ArgumentNullException.ThrowIfNull(consumer);
+
+        if (current is null)
+        {
+            return;
+        }
+
+        var saved = current;
         try
         {
-            return assembly.GetTypes();
+            // Get the item element name (e.g. "member" or from xmlName trait on list member)
+            var memberSchema = schema.ListMember;
+            string itemName = memberSchema is not null
+                ? (XmlTraits.GetXmlName(memberSchema) ?? memberSchema.MemberName ?? "member")
+                : "member";
+
+            foreach (var child in saved.Elements(itemName))
+            {
+                current = child;
+                consumer(state, this);
+            }
         }
-        catch (ReflectionTypeLoadException error)
+        finally
         {
-            return error.Types.Where(type => type is not null)!;
+            current = saved;
         }
     }
 
-    private sealed class RootSentinel
+    public void ReadMap<TState>(Schema schema, TState state, MapMemberConsumer<TState> consumer)
     {
-        public static readonly RootSentinel Instance = new();
+        ArgumentNullException.ThrowIfNull(consumer);
+
+        if (current is null)
+        {
+            return;
+        }
+
+        var saved = current;
+        try
+        {
+            // Map entries: <entry><key>k</key><value>v</value></entry>
+            foreach (var entry in saved.Elements())
+            {
+                var keyElement = entry.Element("key");
+                var valueElement = entry.Element("value");
+                if (keyElement is null)
+                {
+                    continue;
+                }
+
+                var key = keyElement.Value;
+                current = valueElement;
+                consumer(state, key, this);
+            }
+        }
+        finally
+        {
+            current = saved;
+        }
     }
 
-    private sealed class MissingMember
-    {
-        public static readonly MissingMember Instance = new();
-    }
+    public bool ReadBoolean(Schema schema) =>
+        string.Equals(current?.Value, "true", StringComparison.OrdinalIgnoreCase);
 
-    private sealed class NullValue
+    public sbyte ReadByte(Schema schema) =>
+        sbyte.Parse(current?.Value ?? "0", CultureInfo.InvariantCulture);
+
+    public short ReadShort(Schema schema) =>
+        short.Parse(current?.Value ?? "0", CultureInfo.InvariantCulture);
+
+    public int ReadInteger(Schema schema) =>
+        int.Parse(current?.Value ?? "0", CultureInfo.InvariantCulture);
+
+    public long ReadLong(Schema schema) =>
+        long.Parse(current?.Value ?? "0", CultureInfo.InvariantCulture);
+
+    public float ReadFloat(Schema schema) =>
+        float.Parse(current?.Value ?? "0", CultureInfo.InvariantCulture);
+
+    public double ReadDouble(Schema schema) =>
+        double.Parse(current?.Value ?? "0", CultureInfo.InvariantCulture);
+
+    public BigInteger ReadBigInteger(Schema schema) =>
+        BigInteger.Parse(current?.Value ?? "0", CultureInfo.InvariantCulture);
+
+    public decimal ReadBigDecimal(Schema schema) =>
+        decimal.Parse(current?.Value ?? "0", CultureInfo.InvariantCulture);
+
+    public string ReadString(Schema schema) =>
+        current?.Value ?? throw new InvalidOperationException("Expected XML element with text.");
+
+    public byte[] ReadBlob(Schema schema) =>
+        Convert.FromBase64String(
+            current?.Value ?? throw new InvalidOperationException("Expected XML element with text.")
+        );
+
+    public DateTimeOffset ReadTimestamp(Schema schema) =>
+        XmlShapeSerializer.ParseTimestamp(schema, current?.Value ?? string.Empty);
+
+    public Document ReadDocument(Schema schema) =>
+        throw new NotSupportedException("Smithy Document values are not supported in XML.");
+
+    private static Schema? ResolveMember(Schema structSchema, string xmlElementName)
     {
-        public static readonly NullValue Instance = new();
+        foreach (var member in structSchema.Members)
+        {
+            var name = XmlTraits.GetXmlName(member) ?? member.MemberName!;
+            if (string.Equals(name, xmlElementName, StringComparison.Ordinal))
+            {
+                return member;
+            }
+        }
+
+        return null;
     }
 }

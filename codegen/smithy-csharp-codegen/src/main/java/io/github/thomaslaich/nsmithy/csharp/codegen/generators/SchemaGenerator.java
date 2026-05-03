@@ -4,7 +4,6 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.AttributeEmitter;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -23,6 +22,7 @@ import software.amazon.smithy.model.shapes.MapShape;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
+import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.traits.Trait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -52,8 +52,27 @@ public final class SchemaGenerator {
         case "Timestamp" -> "PreludeSchemas.Timestamp";
         case "Document" -> "PreludeSchemas.Document";
         case "Unit" -> "PreludeSchemas.Unit";
-        default -> throw new IllegalArgumentException("Unsupported prelude shape: " + shape.getId());
+        default ->
+            throw new IllegalArgumentException("Unsupported prelude shape: " + shape.getId());
       };
+    }
+
+    // IntEnum generates a plain C# enum with no Schema property; its wire type is Integer.
+    if (shape.getType() == ShapeType.INT_ENUM) {
+      return "PreludeSchemas.Integer";
+    }
+
+    // Timestamp shapes outside smithy.api (e.g. with @timestampFormat applied) still map
+    // to System.DateTimeOffset in C# which has no Schema property.
+    if (shape.getType() == ShapeType.TIMESTAMP) {
+      return "PreludeSchemas.Timestamp";
+    }
+
+    // Primitive shapes outside smithy.api (e.g. custom boolean/integer aliases) still map
+    // to the corresponding C# primitives which have no Schema property.
+    String preludeSchema = primitiveTypeToPreludeSchema(shape.getType());
+    if (preludeSchema != null) {
+      return preludeSchema;
     }
 
     SymbolProvider symbolProvider = context.symbolProvider();
@@ -101,7 +120,7 @@ public final class SchemaGenerator {
     writer.write("");
     writer.write(
         "public static Schema Schema { get; } = Schema.Create$L($L, [$L], $L);",
-        AttributeEmitter.shapeKindName(shape.getType()),
+        shapeKindName(shape.getType()),
         shapeIdExpr(shape.getId()),
         members.stream()
             .map(SchemaGenerator::memberSchemaFieldName)
@@ -110,7 +129,8 @@ public final class SchemaGenerator {
     writer.write("");
   }
 
-  public static void writeListSchema(CSharpWriter writer, GenerationContext context, ListShape shape) {
+  public static void writeListSchema(
+      CSharpWriter writer, GenerationContext context, ListShape shape) {
     addImports(writer);
     Model model = context.model();
     Shape memberTarget = model.expectShape(shape.getMember().getTarget());
@@ -122,13 +142,14 @@ public final class SchemaGenerator {
     writer.write("");
     writer.write(
         "public static Schema Schema { get; } = Schema.Create$L($L, MemberSchema, $L);",
-        AttributeEmitter.shapeKindName(shape.getType()),
+        shapeKindName(shape.getType()),
         shapeIdExpr(shape.getId()),
         traitsExpr(shape.getAllTraits().values()));
     writer.write("");
   }
 
-  public static void writeMapSchema(CSharpWriter writer, GenerationContext context, MapShape shape) {
+  public static void writeMapSchema(
+      CSharpWriter writer, GenerationContext context, MapShape shape) {
     addImports(writer);
     Model model = context.model();
     Shape keyTarget = model.expectShape(shape.getKey().getTarget());
@@ -156,7 +177,7 @@ public final class SchemaGenerator {
     writer.write(
         "public static Schema Schema { get; } = Schema.CreateSimple($L, ShapeKind.$L, $L);",
         shapeIdExpr(shape.getId()),
-        AttributeEmitter.shapeKindName(shape.getType()),
+        shapeKindName(shape.getType()),
         traitsExpr(shape.getAllTraits().values()));
     writer.write("");
   }
@@ -194,7 +215,9 @@ public final class SchemaGenerator {
 
   private static String arrayDocumentExpr(ArrayNode node) {
     return "Document.From(new Document[] {"
-        + node.getElements().stream().map(SchemaGenerator::documentExpr).collect(Collectors.joining(", "))
+        + node.getElements().stream()
+            .map(SchemaGenerator::documentExpr)
+            .collect(Collectors.joining(", "))
         + "})";
   }
 
@@ -213,5 +236,38 @@ public final class SchemaGenerator {
         + ", "
         + documentExpr(member.getValue())
         + "}";
+  }
+
+  /**
+   * Returns the PreludeSchemas accessor for built-in primitive ShapeTypes that map to C#
+   * primitives (which have no .Schema property), or null if the type is a user-defined shape.
+   */
+  private static String primitiveTypeToPreludeSchema(ShapeType t) {
+    return switch (t) {
+      case BOOLEAN -> "PreludeSchemas.Boolean";
+      case BYTE -> "PreludeSchemas.Byte";
+      case SHORT -> "PreludeSchemas.Short";
+      case INTEGER -> "PreludeSchemas.Integer";
+      case LONG -> "PreludeSchemas.Long";
+      case FLOAT -> "PreludeSchemas.Float";
+      case DOUBLE -> "PreludeSchemas.Double";
+      case BIG_INTEGER -> "PreludeSchemas.BigInteger";
+      case BIG_DECIMAL -> "PreludeSchemas.BigDecimal";
+      case STRING -> "PreludeSchemas.String";
+      case BLOB -> "PreludeSchemas.Blob";
+      case TIMESTAMP -> "PreludeSchemas.Timestamp";
+      case DOCUMENT -> "PreludeSchemas.Document";
+      default -> null;
+    };
+  }
+
+  private static String shapeKindName(ShapeType t) {
+    return switch (t) {
+      case INT_ENUM -> "IntEnum";
+      default -> {
+        String name = t.name().toLowerCase();
+        yield Character.toUpperCase(name.charAt(0)) + name.substring(1);
+      }
+    };
   }
 }

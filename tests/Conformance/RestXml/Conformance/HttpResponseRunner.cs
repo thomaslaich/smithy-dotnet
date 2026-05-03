@@ -4,7 +4,6 @@ using System.Reflection;
 using System.Text.Json.Nodes;
 using NSmithy.Client;
 using NSmithy.Core;
-using NSmithy.Core.Annotations;
 
 namespace RestXml.Conformance;
 
@@ -146,8 +145,8 @@ internal static class HttpResponseRunner
             // Smithy enums are generated as readonly record structs whose Value property is set
             // only by static instances. Pick the first static instance so the codec can read a
             // non-null Value.
-            var shape = type.GetCustomAttribute<SmithyShapeAttribute>();
-            if (shape?.Kind == ShapeKind.Enum)
+            var schemaKind = GetSchemaKind(type);
+            if (schemaKind == ShapeKind.Enum)
             {
                 var staticInst = type.GetProperties(BindingFlags.Public | BindingFlags.Static)
                     .FirstOrDefault(p => p.PropertyType == type)
@@ -220,6 +219,12 @@ internal static class HttpResponseRunner
             return Nullable.GetUnderlyingType(p.ParameterType) is not null;
         var ctx = new NullabilityInfoContext();
         return ctx.Create(p).WriteState == NullabilityState.Nullable;
+    }
+
+    private static ShapeKind? GetSchemaKind(Type type)
+    {
+        var schemaProp = type.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static);
+        return (schemaProp?.GetValue(null) as Schema)?.Kind;
     }
 }
 
@@ -324,8 +329,8 @@ internal static class ResponseAssertions
 
         // Enum-as-struct: compare its Value property to the expected string.
         var actualType = actual.GetType();
-        var shape = actualType.GetCustomAttribute<SmithyShapeAttribute>();
-        if (actualType.IsValueType && shape?.Kind == ShapeKind.Enum)
+        var shape = GetSchemaKind(actualType);
+        if (actualType.IsValueType && shape == ShapeKind.Enum)
         {
             var valProp = actualType.GetProperty("Value")!;
             Assert.Equal((string?)expected, (string?)valProp.GetValue(actual));
@@ -351,7 +356,7 @@ internal static class ResponseAssertions
 
         // Smithy unions: actual is a `MemberName` subclass with a `Value` property. Expected is
         // a single-key JSON object {"memberName": <value>}.
-        if (shape?.Kind == ShapeKind.Union)
+        if (shape == ShapeKind.Union)
         {
             var obj = expected.AsObject();
             Assert.Single(obj);
@@ -364,7 +369,7 @@ internal static class ResponseAssertions
         }
 
         // Smithy lists: wrapper record with a `Values` IReadOnlyList<T> property.
-        if (shape?.Kind == ShapeKind.List)
+        if (shape == ShapeKind.List)
         {
             var values = actualType.GetProperty("Values")!.GetValue(actual);
             AssertSequence(expected, (IEnumerable)values!, path);
@@ -373,7 +378,7 @@ internal static class ResponseAssertions
 
         // Smithy maps: wrapper record with a `Values` IReadOnlyDictionary<K,V> property; the
         // expected JSON is the dictionary contents directly (no `values` key).
-        if (shape?.Kind == ShapeKind.Map)
+        if (shape == ShapeKind.Map)
         {
             var values = actualType.GetProperty("Values")!.GetValue(actual);
             AssertMap(expected, ToDictionary(values!), path);
@@ -384,7 +389,7 @@ internal static class ResponseAssertions
         if (
             actual is IEnumerable seq
             && actual is not string
-            && actualType.GetCustomAttribute<SmithyShapeAttribute>()?.Kind != ShapeKind.Structure
+            && GetSchemaKind(actualType) != ShapeKind.Structure
         )
         {
             // Maps come through as IEnumerable<KeyValuePair<K, V>>.

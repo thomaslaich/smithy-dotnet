@@ -118,12 +118,12 @@ public sealed class Schema
     ) => CreateAggregate(id, ShapeKind.Union, members, traits);
 
     /// <summary>Create a schema for a list shape.</summary>
-    public static Schema CreateList(ShapeId id, Schema member, IEnumerable<Trait>? traits = null)
-        => CreateCollection(id, ShapeKind.List, member, traits);
+    public static Schema CreateList(ShapeId id, Schema member, IEnumerable<Trait>? traits = null) =>
+        CreateCollection(id, ShapeKind.List, member, traits);
 
     /// <summary>Create a schema for a set shape.</summary>
-    public static Schema CreateSet(ShapeId id, Schema member, IEnumerable<Trait>? traits = null)
-        => CreateCollection(id, ShapeKind.Set, member, traits);
+    public static Schema CreateSet(ShapeId id, Schema member, IEnumerable<Trait>? traits = null) =>
+        CreateCollection(id, ShapeKind.Set, member, traits);
 
     private static Schema CreateCollection(
         ShapeId id,

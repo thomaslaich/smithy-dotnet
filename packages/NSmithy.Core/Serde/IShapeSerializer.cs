@@ -38,7 +38,7 @@ public interface IShapeSerializer : IDisposable
 
     void WriteBoolean(Schema schema, bool value);
 
-    void WriteByte(Schema schema, byte value);
+    void WriteByte(Schema schema, sbyte value);
 
     void WriteShort(Schema schema, short value);
 

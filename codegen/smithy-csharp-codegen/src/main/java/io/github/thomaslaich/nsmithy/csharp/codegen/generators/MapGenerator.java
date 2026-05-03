@@ -7,9 +7,9 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.AttributeEmitter;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
+import io.github.thomaslaich.nsmithy.csharp.codegen.SymbolProperties;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.shapes.MapShape;
@@ -40,7 +40,6 @@ public final class MapGenerator implements Runnable {
     String valueType =
         CSharpSymbolProvider.qualified(value) + (ShapeSupport.isSparse(shape) ? "?" : "");
 
-    AttributeEmitter.writeShapeAttributes(writer, shape);
     writer.write(
         "public sealed partial record class $L : ISerializableShape, IDeserializableShape<$L>",
         typeName,
@@ -72,8 +71,6 @@ public final class MapGenerator implements Runnable {
                     valueType);
               });
           writer.write("");
-          AttributeEmitter.writeMemberAttributes(
-              writer, shape.getValue(), ShapeSupport.isSparse(shape));
           writer.write(
               "public System.Collections.Generic.IReadOnlyDictionary<$L, $L> Values { get; }",
               keyType,
@@ -86,15 +83,19 @@ public final class MapGenerator implements Runnable {
   }
 
   private void writeSerialize() {
+    SymbolProvider sp = context.symbolProvider();
     Shape valueTarget = context.model().expectShape(shape.getValue().getTarget());
+    Symbol valueSym = sp.toSymbol(valueTarget);
+    boolean valueIsValueType =
+        valueSym.getProperty(SymbolProperties.IS_VALUE_TYPE, Boolean.class).orElse(false);
+    String valueTypeName = CSharpSymbolProvider.qualified(valueSym);
     writer.write("public void Serialize(IShapeSerializer serializer)");
     writer.openBlock(
         "{",
         "}",
         () -> {
           writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
-          writer.write(
-              "serializer.WriteMap(Schema, Values, Values.Count, static (values, m) =>");
+          writer.write("serializer.WriteMap(Schema, Values, Values.Count, static (values, m) =>");
           writer.openBlock(
               "{",
               "});",
@@ -119,11 +120,19 @@ public final class MapGenerator implements Runnable {
                             "{",
                             "}",
                             () -> {
+                              // For nullable value types (structs) in sparse maps, we must cast
+                              // entry.Value (T?) to T explicitly so the generic lambda types correctly.
+                              String stateExpr =
+                                  valueIsValueType
+                                      ? "(" + valueTypeName + ")entry.Value!"
+                                      : "entry.Value";
                               writer.write(
-                                  "m.Entry(entry.Key, entry.Value, static (value, w) =>"
+                                  "m.Entry(entry.Key, $L, static (value, w) =>"
                                       + " "
-                                      + writeValueStatement(valueTarget, "w", "ValueSchema", "value")
-                                      + ");");
+                                      + writeValueStatement(
+                                          valueTarget, "w", "ValueSchema", "value")
+                                      + ");",
+                                  stateExpr);
                             });
                       } else {
                         writer.write(
@@ -168,16 +177,22 @@ public final class MapGenerator implements Runnable {
                   writer.openBlock(
                       "{",
                       "}",
-                      () -> writer.write("map[key] = " + readValueExpression(valueTarget, "r", "ValueSchema") + ";"));
+                      () ->
+                          writer.write(
+                              "map[key] = "
+                                  + readValueExpression(valueTarget, "r", "ValueSchema")
+                                  + ";"));
                 } else {
-                  writer.write("map[key] = " + readValueExpression(valueTarget, "r", "ValueSchema") + ";");
+                  writer.write(
+                      "map[key] = " + readValueExpression(valueTarget, "r", "ValueSchema") + ";");
                 }
               });
           writer.write("return new $L(values);", typeName);
         });
   }
 
-  private String writeValueStatement(Shape target, String serializerVar, String schemaVar, String valueExpr) {
+  private String writeValueStatement(
+      Shape target, String serializerVar, String schemaVar, String valueExpr) {
     return switch (target.getType()) {
       case BOOLEAN -> serializerVar + ".WriteBoolean(" + schemaVar + ", " + valueExpr + ")";
       case BYTE -> serializerVar + ".WriteByte(" + schemaVar + ", " + valueExpr + ")";
@@ -194,7 +209,8 @@ public final class MapGenerator implements Runnable {
       case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ")";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ")";
       case STRUCTURE, UNION, LIST, SET, MAP -> valueExpr + ".Serialize(" + serializerVar + ")";
-      default -> throw new IllegalArgumentException("Unsupported map value shape: " + target.getId());
+      default ->
+          throw new IllegalArgumentException("Unsupported map value shape: " + target.getId());
     };
   }
 
@@ -226,7 +242,8 @@ public final class MapGenerator implements Runnable {
               + ".ReadInteger("
               + schemaVar
               + ")";
-      default -> throw new IllegalArgumentException("Unsupported map value shape: " + target.getId());
+      default ->
+          throw new IllegalArgumentException("Unsupported map value shape: " + target.getId());
     };
   }
 }

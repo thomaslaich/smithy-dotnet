@@ -9,7 +9,6 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.AttributeEmitter;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
@@ -41,7 +40,6 @@ public final class StructureGenerator implements Runnable {
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     List<MemberShape> members = ShapeSupport.sortedMembers(shape);
 
-    AttributeEmitter.writeShapeAttributes(writer, shape);
     writer.write(
         "public sealed partial record class $L : ISerializableStruct, IDeserializableShape<$L>",
         typeName,
@@ -125,7 +123,6 @@ public final class StructureGenerator implements Runnable {
       String prop = CSharpNaming.propertyName(m.getMemberName());
       boolean nullable = ShapeSupport.isNullable(m);
       String type = ShapeSupport.memberTypeExpr(sp, m, nullable);
-      AttributeEmitter.writeMemberAttributes(writer, m, ShapeSupport.isSparseTarget(model, m));
       writer.write("public $L $L { get; }", type, prop);
     }
   }
@@ -143,11 +140,12 @@ public final class StructureGenerator implements Runnable {
             String schema = prop + "Schema";
             Shape target = model.expectShape(member.getTarget());
             if (ShapeSupport.isNullable(member)) {
-              writer.write("if ($L is { } value)", prop);
+              String local = CSharpNaming.parameterName(member.getMemberName());
+              writer.write("if ($L is { } $L)", prop, local);
               writer.openBlock(
                   "{",
                   "}",
-                  () -> writer.write(writeValueStatement(target, "serializer", schema, "value")));
+                  () -> writer.write(writeValueStatement(target, "serializer", schema, local)));
             } else {
               writer.write(writeValueStatement(target, "serializer", schema, prop));
             }
@@ -170,7 +168,8 @@ public final class StructureGenerator implements Runnable {
                 CSharpNaming.parameterName(member.getMemberName()));
           }
           writer.write("");
-          writer.write("deserializer.ReadStruct<object?>(Schema, null, new StructMemberConsumer<object?>(");
+          writer.write(
+              "deserializer.ReadStruct<object?>(Schema, null, new StructMemberConsumer<object?>(");
           writer.write("Member: (_, member, reader) =>");
           writer.openBlock(
               "{",
@@ -182,7 +181,9 @@ public final class StructureGenerator implements Runnable {
                   String local = CSharpNaming.parameterName(memberName);
                   Shape target = model.expectShape(member.getTarget());
                   String keyword = i == 0 ? "if" : "else if";
-                  writer.write(keyword + " (member.MemberName == $L)", CSharpNaming.formatString(memberName));
+                  writer.write(
+                      keyword + " (member.MemberName == $L)",
+                      CSharpNaming.formatString(memberName));
                   writer.openBlock(
                       "{",
                       "}",
@@ -198,13 +199,19 @@ public final class StructureGenerator implements Runnable {
                                   writer.write(
                                       local
                                           + " = "
-                                          + readValueExpression(target, "reader", CSharpNaming.propertyName(memberName) + "Schema")
+                                          + readValueExpression(
+                                              target,
+                                              "reader",
+                                              CSharpNaming.propertyName(memberName) + "Schema")
                                           + ";"));
                         } else {
                           writer.write(
                               local
                                   + " = "
-                                  + readValueExpression(target, "reader", CSharpNaming.propertyName(memberName) + "Schema")
+                                  + readValueExpression(
+                                      target,
+                                      "reader",
+                                      CSharpNaming.propertyName(memberName) + "Schema")
                                   + ";");
                         }
                       });
@@ -226,7 +233,8 @@ public final class StructureGenerator implements Runnable {
         args.add(
             local
                 + " ?? throw new System.InvalidOperationException("
-                + CSharpNaming.formatString("Missing required member '" + member.getMemberName() + "'.")
+                + CSharpNaming.formatString(
+                    "Missing required member '" + member.getMemberName() + "'.")
                 + ")");
       }
     }
@@ -237,7 +245,8 @@ public final class StructureGenerator implements Runnable {
     return ShapeSupport.memberTypeExpr(sp, member, true);
   }
 
-  private String writeValueStatement(Shape target, String serializerVar, String schemaVar, String valueExpr) {
+  private String writeValueStatement(
+      Shape target, String serializerVar, String schemaVar, String valueExpr) {
     return switch (target.getType()) {
       case BOOLEAN -> serializerVar + ".WriteBoolean(" + schemaVar + ", " + valueExpr + ");";
       case BYTE -> serializerVar + ".WriteByte(" + schemaVar + ", " + valueExpr + ");";
@@ -249,13 +258,15 @@ public final class StructureGenerator implements Runnable {
       case BIG_INTEGER -> serializerVar + ".WriteBigInteger(" + schemaVar + ", " + valueExpr + ");";
       case BIG_DECIMAL -> serializerVar + ".WriteBigDecimal(" + schemaVar + ", " + valueExpr + ");";
       case TIMESTAMP -> serializerVar + ".WriteTimestamp(" + schemaVar + ", " + valueExpr + ");";
-      case STRING, ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case STRING -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ".Value);";
       case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ");";
       case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ");";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";
       case STRUCTURE, UNION, LIST, SET, MAP -> valueExpr + ".Serialize(" + serializerVar + ");";
       default ->
-          throw new IllegalArgumentException("Unsupported structure member shape: " + target.getId());
+          throw new IllegalArgumentException(
+              "Unsupported structure member shape: " + target.getId());
     };
   }
 
@@ -288,7 +299,8 @@ public final class StructureGenerator implements Runnable {
               + schemaVar
               + ")";
       default ->
-          throw new IllegalArgumentException("Unsupported structure member shape: " + target.getId());
+          throw new IllegalArgumentException(
+              "Unsupported structure member shape: " + target.getId());
     };
   }
 }

@@ -1,5 +1,6 @@
 <Project>
   <ItemGroup>
+    <PackageVersion Include="System.Formats.Cbor" Version="9.0.4" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="Microsoft.Build.Framework" Version="18.3.3" />
     <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="18.3.3" />

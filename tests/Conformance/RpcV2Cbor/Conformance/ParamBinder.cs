@@ -2,7 +2,6 @@ using System.Collections;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using NSmithy.Core;
-using NSmithy.Core.Annotations;
 
 namespace RpcV2Cbor.Conformance;
 
@@ -56,29 +55,29 @@ internal static class ParamBinder
         if (targetType.IsEnum)
             return BindIntEnum(targetType, value);
 
-        var shape = targetType.GetCustomAttribute<SmithyShapeAttribute>();
+        var schemaKind = GetSchemaKind(targetType);
 
         // String-enum codegen: readonly record struct with (string Value) ctor.
-        if (targetType.IsValueType && shape?.Kind == ShapeKind.Enum)
+        if (targetType.IsValueType && schemaKind == ShapeKind.Enum)
         {
             return Activator.CreateInstance(targetType, (string)value!);
         }
 
         // Smithy unions are codegen'd as `abstract record class` with `FromMember(T)` static
         // factories per case. The JSON form is `{ "memberName": <inner> }`.
-        if (shape?.Kind == ShapeKind.Union)
+        if (schemaKind == ShapeKind.Union)
         {
             return BindUnion(targetType, value);
         }
 
         // Smithy lists/maps are codegen'd as wrapper records with a single ctor accepting
         // IEnumerable<T> / IEnumerable<KeyValuePair<TK, TV>>.
-        if (shape?.Kind == ShapeKind.List)
+        if (schemaKind == ShapeKind.List)
         {
             return BindShapeList(targetType, value);
         }
 
-        if (shape?.Kind == ShapeKind.Map)
+        if (schemaKind == ShapeKind.Map)
         {
             return BindShapeMap(targetType, value);
         }
@@ -165,13 +164,6 @@ internal static class ParamBinder
             return Enum.ToObject(enumType, n);
         if (raw.TryGetValue<string>(out var s))
         {
-            // Match by [SmithyEnumValue] first, else by enum name.
-            foreach (var f in enumType.GetFields(BindingFlags.Public | BindingFlags.Static))
-            {
-                var ev = f.GetCustomAttribute<SmithyEnumValueAttribute>();
-                if (ev?.Value == s)
-                    return f.GetValue(null)!;
-            }
             return Enum.Parse(enumType, s, ignoreCase: true);
         }
         throw new InvalidOperationException($"Cannot bind {value} to enum {enumType}.");
@@ -246,5 +238,11 @@ internal static class ParamBinder
         }
         return best
             ?? throw new InvalidOperationException($"No public constructor on {type.FullName}.");
+    }
+
+    private static ShapeKind? GetSchemaKind(Type targetType)
+    {
+        var schemaProp = targetType.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static);
+        return (schemaProp?.GetValue(null) as Schema)?.Kind;
     }
 }

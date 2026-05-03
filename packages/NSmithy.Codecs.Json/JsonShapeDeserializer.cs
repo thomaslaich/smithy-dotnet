@@ -135,7 +135,7 @@ internal sealed class JsonShapeDeserializer : IShapeDeserializer
             _ => throw UnexpectedKind(JsonValueKind.True, JsonValueKind.False),
         };
 
-    public byte ReadByte(Schema schema) => current.GetByte();
+    public sbyte ReadByte(Schema schema) => current.GetSByte();
 
     public short ReadShort(Schema schema) => current.GetInt16();
 

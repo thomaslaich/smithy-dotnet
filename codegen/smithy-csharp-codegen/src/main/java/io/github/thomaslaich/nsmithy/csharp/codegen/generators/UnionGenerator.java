@@ -8,7 +8,6 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.AttributeEmitter;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
@@ -40,7 +39,6 @@ public final class UnionGenerator implements Runnable {
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     List<MemberShape> members = ShapeSupport.sortedMembers(shape);
 
-    AttributeEmitter.writeShapeAttributes(writer, shape);
     writer.write(
         "public abstract partial record class $L : ISerializableShape, IDeserializableShape<$L>",
         typeName,
@@ -60,7 +58,6 @@ public final class UnionGenerator implements Runnable {
             String variantName = CSharpNaming.typeName(m.getMemberName());
             String valueType = ShapeSupport.memberTypeExpr(sp, m, false);
             Shape target = model.expectShape(m.getTarget());
-            AttributeEmitter.writeMemberAttributes(writer, m, false);
             writer.write("public sealed partial record class $L : $L", variantName, typeName);
             writer.openBlock(
                 "{",
@@ -91,7 +88,9 @@ public final class UnionGenerator implements Runnable {
                         writer.write("serializer.WriteStruct(Schema, new UnionMembers(this));");
                       });
                   writer.write("");
-                  writer.write("private sealed class UnionMembers($L owner) : ISerializableStruct", variantName);
+                  writer.write(
+                      "private sealed class UnionMembers($L owner) : ISerializableStruct",
+                      variantName);
                   writer.openBlock(
                       "{",
                       "}",
@@ -100,9 +99,7 @@ public final class UnionGenerator implements Runnable {
                         writer.write("");
                         writer.write("public void Serialize(IShapeSerializer serializer)");
                         writer.openBlock(
-                            "{",
-                            "}",
-                            () -> writer.write("serializer.WriteStruct(Schema, this);"));
+                            "{", "}", () -> writer.write("serializer.WriteStruct(Schema, this);"));
                         writer.write("");
                         writer.write("public void SerializeMembers(IShapeSerializer serializer)");
                         writer.openBlock(
@@ -111,7 +108,10 @@ public final class UnionGenerator implements Runnable {
                             () ->
                                 writer.write(
                                     writeValueStatement(
-                                        target, "serializer", variantName + "Schema", "owner.Value")));
+                                        target,
+                                        "serializer",
+                                        variantName + "Schema",
+                                        "owner.Value")));
                       });
                 });
             writer.write("");
@@ -148,7 +148,8 @@ public final class UnionGenerator implements Runnable {
                       writer.write("serializer.WriteStruct(Schema, new UnionMembers(this));");
                     });
                 writer.write("");
-                writer.write("private sealed class UnionMembers(Unknown owner) : ISerializableStruct");
+                writer.write(
+                    "private sealed class UnionMembers(Unknown owner) : ISerializableStruct");
                 writer.openBlock(
                     "{",
                     "}",
@@ -157,15 +158,14 @@ public final class UnionGenerator implements Runnable {
                       writer.write("");
                       writer.write("public void Serialize(IShapeSerializer serializer)");
                       writer.openBlock(
-                          "{",
-                          "}",
-                          () -> writer.write("serializer.WriteStruct(Schema, this);"));
+                          "{", "}", () -> writer.write("serializer.WriteStruct(Schema, this);"));
                       writer.write("");
                       writer.write("public void SerializeMembers(IShapeSerializer serializer)");
                       writer.openBlock(
                           "{",
                           "}",
-                          () -> writer.write("serializer.WriteDocument(TagSchema(), owner.Value);"));
+                          () ->
+                              writer.write("serializer.WriteDocument(TagSchema(), owner.Value);"));
                       writer.write("");
                       writer.write("private Schema TagSchema()");
                       writer.openBlock(
@@ -229,7 +229,8 @@ public final class UnionGenerator implements Runnable {
           writer.write("System.ArgumentNullException.ThrowIfNull(deserializer);");
           writer.write(typeName + "? result = null;");
           writer.write("");
-          writer.write("deserializer.ReadStruct<object?>(Schema, null, new StructMemberConsumer<object?>(");
+          writer.write(
+              "deserializer.ReadStruct<object?>(Schema, null, new StructMemberConsumer<object?>(");
           writer.write("Member: (_, member, reader) =>");
           writer.openBlock(
               "{",
@@ -241,7 +242,9 @@ public final class UnionGenerator implements Runnable {
                   String memberName = member.getMemberName();
                   String variantName = CSharpNaming.typeName(memberName);
                   String keyword = i == 0 ? "if" : "else if";
-                  writer.write(keyword + " (member.MemberName == $L)", CSharpNaming.formatString(memberName));
+                  writer.write(
+                      keyword + " (member.MemberName == $L)",
+                      CSharpNaming.formatString(memberName));
                   writer.openBlock(
                       "{",
                       "}",
@@ -266,11 +269,13 @@ public final class UnionGenerator implements Runnable {
           writer.write("));");
           writer.write("");
           writer.write(
-              "return result ?? throw new System.InvalidOperationException(\"Union payload was empty.\");");
+              "return result ?? throw new System.InvalidOperationException(\"Union payload was"
+                  + " empty.\");");
         });
   }
 
-  private String writeValueStatement(Shape target, String serializerVar, String schemaVar, String valueExpr) {
+  private String writeValueStatement(
+      Shape target, String serializerVar, String schemaVar, String valueExpr) {
     return switch (target.getType()) {
       case BOOLEAN -> serializerVar + ".WriteBoolean(" + schemaVar + ", " + valueExpr + ");";
       case BYTE -> serializerVar + ".WriteByte(" + schemaVar + ", " + valueExpr + ");";
@@ -287,7 +292,8 @@ public final class UnionGenerator implements Runnable {
       case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ");";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";
       case STRUCTURE, UNION, LIST, SET, MAP -> valueExpr + ".Serialize(" + serializerVar + ");";
-      default -> throw new IllegalArgumentException("Unsupported union member shape: " + target.getId());
+      default ->
+          throw new IllegalArgumentException("Unsupported union member shape: " + target.getId());
     };
   }
 
@@ -319,7 +325,8 @@ public final class UnionGenerator implements Runnable {
               + ".ReadInteger("
               + schemaVar
               + ")";
-      default -> throw new IllegalArgumentException("Unsupported union member shape: " + target.getId());
+      default ->
+          throw new IllegalArgumentException("Unsupported union member shape: " + target.getId());
     };
   }
 }

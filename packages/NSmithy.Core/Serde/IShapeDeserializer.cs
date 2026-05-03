@@ -24,7 +24,7 @@ public interface IShapeDeserializer : IDisposable
 
     bool ReadBoolean(Schema schema);
 
-    byte ReadByte(Schema schema);
+    sbyte ReadByte(Schema schema);
 
     short ReadShort(Schema schema);
 

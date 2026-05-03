@@ -5,8 +5,6 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
-import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.AttributeEmitter;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import software.amazon.smithy.model.shapes.IntEnumShape;
@@ -29,9 +27,7 @@ public final class IntEnumGenerator implements Runnable {
 
   @Override
   public void run() {
-    writer.addImport(RuntimeTypes.NSMITHY_CORE_ANNOTATIONS);
     String typeName = CSharpNaming.typeName(shape.getId().getName());
-    AttributeEmitter.writeShapeAttributes(writer, shape);
     writer.write("public enum $L", typeName);
     writer.openBlock(
         "{",
@@ -42,8 +38,6 @@ public final class IntEnumGenerator implements Runnable {
             Integer value =
                 m.getTrait(EnumValueTrait.class).flatMap(t -> t.getIntValue()).orElse(null);
             if (value != null) {
-              writer.write(
-                  "[SmithyEnumValue($L)]", CSharpNaming.formatString(Integer.toString(value)));
               writer.write("$L = $L,", prop, value);
             } else {
               writer.write("$L,", prop);

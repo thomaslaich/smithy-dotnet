@@ -22,7 +22,6 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.AttributeEmitter;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport.Kind;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
@@ -624,8 +623,7 @@ public final class ClientGenerator implements Runnable {
         .orElse(null);
   }
 
-  private String serializePayloadValue(
-      MemberShape member, String serializerVar, String valueExpr) {
+  private String serializePayloadValue(MemberShape member, String serializerVar, String valueExpr) {
     Shape target = context.model().expectShape(member.getTarget());
     return writeValueStatement(
         target, serializerVar, SchemaGenerator.memberSchemaExpr(context, member), valueExpr);
@@ -675,7 +673,6 @@ public final class ClientGenerator implements Runnable {
   private void writeBodyProjectionType(
       SymbolProvider sp, StructureShape shape, List<MemberShape> bodyMembers) {
     String typeName = bodyProjectionName(shape);
-    AttributeEmitter.writeShapeAttributes(writer, shape);
     writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     writer.write(
         "private sealed class $L : ISerializableStruct, IDeserializableShape<$L>",
@@ -716,8 +713,6 @@ public final class ClientGenerator implements Runnable {
           writer.write("");
           for (MemberShape m : bodyMembers) {
             String type = ShapeSupport.memberTypeExpr(sp, m, ShapeSupport.isNullable(m));
-            AttributeEmitter.writeMemberAttributes(
-                writer, m, ShapeSupport.isSparseTarget(context.model(), m));
             writer.write(
                 "public $L $L { get; }", type, CSharpNaming.propertyName(m.getMemberName()));
             writer.write("");
@@ -768,7 +763,8 @@ public final class ClientGenerator implements Runnable {
                 }
                 writer.write("");
                 writer.write(
-                    "deserializer.ReadStruct<object?>(Schema, null, new StructMemberConsumer<object?>(");
+                    "deserializer.ReadStruct<object?>(Schema, null, new"
+                        + " StructMemberConsumer<object?>(");
                 writer.write("Member: (_, member, reader) =>");
                 writer.openBlock(
                     "{",
@@ -790,9 +786,7 @@ public final class ClientGenerator implements Runnable {
                               if (ShapeSupport.isNullable(m)) {
                                 writer.write("if (reader.IsNull())");
                                 writer.openBlock(
-                                    "{",
-                                    "}",
-                                    () -> writer.write("reader.ReadNull();"));
+                                    "{", "}", () -> writer.write("reader.ReadNull();"));
                                 writer.write("else");
                                 writer.openBlock(
                                     "{",
@@ -801,7 +795,8 @@ public final class ClientGenerator implements Runnable {
                                         writer.write(
                                             local
                                                 + " = "
-                                                + readValueExpression(target, "reader", prop + "Schema")
+                                                + readValueExpression(
+                                                    target, "reader", prop + "Schema")
                                                 + ";"));
                               } else {
                                 writer.write(
@@ -815,7 +810,10 @@ public final class ClientGenerator implements Runnable {
                     });
                 writer.write("));");
                 writer.write("");
-                writer.write("return new $L($L);", typeName, bodyProjectionConstructorArguments(bodyMembers));
+                writer.write(
+                    "return new $L($L);",
+                    typeName,
+                    bodyProjectionConstructorArguments(bodyMembers));
               });
         });
     writer.write("");
@@ -838,7 +836,8 @@ public final class ClientGenerator implements Runnable {
     return String.join(", ", args);
   }
 
-  private String writeValueStatement(Shape target, String serializerVar, String schemaVar, String valueExpr) {
+  private String writeValueStatement(
+      Shape target, String serializerVar, String schemaVar, String valueExpr) {
     return switch (target.getType()) {
       case BOOLEAN -> serializerVar + ".WriteBoolean(" + schemaVar + ", " + valueExpr + ");";
       case BYTE -> serializerVar + ".WriteByte(" + schemaVar + ", " + valueExpr + ");";
@@ -856,7 +855,8 @@ public final class ClientGenerator implements Runnable {
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";
       case STRUCTURE, UNION, LIST, SET, MAP -> valueExpr + ".Serialize(" + serializerVar + ");";
       default ->
-          throw new IllegalArgumentException("Unsupported body projection member shape: " + target.getId());
+          throw new IllegalArgumentException(
+              "Unsupported body projection member shape: " + target.getId());
     };
   }
 
@@ -889,7 +889,8 @@ public final class ClientGenerator implements Runnable {
               + schemaVar
               + ")";
       default ->
-          throw new IllegalArgumentException("Unsupported body projection member shape: " + target.getId());
+          throw new IllegalArgumentException(
+              "Unsupported body projection member shape: " + target.getId());
     };
   }
 
