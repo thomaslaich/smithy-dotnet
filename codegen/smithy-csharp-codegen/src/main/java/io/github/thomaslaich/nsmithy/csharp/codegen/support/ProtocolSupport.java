@@ -61,9 +61,9 @@ public final class ProtocolSupport {
   /** C# class name of the protocol runtime helper. */
   public static String runtimeProtocolType(Kind kind) {
     return switch (kind) {
-      case REST_JSON -> "RestJsonClientProtocol";
-      case REST_XML -> "RestXmlClientProtocol";
-      case RPC_V2_CBOR -> "RpcV2CborClientProtocol";
+      case REST_JSON -> "RestJsonProtocol";
+      case REST_XML -> "RestXmlProtocol";
+      case RPC_V2_CBOR -> "RpcV2CborProtocol";
     };
   }
 

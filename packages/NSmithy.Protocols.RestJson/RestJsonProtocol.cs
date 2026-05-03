@@ -6,7 +6,7 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Protocols.RestJson;
 
-public static class RestJsonClientProtocol
+public static class RestJsonProtocol
 {
     public static void AddHeader(
         IDictionary<string, IReadOnlyList<string>> headers,

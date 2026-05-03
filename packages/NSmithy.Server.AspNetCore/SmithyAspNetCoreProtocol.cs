@@ -18,7 +18,7 @@ public static class SmithyAspNetCoreProtocol
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         return httpContext.Request.RouteValues.TryGetValue(name, out var value) && value is not null
-            ? RestJsonClientProtocol.ConvertHttpValue<T>(value.ToString())!
+            ? RestJsonProtocol.ConvertHttpValue<T>(value.ToString())!
             : throw new InvalidOperationException($"Missing route value '{name}'.");
     }
 
@@ -29,7 +29,7 @@ public static class SmithyAspNetCoreProtocol
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         return httpContext.Request.Query.TryGetValue(name, out var values)
-            ? RestJsonClientProtocol.ConvertHttpValue<T>(values.FirstOrDefault())
+            ? RestJsonProtocol.ConvertHttpValue<T>(values.FirstOrDefault())
             : default;
     }
 
@@ -43,7 +43,7 @@ public static class SmithyAspNetCoreProtocol
             throw new InvalidOperationException($"Missing query value '{name}'.");
         }
 
-        return RestJsonClientProtocol.ConvertHttpValue<T>(values.FirstOrDefault())!;
+        return RestJsonProtocol.ConvertHttpValue<T>(values.FirstOrDefault())!;
     }
 
     [return: MaybeNull]
@@ -67,7 +67,7 @@ public static class SmithyAspNetCoreProtocol
             }
         }
 
-        return RestJsonClientProtocol.CreateStringMap<T>(values);
+        return RestJsonProtocol.CreateStringMap<T>(values);
     }
 
     [return: MaybeNull]
@@ -77,7 +77,7 @@ public static class SmithyAspNetCoreProtocol
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         return httpContext.Request.Headers.TryGetValue(name, out var values)
-            ? RestJsonClientProtocol.ConvertHttpValue<T>(values.FirstOrDefault())
+            ? RestJsonProtocol.ConvertHttpValue<T>(values.FirstOrDefault())
             : default;
     }
 
@@ -91,7 +91,7 @@ public static class SmithyAspNetCoreProtocol
             throw new InvalidOperationException($"Missing header value '{name}'.");
         }
 
-        return RestJsonClientProtocol.ConvertHttpValue<T>(values.FirstOrDefault())!;
+        return RestJsonProtocol.ConvertHttpValue<T>(values.FirstOrDefault())!;
     }
 
     [return: MaybeNull]
@@ -112,7 +112,7 @@ public static class SmithyAspNetCoreProtocol
             }
         }
 
-        return RestJsonClientProtocol.CreateStringMap<T>(values);
+        return RestJsonProtocol.CreateStringMap<T>(values);
     }
 
     public static async Task<T> ReadJsonRequestBodyAsync<T>(
@@ -221,7 +221,7 @@ public static class SmithyAspNetCoreProtocol
             return;
         }
 
-        httpContext.Response.Headers[name] = RestJsonClientProtocol.FormatHttpValue(value);
+        httpContext.Response.Headers[name] = RestJsonProtocol.FormatHttpValue(value);
     }
 
     public static void AddPrefixedResponseHeaders(
@@ -238,7 +238,7 @@ public static class SmithyAspNetCoreProtocol
             return;
         }
 
-        foreach (var item in RestJsonClientProtocol.EnumerateStringMap(value))
+        foreach (var item in RestJsonProtocol.EnumerateStringMap(value))
         {
             if (item.Value is null)
             {
@@ -246,7 +246,7 @@ public static class SmithyAspNetCoreProtocol
             }
 
             httpContext.Response.Headers[$"{prefix}{item.Key}"] =
-                RestJsonClientProtocol.FormatHttpValue(item.Value);
+                RestJsonProtocol.FormatHttpValue(item.Value);
         }
     }
 

@@ -3,7 +3,7 @@ using NSmithy.Http;
 
 namespace NSmithy.Protocols.RpcV2Cbor;
 
-public static class RpcV2CborClientProtocol
+public static class RpcV2CborProtocol
 {
     public static T DeserializeBody<T>(ISmithyCodec codec, byte[] content)
         where T : IDeserializableShape<T>

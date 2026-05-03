@@ -1,11 +1,12 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Xml.Linq;
-using System.Diagnostics.CodeAnalysis;
 using NSmithy.Core.Serde;
+using NSmithy.Protocols.RestJson;
 
 namespace NSmithy.Protocols.RestXml;
 
-public static class RestXmlClientProtocol
+public static class RestXmlProtocol
 {
     public static void AddHeader(
         IDictionary<string, IReadOnlyList<string>> headers,
@@ -13,7 +14,7 @@ public static class RestXmlClientProtocol
         object? value
     )
     {
-        NSmithy.Protocols.RestJson.RestJsonClientProtocol.AddHeader(headers, name, value);
+        RestJsonProtocol.AddHeader(headers, name, value);
     }
 
     public static void AddPrefixedHeaders(
@@ -22,46 +23,39 @@ public static class RestXmlClientProtocol
         object? value
     )
     {
-        NSmithy.Protocols.RestJson.RestJsonClientProtocol.AddPrefixedHeaders(
-            headers,
-            prefix,
-            value
-        );
+        RestJsonProtocol.AddPrefixedHeaders(headers, prefix, value);
     }
 
     public static void AppendQuery(StringBuilder builder, string name, object? value)
     {
-        NSmithy.Protocols.RestJson.RestJsonClientProtocol.AppendQuery(builder, name, value);
+        RestJsonProtocol.AppendQuery(builder, name, value);
     }
 
     public static void AppendQueryMap(StringBuilder builder, object? value)
     {
-        NSmithy.Protocols.RestJson.RestJsonClientProtocol.AppendQueryMap(builder, value);
+        RestJsonProtocol.AppendQueryMap(builder, value);
     }
 
     public static string EscapeGreedyLabel(object value)
     {
-        return NSmithy.Protocols.RestJson.RestJsonClientProtocol.EscapeGreedyLabel(value);
+        return RestJsonProtocol.EscapeGreedyLabel(value);
     }
 
     public static string FormatHttpValue(object value)
     {
-        return NSmithy.Protocols.RestJson.RestJsonClientProtocol.FormatHttpValue(value);
+        return RestJsonProtocol.FormatHttpValue(value);
     }
 
     public static T DeserializeBody<T>(ISmithyCodec codec, byte[] content)
         where T : IDeserializableShape<T>
     {
-        return NSmithy.Protocols.RestJson.RestJsonClientProtocol.DeserializeBody<T>(codec, content);
+        return RestJsonProtocol.DeserializeBody<T>(codec, content);
     }
 
     public static T DeserializeRequiredBody<T>(ISmithyCodec codec, byte[] content)
         where T : IDeserializableShape<T>
     {
-        return NSmithy.Protocols.RestJson.RestJsonClientProtocol.DeserializeRequiredBody<T>(
-            codec,
-            content
-        );
+        return RestJsonProtocol.DeserializeRequiredBody<T>(codec, content);
     }
 
     public static string? DeserializeErrorCode(byte[] content)
@@ -76,7 +70,7 @@ public static class RestXmlClientProtocol
         string name
     )
     {
-        return NSmithy.Protocols.RestJson.RestJsonClientProtocol.GetHeader<T>(headers, name);
+        return RestJsonProtocol.GetHeader<T>(headers, name);
     }
 
     public static T GetRequiredHeader<T>(
@@ -84,10 +78,7 @@ public static class RestXmlClientProtocol
         string name
     )
     {
-        return NSmithy.Protocols.RestJson.RestJsonClientProtocol.GetRequiredHeader<T>(
-            headers,
-            name
-        );
+        return RestJsonProtocol.GetRequiredHeader<T>(headers, name);
     }
 
     [return: MaybeNull]
@@ -96,10 +87,7 @@ public static class RestXmlClientProtocol
         string prefix
     )
     {
-        return NSmithy.Protocols.RestJson.RestJsonClientProtocol.GetPrefixedHeaders<T>(
-            headers,
-            prefix
-        );
+        return RestJsonProtocol.GetPrefixedHeaders<T>(headers, prefix);
     }
 
     public static T GetRequiredPrefixedHeaders<T>(
@@ -107,10 +95,7 @@ public static class RestXmlClientProtocol
         string prefix
     )
     {
-        return NSmithy.Protocols.RestJson.RestJsonClientProtocol.GetRequiredPrefixedHeaders<T>(
-            headers,
-            prefix
-        );
+        return RestJsonProtocol.GetRequiredPrefixedHeaders<T>(headers, prefix);
     }
 
     private static XElement GetErrorRoot(byte[] content)
