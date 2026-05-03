@@ -231,7 +231,7 @@ public final class UnionGenerator implements Runnable {
           writer.write("");
           writer.write(
               "deserializer.ReadStruct<object?>(Schema, null, new StructMemberConsumer<object?>(");
-          writer.write("Member: (_, member, reader) =>");
+          writer.write("Member: (_, field, reader) =>");
           writer.openBlock(
               "{",
               "}",
@@ -243,7 +243,7 @@ public final class UnionGenerator implements Runnable {
                   String variantName = CSharpNaming.typeName(memberName);
                   String keyword = i == 0 ? "if" : "else if";
                   writer.write(
-                      keyword + " (member.MemberName == $L)",
+                      keyword + " (field.MemberName == $L)",
                       CSharpNaming.formatString(memberName));
                   writer.openBlock(
                       "{",
@@ -255,7 +255,7 @@ public final class UnionGenerator implements Runnable {
                               readValueExpression(
                                   target,
                                   "reader",
-                                  CSharpNaming.propertyName(memberName) + "Schema")));
+                                  SchemaGenerator.memberSchemaFieldName(member))));
                 }
               });
           writer.write(",");
@@ -287,7 +287,8 @@ public final class UnionGenerator implements Runnable {
       case BIG_INTEGER -> serializerVar + ".WriteBigInteger(" + schemaVar + ", " + valueExpr + ");";
       case BIG_DECIMAL -> serializerVar + ".WriteBigDecimal(" + schemaVar + ", " + valueExpr + ");";
       case TIMESTAMP -> serializerVar + ".WriteTimestamp(" + schemaVar + ", " + valueExpr + ");";
-      case STRING, ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case STRING -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ".Value);";
       case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ");";
       case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ");";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";

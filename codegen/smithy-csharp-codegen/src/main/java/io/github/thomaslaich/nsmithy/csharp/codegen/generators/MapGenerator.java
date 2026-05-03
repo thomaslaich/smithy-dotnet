@@ -130,8 +130,9 @@ public final class MapGenerator implements Runnable {
                               writer.write(
                                   "m.Entry(entry.Key, $L, static (value, w) =>"
                                       + " "
-                                      + writeValueStatement(
-                                          valueTarget, "w", "ValueSchema", "value")
+                                      + stripTrailingSemicolon(
+                                          writeValueStatement(
+                                              valueTarget, "w", "ValueSchema", "value"))
                                       + ");",
                                   stateExpr);
                             });
@@ -139,7 +140,8 @@ public final class MapGenerator implements Runnable {
                         writer.write(
                             "m.Entry(entry.Key, entry.Value, static (value, w) =>"
                                 + " "
-                                + writeValueStatement(valueTarget, "w", "ValueSchema", "value")
+                                + stripTrailingSemicolon(
+                                    writeValueStatement(valueTarget, "w", "ValueSchema", "value"))
                                 + ");");
                       }
                     });
@@ -205,14 +207,21 @@ public final class MapGenerator implements Runnable {
       case BIG_INTEGER -> serializerVar + ".WriteBigInteger(" + schemaVar + ", " + valueExpr + ")";
       case BIG_DECIMAL -> serializerVar + ".WriteBigDecimal(" + schemaVar + ", " + valueExpr + ")";
       case TIMESTAMP -> serializerVar + ".WriteTimestamp(" + schemaVar + ", " + valueExpr + ")";
-      case STRING, ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ")";
+      case STRING -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ")";
+      case ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ".Value)";
       case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ")";
       case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ")";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ")";
-      case STRUCTURE, UNION, LIST, SET, MAP -> valueExpr + ".Serialize(" + serializerVar + ")";
+      case STRUCTURE, UNION, LIST, SET, MAP -> valueExpr + ".Serialize(" + serializerVar + ");";
       default ->
           throw new IllegalArgumentException("Unsupported map value shape: " + target.getId());
     };
+  }
+
+  private static String stripTrailingSemicolon(String statement) {
+    return statement.endsWith(";")
+        ? statement.substring(0, statement.length() - 1)
+        : statement;
   }
 
   private String readValueExpression(Shape target, String deserializerVar, String schemaVar) {

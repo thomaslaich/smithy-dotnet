@@ -192,7 +192,7 @@ public final class SchemaGenerator {
         + ")";
   }
 
-  private static String memberSchemaFieldName(MemberShape member) {
+  public static String memberSchemaFieldName(MemberShape member) {
     return CSharpNaming.propertyName(member.getMemberName()) + "Schema";
   }
 
@@ -203,18 +203,21 @@ public final class SchemaGenerator {
 
   private static String documentExpr(Node node) {
     return switch (node.getType()) {
-      case NULL -> "Document.Null";
-      case BOOLEAN -> "Document.From(" + node.expectBooleanNode().getValue() + ")";
+      case NULL -> "NSmithy.Core.Document.Null";
+      case BOOLEAN -> "NSmithy.Core.Document.From(" + node.expectBooleanNode().getValue() + ")";
       case STRING ->
-          "Document.From(" + CSharpNaming.formatString(node.expectStringNode().getValue()) + ")";
-      case NUMBER -> "Document.From((decimal)" + node.expectNumberNode().getValue() + ")";
+          "NSmithy.Core.Document.From("
+              + CSharpNaming.formatString(node.expectStringNode().getValue())
+              + ")";
+      case NUMBER ->
+          "NSmithy.Core.Document.From((decimal)" + node.expectNumberNode().getValue() + ")";
       case ARRAY -> arrayDocumentExpr(node.expectArrayNode());
       case OBJECT -> objectDocumentExpr(node.expectObjectNode());
     };
   }
 
   private static String arrayDocumentExpr(ArrayNode node) {
-    return "Document.From(new Document[] {"
+    return "NSmithy.Core.Document.From(new NSmithy.Core.Document[] {"
         + node.getElements().stream()
             .map(SchemaGenerator::documentExpr)
             .collect(Collectors.joining(", "))
@@ -222,7 +225,8 @@ public final class SchemaGenerator {
   }
 
   private static String objectDocumentExpr(ObjectNode node) {
-    return "Document.From(new System.Collections.Generic.Dictionary<string, Document>"
+    return "NSmithy.Core.Document.From("
+        + "new System.Collections.Generic.Dictionary<string, NSmithy.Core.Document>"
         + " {"
         + node.getMembers().entrySet().stream()
             .map(SchemaGenerator::objectMemberExpr)

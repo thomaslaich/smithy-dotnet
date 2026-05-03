@@ -7,6 +7,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
+import io.github.thomaslaich.nsmithy.csharp.codegen.SymbolProperties;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -71,6 +72,9 @@ public final class ListGenerator implements Runnable {
 
   private void writeSerialize() {
     Shape target = context.model().expectShape(shape.getMember().getTarget());
+    Symbol memberSym = context.symbolProvider().toSymbol(target);
+    boolean memberIsValueType =
+        memberSym.getProperty(SymbolProperties.IS_VALUE_TYPE, Boolean.class).orElse(false);
     writer.write("public void Serialize(IShapeSerializer serializer)");
     writer.openBlock(
         "{",
@@ -97,7 +101,11 @@ public final class ListGenerator implements Runnable {
                             "}",
                             () ->
                                 writer.write(
-                                    writeValueStatement(target, "w", "MemberSchema", "item")));
+                                    writeValueStatement(
+                                        target,
+                                        "w",
+                                        "MemberSchema",
+                                        memberIsValueType ? "item.Value" : "item")));
                       } else {
                         writer.write(writeValueStatement(target, "w", "MemberSchema", "item"));
                       }
@@ -160,7 +168,8 @@ public final class ListGenerator implements Runnable {
       case BIG_INTEGER -> serializerVar + ".WriteBigInteger(" + schemaVar + ", " + valueExpr + ");";
       case BIG_DECIMAL -> serializerVar + ".WriteBigDecimal(" + schemaVar + ", " + valueExpr + ");";
       case TIMESTAMP -> serializerVar + ".WriteTimestamp(" + schemaVar + ", " + valueExpr + ");";
-      case STRING, ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case STRING -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ".Value);";
       case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ");";
       case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ");";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";

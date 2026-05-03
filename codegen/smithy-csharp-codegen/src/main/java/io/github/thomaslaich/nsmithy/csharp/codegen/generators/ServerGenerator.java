@@ -598,11 +598,7 @@ public final class ServerGenerator implements Runnable {
       return required ? expr + "!" : expr;
     }
     if (ShapeSupport.isHttpPayload(m)) {
-      return "await SmithyAspNetCoreProtocol."
-          + (required ? "ReadRequiredJsonRequestBodyAsync(" : "ReadJsonRequestBodyAsync(")
-          + "httpContext, reader => "
-          + deserializePayloadValue(m, "reader")
-          + ", cancellationToken).ConfigureAwait(false)";
+      return deserializePayloadExpression(m, required);
     }
     if (bodyVar != null) {
       return bodyVar + "." + CSharpNaming.propertyName(m.getMemberName());
@@ -653,11 +649,9 @@ public final class ServerGenerator implements Runnable {
                   .findFirst();
           if (payload.isPresent()) {
             writer.write(
-                "await SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, serializer =>"
-                    + " $L, cancellationToken).ConfigureAwait(false);",
-                serializePayloadValue(
+                "await $L.ConfigureAwait(false);",
+                serializePayloadResponseExpression(
                     payload.get(),
-                    "serializer",
                     "output." + CSharpNaming.propertyName(payload.get().getMemberName())));
             return;
           }
@@ -778,18 +772,20 @@ public final class ServerGenerator implements Runnable {
               () -> {
                 for (MemberShape m : bodyMembers) {
                   String prop = CSharpNaming.propertyName(m.getMemberName());
+                  String schema = SchemaGenerator.memberSchemaFieldName(m);
                   Shape target = context.model().expectShape(m.getTarget());
                   if (ShapeSupport.isNullable(m)) {
-                    writer.write("if ($L is { } value)", prop);
+                    String local = CSharpNaming.parameterName(m.getMemberName());
+                    writer.write("if ($L is { } $L)", prop, local);
                     writer.openBlock(
                         "{",
                         "}",
                         () ->
                             writer.write(
                                 writeValueStatement(
-                                    target, "serializer", prop + "Schema", "value")));
+                                    target, "serializer", schema, local)));
                   } else {
-                    writer.write(writeValueStatement(target, "serializer", prop + "Schema", prop));
+                    writer.write(writeValueStatement(target, "serializer", schema, prop));
                   }
                 }
               });
@@ -810,19 +806,19 @@ public final class ServerGenerator implements Runnable {
                 writer.write(
                     "deserializer.ReadStruct<object?>(Schema, null, new"
                         + " StructMemberConsumer<object?>(");
-                writer.write("Member: (_, member, reader) =>");
+                writer.write("Member: (_, field, reader) =>");
                 writer.openBlock(
                     "{",
                     "}",
                     () -> {
                       for (int i = 0; i < bodyMembers.size(); i++) {
                         MemberShape m = bodyMembers.get(i);
-                        String prop = CSharpNaming.propertyName(m.getMemberName());
                         String local = CSharpNaming.parameterName(m.getMemberName());
+                        String schema = SchemaGenerator.memberSchemaFieldName(m);
                         Shape target = context.model().expectShape(m.getTarget());
                         String keyword = i == 0 ? "if" : "else if";
                         writer.write(
-                            keyword + " (member.MemberName == $L)",
+                            keyword + " (field.MemberName == $L)",
                             CSharpNaming.formatString(m.getMemberName()));
                         writer.openBlock(
                             "{",
@@ -840,14 +836,13 @@ public final class ServerGenerator implements Runnable {
                                         writer.write(
                                             local
                                                 + " = "
-                                                + readValueExpression(
-                                                    target, "reader", prop + "Schema")
+                                                + readValueExpression(target, "reader", schema)
                                                 + ";"));
                               } else {
                                 writer.write(
                                     local
                                         + " = "
-                                        + readValueExpression(target, "reader", prop + "Schema")
+                                        + readValueExpression(target, "reader", schema)
                                         + ";");
                               }
                             });
@@ -873,6 +868,34 @@ public final class ServerGenerator implements Runnable {
     Shape target = context.model().expectShape(member.getTarget());
     return readValueExpression(
         target, deserializerVar, SchemaGenerator.memberSchemaExpr(context, member));
+  }
+
+  private String deserializePayloadExpression(MemberShape member, boolean required) {
+    Shape target = context.model().expectShape(member.getTarget());
+    if (ShapeSupport.usesShapeSerde(target)) {
+      String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target));
+      return "await SmithyAspNetCoreProtocol."
+          + (required ? "ReadRequiredJsonRequestBodyAsync<" : "ReadJsonRequestBodyAsync<")
+          + type
+          + ">(httpContext, cancellationToken).ConfigureAwait(false)";
+    }
+    return "await SmithyAspNetCoreProtocol."
+        + (required ? "ReadRequiredJsonRequestBodyAsync(" : "ReadJsonRequestBodyAsync(")
+        + "httpContext, reader => "
+        + deserializePayloadValue(member, "reader")
+        + ", cancellationToken).ConfigureAwait(false)";
+  }
+
+  private String serializePayloadResponseExpression(MemberShape member, String valueExpr) {
+    Shape target = context.model().expectShape(member.getTarget());
+    if (ShapeSupport.usesShapeSerde(target)) {
+      return "SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, "
+          + valueExpr
+          + ", cancellationToken)";
+    }
+    return "SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, serializer => "
+        + stripTrailingSemicolon(serializePayloadValue(member, "serializer", valueExpr))
+        + ", cancellationToken)";
   }
 
   private String bodyProjectionConstructorArguments(List<MemberShape> bodyMembers) {
@@ -905,7 +928,8 @@ public final class ServerGenerator implements Runnable {
       case BIG_INTEGER -> serializerVar + ".WriteBigInteger(" + schemaVar + ", " + valueExpr + ");";
       case BIG_DECIMAL -> serializerVar + ".WriteBigDecimal(" + schemaVar + ", " + valueExpr + ");";
       case TIMESTAMP -> serializerVar + ".WriteTimestamp(" + schemaVar + ", " + valueExpr + ");";
-      case STRING, ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case STRING -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ".Value);";
       case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ");";
       case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ");";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";
@@ -914,6 +938,12 @@ public final class ServerGenerator implements Runnable {
           throw new IllegalArgumentException(
               "Unsupported body projection member shape: " + target.getId());
     };
+  }
+
+  private static String stripTrailingSemicolon(String statement) {
+    return statement.endsWith(";")
+        ? statement.substring(0, statement.length() - 1)
+        : statement;
   }
 
   private String readValueExpression(Shape target, String deserializerVar, String schemaVar) {

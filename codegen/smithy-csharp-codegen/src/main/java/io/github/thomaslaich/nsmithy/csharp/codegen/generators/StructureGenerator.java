@@ -137,7 +137,7 @@ public final class StructureGenerator implements Runnable {
           writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
           for (MemberShape member : members) {
             String prop = CSharpNaming.propertyName(member.getMemberName());
-            String schema = prop + "Schema";
+            String schema = SchemaGenerator.memberSchemaFieldName(member);
             Shape target = model.expectShape(member.getTarget());
             if (ShapeSupport.isNullable(member)) {
               String local = CSharpNaming.parameterName(member.getMemberName());
@@ -170,7 +170,7 @@ public final class StructureGenerator implements Runnable {
           writer.write("");
           writer.write(
               "deserializer.ReadStruct<object?>(Schema, null, new StructMemberConsumer<object?>(");
-          writer.write("Member: (_, member, reader) =>");
+          writer.write("Member: (_, field, reader) =>");
           writer.openBlock(
               "{",
               "}",
@@ -182,7 +182,7 @@ public final class StructureGenerator implements Runnable {
                   Shape target = model.expectShape(member.getTarget());
                   String keyword = i == 0 ? "if" : "else if";
                   writer.write(
-                      keyword + " (member.MemberName == $L)",
+                      keyword + " (field.MemberName == $L)",
                       CSharpNaming.formatString(memberName));
                   writer.openBlock(
                       "{",
@@ -202,7 +202,7 @@ public final class StructureGenerator implements Runnable {
                                           + readValueExpression(
                                               target,
                                               "reader",
-                                              CSharpNaming.propertyName(memberName) + "Schema")
+                                              SchemaGenerator.memberSchemaFieldName(member))
                                           + ";"));
                         } else {
                           writer.write(
@@ -211,7 +211,7 @@ public final class StructureGenerator implements Runnable {
                                   + readValueExpression(
                                       target,
                                       "reader",
-                                      CSharpNaming.propertyName(memberName) + "Schema")
+                                      SchemaGenerator.memberSchemaFieldName(member))
                                   + ";");
                         }
                       });

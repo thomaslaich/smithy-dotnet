@@ -240,26 +240,59 @@ public final class ClientGenerator implements Runnable {
               if (defaultExpr != null) {
                 // alloy semantics: omit the body when the user-provided value equals the
                 // member's @default. Mirrors the SimpleRestJsonNoneHttpPayloadWithDefault tests.
-                writer.write(
-                    "if (!System.Collections.Generic.EqualityComparer<$L>.Default.Equals(input.$L,"
-                        + " $L))",
-                    ShapeSupport.parameterTypeExpr(sp, pm),
-                    prop,
-                    defaultExpr);
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      writer.write(
-                          "request.Content = DocumentCodec.Serialize(serializer => $L);",
-                          serializePayloadValue(pm, "serializer", "input." + prop));
-                      writer.write("request.ContentType = DocumentCodec.MediaType;");
-                    });
+                if (ShapeSupport.isNullable(pm)) {
+                  writer.write("if (input.$L is { } payloadValue)", prop);
+                  writer.openBlock(
+                      "{",
+                      "}",
+                      () -> {
+                        writer.write(
+                            "if (!System.Collections.Generic.EqualityComparer<$L>.Default.Equals(payloadValue,"
+                                + " $L))",
+                            ShapeSupport.parameterTypeExpr(sp, pm),
+                            defaultExpr);
+                        writer.openBlock(
+                            "{",
+                            "}",
+                            () -> {
+                              writer.write(
+                                  "request.Content = $L;",
+                                  serializePayloadExpression(pm, "payloadValue"));
+                              writer.write("request.ContentType = DocumentCodec.MediaType;");
+                            });
+                      });
+                } else {
+                  writer.write(
+                      "if (!System.Collections.Generic.EqualityComparer<$L>.Default.Equals(input.$L,"
+                          + " $L))",
+                      ShapeSupport.parameterTypeExpr(sp, pm),
+                      prop,
+                      defaultExpr);
+                  writer.openBlock(
+                      "{",
+                      "}",
+                      () -> {
+                        writer.write(
+                            "request.Content = $L;", serializePayloadExpression(pm, "input." + prop));
+                        writer.write("request.ContentType = DocumentCodec.MediaType;");
+                      });
+                }
               } else {
-                writer.write(
-                    "request.Content = DocumentCodec.Serialize(serializer => $L);",
-                    serializePayloadValue(pm, "serializer", "input." + prop));
-                writer.write("request.ContentType = DocumentCodec.MediaType;");
+                if (ShapeSupport.isNullable(pm)) {
+                  writer.write("if (input.$L is { } payloadValue)", prop);
+                  writer.openBlock(
+                      "{",
+                      "}",
+                      () -> {
+                        writer.write(
+                            "request.Content = $L;", serializePayloadExpression(pm, "payloadValue"));
+                        writer.write("request.ContentType = DocumentCodec.MediaType;");
+                      });
+                } else {
+                  writer.write(
+                      "request.Content = $L;", serializePayloadExpression(pm, "input." + prop));
+                  writer.write("request.ContentType = DocumentCodec.MediaType;");
+                }
               }
             } else if (input != null && hasHttpBody(input)) {
               writeRequestBody(input);
@@ -460,15 +493,7 @@ public final class ClientGenerator implements Runnable {
       // When the member has @default, fall back to non-required deserialization so an empty
       // body returns null and the output ctor substitutes the default value.
       boolean hasDefault = ShapeSupport.hasDefault(m);
-      return (required && !hasDefault)
-          ? runtime
-              + ".DeserializeRequiredBody(DocumentCodec, response.Content, reader => "
-              + deserializePayloadValue(m, "reader")
-              + ")"
-          : runtime
-              + ".DeserializeBody(DocumentCodec, response.Content, reader => "
-              + deserializePayloadValue(m, "reader")
-              + ")";
+      return deserializePayloadExpression(m, required && !hasDefault);
     }
     if (bodyVar != null) {
       return bodyVar + "." + CSharpNaming.propertyName(m.getMemberName());
@@ -635,6 +660,41 @@ public final class ClientGenerator implements Runnable {
         target, deserializerVar, SchemaGenerator.memberSchemaExpr(context, member));
   }
 
+  private String serializePayloadExpression(MemberShape member, String valueExpr) {
+    Shape target = context.model().expectShape(member.getTarget());
+    if (ShapeSupport.usesShapeSerde(target)) {
+      return "DocumentCodec.Serialize(" + valueExpr + ")";
+    }
+    return "DocumentCodec.Serialize(serializer => "
+        + stripTrailingSemicolon(serializePayloadValue(member, "serializer", valueExpr))
+        + ")";
+  }
+
+  private String deserializePayloadExpression(MemberShape member, boolean required) {
+    Shape target = context.model().expectShape(member.getTarget());
+    if (ShapeSupport.usesShapeSerde(target)) {
+      String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target));
+      return required
+          ? runtime + ".DeserializeRequiredBody<" + type + ">(DocumentCodec, response.Content)"
+          : runtime + ".DeserializeBody<" + type + ">(DocumentCodec, response.Content)";
+    }
+    return required
+        ? runtime
+            + ".DeserializeRequiredBody(DocumentCodec, response.Content, reader => "
+            + deserializePayloadValue(member, "reader")
+            + ")"
+        : runtime
+            + ".DeserializeBody(DocumentCodec, response.Content, reader => "
+            + deserializePayloadValue(member, "reader")
+            + ")";
+  }
+
+  private static String stripTrailingSemicolon(String statement) {
+    return statement.endsWith(";")
+        ? statement.substring(0, statement.length() - 1)
+        : statement;
+  }
+
   // ---------------- body projection types ----------------
 
   private void writeBodyProjectionTypes(SymbolProvider sp, Model model, List<OperationShape> ops) {
@@ -733,18 +793,20 @@ public final class ClientGenerator implements Runnable {
               () -> {
                 for (MemberShape m : bodyMembers) {
                   String prop = CSharpNaming.propertyName(m.getMemberName());
+                  String schema = SchemaGenerator.memberSchemaFieldName(m);
                   Shape target = context.model().expectShape(m.getTarget());
                   if (ShapeSupport.isNullable(m)) {
-                    writer.write("if ($L is { } value)", prop);
+                    String local = CSharpNaming.parameterName(m.getMemberName());
+                    writer.write("if ($L is { } $L)", prop, local);
                     writer.openBlock(
                         "{",
                         "}",
                         () ->
                             writer.write(
                                 writeValueStatement(
-                                    target, "serializer", prop + "Schema", "value")));
+                                    target, "serializer", schema, local)));
                   } else {
-                    writer.write(writeValueStatement(target, "serializer", prop + "Schema", prop));
+                    writer.write(writeValueStatement(target, "serializer", schema, prop));
                   }
                 }
               });
@@ -765,19 +827,19 @@ public final class ClientGenerator implements Runnable {
                 writer.write(
                     "deserializer.ReadStruct<object?>(Schema, null, new"
                         + " StructMemberConsumer<object?>(");
-                writer.write("Member: (_, member, reader) =>");
+                writer.write("Member: (_, field, reader) =>");
                 writer.openBlock(
                     "{",
                     "}",
                     () -> {
                       for (int i = 0; i < bodyMembers.size(); i++) {
                         MemberShape m = bodyMembers.get(i);
-                        String prop = CSharpNaming.propertyName(m.getMemberName());
                         String local = CSharpNaming.parameterName(m.getMemberName());
+                        String schema = SchemaGenerator.memberSchemaFieldName(m);
                         Shape target = context.model().expectShape(m.getTarget());
                         String keyword = i == 0 ? "if" : "else if";
                         writer.write(
-                            keyword + " (member.MemberName == $L)",
+                            keyword + " (field.MemberName == $L)",
                             CSharpNaming.formatString(m.getMemberName()));
                         writer.openBlock(
                             "{",
@@ -795,14 +857,13 @@ public final class ClientGenerator implements Runnable {
                                         writer.write(
                                             local
                                                 + " = "
-                                                + readValueExpression(
-                                                    target, "reader", prop + "Schema")
+                                                + readValueExpression(target, "reader", schema)
                                                 + ";"));
                               } else {
                                 writer.write(
                                     local
                                         + " = "
-                                        + readValueExpression(target, "reader", prop + "Schema")
+                                        + readValueExpression(target, "reader", schema)
                                         + ";");
                               }
                             });
@@ -823,7 +884,11 @@ public final class ClientGenerator implements Runnable {
     List<String> args = new ArrayList<>();
     for (MemberShape m : bodyMembers) {
       String local = CSharpNaming.parameterName(m.getMemberName());
-      if (ShapeSupport.isOptionalParameter(m)) {
+      String defaultExpr =
+          ShapeSupport.defaultValueExpression(context.model(), context.symbolProvider(), m);
+      if (defaultExpr != null) {
+        args.add(local + " ?? " + defaultExpr);
+      } else if (ShapeSupport.isOptionalParameter(m)) {
         args.add(local);
       } else {
         args.add(
@@ -849,9 +914,11 @@ public final class ClientGenerator implements Runnable {
       case BIG_INTEGER -> serializerVar + ".WriteBigInteger(" + schemaVar + ", " + valueExpr + ");";
       case BIG_DECIMAL -> serializerVar + ".WriteBigDecimal(" + schemaVar + ", " + valueExpr + ");";
       case TIMESTAMP -> serializerVar + ".WriteTimestamp(" + schemaVar + ", " + valueExpr + ");";
-      case STRING, ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case STRING -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ".Value);";
       case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ");";
-      case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ");";
+      case DOCUMENT ->
+          serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + "!);";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";
       case STRUCTURE, UNION, LIST, SET, MAP -> valueExpr + ".Serialize(" + serializerVar + ");";
       default ->

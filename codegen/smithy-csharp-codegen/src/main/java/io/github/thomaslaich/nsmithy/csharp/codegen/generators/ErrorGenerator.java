@@ -142,6 +142,7 @@ public final class ErrorGenerator implements Runnable {
           for (MemberShape member : members) {
             String prop = CSharpNaming.propertyName(member.getMemberName());
             String expr = member.equals(messageMember) ? "base.Message!" : prop;
+            String schema = SchemaGenerator.memberSchemaFieldName(member);
             Shape target = model.expectShape(member.getTarget());
             if (ShapeSupport.isNullable(member) && !member.equals(messageMember)) {
               String local = CSharpNaming.parameterName(member.getMemberName());
@@ -151,9 +152,9 @@ public final class ErrorGenerator implements Runnable {
                   "}",
                   () ->
                       writer.write(
-                          writeValueStatement(target, "serializer", prop + "Schema", local)));
+                          writeValueStatement(target, "serializer", schema, local)));
             } else {
-              writer.write(writeValueStatement(target, "serializer", prop + "Schema", expr));
+              writer.write(writeValueStatement(target, "serializer", schema, expr));
             }
           }
         });
@@ -180,7 +181,7 @@ public final class ErrorGenerator implements Runnable {
           writer.write("");
           writer.write(
               "deserializer.ReadStruct<object?>(Schema, null, new StructMemberConsumer<object?>(");
-          writer.write("Member: (_, member, reader) =>");
+          writer.write("Member: (_, field, reader) =>");
           writer.openBlock(
               "{",
               "}",
@@ -191,7 +192,7 @@ public final class ErrorGenerator implements Runnable {
                   Shape target = model.expectShape(member.getTarget());
                   String keyword = i == 0 ? "if" : "else if";
                   writer.write(
-                      keyword + " (member.MemberName == $L)",
+                      keyword + " (field.MemberName == $L)",
                       CSharpNaming.formatString(member.getMemberName()));
                   writer.openBlock(
                       "{",
@@ -211,8 +212,7 @@ public final class ErrorGenerator implements Runnable {
                                           + readValueExpression(
                                               target,
                                               "reader",
-                                              CSharpNaming.propertyName(member.getMemberName())
-                                                  + "Schema")
+                                              SchemaGenerator.memberSchemaFieldName(member))
                                           + ";"));
                         } else {
                           writer.write(
@@ -221,7 +221,7 @@ public final class ErrorGenerator implements Runnable {
                                   + readValueExpression(
                                       target,
                                       "reader",
-                                      CSharpNaming.propertyName(member.getMemberName()) + "Schema")
+                                      SchemaGenerator.memberSchemaFieldName(member))
                                   + ";");
                         }
                       });
@@ -267,7 +267,8 @@ public final class ErrorGenerator implements Runnable {
       case BIG_INTEGER -> serializerVar + ".WriteBigInteger(" + schemaVar + ", " + valueExpr + ");";
       case BIG_DECIMAL -> serializerVar + ".WriteBigDecimal(" + schemaVar + ", " + valueExpr + ");";
       case TIMESTAMP -> serializerVar + ".WriteTimestamp(" + schemaVar + ", " + valueExpr + ");";
-      case STRING, ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case STRING -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ".Value);";
       case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ");";
       case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ");";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";

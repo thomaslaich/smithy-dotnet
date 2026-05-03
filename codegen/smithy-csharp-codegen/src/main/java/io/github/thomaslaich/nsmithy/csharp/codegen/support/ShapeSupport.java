@@ -169,6 +169,13 @@ public final class ShapeSupport {
     };
   }
 
+  public static boolean usesShapeSerde(Shape target) {
+    return switch (target.getType()) {
+      case ENUM, STRUCTURE, UNION, LIST, SET, MAP -> true;
+      default -> false;
+    };
+  }
+
   /** Members of a structure/error/union, sorted by member name. */
   public static List<MemberShape> sortedMembers(Shape shape) {
     return sortedMembers(shape, null);
