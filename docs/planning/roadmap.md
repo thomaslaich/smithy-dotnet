@@ -15,17 +15,15 @@ NSmithy keeps a hybrid boundary:
 
 The rationale is documented in [Hybrid Codegen Architecture](../architecture/hybrid-codegen.md).
 
-This means the project is not committing to a rewrite of the generator as a
-Smithy Java plugin in the near term, though that remains a reasonable option to
-evaluate if the semantic-model boundary becomes a larger cost.
+The generator is implemented as a Smithy Java plugin, invoked through the
+existing MSBuild and Smithy CLI flow.
 
 ## Current Baseline
 
 The repository already ships a working preview slice:
 
 - Smithy CLI integration through `NSmithy.MSBuild`
-- Smithy JSON AST parsing and internal model loading
-- C# generation for core shapes
+- C# and `.proto` generation implemented as a Smithy Java plugin
 - generated HTTP clients for `aws.protocols#restJson1`
 - generated HTTP clients and ASP.NET Core server surfaces for
   `alloy#simpleRestJson`
@@ -110,24 +108,6 @@ the architecture from scratch.
 - Keep the scope narrow and compliance-driven instead of claiming broad Smithy
   protocol coverage too early.
 
-### 7. Improve JSON serialization performance, generation, and AOT support
-
-- Improve JSON serialization throughput and allocation behavior on the current
-  generated path.
-- Re-evaluate source-generator or incremental-generator approaches for
-  serializer metadata, registration glue, or generated fast paths.
-- Improve the story for NativeAOT and reflection trimming once the main
-  generated HTTP/JSON path is stable enough to optimize intentionally.
-
-### 8. Experiment with Java-side Smithy plugin integration
-
-- Evaluate whether selected parts of the codegen pipeline should move into a
-  Smithy Java plugin while keeping MSBuild and Smithy CLI as the main user-facing
-  build flow.
-- Focus the experiment on semantic-model handling and protocol-specific logic
-  where direct access to Smithy internals may simplify the implementation.
-- Treat this as an architectural spike, not a committed rewrite plan.
-
 ## Later Work
 
 These are plausible future areas, but they are not the current focus:
@@ -135,19 +115,3 @@ These are plausible future areas, but they are not the current focus:
 - AWS JSON protocols
 - EC2 Query and AWS Query
 - F#-specific generation
-
-## Open Questions
-
-1. How far should `alloy#simpleRestJson` server compliance go before the project
-   changes its recommendation level from "preview" to a stronger claim?
-
-2. Should higher-performance JSON serialization come from source generation,
-  generated serializer glue, runtime specialization, or some hybrid of those
-  approaches?
-
-3. What is the smallest package and API surface that cleanly supports the gRPC
-   path without overfitting to the current preview implementation?
-
-4. Would a Smithy Java plugin, still invoked through the current MSBuild plus
-   Smithy CLI flow, actually reduce semantic-model complexity enough to justify
-   the additional packaging and testing cost?
