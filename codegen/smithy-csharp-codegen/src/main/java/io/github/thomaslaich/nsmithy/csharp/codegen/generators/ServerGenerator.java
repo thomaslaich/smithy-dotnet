@@ -86,8 +86,7 @@ public final class ServerGenerator implements Runnable {
     // Per-operation handler interfaces
     for (OperationShape op : ops) {
       writer.write("public interface $L", opHandlerName(op));
-      writer.openBlock(
-          "{", "}", () -> writer.write("$L;", serverOperationSignature(sp, op)));
+      writer.openBlock("{", "}", () -> writer.write("$L;", serverOperationSignature(sp, op)));
       writer.write("");
     }
 

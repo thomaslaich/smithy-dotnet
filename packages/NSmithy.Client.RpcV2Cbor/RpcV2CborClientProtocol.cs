@@ -1,5 +1,5 @@
-using NSmithy.Core.Serde;
 using NSmithy.Codecs.Cbor;
+using NSmithy.Core.Serde;
 using NSmithy.Http;
 
 namespace NSmithy.Client.RpcV2Cbor;

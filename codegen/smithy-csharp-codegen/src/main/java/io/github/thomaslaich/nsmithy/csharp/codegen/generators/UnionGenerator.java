@@ -49,8 +49,7 @@ public final class UnionGenerator implements Runnable {
             String variantName = CSharpNaming.typeName(m.getMemberName());
             String valueType = ShapeSupport.memberTypeExpr(sp, m, false);
             AttributeEmitter.writeMemberAttributes(writer, m, false);
-            writer.write(
-                "public sealed partial record class $L : $L", variantName, typeName);
+            writer.write("public sealed partial record class $L : $L", variantName, typeName);
             writer.openBlock(
                 "{",
                 "}",
@@ -72,10 +71,8 @@ public final class UnionGenerator implements Runnable {
                   writer.write("public $L Value { get; }", valueType);
                 });
             writer.write("");
-            writer.write(
-                "public static $L From$L($L value)", typeName, variantName, valueType);
-            writer.openBlock(
-                "{", "}", () -> writer.write("return new $L(value);", variantName));
+            writer.write("public static $L From$L($L value)", typeName, variantName, valueType);
+            writer.openBlock("{", "}", () -> writer.write("return new $L(value);", variantName));
             writer.write("");
           }
 

@@ -43,9 +43,7 @@ public final class ListGenerator implements Runnable {
         () -> {
           writer.write("");
           writer.write(
-              "public $L(System.Collections.Generic.IEnumerable<$L> values)",
-              typeName,
-              memberType);
+              "public $L(System.Collections.Generic.IEnumerable<$L> values)", typeName, memberType);
           writer.openBlock(
               "{",
               "}",

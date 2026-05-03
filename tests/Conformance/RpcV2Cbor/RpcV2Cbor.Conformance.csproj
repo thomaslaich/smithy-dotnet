@@ -27,7 +27,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../packages/NSmithy.Client/NSmithy.Client.csproj" />
-    <ProjectReference Include="../../../packages/NSmithy.Client.RpcV2Cbor/NSmithy.Client.RpcV2Cbor.csproj" />    <ProjectReference Include="../../../packages/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Client.RpcV2Cbor/NSmithy.Client.RpcV2Cbor.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Core/NSmithy.Core.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Http/NSmithy.Http.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />

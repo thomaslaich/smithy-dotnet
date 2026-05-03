@@ -3,9 +3,9 @@ using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Xml.Linq;
-using NSmithy.Core.Serde;
 using NSmithy.Core;
 using NSmithy.Core.Annotations;
+using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Xml;
 
