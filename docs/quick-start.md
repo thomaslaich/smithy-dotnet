@@ -1,15 +1,23 @@
 # Quick Start
 
+> **Note on the Java dependency:** `NSmithy.MSBuild` invokes the Smithy CLI
+> during `dotnet build`. The CLI is a JVM tool, so Java must be available on
+> the machine. This is the most common adoption blocker for .NET teams — if
+> your team has no existing Java toolchain, setting it up just to run a code
+> generator can feel heavyweight. The fastest way around this is the
+> [smithy-dotnet-minimal-pixi](https://github.com/thomaslaich/smithy-dotnet-minimal-pixi)
+> example, which uses [pixi](https://pixi.sh) to manage the Smithy CLI, Java,
+> and .NET in a self-contained project-local environment — no system-wide Java
+> install required.
+
 This guide uses local packages from this repository. Published preview packages
 are not assumed.
 
 ## Install The Smithy CLI
 
-`NSmithy.MSBuild` invokes the Smithy CLI during `dotnet build`. The CLI is a
-JVM tool, so Java must also be available. Two recommended approaches are shown
-below.
+Two recommended approaches are shown below.
 
-### Using pixi (conda-forge)
+### Using pixi (conda-forge, recommended)
 
 [pixi](https://pixi.sh) manages both the Smithy CLI and the JDK in a
 reproducible conda-forge environment.
@@ -73,11 +81,11 @@ Reference the packages needed by generated `restJson1` clients:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.4" />
-  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.4" />
-  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.4" />
-  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.4" />
-  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.4" PrivateAssets="all" />
+  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.5" />
+  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.5" />
+  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.5" />
+  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.5" />
+  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.5" PrivateAssets="all" />
 </ItemGroup>
 ```
 
@@ -86,8 +94,8 @@ For generated ASP.NET Core `simpleRestJson` servers, also reference:
 ```xml
 <ItemGroup>
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.4" />
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.4" />
+  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.5" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.5" />
 </ItemGroup>
 ```
 
@@ -109,7 +117,7 @@ For NSmithy code generation, add a `smithy-build.json` like this:
   "maven": {
     "dependencies": [
       "software.amazon.smithy:smithy-aws-traits:1.68.0",
-      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.4"
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.5"
     ]
   },
   "plugins": {
