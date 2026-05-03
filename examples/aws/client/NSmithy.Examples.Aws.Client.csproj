@@ -15,8 +15,8 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="NSmithy.Client" Version="0.1.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Client.RestXml" Version="0.1.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Client.RpcV2Cbor" Version="0.1.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Protocols.RestXml" Version="0.1.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Core" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Http" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-SNAPSHOT" PrivateAssets="all" />

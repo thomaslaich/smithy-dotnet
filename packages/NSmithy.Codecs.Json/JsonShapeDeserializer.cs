@@ -226,22 +226,22 @@ internal sealed class JsonShapeDeserializer : IShapeDeserializer
 
     private DateTimeOffset ReadEpochSecondsTimestamp()
     {
-        decimal seconds =
-            current.ValueKind switch
-            {
-                JsonValueKind.Number => decimal.Parse(
-                    current.GetRawText(),
-                    CultureInfo.InvariantCulture
-                ),
-                JsonValueKind.String => decimal.Parse(
-                    current.GetString()
-                        ?? throw new InvalidOperationException("Expected non-null JSON string."),
-                    CultureInfo.InvariantCulture
-                ),
-                _ => throw UnexpectedKind(JsonValueKind.Number, JsonValueKind.String),
-            };
+        decimal seconds = current.ValueKind switch
+        {
+            JsonValueKind.Number => decimal.Parse(
+                current.GetRawText(),
+                CultureInfo.InvariantCulture
+            ),
+            JsonValueKind.String => decimal.Parse(
+                current.GetString()
+                    ?? throw new InvalidOperationException("Expected non-null JSON string."),
+                CultureInfo.InvariantCulture
+            ),
+            _ => throw UnexpectedKind(JsonValueKind.Number, JsonValueKind.String),
+        };
 
-        long ticks = DateTimeOffset.UnixEpoch.Ticks + decimal.ToInt64(seconds * TimeSpan.TicksPerSecond);
+        long ticks =
+            DateTimeOffset.UnixEpoch.Ticks + decimal.ToInt64(seconds * TimeSpan.TicksPerSecond);
         return new DateTimeOffset(ticks, TimeSpan.Zero);
     }
 }

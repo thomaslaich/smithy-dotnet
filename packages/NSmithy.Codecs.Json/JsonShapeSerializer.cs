@@ -108,10 +108,7 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
         switch (GetTimestampFormat(schema))
         {
             case "epoch-seconds":
-                writer.WriteRawValue(
-                    FormatEpochSeconds(value),
-                    skipInputValidation: true
-                );
+                writer.WriteRawValue(FormatEpochSeconds(value), skipInputValidation: true);
                 break;
             case "http-date":
                 writer.WriteStringValue(
@@ -252,10 +249,7 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
             switch (GetTimestampFormat(schema))
             {
                 case "epoch-seconds":
-                    writer.WriteRawValue(
-                        FormatEpochSeconds(value),
-                        skipInputValidation: true
-                    );
+                    writer.WriteRawValue(FormatEpochSeconds(value), skipInputValidation: true);
                     break;
                 case "http-date":
                     writer.WriteStringValue(

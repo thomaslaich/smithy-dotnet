@@ -273,7 +273,8 @@ public final class ClientGenerator implements Runnable {
                       "}",
                       () -> {
                         writer.write(
-                            "request.Content = $L;", serializePayloadExpression(pm, "input." + prop));
+                            "request.Content = $L;",
+                            serializePayloadExpression(pm, "input." + prop));
                         writer.write("request.ContentType = DocumentCodec.MediaType;");
                       });
                 }
@@ -285,7 +286,8 @@ public final class ClientGenerator implements Runnable {
                       "}",
                       () -> {
                         writer.write(
-                            "request.Content = $L;", serializePayloadExpression(pm, "payloadValue"));
+                            "request.Content = $L;",
+                            serializePayloadExpression(pm, "payloadValue"));
                         writer.write("request.ContentType = DocumentCodec.MediaType;");
                       });
                 } else {
@@ -690,9 +692,7 @@ public final class ClientGenerator implements Runnable {
   }
 
   private static String stripTrailingSemicolon(String statement) {
-    return statement.endsWith(";")
-        ? statement.substring(0, statement.length() - 1)
-        : statement;
+    return statement.endsWith(";") ? statement.substring(0, statement.length() - 1) : statement;
   }
 
   // ---------------- body projection types ----------------
@@ -802,9 +802,7 @@ public final class ClientGenerator implements Runnable {
                         "{",
                         "}",
                         () ->
-                            writer.write(
-                                writeValueStatement(
-                                    target, "serializer", schema, local)));
+                            writer.write(writeValueStatement(target, "serializer", schema, local)));
                   } else {
                     writer.write(writeValueStatement(target, "serializer", schema, prop));
                   }
@@ -917,8 +915,7 @@ public final class ClientGenerator implements Runnable {
       case STRING -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
       case ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ".Value);";
       case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ");";
-      case DOCUMENT ->
-          serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + "!);";
+      case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + "!);";
       case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";
       case STRUCTURE -> serializerVar + ".WriteStruct(" + schemaVar + ", " + valueExpr + ");";
       case UNION, LIST, SET, MAP ->

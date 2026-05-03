@@ -17,7 +17,7 @@
     <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
     <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="all" />
     <PackageReference Include="NSmithy.Client" Version="0.1.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Client.RestJson" Version="0.1.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Core" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Http" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-SNAPSHOT" PrivateAssets="all" />

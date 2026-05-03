@@ -1,6 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
-    <ProjectReference Include="../NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
-    <ProjectReference Include="../NSmithy.Client.RestJson/NSmithy.Client.RestJson.csproj" />
+    <ProjectReference Include="../NSmithy.Protocols.RestXml/NSmithy.Protocols.RestXml.csproj" />
   </ItemGroup>
 </Project>

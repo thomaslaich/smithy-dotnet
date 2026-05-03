@@ -150,9 +150,7 @@ public final class ErrorGenerator implements Runnable {
               writer.openBlock(
                   "{",
                   "}",
-                  () ->
-                      writer.write(
-                          writeValueStatement(target, "serializer", schema, local)));
+                  () -> writer.write(writeValueStatement(target, "serializer", schema, local)));
             } else {
               writer.write(writeValueStatement(target, "serializer", schema, expr));
             }

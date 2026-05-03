@@ -781,9 +781,7 @@ public final class ServerGenerator implements Runnable {
                         "{",
                         "}",
                         () ->
-                            writer.write(
-                                writeValueStatement(
-                                    target, "serializer", schema, local)));
+                            writer.write(writeValueStatement(target, "serializer", schema, local)));
                   } else {
                     writer.write(writeValueStatement(target, "serializer", schema, prop));
                   }
@@ -943,9 +941,7 @@ public final class ServerGenerator implements Runnable {
   }
 
   private static String stripTrailingSemicolon(String statement) {
-    return statement.endsWith(";")
-        ? statement.substring(0, statement.length() - 1)
-        : statement;
+    return statement.endsWith(";") ? statement.substring(0, statement.length() - 1) : statement;
   }
 
   private String readValueExpression(Shape target, String deserializerVar, String schemaVar) {

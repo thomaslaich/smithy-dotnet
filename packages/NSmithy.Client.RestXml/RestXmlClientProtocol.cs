@@ -1,7 +1,3 @@
-using System.Collections;
-using System.Globalization;
-using System.Text;
-using System.Xml.Linq;
 using NSmithy.Core.Serde;
 
 namespace NSmithy.Client.RestXml;
@@ -12,100 +8,58 @@ public static class RestXmlClientProtocol
         IDictionary<string, IReadOnlyList<string>> headers,
         string name,
         object? value
-    )
-    {
-        RestJson.RestJsonClientProtocol.AddHeader(headers, name, value);
-    }
+    ) => NSmithy.Protocols.RestXml.RestXmlClientProtocol.AddHeader(headers, name, value);
 
     public static void AddPrefixedHeaders(
         IDictionary<string, IReadOnlyList<string>> headers,
         string prefix,
         object? value
-    )
-    {
-        RestJson.RestJsonClientProtocol.AddPrefixedHeaders(headers, prefix, value);
-    }
+    ) => NSmithy.Protocols.RestXml.RestXmlClientProtocol.AddPrefixedHeaders(headers, prefix, value);
 
-    public static void AppendQuery(StringBuilder builder, string name, object? value)
-    {
-        RestJson.RestJsonClientProtocol.AppendQuery(builder, name, value);
-    }
+    public static void AppendQuery(System.Text.StringBuilder builder, string name, object? value) =>
+        NSmithy.Protocols.RestXml.RestXmlClientProtocol.AppendQuery(builder, name, value);
 
-    public static void AppendQueryMap(StringBuilder builder, object? value)
-    {
-        RestJson.RestJsonClientProtocol.AppendQueryMap(builder, value);
-    }
+    public static void AppendQueryMap(System.Text.StringBuilder builder, object? value) =>
+        NSmithy.Protocols.RestXml.RestXmlClientProtocol.AppendQueryMap(builder, value);
 
-    public static string EscapeGreedyLabel(object value)
-    {
-        return RestJson.RestJsonClientProtocol.EscapeGreedyLabel(value);
-    }
+    public static string EscapeGreedyLabel(object value) =>
+        NSmithy.Protocols.RestXml.RestXmlClientProtocol.EscapeGreedyLabel(value);
 
-    public static string FormatHttpValue(object value)
-    {
-        return RestJson.RestJsonClientProtocol.FormatHttpValue(value);
-    }
+    public static string FormatHttpValue(object value) =>
+        NSmithy.Protocols.RestXml.RestXmlClientProtocol.FormatHttpValue(value);
 
     public static T DeserializeBody<T>(ISmithyCodec codec, byte[] content)
-        where T : IDeserializableShape<T>
-    {
-        return RestJson.RestJsonClientProtocol.DeserializeBody<T>(codec, content);
-    }
+        where T : IDeserializableShape<T> =>
+        NSmithy.Protocols.RestXml.RestXmlClientProtocol.DeserializeBody<T>(codec, content);
 
     public static T DeserializeRequiredBody<T>(ISmithyCodec codec, byte[] content)
-        where T : IDeserializableShape<T>
-    {
-        return RestJson.RestJsonClientProtocol.DeserializeRequiredBody<T>(codec, content);
-    }
+        where T : IDeserializableShape<T> =>
+        NSmithy.Protocols.RestXml.RestXmlClientProtocol.DeserializeRequiredBody<T>(codec, content);
 
-    public static string? DeserializeErrorCode(byte[] content)
-    {
-        var root = GetErrorRoot(content);
-        return root.Elements().FirstOrDefault(element => element.Name.LocalName == "Code")?.Value;
-    }
+    public static string? DeserializeErrorCode(byte[] content) =>
+        NSmithy.Protocols.RestXml.RestXmlClientProtocol.DeserializeErrorCode(content);
 
     public static T GetHeader<T>(
         IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
         string name
-    )
-    {
-        return RestJson.RestJsonClientProtocol.GetHeader<T>(headers, name);
-    }
+    ) => NSmithy.Protocols.RestXml.RestXmlClientProtocol.GetHeader<T>(headers, name);
 
     public static T GetRequiredHeader<T>(
         IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
         string name
-    )
-    {
-        return RestJson.RestJsonClientProtocol.GetRequiredHeader<T>(headers, name);
-    }
+    ) => NSmithy.Protocols.RestXml.RestXmlClientProtocol.GetRequiredHeader<T>(headers, name);
 
     public static T GetPrefixedHeaders<T>(
         IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
         string prefix
-    )
-    {
-        return RestJson.RestJsonClientProtocol.GetPrefixedHeaders<T>(headers, prefix);
-    }
+    ) => NSmithy.Protocols.RestXml.RestXmlClientProtocol.GetPrefixedHeaders<T>(headers, prefix);
 
     public static T GetRequiredPrefixedHeaders<T>(
         IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
         string prefix
-    )
-    {
-        return RestJson.RestJsonClientProtocol.GetRequiredPrefixedHeaders<T>(headers, prefix);
-    }
-
-    private static XElement GetErrorRoot(byte[] content)
-    {
-        var document = XDocument.Parse(Encoding.UTF8.GetString(content));
-        var root =
-            document.Root
-            ?? throw new InvalidOperationException(
-                "Response body was missing an XML root element."
-            );
-        return string.Equals(root.Name.LocalName, "ErrorResponse", StringComparison.Ordinal)
-            ? root.Elements().FirstOrDefault(element => element.Name.LocalName == "Error") ?? root
-            : root;
-    }
+    ) =>
+        NSmithy.Protocols.RestXml.RestXmlClientProtocol.GetRequiredPrefixedHeaders<T>(
+            headers,
+            prefix
+        );
 }

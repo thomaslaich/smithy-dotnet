@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <PackageReference Include="NSmithy.Client" Version="0.1.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Client.RestJson" Version="0.1.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Core" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Http" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-SNAPSHOT" />

@@ -84,9 +84,9 @@ public final class ProtocolSupport {
   /** Runtime namespace housing the protocol class. */
   public static String runtimeProtocolNamespace(Kind kind) {
     return switch (kind) {
-      case REST_JSON -> RuntimeTypes.NSMITHY_CLIENT_RESTJSON;
-      case REST_XML -> RuntimeTypes.NSMITHY_CLIENT_RESTXML;
-      case RPC_V2_CBOR -> RuntimeTypes.NSMITHY_CLIENT_RPCV2CBOR;
+      case REST_JSON -> RuntimeTypes.NSMITHY_PROTOCOLS_RESTJSON;
+      case REST_XML -> RuntimeTypes.NSMITHY_PROTOCOLS_RESTXML;
+      case RPC_V2_CBOR -> RuntimeTypes.NSMITHY_PROTOCOLS_RPCV2CBOR;
     };
   }
 

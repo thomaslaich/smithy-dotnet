@@ -224,9 +224,7 @@ public final class MapGenerator implements Runnable {
   }
 
   private static String stripTrailingSemicolon(String statement) {
-    return statement.endsWith(";")
-        ? statement.substring(0, statement.length() - 1)
-        : statement;
+    return statement.endsWith(";") ? statement.substring(0, statement.length() - 1) : statement;
   }
 
   private String readValueExpression(Shape target, String deserializerVar, String schemaVar) {

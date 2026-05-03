@@ -8,6 +8,9 @@
     <Project Path="packages/NSmithy.Core/NSmithy.Core.csproj" />
     <Project Path="packages/NSmithy.Http/NSmithy.Http.csproj" />
     <Project Path="packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
+    <Project Path="packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
+    <Project Path="packages/NSmithy.Protocols.RestXml/NSmithy.Protocols.RestXml.csproj" />
+    <Project Path="packages/NSmithy.Protocols.RpcV2Cbor/NSmithy.Protocols.RpcV2Cbor.csproj" />
     <Project Path="packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
     <Project Path="packages/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
     <Project Path="packages/NSmithy.Server/NSmithy.Server.csproj" />

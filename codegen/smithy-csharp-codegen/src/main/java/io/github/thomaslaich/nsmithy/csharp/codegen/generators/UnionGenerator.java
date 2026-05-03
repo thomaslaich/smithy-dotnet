@@ -53,7 +53,8 @@ public final class UnionGenerator implements Runnable {
           writer.write("private protected $L() { }", typeName);
           writer.write("");
           writer.write("public abstract void Serialize(IShapeSerializer serializer);");
-          writer.write("public abstract void Serialize(IShapeSerializer serializer, Schema schema);");
+          writer.write(
+              "public abstract void Serialize(IShapeSerializer serializer, Schema schema);");
           writer.write("");
           for (MemberShape m : members) {
             String variantName = CSharpNaming.typeName(m.getMemberName());
@@ -81,12 +82,10 @@ public final class UnionGenerator implements Runnable {
                   writer.write("public $L Value { get; }", valueType);
                   writer.write("");
                   writer.write("public override void Serialize(IShapeSerializer serializer)");
-                  writer.openBlock(
-                      "{",
-                      "}",
-                      () -> writer.write("Serialize(serializer, Schema);"));
+                  writer.openBlock("{", "}", () -> writer.write("Serialize(serializer, Schema);"));
                   writer.write("");
-                  writer.write("public override void Serialize(IShapeSerializer serializer, Schema schema)");
+                  writer.write(
+                      "public override void Serialize(IShapeSerializer serializer, Schema schema)");
                   writer.openBlock(
                       "{",
                       "}",
@@ -147,12 +146,10 @@ public final class UnionGenerator implements Runnable {
                 writer.write("public Document Value { get; }");
                 writer.write("");
                 writer.write("public override void Serialize(IShapeSerializer serializer)");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> writer.write("Serialize(serializer, Schema);"));
+                writer.openBlock("{", "}", () -> writer.write("Serialize(serializer, Schema);"));
                 writer.write("");
-                writer.write("public override void Serialize(IShapeSerializer serializer, Schema schema)");
+                writer.write(
+                    "public override void Serialize(IShapeSerializer serializer, Schema schema)");
                 writer.openBlock(
                     "{",
                     "}",
@@ -256,8 +253,7 @@ public final class UnionGenerator implements Runnable {
                   String variantName = CSharpNaming.typeName(memberName);
                   String keyword = i == 0 ? "if" : "else if";
                   writer.write(
-                      keyword + " (field.MemberName == $L)",
-                      CSharpNaming.formatString(memberName));
+                      keyword + " (field.MemberName == $L)", CSharpNaming.formatString(memberName));
                   writer.openBlock(
                       "{",
                       "}",

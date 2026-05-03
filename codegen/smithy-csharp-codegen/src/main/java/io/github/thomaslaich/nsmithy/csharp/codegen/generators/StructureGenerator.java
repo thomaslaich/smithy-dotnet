@@ -182,8 +182,7 @@ public final class StructureGenerator implements Runnable {
                   Shape target = model.expectShape(member.getTarget());
                   String keyword = i == 0 ? "if" : "else if";
                   writer.write(
-                      keyword + " (field.MemberName == $L)",
-                      CSharpNaming.formatString(memberName));
+                      keyword + " (field.MemberName == $L)", CSharpNaming.formatString(memberName));
                   writer.openBlock(
                       "{",
                       "}",
