@@ -245,8 +245,9 @@ public static class SmithyAspNetCoreProtocol
                 continue;
             }
 
-            httpContext.Response.Headers[$"{prefix}{item.Key}"] =
-                RestJsonProtocol.FormatHttpValue(item.Value);
+            httpContext.Response.Headers[$"{prefix}{item.Key}"] = RestJsonProtocol.FormatHttpValue(
+                item.Value
+            );
         }
     }
 
