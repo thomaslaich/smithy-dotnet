@@ -1,7 +1,7 @@
 using System.Collections;
 using System.Globalization;
 using System.Text;
-using NSmithy.Codecs;
+using NSmithy.Core.Serde;
 
 namespace NSmithy.Client.RestJson;
 

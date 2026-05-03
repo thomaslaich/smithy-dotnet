@@ -26,9 +26,7 @@
     <ProjectReference Include="../../packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <ProjectReference Include="../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
-    <ProjectReference Include="../../packages/NSmithy.Server/NSmithy.Server.csproj" />
-    <ProjectReference Include="../../packages/NSmithy.Codecs/NSmithy.Codecs.csproj" />
-    <ProjectReference Include="../../packages/NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Server/NSmithy.Server.csproj" />    <ProjectReference Include="../../packages/NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
   </ItemGroup>
 
   <ItemGroup>

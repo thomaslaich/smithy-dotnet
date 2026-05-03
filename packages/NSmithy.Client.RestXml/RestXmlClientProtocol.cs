@@ -2,7 +2,7 @@ using System.Collections;
 using System.Globalization;
 using System.Text;
 using System.Xml.Linq;
-using NSmithy.Codecs;
+using NSmithy.Core.Serde;
 
 namespace NSmithy.Client.RestXml;
 

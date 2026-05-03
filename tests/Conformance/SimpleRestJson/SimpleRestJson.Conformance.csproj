@@ -36,9 +36,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../packages/NSmithy.Client/NSmithy.Client.csproj" />
-    <ProjectReference Include="../../../packages/NSmithy.Client.RestJson/NSmithy.Client.RestJson.csproj" />
-    <ProjectReference Include="../../../packages/NSmithy.Codecs/NSmithy.Codecs.csproj" />
-    <ProjectReference Include="../../../packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Client.RestJson/NSmithy.Client.RestJson.csproj" />    <ProjectReference Include="../../../packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Core/NSmithy.Core.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Http/NSmithy.Http.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />

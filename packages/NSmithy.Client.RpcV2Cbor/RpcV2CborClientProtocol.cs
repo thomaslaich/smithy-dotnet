@@ -1,4 +1,4 @@
-using NSmithy.Codecs;
+using NSmithy.Core.Serde;
 using NSmithy.Codecs.Cbor;
 using NSmithy.Http;
 

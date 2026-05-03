@@ -102,7 +102,7 @@ public final class ClientGenerator implements Runnable {
     if (emitsHttp) {
       writer.addImport(RuntimeTypes.NSMITHY_CLIENT);
       writer.addImport(RuntimeTypes.NSMITHY_HTTP);
-      writer.addImport(RuntimeTypes.NSMITHY_CODECS);
+      writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
       writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kind));
       writer.addImport(ProtocolSupport.codecNamespace(kind));
       writeHttpClient(sp, model, operations, typeName, interfaceName);

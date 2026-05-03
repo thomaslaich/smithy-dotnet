@@ -1,4 +1,4 @@
-namespace NSmithy.Codecs;
+namespace NSmithy.Core.Serde;
 
 public interface ISmithyPayloadCodec
 {
