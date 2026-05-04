@@ -177,5 +177,6 @@ When the environment is active, `smithy` is resolved from `PATH`. Set `SmithyCli
 - [Multi-Protocol Guide](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/multi-protocol.md)
 - [MSBuild Reference](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/msbuild.md)
 - [Architecture](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/architecture/hybrid-codegen.md)
+- [Design Docs](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/README.md)
 - [Known Limitations](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/known-limitations.md)
 - [Roadmap](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/planning/roadmap.md)
