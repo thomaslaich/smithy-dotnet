@@ -1,133 +1,118 @@
-# Hybrid Codegen Architecture
+# Codegen Architecture
 
 NSmithy uses Smithy and .NET at different layers of the pipeline.
 
-## Decision
+## Overview
 
-Today, NSmithy does not implement its primary C# generator as a Smithy Java
-plugin.
+NSmithy implements C# code generation as a Smithy Java plugin
+(`smithy-csharp-codegen`). The plugin is loaded by the Smithy CLI and runs
+inside `smithy build`, where it has direct access to Smithy's semantic model via
+the standard `CodegenDirector` APIs.
 
-Instead:
+The two sides of the architecture are:
 
-- Smithy CLI is responsible for model assembly, validation, projections, imports,
-  prelude resolution, and Maven dependency handling.
-- NSmithy reads the resulting Smithy JSON AST/build artifacts and performs C#
-  and `.proto` generation inside the .NET toolchain.
+- **Java (codegen)**: model assembly, validation, trait resolution, and C#/`.proto`
+  emission all happen inside the Java plugin during `smithy build`.
+- **.NET (runtime + build integration)**: `NSmithy.MSBuild` invokes `smithy build`,
+  picks up the generated files, and adds them to the `dotnet build` compilation.
+  The `.NET` runtime packages (`NSmithy.Core`, `NSmithy.Protocols.*`, etc.) provide
+  the protocol dispatch, schema metadata, and transport abstractions that the
+  generated code depends on.
 
-This is the current architecture and the working default for the project today.
-It is not the same as a final decision that Java-side Smithy plugin integration
-should never be used.
+## Codegen Pipeline
 
-## Why
+```
+smithy-build.json
+      │
+      ▼
+smithy build (Smithy CLI)
+      │   loads smithy-csharp-codegen Java plugin
+      │   assembles + validates model
+      │   runs CodegenDirector
+      │     ├── StructureGenerator    → <Shape>.g.cs
+      │     ├── UnionGenerator        → <Shape>.g.cs
+      │     ├── ErrorGenerator        → <Shape>.g.cs
+      │     ├── List/MapGenerator     → <Shape>.g.cs
+      │     ├── Enum/IntEnumGenerator → <Shape>.g.cs
+      │     ├── ClientGenerator       → <Service>Client.g.cs
+      │     ├── ServerGenerator       → <Service>Server.g.cs
+      │     └── ProtoGenerator        → <Service>.proto  (gRPC only)
+      │
+      ▼
+  obj/Smithy/<projection>/csharp-codegen/**/*.g.cs
+  obj/Smithy/<projection>/csharp-codegen/**/*.proto
+```
 
-### Keep the .NET backend in the .NET build
+MSBuild then picks up the generated files via two targets in `NSmithy.MSBuild`:
 
-The main user workflow is `dotnet build`. The current MSBuild task runs Smithy,
-generates sources into `obj/`, manages incremental inputs, cleans stale files,
-and adds generated files to compilation.
+- `_AddSmithyGeneratedCompileItems` – adds `.g.cs` files to `<Compile>`.
+- `_AddSmithyGeneratedProtoItems` – registers `.proto` files with Grpc.Tools.
 
-Keeping code generation in .NET means:
+## Java Plugin
 
-- the full generation path stays inside MSBuild
-- generated outputs are handled with normal .NET build semantics
-- consumers do not need a Gradle plugin or a Java-packaged Smithy plugin to use
-  generated C# in their projects
+`CSharpClientCodegenPlugin` implements Smithy's `SmithyBuildPlugin` interface
+and is discovered on the classpath via
+`META-INF/services/software.amazon.smithy.build.SmithyBuildPlugin`.
 
-### Keep iteration and tests local to the target language
+It delegates to `DirectedCSharpClientCodegen`, which implements
+`DirectedCodegen`. Smithy's `CodegenDirector` calls one method per shape kind
+(structure, union, list, map, enum, service, etc.) and the plugin emits the
+corresponding `.g.cs` file through `CSharpWriter`.
 
-The generator is primarily a C# backend. Its tests can construct small Smithy
-models directly, run the generator in-process, and compile the resulting C#
-against the local runtime packages.
+Because the plugin runs inside `smithy build`, it has direct access to Smithy's
+fully assembled and validated semantic model — no separate JSON AST parsing step
+is needed in .NET.
 
-That loop is materially simpler than:
+## MSBuild Integration
 
-- packaging a Java Smithy plugin
-- invoking it through Smithy build or Gradle
-- moving generated outputs back into `dotnet build`
-- expressing most generator tests as cross-toolchain integration tests
+The main user workflow is `dotnet build`. `NSmithy.MSBuild` provides a
+`GenerateSmithyCode` target that runs `smithy build` before `CoreCompile`.
+Incremental builds are tracked via a stamp file; the target only re-runs when
+model inputs change.
 
-### Reuse Smithy where it adds the most value
+Consumers do not need Gradle or a separate codegen invocation — they reference
+`NSmithy.MSBuild` as a NuGet package and add `smithy-csharp-codegen` as a Maven
+dependency in their `smithy-build.json`.
 
-Smithy already solves the hard model-front-end problems:
+## .NET Runtime Packages
 
-- IDL parsing
-- model assembly
-- trait validation
-- projections and transforms
-- Maven dependency resolution
-- compatibility with the broader Smithy ecosystem
+Generated code depends on .NET packages that are published to NuGet:
 
-NSmithy intentionally reuses that front end rather than reimplementing it.
+- `NSmithy.Core` — `Schema`, `ShapeId`, `Trait`, codec interfaces
+- `NSmithy.Http` — `IHttpTransport`, `SmithyHttpRequest`, `SmithyHttpResponse`
+- `NSmithy.Client` — `ISmithyClient`, `SmithyClientOptions`
+- `NSmithy.Server` / `NSmithy.Server.AspNetCore` — server framework
+- `NSmithy.Codecs.Json/Xml/Cbor` — codec implementations
+- `NSmithy.Protocols.RestJson/RestXml/RpcV2Cbor` — protocol binding
+
+These packages are independent of the Java plugin. A consumer project references
+them in its `.csproj`; the generated `.g.cs` files import the matching types.
 
 ## Tradeoffs
 
-This architecture is not free.
+**What the Java plugin approach gives us:**
 
-Current costs:
+- direct access to Smithy's semantic model — no reimplementing IDL parsing,
+  shape assembly, or trait resolution in .NET
+- protocol correctness from Smithy's own model (trait semantics are authoritative)
+- interoperability with the Smithy plugin ecosystem (transforms, projections,
+  external trait libraries like `alloy`)
 
-- NSmithy owns a JSON AST reader and its own internal model representation
-- there is an extra boundary between Smithy semantic model handling and C#
-  emission
-- some Smithy semantics may require additional mapping work in .NET that a Java
-  plugin would get more directly from Smithy libraries
+**What it costs:**
 
-These costs are accepted because they keep the main backend, tests, and build
-integration in the environment where the generated code is consumed.
+- the generator and its tests live in a Java/Gradle build, which is a separate
+  toolchain from the .NET runtime
+- backend iteration (edit generator → test generated output) involves building
+  the JAR and invoking `smithy build`, which is slower than an in-process loop
+- packaging and release management spans NuGet (runtime) and Maven Central
+  (codegen JAR)
 
-## Why Not A Smithy Java Plugin By Default
-
-A Java plugin would simplify one narrow concern: direct access to Smithy's
-semantic model and plugin APIs.
-
-It would also introduce new complexity that does not fit the current product
-shape well:
-
-- Java/Gradle packaging and release management for the generator itself
-- tighter coupling to Smithy Java internals and plugin APIs
-- a more complex handoff from Java-generated artifacts back into `dotnet build`
-- slower backend iteration for a C#-focused project
-
-For NSmithy today, that is not yet proven to be a net simplification.
-
-## Scope Of The Decision
-
-This decision does not rule out:
-
-- small Java-side helpers if a future feature truly needs them
-- better use of Smithy build projections or plugins as model pre-processing
-- evaluating a Smithy Java plugin while still keeping MSBuild and Smithy CLI as
-  the user-facing build entrypoint
-- revisiting the boundary if the JSON AST seam becomes a dominant maintenance
-  cost
-
-It only rules out treating "rewrite the generator as a Smithy Java plugin" as a
-committed roadmap direction before there is evidence that it simplifies the
-system overall.
-
-## What A Reasonable Evaluation Would Look Like
-
-If the project explores Java-side Smithy plugin integration, the likely shape is
-not "replace MSBuild with Gradle."
-
-A more realistic option would be:
-
-- keep `dotnet build` and `NSmithy.MSBuild` as the main user experience
-- keep invoking Smithy CLI from the .NET build
-- let Smithy run a custom Java plugin for the part of the pipeline where direct
-  access to Smithy's semantic model might help
-- compare that result against the current JSON AST plus .NET generator approach
-
-That evaluation should answer at least these questions:
-
-- Does a Java plugin remove meaningful semantic-model complexity, or only move
-  it?
-- Does it improve protocol correctness or trait handling in a way that matters?
-- What does it do to test speed and backend iteration for C# generation?
-- How much new packaging, versioning, and distribution complexity does it add?
-- Can the project keep the same MSBuild-first developer experience?
+These costs are accepted because the Java plugin gives access to Smithy's
+semantic model at the layer where model semantics are most precisely defined.
 
 ## Related Docs
 
 - [MSBuild Reference](../msbuild.md)
 - [Known Limitations](../known-limitations.md)
 - [Roadmap](../planning/roadmap.md)
+- [Design Docs](../../designs/README.md)
