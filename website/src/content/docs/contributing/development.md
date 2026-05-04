@@ -1,6 +1,6 @@
 ---
 title: Development
-description: How to build and test the Smithy.NET repository locally.
+description: How to build and test the NSmithy repository locally.
 ---
 
 This guide covers building and testing the repository locally.

@@ -1,102 +1,63 @@
 ---
-title: Protocol Conformance Matrix
-description: Official protocol conformance test results for Smithy.NET.
+title: Protocol Conformance
+description: How NSmithy runs protocol conformance tests.
 ---
 
-| Protocol | Case kind | Executable | Skipped | Total | Conformance |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `alloy#simpleRestJson` | `Request` | 17 | 6 | 23 | 73.9% |
-| `alloy#simpleRestJson` | `Response` | 14 | 6 | 20 | 70.0% |
-| `aws.protocols#restJson1` | `Request` | 5 | 153 | 158 | 3.2% |
-| `aws.protocols#restJson1` | `Response` | 4 | 110 | 114 | 3.5% |
-| `aws.protocols#restJson1` | `MalformedRequest` | 0 | 191 | 191 | 0.0% |
+NSmithy runs official Smithy and Alloy protocol conformance test suites as part
+of its test infrastructure. The tests are located under `packages/` in the
+repository and are run as part of the standard `just test` CI step.
 
-## Executable Cases
+## How Conformance Tests Work
 
-- `alloy#simpleRestJson` `Request` `AddMenuItem`
-- `alloy#simpleRestJson` `Request` `CustomCodeInput`
-- `alloy#simpleRestJson` `Request` `GetEnumInput`
-- `alloy#simpleRestJson` `Request` `GetIntEnumInput`
-- `alloy#simpleRestJson` `Request` `GetMenuRequest`
-- `alloy#simpleRestJson` `Request` `HeaderEndpointInput`
-- `alloy#simpleRestJson` `Request` `HealthGet`
-- `alloy#simpleRestJson` `Request` `RoundTripRequest`
-- `alloy#simpleRestJson` `Request` `RoutingAbc`
-- `alloy#simpleRestJson` `Request` `RoutingAbcDef`
-- `alloy#simpleRestJson` `Request` `RoutingAbcDefGreedy`
-- `alloy#simpleRestJson` `Request` `RoutingAbcLabel`
-- `alloy#simpleRestJson` `Request` `RoutingAbcXyz`
-- `alloy#simpleRestJson` `Request` `SimpleRestJsonNoneHttpPayloadWithDefault`
-- `alloy#simpleRestJson` `Request` `SimpleRestJsonNoneRequiredHttpPayloadWithDefault`
-- `alloy#simpleRestJson` `Request` `SimpleRestJsonSomeHttpPayloadWithDefault`
-- `alloy#simpleRestJson` `Request` `SimpleRestJsonSomeRequiredHttpPayloadWithDefault`
-- `alloy#simpleRestJson` `Response` `AddMenuItemResult`
-- `alloy#simpleRestJson` `Response` `CustomCodeOutput`
-- `alloy#simpleRestJson` `Response` `GetEnumOutput`
-- `alloy#simpleRestJson` `Response` `GetIntEnumOutput`
-- `alloy#simpleRestJson` `Response` `GetMenuResponse`
-- `alloy#simpleRestJson` `Response` `NotFoundError`
-- `alloy#simpleRestJson` `Response` `PriceErrorTest`
-- `alloy#simpleRestJson` `Response` `RoundTripDataResponse`
-- `alloy#simpleRestJson` `Response` `SimpleRestJsonNoneHttpPayloadWithDefault`
-- `alloy#simpleRestJson` `Response` `SimpleRestJsonNoneRequiredHttpPayloadWithDefault`
-- `alloy#simpleRestJson` `Response` `SimpleRestJsonSomeHttpPayloadWithDefault`
-- `alloy#simpleRestJson` `Response` `SimpleRestJsonSomeRequiredHttpPayloadWithDefault`
-- `alloy#simpleRestJson` `Response` `VersionOutput`
-- `alloy#simpleRestJson` `Response` `headerEndpointResponse`
-- `aws.protocols#restJson1` `Request` `HttpQueryParamsOnlyRequest`
-- `aws.protocols#restJson1` `Request` `RestJsonConstantQueryString`
-- `aws.protocols#restJson1` `Request` `RestJsonEmptyInputAndEmptyOutput`
-- `aws.protocols#restJson1` `Request` `RestJsonHttpPayloadWithStructure`
-- `aws.protocols#restJson1` `Request` `RestJsonHttpPrefixHeadersArePresent`
-- `aws.protocols#restJson1` `Response` `RestJsonHttpPayloadWithStructure`
-- `aws.protocols#restJson1` `Response` `RestJsonHttpPrefixHeadersArePresent`
-- `aws.protocols#restJson1` `Response` `RestJsonHttpResponseCode`
-- `aws.protocols#restJson1` `Response` `RestJsonHttpResponseCodeWithNoPayload`
+Each supported protocol has a dedicated test project that:
 
-## Skipped Cases By Reason
+1. Loads the official Smithy conformance test suite for that protocol.
+2. Generates request or response messages using NSmithy's codec and protocol
+   binding.
+3. Compares the result against the expected wire representation from the test
+   case.
 
-### restJson1 server generation and malformed request rejection are not implemented.
+Cases that are not yet supported are marked with explicit skip reasons so the
+test output distinguishes between "not implemented" and "broken."
 
-- Count: 191
-- `aws.protocols#restJson1` `MalformedRequest` *(191 cases — see source for full list)*
+## Running The Tests
 
-### Official request/response conformance execution is not yet enabled for this case.
+```bash
+just test
+```
 
-- Count: 221
-- `alloy#simpleRestJson` `Request` `PrimitivesEncodingRequest`
-- `alloy#simpleRestJson` `Response` `PrimitivesEncodingResponse`
-- `aws.protocols#restJson1` `Request` *(110 cases)*
-- `aws.protocols#restJson1` `Response` *(96 cases — see source for full list)*
+Results are printed to the terminal. Each skipped case shows its skip reason
+inline.
 
-### Full union protocol encodings are not implemented.
+## Current Coverage
 
-- Count: 39
-- `alloy#simpleRestJson` `Request` `OpenUnionsKnownDiscriminatedUnionCase`
-- `alloy#simpleRestJson` `Request` `OpenUnionsKnownTaggedUnionCase`
-- `alloy#simpleRestJson` `Request` `OpenUnionsUnknownDiscriminatedUnionCase`
-- `alloy#simpleRestJson` `Request` `OpenUnionsUnknownTaggedUnionCase`
-- `alloy#simpleRestJson` `Response` `OpenUnionsKnownDiscriminatedUnionCase`
-- `alloy#simpleRestJson` `Response` `OpenUnionsKnownTaggedUnionCase`
-- `alloy#simpleRestJson` `Response` `OpenUnionsUnknownDiscriminatedUnionCase`
-- `alloy#simpleRestJson` `Response` `OpenUnionsUnknownTaggedUnionCase`
-- `aws.protocols#restJson1` *(31 union cases — see source for full list)*
+To see the current conformance pass/skip/fail breakdown, run the test suite
+locally. The numbers change as coverage expands and should be treated as
+point-in-time snapshots rather than a stable published matrix.
 
-### AWS service-specific restJson1 protocol fixtures are outside the current generated-client slice.
+Rough guidance on where each protocol stands today:
 
-- Count: 8
-- `aws.protocols#restJson1` `Request` `AcceptHeaderStarRequestTest`
-- `aws.protocols#restJson1` `Request` `AcceptHeaderStarStarRequestTest`
-- `aws.protocols#restJson1` `Request` `ApiGatewayAccept`
-- `aws.protocols#restJson1` `Request` `GlacierAccountId`
-- `aws.protocols#restJson1` `Request` `GlacierChecksums`
-- `aws.protocols#restJson1` `Request` `GlacierMultipartChecksums`
-- `aws.protocols#restJson1` `Request` `GlacierVersionHeader`
-- `aws.protocols#restJson1` `Request` `RestJsonRecursiveStructuresValidate`
+- `alloy#simpleRestJson` — most complete; the majority of request and response
+  cases pass.
+- `aws.protocols#restJson1` — narrow slice; only a small subset of cases run,
+  with the rest explicitly skipped pending broader binding coverage.
+- `smithy.protocols#rpcv2Cbor` — early preview; conformance test integration
+  is in progress.
+- `alloy.proto#grpc` — not covered by Smithy's conformance suite; tested
+  via end-to-end examples instead.
 
-### Other skip reasons
+## Skip Reasons
 
-- **Endpoint and host-prefix binding traits are not implemented** (3 cases)
-- **`alloy#preserveKeyOrder` behavior is not implemented** (2 cases)
-- **Greedy label URI expansion is not implemented** (1 case)
-- **HTTP checksum traits are not implemented** (1 case)
+Common reasons a case is skipped rather than failed:
+
+- **Server generation not implemented** — `restJson1` server surfaces and
+  malformed-request rejection are out of scope for this preview.
+- **Feature not yet implemented** — e.g. open union encodings, greedy label
+  URI expansion, endpoint host-prefix binding.
+- **AWS service-specific fixtures** — fixtures that depend on AWS-specific
+  behavior outside the current generated-client slice.
+
+## Related Docs
+
+- [Protocol Status](../)
+- [Known Limitations](../../reference/known-limitations/)

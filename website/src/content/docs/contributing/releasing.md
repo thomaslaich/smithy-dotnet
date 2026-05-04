@@ -1,9 +1,9 @@
 ---
 title: Releasing
-description: How to publish a new Smithy.NET release.
+description: How to publish a new NSmithy release.
 ---
 
-Smithy.NET releases are published by creating a GitHub release.
+NSmithy releases are published by creating a GitHub release.
 
 ## Version
 
@@ -18,8 +18,8 @@ GitHub release tags should match the package version with a `v` prefix.
 
 Example:
 
-- package version: `0.1.0-preview.2`
-- release tag: `v0.1.0-preview.2`
+- package version: `0.1.0-preview.5`
+- release tag: `v0.1.0-preview.5`
 
 ## GitHub Release Flow
 

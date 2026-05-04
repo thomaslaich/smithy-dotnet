@@ -1,6 +1,6 @@
 ---
 title: Supported Surface
-description: What the current Smithy.NET preview generates and supports.
+description: What the current NSmithy preview generates and supports.
 ---
 
 This document describes the current preview implementation, not the final
@@ -21,8 +21,9 @@ The C# generator emits files for:
 - `restJson1` services as typed clients
 - `simpleRestJson` services as typed clients
 - `simpleRestJson` services as typed ASP.NET Core server surfaces
+- `rpcv2Cbor` services as typed clients (early preview)
 
-Generated files include Smithy metadata attributes from `SmithyNet.Core`.
+Generated files include Smithy metadata attributes from `NSmithy.Core`.
 
 ## Nullability
 
@@ -37,7 +38,7 @@ remote callers can omit required data even when generated .NET types are strict.
 
 ## JSON
 
-`SmithyNet.Json` supports JSON serialization and deserialization for generated
+`NSmithy.Codecs.Json` supports JSON serialization and deserialization for generated
 Smithy shapes using generated metadata attributes.
 
 Covered shape kinds:
@@ -57,14 +58,14 @@ serializer metadata is planned but not implemented.
 
 ## HTTP Client Runtime
 
-`SmithyNet.Http` provides:
+`NSmithy.Http` provides:
 
 - `SmithyHttpRequest`
 - `SmithyHttpResponse`
 - `IHttpTransport`
 - `HttpClientTransport`
 
-`SmithyNet.Client` provides:
+`NSmithy.Client` provides:
 
 - `SmithyOperationInvoker`
 - client middleware
@@ -74,7 +75,7 @@ serializer metadata is planned but not implemented.
 
 ## Server Runtime
 
-`SmithyNet.Server` provides the first server-side runtime primitives:
+`NSmithy.Server` provides the first server-side runtime primitives:
 
 - service and operation descriptors
 - generated operation handler interfaces and aggregate service handler interfaces
@@ -100,6 +101,7 @@ The implemented protocol slices are:
 - generated clients for `aws.protocols#restJson1`
 - generated clients for `alloy#simpleRestJson`
 - generated ASP.NET Core servers for `alloy#simpleRestJson`
+- generated clients for `smithy.protocols#rpcv2Cbor` (early preview)
 
 Generated `restJson1` servers are not part of this preview.
 
@@ -129,26 +131,9 @@ targets string-keyed, string-valued generated map shapes.
 
 ## Examples
 
-The current end-to-end example is:
+The current end-to-end examples are:
 
-- `examples/polyglot/java`: Java `restJson1` server
-- `examples/polyglot/scala`: Scala `simpleRestJson` server
-- `examples/polyglot/dotnet`: generated .NET clients using local Smithy.NET
-  packages
-
-Run the Java and Scala services first, then run the .NET client:
-
-```bash
-cd examples/polyglot/java
-gradle :server:run
-```
-
-```bash
-cd examples/polyglot/scala
-sbt run
-```
-
-```bash
-cd examples/polyglot/dotnet
-dotnet run -- world http://localhost:8082 http://localhost:8081
-```
+- `examples/simple-rest-json/dotnet`: generated NSmithy client and ASP.NET Core server using `alloy#simpleRestJson`
+- `examples/rpcv2cbor/dotnet`: generated `rpcv2Cbor` client with an in-process mock transport
+- `examples/grpc/dotnet`: generated HTTP and gRPC client/server from one `alloy.proto#grpc` model
+- `examples/polyglot/dotnet`: generated .NET clients calling Java and Scala servers
