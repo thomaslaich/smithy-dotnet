@@ -1,4 +1,7 @@
-# HTTP Interfaces
+---
+title: HTTP Interfaces
+description: How NSmithy abstracts the HTTP transport layer.
+---
 
 How NSmithy abstracts the HTTP transport layer.
 
@@ -112,4 +115,4 @@ instantiates.
 
 - [serialization.md](serialization.md) — codec and protocol binding
 - [codegen-architecture.md](codegen-architecture.md) — codegen pipeline
-- [Multi-Protocol Guide](../docs/multi-protocol.md)
+- [Multi-Protocol Guide](/smithy-dotnet/multi-protocol/)

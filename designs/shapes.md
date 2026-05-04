@@ -1,4 +1,7 @@
-# Shapes
+---
+title: Shape Mapping
+description: How Smithy shapes map to C# types in generated NSmithy code.
+---
 
 How Smithy shapes map to C# types in generated code.
 

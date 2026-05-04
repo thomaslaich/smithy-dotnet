@@ -1,4 +1,7 @@
-# Codegen Architecture
+---
+title: Codegen Architecture
+description: How the NSmithy Java plugin generates C# and .proto files from Smithy models.
+---
 
 ## Overview
 
@@ -7,6 +10,16 @@ plugin (`smithy-csharp-codegen`). The plugin runs inside `smithy build` via the
 Smithy CLI, which means it has direct access to Smithy's fully assembled and
 validated semantic model. MSBuild invokes `smithy build` before C# compilation
 and registers the generated files with the .NET toolchain.
+
+The two sides of the architecture are:
+
+- **Java (codegen)**: model assembly, validation, trait resolution, and C#/`.proto`
+  emission all happen inside the Java plugin during `smithy build`.
+- **.NET (runtime + build integration)**: `NSmithy.MSBuild` invokes `smithy build`,
+  picks up the generated files, and adds them to the `dotnet build` compilation.
+  The `.NET` runtime packages (`NSmithy.Core`, `NSmithy.Protocols.*`, etc.) provide
+  the protocol dispatch, schema metadata, and transport abstractions that the
+  generated code depends on.
 
 ## Goals
 
@@ -17,6 +30,35 @@ and registers the generated files with the .NET toolchain.
   hand, not produced by a template engine.
 - Support multiple protocols from a single model.
 - Enable incremental builds: regenerate only when model inputs change.
+
+## Codegen Pipeline
+
+```
+smithy-build.json
+      │
+      ▼
+smithy build (Smithy CLI)
+      │   loads smithy-csharp-codegen Java plugin
+      │   assembles + validates model
+      │   runs CodegenDirector
+      │     ├── StructureGenerator    → <Shape>.g.cs
+      │     ├── UnionGenerator        → <Shape>.g.cs
+      │     ├── ErrorGenerator        → <Shape>.g.cs
+      │     ├── List/MapGenerator     → <Shape>.g.cs
+      │     ├── Enum/IntEnumGenerator → <Shape>.g.cs
+      │     ├── ClientGenerator       → <Service>Client.g.cs
+      │     ├── ServerGenerator       → <Service>Server.g.cs
+      │     └── ProtoGenerator        → <Service>.proto  (gRPC only)
+      │
+      ▼
+  obj/Smithy/<projection>/csharp-codegen/**/*.g.cs
+  obj/Smithy/<projection>/csharp-codegen/**/*.proto
+```
+
+MSBuild then picks up the generated files via two targets in `NSmithy.MSBuild`:
+
+- `_AddSmithyGeneratedCompileItems` – adds `.g.cs` files to `<Compile>`.
+- `_AddSmithyGeneratedProtoItems` – registers `.proto` files with Grpc.Tools.
 
 ## Plugin Design
 
@@ -54,7 +96,7 @@ All files are written under the Smithy projection's output directory:
 
 `CSharpSymbolProvider` maps each Smithy shape to a C# `Symbol` carrying the
 namespace, type name, and import list. The mapping follows the rules in
-[shapes.md](shapes.md).
+[Shape Mapping](/smithy-dotnet/design/shapes/).
 
 ### Writers
 
@@ -117,13 +159,27 @@ The `baseNamespace` prefix is prepended to Smithy namespace segments to form C#
 namespaces; an empty string means the Smithy namespace is used as-is (with
 segments capitalised to PascalCase).
 
+## .NET Runtime Packages
+
+Generated code depends on .NET packages published to NuGet:
+
+- `NSmithy.Core` — `Schema`, `ShapeId`, `Trait`, codec interfaces
+- `NSmithy.Http` — `IHttpTransport`, `SmithyHttpRequest`, `SmithyHttpResponse`
+- `NSmithy.Client` — `ISmithyClient`, `SmithyClientOptions`
+- `NSmithy.Server` / `NSmithy.Server.AspNetCore` — server framework
+- `NSmithy.Codecs.Json/Xml/Cbor` — codec implementations
+- `NSmithy.Protocols.RestJson/RestXml/RpcV2Cbor` — protocol binding
+
+These packages are independent of the Java plugin. A consumer project references
+them in its `.csproj`; the generated `.g.cs` files import the matching types.
+
 ## Generated Code Shape
 
 Each generated shape file contains:
 
-1. A C# record or class for the shape (see [shapes.md](shapes.md)).
+1. A C# record or class for the shape (see [Shape Mapping](/smithy-dotnet/design/shapes/)).
 2. A `static readonly Schema` field describing the shape's kind, traits, and
-   members at runtime (see [serialization.md](serialization.md)).
+   members at runtime (see [Serialization](/smithy-dotnet/design/serialization/)).
 3. Explicit `ISerializableShape` and `IDeserializableShape` implementations that
    call through to the runtime codec system.
 
@@ -133,6 +189,28 @@ Service files additionally contain:
   and transport at construction time.
 - `I<Service>Handler` / `<Service>Server` — server-side handler interface and
   ASP.NET Core adapter.
+
+## Tradeoffs
+
+**What the Java plugin approach gives us:**
+
+- direct access to Smithy's semantic model — no reimplementing IDL parsing,
+  shape assembly, or trait resolution in .NET
+- protocol correctness from Smithy's own model (trait semantics are authoritative)
+- interoperability with the Smithy plugin ecosystem (transforms, projections,
+  external trait libraries like `alloy`)
+
+**What it costs:**
+
+- the generator and its tests live in a Java/Gradle build, which is a separate
+  toolchain from the .NET runtime
+- backend iteration (edit generator → test generated output) involves building
+  the JAR and invoking `smithy build`, which is slower than an in-process loop
+- packaging and release management spans NuGet (runtime) and Maven Central
+  (codegen JAR)
+
+These costs are accepted because the Java plugin gives access to Smithy's
+semantic model at the layer where model semantics are most precisely defined.
 
 ## Alternatives Considered
 
@@ -165,7 +243,6 @@ used by `smithy-python` and other Smithy generators.
 
 ## Related Docs
 
-- [shapes.md](shapes.md) — Smithy → C# type mapping
-- [serialization.md](serialization.md) — Schema-aware codec design
-- [Architecture overview](../docs/architecture/hybrid-codegen.md)
-- [MSBuild Reference](../docs/msbuild.md)
+- [Shape Mapping](/smithy-dotnet/design/shapes/)
+- [Serialization](/smithy-dotnet/design/serialization/)
+- [MSBuild Reference](/smithy-dotnet/msbuild/)

@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import mermaid from 'astro-mermaid';
 import { readFileSync } from 'node:fs';
 
 const smithyGrammar = JSON.parse(
@@ -12,6 +13,7 @@ export default defineConfig({
 	site: 'https://thomaslaich.github.io',
 	base: '/smithy-dotnet',
 	integrations: [
+		mermaid({ autoTheme: true }),
 		starlight({
 			title: 'NSmithy',
 			description: 'Generate C# models, typed HTTP clients, and ASP.NET Core servers from Smithy models.',
@@ -30,13 +32,14 @@ export default defineConfig({
 				{
 					label: 'Getting Started',
 					items: [
-						{ label: 'Quick Start', slug: 'quick-start' },
+						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
+						{ label: 'Environment Setup', slug: 'getting-started/environment' },
 					],
 				},
 				{
 					label: 'Reference',
 					items: [
-						{ label: 'MSBuild', slug: 'msbuild' },
+						{ label: 'MSBuild', slug: 'reference/msbuild' },
 						{ label: 'Supported Surface', slug: 'reference/supported-surface' },
 						{ label: 'Known Limitations', slug: 'reference/known-limitations' },
 					],
@@ -44,7 +47,7 @@ export default defineConfig({
 				{
 					label: 'Guides',
 					items: [
-						{ label: 'Multi-Protocol', slug: 'multi-protocol' },
+						{ label: 'Multi-Protocol', slug: 'guides/multi-protocol' },
 					],
 				},
 				{
@@ -52,12 +55,6 @@ export default defineConfig({
 					items: [
 						{ label: 'Protocol Status', slug: 'protocols' },
 						{ label: 'Conformance Tests', slug: 'protocols/conformance' },
-					],
-				},
-				{
-					label: 'Architecture',
-					items: [
-						{ label: 'Hybrid Codegen', slug: 'architecture/hybrid-codegen' },
 					],
 				},
 				{

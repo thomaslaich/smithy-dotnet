@@ -113,6 +113,6 @@ instantiates.
 
 ## Related Docs
 
-- [Serialization](./serialization/) — codec and protocol binding
-- [Codegen Architecture](./codegen-architecture/) — codegen pipeline
-- [Multi-Protocol Guide](../multi-protocol/)
+- [Serialization](/smithy-dotnet/design/serialization/) — codec and protocol binding
+- [Codegen Architecture](/smithy-dotnet/design/codegen-architecture/) — codegen pipeline
+- [Multi-Protocol Guide](/smithy-dotnet/guides/multi-protocol/)

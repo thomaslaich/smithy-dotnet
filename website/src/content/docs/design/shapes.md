@@ -76,7 +76,7 @@ public record GetWidgetInput(string Id, string? Filter = null);
 ```
 
 Each generated structure implements `ISerializableShape` and
-`IDeserializableShape` (see [Serialization](./serialization/)) and carries a
+`IDeserializableShape` (see [Serialization](/smithy-dotnet/design/serialization/)) and carries a
 `static readonly Schema` field.
 
 ## Errors
@@ -134,7 +134,7 @@ A Smithy service shape produces two generated files:
 - `<Service>Server.g.cs` — a handler interface (`I<Service>Handler`) and an
   ASP.NET Core adapter (`<Service>Server`).
 
-See [Codegen Architecture](./codegen-architecture/) for the generator
+See [Codegen Architecture](/smithy-dotnet/design/codegen-architecture/) for the generator
 pipeline details.
 
 ## Namespace Mapping

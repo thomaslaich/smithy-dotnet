@@ -34,7 +34,7 @@ use alloy.proto#protoIndex
 @grpc
 service HelloService {
     version: "2026-04-21"
-    operations: [SayHello, Ping]
+    operations: [SayHello]
 }
 
 @http(method: "GET", uri: "/hello/{name}")
@@ -93,16 +93,10 @@ internal sealed class HelloHandler : IHelloServiceHandler
 {
     public Task<SayHelloOutput> SayHelloAsync(
         SayHelloInput input,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         return Task.FromResult(new SayHelloOutput("server", $"hello, {input.Name}"));
-    }
-
-    public Task<PingOutput> PingAsync(
-        PingInput input,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(new PingOutput("server", $"pong, {input.Name}"));
     }
 }
 ```
@@ -129,8 +123,8 @@ using Grpc.Net.Client;
 
 IHelloServiceClient httpClient = new HelloServiceClient(
     new HttpClient(),
-    new SmithyClientOptions { Endpoint = new Uri("http://localhost:5000") });
-
+    new SmithyClientOptions { Endpoint = new Uri("http://localhost:5000") }
+);
 var httpHello = await httpClient.SayHelloAsync(new SayHelloInput("world"));
 
 using var channel = GrpcChannel.ForAddress("http://localhost:5001");

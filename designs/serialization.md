@@ -1,4 +1,7 @@
-# Serialization
+---
+title: Serialization
+description: How NSmithy serializes and deserializes Smithy shapes at runtime.
+---
 
 How NSmithy serializes and deserializes Smithy shapes at runtime.
 
