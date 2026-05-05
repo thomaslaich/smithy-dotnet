@@ -14,18 +14,18 @@ and servers — remove the server packages if you only need generated clients.
 ```xml
 <ItemGroup>
   <!-- code generation (build-time only) -->
-  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.6" PrivateAssets="all" />
+  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.7" PrivateAssets="all" />
 
   <!-- core runtime (always required) -->
-  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.6" />
-  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.6" />
-  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.6" />
-  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.6" />
+  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.7" />
+  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.7" />
+  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.7" />
+  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.7" />
 
   <!-- server runtime (only needed for generated ASP.NET Core servers) -->
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.6" />
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.6" />
+  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.7" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.7" />
 </ItemGroup>
 ```
 
@@ -44,7 +44,7 @@ Add a `smithy-build.json` next to your `.csproj`:
   "maven": {
     "dependencies": [
       "com.disneystreaming.alloy:alloy-core:0.3.38",
-      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.6"
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.7"
     ]
   },
   "plugins": {
