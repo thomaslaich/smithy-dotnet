@@ -20,6 +20,9 @@ For a repo-scoped install (recommended — teammates get it via `dotnet tool res
 dotnet tool install NSmithy.Tool --local
 ```
 
+The NuGet package is named `NSmithy.Tool` to stay consistent with the rest of the
+NSmithy package family. Once installed, the command is `dotnet nsmithy`.
+
 ## Contracts project
 
 Create a minimal `.csproj` next to your `.smithy` files. The version, Maven group,
