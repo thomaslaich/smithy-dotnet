@@ -40,11 +40,11 @@ The fastest way to try NSmithy is with the [smithy-dotnet-minimal-pixi](https://
 
    ```xml
    <ItemGroup>
-     <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.6" />
-     <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.6" />
-     <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.6" />
-     <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.6" />
-     <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.6" PrivateAssets="all" />
+     <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.7" />
+     <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.7" />
+     <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.7" />
+     <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.7" />
+     <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.7" PrivateAssets="all" />
    </ItemGroup>
    ```
 
@@ -88,7 +88,7 @@ The fastest way to try NSmithy is with the [smithy-dotnet-minimal-pixi](https://
      "maven": {
        "dependencies": [
          "com.disneystreaming.alloy:alloy-core:0.3.38",
-         "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.6"
+         "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.7"
        ]
      },
      "plugins": {
