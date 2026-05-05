@@ -46,7 +46,7 @@ These protocols are not current NSmithy targets:
 ## Related Docs
 
 - [Known Limitations](../reference/known-limitations/)
-- [Multi-Protocol Guide](../multi-protocol/)
-- [Architecture](../architecture/hybrid-codegen/)
+- [Multi-Protocol Guide](../guides/multi-protocol/)
+- [Architecture](../design/codegen-architecture/)
 - [Conformance Matrix](./conformance/)
 - [Roadmap](../contributing/roadmap/)

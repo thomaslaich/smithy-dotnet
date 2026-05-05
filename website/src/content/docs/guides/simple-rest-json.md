@@ -137,5 +137,5 @@ populated from the `x-request-id` response header, not the JSON body.
 
 ## Related
 
-- [Multi-Protocol](./multi-protocol/) — serve the same handler over HTTP and gRPC simultaneously
-- [Protocol Status](../protocols/) — current coverage and conformance status
+- [Multi-Protocol](/smithy-dotnet/guides/multi-protocol/) — serve the same handler over HTTP and gRPC simultaneously
+- [Protocol Status](/smithy-dotnet/protocols/) — current coverage and conformance status
