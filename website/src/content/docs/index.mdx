@@ -71,7 +71,8 @@ Console.WriteLine(response.Message); // Hello, World!`;
   .how-it-works {
     display: grid;
     grid-template-columns: 2fr 3fr;
-    gap: 1.5rem 3rem;
+    column-gap: 3rem;
+    row-gap: 3rem;
     align-items: start;
     margin: 3rem 0;
   }
@@ -91,9 +92,7 @@ Start by describing your API in [Smithy IDL](https://smithy.io) — operations, 
 
 </div>
 <Code code={smithyCode} lang="smithy" />
-</div>
 
-<div class="how-it-works">
 <div>
 
 ### Implement server stubs
@@ -102,9 +101,7 @@ NSmithy generates a typed handler interface — one method per service operation
 
 </div>
 <Code code={serverCode} lang="csharp" />
-</div>
 
-<div class="how-it-works">
 <div>
 
 ### Use the generated client
