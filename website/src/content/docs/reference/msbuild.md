@@ -1,40 +1,15 @@
-# MSBuild Reference
+---
+title: MSBuild Reference
+description: MSBuild properties and items for NSmithy.MSBuild.
+---
 
 `NSmithy.MSBuild` runs before C# compilation when a project has either
-`@(SmithyModel)` items or a `smithy-build.json` at the project root.
+`@(SmithyModel)` items or a `smithy-build.json` at the project root. It invokes
+`smithy build`, which runs the `csharp-codegen` Java plugin to emit `.g.cs` and
+`.proto` files, then registers those files with the .NET toolchain.
 
-The task:
-
-1. runs `smithy build`
-2. reads the selected projection's `model/model.json`
-3. generates C# files under `$(SmithyGeneratedOutputPath)`
-4. removes stale generated files from previous runs
-5. adds the generated files to `Compile`
-6. writes dependency manifests for incremental builds
-
-## Build Flow
-
-```mermaid
-flowchart TD
-    A[dotnet build] --> B[MSBuild GenerateSmithyCode target]
-    C[smithy-build.json]
-    D[.smithy and .json model inputs]
-    C --> B
-    D --> B
-    B --> F["smithy build\n(Smithy CLI)"]
-    F --> P["csharp-codegen Java plugin\nruns inside smithy build"]
-    P --> G["Projection output under SmithyBuildOutputPath\n(.g.cs and .proto files written by plugin)"]
-    G --> L["_AddSmithyGeneratedCompileItems\nAdds .g.cs files to Compile"]
-    G --> M["_AddSmithyGeneratedProtoItems\nAdds .proto files to Protobuf"]
-    M --> N[Protobuf compile when Grpc.Tools is referenced]
-    L --> O[CoreCompile]
-    N --> O
-```
-
-This diagram is intentionally simplified. Code generation happens entirely
-inside `smithy build` via the `csharp-codegen` Java plugin. The MSBuild
-targets after `smithy build` only register the already-generated files with
-the .NET compilation.
+See [Codegen Architecture](/smithy-dotnet/design/codegen-architecture/) for the
+full build pipeline diagram.
 
 ## Model Inputs
 

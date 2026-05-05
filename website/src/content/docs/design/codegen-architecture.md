@@ -33,29 +33,27 @@ The two sides of the architecture are:
 
 ## Codegen Pipeline
 
-```
-smithy-build.json
-      │
-      ▼
-smithy build (Smithy CLI)
-      │   loads smithy-csharp-codegen Java plugin
-      │   assembles + validates model
-      │   runs CodegenDirector
-      │     ├── StructureGenerator    → <Shape>.g.cs
-      │     ├── UnionGenerator        → <Shape>.g.cs
-      │     ├── ErrorGenerator        → <Shape>.g.cs
-      │     ├── List/MapGenerator     → <Shape>.g.cs
-      │     ├── Enum/IntEnumGenerator → <Shape>.g.cs
-      │     ├── ClientGenerator       → <Service>Client.g.cs
-      │     ├── ServerGenerator       → <Service>Server.g.cs
-      │     └── ProtoGenerator        → <Service>.proto  (gRPC only)
-      │
-      ▼
-  obj/Smithy/<projection>/csharp-codegen/**/*.g.cs
-  obj/Smithy/<projection>/csharp-codegen/**/*.proto
+```mermaid
+flowchart TD
+    C[smithy-build.json] --> B[GenerateSmithyCode\nMSBuild target]
+    D[model files] --> B
+    B --> E["smithy build\n(Smithy CLI)"]
+    E --> F["smithy-csharp-codegen\nJava plugin"]
+    F --> G["CodegenDirector\nassembles + validates model"]
+    G --> H["Shape generators\nStructure / Union / Error\nList / Map / Enum"]
+    G --> I["Service generators\nClientGenerator + ServerGenerator"]
+    G --> J["ProtoGenerator\ngRPC only"]
+    H --> K[".g.cs files\nunder SmithyBuildOutputPath"]
+    I --> K
+    J --> L[".proto files\nunder SmithyBuildOutputPath"]
+    K --> M["_AddSmithyGeneratedCompileItems"]
+    L --> N["_AddSmithyGeneratedProtoItems"]
+    M --> O[CoreCompile]
+    N --> P["Protobuf compile\nwhen Grpc.Tools is referenced"]
+    P --> O
 ```
 
-MSBuild then picks up the generated files via two targets in `NSmithy.MSBuild`:
+MSBuild picks up the generated files via two targets in `NSmithy.MSBuild`:
 
 - `_AddSmithyGeneratedCompileItems` – adds `.g.cs` files to `<Compile>`.
 - `_AddSmithyGeneratedProtoItems` – registers `.proto` files with Grpc.Tools.
@@ -245,4 +243,4 @@ used by `smithy-python` and other Smithy generators.
 
 - [Shape Mapping](/smithy-dotnet/design/shapes/)
 - [Serialization](/smithy-dotnet/design/serialization/)
-- [MSBuild Reference](/smithy-dotnet/msbuild/)
+- [MSBuild Reference](/smithy-dotnet/reference/msbuild/)

@@ -1,4 +1,7 @@
-# Roadmap
+---
+title: Roadmap
+description: Current direction and near-term priorities for NSmithy.
+---
 
 This roadmap describes the current direction of NSmithy as the repository
 exists today. It is intentionally shorter and more opinionated than the earlier
@@ -13,7 +16,7 @@ NSmithy keeps a hybrid boundary:
 - NSmithy reads the Smithy build output and performs C# and `.proto`
   generation inside the .NET build.
 
-The rationale is documented in [Hybrid Codegen Architecture](../architecture/hybrid-codegen.md).
+The rationale is documented in [Hybrid Codegen Architecture](../architecture/hybrid-codegen/).
 
 The generator is implemented as a Smithy Java plugin, invoked through the
 existing MSBuild and Smithy CLI flow.

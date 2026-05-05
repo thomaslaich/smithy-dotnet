@@ -169,6 +169,6 @@ runtime overhead and integrate with the .NET JSON ecosystem.
 
 ## Related Docs
 
-- [shapes.md](shapes.md) — C# type mapping
-- [http-interfaces.md](http-interfaces.md) — HTTP transport
-- [codegen-architecture.md](codegen-architecture.md) — codegen pipeline
+- [Shape Mapping](/smithy-dotnet/design/shapes/) — C# type mapping
+- [HTTP Interfaces](/smithy-dotnet/design/http-interfaces/) — HTTP transport
+- [Codegen Architecture](/smithy-dotnet/design/codegen-architecture/) — codegen pipeline

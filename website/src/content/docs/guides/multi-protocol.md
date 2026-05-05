@@ -1,4 +1,7 @@
-# One Service, Two Transports
+---
+title: Multi-Protocol
+description: Expose one Smithy service over both HTTP and gRPC with a single handler implementation.
+---
 
 This guide shows how to expose one Smithy service over both HTTP and gRPC while
 keeping a single service implementation.
@@ -31,7 +34,7 @@ use alloy.proto#protoIndex
 @grpc
 service HelloService {
     version: "2026-04-21"
-    operations: [SayHello, Ping]
+    operations: [SayHello]
 }
 
 @http(method: "GET", uri: "/hello/{name}")
@@ -69,14 +72,8 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenLocalhost(5000, listenOptions =>
-    {
-        listenOptions.Protocols = HttpProtocols.Http1;
-    });
-    options.ListenLocalhost(5001, listenOptions =>
-    {
-        listenOptions.Protocols = HttpProtocols.Http2;
-    });
+    options.ListenLocalhost(5000, o => o.Protocols = HttpProtocols.Http1);
+    options.ListenLocalhost(5001, o => o.Protocols = HttpProtocols.Http2);
 });
 builder.Services.AddGrpc();
 builder.Services.AddHelloServiceHandler<HelloHandler>();
@@ -90,16 +87,10 @@ internal sealed class HelloHandler : IHelloServiceHandler
 {
     public Task<SayHelloOutput> SayHelloAsync(
         SayHelloInput input,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+    )
     {
         return Task.FromResult(new SayHelloOutput("server", $"hello, {input.Name}"));
-    }
-
-    public Task<PingOutput> PingAsync(
-        PingInput input,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(new PingOutput("server", $"pong, {input.Name}"));
     }
 }
 ```
@@ -126,8 +117,8 @@ using Grpc.Net.Client;
 
 IHelloServiceClient httpClient = new HelloServiceClient(
     new HttpClient(),
-    new SmithyClientOptions { Endpoint = new Uri("http://localhost:5000") });
-
+    new SmithyClientOptions { Endpoint = new Uri("http://localhost:5000") }
+);
 var httpHello = await httpClient.SayHelloAsync(new SayHelloInput("world"));
 
 using var channel = GrpcChannel.ForAddress("http://localhost:5001");
