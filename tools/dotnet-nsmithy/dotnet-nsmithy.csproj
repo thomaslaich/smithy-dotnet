@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <PackageId>NSmithy.Tool</PackageId>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>dotnet-nsmithy</ToolCommandName>
     <RollForward>Major</RollForward>
