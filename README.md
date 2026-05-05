@@ -5,6 +5,8 @@ the [Smithy reference implementations](https://github.com/smithy-lang/smithy)._
 
 # NSmithy
 
+**Documentation: [thomaslaich.github.io/smithy-dotnet](https://thomaslaich.github.io/smithy-dotnet/)**
+
 NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io)
 model into idiomatic C# at build time. From a single contract you get the same
 model types, typed clients, and server scaffolding that any other Smithy
@@ -17,8 +19,6 @@ in order to make code generation as seemless as possible.
 - **Typed protocol-aware clients**: Supports `alloy#simpleRestJson`, `aws.protocols#restJson1`, `aws.protocols#restXml`, and `smithy.protocols#rpcv2Cbor`.
 - **ASP.NET Core server surfaces**: Implements Smithy services as ASP.NET Core endpoints with minimal boilerplate.
 - **Conformance**: Protocols are tested against the official Smithy/AWS and alloy protocol test suites.
-
-See the [roadmap](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/planning/roadmap.md) for planned features.
 
 ## Quick Start
 
@@ -170,13 +170,3 @@ dotnet build
 
 When the environment is active, `smithy` is resolved from `PATH`. Set `SmithyCliPath` to force a specific executable if needed.
 
-## Documentation
-
-- [Protocol Status](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/protocols/README.md)
-- [Quick Start](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/quick-start.md)
-- [Multi-Protocol Guide](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/multi-protocol.md)
-- [MSBuild Reference](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/msbuild.md)
-- [Architecture](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/architecture/hybrid-codegen.md)
-- [Design Docs](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/README.md)
-- [Known Limitations](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/known-limitations.md)
-- [Roadmap](https://github.com/thomaslaich/smithy-dotnet/blob/main/docs/planning/roadmap.md)
