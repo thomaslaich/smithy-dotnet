@@ -56,6 +56,8 @@ jobs:
       - name: Publish packages to NuGet
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: >
-          dotnet nuget push "artifacts/packages/*.nupkg" --api-key "$NUGET_API_KEY" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+          NUGET_API_KEY_TOOL: ${{ secrets.NUGET_API_KEY_TOOL }}
+        run: |
+          dotnet nuget push "artifacts/packages/dotnet-nsmithy.*.nupkg" --api-key "$NUGET_API_KEY_TOOL" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+          dotnet nuget push "artifacts/packages/NSmithy.*.nupkg" --api-key "$NUGET_API_KEY" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
 
