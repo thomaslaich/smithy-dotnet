@@ -4,7 +4,7 @@ description: Get up and running with NSmithy.
 ---
 
 This guide assumes the Smithy CLI and JDK are already available in your build
-environment. If not, see [Environment Setup](./environment/) first.
+environment. If not, see [Environment Setup](/smithy-dotnet/getting-started/environment/) first.
 
 ## Configure The Project
 
@@ -14,24 +14,24 @@ and servers — remove the server packages if you only need generated clients.
 ```xml
 <ItemGroup>
   <!-- code generation (build-time only) -->
-  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.5" PrivateAssets="all" />
+  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.6" PrivateAssets="all" />
 
   <!-- core runtime (always required) -->
-  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.5" />
-  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.5" />
-  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.5" />
-  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.5" />
+  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.6" />
+  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.6" />
+  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.6" />
+  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.6" />
 
   <!-- server runtime (only needed for generated ASP.NET Core servers) -->
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.5" />
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.5" />
+  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.6" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.6" />
 </ItemGroup>
 ```
 
 NSmithy.MSBuild picks up the `smithy-build.json` next to the `.csproj`
 automatically — no additional MSBuild properties are needed for basic use.
-See the [MSBuild reference](../reference/msbuild/) for the full property list.
+See the [MSBuild reference](/smithy-dotnet/reference/msbuild/) for the full property list.
 
 ## Add A Model
 
@@ -44,7 +44,7 @@ Add a `smithy-build.json` next to your `.csproj`:
   "maven": {
     "dependencies": [
       "com.disneystreaming.alloy:alloy-core:0.3.38",
-      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.5"
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.6"
     ]
   },
   "plugins": {
@@ -133,6 +133,6 @@ internal sealed class HelloHandler : IHelloServiceHandler
 ## Next Steps
 
 - [Minimal pixi example](https://github.com/thomaslaich/smithy-dotnet-minimal-pixi) — a standalone repo with everything wired up
-- [MSBuild Reference](../reference/msbuild/) — all MSBuild properties and items for `NSmithy.MSBuild`
-- [Multi-Protocol](../guides/multi-protocol/) — expose one service over both HTTP and gRPC
-- [Protocol Status](../protocols/) — what protocols are supported and at what stage
+- [MSBuild Reference](/smithy-dotnet/reference/msbuild/) — all MSBuild properties and items for `NSmithy.MSBuild`
+- [Multi-Protocol](/smithy-dotnet/guides/multi-protocol/) — expose one service over both HTTP and gRPC
+- [Protocol Status](/smithy-dotnet/protocols/) — what protocols are supported and at what stage

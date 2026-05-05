@@ -16,7 +16,7 @@ NSmithy keeps a hybrid boundary:
 - NSmithy reads the Smithy build output and performs C# and `.proto`
   generation inside the .NET build.
 
-The rationale is documented in [Hybrid Codegen Architecture](../architecture/hybrid-codegen/).
+The rationale is documented in [Hybrid Codegen Architecture](../design/codegen-architecture/).
 
 The generator is implemented as a Smithy Java plugin, invoked through the
 existing MSBuild and Smithy CLI flow.

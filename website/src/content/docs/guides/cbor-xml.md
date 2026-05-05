@@ -55,7 +55,7 @@ to a fixed `POST /service/{Service}/operation/{Operation}` path.
 Add `NSmithy.Codecs.Cbor` to your project:
 
 ```xml
-<PackageReference Include="NSmithy.Codecs.Cbor" Version="0.1.0-preview.5" />
+<PackageReference Include="NSmithy.Codecs.Cbor" Version="0.1.0-preview.6" />
 ```
 
 Use the generated client the same way as any other NSmithy client:
@@ -126,7 +126,7 @@ name is used as-is.
 Add `NSmithy.Codecs.Xml` to your project:
 
 ```xml
-<PackageReference Include="NSmithy.Codecs.Xml" Version="0.1.0-preview.5" />
+<PackageReference Include="NSmithy.Codecs.Xml" Version="0.1.0-preview.6" />
 ```
 
 ```csharp
@@ -144,5 +144,5 @@ Console.WriteLine(response.Message);
 
 ## Related
 
-- [Protocol Status](../protocols/) — current coverage and what "early preview" means
-- [Conformance Tests](../protocols/conformance/) — how protocol correctness is verified
+- [Protocol Status](/smithy-dotnet/protocols/) — current coverage and what "early preview" means
+- [Conformance Tests](/smithy-dotnet/protocols/conformance/) — how protocol correctness is verified
