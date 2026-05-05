@@ -11,13 +11,13 @@ any Maven-compatible registry over HTTP.
 ## Installation
 
 ```bash
-dotnet tool install -g dotnet-nsmithy
+dotnet tool install -g NSmithy.Tool
 ```
 
 For a repo-scoped install (recommended — teammates get it via `dotnet tool restore`):
 
 ```bash
-dotnet tool install dotnet-nsmithy --local
+dotnet tool install NSmithy.Tool --local
 ```
 
 ## Contracts project
