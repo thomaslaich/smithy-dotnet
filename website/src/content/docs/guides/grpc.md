@@ -9,7 +9,7 @@ NSmithy can generate gRPC surfaces from a Smithy model annotated with
 those stubs with a typed adapter that matches the same handler interface used by
 the HTTP surface.
 
-This is experimental in the current preview — see [Protocol Status](../protocols/)
+This is experimental in the current preview — see [Protocol Status](/smithy-dotnet/protocols/)
 for the current maturity level.
 
 ## Model
@@ -61,7 +61,7 @@ No extra plugin configuration is needed beyond referencing `alloy-core`:
   "maven": {
     "dependencies": [
       "com.disneystreaming.alloy:alloy-core:0.3.38",
-      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.5"
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.6"
     ]
   },
   "plugins": {
@@ -80,14 +80,14 @@ standard NSmithy packages:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.5" PrivateAssets="all" />
-  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.5" />
-  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.5" />
-  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.5" />
-  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.5" />
+  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.6" PrivateAssets="all" />
+  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.6" />
+  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.6" />
+  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.6" />
+  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.6" />
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.5" />
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.5" />
+  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.6" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.6" />
 
   <!-- gRPC -->
   <PackageReference Include="Grpc.AspNetCore" Version="2.67.0" />
@@ -146,5 +146,5 @@ Console.WriteLine(response.Message); // Hello, world!
 
 ## Related
 
-- [Multi-Protocol](./multi-protocol/) — serve both HTTP and gRPC from one handler
-- [Protocol Status](../protocols/) — current gRPC maturity level
+- [Multi-Protocol](/smithy-dotnet/guides/multi-protocol/) — serve both HTTP and gRPC from one handler
+- [Protocol Status](/smithy-dotnet/protocols/) — current gRPC maturity level
