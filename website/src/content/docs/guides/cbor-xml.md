@@ -1,5 +1,5 @@
 ---
-title: rpcv2Cbor and restXml
+title: AWS Protocols
 description: Use binary (CBOR) and XML protocol clients generated from Smithy models.
 ---
 

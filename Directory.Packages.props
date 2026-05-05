@@ -1,5 +1,6 @@
 <Project>
   <ItemGroup>
+    <PackageVersion Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
     <PackageVersion Include="System.Formats.Cbor" Version="9.0.4" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="Microsoft.Build.Framework" Version="18.3.3" />

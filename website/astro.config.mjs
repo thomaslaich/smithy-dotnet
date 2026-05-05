@@ -41,9 +41,9 @@ export default defineConfig({
 					items: [
 						{ label: 'simpleRestJson', slug: 'guides/simple-rest-json' },
 						{ label: 'gRPC', slug: 'guides/grpc' },
-						{ label: 'rpcv2Cbor and restXml', slug: 'guides/cbor-xml' },
+						{ label: 'AWS Protocols', slug: 'guides/cbor-xml' },
 						{ label: 'Multi-Protocol', slug: 'guides/multi-protocol' },
-					{ label: 'Distributing Contracts', slug: 'guides/distributing-contracts' },
+						{ label: 'dotnet nsmithy CLI', slug: 'guides/cli' },
 					],
 				},
 				{
