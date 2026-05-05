@@ -61,7 +61,7 @@ No extra plugin configuration is needed beyond referencing `alloy-core`:
   "maven": {
     "dependencies": [
       "com.disneystreaming.alloy:alloy-core:0.3.38",
-      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.7"
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.8"
     ]
   },
   "plugins": {
@@ -80,14 +80,14 @@ standard NSmithy packages:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.7" PrivateAssets="all" />
-  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.7" />
-  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.7" />
-  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.7" />
-  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.7" />
+  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.8" PrivateAssets="all" />
+  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.8" />
+  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.8" />
+  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.8" />
+  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.8" />
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.7" />
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.7" />
+  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.8" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.8" />
 
   <!-- gRPC -->
   <PackageReference Include="Grpc.AspNetCore" Version="2.67.0" />
