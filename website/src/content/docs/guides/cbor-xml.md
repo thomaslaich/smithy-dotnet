@@ -55,7 +55,7 @@ to a fixed `POST /service/{Service}/operation/{Operation}` path.
 Add `NSmithy.Codecs.Cbor` to your project:
 
 ```xml
-<PackageReference Include="NSmithy.Codecs.Cbor" Version="0.1.0-preview.7" />
+<PackageReference Include="NSmithy.Codecs.Cbor" Version="0.1.0-preview.8" />
 ```
 
 Use the generated client the same way as any other NSmithy client:
@@ -126,7 +126,7 @@ name is used as-is.
 Add `NSmithy.Codecs.Xml` to your project:
 
 ```xml
-<PackageReference Include="NSmithy.Codecs.Xml" Version="0.1.0-preview.7" />
+<PackageReference Include="NSmithy.Codecs.Xml" Version="0.1.0-preview.8" />
 ```
 
 ```csharp

@@ -60,4 +60,3 @@ jobs:
         run: |
           dotnet nuget push "artifacts/packages/dotnet-nsmithy.*.nupkg" --api-key "$NUGET_API_KEY_TOOL" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
           dotnet nuget push "artifacts/packages/NSmithy.*.nupkg" --api-key "$NUGET_API_KEY" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
-
