@@ -1,4 +1,7 @@
-# Development
+---
+title: Development
+description: How to build and test the NSmithy repository locally.
+---
 
 This guide covers building and testing the repository locally.
 
@@ -63,4 +66,4 @@ Adjust the relative path to match your project layout.
 
 ## Releasing
 
-See [docs/releasing.md](releasing.md).
+See [Releasing](./releasing/).

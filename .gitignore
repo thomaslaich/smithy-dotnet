@@ -11,6 +11,7 @@ TestResults/
 *.nupkg
 *.snupkg
 artifacts/
+dist/
 
 
 # because of examples

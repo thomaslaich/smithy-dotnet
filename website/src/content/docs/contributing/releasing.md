@@ -1,4 +1,7 @@
-# Releasing
+---
+title: Releasing
+description: How to publish a new NSmithy release.
+---
 
 NSmithy releases are published by creating a GitHub release.
 
