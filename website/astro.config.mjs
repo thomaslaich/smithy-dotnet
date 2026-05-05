@@ -37,17 +37,21 @@ export default defineConfig({
 					],
 				},
 				{
+					label: 'Guides',
+					items: [
+						{ label: 'simpleRestJson', slug: 'guides/simple-rest-json' },
+						{ label: 'gRPC', slug: 'guides/grpc' },
+						{ label: 'rpcv2Cbor and restXml', slug: 'guides/cbor-xml' },
+						{ label: 'Multi-Protocol', slug: 'guides/multi-protocol' },
+					{ label: 'Distributing Contracts', slug: 'guides/distributing-contracts' },
+					],
+				},
+				{
 					label: 'Reference',
 					items: [
 						{ label: 'MSBuild', slug: 'reference/msbuild' },
 						{ label: 'Supported Surface', slug: 'reference/supported-surface' },
 						{ label: 'Known Limitations', slug: 'reference/known-limitations' },
-					],
-				},
-				{
-					label: 'Guides',
-					items: [
-						{ label: 'Multi-Protocol', slug: 'guides/multi-protocol' },
 					],
 				},
 				{

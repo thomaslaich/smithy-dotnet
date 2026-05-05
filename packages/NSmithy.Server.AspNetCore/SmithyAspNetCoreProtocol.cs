@@ -195,22 +195,6 @@ public static class SmithyAspNetCoreProtocol
             .ConfigureAwait(false);
     }
 
-    public static async Task WriteJsonResponseAsync(
-        HttpContext httpContext,
-        Action<IShapeSerializer> write,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(httpContext);
-        ArgumentNullException.ThrowIfNull(write);
-
-        httpContext.Response.ContentType = "application/json";
-        var content = JsonCodec.Serialize(write);
-        await httpContext
-            .Response.Body.WriteAsync(content, cancellationToken)
-            .ConfigureAwait(false);
-    }
-
     public static void AddResponseHeader(HttpContext httpContext, string name, object? value)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
