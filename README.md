@@ -11,7 +11,7 @@ NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io)
 model into idiomatic C# at build time. From a single contract you get the same
 model types, typed clients, and server scaffolding that any other Smithy
 language would produce. NSmithy aims to fully integrate into your MSBuild workflow,
-in order to make code generation as seemless as possible.
+in order to make code generation as seamless as possible.
 
 ## Features
 
@@ -24,149 +24,18 @@ in order to make code generation as seemless as possible.
 
 The fastest way to try NSmithy is with the [smithy-dotnet-minimal-pixi](https://github.com/thomaslaich/smithy-dotnet-minimal-pixi) example. It shows a minimal project using NSmithy and [pixi](https://pixi.sh) for environment management.
 
----
+## Development
 
-### Or, set up manually:
+The recommended way to work on this repo is with [Nix](https://nixos.org/) (preferably [Determinate Nix](https://determinate.systems/nix/)) and [devenv](https://devenv.sh/).
 
-1. **Create a new .NET project:**
-
-   ```bash
-   dotnet new console -n MySmithyApp
-   cd MySmithyApp
-   ```
-
-2. **Add NSmithy dependencies:**
-   Edit your `.csproj` to include:
-
-   ```xml
-   <ItemGroup>
-     <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.8" />
-     <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.8" />
-     <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.8" />
-     <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.8" />
-     <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.8" PrivateAssets="all" />
-   </ItemGroup>
-   ```
-
-3. **Add a Smithy model and smithy-build.json:**
-   - Create a `model/hello.smithy` file:
-
-   ```smithy
-   $version: "2"
-
-   namespace example.hello
-
-   use alloy#simpleRestJson
-
-   @simpleRestJson
-   service HelloService {
-       version: "2024-01-01"
-       operations: [SayHello]
-   }
-
-   @http(method: "GET", uri: "/hello/{name}")
-   operation SayHello {
-       input := {
-           @required
-           @httpLabel
-           name: String
-       }
-
-       output := {
-           @required
-           message: String
-       }
-   }
-   ```
-
-   - Create a `smithy-build.json` at the project root:
-
-   ```json
-   {
-     "version": "1.0",
-     "sources": ["model"],
-     "maven": {
-       "dependencies": [
-         "com.disneystreaming.alloy:alloy-core:0.3.38",
-         "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.8"
-       ]
-     },
-     "plugins": {
-       "csharp-codegen": {
-         "service": "example.hello#HelloService",
-         "baseNamespace": ""
-       }
-     }
-   }
-   ```
-
-4. **Build the project:**
+1. **Install Nix** (recommended: [Determinate Nix](https://determinate.systems/nix/)) and [devenv](https://devenv.sh/).
+2. **Optionally install [direnv](https://direnv.net/)** to activate the dev environment automatically when entering the directory (`direnv allow`). Without it, run `devenv shell` manually.
+3. **Use the `just` recipes** to build, test, and package:
 
    ```bash
-   dotnet build
+   just          # list all available recipes
+   just build    # build the codegen JAR and .NET solution
+   just test     # run the test suite
+   just fmt      # format all code
+   just ci       # run the full CI pipeline locally
    ```
-
-5. **Use the generated client/server code in your app.**
-
-   ```csharp
-   using Example.Hello;
-   using NSmithy.Client;
-
-   var client = new HelloServiceClient(
-       new HttpClient(),
-       new SmithyClientOptions { Endpoint = new Uri("http://localhost:8082") }
-   );
-
-   var output = await client.SayHelloAsync(new SayHelloInput("world"));
-   Console.WriteLine(output.Message);
-   ```
-
----
-
-## Why Smithy?
-
-Service definitions tend to fragment over time. Teams publish different API
-descriptions, generate clients differently, adopt different protocols, and
-couple contracts to specific frameworks or transports. The result is usually a
-mix of handwritten clients, drifting conventions, and contracts that are hard
-to reuse across stacks.
-
-Smithy separates the service contract from the implementation. You define the
-model once, distribute it like any other package, and generate client and
-server surfaces across languages without locking the contract to one transport
-stack.
-
-`gRPC` solves some of the same problems, but within a single protocol stack.
-Smithy works at a higher level: one model can target multiple protocols and be
-extended with custom traits and protocols when needed.
-
-That matters when you want:
-
-- a stable contract that is not tied to one framework or HTTP stack
-- room to evolve protocols and implementations without redefining the service
-- consistent client, server, and documentation surfaces across languages
-- less hand-written protocol glue repeated in every application
-
-## Why NSmithy?
-
-There is no official Smithy implementation for .NET today. NSmithy fills that
-gap by making Smithy feel native in the .NET ecosystem while supporting
-[alloy](https://github.com/disneystreaming/alloy) traits and workflows that
-matter in practice.
-
-In practice, that means contract-first, protocol-aware generation for .NET with
-generated C# types, typed clients, and ASP.NET Core server surfaces.
-
-## Smithy CLI & Environment
-
-The easiest way to get started is with [pixi](https://pixi.sh) and the minimal example linked above. This sets up Smithy CLI, Java, and .NET in a project-local environment:
-
-```bash
-pixi init
-pixi add smithy openjdk dotnet
-pixi shell
-dotnet build
-```
-
-When the environment is active, `smithy` is resolved from `PATH`. Set `SmithyCliPath` to force a specific executable if needed.
-
