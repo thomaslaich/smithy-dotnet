@@ -1,0 +1,193 @@
+---
+/**
+ * TypeHintCode — syntax-highlighted code block with Twoslash-style type hints.
+ *
+ * Annotation syntax (same as Twoslash):
+ *   // ^? TypeName
+ *
+ * The `^` must be column-aligned with the first character of the token to annotate
+ * on the line above. Annotation lines are stripped from the rendered output.
+ *
+ * When a shiki token includes leading whitespace before the annotation column
+ * (common for indented identifiers), the token is split so only the identifier
+ * itself gets the dotted underline and the tooltip is anchored above it.
+ *
+ * Pass a `types` prop to show expanded type definitions in the tooltip rather than
+ * just the type name:
+ *   types={{ SayHelloInput: "record SayHelloInput(string Name)" }}
+ */
+import { createHighlighter } from 'shiki';
+
+interface Props {
+  code: string;
+  lang: string;
+  /** Map from annotation label to the full type definition shown in the tooltip. */
+  types?: Record<string, string>;
+}
+
+const { code, lang, types = {} } = Astro.props;
+
+// ── 1. Parse // ^? annotations ───────────────────────────────────────────────
+
+type Annotation = { lineIdx: number; col: number; label: string };
+const lines = code.split('\n');
+const annotations: Annotation[] = [];
+const cleanLines: string[] = [];
+
+for (const line of lines) {
+  const isAnnotation = /^\s*\/\/\s*\^/.test(line);
+  if (isAnnotation && cleanLines.length > 0) {
+    const col = line.indexOf('^');
+    const label = line.slice(col + 2).trim();
+    if (label) annotations.push({ lineIdx: cleanLines.length - 1, col, label });
+  } else {
+    cleanLines.push(line);
+  }
+}
+
+const cleanCode = cleanLines.join('\n');
+
+// ── 2. Build tooltip text for a given label ───────────────────────────────────
+// Stored as a data-tip attribute; rendered via CSS ::before so no block
+// descendants end up inside the <pre>.
+
+function tipText(label: string): string {
+  return types[label] ?? label;
+}
+
+// ── 3. Highlight ─────────────────────────────────────────────────────────────
+//
+// Track cumulative character offsets in the `span` hook (shiki guarantees
+// left-to-right order within each line) to match annotation columns without
+// depending on the `tokens` hook (API differs across shiki versions).
+//
+// When the annotation column falls inside a token but not at its start (i.e. the
+// token includes leading whitespace before the identifier), we split the token:
+//   <span style="color:…">SPACES<span class="th" data-tip="…">IDENT</span></span>
+// This anchors the tooltip above the identifier rather than above the margin.
+
+const highlighter = await createHighlighter({
+  themes: ['github-dark', 'github-light'],
+  langs: [lang as Parameters<typeof createHighlighter>[0]['langs'][number]],
+});
+
+const lineCharPos = new Map<number, number>();
+
+type HastNode = object;
+
+const html = highlighter.codeToHtml(cleanCode, {
+  lang: lang as string,
+  themes: { dark: 'github-dark', light: 'github-light' },
+  defaultColor: false,
+  transformers: [
+    {
+      name: 'type-hints',
+      span(node, line) {
+        const child = (node.children as { type: string; value?: string }[])?.[0];
+        const text = child?.type === 'text' ? (child.value ?? '') : '';
+        const pos = lineCharPos.get(line) ?? 0;
+
+        for (const ann of annotations) {
+          if (ann.lineIdx === line - 1 && pos <= ann.col && ann.col < pos + text.length) {
+            const leadingLen = ann.col - pos;
+            const tip = tipText(ann.label);
+
+            if (leadingLen > 0) {
+              // Token starts before the annotation column — split it.
+              // Keep leading whitespace as a plain text node; wrap only the
+              // identifier portion in the annotated span.
+              node.children = [
+                { type: 'text', value: text.slice(0, leadingLen) },
+                {
+                  type: 'element',
+                  tagName: 'span',
+                  properties: { class: 'th', 'data-tip': tip },
+                  children: [{ type: 'text', value: text.slice(leadingLen) }],
+                },
+              ] as HastNode[];
+            } else {
+              // Token starts exactly at the annotation column — annotate as-is.
+              node.properties ??= {};
+              node.properties['class'] = 'th';
+              node.properties['data-tip'] = tip;
+            }
+            break;
+          }
+        }
+
+        lineCharPos.set(line, pos + text.length);
+      },
+    },
+  ],
+});
+---
+
+<div class="thc" set:html={html} />
+
+<style>
+  /* ── Light / dark token colours (shiki dual-theme) ── */
+  html[data-theme='dark'] .thc :global(span[style]) {
+    color: var(--shiki-dark);
+    background-color: var(--shiki-dark-bg);
+  }
+  html[data-theme='light'] .thc :global(span[style]) {
+    color: var(--shiki-light);
+    background-color: var(--shiki-light-bg);
+  }
+
+  /* ── Pre / code wrapper ── */
+  .thc :global(pre) {
+    margin: 0;
+    padding: 1.1rem 1.25rem;
+    border-radius: 0.5rem;
+    overflow: visible; /* tooltips must escape the pre */
+    font-size: var(--sl-text-code);
+    line-height: 1.7;
+  }
+  html[data-theme='dark'] .thc :global(pre) { background-color: #24292e; }
+  html[data-theme='light'] .thc :global(pre) { background-color: #f6f8fa; }
+
+  .thc :global(code) {
+    font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo,
+      Consolas, 'DejaVu Sans Mono', monospace;
+  }
+
+  /* ── Annotated token ── */
+  .thc :global(.th) {
+    position: relative;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 3px;
+    text-decoration-skip-ink: auto;
+    cursor: help;
+  }
+
+  /* ── Tooltip via ::before pseudo-element ── */
+  /* Rendered outside the normal flow — no block descendants inside <pre>. */
+  .thc :global(.th)::before {
+    content: attr(data-tip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 0.82em;
+    white-space: pre;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+    z-index: 50;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  html[data-theme='dark'] .thc :global(.th)::before {
+    background: #1e1e2e;
+    border: 1px solid #45475a;
+    color: #cdd6f4;
+  }
+  html[data-theme='light'] .thc :global(.th)::before {
+    background: #eff1f5;
+    border: 1px solid #bcc0cc;
+    color: #4c4f69;
+  }
+  .thc :global(.th:hover)::before { opacity: 1; }
+</style>
