@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Default location of smithy model files in the contracts project -->
+    <SmithySources Condition="'$(SmithySources)' == ''">$(MSBuildProjectDirectory)/model</SmithySources>
+  </PropertyGroup>
+</Project>

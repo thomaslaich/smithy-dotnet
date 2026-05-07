@@ -1,5 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Http/NSmithy.Http.csproj" />
+
+    <!--
+      NSmithy.MSBuild carries the smithy codegen MSBuild targets. We keep it out of the
+      compile/runtime closure (it produces no DLL) but leave "build" un-private so its
+      buildTransitive targets flow to consumers of NSmithy.Client.
+    -->
+    <ProjectReference Include="../NSmithy.MSBuild/NSmithy.MSBuild.csproj"
+                      PrivateAssets="compile;runtime;contentfiles;analyzers;native" />
+
+    <!-- Props file sets SmithyGenerateClient=true / SmithyGenerateServer=false by default -->
+    <None Include="Targets/NSmithy.Client.props" Pack="true" PackagePath="build/NSmithy.Client.props" />
+    <None Include="Targets/NSmithy.Client.props" Pack="true" PackagePath="buildTransitive/NSmithy.Client.props" />
   </ItemGroup>
 </Project>

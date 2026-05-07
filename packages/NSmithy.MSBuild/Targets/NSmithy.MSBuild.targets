@@ -31,6 +31,7 @@
     <SmithyStampFile Condition="'$(SmithyStampFile)' == ''"
       >$(SmithyBuildOutputPath)NSmithy.Generated.stamp</SmithyStampFile
     >
+    <SmithyBaseNamespace Condition="'$(SmithyBaseNamespace)' == ''"></SmithyBaseNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -40,15 +41,86 @@
     />
     <_SmithyGeneratorInput Include="$(SmithyBuildFile)" Condition="Exists('$(SmithyBuildFile)')" />
     <!-- Ensure dotnet watch rebuilds when smithy model files change -->
-    <Watch Include="$(SmithyBuildFile)" />
+    <Watch Include="$(SmithyBuildFile)" Condition="Exists('$(SmithyBuildFile)')" />
     <Watch Include="@(_SmithyGeneratorInput)" />
   </ItemGroup>
+
+  <!--
+    Collect SmithySource items and SmithyMavenDependency items from ProjectReferences
+    that use NSmithy.Contracts (P2P case). Non-contracts projects silently skip via
+    SkipNonexistentTargets="true".
+
+    For NuGet consumers of a contracts package, SmithySource items are added by the
+    package's buildTransitive/NSmithy.Contracts.targets instead.
+  -->
+  <Target Name="_CollectSmithyItemsFromProjectReferences"
+          BeforeTargets="_PrepareSmithyBuildFile"
+          Condition="'@(ProjectReference)' != ''">
+    <MSBuild
+      Projects="@(ProjectReference)"
+      Targets="GetSmithyContractItems"
+      Properties="BuildProjectReferences=false"
+      SkipNonexistentTargets="true"
+      RebaseOutputs="true">
+      <Output TaskParameter="TargetOutputs" ItemName="SmithySource" />
+    </MSBuild>
+    <MSBuild
+      Projects="@(ProjectReference)"
+      Targets="GetSmithyMavenDependencies"
+      Properties="BuildProjectReferences=false"
+      SkipNonexistentTargets="true"
+      RebaseOutputs="true">
+      <Output TaskParameter="TargetOutputs" ItemName="SmithyMavenDependency" />
+    </MSBuild>
+  </Target>
+
+  <!--
+    Decide which smithy-build.json to use:
+
+    1. Explicit $(SmithyBuildFile) exists on disk → use it as-is (existing behaviour).
+    2. SmithySource items are present (from a contracts reference) → synthesize a
+       smithy-build.json in IntermediateOutputPath from those sources + SmithyMavenDependency
+       items + csproj properties (SmithyService, SmithyBaseNamespace, SmithyPlugin).
+
+    The synthesized file is written only when its inputs change so incremental builds
+    are cheap.
+  -->
+  <Target Name="_PrepareSmithyBuildFile"
+          BeforeTargets="GenerateSmithyCode"
+          DependsOnTargets="_CollectSmithyItemsFromProjectReferences"
+          Condition="!Exists('$(SmithyBuildFile)') and '@(SmithySource)' != ''">
+
+    <Error
+      Text="NSmithy: SmithyService must be set when generating from a contracts reference. Add &lt;SmithyService&gt;my.namespace#MyService&lt;/SmithyService&gt; to your project."
+      Condition="'$(SmithyService)' == ''" />
+
+    <PropertyGroup>
+      <_SmithySourcesJson>@(SmithySource -> '"%(FullPath)"', ',')</_SmithySourcesJson>
+      <_SmithyDepsJson>@(SmithyMavenDependency -> '"%(Identity)"', ',')</_SmithyDepsJson>
+      <_SmithySynthesizedBuildFile>$(IntermediateOutputPath)smithy-build.json</_SmithySynthesizedBuildFile>
+    </PropertyGroup>
+
+    <PropertyGroup>
+      <_SmithySynthesizedJson>{"version":"1.0","sources":[$(_SmithySourcesJson)],"maven":{"repositories":[{"url":"file://~/.m2/repository"},{"url":"https://repo.maven.apache.org/maven2/"}],"dependencies":[$(_SmithyDepsJson)]},"plugins":{"$(SmithyPlugin)":{"service":"$(SmithyService)","baseNamespace":"$(SmithyBaseNamespace)"}}}</_SmithySynthesizedJson>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <WriteLinesToFile
+      File="$(_SmithySynthesizedBuildFile)"
+      Lines="$(_SmithySynthesizedJson)"
+      Overwrite="true"
+      WriteOnlyWhenDifferent="true" />
+
+    <PropertyGroup>
+      <SmithyBuildFile>$(_SmithySynthesizedBuildFile)</SmithyBuildFile>
+    </PropertyGroup>
+  </Target>
 
   <Target
     Name="GenerateSmithyCode"
     BeforeTargets="CoreCompile"
     Condition="Exists('$(SmithyBuildFile)')"
-    Inputs="@(_SmithyGeneratorInput)"
+    Inputs="@(_SmithyGeneratorInput);@(SmithySource)"
     Outputs="$(SmithyStampFile)"
   >
     <MakeDir Directories="$(SmithyBuildOutputPath)" />

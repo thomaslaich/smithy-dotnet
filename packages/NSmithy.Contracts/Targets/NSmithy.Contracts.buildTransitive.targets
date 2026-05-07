@@ -1,0 +1,20 @@
+<Project>
+  <!--
+    Imported in any project that has a NuGet reference (direct or transitive) to a
+    contracts package built with NSmithy.Contracts.
+
+    $(MSBuildThisFileDirectory) points to the buildTransitive/ folder in the NuGet cache.
+    Smithy files and the maven deps list are packed into build/ by NSmithy.Contracts.targets.
+  -->
+  <ItemGroup>
+    <SmithySource Include="$(MSBuildThisFileDirectory)..\build\smithy\**\*.smithy" />
+  </ItemGroup>
+
+  <Target Name="_ImportSmithyMavenDepsFromNuGet"
+          BeforeTargets="_PrepareSmithyBuildFile"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\build\smithy-maven-deps.txt')">
+    <ReadLinesFromFile File="$(MSBuildThisFileDirectory)..\build\smithy-maven-deps.txt">
+      <Output TaskParameter="Lines" ItemName="SmithyMavenDependency" />
+    </ReadLinesFromFile>
+  </Target>
+</Project>

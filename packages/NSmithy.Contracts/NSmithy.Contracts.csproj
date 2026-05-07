@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Imported in the contracts project itself -->
+    <None Include="Targets/NSmithy.Contracts.props" Pack="true" PackagePath="build/NSmithy.Contracts.props" />
+    <None Include="Targets/NSmithy.Contracts.targets" Pack="true" PackagePath="build/NSmithy.Contracts.targets" />
+    <!-- Imported in NuGet consumers of the contracts package -->
+    <None Include="Targets/NSmithy.Contracts.buildTransitive.targets" Pack="true" PackagePath="buildTransitive/NSmithy.Contracts.targets" />
+  </ItemGroup>
+</Project>

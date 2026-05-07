@@ -1,0 +1,57 @@
+<Project>
+  <!--
+    Called by NSmithy.MSBuild on ProjectReference items to collect smithy sources.
+    SkipNonexistentTargets="true" on the caller means this is a no-op for projects
+    that don't reference NSmithy.Contracts.
+  -->
+  <Target Name="GetSmithyContractItems" Returns="@(SmithySource)">
+    <ItemGroup>
+      <SmithySource Include="$(SmithySources)/**/*.smithy" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    Called by NSmithy.MSBuild to collect maven dependencies declared by the contracts project.
+    SmithyMavenDependency items are declared by the user in their .csproj, e.g.:
+      <ItemGroup>
+        <SmithyMavenDependency Include="com.disneystreaming.alloy:alloy-core:0.3.38" />
+      </ItemGroup>
+  -->
+  <Target Name="GetSmithyMavenDependencies" Returns="@(SmithyMavenDependency)" />
+
+  <!--
+    Write maven dependencies to a text file and embed it in the NuGet package so that
+    NuGet consumers can restore them via the buildTransitive targets.
+  -->
+  <Target Name="_WriteSmithyMavenDepsFile" BeforeTargets="GenerateNuspec;Pack">
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <WriteLinesToFile
+      File="$(IntermediateOutputPath)smithy-maven-deps.txt"
+      Lines="@(SmithyMavenDependency)"
+      Overwrite="true" />
+    <ItemGroup>
+      <None
+        Include="$(IntermediateOutputPath)smithy-maven-deps.txt"
+        Pack="true"
+        PackagePath="build/smithy-maven-deps.txt" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    Embed smithy model files and the optional smithy-build.json into the NuGet package
+    so that NuGet consumers can pick them up via the buildTransitive targets.
+  -->
+  <Target Name="_PackSmithyFilesIntoNuGet" BeforeTargets="GenerateNuspec;Pack">
+    <ItemGroup>
+      <None
+        Include="$(SmithySources)/**/*.smithy"
+        Pack="true"
+        PackagePath="build/smithy/%(RecursiveDir)%(Filename)%(Extension)" />
+      <None
+        Include="$(MSBuildProjectDirectory)/smithy-build.json"
+        Pack="true"
+        PackagePath="build/smithy-build.json"
+        Condition="Exists('$(MSBuildProjectDirectory)/smithy-build.json')" />
+    </ItemGroup>
+  </Target>
+</Project>
