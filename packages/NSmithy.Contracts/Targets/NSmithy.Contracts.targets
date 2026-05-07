@@ -1,5 +1,13 @@
 <Project>
   <!--
+    MSBuild task assembly. $(MSBuildThisFileDirectory) points to build/ in the NuGet cache;
+    the DLL is packed into tasks/{tfm}/ by BuildOutputTargetFolder in the csproj.
+  -->
+  <UsingTask
+    TaskName="CreateSmithyJar"
+    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\net10.0\NSmithy.Contracts.dll"
+  />
+  <!--
     Called by NSmithy.MSBuild on ProjectReference items to collect smithy sources.
     SkipNonexistentTargets="true" on the caller means this is a no-op for projects
     that don't reference NSmithy.Contracts.
@@ -20,9 +28,29 @@
   <Target Name="GetSmithyMavenDependencies" Returns="@(SmithyMavenDependency)" />
 
   <!--
-    Write maven dependencies to a text file and embed it in the NuGet package so that
-    NuGet consumers can restore them via the buildTransitive targets.
+    Run after Pack so dotnet pack produces both NuGet and JAR in one step.
+    Gated on SmithyMavenGroupId so projects that only want NuGet distribution can skip it.
+    SmithyMavenArtifactId defaults to the package id; Version comes from PackageVersion
+    which is set by the SDK from VersionPrefix + VersionSuffix.
   -->
+  <Target Name="_CreateSmithyJar"
+          AfterTargets="Pack"
+          Condition="'$(SmithyMavenGroupId)' != ''">
+    <Error
+      Text="NSmithy: SmithyMavenArtifactId must be set when SmithyMavenGroupId is set."
+      Condition="'$(SmithyMavenArtifactId)' == ''" />
+    <ItemGroup>
+      <_JarSmithySource Include="$(SmithySources)/**/*.smithy" />
+    </ItemGroup>
+    <CreateSmithyJar
+      Sources="@(_JarSmithySource)"
+      SourcesRoot="$(SmithySources)"
+      GroupId="$(SmithyMavenGroupId)"
+      ArtifactId="$(SmithyMavenArtifactId)"
+      Version="$(PackageVersion)"
+      OutputDirectory="$(PackageOutputAbsolutePath)" />
+  </Target>
+
   <Target Name="_WriteSmithyMavenDepsFile" BeforeTargets="GenerateNuspec;Pack">
     <MakeDir Directories="$(IntermediateOutputPath)" />
     <WriteLinesToFile

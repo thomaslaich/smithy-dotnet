@@ -1,11 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!--
+      Put the task assembly in tasks/{tfm}/ rather than lib/{tfm}/ so consumers
+      do not get it as a compile-time reference — it is a build tool, not a library.
+    -->
+    <BuildOutputTargetFolder>tasks</BuildOutputTargetFolder>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Framework" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" PrivateAssets="all" />
+
     <!-- Imported in the contracts project itself -->
     <None Include="Targets/NSmithy.Contracts.props" Pack="true" PackagePath="build/NSmithy.Contracts.props" />
     <None Include="Targets/NSmithy.Contracts.targets" Pack="true" PackagePath="build/NSmithy.Contracts.targets" />
