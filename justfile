@@ -44,6 +44,7 @@ refresh-examples:
     dotnet clean examples/grpc/client-rest/NSmithy.Examples.Grpc.ClientRest.csproj --verbosity minimal
     dotnet clean examples/grpc/client-grpc/NSmithy.Examples.Grpc.ClientGrpc.csproj --verbosity minimal
     dotnet clean examples/polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj --verbosity minimal
+    rm -rf examples/simple-rest-json/contracts/obj
     rm -rf examples/simple-rest-json/server/obj
     rm -rf examples/simple-rest-json/client/obj
     rm -rf examples/aws/client/obj
@@ -51,6 +52,7 @@ refresh-examples:
     rm -rf examples/grpc/client-rest/obj
     rm -rf examples/grpc/client-grpc/obj
     rm -rf examples/polyglot/dotnet/obj
+    dotnet restore examples/simple-rest-json/contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj --no-cache --force
     dotnet restore examples/simple-rest-json/server/NSmithy.Examples.SimpleRestJson.Server.csproj --no-cache --force
     dotnet restore examples/simple-rest-json/client/NSmithy.Examples.SimpleRestJson.Client.csproj --no-cache --force
     dotnet restore examples/aws/client/NSmithy.Examples.Aws.Client.csproj --no-cache --force
