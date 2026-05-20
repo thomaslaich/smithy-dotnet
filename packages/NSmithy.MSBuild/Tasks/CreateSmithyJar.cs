@@ -11,7 +11,7 @@ namespace NSmithy.Contracts;
 /// Packs .smithy model files into a Maven-compatible JAR artifact (plus POM and checksums),
 /// mirroring the structure expected by Smithy's JAR model discovery.
 /// </summary>
-public sealed class CreateSmithyJarTask : MsBuildTask
+public sealed class CreateSmithyJar : MsBuildTask
 {
     /// <summary>The .smithy files to include in the JAR.</summary>
     [Required]
@@ -71,8 +71,10 @@ public sealed class CreateSmithyJarTask : MsBuildTask
 
         var manifest = string.Join("\n", entries) + "\n";
 
-        Log.LogMessage(MessageImportance.High,
-            $"NSmithy: packing {smithyFiles.Count} .smithy file(s) → {Path.GetFileName(jarPath)}");
+        Log.LogMessage(
+            MessageImportance.High,
+            $"NSmithy: packing {smithyFiles.Count} .smithy file(s) → {Path.GetFileName(jarPath)}"
+        );
 
         using (var jarStream = File.Create(jarPath))
         using (var zip = new ZipArchive(jarStream, ZipArchiveMode.Create, leaveOpen: false))
@@ -121,8 +123,14 @@ public sealed class CreateSmithyJarTask : MsBuildTask
     private static void WriteChecksums(string filePath)
     {
         var content = File.ReadAllBytes(filePath);
-        File.WriteAllText(filePath + ".md5", Convert.ToHexString(MD5.HashData(content)).ToLowerInvariant());
-        File.WriteAllText(filePath + ".sha1", Convert.ToHexString(SHA1.HashData(content)).ToLowerInvariant());
+        File.WriteAllText(
+            filePath + ".md5",
+            Convert.ToHexString(MD5.HashData(content)).ToLowerInvariant()
+        );
+        File.WriteAllText(
+            filePath + ".sha1",
+            Convert.ToHexString(SHA1.HashData(content)).ToLowerInvariant()
+        );
     }
 #pragma warning restore CA5351, CA5350
 }

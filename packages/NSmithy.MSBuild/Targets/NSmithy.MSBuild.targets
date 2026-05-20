@@ -1,4 +1,136 @@
 <Project>
+  <!--
+    NSmithy.MSBuild.targets — imported in every project that has NSmithy.MSBuild in its
+    NuGet dependency tree (directly or via NSmithy.Server / NSmithy.Client).
+
+    Two independent behaviours, both opt-in via properties:
+
+      SmithyPublish=true   Pack smithy model files into the NuGet package and (when
+                           SmithyMavenGroupId is also set) produce a Maven JAR.
+                           Also exposes GetSmithyContractItems / GetSmithyMavenDependencies
+                           so that server/client projects can collect models via a
+                           <ProjectReference> to this project.
+
+      (code generation)    Runs automatically when a smithy-build.json exists, or when
+                           SmithySource items are present (collected from a contracts
+                           ProjectReference or a published contracts NuGet package).
+                           Controlled by SmithyGenerateServer / SmithyGenerateClient.
+  -->
+
+  <!-- ================================================================
+       MSBuild task — CreateSmithyJar
+       $(MSBuildThisFileDirectory) → buildTransitive/ in the NuGet cache;
+       the DLL lives in tasks/net10.0/ one level up.
+       ================================================================ -->
+
+  <UsingTask
+    TaskName="CreateSmithyJar"
+    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\net10.0\NSmithy.MSBuild.dll"
+  />
+
+  <!-- ================================================================
+       P2P support — targets called by NSmithy.MSBuild on ProjectReference
+       items via MSBuild task with SkipNonexistentTargets="true".
+       Available in every project so that any project can act as a
+       contract source when SmithyPublish=true is set.
+       ================================================================ -->
+
+  <!--
+    Returns the smithy model files for this project.
+    Called by _CollectSmithyItemsFromProjectReferences in dependent projects.
+  -->
+  <Target Name="GetSmithyContractItems" Returns="@(SmithySource)">
+    <ItemGroup>
+      <SmithySource Include="$(SmithySources)/**/*.smithy" />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    Returns the SmithyMavenDependency items declared in this project's .csproj.
+    Called by _CollectSmithyItemsFromProjectReferences in dependent projects.
+  -->
+  <Target Name="GetSmithyMavenDependencies" Returns="@(SmithyMavenDependency)" />
+
+  <!-- ================================================================
+       Pack integration — SmithyPublish=true only
+       ================================================================ -->
+
+  <!--
+    Embed smithy model files into the NuGet package so that NuGet consumers
+    can pick them up. Static ItemGroup so the files are reliably collected
+    by the NuGet Pack task regardless of target ordering.
+  -->
+  <ItemGroup Condition="'$(SmithyPublish)' == 'true'">
+    <None
+      Include="$(SmithySources)/**/*.smithy"
+      Pack="true"
+      PackagePath="build/smithy/%(RecursiveDir)%(Filename)%(Extension)"
+    />
+    <None
+      Include="$(MSBuildProjectDirectory)/smithy-build.json"
+      Pack="true"
+      PackagePath="build/smithy-build.json"
+      Condition="Exists('$(MSBuildProjectDirectory)/smithy-build.json')"
+    />
+  </ItemGroup>
+
+  <!--
+    Write SmithyMavenDependency items to a text file packed into the NuGet package
+    so that NuGet consumers can restore them. Uses GenerateNuspecDependsOn so the
+    file is written before nuspec generation collects pack items.
+  -->
+  <PropertyGroup Condition="'$(SmithyPublish)' == 'true'">
+    <GenerateNuspecDependsOn>_WriteSmithyMavenDepsFile;$(GenerateNuspecDependsOn)</GenerateNuspecDependsOn>
+  </PropertyGroup>
+
+  <Target Name="_WriteSmithyMavenDepsFile" Condition="'$(SmithyPublish)' == 'true'">
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <WriteLinesToFile
+      File="$(IntermediateOutputPath)smithy-maven-deps.txt"
+      Lines="@(SmithyMavenDependency)"
+      Overwrite="true"
+    />
+    <ItemGroup>
+      <None
+        Include="$(IntermediateOutputPath)smithy-maven-deps.txt"
+        Pack="true"
+        PackagePath="build/smithy-maven-deps.txt"
+      />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    After dotnet pack, create a Maven JAR alongside the NuGet package.
+    Gated on SmithyMavenGroupId so projects that only want NuGet distribution
+    can skip it by leaving SmithyMavenGroupId unset.
+  -->
+  <Target
+    Name="_CreateSmithyJar"
+    AfterTargets="Pack"
+    Condition="'$(SmithyPublish)' == 'true' and '$(SmithyMavenGroupId)' != ''"
+  >
+    <Error
+      Text="NSmithy: SmithyMavenArtifactId must be set when SmithyMavenGroupId is set."
+      Condition="'$(SmithyMavenArtifactId)' == ''"
+    />
+    <ItemGroup>
+      <_JarSmithySource Include="$(SmithySources)/**/*.smithy" />
+    </ItemGroup>
+    <CreateSmithyJar
+      Sources="@(_JarSmithySource)"
+      SourcesRoot="$(SmithySources)"
+      GroupId="$(SmithyMavenGroupId)"
+      ArtifactId="$(SmithyMavenArtifactId)"
+      Version="$(PackageVersion)"
+      OutputDirectory="$(PackageOutputAbsolutePath)"
+    />
+  </Target>
+
+  <!-- ================================================================
+       Code generation — runs when smithy-build.json exists or SmithySource
+       items are present (from a contracts ProjectReference or NuGet package)
+       ================================================================ -->
+
   <PropertyGroup>
     <SmithyBuildFile Condition="'$(SmithyBuildFile)' == ''"
       >$(MSBuildProjectDirectory)/smithy-build.json</SmithyBuildFile
@@ -11,13 +143,9 @@
     <SmithyGeneratedOutputPath Condition="'$(SmithyGeneratedOutputPath)' == ''"
       >$(SmithyBuildOutputPath)$(SmithyProjection)/$(SmithyPlugin)/</SmithyGeneratedOutputPath
     >
-    <!-- Glob pattern matching every projection's csharp-codegen output. Lets a single
-         project consume multiple projections (e.g. restxml + rpcv2cbor) without manual config. -->
     <SmithyAllProjectionsGlob Condition="'$(SmithyAllProjectionsGlob)' == ''"
       >$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.g.cs</SmithyAllProjectionsGlob
     >
-    <!-- Glob pattern matching every projection's generated .proto files. Picked up by
-         Grpc.Tools when the project references it (Grpc.AspNetCore / Grpc.Net.Client). -->
     <SmithyAllProtosGlob Condition="'$(SmithyAllProtosGlob)' == ''"
       >$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.proto</SmithyAllProtosGlob
     >
@@ -40,28 +168,28 @@
       Exclude="$(MSBuildProjectDirectory)/obj/**;$(MSBuildProjectDirectory)/bin/**;$(SmithyBuildOutputPath)**"
     />
     <_SmithyGeneratorInput Include="$(SmithyBuildFile)" Condition="Exists('$(SmithyBuildFile)')" />
-    <!-- Ensure dotnet watch rebuilds when smithy model files change -->
     <Watch Include="$(SmithyBuildFile)" Condition="Exists('$(SmithyBuildFile)')" />
     <Watch Include="@(_SmithyGeneratorInput)" />
   </ItemGroup>
 
   <!--
-    Collect SmithySource items and SmithyMavenDependency items from ProjectReferences
-    that use NSmithy.Contracts (P2P case). Non-contracts projects silently skip via
-    SkipNonexistentTargets="true".
-
-    For NuGet consumers of a contracts package, SmithySource items are added by the
-    package's buildTransitive/NSmithy.Contracts.targets instead.
+    Collect SmithySource and SmithyMavenDependency items from ProjectReferences that
+    expose GetSmithyContractItems / GetSmithyMavenDependencies (i.e. projects with
+    SmithyPublish=true). SkipNonexistentTargets="true" makes this a no-op for
+    projects that don't set SmithyPublish.
   -->
-  <Target Name="_CollectSmithyItemsFromProjectReferences"
-          BeforeTargets="_PrepareSmithyBuildFile"
-          Condition="'@(ProjectReference)' != ''">
+  <Target
+    Name="_CollectSmithyItemsFromProjectReferences"
+    BeforeTargets="_PrepareSmithyBuildFile"
+    Condition="'@(ProjectReference)' != ''"
+  >
     <MSBuild
       Projects="@(ProjectReference)"
       Targets="GetSmithyContractItems"
       Properties="BuildProjectReferences=false"
       SkipNonexistentTargets="true"
-      RebaseOutputs="true">
+      RebaseOutputs="true"
+    >
       <Output TaskParameter="TargetOutputs" ItemName="SmithySource" />
     </MSBuild>
     <MSBuild
@@ -69,49 +197,57 @@
       Targets="GetSmithyMavenDependencies"
       Properties="BuildProjectReferences=false"
       SkipNonexistentTargets="true"
-      RebaseOutputs="true">
+      RebaseOutputs="false"
+    >
       <Output TaskParameter="TargetOutputs" ItemName="SmithyMavenDependency" />
     </MSBuild>
   </Target>
 
   <!--
-    Decide which smithy-build.json to use:
-
-    1. Explicit $(SmithyBuildFile) exists on disk → use it as-is (existing behaviour).
-    2. SmithySource items are present (from a contracts reference) → synthesize a
-       smithy-build.json in IntermediateOutputPath from those sources + SmithyMavenDependency
-       items + csproj properties (SmithyService, SmithyBaseNamespace, SmithyPlugin).
-
-    The synthesized file is written only when its inputs change so incremental builds
-    are cheap.
+    Synthesise a smithy-build.json when none exists on disk but SmithySource items
+    are present (collected from a contracts ProjectReference or NuGet package).
+    The condition check for SmithySource must be inside the target body — MSBuild
+    evaluates target Condition attributes before DependsOnTargets run, so
+    SmithySource would always appear empty at the Condition evaluation point.
   -->
-  <Target Name="_PrepareSmithyBuildFile"
-          BeforeTargets="GenerateSmithyCode"
-          DependsOnTargets="_CollectSmithyItemsFromProjectReferences"
-          Condition="!Exists('$(SmithyBuildFile)') and '@(SmithySource)' != ''">
+  <Target
+    Name="_PrepareSmithyBuildFile"
+    BeforeTargets="GenerateSmithyCode"
+    DependsOnTargets="_CollectSmithyItemsFromProjectReferences"
+    Condition="!Exists('$(SmithyBuildFile)')"
+  >
+    <PropertyGroup Condition="'@(SmithySource)' != ''">
+      <_SmithyShouldSynthesize>true</_SmithyShouldSynthesize>
+    </PropertyGroup>
 
     <Error
       Text="NSmithy: SmithyService must be set when generating from a contracts reference. Add &lt;SmithyService&gt;my.namespace#MyService&lt;/SmithyService&gt; to your project."
-      Condition="'$(SmithyService)' == ''" />
+      Condition="'$(_SmithyShouldSynthesize)' == 'true' and '$(SmithyService)' == ''"
+    />
 
-    <PropertyGroup>
+    <PropertyGroup Condition="'$(_SmithyShouldSynthesize)' == 'true'">
       <_SmithySourcesJson>@(SmithySource -> '"%(FullPath)"', ',')</_SmithySourcesJson>
       <_SmithyDepsJson>@(SmithyMavenDependency -> '"%(Identity)"', ',')</_SmithyDepsJson>
       <_SmithySynthesizedBuildFile>$(IntermediateOutputPath)smithy-build.json</_SmithySynthesizedBuildFile>
     </PropertyGroup>
 
-    <PropertyGroup>
+    <PropertyGroup Condition="'$(_SmithyShouldSynthesize)' == 'true'">
       <_SmithySynthesizedJson>{"version":"1.0","sources":[$(_SmithySourcesJson)],"maven":{"repositories":[{"url":"file://~/.m2/repository"},{"url":"https://repo.maven.apache.org/maven2/"}],"dependencies":[$(_SmithyDepsJson)]},"plugins":{"$(SmithyPlugin)":{"service":"$(SmithyService)","baseNamespace":"$(SmithyBaseNamespace)"}}}</_SmithySynthesizedJson>
     </PropertyGroup>
 
-    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <MakeDir
+      Directories="$(IntermediateOutputPath)"
+      Condition="'$(_SmithyShouldSynthesize)' == 'true'"
+    />
     <WriteLinesToFile
       File="$(_SmithySynthesizedBuildFile)"
       Lines="$(_SmithySynthesizedJson)"
       Overwrite="true"
-      WriteOnlyWhenDifferent="true" />
+      WriteOnlyWhenDifferent="true"
+      Condition="'$(_SmithyShouldSynthesize)' == 'true'"
+    />
 
-    <PropertyGroup>
+    <PropertyGroup Condition="'$(_SmithyShouldSynthesize)' == 'true'">
       <SmithyBuildFile>$(_SmithySynthesizedBuildFile)</SmithyBuildFile>
     </PropertyGroup>
   </Target>
@@ -160,11 +296,6 @@
     </ItemGroup>
   </Target>
 
-  <!--
-    Register generated .proto files with Grpc.Tools so protoc emits the matching C# stubs.
-    Must run before Protobuf_PrepareCompile (the Grpc.Tools entry point that walks @(Protobuf)).
-    The target is a no-op when Grpc.Tools is not referenced.
-  -->
   <Target
     Name="_AddSmithyGeneratedProtoItems"
     DependsOnTargets="GenerateSmithyCode"

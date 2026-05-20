@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/contracts/">
+    <Project Path="contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj" />
+  </Folder>
   <Folder Name="/client/">
     <Project Path="client/NSmithy.Examples.SimpleRestJson.Client.csproj" />
   </Folder>

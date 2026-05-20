@@ -15,11 +15,20 @@ In the Quick Start, the model lives in the same project as the server or client.
 That works for small cases, but becomes awkward when:
 
 - a server project and a client project need to share the same model
-- you want to version and publish the contract independently
-- you want to distribute the model to non-.NET consumers (Maven/JAR)
+- you want to version and publish the model as a NuGet package for external .NET consumers
+- you want to version the contract independently of the server
 
 A contracts project gives each concern its own csproj and lets the model be the
 single source of truth.
+
+:::note[Single-project alternative]
+A separate contracts project is optional. You can add `<SmithyPublish>true</SmithyPublish>`
+directly to your server or client project and skip this guide entirely —
+`dotnet pack` will still produce the Maven JAR. A dedicated contracts project is
+only needed when you want to publish the model as a NuGet package for external
+.NET consumers, since packing a NuGet contracts package from a server project
+requires extra configuration to strip server runtime dependencies from the package.
+:::
 
 ## Create the Contracts Project
 
@@ -33,10 +42,11 @@ Replace the generated `.csproj` contents with:
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <SmithyPublish>true</SmithyPublish>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSmithy.Contracts" Version="0.1.0-preview.8" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.8" />
   </ItemGroup>
 
   <!-- Maven dependencies needed by the Smithy codegen plugin -->
@@ -47,7 +57,7 @@ Replace the generated `.csproj` contents with:
 </Project>
 ```
 
-`NSmithy.Contracts` adds MSBuild targets that:
+`NSmithy.MSBuild` with `SmithyPublish=true` adds MSBuild targets that:
 
 - expose `GetSmithyContractItems` — returns the `.smithy` files to codegen consumers
 - expose `GetSmithyMavenDependencies` — forwards Maven dependency declarations

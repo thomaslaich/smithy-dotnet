@@ -8,6 +8,14 @@ and published so teams outside the solution can consume the model — .NET
 consumers via NuGet, and Java/Smithy consumers via a Maven-compatible JAR. Both
 artifacts are produced by a single `dotnet pack` invocation.
 
+**Maven is generally the more universal distribution path.** Any Smithy-based
+toolchain — Java, TypeScript, Python, and .NET — can consume a JAR from a
+Maven registry without any NSmithy-specific setup. NuGet distribution is a good
+fit when your consumers are exclusively .NET and you would rather not maintain a
+Maven registry at all; if you already publish to Maven (or use a public registry
+like Maven Central), the JAR covers everyone and the NuGet package becomes
+optional.
+
 ## NuGet Distribution
 
 ### Packing
@@ -16,16 +24,15 @@ artifacts are produced by a single `dotnet pack` invocation.
 dotnet pack MyService.Contracts --configuration Release
 ```
 
-`NSmithy.Contracts` embeds the `.smithy` model files and the Maven dependency
+`NSmithy.MSBuild` embeds the `.smithy` model files and the Maven dependency
 list into the package at pack time:
 
 | Package path | Contents |
 | --- | --- |
 | `build/smithy/**/*.smithy` | model files |
 | `build/smithy-maven-deps.txt` | one Maven coordinate per line |
-| `build/NSmithy.Contracts.props` | sets `SmithySources` default |
-| `build/NSmithy.Contracts.targets` | MSBuild targets for the contracts project itself |
-| `buildTransitive/NSmithy.Contracts.targets` | MSBuild targets imported by downstream NuGet consumers |
+| `build/NSmithy.MSBuild.props` | sets `SmithySources` default |
+| `buildTransitive/NSmithy.MSBuild.targets` | MSBuild targets imported by all consumers |
 
 ### Consuming via NuGet
 
@@ -64,6 +71,7 @@ Add `SmithyMavenGroupId` and `SmithyMavenArtifactId` to the contracts project:
 <PropertyGroup>
   <PackageId>MyService.Contracts</PackageId>
   <Version>1.0.0</Version>
+  <SmithyPublish>true</SmithyPublish>
 
   <!-- Maven coordinates for the emitted JAR -->
   <SmithyMavenGroupId>io.github.acme</SmithyMavenGroupId>

@@ -44,59 +44,128 @@ service shape and the Maven dependency that brings it in.
 
 ## Modeling
 
-Apply `@simpleRestJson` to the service and `@http` to each operation:
+The example below is adapted from the [Smithy quickstart](https://smithy.io/2.0/quickstart.html).
+It demonstrates resources, pagination, errors, and common HTTP binding traits.
 
 ```smithy
 $version: "2"
 
-namespace example.hello
+namespace example.weather
 
 use alloy#simpleRestJson
 
+/// Provides weather forecasts.
 @simpleRestJson
-service HelloService {
-    version: "2026-01-01"
-    operations: [SayHello, CreateItem]
-    errors: [ThrottlingError]
+@paginated(inputToken: "nextToken", outputToken: "nextToken", pageSize: "pageSize")
+service Weather {
+    version: "2006-03-01"
+    resources: [City]
+    operations: [GetCurrentTime]
 }
 
-@http(method: "GET", uri: "/hello/{name}")
+resource City {
+    identifiers: { cityId: CityId }
+    properties: { coordinates: CityCoordinates }
+    read: GetCity
+    list: ListCities
+    resources: [Forecast]
+}
+
+resource Forecast {
+    identifiers: { cityId: CityId }
+    properties: { chanceOfRain: Float }
+    read: GetForecast
+}
+
+@pattern("^[A-Za-z0-9 ]+$")
+string CityId
+
 @readonly
-operation SayHello {
-    input := {
-        @required @httpLabel
-        name: String
-
-        @httpQuery("verbose")
-        verbose: Boolean
-    }
+@http(method: "GET", uri: "/current-time")
+operation GetCurrentTime {
     output := {
         @required
-        message: String
-
-        @httpHeader("x-request-id")
-        requestId: String
-    }
-    errors: [NotFound]
-}
-
-@http(method: "POST", uri: "/items")
-operation CreateItem {
-    input := {
-        @required
-        name: String
-    }
-    output := {
-        @required
-        id: String
+        time: Timestamp
     }
 }
 
-@error("client") @httpError(404)
-structure NotFound { message: String }
+@readonly
+@http(method: "GET", uri: "/cities/{cityId}")
+operation GetCity {
+    input := for City {
+        @required
+        @httpLabel
+        $cityId
+    }
+    output := for City {
+        @required
+        @notProperty
+        name: String
 
-@error("server") @httpError(429)
-structure ThrottlingError { message: String }
+        @required
+        $coordinates
+    }
+    errors: [NoSuchResource]
+}
+
+@readonly
+@paginated(items: "items")
+@http(method: "GET", uri: "/cities")
+operation ListCities {
+    input := {
+        @httpQuery("nextToken")
+        nextToken: String
+
+        @httpQuery("pageSize")
+        pageSize: Integer
+    }
+    output := {
+        nextToken: String
+
+        @required
+        items: CitySummaries
+    }
+}
+
+@readonly
+@http(method: "GET", uri: "/cities/{cityId}/forecast")
+operation GetForecast {
+    input := for Forecast {
+        @required
+        @httpLabel
+        $cityId
+    }
+    output := for Forecast {
+        $chanceOfRain
+    }
+}
+
+structure CityCoordinates {
+    @required
+    latitude: Float
+
+    @required
+    longitude: Float
+}
+
+list CitySummaries {
+    member: CitySummary
+}
+
+@references([{resource: City}])
+structure CitySummary {
+    @required
+    cityId: CityId
+
+    @required
+    name: String
+}
+
+@error("client")
+structure NoSuchResource {
+    @required
+    resourceType: String
+}
 ```
 
 Key HTTP binding traits:
@@ -112,33 +181,48 @@ Members without an explicit binding go into the JSON body.
 
 ## Server
 
+NSmithy generates one `IWeatherServiceHandler` interface with a method for each
+operation. Implement it once; the generated ASP.NET Core adapter handles routing,
+serialization, and error dispatch.
+
 ```csharp
-using Example.Hello;
+using Example.Weather;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddHelloServiceHandler<HelloHandler>();
+builder.Services.AddWeatherServiceHandler<WeatherHandler>();
 
 var app = builder.Build();
-app.MapHelloServiceHttp();
+app.MapWeatherServiceHttp();
 app.Run();
 
-internal sealed class HelloHandler : IHelloServiceHandler
+internal sealed class WeatherHandler : IWeatherServiceHandler
 {
-    public Task<SayHelloOutput> SayHelloAsync(
-        SayHelloInput input, CancellationToken ct = default)
-    {
-        if (input.Name == "nobody")
-            throw new NotFoundException("not found");
+    public Task<GetCurrentTimeOutput> GetCurrentTimeAsync(
+        GetCurrentTimeInput input, CancellationToken ct = default) =>
+        Task.FromResult(new GetCurrentTimeOutput(DateTimeOffset.UtcNow));
 
-        return Task.FromResult(new SayHelloOutput(
-            Message: $"Hello, {input.Name}!",
-            RequestId: Guid.NewGuid().ToString()
+    public Task<GetCityOutput> GetCityAsync(
+        GetCityInput input, CancellationToken ct = default)
+    {
+        if (input.CityId == "unknown")
+            throw new NoSuchResource(null, "City");
+
+        return Task.FromResult(new GetCityOutput(
+            name: "Seattle",
+            coordinates: new CityCoordinates(47.6f, -122.3f)
         ));
     }
 
-    public Task<CreateItemOutput> CreateItemAsync(
-        CreateItemInput input, CancellationToken ct = default) =>
-        Task.FromResult(new CreateItemOutput(Guid.NewGuid().ToString()));
+    public Task<ListCitiesOutput> ListCitiesAsync(
+        ListCitiesInput input, CancellationToken ct = default) =>
+        Task.FromResult(new ListCitiesOutput(new CitySummaries([
+            new CitySummary("SEA", "Seattle"),
+            new CitySummary("NYC", "New York"),
+        ])));
+
+    public Task<GetForecastOutput> GetForecastAsync(
+        GetForecastInput input, CancellationToken ct = default) =>
+        Task.FromResult(new GetForecastOutput(chanceOfRain: 0.4f));
 }
 ```
 
@@ -148,20 +232,27 @@ serialize it with the correct HTTP status code and JSON body.
 ## Client
 
 ```csharp
-using Example.Hello;
+using Example.Weather;
 using NSmithy.Client;
 
-var client = new HelloServiceClient(
+var client = new WeatherClient(
     new HttpClient(),
     new SmithyClientOptions { Endpoint = new Uri("http://localhost:5000") }
 );
 
-var response = await client.SayHelloAsync(new SayHelloInput("world"));
-Console.WriteLine(response.Message);    // Hello, world!
-Console.WriteLine(response.RequestId); // from x-request-id header
-```
+var time = await client.GetCurrentTimeAsync(new GetCurrentTimeInput());
+Console.WriteLine(time.Time);
 
-`@httpHeader` members are deserialized from the response header automatically.
+var cities = await client.ListCitiesAsync(new ListCitiesInput(pageSize: 10));
+foreach (var c in cities.Items.Values)
+    Console.WriteLine($"{c.CityId}: {c.Name}");
+
+var seattle = await client.GetCityAsync(new GetCityInput("SEA"));
+Console.WriteLine($"{seattle.Name} ({seattle.Coordinates.Latitude}, {seattle.Coordinates.Longitude})");
+
+var forecast = await client.GetForecastAsync(new GetForecastInput("SEA"));
+Console.WriteLine($"Chance of rain: {forecast.ChanceOfRain:P0}");
+```
 
 ## Related
 
