@@ -138,10 +138,26 @@ Once installed, the dependency can be added to any `smithy-build.json`:
 
 ### Publishing to a Remote Registry
 
-Upload the JAR, POM, and their `.md5`/`.sha1` checksums to your Maven registry
-(Maven Central, GitHub Packages, Artifactory, etc.) following that registry's
-deployment procedure. The checksum files satisfy Maven's artifact integrity
-requirements out of the box.
+Use the `dotnet-nsmithy push` tool to upload the JAR, POM, and checksums to any
+Maven registry that accepts HTTP PUT (GitHub Packages, Artifactory, Nexus, etc.):
+
+```shell
+dotnet tool install -g dotnet-nsmithy
+
+dotnet nsmithy push bin/Release \
+  --registry https://maven.pkg.github.com/ORG/REPO \
+  --username $GITHUB_ACTOR \
+  --token    $GITHUB_TOKEN
+```
+
+`push` reads `SmithyMavenGroupId`, `SmithyMavenArtifactId`, and the version
+from the `.csproj` automatically, so no extra flags are needed if you run it
+from the project directory. Credentials can also be provided via the
+`MAVEN_USERNAME` / `MAVEN_TOKEN` environment variables.
+
+For Maven Central, follow Sonatype's deployment procedure — `push` targets
+registries that accept direct HTTP PUT; the Central Portal's bundle-upload flow
+requires a different approach.
 
 ## Related
 
