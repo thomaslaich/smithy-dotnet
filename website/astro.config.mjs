@@ -39,11 +39,9 @@ export default defineConfig({
 				{
 					label: 'Guides',
 					items: [
-						{ label: 'simpleRestJson', slug: 'guides/simple-rest-json' },
-						{ label: 'gRPC', slug: 'guides/grpc' },
-						{ label: 'AWS Protocols', slug: 'guides/cbor-xml' },
 						{ label: 'Multi-Protocol', slug: 'guides/multi-protocol' },
-						{ label: 'dotnet nsmithy CLI', slug: 'guides/cli' },
+						{ label: 'Contracts Project', slug: 'guides/contracts-project' },
+						{ label: 'Distributing Contracts', slug: 'guides/distributing-contracts' },
 					],
 				},
 				{
@@ -58,6 +56,10 @@ export default defineConfig({
 					label: 'Protocols',
 					items: [
 						{ label: 'Protocol Status', slug: 'protocols' },
+						{ label: 'REST JSON', slug: 'protocols/simple-rest-json' },
+						{ label: 'gRPC', slug: 'protocols/grpc' },
+						{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor' },
+						{ label: 'REST XML', slug: 'protocols/rest-xml' },
 						{ label: 'Conformance Tests', slug: 'protocols/conformance' },
 					],
 				},

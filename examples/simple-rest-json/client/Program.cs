@@ -1,16 +1,23 @@
-using Example.Hello;
+using Example.Weather;
 using NSmithy.Client;
 
 var endpoint = args.Length > 0 ? args[0] : "http://localhost:5000";
-var name = args.Length > 1 ? args[1] : "world";
 
-var client = new HelloServiceClient(
+var client = new WeatherClient(
     new HttpClient(),
     new SmithyClientOptions { Endpoint = new Uri(endpoint) }
 );
 
-var hello = await client.SayHelloAsync(new SayHelloInput(name));
-Console.WriteLine($"SayHello => {hello.Message} from {hello.From}");
+var time = await client.GetCurrentTimeAsync(new GetCurrentTimeInput());
+Console.WriteLine($"Current time: {time.Time}");
 
-var ping = await client.PingAsync(new PingInput(name));
-Console.WriteLine($"Ping => {ping.Message} from {ping.From}");
+var cities = await client.ListCitiesAsync(new ListCitiesInput(pageSize: 10));
+Console.WriteLine($"Cities ({cities.Items.Values.Count}):");
+foreach (var c in cities.Items.Values)
+    Console.WriteLine($"  {c.CityId}: {c.Name}");
+
+var seattle = await client.GetCityAsync(new GetCityInput("SEA"));
+Console.WriteLine($"Seattle: ({seattle.Coordinates.Latitude}, {seattle.Coordinates.Longitude})");
+
+var forecast = await client.GetForecastAsync(new GetForecastInput("SEA"));
+Console.WriteLine($"Forecast for SEA: {forecast.ChanceOfRain:P0} chance of rain");

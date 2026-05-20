@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    Default code-generation flags for projects that consume a Smithy service as a client.
+    Client stubs are on; server stubs are off unless the user explicitly opts in.
+    Override in your .csproj PropertyGroup if you need both.
+  -->
+  <PropertyGroup>
+    <SmithyGenerateClient Condition="'$(SmithyGenerateClient)' == ''">true</SmithyGenerateClient>
+    <SmithyGenerateServer Condition="'$(SmithyGenerateServer)' == ''">false</SmithyGenerateServer>
+  </PropertyGroup>
+</Project>

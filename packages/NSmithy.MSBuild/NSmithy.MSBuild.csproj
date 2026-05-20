@@ -1,16 +1,39 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!--
+      Put the task assembly in tasks/{tfm}/ rather than lib/{tfm}/ so consumers
+      do not get it as a compile-time reference — it is a build tool, not a library.
+    -->
+    <BuildOutputTargetFolder>tasks</BuildOutputTargetFolder>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      MSBuild.* are compile-time only. Do NOT bundle them alongside the task DLL:
+      MSBuild's MSBuildLoadContext routes them to the host process's default ALC via its
+      well-known-assembly exclusion. Bundling creates a second copy in the plugin ALC,
+      splitting the ITask type identity and causing MSB4062.
+    -->
+    <PackageReference Include="Microsoft.Build.Framework" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" PrivateAssets="all" />
+
+    <!--
+      build/ props: auto-imported for direct consumers only (projects that explicitly
+      reference NSmithy.MSBuild). Sets SmithySources default and other opt-in defaults.
+    -->
     <None
-      Include="Targets/NSmithy.MSBuild.targets"
+      Include="Targets/NSmithy.MSBuild.props"
       Pack="true"
-      PackagePath="build/NSmithy.MSBuild.targets"
+      PackagePath="build/NSmithy.MSBuild.props"
     />
+
+    <!--
+      buildTransitive/ targets: auto-imported for every project that has NSmithy.MSBuild
+      anywhere in its NuGet dependency tree — including server/client projects that get
+      it transitively via NSmithy.Server or NSmithy.Client.
+    -->
     <None
       Include="Targets/NSmithy.MSBuild.targets"
       Pack="true"

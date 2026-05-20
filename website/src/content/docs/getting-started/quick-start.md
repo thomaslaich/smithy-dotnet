@@ -8,29 +8,24 @@ environment. If not, see [Environment Setup](/smithy-dotnet/getting-started/envi
 
 ## Configure The Project
 
-Add the following to your `.csproj`. The single `ItemGroup` covers both clients
-and servers — remove the server packages if you only need generated clients.
+Add the following to your `.csproj`. The codegen MSBuild targets are pulled in
+automatically via `NSmithy.Server.AspNetCore` and `NSmithy.Client` — no
+separate `NSmithy.MSBuild` reference is needed.
 
 ```xml
 <ItemGroup>
-  <!-- code generation (build-time only) -->
-  <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.8" PrivateAssets="all" />
+  <!-- client -->
+  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.9" />
 
-  <!-- core runtime (always required) -->
-  <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.8" />
-  <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.8" />
-  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.8" />
-  <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.8" />
-
-  <!-- server runtime (only needed for generated ASP.NET Core servers) -->
+  <!-- server (ASP.NET Core) -->
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.8" />
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.8" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.9" />
 </ItemGroup>
 ```
 
-NSmithy.MSBuild picks up the `smithy-build.json` next to the `.csproj`
-automatically — no additional MSBuild properties are needed for basic use.
+Remove the server lines if you only need a generated client.
+
+The `smithy-build.json` next to the `.csproj` is picked up automatically.
 See the [MSBuild reference](/smithy-dotnet/reference/msbuild/) for the full property list.
 
 ## Add A Model
@@ -44,7 +39,7 @@ Add a `smithy-build.json` next to your `.csproj`:
   "maven": {
     "dependencies": [
       "com.disneystreaming.alloy:alloy-core:0.3.38",
-      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.8"
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.9"
     ]
   },
   "plugins": {
@@ -132,7 +127,7 @@ internal sealed class HelloHandler : IHelloServiceHandler
 
 ## Next Steps
 
-- [Minimal pixi example](https://github.com/thomaslaich/smithy-dotnet-minimal-pixi) — a standalone repo with everything wired up
+- [simple-rest-json example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/simple-rest-json) — a full working example with pixi environment
 - [MSBuild Reference](/smithy-dotnet/reference/msbuild/) — all MSBuild properties and items for `NSmithy.MSBuild`
 - [Multi-Protocol](/smithy-dotnet/guides/multi-protocol/) — expose one service over both HTTP and gRPC
 - [Protocol Status](/smithy-dotnet/protocols/) — what protocols are supported and at what stage

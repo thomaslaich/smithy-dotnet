@@ -22,7 +22,7 @@ in order to make code generation as seamless as possible.
 
 ## Quick Start
 
-The fastest way to try NSmithy is with the [smithy-dotnet-minimal-pixi](https://github.com/thomaslaich/smithy-dotnet-minimal-pixi) example. It shows a minimal project using NSmithy and [pixi](https://pixi.sh) for environment management.
+The fastest way to try NSmithy is with the [simple-rest-json](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/simple-rest-json) example. It shows a minimal project using NSmithy and [pixi](https://pixi.sh) for environment management.
 
 ## Development
 

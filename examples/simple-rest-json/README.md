@@ -1,19 +1,20 @@
 # NSmithy simpleRestJson Example
 
-This example uses NSmithy for both sides of an `alloy#simpleRestJson` HTTP
-API:
+A Weather service built with `alloy#simpleRestJson`. The model is adapted from
+the [Smithy quickstart](https://smithy.io/2.0/quickstart.html) and demonstrates
+resources, pagination, errors, and HTTP binding traits.
 
-- `server`: generated ASP.NET Core endpoints and a handwritten
-  `IHelloServiceHandler` implementation.
+- `contracts`: the Smithy model, packaged as a contracts project.
+- `server`: generated ASP.NET Core endpoints with a handwritten `IWeatherServiceHandler` implementation.
 - `client`: generated typed client that calls the server.
 
-The model includes a small local definition of `alloy#simpleRestJson` so the
-Smithy CLI can validate the example without downloading extra Smithy model
-dependencies.
+The server and client reference the contracts project directly. No
+`smithy-build.json` is needed — NSmithy synthesizes one from the model sources
+and Maven dependencies declared in the contracts project.
 
 ## Run
 
-From the repository root, create local packages:
+From the repository root, build and pack local packages:
 
 ```bash
 just build
@@ -21,33 +22,26 @@ just pack
 just refresh-examples
 ```
 
-`just refresh-examples` clears the example projects' local `NSmithy.*`
-package cache. This matters while developing with a fixed preview version,
-because NuGet otherwise keeps using the older extracted package contents.
-
 Start the server:
 
 ```bash
-cd examples/simple-rest-json/dotnet/server
-dotnet run --urls http://localhost:5000
+cd examples/simple-rest-json
+pixi shell  # not needed when using direnv
+dotnet run --project server --urls http://localhost:5000
 ```
 
 In another shell, run the client:
 
 ```bash
-cd examples/simple-rest-json/dotnet/client
-dotnet run -- http://localhost:5000 world
+cd examples/simple-rest-json
+dotnet run --project client -- http://localhost:5000
 ```
 
-You can also call the server directly:
+Or call the server directly:
 
 ```bash
-curl -i http://localhost:5000/hello/world
-curl -i -X POST http://localhost:5000/ping \
-  -H "Content-Type: application/json" \
-  -d '{"name":"world"}'
+curl -i http://localhost:5000/current-time
+curl -i http://localhost:5000/cities
+curl -i http://localhost:5000/cities/SEA
+curl -i http://localhost:5000/cities/SEA/forecast
 ```
-
-Current preview note: `simpleRestJson` services generate both client and server
-surfaces, so both example projects reference the client and server runtime
-packages.

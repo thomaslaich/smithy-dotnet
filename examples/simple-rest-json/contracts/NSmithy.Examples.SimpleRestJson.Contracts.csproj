@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionSuffix>SNAPSHOT</VersionSuffix>
+    <SmithyPublish>true</SmithyPublish>
+    <SmithyMavenGroupId>io.github.thomaslaich.nsmithy.examples</SmithyMavenGroupId>
+    <SmithyMavenArtifactId>simple-rest-json</SmithyMavenArtifactId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-SNAPSHOT" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <SmithyMavenDependency Include="com.disneystreaming.alloy:alloy-core:0.3.38" />
+    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-SNAPSHOT" />
+  </ItemGroup>
+</Project>

@@ -4,20 +4,17 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <RootNamespace></RootNamespace>
-    <SmithyBuildFile>../smithy-build.json</SmithyBuildFile>
-    <SmithyGeneratedNamespaces>example.hello</SmithyGeneratedNamespaces>
+    <SmithyService>example.weather#Weather</SmithyService>
+    <SmithyGeneratedNamespaces>example.weather</SmithyGeneratedNamespaces>
     <SmithyGenerateServer>false</SmithyGenerateServer>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="NSmithy.Client" Version="0.1.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.1.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Core" Version="0.1.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Http" Version="0.1.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-SNAPSHOT" PrivateAssets="all" />
+    <ProjectReference Include="../contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj" />
   </ItemGroup>
 </Project>
