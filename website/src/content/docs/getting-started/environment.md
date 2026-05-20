@@ -21,8 +21,8 @@ pixi shell
 Once the shell is active, `smithy` and `dotnet` are both on `PATH` and
 `JAVA_HOME` is set correctly.
 
-For a full working example see
-[smithy-dotnet-minimal-pixi](https://github.com/thomaslaich/smithy-dotnet-minimal-pixi).
+For a full working example see the
+[simple-rest-json example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/simple-rest-json).
 
 ## Using devenv
 
