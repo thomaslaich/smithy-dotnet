@@ -82,9 +82,29 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
 
     public void WriteLong(Schema schema, long value) => writer.WriteNumberValue(value);
 
-    public void WriteFloat(Schema schema, float value) => writer.WriteNumberValue(value);
+    public void WriteFloat(Schema schema, float value)
+    {
+        if (float.IsNaN(value))
+            writer.WriteStringValue("NaN");
+        else if (float.IsPositiveInfinity(value))
+            writer.WriteStringValue("Infinity");
+        else if (float.IsNegativeInfinity(value))
+            writer.WriteStringValue("-Infinity");
+        else
+            writer.WriteNumberValue(value);
+    }
 
-    public void WriteDouble(Schema schema, double value) => writer.WriteNumberValue(value);
+    public void WriteDouble(Schema schema, double value)
+    {
+        if (double.IsNaN(value))
+            writer.WriteStringValue("NaN");
+        else if (double.IsPositiveInfinity(value))
+            writer.WriteStringValue("Infinity");
+        else if (double.IsNegativeInfinity(value))
+            writer.WriteStringValue("-Infinity");
+        else
+            writer.WriteNumberValue(value);
+    }
 
     public void WriteBigInteger(Schema schema, BigInteger value) =>
         writer.WriteRawValue(
@@ -206,13 +226,27 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
         public void WriteFloat(Schema schema, float value)
         {
             WritePropertyName(schema);
-            writer.WriteNumberValue(value);
+            if (float.IsNaN(value))
+                writer.WriteStringValue("NaN");
+            else if (float.IsPositiveInfinity(value))
+                writer.WriteStringValue("Infinity");
+            else if (float.IsNegativeInfinity(value))
+                writer.WriteStringValue("-Infinity");
+            else
+                writer.WriteNumberValue(value);
         }
 
         public void WriteDouble(Schema schema, double value)
         {
             WritePropertyName(schema);
-            writer.WriteNumberValue(value);
+            if (double.IsNaN(value))
+                writer.WriteStringValue("NaN");
+            else if (double.IsPositiveInfinity(value))
+                writer.WriteStringValue("Infinity");
+            else if (double.IsNegativeInfinity(value))
+                writer.WriteStringValue("-Infinity");
+            else
+                writer.WriteNumberValue(value);
         }
 
         public void WriteBigInteger(Schema schema, BigInteger value)
@@ -280,8 +314,9 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
 
     private static string GetTimestampFormat(Schema schema)
     {
-        var trait = schema.GetTrait(JsonTraits.TimestampFormat);
-        return trait?.Value.AsString() ?? "date-time";
+        var trait = schema.GetTrait(JsonTraits.TimestampFormat)
+            ?? schema.Target?.GetTrait(JsonTraits.TimestampFormat);
+        return trait?.Value.AsString() ?? "epoch-seconds";
     }
 
     private static string FormatDateTime(DateTimeOffset value)

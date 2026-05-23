@@ -115,7 +115,7 @@ public final class SchemaGenerator {
           memberSchemaFieldName(member),
           shapeIdExpr(member.getId()),
           memberTargetExpr(context, member),
-          traitsExpr(member.getAllTraits().values()));
+          memberTraitsExpr(context, member));
     }
     writer.write("");
     writer.write(
@@ -138,7 +138,7 @@ public final class SchemaGenerator {
         "private static readonly Schema MemberSchema = Schema.CreateMember($L, () => $L, $L);",
         shapeIdExpr(shape.getMember().getId()),
         shapeSchemaAccessor(context, memberTarget),
-        traitsExpr(shape.getMember().getAllTraits().values()));
+        memberTraitsExpr(context, shape.getMember()));
     writer.write("");
     writer.write(
         "public static Schema Schema { get; } = Schema.Create$L($L, MemberSchema, $L);",
@@ -158,12 +158,12 @@ public final class SchemaGenerator {
         "private static readonly Schema KeySchema = Schema.CreateMember($L, () => $L, $L);",
         shapeIdExpr(shape.getKey().getId()),
         shapeSchemaAccessor(context, keyTarget),
-        traitsExpr(shape.getKey().getAllTraits().values()));
+        memberTraitsExpr(context, shape.getKey()));
     writer.write(
         "private static readonly Schema ValueSchema = Schema.CreateMember($L, () => $L, $L);",
         shapeIdExpr(shape.getValue().getId()),
         shapeSchemaAccessor(context, valueTarget),
-        traitsExpr(shape.getValue().getAllTraits().values()));
+        memberTraitsExpr(context, shape.getValue()));
     writer.write("");
     writer.write(
         "public static Schema Schema { get; } = Schema.CreateMap($L, KeySchema, ValueSchema, $L);",
@@ -188,7 +188,7 @@ public final class SchemaGenerator {
         + ", () => "
         + memberTargetExpr(context, member)
         + ", "
-        + traitsExpr(member.getAllTraits().values())
+        + memberTraitsExpr(context, member)
         + ")";
   }
 
@@ -199,6 +199,42 @@ public final class SchemaGenerator {
   private static String memberTargetExpr(GenerationContext context, MemberShape member) {
     Shape target = context.model().expectShape(member.getTarget());
     return shapeSchemaAccessor(context, target);
+  }
+
+  private static String memberTraitsExpr(GenerationContext context, MemberShape member) {
+    List<Trait> traits = new ArrayList<>(member.getAllTraits().values());
+    Shape target = context.model().expectShape(member.getTarget());
+    if (shouldInlineTargetTraits(target)) {
+      for (Trait trait : target.getAllTraits().values()) {
+        if (traits.stream().noneMatch(existing -> existing.toShapeId().equals(trait.toShapeId()))) {
+          traits.add(trait);
+        }
+      }
+    }
+    return traitsExpr(traits);
+  }
+
+  private static boolean shouldInlineTargetTraits(Shape target) {
+    if ("smithy.api".equals(target.getId().getNamespace())) {
+      return false;
+    }
+
+    return switch (target.getType()) {
+      case BOOLEAN,
+          BYTE,
+          SHORT,
+          INTEGER,
+          LONG,
+          FLOAT,
+          DOUBLE,
+          BIG_INTEGER,
+          BIG_DECIMAL,
+          STRING,
+          BLOB,
+          TIMESTAMP,
+          DOCUMENT -> true;
+      default -> false;
+    };
   }
 
   private static String documentExpr(Node node) {

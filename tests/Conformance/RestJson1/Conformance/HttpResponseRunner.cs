@@ -392,6 +392,37 @@ internal static class ResponseAssertions
             return;
         }
 
+        // byte[] implements IEnumerable<byte> but must be compared as a base64 blob.
+        if (actual is byte[] bytes)
+        {
+            var base64 = (string?)expected;
+            byte[] expectedBytes;
+            if (string.IsNullOrEmpty(base64))
+            {
+                expectedBytes = [];
+            }
+            else
+            {
+                try
+                {
+                    expectedBytes = Convert.FromBase64String(base64);
+                }
+                catch (FormatException)
+                {
+                    // Raw payload/blob protocol tests often express the expected body as plain text.
+                    expectedBytes = System.Text.Encoding.UTF8.GetBytes(base64);
+                }
+            }
+            Assert.Equal(expectedBytes, bytes);
+            return;
+        }
+
+        if (actual is Document document)
+        {
+            AssertJsonEqual(expected, DocumentToJson(document), path);
+            return;
+        }
+
         // Plain enumerable (used for IReadOnlyList<T> directly bound on a structure member).
         if (
             actual is IEnumerable seq
@@ -458,9 +489,79 @@ internal static class ResponseAssertions
     {
         var arr = expected.AsArray();
         var actualList = actual.Cast<object?>().ToArray();
+        if (
+            arr.Count == 0
+            && actualList.Length == 1
+            && actualList[0] is string empty
+            && empty.Length == 0
+        )
+        {
+            actualList = [];
+        }
         Assert.Equal(arr.Count, actualList.Length);
         for (var i = 0; i < arr.Count; i++)
             AssertEqual(arr[i], actualList[i], $"{path}[{i}]");
+    }
+
+    private static JsonNode? DocumentToJson(Document document) =>
+        document.Kind switch
+        {
+            DocumentKind.Null => null,
+            DocumentKind.Boolean => JsonValue.Create(document.AsBoolean()),
+            DocumentKind.String => JsonValue.Create(document.AsString()),
+            DocumentKind.Number => JsonValue.Create(document.AsNumber()),
+            DocumentKind.Array => new JsonArray(document.AsArray().Select(DocumentToJson).ToArray()),
+            DocumentKind.Object => new JsonObject(
+                document.AsObject().ToDictionary(kv => kv.Key, kv => DocumentToJson(kv.Value))
+            ),
+            _ => throw new InvalidOperationException($"Unsupported document kind {document.Kind}."),
+        };
+
+    private static void AssertJsonEqual(JsonNode? expected, JsonNode? actual, string path)
+    {
+        if (expected is null || actual is null)
+        {
+            Assert.Equal(expected is null, actual is null);
+            return;
+        }
+        if (expected is JsonObject expectedObject && actual is JsonObject actualObject)
+        {
+            Assert.Equal(expectedObject.Count, actualObject.Count);
+            foreach (var (key, value) in expectedObject)
+            {
+                Assert.True(actualObject.TryGetPropertyValue(key, out var actualValue), $"[{path}] missing key '{key}'.");
+                AssertJsonEqual(value, actualValue, $"{path}.{key}");
+            }
+            return;
+        }
+        if (expected is JsonArray expectedArray && actual is JsonArray actualArray)
+        {
+            Assert.Equal(expectedArray.Count, actualArray.Count);
+            for (var i = 0; i < expectedArray.Count; i++)
+                AssertJsonEqual(expectedArray[i], actualArray[i], $"{path}[{i}]");
+            return;
+        }
+        if (expected is JsonValue expectedValue && actual is JsonValue actualValueNode)
+        {
+            if (expectedValue.TryGetValue<string>(out var expectedString))
+            {
+                Assert.Equal(expectedString, actualValueNode.ToString());
+                return;
+            }
+            if (expectedValue.TryGetValue<bool>(out var expectedBool))
+            {
+                Assert.True(actualValueNode.TryGetValue<bool>(out var actualBool));
+                Assert.Equal(expectedBool, actualBool);
+                return;
+            }
+            if (expectedValue.TryGetValue<decimal>(out var expectedDecimal))
+            {
+                Assert.True(actualValueNode.TryGetValue<decimal>(out var actualDecimal));
+                Assert.Equal(expectedDecimal, actualDecimal);
+                return;
+            }
+        }
+        Assert.Equal(expected.ToJsonString(), actual.ToJsonString());
     }
 
     private static System.Collections.IDictionary ToDictionary(object enumerableOrDictionary)
@@ -521,16 +622,60 @@ internal static class ResponseAssertions
             || actual is long
             || actual is short
             || actual is byte
+            || actual is sbyte
             || actual is float
             || actual is double
             || actual is decimal
         )
         {
-            var expectedNum = (double)expected!;
             var actualNum = Convert.ToDouble(
                 actual,
                 System.Globalization.CultureInfo.InvariantCulture
             );
+            // NaN and ±Infinity come as JSON strings in restJson1
+            if (expected.TryGetValue<string>(out var specialStr))
+            {
+                var expectedSpecial = specialStr switch
+                {
+                    "NaN" => double.NaN,
+                    "Infinity" => double.PositiveInfinity,
+                    "-Infinity" => double.NegativeInfinity,
+                    _ => double.Parse(
+                        specialStr,
+                        System.Globalization.CultureInfo.InvariantCulture
+                    ),
+                };
+                if (double.IsNaN(expectedSpecial))
+                    Assert.True(
+                        double.IsNaN(actualNum),
+                        $"[{path}] expected NaN, got {actualNum}."
+                    );
+                else if (double.IsPositiveInfinity(expectedSpecial))
+                    Assert.True(
+                        double.IsPositiveInfinity(actualNum),
+                        $"[{path}] expected Infinity, got {actualNum}."
+                    );
+                else if (double.IsNegativeInfinity(expectedSpecial))
+                    Assert.True(
+                        double.IsNegativeInfinity(actualNum),
+                        $"[{path}] expected -Infinity, got {actualNum}."
+                    );
+                else
+                    Assert.Equal(expectedSpecial, actualNum);
+                return;
+            }
+            var expectedNum = (double)expected!;
+            // float values lose precision when widened to double; compare at float precision.
+            if (actual is float f)
+            {
+                var expectedF = (float)expectedNum;
+                var tolerance = Math.Abs(expectedF) * 1e-6f + 1e-6f;
+                Assert.True(
+                    Math.Abs(f - expectedF) <= tolerance,
+                    $"[{path}] expected {expectedNum}, got {actualNum}."
+                );
+                return;
+            }
             Assert.True(
                 Math.Abs(actualNum - expectedNum) < 1e-9 || actualNum == expectedNum,
                 $"[{path}] expected {expectedNum}, got {actualNum}."

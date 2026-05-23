@@ -22,6 +22,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
+import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport.Kind;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
@@ -41,11 +42,14 @@ import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
+import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.model.traits.HttpHeaderTrait;
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait;
 import software.amazon.smithy.model.traits.HttpQueryTrait;
 import software.amazon.smithy.model.traits.HttpTrait;
+import software.amazon.smithy.model.traits.IdempotencyTokenTrait;
+import software.amazon.smithy.model.traits.InputTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -60,6 +64,7 @@ public final class ClientGenerator implements Runnable {
   private final boolean emitsGrpc;
   private final Kind kind;
   private final String runtime; // ProtocolSupport.runtimeProtocolType(kind)
+  private final boolean rawRestJsonStringPayloads;
 
   public ClientGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
@@ -69,6 +74,7 @@ public final class ClientGenerator implements Runnable {
     this.emitsGrpc = ProtocolSupport.isGrpcService(s);
     this.kind = emitsHttp ? ProtocolSupport.kindOf(s) : Kind.REST_JSON;
     this.runtime = ProtocolSupport.runtimeProtocolType(this.kind);
+    this.rawRestJsonStringPayloads = s.findTrait(TraitIds.REST_JSON_1).isPresent();
   }
 
   @Override
@@ -135,6 +141,7 @@ public final class ClientGenerator implements Runnable {
               ProtocolSupport.codecType(kind),
               ProtocolSupport.codecExpression(kind));
           writer.write("private readonly SmithyOperationInvoker invoker;");
+          writer.write("private readonly SmithyClientOptions options;");
           writer.write("");
           writer.write("public $L(System.Uri endpoint)", typeName);
           writer.write(
@@ -152,17 +159,25 @@ public final class ClientGenerator implements Runnable {
           writer.write(
               "    : this(new SmithyOperationInvoker(new HttpClientTransport(httpClient, (options"
                   + " ?? throw new System.ArgumentNullException(nameof(options))).Endpoint),"
-                  + " options.Middleware))");
+                  + " options.Middleware), options)");
           writer.write("{ }");
           writer.write("");
           writer.write("public $L(SmithyOperationInvoker invoker)", typeName);
+          writer.write("    : this(invoker, SmithyClientOptions.Default)");
+          writer.write("{ }");
+          writer.write("");
+          writer.write("public $L(SmithyOperationInvoker invoker, SmithyClientOptions options)", typeName);
           writer.openBlock(
               "{",
               "}",
-              () ->
-                  writer.write(
-                      "this.invoker = invoker ?? throw new"
-                          + " System.ArgumentNullException(nameof(invoker));"));
+              () -> {
+                writer.write(
+                    "this.invoker = invoker ?? throw new"
+                        + " System.ArgumentNullException(nameof(invoker));");
+                writer.write(
+                    "this.options = options ?? throw new"
+                        + " System.ArgumentNullException(nameof(options));");
+              });
           writer.write("");
 
           for (OperationShape op : operations) writeOperationMethod(sp, model, op);
@@ -258,7 +273,7 @@ public final class ClientGenerator implements Runnable {
                               writer.write(
                                   "request.Content = $L;",
                                   serializePayloadExpression(pm, "payloadValue"));
-                              writer.write("request.ContentType = DocumentCodec.MediaType;");
+                              writer.write("request.ContentType = $L;", payloadContentType(pm));
                             });
                       });
                 } else {
@@ -275,7 +290,7 @@ public final class ClientGenerator implements Runnable {
                         writer.write(
                             "request.Content = $L;",
                             serializePayloadExpression(pm, "input." + prop));
-                        writer.write("request.ContentType = DocumentCodec.MediaType;");
+                        writer.write("request.ContentType = $L;", payloadContentType(pm));
                       });
                 }
               } else {
@@ -288,12 +303,24 @@ public final class ClientGenerator implements Runnable {
                         writer.write(
                             "request.Content = $L;",
                             serializePayloadExpression(pm, "payloadValue"));
-                        writer.write("request.ContentType = DocumentCodec.MediaType;");
+                        writer.write("request.ContentType = $L;", payloadContentType(pm));
                       });
+                  if (isStructurePayload(pm)) {
+                    writer.write("else");
+                    writer.openBlock(
+                        "{",
+                        "}",
+                        () -> {
+                          writer.write(
+                              "request.Content = $L;",
+                              emptyPayloadExpression(pm));
+                          writer.write("request.ContentType = $L;", payloadContentType(pm));
+                        });
+                  }
                 } else {
                   writer.write(
                       "request.Content = $L;", serializePayloadExpression(pm, "input." + prop));
-                  writer.write("request.ContentType = DocumentCodec.MediaType;");
+                  writer.write("request.ContentType = $L;", payloadContentType(pm));
                 }
               }
             } else if (input != null && hasHttpBody(input)) {
@@ -337,32 +364,66 @@ public final class ClientGenerator implements Runnable {
           writer.write("var $L = input.$L;", varName, prop);
         }
         writer.write(
-            "requestUriBuilder.Replace($L, $L.EscapeGreedyLabel($L));",
+            "requestUriBuilder.Replace($L, $L.EscapeGreedyLabel($L, $L));",
             CSharpNaming.formatString("{" + m.getMemberName() + "+}"),
             runtime,
+            SchemaGenerator.memberSchemaExpr(context, m),
             varName);
         writer.write(
             "requestUriBuilder.Replace($L,"
-                + " System.Uri.EscapeDataString($L.FormatHttpValue($L)));",
+                + " System.Uri.EscapeDataString($L.FormatHttpValue($L, $L)));",
             CSharpNaming.formatString("{" + m.getMemberName() + "}"),
             runtime,
+            SchemaGenerator.memberSchemaExpr(context, m),
             varName);
       }
       for (MemberShape m : ShapeSupport.sortedMembers(input)) {
         if (!ShapeSupport.isHttpQuery(m)) continue;
         String qn = m.expectTrait(HttpQueryTrait.class).getValue();
-        writer.write(
-            "$L.AppendQuery(requestUriBuilder, $L, input.$L);",
-            runtime,
-            CSharpNaming.formatString(qn),
-            CSharpNaming.propertyName(m.getMemberName()));
+        String prop = CSharpNaming.propertyName(m.getMemberName());
+        if (m.hasTrait(IdempotencyTokenTrait.class)) {
+          String local = CSharpNaming.parameterName(m.getMemberName()) + "QueryValue";
+          writer.write(
+              "var $L = input.$L ?? options.IdempotencyTokenProvider();",
+              local,
+              prop);
+          writer.write(
+              "$L.AppendQuery(requestUriBuilder, $L, $L, $L);",
+              runtime,
+              CSharpNaming.formatString(qn),
+              SchemaGenerator.memberSchemaExpr(context, m),
+              local);
+        } else {
+          writer.write(
+              "$L.AppendQuery(requestUriBuilder, $L, $L, input.$L);",
+              runtime,
+              CSharpNaming.formatString(qn),
+              SchemaGenerator.memberSchemaExpr(context, m),
+              prop);
+        }
       }
+      List<String> explicitQueryNames =
+          ShapeSupport.sortedMembers(input).stream()
+              .filter(ShapeSupport::isHttpQuery)
+              .map(m -> m.expectTrait(HttpQueryTrait.class).getValue())
+              .sorted()
+              .collect(Collectors.toList());
       for (MemberShape m : ShapeSupport.sortedMembers(input)) {
         if (!ShapeSupport.isHttpQueryParams(m)) continue;
-        writer.write(
-            "$L.AppendQueryMap(requestUriBuilder, input.$L);",
-            runtime,
-            CSharpNaming.propertyName(m.getMemberName()));
+        if (explicitQueryNames.isEmpty()) {
+          writer.write(
+              "$L.AppendQueryMap(requestUriBuilder, input.$L);",
+              runtime,
+              CSharpNaming.propertyName(m.getMemberName()));
+        } else {
+          writer.write(
+              "$L.AppendQueryMap(requestUriBuilder, input.$L, new string[] { $L });",
+              runtime,
+              CSharpNaming.propertyName(m.getMemberName()),
+              explicitQueryNames.stream()
+                  .map(CSharpNaming::formatString)
+                  .collect(Collectors.joining(", ")));
+        }
       }
     }
     writer.write("var requestUri = requestUriBuilder.ToString();");
@@ -373,9 +434,10 @@ public final class ClientGenerator implements Runnable {
       if (ShapeSupport.isHttpHeader(m)) {
         String name = m.expectTrait(HttpHeaderTrait.class).getValue();
         writer.write(
-            "$L.AddHeader(request.Headers, $L, input.$L);",
+            "$L.AddHeader(request.Headers, $L, $L, input.$L);",
             runtime,
             CSharpNaming.formatString(name),
+            SchemaGenerator.memberSchemaExpr(context, m),
             CSharpNaming.propertyName(m.getMemberName()));
       } else if (ShapeSupport.isHttpPrefixHeaders(m)) {
         String prefix = m.expectTrait(HttpPrefixHeadersTrait.class).getValue();
@@ -464,12 +526,16 @@ public final class ClientGenerator implements Runnable {
               + memberType
               + ">(response.Headers, "
               + CSharpNaming.formatString(name)
+              + ", "
+              + SchemaGenerator.memberSchemaExpr(context, m)
               + ")"
           : runtime
               + ".GetHeader<"
               + memberType
               + ">(response.Headers, "
               + CSharpNaming.formatString(name)
+              + ", "
+              + SchemaGenerator.memberSchemaExpr(context, m)
               + ")";
     }
     if (ShapeSupport.isHttpPrefixHeaders(m)) {
@@ -519,14 +585,6 @@ public final class ClientGenerator implements Runnable {
         "{",
         "}",
         () -> {
-          writer.write("if (response.Content.Length == 0)");
-          writer.openBlock(
-              "{",
-              "}",
-              () ->
-                  writer.write(
-                      "return"
-                          + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);"));
           if (errorIds.isEmpty()) {
             writer.write("");
             writer.write(
@@ -568,6 +626,15 @@ public final class ClientGenerator implements Runnable {
               }
             }
             case REST_JSON -> {
+              writer.write("var errorType = $L.DeserializeErrorType(response);", runtime);
+              for (ShapeId errId : errorIds) {
+                StructureShape err = model.expectShape(errId, StructureShape.class);
+                writer.write("");
+                writer.write(
+                    "if (string.Equals(errorType, $L, System.StringComparison.Ordinal))",
+                    CSharpNaming.formatString(errId.getName()));
+                writer.openBlock("{", "}", () -> writeErrorReturn(sp, err));
+              }
               for (ShapeId errId : errorIds) {
                 StructureShape err = model.expectShape(errId, StructureShape.class);
                 Integer status = httpErrorCode(err);
@@ -664,6 +731,15 @@ public final class ClientGenerator implements Runnable {
 
   private String serializePayloadExpression(MemberShape member, String valueExpr) {
     Shape target = context.model().expectShape(member.getTarget());
+    if (target.getType() == ShapeType.BLOB) {
+      return valueExpr;
+    }
+    if (rawRestJsonStringPayloads && target.getType() == ShapeType.STRING) {
+      return "System.Text.Encoding.UTF8.GetBytes(" + valueExpr + ")";
+    }
+    if (rawRestJsonStringPayloads && target.getType() == ShapeType.ENUM) {
+      return "System.Text.Encoding.UTF8.GetBytes(" + valueExpr + ".ToString())";
+    }
     if (ShapeSupport.usesShapeSerde(target)) {
       return "DocumentCodec.Serialize(" + valueExpr + ")";
     }
@@ -674,6 +750,22 @@ public final class ClientGenerator implements Runnable {
 
   private String deserializePayloadExpression(MemberShape member, boolean required) {
     Shape target = context.model().expectShape(member.getTarget());
+    if (target.getType() == ShapeType.BLOB) {
+      return required ? "response.Content" : "response.Content.Length == 0 ? null : response.Content";
+    }
+    if (rawRestJsonStringPayloads && target.getType() == ShapeType.STRING) {
+      return required
+          ? "System.Text.Encoding.UTF8.GetString(response.Content)"
+          : "response.Content.Length == 0 ? null : System.Text.Encoding.UTF8.GetString(response.Content)";
+    }
+    if (rawRestJsonStringPayloads && target.getType() == ShapeType.ENUM) {
+      String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target));
+      return required
+          ? "new " + type + "(System.Text.Encoding.UTF8.GetString(response.Content))"
+          : "response.Content.Length == 0 ? null : new "
+              + type
+              + "(System.Text.Encoding.UTF8.GetString(response.Content))";
+    }
     if (ShapeSupport.usesShapeSerde(target)) {
       String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target));
       return required
@@ -691,8 +783,37 @@ public final class ClientGenerator implements Runnable {
             + ")";
   }
 
+  private String payloadContentType(MemberShape member) {
+    Shape target = context.model().expectShape(member.getTarget());
+    return switch (target.getType()) {
+      case BLOB -> CSharpNaming.formatString("application/octet-stream");
+      case STRING, ENUM ->
+          rawRestJsonStringPayloads
+              ? CSharpNaming.formatString("text/plain")
+              : "DocumentCodec.MediaType";
+      default -> "DocumentCodec.MediaType";
+    };
+  }
+
   private static String stripTrailingSemicolon(String statement) {
     return statement.endsWith(";") ? statement.substring(0, statement.length() - 1) : statement;
+  }
+
+  private boolean isBodyProjectionNullable(StructureShape shape, MemberShape member) {
+    return ShapeSupport.isNullable(member)
+        || (shape.hasTrait(InputTrait.class) && ShapeSupport.hasDefault(member));
+  }
+
+  private boolean isStructurePayload(MemberShape member) {
+    Shape target = context.model().expectShape(member.getTarget());
+    return kind == Kind.REST_JSON && target.getType() == ShapeType.STRUCTURE;
+  }
+
+  private String emptyPayloadExpression(MemberShape member) {
+    String type =
+        CSharpSymbolProvider.qualified(
+            context.symbolProvider().toSymbol(context.model().expectShape(member.getTarget())));
+    return "DocumentCodec.Serialize(new " + type + "())";
   }
 
   // ---------------- body projection types ----------------
@@ -753,7 +874,7 @@ public final class ClientGenerator implements Runnable {
               () -> {
                 for (int i = 0; i < bodyMembers.size(); i++) {
                   MemberShape m = bodyMembers.get(i);
-                  String type = ShapeSupport.memberTypeExpr(sp, m, ShapeSupport.isNullable(m));
+                  String type = ShapeSupport.memberTypeExpr(sp, m, isBodyProjectionNullable(shape, m));
                   writer.write(
                       "$L $L$L",
                       type,
@@ -772,7 +893,7 @@ public final class ClientGenerator implements Runnable {
           writer.write("}");
           writer.write("");
           for (MemberShape m : bodyMembers) {
-            String type = ShapeSupport.memberTypeExpr(sp, m, ShapeSupport.isNullable(m));
+            String type = ShapeSupport.memberTypeExpr(sp, m, isBodyProjectionNullable(shape, m));
             writer.write(
                 "public $L $L { get; }", type, CSharpNaming.propertyName(m.getMemberName()));
             writer.write("");
@@ -795,7 +916,7 @@ public final class ClientGenerator implements Runnable {
                   String prop = CSharpNaming.propertyName(m.getMemberName());
                   String schema = SchemaGenerator.memberSchemaFieldName(m);
                   Shape target = context.model().expectShape(m.getTarget());
-                  if (ShapeSupport.isNullable(m)) {
+                  if (isBodyProjectionNullable(shape, m)) {
                     String local = CSharpNaming.parameterName(m.getMemberName());
                     writer.write("if ($L is { } $L)", prop, local);
                     writer.openBlock(
@@ -872,19 +993,20 @@ public final class ClientGenerator implements Runnable {
                 writer.write(
                     "return new $L($L);",
                     typeName,
-                    bodyProjectionConstructorArguments(bodyMembers));
+                    bodyProjectionConstructorArguments(shape, bodyMembers));
               });
         });
     writer.write("");
   }
 
-  private String bodyProjectionConstructorArguments(List<MemberShape> bodyMembers) {
+  private String bodyProjectionConstructorArguments(
+      StructureShape shape, List<MemberShape> bodyMembers) {
     List<String> args = new ArrayList<>();
     for (MemberShape m : bodyMembers) {
       String local = CSharpNaming.parameterName(m.getMemberName());
       String defaultExpr =
           ShapeSupport.defaultValueExpression(context.model(), context.symbolProvider(), m);
-      if (defaultExpr != null) {
+      if (defaultExpr != null && !isBodyProjectionNullable(shape, m)) {
         args.add(local + " ?? " + defaultExpr);
       } else if (ShapeSupport.isOptionalParameter(m)) {
         args.add(local);

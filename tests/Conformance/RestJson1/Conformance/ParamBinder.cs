@@ -40,12 +40,51 @@ internal static class ParamBinder
             return (short)value!;
         if (targetType == typeof(byte))
             return (byte)value!;
+        if (targetType == typeof(sbyte))
+            return (sbyte)value!;
+        if (targetType == typeof(byte[]))
+        {
+            var text = (string)value!;
+            try
+            {
+                return Convert.FromBase64String(text);
+            }
+            catch (FormatException)
+            {
+                // Raw HTTP payload/blob test inputs use literal text rather than base64.
+                return System.Text.Encoding.UTF8.GetBytes(text);
+            }
+        }
         if (targetType == typeof(float))
+        {
+            var raw = value!.AsValue();
+            if (raw.TryGetValue<string>(out var floatStr))
+                return floatStr switch
+                {
+                    "NaN" => float.NaN,
+                    "Infinity" => float.PositiveInfinity,
+                    "-Infinity" => float.NegativeInfinity,
+                    _ => float.Parse(floatStr, System.Globalization.CultureInfo.InvariantCulture),
+                };
             return (float)value!;
+        }
         if (targetType == typeof(double))
+        {
+            var raw = value!.AsValue();
+            if (raw.TryGetValue<string>(out var dblStr))
+                return dblStr switch
+                {
+                    "NaN" => double.NaN,
+                    "Infinity" => double.PositiveInfinity,
+                    "-Infinity" => double.NegativeInfinity,
+                    _ => double.Parse(dblStr, System.Globalization.CultureInfo.InvariantCulture),
+                };
             return (double)value!;
+        }
         if (targetType == typeof(decimal))
             return (decimal)value!;
+        if (targetType == typeof(Document))
+            return BindDocument(value);
 
         if (targetType == typeof(DateTimeOffset))
             return BindDateTimeOffset(value);
@@ -195,6 +234,30 @@ internal static class ParamBinder
         return def == typeof(IReadOnlyDictionary<,>)
             || def == typeof(IDictionary<,>)
             || def == typeof(Dictionary<,>);
+    }
+
+    private static Document BindDocument(JsonNode value)
+    {
+        if (value is JsonValue scalar)
+        {
+            if (scalar.TryGetValue<string>(out var s))
+                return Document.From(s);
+            if (scalar.TryGetValue<bool>(out var b))
+                return Document.From(b);
+            if (scalar.TryGetValue<decimal>(out var d))
+                return Document.From(d);
+            if (scalar.TryGetValue<double>(out var dbl))
+                return Document.From((decimal)dbl);
+        }
+        if (value is JsonArray array)
+            return Document.From(array.Select(item => BindDocument(item!)));
+        if (value is JsonObject obj)
+        {
+            return Document.From(
+                obj.ToDictionary(kv => kv.Key, kv => BindDocument(kv.Value!), StringComparer.Ordinal)
+            );
+        }
+        return Document.Null;
     }
 
     private static object BindStructure(Type type, JsonNode value)

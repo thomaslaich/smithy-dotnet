@@ -143,9 +143,27 @@ internal sealed class JsonShapeDeserializer : IShapeDeserializer
 
     public long ReadLong(Schema schema) => current.GetInt64();
 
-    public float ReadFloat(Schema schema) => current.GetSingle();
+    public float ReadFloat(Schema schema) =>
+        current.ValueKind == JsonValueKind.String
+            ? current.GetString() switch
+            {
+                "NaN" => float.NaN,
+                "Infinity" => float.PositiveInfinity,
+                "-Infinity" => float.NegativeInfinity,
+                var s => float.Parse(s!, CultureInfo.InvariantCulture),
+            }
+            : current.GetSingle();
 
-    public double ReadDouble(Schema schema) => current.GetDouble();
+    public double ReadDouble(Schema schema) =>
+        current.ValueKind == JsonValueKind.String
+            ? current.GetString() switch
+            {
+                "NaN" => double.NaN,
+                "Infinity" => double.PositiveInfinity,
+                "-Infinity" => double.NegativeInfinity,
+                var s => double.Parse(s!, CultureInfo.InvariantCulture),
+            }
+            : current.GetDouble();
 
     public BigInteger ReadBigInteger(Schema schema) =>
         BigInteger.Parse(current.GetRawText(), CultureInfo.InvariantCulture);
@@ -220,8 +238,9 @@ internal sealed class JsonShapeDeserializer : IShapeDeserializer
 
     private static string GetTimestampFormat(Schema schema)
     {
-        var trait = schema.GetTrait(JsonTraits.TimestampFormat);
-        return trait?.Value.AsString() ?? "date-time";
+        var trait = schema.GetTrait(JsonTraits.TimestampFormat)
+            ?? schema.Target?.GetTrait(JsonTraits.TimestampFormat);
+        return trait?.Value.AsString() ?? "epoch-seconds";
     }
 
     private DateTimeOffset ReadEpochSecondsTimestamp()

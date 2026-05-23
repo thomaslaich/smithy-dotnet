@@ -18,6 +18,7 @@ namespace SimpleRestJson.Conformance;
 internal static class HttpRequestRunner
 {
     private static readonly Uri Endpoint = new("http://localhost");
+    private const string DefaultIdempotencyToken = "00000000-0000-4000-8000-000000000000";
 
     /// <summary>
     /// Generated client types in the test assembly. We discover these once via reflection so the
@@ -69,7 +70,11 @@ internal static class HttpRequestRunner
         var client = Activator.CreateInstance(
             clientType,
             httpClient,
-            new SmithyClientOptions { Endpoint = Endpoint }
+            new SmithyClientOptions
+            {
+                Endpoint = Endpoint,
+                IdempotencyTokenProvider = static () => DefaultIdempotencyToken,
+            }
         )!;
 
         try

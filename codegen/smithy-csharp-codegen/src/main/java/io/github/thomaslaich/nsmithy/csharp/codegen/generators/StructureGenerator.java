@@ -17,6 +17,7 @@ import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.StructureShape;
+import software.amazon.smithy.model.traits.InputTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -102,9 +103,9 @@ public final class StructureGenerator implements Runnable {
             String prop = CSharpNaming.propertyName(m.getMemberName());
             String param = CSharpNaming.parameterName(m.getMemberName());
             String defaultExpr = ShapeSupport.defaultValueExpression(model, sp, m);
-            if (defaultExpr != null) {
+            if (defaultExpr != null && !isInputDefaultMember(m)) {
               writer.write("$L = $L ?? $L;", prop, param, defaultExpr);
-            } else if (!ShapeSupport.isNullable(m) && ShapeSupport.isReferenceType(model, m)) {
+            } else if (!isTreatAsNullable(m) && ShapeSupport.isReferenceType(model, m)) {
               writer.write(
                   "$L = $L ?? throw new System.ArgumentNullException(nameof($L));",
                   prop,
@@ -121,7 +122,7 @@ public final class StructureGenerator implements Runnable {
   private void writeProperties(SymbolProvider sp, Model model) {
     for (MemberShape m : ShapeSupport.sortedMembers(shape)) {
       String prop = CSharpNaming.propertyName(m.getMemberName());
-      boolean nullable = ShapeSupport.isNullable(m);
+      boolean nullable = isTreatAsNullable(m);
       String type = ShapeSupport.memberTypeExpr(sp, m, nullable);
       writer.write("public $L $L { get; }", type, prop);
     }
@@ -139,7 +140,7 @@ public final class StructureGenerator implements Runnable {
             String prop = CSharpNaming.propertyName(member.getMemberName());
             String schema = SchemaGenerator.memberSchemaFieldName(member);
             Shape target = model.expectShape(member.getTarget());
-            if (ShapeSupport.isNullable(member)) {
+            if (isTreatAsNullable(member)) {
               String local = CSharpNaming.parameterName(member.getMemberName());
               writer.write("if ($L is { } $L)", prop, local);
               writer.openBlock(
@@ -242,6 +243,14 @@ public final class StructureGenerator implements Runnable {
 
   private String deserializationLocalType(SymbolProvider sp, MemberShape member) {
     return ShapeSupport.memberTypeExpr(sp, member, true);
+  }
+
+  private boolean isInputDefaultMember(MemberShape member) {
+    return shape.hasTrait(InputTrait.class) && ShapeSupport.hasDefault(member);
+  }
+
+  private boolean isTreatAsNullable(MemberShape member) {
+    return ShapeSupport.isNullable(member) || isInputDefaultMember(member);
   }
 
   private String writeValueStatement(

@@ -7,4 +7,7 @@ public sealed class SmithyClientOptions
     public Uri? Endpoint { get; init; }
 
     public IReadOnlyList<ISmithyClientMiddleware> Middleware { get; init; } = [];
+
+    public Func<string> IdempotencyTokenProvider { get; init; } = static () =>
+        Guid.NewGuid().ToString();
 }

@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
+    <ProjectReference Include="../NSmithy.Http/NSmithy.Http.csproj" />
   </ItemGroup>
 </Project>
