@@ -66,6 +66,11 @@ internal sealed class JsonShapeDeserializer : IShapeDeserializer
         ArgumentNullException.ThrowIfNull(schema);
         ArgumentNullException.ThrowIfNull(consumer.Member);
         EnsureKind(JsonValueKind.Object);
+        if (schema.Kind == ShapeKind.Union)
+        {
+            ReadUnionStruct(schema, state, consumer);
+            return;
+        }
         var saved = current;
         try
         {
@@ -223,6 +228,116 @@ internal sealed class JsonShapeDeserializer : IShapeDeserializer
         return null;
     }
 
+    private void ReadUnionStruct<TState>(
+        Schema schema,
+        TState state,
+        StructMemberConsumer<TState> consumer
+    )
+    {
+        var saved = current;
+        var jsonUnknownMember = schema.Members.FirstOrDefault(member =>
+            member.HasTrait(JsonTraits.JsonUnknown)
+        );
+        var discriminatorName = GetDiscriminatorName(schema);
+
+        if (discriminatorName is not null)
+        {
+            if (
+                saved.TryGetProperty(discriminatorName, out var discriminator)
+                && discriminator.ValueKind == JsonValueKind.String
+            )
+            {
+                var memberSchema = schema.GetMember(discriminator.GetString()!);
+                if (memberSchema is not null && !memberSchema.HasTrait(JsonTraits.JsonUnknown))
+                {
+                    using var payloadDocument = CreateObjectWithoutProperty(
+                        saved,
+                        discriminatorName
+                    );
+                    var previous = current;
+                    try
+                    {
+                        current = payloadDocument.RootElement;
+                        consumer.Member(state, memberSchema, this);
+                    }
+                    finally
+                    {
+                        current = previous;
+                    }
+
+                    return;
+                }
+            }
+
+            if (jsonUnknownMember is not null)
+            {
+                var previous = current;
+                try
+                {
+                    current = saved;
+                    consumer.Member(state, jsonUnknownMember, this);
+                }
+                finally
+                {
+                    current = previous;
+                }
+
+                return;
+            }
+        }
+
+        if (jsonUnknownMember is not null)
+        {
+            var properties = saved.EnumerateObject().ToArray();
+            if (properties.Length == 1)
+            {
+                var memberSchema = ResolveMember(schema, properties[0].Name);
+                if (memberSchema is not null && !memberSchema.HasTrait(JsonTraits.JsonUnknown))
+                {
+                    var previous = current;
+                    try
+                    {
+                        current = properties[0].Value;
+                        consumer.Member(state, memberSchema, this);
+                    }
+                    finally
+                    {
+                        current = previous;
+                    }
+
+                    return;
+                }
+
+                var old = current;
+                try
+                {
+                    current = saved;
+                    consumer.Member(state, jsonUnknownMember, this);
+                }
+                finally
+                {
+                    current = old;
+                }
+
+                return;
+            }
+        }
+
+        foreach (var property in saved.EnumerateObject())
+        {
+            var memberSchema = ResolveMember(schema, property.Name);
+            if (memberSchema is null)
+            {
+                current = property.Value;
+                consumer.UnknownMember?.Invoke(state, property.Name, this);
+                continue;
+            }
+
+            current = property.Value;
+            consumer.Member(state, memberSchema, this);
+        }
+    }
+
     private void EnsureKind(JsonValueKind expected)
     {
         if (current.ValueKind != expected)
@@ -238,9 +353,38 @@ internal sealed class JsonShapeDeserializer : IShapeDeserializer
 
     private static string GetTimestampFormat(Schema schema)
     {
-        var trait = schema.GetTrait(JsonTraits.TimestampFormat)
+        var trait =
+            schema.GetTrait(JsonTraits.TimestampFormat)
             ?? schema.Target?.GetTrait(JsonTraits.TimestampFormat);
         return trait?.Value.AsString() ?? "epoch-seconds";
+    }
+
+    private static string? GetDiscriminatorName(Schema schema)
+    {
+        return schema.GetTrait(JsonTraits.Discriminated)?.Value.AsString();
+    }
+
+    private static JsonDocument CreateObjectWithoutProperty(JsonElement value, string propertyName)
+    {
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            foreach (var property in value.EnumerateObject())
+            {
+                if (property.NameEquals(propertyName))
+                {
+                    continue;
+                }
+
+                writer.WritePropertyName(property.Name);
+                property.Value.WriteTo(writer);
+            }
+
+            writer.WriteEndObject();
+        }
+
+        return JsonDocument.Parse(buffer.ToArray());
     }
 
     private DateTimeOffset ReadEpochSecondsTimestamp()

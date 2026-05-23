@@ -232,7 +232,8 @@ public final class SchemaGenerator {
           STRING,
           BLOB,
           TIMESTAMP,
-          DOCUMENT -> true;
+          DOCUMENT ->
+          true;
       default -> false;
     };
   }

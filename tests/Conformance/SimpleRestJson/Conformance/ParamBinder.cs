@@ -51,6 +51,8 @@ internal static class ParamBinder
             return BindDateTimeOffset(value);
         if (targetType == typeof(DateTime))
             return BindDateTimeOffset(value).UtcDateTime;
+        if (targetType == typeof(Document))
+            return BindDocument(value);
 
         if (targetType.IsEnum)
             return BindIntEnum(targetType, value);
@@ -137,6 +139,33 @@ internal static class ParamBinder
         var inputType = factory.GetParameters()[0].ParameterType;
         var bound = Bind(inputType, inner);
         return factory.Invoke(null, [bound])!;
+    }
+
+    private static Document BindDocument(JsonNode? value)
+    {
+        return value switch
+        {
+            null => Document.Null,
+            JsonObject obj => Document.From(
+                obj.ToDictionary(kv => kv.Key, kv => BindDocument(kv.Value), StringComparer.Ordinal)
+            ),
+            JsonArray array => Document.From(array.Select(item => BindDocument(item))),
+            JsonValue scalar => BindDocumentScalar(scalar),
+            _ => throw new InvalidOperationException(
+                $"Unsupported document node {value.GetType()}."
+            ),
+        };
+    }
+
+    private static Document BindDocumentScalar(JsonValue value)
+    {
+        if (value.TryGetValue<string>(out var text))
+            return Document.From(text);
+        if (value.TryGetValue<bool>(out var boolean))
+            return Document.From(boolean);
+        if (value.TryGetValue<decimal>(out var number))
+            return Document.From(number);
+        return Document.Null;
     }
 
     private static object BindShapeList(Type listShape, JsonNode value)

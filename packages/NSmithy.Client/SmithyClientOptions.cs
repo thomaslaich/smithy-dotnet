@@ -8,6 +8,6 @@ public sealed class SmithyClientOptions
 
     public IReadOnlyList<ISmithyClientMiddleware> Middleware { get; init; } = [];
 
-    public Func<string> IdempotencyTokenProvider { get; init; } = static () =>
-        Guid.NewGuid().ToString();
+    public Func<string> IdempotencyTokenProvider { get; init; } =
+        static () => Guid.NewGuid().ToString();
 }

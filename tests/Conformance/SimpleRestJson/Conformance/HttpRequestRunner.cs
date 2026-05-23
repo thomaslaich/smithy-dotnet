@@ -168,6 +168,11 @@ internal static class RequestAssertions
     {
         var expectedBody = expected.Body ?? "";
         var actualBody = Encoding.UTF8.GetString(actual.Body);
+        if (expected.Id.Contains("PreserveKeyOrder", StringComparison.Ordinal))
+        {
+            Xunit.Assert.Equal(expectedBody, actualBody);
+            return;
+        }
         // Always prefer structural JSON comparison when both sides parse as JSON; fall back to
         // exact string equality (covers raw text payloads).
         if (TryParseJson(expectedBody, out var ej) && TryParseJson(actualBody, out var aj))

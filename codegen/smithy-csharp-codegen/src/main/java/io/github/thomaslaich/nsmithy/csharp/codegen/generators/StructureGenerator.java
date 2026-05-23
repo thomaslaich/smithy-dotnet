@@ -39,7 +39,7 @@ public final class StructureGenerator implements Runnable {
     writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     Model model = context.model();
     String typeName = CSharpNaming.typeName(shape.getId().getName());
-    List<MemberShape> members = ShapeSupport.sortedMembers(shape);
+    List<MemberShape> members = List.copyOf(shape.members());
 
     writer.write(
         "public sealed partial record class $L : ISerializableStruct, IDeserializableShape<$L>",
@@ -120,7 +120,7 @@ public final class StructureGenerator implements Runnable {
   }
 
   private void writeProperties(SymbolProvider sp, Model model) {
-    for (MemberShape m : ShapeSupport.sortedMembers(shape)) {
+    for (MemberShape m : shape.members()) {
       String prop = CSharpNaming.propertyName(m.getMemberName());
       boolean nullable = isTreatAsNullable(m);
       String type = ShapeSupport.memberTypeExpr(sp, m, nullable);

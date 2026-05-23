@@ -166,7 +166,8 @@ public final class ClientGenerator implements Runnable {
           writer.write("    : this(invoker, SmithyClientOptions.Default)");
           writer.write("{ }");
           writer.write("");
-          writer.write("public $L(SmithyOperationInvoker invoker, SmithyClientOptions options)", typeName);
+          writer.write(
+              "public $L(SmithyOperationInvoker invoker, SmithyClientOptions options)", typeName);
           writer.openBlock(
               "{",
               "}",
@@ -311,9 +312,7 @@ public final class ClientGenerator implements Runnable {
                         "{",
                         "}",
                         () -> {
-                          writer.write(
-                              "request.Content = $L;",
-                              emptyPayloadExpression(pm));
+                          writer.write("request.Content = $L;", emptyPayloadExpression(pm));
                           writer.write("request.ContentType = $L;", payloadContentType(pm));
                         });
                   }
@@ -383,10 +382,7 @@ public final class ClientGenerator implements Runnable {
         String prop = CSharpNaming.propertyName(m.getMemberName());
         if (m.hasTrait(IdempotencyTokenTrait.class)) {
           String local = CSharpNaming.parameterName(m.getMemberName()) + "QueryValue";
-          writer.write(
-              "var $L = input.$L ?? options.IdempotencyTokenProvider();",
-              local,
-              prop);
+          writer.write("var $L = input.$L ?? options.IdempotencyTokenProvider();", local, prop);
           writer.write(
               "$L.AppendQuery(requestUriBuilder, $L, $L, $L);",
               runtime,
@@ -456,9 +452,7 @@ public final class ClientGenerator implements Runnable {
 
   private void writeRequestBody(StructureShape input) {
     List<MemberShape> bodyMembers =
-        ShapeSupport.sortedMembers(input).stream()
-            .filter(ShapeSupport::isHttpBody)
-            .collect(Collectors.toList());
+        input.members().stream().filter(ShapeSupport::isHttpBody).collect(Collectors.toList());
     if (bodyMembers.isEmpty()) return;
     String bodyType = bodyProjectionName(input);
     writer.openBlock(
@@ -751,12 +745,15 @@ public final class ClientGenerator implements Runnable {
   private String deserializePayloadExpression(MemberShape member, boolean required) {
     Shape target = context.model().expectShape(member.getTarget());
     if (target.getType() == ShapeType.BLOB) {
-      return required ? "response.Content" : "response.Content.Length == 0 ? null : response.Content";
+      return required
+          ? "response.Content"
+          : "response.Content.Length == 0 ? null : response.Content";
     }
     if (rawRestJsonStringPayloads && target.getType() == ShapeType.STRING) {
       return required
           ? "System.Text.Encoding.UTF8.GetString(response.Content)"
-          : "response.Content.Length == 0 ? null : System.Text.Encoding.UTF8.GetString(response.Content)";
+          : "response.Content.Length == 0 ? null :"
+              + " System.Text.Encoding.UTF8.GetString(response.Content)";
     }
     if (rawRestJsonStringPayloads && target.getType() == ShapeType.ENUM) {
       String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target));
@@ -828,9 +825,7 @@ public final class ClientGenerator implements Runnable {
       if (!isUnit(op.getInputShape()) && emitted.add(op.getInputShape())) {
         StructureShape input = model.expectShape(op.getInputShape(), StructureShape.class);
         List<MemberShape> bodyMembers =
-            ShapeSupport.constructorMembers(input).stream()
-                .filter(ShapeSupport::isHttpBody)
-                .collect(Collectors.toList());
+            input.members().stream().filter(ShapeSupport::isHttpBody).collect(Collectors.toList());
         if (!bodyMembers.isEmpty()) writeBodyProjectionType(sp, input, bodyMembers);
       }
       if (!isUnit(op.getOutputShape()) && emitted.add(op.getOutputShape())) {
@@ -874,7 +869,8 @@ public final class ClientGenerator implements Runnable {
               () -> {
                 for (int i = 0; i < bodyMembers.size(); i++) {
                   MemberShape m = bodyMembers.get(i);
-                  String type = ShapeSupport.memberTypeExpr(sp, m, isBodyProjectionNullable(shape, m));
+                  String type =
+                      ShapeSupport.memberTypeExpr(sp, m, isBodyProjectionNullable(shape, m));
                   writer.write(
                       "$L $L$L",
                       type,
@@ -1034,7 +1030,7 @@ public final class ClientGenerator implements Runnable {
       case BIG_INTEGER -> serializerVar + ".WriteBigInteger(" + schemaVar + ", " + valueExpr + ");";
       case BIG_DECIMAL -> serializerVar + ".WriteBigDecimal(" + schemaVar + ", " + valueExpr + ");";
       case TIMESTAMP -> serializerVar + ".WriteTimestamp(" + schemaVar + ", " + valueExpr + ");";
-      case STRING -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
+      case STRING -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + "!);";
       case ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ".Value);";
       case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ");";
       case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + "!);";

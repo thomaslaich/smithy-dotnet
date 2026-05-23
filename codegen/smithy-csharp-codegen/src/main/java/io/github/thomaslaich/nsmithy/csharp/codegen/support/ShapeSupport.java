@@ -120,7 +120,8 @@ public final class ShapeSupport {
             switch (target.getType()) {
               case LIST -> target.asListShape().orElseThrow().getMember().getTarget();
               case SET -> target.asSetShape().orElseThrow().getMember().getTarget();
-              default -> throw new IllegalArgumentException("Expected list/set shape: " + target.getId());
+              default ->
+                  throw new IllegalArgumentException("Expected list/set shape: " + target.getId());
             });
     String elementType = CSharpSymbolProvider.qualified(sp.toSymbol(memberTarget));
     List<String> elements = new ArrayList<>();
@@ -154,7 +155,8 @@ public final class ShapeSupport {
             .append("> {");
     boolean first = true;
     for (var entry : node.expectObjectNode().getStringMap().entrySet()) {
-      String keyLiteral = defaultLiteral(software.amazon.smithy.model.node.Node.from(entry.getKey()));
+      String keyLiteral =
+          defaultLiteral(software.amazon.smithy.model.node.Node.from(entry.getKey()));
       String valueLiteral = literalForShape(model, sp, valueTarget, entry.getValue(), valueType);
       if (keyLiteral == null || valueLiteral == null) return null;
       if (!first) sb.append(", ");

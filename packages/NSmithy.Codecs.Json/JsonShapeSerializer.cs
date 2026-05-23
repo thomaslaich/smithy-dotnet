@@ -39,6 +39,12 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
     {
         ArgumentNullException.ThrowIfNull(schema);
         ArgumentNullException.ThrowIfNull(value);
+        var unionSchema = GetUnionSchema(schema);
+        if (unionSchema is not null)
+        {
+            WriteUnion(writer, unionSchema, value);
+            return;
+        }
         writer.WriteStartObject();
         var memberSerializer = new JsonStructMemberSerializer(writer);
         value.SerializeMembers(memberSerializer);
@@ -160,6 +166,12 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
         {
             ArgumentNullException.ThrowIfNull(value);
             WritePropertyName(schema);
+            var unionSchema = GetUnionSchema(schema);
+            if (unionSchema is not null)
+            {
+                WriteUnion(writer, unionSchema, value);
+                return;
+            }
             writer.WriteStartObject();
             value.SerializeMembers(new JsonStructMemberSerializer(writer));
             writer.WriteEndObject();
@@ -312,11 +324,55 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
             writer.WritePropertyName(JsonNameResolver.Resolve(memberSchema));
     }
 
+    private static void WriteUnion(Utf8JsonWriter writer, Schema schema, ISerializableStruct value)
+    {
+        var captured = UnionValueCaptureSerializer.Capture(value);
+        var discriminatorName = GetDiscriminatorName(schema);
+        if (discriminatorName is not null)
+        {
+            if (captured.Schema.HasTrait(JsonTraits.JsonUnknown))
+            {
+                captured.WriteValue(writer);
+                return;
+            }
+
+            writer.WriteStartObject();
+            writer.WriteString(discriminatorName, captured.Schema.MemberName);
+            captured.WriteFlattenedObject(writer);
+            writer.WriteEndObject();
+            return;
+        }
+
+        if (captured.Schema.HasTrait(JsonTraits.JsonUnknown))
+        {
+            captured.WriteValue(writer);
+            return;
+        }
+
+        writer.WriteStartObject();
+        writer.WritePropertyName(JsonNameResolver.Resolve(captured.Schema));
+        captured.WriteValue(writer);
+        writer.WriteEndObject();
+    }
+
     private static string GetTimestampFormat(Schema schema)
     {
-        var trait = schema.GetTrait(JsonTraits.TimestampFormat)
+        var trait =
+            schema.GetTrait(JsonTraits.TimestampFormat)
             ?? schema.Target?.GetTrait(JsonTraits.TimestampFormat);
         return trait?.Value.AsString() ?? "epoch-seconds";
+    }
+
+    private static string? GetDiscriminatorName(Schema schema)
+    {
+        return schema.GetTrait(JsonTraits.Discriminated)?.Value.AsString();
+    }
+
+    private static Schema? GetUnionSchema(Schema schema)
+    {
+        return schema.Kind == ShapeKind.Union ? schema
+            : schema.Target?.Kind == ShapeKind.Union ? schema.Target
+            : null;
     }
 
     private static string FormatDateTime(DateTimeOffset value)
@@ -339,5 +395,170 @@ internal sealed class JsonShapeSerializer : IShapeSerializer
             (value.ToUniversalTime().Ticks - DateTimeOffset.UnixEpoch.Ticks)
             / (decimal)TimeSpan.TicksPerSecond;
         return seconds.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private sealed class UnionValueCaptureSerializer : IShapeSerializer
+    {
+        public CapturedUnionMember? Captured { get; private set; }
+
+        private UnionValueCaptureSerializer() { }
+
+        public static CapturedUnionMember Capture(ISerializableStruct value)
+        {
+            var serializer = new UnionValueCaptureSerializer();
+            value.SerializeMembers(serializer);
+            return serializer.Captured
+                ?? throw new InvalidOperationException("Union payload was empty.");
+        }
+
+        public void Dispose() { }
+
+        public void Flush() { }
+
+        public void WriteStruct(Schema schema, ISerializableStruct value)
+        {
+            Captured = CaptureValue(schema, serializer => serializer.WriteStruct(schema, value));
+        }
+
+        public void WriteList<TState>(
+            Schema schema,
+            TState state,
+            int size,
+            Action<TState, IShapeSerializer> consumer
+        )
+        {
+            Captured = CaptureValue(
+                schema,
+                serializer => serializer.WriteList(schema, state, size, consumer)
+            );
+        }
+
+        public void WriteMap<TState>(
+            Schema schema,
+            TState state,
+            int size,
+            Action<TState, IMapSerializer> consumer
+        )
+        {
+            Captured = CaptureValue(
+                schema,
+                serializer => serializer.WriteMap(schema, state, size, consumer)
+            );
+        }
+
+        public void WriteBoolean(Schema schema, bool value)
+        {
+            Captured = CaptureValue(schema, serializer => serializer.WriteBoolean(schema, value));
+        }
+
+        public void WriteByte(Schema schema, sbyte value)
+        {
+            Captured = CaptureValue(schema, serializer => serializer.WriteByte(schema, value));
+        }
+
+        public void WriteShort(Schema schema, short value)
+        {
+            Captured = CaptureValue(schema, serializer => serializer.WriteShort(schema, value));
+        }
+
+        public void WriteInteger(Schema schema, int value)
+        {
+            Captured = CaptureValue(schema, serializer => serializer.WriteInteger(schema, value));
+        }
+
+        public void WriteLong(Schema schema, long value)
+        {
+            Captured = CaptureValue(schema, serializer => serializer.WriteLong(schema, value));
+        }
+
+        public void WriteFloat(Schema schema, float value)
+        {
+            Captured = CaptureValue(schema, serializer => serializer.WriteFloat(schema, value));
+        }
+
+        public void WriteDouble(Schema schema, double value)
+        {
+            Captured = CaptureValue(schema, serializer => serializer.WriteDouble(schema, value));
+        }
+
+        public void WriteBigInteger(Schema schema, BigInteger value)
+        {
+            Captured = CaptureValue(
+                schema,
+                serializer => serializer.WriteBigInteger(schema, value)
+            );
+        }
+
+        public void WriteBigDecimal(Schema schema, decimal value)
+        {
+            Captured = CaptureValue(
+                schema,
+                serializer => serializer.WriteBigDecimal(schema, value)
+            );
+        }
+
+        public void WriteString(Schema schema, string value)
+        {
+            Captured = CaptureValue(schema, serializer => serializer.WriteString(schema, value));
+        }
+
+        public void WriteBlob(Schema schema, ReadOnlySpan<byte> value)
+        {
+            var bytes = value.ToArray();
+            Captured = CaptureValue(schema, serializer => serializer.WriteBlob(schema, bytes));
+        }
+
+        public void WriteTimestamp(Schema schema, DateTimeOffset value)
+        {
+            Captured = CaptureValue(schema, serializer => serializer.WriteTimestamp(schema, value));
+        }
+
+        public void WriteDocument(Schema schema, Document value)
+        {
+            Captured = CaptureValue(schema, serializer => serializer.WriteDocument(schema, value));
+        }
+
+        public void WriteNull(Schema schema)
+        {
+            Captured = CaptureValue(schema, serializer => serializer.WriteNull(schema));
+        }
+
+        private static CapturedUnionMember CaptureValue(
+            Schema schema,
+            Action<JsonShapeSerializer> write
+        )
+        {
+            using var buffer = new MemoryStream();
+            using var serializer = new JsonShapeSerializer(buffer);
+            write(serializer);
+            serializer.Flush();
+            buffer.Position = 0;
+            using var document = JsonDocument.Parse(buffer.ToArray());
+            return new CapturedUnionMember(schema, document.RootElement.Clone());
+        }
+    }
+
+    private readonly record struct CapturedUnionMember(Schema Schema, JsonElement Value)
+    {
+        public void WriteValue(Utf8JsonWriter writer)
+        {
+            Value.WriteTo(writer);
+        }
+
+        public void WriteFlattenedObject(Utf8JsonWriter writer)
+        {
+            if (Value.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidOperationException(
+                    $"Discriminated union member '{Schema.MemberName}' must serialize as a JSON object."
+                );
+            }
+
+            foreach (var property in Value.EnumerateObject())
+            {
+                writer.WritePropertyName(property.Name);
+                property.Value.WriteTo(writer);
+            }
+        }
     }
 }

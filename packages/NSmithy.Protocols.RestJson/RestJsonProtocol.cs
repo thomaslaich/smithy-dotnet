@@ -61,7 +61,10 @@ public static class RestJsonProtocol
         var listValues = TryGetSmithyListValues(value);
         if (listValues is not null)
         {
-            headers[name] = [string.Join(", ", listValues.Select(v => FormatHttpValue(schema, v!)))];
+            headers[name] =
+            [
+                string.Join(", ", listValues.Select(v => FormatHttpValue(schema, v!))),
+            ];
             return;
         }
 
@@ -492,7 +495,12 @@ public static class RestJsonProtocol
         builder.Append(Uri.EscapeDataString(FormatHttpValue(value)));
     }
 
-    private static void AppendQueryValue(StringBuilder builder, string name, Schema schema, object? value)
+    private static void AppendQueryValue(
+        StringBuilder builder,
+        string name,
+        Schema schema,
+        object? value
+    )
     {
         if (value is null)
         {
@@ -667,7 +675,11 @@ public static class RestJsonProtocol
     /// Tries to build a Smithy list wrapper from a comma-separated HTTP header string.
     /// Returns <c>null</c> if <paramref name="targetType"/> is not a Smithy list wrapper.
     /// </summary>
-    private static object? TryBuildSmithyListFromHeader(Schema? schema, Type targetType, string value)
+    private static object? TryBuildSmithyListFromHeader(
+        Schema? schema,
+        Type targetType,
+        string value
+    )
     {
         if (!targetType.IsClass)
             return null;
@@ -702,7 +714,10 @@ public static class RestJsonProtocol
     private static IEnumerable<string> SplitHeaderList(string value, Type elementType)
     {
         // HTTP date timestamps end with " GMT" and the list separator is "GMT, ".
-        if (elementType == typeof(DateTimeOffset) && value.Contains("GMT,", StringComparison.OrdinalIgnoreCase))
+        if (
+            elementType == typeof(DateTimeOffset)
+            && value.Contains("GMT,", StringComparison.OrdinalIgnoreCase)
+        )
         {
             var segments = value.Split("GMT,", StringSplitOptions.None);
             for (var i = 0; i < segments.Length; i++)
@@ -772,7 +787,9 @@ public static class RestJsonProtocol
         if (schema is null)
             return "date-time";
 
-        var trait = schema.GetTrait(TimestampFormatTraitId) ?? schema.Target?.GetTrait(TimestampFormatTraitId);
+        var trait =
+            schema.GetTrait(TimestampFormatTraitId)
+            ?? schema.Target?.GetTrait(TimestampFormatTraitId);
         if (trait?.Value.AsString() is { } explicitFormat)
             return explicitFormat;
 
@@ -844,7 +861,10 @@ public static class RestJsonProtocol
         var seconds =
             (decimal)(value.ToUniversalTime().Ticks - DateTimeOffset.UnixEpoch.Ticks)
             / TimeSpan.TicksPerSecond;
-        return seconds.ToString("0.0################", CultureInfo.InvariantCulture).TrimEnd('0').TrimEnd('.');
+        return seconds
+            .ToString("0.0################", CultureInfo.InvariantCulture)
+            .TrimEnd('0')
+            .TrimEnd('.');
     }
 
     private static string FormatDateTimeTimestamp(DateTimeOffset value)

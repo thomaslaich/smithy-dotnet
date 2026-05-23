@@ -105,7 +105,8 @@ internal static class HttpRequestRunner
     {
         if (!string.IsNullOrWhiteSpace(testCase.Host))
         {
-            return testCase.Host.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            return
+                testCase.Host.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
                 || testCase.Host.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
                 ? new Uri(testCase.Host)
                 : new Uri("http://" + testCase.Host);
@@ -228,9 +229,8 @@ internal static class RequestAssertions
             (null, null) => true,
             (null, _) or (_, null) => false,
             (JsonObject ao, JsonObject bo) => ao.All(kv =>
-                    bo.TryGetPropertyValue(kv.Key, out var bv) && JsonEquals(kv.Value, bv)
-                )
-                && bo.All(kv => ao.ContainsKey(kv.Key) || kv.Value is null),
+                bo.TryGetPropertyValue(kv.Key, out var bv) && JsonEquals(kv.Value, bv)
+            ) && bo.All(kv => ao.ContainsKey(kv.Key) || kv.Value is null),
             (JsonArray aa, JsonArray bb) => aa.Count == bb.Count
                 && aa.Zip(bb, JsonEquals).All(x => x),
             (JsonValue av, JsonValue bv) => JsonValueEquals(av, bv),
@@ -279,7 +279,10 @@ internal static class RequestAssertions
 
     private static string NormalizePath(string path) => path.Length > 1 ? path.TrimEnd('/') : path;
 
-    private static bool IsEmptyJsonBodyEquivalent(HttpRequestTestCase expected, RecordedRequest actual)
+    private static bool IsEmptyJsonBodyEquivalent(
+        HttpRequestTestCase expected,
+        RecordedRequest actual
+    )
     {
         var expectedBody = expected.Body ?? "";
         var actualBody = Encoding.UTF8.GetString(actual.Body);

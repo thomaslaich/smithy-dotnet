@@ -27,14 +27,16 @@ internal static class SimpleRestJsonAllowlist
         "SimpleRestJsonNoneHttpPayloadWithDefault",
         "SimpleRestJsonNoneRequiredHttpPayloadWithDefault",
         "PrimitivesEncodingRequest",
+        "PreserveKeyOrderRequest",
+        "OpenUnionsKnownTaggedUnionCase",
+        "OpenUnionsUnknownTaggedUnionCase",
+        "OpenUnionsKnownDiscriminatedUnionCase",
+        "OpenUnionsUnknownDiscriminatedUnionCase",
         "RoutingAbc",
         "RoutingAbcDef",
         "RoutingAbcDefGreedy",
         "RoutingAbcLabel",
         "RoutingAbcXyz",
-        // Known codegen issues (excluded until fixed) — each is a real bug, not a harness gap:
-        //   * PreserveKeyOrderRequest — Document type binding/serialization not validated yet.
-        // OpenUnions* require open-union codegen support which we haven’t validated yet.
     };
 
     public static readonly IReadOnlySet<string> ExecutableResponseCases = new HashSet<string>(
@@ -55,9 +57,11 @@ internal static class SimpleRestJsonAllowlist
         "SimpleRestJsonSomeHttpPayloadWithDefault",
         "SimpleRestJsonSomeRequiredHttpPayloadWithDefault",
         "VersionOutput",
-        // Known codegen issues (excluded until fixed):
-        //   * PrimitivesEncodingResponse — covered by request side; response not yet handled.
-        //   * PreserveKeyOrderResponse — Document support pending.
-        // OpenUnions* require open-union codegen support.
+        "PrimitivesEncodingResponse",
+        "PreserveKeyOrderResponse",
+        "OpenUnionsKnownTaggedUnionCase",
+        "OpenUnionsUnknownTaggedUnionCase",
+        "OpenUnionsKnownDiscriminatedUnionCase",
+        "OpenUnionsUnknownDiscriminatedUnionCase",
     };
 }

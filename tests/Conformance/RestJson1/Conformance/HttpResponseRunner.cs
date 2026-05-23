@@ -510,7 +510,9 @@ internal static class ResponseAssertions
             DocumentKind.Boolean => JsonValue.Create(document.AsBoolean()),
             DocumentKind.String => JsonValue.Create(document.AsString()),
             DocumentKind.Number => JsonValue.Create(document.AsNumber()),
-            DocumentKind.Array => new JsonArray(document.AsArray().Select(DocumentToJson).ToArray()),
+            DocumentKind.Array => new JsonArray(
+                document.AsArray().Select(DocumentToJson).ToArray()
+            ),
             DocumentKind.Object => new JsonObject(
                 document.AsObject().ToDictionary(kv => kv.Key, kv => DocumentToJson(kv.Value))
             ),
@@ -529,7 +531,10 @@ internal static class ResponseAssertions
             Assert.Equal(expectedObject.Count, actualObject.Count);
             foreach (var (key, value) in expectedObject)
             {
-                Assert.True(actualObject.TryGetPropertyValue(key, out var actualValue), $"[{path}] missing key '{key}'.");
+                Assert.True(
+                    actualObject.TryGetPropertyValue(key, out var actualValue),
+                    $"[{path}] missing key '{key}'."
+                );
                 AssertJsonEqual(value, actualValue, $"{path}.{key}");
             }
             return;

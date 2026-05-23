@@ -254,7 +254,11 @@ internal static class ParamBinder
         if (value is JsonObject obj)
         {
             return Document.From(
-                obj.ToDictionary(kv => kv.Key, kv => BindDocument(kv.Value!), StringComparer.Ordinal)
+                obj.ToDictionary(
+                    kv => kv.Key,
+                    kv => BindDocument(kv.Value!),
+                    StringComparer.Ordinal
+                )
             );
         }
         return Document.Null;
