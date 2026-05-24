@@ -15,11 +15,11 @@ separate `NSmithy.MSBuild` reference is needed.
 ```xml
 <ItemGroup>
   <!-- client -->
-  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.9" />
+  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.10" />
 
   <!-- server (ASP.NET Core) -->
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.9" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.10" />
 </ItemGroup>
 ```
 
@@ -39,7 +39,7 @@ Add a `smithy-build.json` next to your `.csproj`:
   "maven": {
     "dependencies": [
       "com.disneystreaming.alloy:alloy-core:0.3.38",
-      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.9"
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.10"
     ]
   },
   "plugins": {

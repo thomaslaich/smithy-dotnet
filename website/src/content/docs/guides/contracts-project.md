@@ -46,13 +46,13 @@ Replace the generated `.csproj` contents with:
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.9" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.10" />
   </ItemGroup>
 
   <!-- Maven dependencies needed by the Smithy codegen plugin -->
   <ItemGroup>
     <SmithyMavenDependency Include="com.disneystreaming.alloy:alloy-core:0.3.38" />
-    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.9" />
+    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.10" />
   </ItemGroup>
 </Project>
 ```
@@ -120,10 +120,10 @@ tell NSmithy which service to generate:
 <ItemGroup>
   <!-- server (ASP.NET Core) -->
   <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.9" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.10" />
 
   <!-- or client -->
-  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.9" />
+  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.10" />
 
   <ProjectReference Include="../MyService.Contracts/MyService.Contracts.csproj" />
 </ItemGroup>
