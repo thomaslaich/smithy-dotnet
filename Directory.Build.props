@@ -17,7 +17,7 @@
     <Description>NSmithy — C# code generation and runtime toolkit for Smithy models.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageProjectUrl>https://github.com/thomaslaich/smithy-dotnet</PackageProjectUrl>
+    <PackageProjectUrl>https://thomaslaich.github.io/smithy-dotnet/</PackageProjectUrl>
     <RepositoryUrl>https://github.com/thomaslaich/smithy-dotnet</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>

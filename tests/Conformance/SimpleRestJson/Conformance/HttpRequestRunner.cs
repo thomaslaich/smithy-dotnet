@@ -18,6 +18,7 @@ namespace SimpleRestJson.Conformance;
 internal static class HttpRequestRunner
 {
     private static readonly Uri Endpoint = new("http://localhost");
+    private const string DefaultIdempotencyToken = "00000000-0000-4000-8000-000000000000";
 
     /// <summary>
     /// Generated client types in the test assembly. We discover these once via reflection so the
@@ -69,7 +70,11 @@ internal static class HttpRequestRunner
         var client = Activator.CreateInstance(
             clientType,
             httpClient,
-            new SmithyClientOptions { Endpoint = Endpoint }
+            new SmithyClientOptions
+            {
+                Endpoint = Endpoint,
+                IdempotencyTokenProvider = static () => DefaultIdempotencyToken,
+            }
         )!;
 
         try
@@ -163,6 +168,11 @@ internal static class RequestAssertions
     {
         var expectedBody = expected.Body ?? "";
         var actualBody = Encoding.UTF8.GetString(actual.Body);
+        if (expected.Id.Contains("PreserveKeyOrder", StringComparison.Ordinal))
+        {
+            Xunit.Assert.Equal(expectedBody, actualBody);
+            return;
+        }
         // Always prefer structural JSON comparison when both sides parse as JSON; fall back to
         // exact string equality (covers raw text payloads).
         if (TryParseJson(expectedBody, out var ej) && TryParseJson(actualBody, out var aj))

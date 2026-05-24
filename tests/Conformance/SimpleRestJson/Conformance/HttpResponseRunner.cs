@@ -206,7 +206,7 @@ internal static class HttpResponseRunner
         {
             var p = ps[i];
             if (p.HasDefaultValue)
-                args[i] = p.DefaultValue;
+                args[i] = p.DefaultValue ?? BuildDefault(p.ParameterType, depth + 1);
             else
                 args[i] = BuildDefault(p.ParameterType, depth + 1);
         }
@@ -330,6 +330,12 @@ internal static class ResponseAssertions
             Assert.Fail(
                 $"[{path}] cannot compare DateTimeOffset against {expected.ToJsonString()}."
             );
+            return;
+        }
+
+        if (actual is Document document)
+        {
+            AssertDocument(expected, document, path);
             return;
         }
 
@@ -496,10 +502,62 @@ internal static class ResponseAssertions
     {
         var obj = expected.AsObject();
         Assert.Equal(obj.Count, actual.Count);
+        var actualKeys = actual.Keys.Cast<object?>().Select(k => k?.ToString()).ToArray();
+        Assert.Equal(obj.Select(kv => kv.Key).ToArray(), actualKeys);
         foreach (var (key, value) in obj)
         {
             Assert.True(actual.Contains(key), $"[{path}] map missing key '{key}'.");
             AssertEqual(value, actual[key], $"{path}[{key}]");
+        }
+    }
+
+    private static void AssertDocument(JsonNode? expected, Document actual, string path)
+    {
+        switch (actual.Kind)
+        {
+            case DocumentKind.Null:
+                Assert.True(expected is null, $"[{path}] expected null document.");
+                return;
+            case DocumentKind.Boolean:
+                Assert.NotNull(expected);
+                Assert.Equal((bool)((JsonValue)expected)!, actual.AsBoolean());
+                return;
+            case DocumentKind.String:
+                Assert.Equal((string?)expected, actual.AsString());
+                return;
+            case DocumentKind.Number:
+                Assert.NotNull(expected);
+                Assert.Equal((decimal)((JsonValue)expected)!, actual.AsNumber());
+                return;
+            case DocumentKind.Array:
+                Assert.NotNull(expected);
+                var expectedArray = expected.AsArray();
+                var actualArray = actual.AsArray();
+                Assert.Equal(expectedArray.Count, actualArray.Count);
+                for (var i = 0; i < expectedArray.Count; i++)
+                    AssertDocument(expectedArray[i], actualArray[i], $"{path}[{i}]");
+                return;
+            case DocumentKind.Object:
+                Assert.NotNull(expected);
+                var expectedObject = expected.AsObject();
+                var actualObject = actual.AsObject();
+                Assert.Equal(expectedObject.Count, actualObject.Count);
+                Assert.Equal(
+                    expectedObject.Select(kv => kv.Key).ToArray(),
+                    actualObject.Keys.ToArray()
+                );
+                foreach (var (key, value) in expectedObject)
+                {
+                    Assert.True(
+                        actualObject.ContainsKey(key),
+                        $"[{path}] document missing key '{key}'."
+                    );
+                    AssertDocument(value, actualObject[key], $"{path}[{key}]");
+                }
+                return;
+            default:
+                Assert.Fail($"[{path}] unsupported document kind {actual.Kind}.");
+                return;
         }
     }
 

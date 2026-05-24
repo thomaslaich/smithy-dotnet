@@ -46,7 +46,7 @@ and Maven dependencies automatically through the `buildTransitive` targets. No
 </PropertyGroup>
 
 <ItemGroup>
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.9" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.10" />
   <PackageReference Include="MyService.Contracts" Version="1.0.0" />
 </ItemGroup>
 ```
