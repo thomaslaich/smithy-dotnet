@@ -17,6 +17,11 @@ export default defineConfig({
 		starlight({
 			title: 'NSmithy',
 			description: 'Generate C# models, typed HTTP clients, and ASP.NET Core servers from Smithy models.',
+			logo: {
+				src: './src/assets/brand/nsmithy_logo_1.png',
+				alt: 'NSmithy logo',
+				replacesTitle: false,
+			},
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/thomaslaich/smithy-dotnet' },
 			],

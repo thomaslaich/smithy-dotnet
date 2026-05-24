@@ -43,16 +43,10 @@ public readonly record struct Document
     public static Document From(IReadOnlyDictionary<string, Document> value)
     {
         ArgumentNullException.ThrowIfNull(value);
-        var sorted = new SortedDictionary<string, Document>(StringComparer.Ordinal);
-        foreach (var item in value)
-        {
-            sorted.Add(item.Key, item.Value);
-        }
-
         return new Document(
             DocumentKind.Object,
             new ReadOnlyDictionary<string, Document>(
-                new Dictionary<string, Document>(sorted, StringComparer.Ordinal)
+                new Dictionary<string, Document>(value, StringComparer.Ordinal)
             )
         );
     }

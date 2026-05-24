@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.shapes.StructureShape;
+import software.amazon.smithy.model.traits.ClientOptionalTrait;
 import software.amazon.smithy.model.traits.DefaultTrait;
 import software.amazon.smithy.model.traits.HttpHeaderTrait;
 import software.amazon.smithy.model.traits.HttpLabelTrait;
@@ -42,6 +43,10 @@ public final class ShapeSupport {
     return member.hasTrait(DefaultTrait.class);
   }
 
+  public static boolean hasClientOptional(MemberShape member) {
+    return member.hasTrait(ClientOptionalTrait.class);
+  }
+
   /**
    * Returns the C# literal expression for a member's @default value, or null if the member has no
    * default. Target-aware so the produced literal type matches the parameter type: * BLOB defaults
@@ -55,16 +60,23 @@ public final class ShapeSupport {
   public static String defaultValueExpression(Model model, SymbolProvider sp, MemberShape member) {
     var trait = member.getTrait(DefaultTrait.class).orElse(null);
     if (trait == null) return null;
+    if (hasClientOptional(member)) return null;
     var node = trait.toNode();
     Shape target = model.expectShape(member.getTarget());
-    // Document defaults can legally be the JSON literal null — that maps to Document.Null
-    // (the document type's "absent" sentinel value), not to a missing default. Handle this
-    // first so the generic null-check below doesn't drop the trait.
+    String typeName = CSharpSymbolProvider.qualified(sp.toSymbol(member));
+    return literalForShape(model, sp, target, node, typeName);
+  }
+
+  private static String literalForShape(
+      Model model,
+      SymbolProvider sp,
+      Shape target,
+      software.amazon.smithy.model.node.Node node,
+      String typeName) {
     if (target.getType() == ShapeType.DOCUMENT) {
       return documentLiteral(node);
     }
     if (node.isNullNode()) return null;
-    String typeName = CSharpSymbolProvider.qualified(sp.toSymbol(member));
     return switch (target.getType()) {
       case BLOB ->
           node.isStringNode()
@@ -90,8 +102,68 @@ public final class ShapeSupport {
           node.isNumberNode()
               ? "(" + typeName + ")" + node.expectNumberNode().getValue().longValue()
               : null;
+      case LIST, SET -> listLiteral(model, sp, target, node, typeName);
+      case MAP -> mapLiteral(model, sp, target, node, typeName);
       default -> defaultLiteral(node);
     };
+  }
+
+  private static String listLiteral(
+      Model model,
+      SymbolProvider sp,
+      Shape target,
+      software.amazon.smithy.model.node.Node node,
+      String typeName) {
+    if (!node.isArrayNode()) return null;
+    Shape memberTarget =
+        model.expectShape(
+            switch (target.getType()) {
+              case LIST -> target.asListShape().orElseThrow().getMember().getTarget();
+              case SET -> target.asSetShape().orElseThrow().getMember().getTarget();
+              default ->
+                  throw new IllegalArgumentException("Expected list/set shape: " + target.getId());
+            });
+    String elementType = CSharpSymbolProvider.qualified(sp.toSymbol(memberTarget));
+    List<String> elements = new ArrayList<>();
+    for (var element : node.expectArrayNode().getElements()) {
+      String literal = literalForShape(model, sp, memberTarget, element, elementType);
+      if (literal == null) return null;
+      elements.add(literal);
+    }
+    return "new " + typeName + "(new " + elementType + "[] {" + String.join(", ", elements) + "})";
+  }
+
+  private static String mapLiteral(
+      Model model,
+      SymbolProvider sp,
+      Shape target,
+      software.amazon.smithy.model.node.Node node,
+      String typeName) {
+    if (!node.isObjectNode()) return null;
+    var mapShape = target.asMapShape().orElseThrow();
+    Shape keyTarget = model.expectShape(mapShape.getKey().getTarget());
+    Shape valueTarget = model.expectShape(mapShape.getValue().getTarget());
+    String keyType = CSharpSymbolProvider.qualified(sp.toSymbol(keyTarget));
+    String valueType = CSharpSymbolProvider.qualified(sp.toSymbol(valueTarget));
+    StringBuilder sb =
+        new StringBuilder("new ")
+            .append(typeName)
+            .append("(new System.Collections.Generic.Dictionary<")
+            .append(keyType)
+            .append(", ")
+            .append(valueType)
+            .append("> {");
+    boolean first = true;
+    for (var entry : node.expectObjectNode().getStringMap().entrySet()) {
+      String keyLiteral =
+          defaultLiteral(software.amazon.smithy.model.node.Node.from(entry.getKey()));
+      String valueLiteral = literalForShape(model, sp, valueTarget, entry.getValue(), valueType);
+      if (keyLiteral == null || valueLiteral == null) return null;
+      if (!first) sb.append(", ");
+      first = false;
+      sb.append("{ ").append(keyLiteral).append(", ").append(valueLiteral).append(" }");
+    }
+    return sb.append("})").toString();
   }
 
   private static String documentLiteral(software.amazon.smithy.model.node.Node node) {
@@ -151,9 +223,9 @@ public final class ShapeSupport {
     return null;
   }
 
-  /** A member is nullable iff not @required AND has no @default. */
+  /** A member is nullable iff not @required AND either has no @default or is @clientOptional. */
   public static boolean isNullable(MemberShape member) {
-    return !isRequired(member) && !hasDefault(member);
+    return !isRequired(member) && (!hasDefault(member) || hasClientOptional(member));
   }
 
   /**

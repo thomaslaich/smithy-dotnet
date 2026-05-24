@@ -17,6 +17,11 @@ starting point. `aws.protocols#restJson1` is available for consuming AWS-style
 REST/JSON services from a generated client; server generation is out of scope
 for this preview.
 
+Current conformance snapshot from the pinned protocol-test models:
+
+- `alloy#simpleRestJson`: `43/43` official request/response cases (`100%`)
+- `aws.protocols#restJson1`: `234/272` official request/response cases (`86.03%`)
+
 The modeling syntax, HTTP binding traits, and generated C# shapes are identical
 between the two protocols — the only difference is the trait applied to the
 service shape and the Maven dependency that brings it in.

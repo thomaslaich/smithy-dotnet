@@ -11,4 +11,8 @@ internal static class JsonTraits
         "smithy.api",
         "timestampFormat"
     );
+
+    public static readonly NSmithy.Core.ShapeId Discriminated = new("alloy", "discriminated");
+
+    public static readonly NSmithy.Core.ShapeId JsonUnknown = new("alloy", "jsonUnknown");
 }

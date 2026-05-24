@@ -1,3 +1,7 @@
+<p align="center">
+   <img src="website/public/brand/nsmithy_logo_1.png" alt="NSmithy logo" width="320" />
+</p>
+
 _Work in Progress: NSmithy is a proof of concept. The current implementation
 demonstrates that Smithy models can drive idiomatic C# clients and ASP.NET Core
 servers end-to-end, but the protocol implementations are not yet on par with
