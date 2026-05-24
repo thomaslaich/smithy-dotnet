@@ -20,29 +20,19 @@
    </a>
 </p>
 
-_Work in Progress: NSmithy is a proof of concept. The current implementation
-demonstrates that Smithy models can drive idiomatic C# clients and ASP.NET Core
-servers end-to-end, but the protocol implementations are not yet on par with
-the [Smithy reference implementations](https://github.com/smithy-lang/smithy)._
+> **Work in Progress:** NSmithy is a proof of concept. Protocol implementations are not yet on par with the [Smithy reference implementations](https://github.com/smithy-lang/smithy).
 
 # NSmithy
 
-**Documentation: [thomaslaich.github.io/smithy-dotnet](https://thomaslaich.github.io/smithy-dotnet/)**
+NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io) model into idiomatic C# at build time. From a single contract you get typed clients, server scaffolding, and shared model types — fully integrated into your MSBuild workflow.
 
-**Design docs: [designs/README.md](designs/README.md)**
-
-NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io)
-model into idiomatic C# at build time. From a single contract you get the same
-model types, typed clients, and server scaffolding that any other Smithy
-language would produce. NSmithy aims to fully integrate into your MSBuild workflow,
-in order to make code generation as seamless as possible.
+**[Documentation](https://thomaslaich.github.io/smithy-dotnet/)** · **[Design docs](designs/README.md)**
 
 ## Features
 
-- **Client and server generation**: Turn a Smithy IDL contract into normal C# types and service surfaces that fit naturally into .NET projects.
-- **MSBuild integration**: Generate idiomatic C# models, typed clients, and ASP.NET Core server stubs from Smithy models during `dotnet build`.
-- **Multiple protocol paths**: Support `alloy#simpleRestJson`, `aws.protocols#restJson1`, `aws.protocols#restXml`, and `smithy.protocols#rpcv2Cbor`.
-- **Conformance-tested protocols**: Exercise protocol support against official Smithy, AWS, and alloy conformance suites.
+- **MSBuild integration**: Generate C# models, typed clients, and ASP.NET Core server stubs from a Smithy IDL as part of `dotnet build` — no separate codegen step.
+- **Protocol support**: Implements `alloy#simpleRestJson`, `aws.protocols#restJson1`, `aws.protocols#restXml`, and `smithy.protocols#rpcv2Cbor`.
+- **Conformance-tested**: Validated against official Smithy, AWS, and alloy conformance suites.
 
 ## Development
 
