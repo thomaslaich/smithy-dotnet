@@ -417,9 +417,15 @@ public static class RestJsonProtocol
             ),
         };
 
-        if (request.ContentHeaders.TryGetValue("Content-Encoding", out var values) && values.Count > 0)
+        if (
+            request.ContentHeaders.TryGetValue("Content-Encoding", out var values)
+            && values.Count > 0
+        )
         {
-            request.ContentHeaders["Content-Encoding"] = [$"{string.Join(", ", values)}, {encoding}"];
+            request.ContentHeaders["Content-Encoding"] =
+            [
+                $"{string.Join(", ", values)}, {encoding}",
+            ];
             return;
         }
 
@@ -437,7 +443,10 @@ public static class RestJsonProtocol
             return;
         }
 
-        request.ContentHeaders["Content-MD5"] = [Convert.ToBase64String(MD5.HashData(request.Content))];
+        request.ContentHeaders["Content-MD5"] =
+        [
+            Convert.ToBase64String(MD5.HashData(request.Content)),
+        ];
     }
 #pragma warning restore CA5351
 

@@ -1,5 +1,7 @@
+using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Text;
 using Microsoft.AspNetCore.Http;
 using NSmithy.Codecs.Json;
 using NSmithy.Core.Serde;
@@ -53,7 +55,7 @@ public static class SmithyAspNetCoreProtocol
         ArgumentNullException.ThrowIfNull(excludedNames);
 
         var excluded = new HashSet<string>(excludedNames, StringComparer.Ordinal);
-        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        var values = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
         foreach (var query in httpContext.Request.Query)
         {
             if (excluded.Contains(query.Key))
@@ -61,13 +63,13 @@ public static class SmithyAspNetCoreProtocol
                 continue;
             }
 
-            if (query.Value.Count > 0)
+            if (query.Value.Count > 0 || query.Value.Count == 0)
             {
-                values[query.Key] = query.Value[0] ?? string.Empty;
+                values[query.Key] = query.Value.Select(value => value ?? string.Empty).ToArray();
             }
         }
 
-        return RestJsonProtocol.CreateStringMap<T>(values);
+        return CreateQueryParamsMap<T>(values);
     }
 
     [return: MaybeNull]
@@ -103,6 +105,11 @@ public static class SmithyAspNetCoreProtocol
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var header in httpContext.Request.Headers)
         {
+            if (!IsBindablePrefixedHeader(prefix, header.Key))
+            {
+                continue;
+            }
+
             if (
                 header.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
                 && header.Value.Count > 0
@@ -195,6 +202,22 @@ public static class SmithyAspNetCoreProtocol
             .ConfigureAwait(false);
     }
 
+    public static async Task WriteJsonResponseAsync(
+        HttpContext httpContext,
+        Action<IShapeSerializer> write,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(write);
+
+        httpContext.Response.ContentType = "application/json";
+        var content = JsonCodec.Serialize(write);
+        await httpContext
+            .Response.Body.WriteAsync(content, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public static void AddResponseHeader(HttpContext httpContext, string name, object? value)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
@@ -229,9 +252,13 @@ public static class SmithyAspNetCoreProtocol
                 continue;
             }
 
-            httpContext.Response.Headers[$"{prefix}{item.Key}"] = RestJsonProtocol.FormatHttpValue(
-                item.Value
-            );
+            var headerName = $"{prefix}{item.Key}";
+            if (httpContext.Response.Headers.ContainsKey(headerName))
+            {
+                continue;
+            }
+
+            httpContext.Response.Headers[headerName] = RestJsonProtocol.FormatHttpValue(item.Value);
         }
     }
 
@@ -241,6 +268,185 @@ public static class SmithyAspNetCoreProtocol
         ArgumentNullException.ThrowIfNull(value);
 
         httpContext.Response.StatusCode = Convert.ToInt32(value, CultureInfo.InvariantCulture);
+    }
+
+    public static bool HasExpectedQueryLiteral(
+        HttpContext httpContext,
+        string name,
+        string? expectedValue
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        if (!httpContext.Request.Query.TryGetValue(name, out var values))
+        {
+            return false;
+        }
+
+        if (expectedValue is null)
+        {
+            return true;
+        }
+
+        return values.Any(value => string.Equals(value, expectedValue, StringComparison.Ordinal));
+    }
+
+    public static async Task<byte[]> ReadPayloadBodyAsync(
+        HttpContext httpContext,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        return await ReadJsonRequestBodyContentAsync(httpContext, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public static async Task<string?> ReadStringPayloadBodyAsync(
+        HttpContext httpContext,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
+        var content = await ReadJsonRequestBodyContentAsync(httpContext, cancellationToken)
+            .ConfigureAwait(false);
+        return content.Length == 0 ? null : Encoding.UTF8.GetString(content);
+    }
+
+    private static T CreateQueryParamsMap<T>(Dictionary<string, IReadOnlyList<string>> values)
+    {
+        if (values.Count == 0)
+        {
+            return default!;
+        }
+
+        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+        var singleValues = values.ToDictionary(
+            entry => entry.Key,
+            entry => entry.Value.Count > 0 ? entry.Value[0] ?? string.Empty : string.Empty,
+            StringComparer.Ordinal
+        );
+
+        if (TryCreateMap(targetType, typeof(string), singleValues, out var stringMap))
+        {
+            return (T)stringMap!;
+        }
+
+        var mapCtor = targetType
+            .GetConstructors()
+            .FirstOrDefault(c =>
+            {
+                var parameters = c.GetParameters();
+                return parameters.Length == 1
+                    && parameters[0].ParameterType.IsGenericType
+                    && (
+                        parameters[0].ParameterType.GetGenericTypeDefinition()
+                            == typeof(IReadOnlyDictionary<,>)
+                        || parameters[0].ParameterType.GetGenericTypeDefinition()
+                            == typeof(Dictionary<,>)
+                    );
+            });
+        if (mapCtor is null)
+        {
+            throw new InvalidOperationException(
+                $"Cannot create query params map type '{targetType}'."
+            );
+        }
+
+        var valueType = mapCtor.GetParameters()[0].ParameterType.GetGenericArguments()[1];
+        var dictType = typeof(Dictionary<,>).MakeGenericType(typeof(string), valueType);
+        var dict = (System.Collections.IDictionary)Activator.CreateInstance(dictType)!;
+        foreach (var entry in values)
+        {
+            dict[entry.Key] = CreateQueryParamValue(valueType, entry.Value);
+        }
+
+        return (T)mapCtor.Invoke([dict]);
+    }
+
+    private static bool TryCreateMap(
+        Type targetType,
+        Type valueType,
+        IReadOnlyDictionary<string, string> values,
+        out object? created
+    )
+    {
+        if (targetType.IsAssignableFrom(typeof(Dictionary<string, string>)))
+        {
+            created = new Dictionary<string, string>(values, StringComparer.Ordinal);
+            return true;
+        }
+
+        var readonlyCtor = targetType.GetConstructor([typeof(IReadOnlyDictionary<string, string>)]);
+        if (readonlyCtor is not null)
+        {
+            created = readonlyCtor.Invoke([
+                new Dictionary<string, string>(values, StringComparer.Ordinal),
+            ]);
+            return true;
+        }
+
+        var dictionaryCtor = targetType.GetConstructor([typeof(Dictionary<string, string>)]);
+        if (dictionaryCtor is not null)
+        {
+            created = dictionaryCtor.Invoke([
+                new Dictionary<string, string>(values, StringComparer.Ordinal),
+            ]);
+            return true;
+        }
+
+        created = null;
+        return false;
+    }
+
+    private static object CreateQueryParamValue(Type valueType, IReadOnlyList<string> values)
+    {
+        if (valueType == typeof(string))
+        {
+            return values.Count > 0 ? values[0] ?? string.Empty : string.Empty;
+        }
+
+        if (values.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var enumerableCtor = valueType.GetConstructor([typeof(IEnumerable<string>)]);
+        if (enumerableCtor is not null)
+        {
+            return enumerableCtor.Invoke([values]);
+        }
+
+        var readonlyCtor = valueType.GetConstructor([typeof(IReadOnlyList<string>)]);
+        if (readonlyCtor is not null)
+        {
+            return readonlyCtor.Invoke([values]);
+        }
+
+        var arrayCtor = valueType.GetConstructor([typeof(string[])]);
+        if (arrayCtor is not null)
+        {
+            return arrayCtor.Invoke([values.ToArray()]);
+        }
+
+        throw new InvalidOperationException(
+            $"Cannot create query params value type '{valueType}' from repeated values."
+        );
+    }
+
+    private static bool IsBindablePrefixedHeader(string prefix, string headerName)
+    {
+        if (!headerName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !headerName.Equals("Host", StringComparison.OrdinalIgnoreCase)
+            && !headerName.Equals("Content-Length", StringComparison.OrdinalIgnoreCase)
+            && !headerName.Equals("Content-Type", StringComparison.OrdinalIgnoreCase)
+            && !headerName.Equals("Accept", StringComparison.OrdinalIgnoreCase)
+            && !headerName.Equals("User-Agent", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<byte[]> ReadJsonRequestBodyContentAsync(

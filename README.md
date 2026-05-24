@@ -29,6 +29,8 @@ the [Smithy reference implementations](https://github.com/smithy-lang/smithy)._
 
 **Documentation: [thomaslaich.github.io/smithy-dotnet](https://thomaslaich.github.io/smithy-dotnet/)**
 
+**Design docs: [designs/README.md](designs/README.md)**
+
 NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io)
 model into idiomatic C# at build time. From a single contract you get the same
 model types, typed clients, and server scaffolding that any other Smithy
@@ -37,14 +39,10 @@ in order to make code generation as seamless as possible.
 
 ## Features
 
-- **Code generation from MSBuild**: Generates C# types, clients, and ASP.NET Core server scaffolding from Smithy models during `dotnet build`.
-- **Typed protocol-aware clients**: Supports `alloy#simpleRestJson`, `aws.protocols#restJson1`, `aws.protocols#restXml`, and `smithy.protocols#rpcv2Cbor`.
-- **ASP.NET Core server surfaces**: Implements Smithy services as ASP.NET Core endpoints with minimal boilerplate.
-- **Conformance**: Protocols are tested against the official Smithy/AWS and alloy protocol test suites.
-
-## Quick Start
-
-The fastest way to try NSmithy is with the [simple-rest-json](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/simple-rest-json) example. It shows a minimal project using NSmithy and [pixi](https://pixi.sh) for environment management.
+- Generate idiomatic C# models, typed clients, and ASP.NET Core server stubs from Smithy models during `dotnet build`.
+- Support multiple Smithy protocol paths, including `alloy#simpleRestJson`, `aws.protocols#restJson1`, `aws.protocols#restXml`, and `smithy.protocols#rpcv2Cbor`.
+- Fit naturally into .NET projects through MSBuild integration, NuGet packages, and generated code that behaves like normal C#.
+- Protocol support is tested against official Smithy, AWS, and alloy conformance suites.
 
 ## Development
 

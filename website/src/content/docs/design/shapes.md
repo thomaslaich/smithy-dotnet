@@ -134,9 +134,6 @@ A Smithy service shape produces two generated files:
 - `<Service>Server.g.cs` — a handler interface (`I<Service>Handler`) and an
   ASP.NET Core adapter (`<Service>Server`).
 
-See [Codegen Architecture](/smithy-dotnet/design/codegen-architecture/) for the generator
-pipeline details.
-
 ## Namespace Mapping
 
 Smithy namespace segments are capitalised to PascalCase and joined with `.` to

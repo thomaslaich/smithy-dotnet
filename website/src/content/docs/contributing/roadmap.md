@@ -3,118 +3,73 @@ title: Roadmap
 description: Current direction and near-term priorities for NSmithy.
 ---
 
-This roadmap describes the current direction of NSmithy as the repository
-exists today. It is intentionally shorter and more opinionated than the earlier
-phase-by-week plan.
+This roadmap describes the current direction of NSmithy as it exists today.
+The architecture is no longer the open question: NSmithy uses Smithy CLI for
+model assembly and a Smithy Java plugin for generation, integrated into the
+.NET build through `NSmithy.MSBuild`. The roadmap is about hardening and
+expanding that baseline rather than revisiting it.
 
-## Architecture
+## Direction
 
-NSmithy keeps a hybrid boundary:
-
-- Smithy CLI handles model assembly, validation, projections, imports, and Maven
-  dependencies.
-- NSmithy reads the Smithy build output and performs C# and `.proto`
-  generation inside the .NET build.
-
-The rationale is documented in [Hybrid Codegen Architecture](../design/codegen-architecture/).
-
-The generator is implemented as a Smithy Java plugin, invoked through the
-existing MSBuild and Smithy CLI flow.
-
-## Current Baseline
-
-The repository already ships a working preview slice:
-
-- Smithy CLI integration through `NSmithy.MSBuild`
-- C# and `.proto` generation implemented as a Smithy Java plugin
-- generated HTTP clients for `aws.protocols#restJson1`
-- generated HTTP clients and ASP.NET Core server surfaces for
-  `alloy#simpleRestJson`
-- early preview protocol slices for `smithy.protocols#rpcv2Cbor` and
-  `aws.protocols#restXml`
-- `.proto` generation and early gRPC support
-- runtime packages for core metadata, JSON, HTTP, client, and server paths
-- protocol compliance and end-to-end tests
-
-The roadmap is now about hardening and simplifying this surface, not restarting
-the architecture from scratch.
-
-## Principles
-
-1. Keep Smithy as the model front end.
-   NSmithy should continue to rely on Smithy CLI for model assembly and
-   validation instead of reimplementing Smithy parsing and semantics in .NET.
-
-2. Keep the backend native to .NET.
-  The main user-facing build flow, package story, and generated-artifact
-  consumption should remain natural for .NET users, even if parts of the
-  generator eventually move closer to Smithy's Java tooling.
-
-3. Prefer narrower supported slices over broad but unstable claims.
-   Protocol support should grow where the repo already has useful runtime and
-   test coverage, especially around `simpleRestJson`.
-
-4. Make preview edges explicit.
-   When a feature is partial, document the shape of the boundary rather than
-   implying general Smithy support.
-
-5. Remove accidental complexity before adding new protocol families.
-   Splitting coupled generation modes and tightening runtime boundaries is more
-   valuable than chasing additional protocols too early.
-
-6. Use additional protocol work to validate abstractions.
-   Protocol expansion should improve codec and transport boundaries rather than
-   just add more generated surface area.
+- Keep Smithy CLI as the model front end for assembly, validation, projections,
+  and Maven dependency resolution.
+- Keep the generated output and runtime story natural for .NET consumers.
+- Prefer explicit preview boundaries over broad compatibility claims.
+- Use protocol expansion to validate and strengthen the runtime seams that are
+  already in place.
 
 ## Near-Term Priorities
 
-### 1. Stabilize the generated HTTP/JSON path
+### 1. Expand AWS protocol coverage
 
-- Expand protocol compliance coverage for generated clients and servers.
-- Tighten request/response binding behavior and error handling.
-- Close the gap between "works for the example" and "safe preview default."
+- Move AWS protocol work into the main near-term track.
+- Add support for additional AWS protocol families, especially AWS JSON,
+  AWS Query, and EC2 Query.
+- Keep the scope driven by conformance and real runtime behavior rather than by
+  marketing-level protocol checklists.
 
-### 2. Split coupled generation modes
+### 2. Deepen the current AWS protocol slices
 
-- Decouple client and server generation where they are still emitted together.
-- Reduce unnecessary runtime package references for client-only or server-only
-  consumers.
-- Make generation switches and output shape easier to reason about.
+- Continue hardening `aws.protocols#restJson1`, `aws.protocols#restXml`, and
+  `smithy.protocols#rpcv2Cbor` as real preview surfaces.
+- Expand protocol compliance and end-to-end coverage where the current runtime
+  seams already exist.
+- Tighten request/response binding behavior and protocol-specific error
+  handling.
 
-### 3. Add templated code generation deliberately
+### 3. Keep the REST JSON path strong
 
-- Introduce templated codegen only where it reduces duplication without hiding
-  protocol semantics.
-- Use templating to make repeated generated shapes easier to evolve and review.
-- Keep the semantic model and generation decisions explicit even if more of the
-  emitted source moves through templates.
+- Maintain `alloy#simpleRestJson` as the most complete end-to-end path.
+- Keep client and ASP.NET Core server generation stable as new protocol work is
+  added.
+- Continue using the REST/JSON path as the main preview baseline for generated
+  developer experience.
 
 ### 4. Improve generator clarity and diagnostics
 
 - Keep generated output predictable and easy to inspect.
 - Improve unsupported-shape and unsupported-trait diagnostics.
-- Continue simplifying internal generator structure where semantics become hard
-  to follow.
+- Continue simplifying generator internals where semantics are harder to follow
+  than they need to be.
 
-### 5. Mature the gRPC path deliberately
+### 5. Expand the `dotnet nsmithy` tool
+
+- Grow `dotnet nsmithy` into the .NET workflow companion for NSmithy rather
+  than a second general-purpose Smithy CLI.
+- Add project-bootstrap ergonomics such as `init` or scaffold commands for
+  common NSmithy layouts and examples.
+- Keep the tool focused on .NET-specific workflows such as scaffolding,
+  packaging, publishing, and diagnostics while leaving Smithy model semantics
+  to Smithy CLI.
+
+### 6. Mature the gRPC path
 
 - Keep `.proto` generation and gRPC support as an explicit preview track.
 - Expand test coverage before broadening feature claims.
 - Clarify the model constraints required by the current generated path.
 
-### 6. Harden the `rpcv2Cbor` and `restXml` slices
-
-- Treat the current implementations as real preview slices, not future
-  prototypes.
-- Expand compliance and behavioral coverage so these paths reflect stable
-  codec and transport seams rather than one-off experiments.
-- Keep the scope narrow and compliance-driven instead of claiming broad Smithy
-  protocol coverage too early.
-
 ## Later Work
 
 These are plausible future areas, but they are not the current focus:
 
-- AWS JSON protocols
-- EC2 Query and AWS Query
 - F#-specific generation

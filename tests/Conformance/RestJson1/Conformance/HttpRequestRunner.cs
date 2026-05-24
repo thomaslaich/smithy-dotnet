@@ -276,7 +276,10 @@ internal static class RequestAssertions
     private static bool EqualHeaderTokenList(string expected, string actual)
     {
         static string[] Split(string value) =>
-            value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            value.Split(
+                ',',
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+            );
 
         return Split(expected).SequenceEqual(Split(actual), StringComparer.Ordinal);
     }

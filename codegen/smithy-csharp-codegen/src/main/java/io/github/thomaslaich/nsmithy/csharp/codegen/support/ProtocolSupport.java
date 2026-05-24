@@ -48,8 +48,7 @@ public final class ProtocolSupport {
   }
 
   public static boolean emitsAspNetCoreServer(ServiceShape s) {
-    // Currently only simpleRestJson on the server.
-    return s.findTrait(TraitIds.SIMPLE_REST_JSON).isPresent();
+    return isRestJsonService(s);
   }
 
   public static Kind kindOf(ServiceShape s) {

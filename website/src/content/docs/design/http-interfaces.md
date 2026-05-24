@@ -114,5 +114,4 @@ instantiates.
 ## Related Docs
 
 - [Serialization](/smithy-dotnet/design/serialization/) — codec and protocol binding
-- [Codegen Architecture](/smithy-dotnet/design/codegen-architecture/) — codegen pipeline
 - [Multi-Protocol Guide](/smithy-dotnet/guides/multi-protocol/)

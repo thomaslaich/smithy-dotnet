@@ -58,6 +58,5 @@ These protocols are not current NSmithy targets:
 
 - [Known Limitations](../reference/known-limitations/)
 - [Multi-Protocol Guide](../guides/multi-protocol/)
-- [Architecture](../design/codegen-architecture/)
 - [Conformance Matrix](./conformance/)
 - [Roadmap](../contributing/roadmap/)

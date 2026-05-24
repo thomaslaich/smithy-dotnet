@@ -53,7 +53,6 @@ export default defineConfig({
 					label: 'Reference',
 					items: [
 						{ label: 'MSBuild', slug: 'reference/msbuild' },
-						{ label: 'Supported Surface', slug: 'reference/supported-surface' },
 						{ label: 'Known Limitations', slug: 'reference/known-limitations' },
 					],
 				},
@@ -63,15 +62,19 @@ export default defineConfig({
 						{ label: 'Protocol Status', slug: 'protocols' },
 						{ label: 'REST JSON', slug: 'protocols/simple-rest-json' },
 						{ label: 'gRPC', slug: 'protocols/grpc' },
-						{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor' },
-						{ label: 'REST XML', slug: 'protocols/rest-xml' },
+						{
+							label: 'AWS Protocols',
+							items: [
+								{ label: 'REST XML', slug: 'protocols/rest-xml' },
+								{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor' },
+							],
+						},
 						{ label: 'Conformance Tests', slug: 'protocols/conformance' },
 					],
 				},
 				{
 					label: 'Design',
 					items: [
-						{ label: 'Codegen Architecture', slug: 'design/codegen-architecture' },
 						{ label: 'Shape Mapping', slug: 'design/shapes' },
 						{ label: 'Serialization', slug: 'design/serialization' },
 						{ label: 'HTTP Interfaces', slug: 'design/http-interfaces' },

@@ -441,10 +441,7 @@ public final class ClientGenerator implements Runnable {
         String name = m.expectTrait(HttpHeaderTrait.class).getValue();
         if ("Content-Type".equalsIgnoreCase(name)) {
           writer.write("if (input.$L is { } value)", CSharpNaming.propertyName(m.getMemberName()));
-          writer.openBlock(
-              "{",
-              "}",
-              () -> writer.write("request.ContentType = value;"));
+          writer.openBlock("{", "}", () -> writer.write("request.ContentType = value;"));
         } else if ("Content-Encoding".equalsIgnoreCase(name)) {
           writer.write(
               "$L.AddHeader(request.ContentHeaders, $L, $L, input.$L);",
@@ -875,7 +872,8 @@ public final class ClientGenerator implements Runnable {
   }
 
   private String mediaTypeValue(Shape shape) {
-    return shape.findTrait(TraitIds.MEDIA_TYPE)
+    return shape
+        .findTrait(TraitIds.MEDIA_TYPE)
         .map(t -> ((Node) t.toNode()).expectStringNode().getValue())
         .orElse(null);
   }

@@ -9,22 +9,17 @@ namespace SimpleRestJson.Conformance;
 /// </summary>
 public sealed class ConformanceRateTests(ITestOutputHelper output)
 {
+    private const string Protocol = "alloy#simpleRestJson";
     private static readonly SmithyTestModel Model = SmithyTestModel.Load();
 
     [Fact]
     public void ReportConformanceRate()
     {
-        var totalRequests = Model
-            .EnumerateHttpRequestTests(SimpleRestJsonAllowlist.Protocol)
-            .Count();
-        var totalResponses = Model
-            .EnumerateHttpResponseTests(SimpleRestJsonAllowlist.Protocol)
-            .Count();
-        var execRequests = SimpleRestJsonAllowlist.ExecutableRequestCases.Count;
-        var execResponses = SimpleRestJsonAllowlist.ExecutableResponseCases.Count;
+        var totalRequests = Model.EnumerateHttpRequestTests(Protocol).Count();
+        var totalResponses = Model.EnumerateHttpResponseTests(Protocol).Count();
 
         output.WriteLine(
-            $"[{SimpleRestJsonAllowlist.Protocol}] requests: {execRequests}/{totalRequests} ({Pct(execRequests, totalRequests)}), responses: {execResponses}/{totalResponses} ({Pct(execResponses, totalResponses)})"
+            $"[{Protocol}] requests: {totalRequests}/{totalRequests} ({Pct(totalRequests, totalRequests)}), responses: {totalResponses}/{totalResponses} ({Pct(totalResponses, totalResponses)})"
         );
     }
 
