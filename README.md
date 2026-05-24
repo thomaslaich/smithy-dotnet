@@ -39,10 +39,10 @@ in order to make code generation as seamless as possible.
 
 ## Features
 
-- Generate idiomatic C# models, typed clients, and ASP.NET Core server stubs from Smithy models during `dotnet build`.
-- Support multiple Smithy protocol paths, including `alloy#simpleRestJson`, `aws.protocols#restJson1`, `aws.protocols#restXml`, and `smithy.protocols#rpcv2Cbor`.
-- Fit naturally into .NET projects through MSBuild integration, NuGet packages, and generated code that behaves like normal C#.
-- Protocol support is tested against official Smithy, AWS, and alloy conformance suites.
+- **MSBuild integration**: Generate idiomatic C# models, typed clients, and ASP.NET Core server stubs from Smithy models during `dotnet build`.
+- **Client and server generation**: Turn a Smithy IDL contract into normal C# types and service surfaces that fit naturally into .NET projects.
+- **Multiple protocol paths**: Support `alloy#simpleRestJson`, `aws.protocols#restJson1`, `aws.protocols#restXml`, and `smithy.protocols#rpcv2Cbor`.
+- **Conformance-tested protocols**: Exercise protocol support against official Smithy, AWS, and alloy conformance suites.
 
 ## Development
 
