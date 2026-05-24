@@ -2,6 +2,24 @@
    <img src="website/public/brand/nsmithy_logo_1.png" alt="NSmithy logo" width="320" />
 </p>
 
+<p align="center">
+   <a href="https://github.com/thomaslaich/smithy-dotnet/actions/workflows/ci.yml">
+      <img src="https://github.com/thomaslaich/smithy-dotnet/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" />
+   </a>
+   <a href="https://thomaslaich.github.io/smithy-dotnet/">
+      <img src="https://github.com/thomaslaich/smithy-dotnet/actions/workflows/docs.yml/badge.svg?branch=main" alt="Docs" />
+   </a>
+   <a href="https://www.nuget.org/packages/NSmithy.Client">
+      <img src="https://img.shields.io/nuget/v/NSmithy.Client" alt="NuGet" />
+   </a>
+   <a href="https://dotnet.microsoft.com/">
+      <img src="https://img.shields.io/badge/.NET-net10.0-512BD4" alt=".NET 10" />
+   </a>
+   <a href="LICENSE">
+      <img src="https://img.shields.io/github/license/thomaslaich/smithy-dotnet" alt="License" />
+   </a>
+</p>
+
 _Work in Progress: NSmithy is a proof of concept. The current implementation
 demonstrates that Smithy models can drive idiomatic C# clients and ASP.NET Core
 servers end-to-end, but the protocol implementations are not yet on par with
