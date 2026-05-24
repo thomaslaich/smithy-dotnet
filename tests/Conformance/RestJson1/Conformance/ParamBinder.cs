@@ -18,6 +18,8 @@ namespace RestJson1.Conformance;
 /// </summary>
 internal static class ParamBinder
 {
+    private static readonly ShapeId HttpPayloadTraitId = ShapeId.Parse("smithy.api#httpPayload");
+
     public static object? Bind(Type targetType, JsonNode? value)
     {
         if (value is null)
@@ -270,12 +272,26 @@ internal static class ParamBinder
         var ctor = SelectConstructor(type);
         var parameters = ctor.GetParameters();
         var args = new object?[parameters.Length];
+        var schema = GetSchema(type);
         for (var i = 0; i < parameters.Length; i++)
         {
             var p = parameters[i];
             if (obj.TryGetPropertyValue(p.Name!, out var node) && node is not null)
             {
-                args[i] = Bind(p.ParameterType, node);
+                var memberSchema = schema?.GetMember(p.Name!);
+                if (
+                    p.ParameterType == typeof(byte[])
+                    && node is JsonValue scalar
+                    && scalar.TryGetValue<string>(out var text)
+                    && memberSchema?.HasTrait(HttpPayloadTraitId) == true
+                )
+                {
+                    args[i] = System.Text.Encoding.UTF8.GetBytes(text);
+                }
+                else
+                {
+                    args[i] = Bind(p.ParameterType, node);
+                }
             }
             else if (p.HasDefaultValue)
             {
@@ -309,10 +325,15 @@ internal static class ParamBinder
 
     private static ShapeKind? GetSchemaKind(Type targetType)
     {
+        return GetSchema(targetType)?.Kind;
+    }
+
+    private static Schema? GetSchema(Type targetType)
+    {
         var schemaProp = targetType.GetProperty(
             "Schema",
             BindingFlags.Public | BindingFlags.Static
         );
-        return (schemaProp?.GetValue(null) as Schema)?.Kind;
+        return schemaProp?.GetValue(null) as Schema;
     }
 }
