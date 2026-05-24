@@ -3,8 +3,6 @@ title: Serialization
 description: How NSmithy serializes and deserializes Smithy shapes at runtime.
 ---
 
-How NSmithy serializes and deserializes Smithy shapes at runtime.
-
 ## Goals
 
 - Protocol implementations must be **shared**: one codec for all clients and

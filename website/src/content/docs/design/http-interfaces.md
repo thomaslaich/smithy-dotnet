@@ -3,8 +3,6 @@ title: HTTP Interfaces
 description: How NSmithy abstracts the HTTP transport layer.
 ---
 
-How NSmithy abstracts the HTTP transport layer.
-
 ## Goals
 
 - Generated clients must not depend on `HttpClient` or any specific .NET HTTP

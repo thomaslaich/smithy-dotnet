@@ -3,8 +3,7 @@ title: Known Limitations
 description: Current limitations and rough edges in the NSmithy preview.
 ---
 
-NSmithy is still a preview-stage implementation. This page tracks the main
-current limitations and rough edges rather than every missing feature.
+NSmithy is still a preview-stage implementation.
 
 ## Smithy CLI And Build Environment
 
@@ -83,9 +82,7 @@ optimized for:
 - source-generated serializer metadata
 - every Smithy edge case across future protocol families
 
-This matters beyond JSON specifically: the project still needs more protocol
-pressure from areas such as `rpcv2Cbor` and `restXml` to fully validate its
-codec and transport abstractions.
+Broader protocol coverage (`rpcv2Cbor`, `restXml`) will drive further validation of the codec and transport abstractions.
 
 ## Client And Server Generation Are Still Coupled In Places
 
@@ -99,5 +96,4 @@ This is a known design debt and should be split into clearer generation modes.
 
 By default, the generator emits all supported shapes in the assembled model.
 When using Smithy build dependencies for traits or shared model packages,
-configure `SmithyGeneratedNamespaces` so dependency model shapes are not emitted
-as C#.
+configure `SmithyBaseNamespace` so dependency model shapes are not emitted as C#.

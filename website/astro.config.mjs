@@ -35,25 +35,14 @@ export default defineConfig({
 			},
 			sidebar: [
 				{
-					label: 'Getting Started',
+					label: 'Overview',
 					items: [
+						{ label: 'Introduction', slug: 'getting-started/introduction' },
 						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
 						{ label: 'Environment Setup', slug: 'getting-started/environment' },
-					],
-				},
-				{
-					label: 'Guides',
-					items: [
-						{ label: 'Multi-Protocol', slug: 'guides/multi-protocol' },
 						{ label: 'Contracts Project', slug: 'guides/contracts-project' },
 						{ label: 'Distributing Contracts', slug: 'guides/distributing-contracts' },
-					],
-				},
-				{
-					label: 'Reference',
-					items: [
-						{ label: 'MSBuild', slug: 'reference/msbuild' },
-						{ label: 'Known Limitations', slug: 'reference/known-limitations' },
+						{ label: 'Multi-Protocol', slug: 'guides/multi-protocol' },
 					],
 				},
 				{
@@ -70,6 +59,13 @@ export default defineConfig({
 							],
 						},
 						{ label: 'Conformance Tests', slug: 'protocols/conformance' },
+					],
+				},
+				{
+					label: 'Reference',
+					items: [
+						{ label: 'MSBuild', slug: 'reference/msbuild' },
+						{ label: 'Known Limitations', slug: 'reference/known-limitations' },
 					],
 				},
 				{

@@ -3,8 +3,6 @@ title: Protocol Status
 description: Where protocol support stands in the current NSmithy preview.
 ---
 
-This page is the short version of where protocol support stands today.
-
 NSmithy is still preview-stage. "Supported" here means there is working
 generator and runtime support for a usable slice, not that the protocol is
 complete or fully conformant across the Smithy surface.
