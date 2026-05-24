@@ -141,8 +141,7 @@ public final class SchemaGenerator {
         memberTraitsExpr(context, shape.getMember()));
     writer.write("");
     writer.write(
-        "public static Schema Schema { get; } = Schema.Create$L($L, MemberSchema, $L);",
-        shapeKindName(shape.getType()),
+          "public static Schema Schema { get; } = Schema.CreateList($L, MemberSchema, $L);",
         shapeIdExpr(shape.getId()),
         traitsExpr(shape.getAllTraits().values()));
     writer.write("");
