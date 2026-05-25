@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Xml.Linq;
 using NSmithy.Core.Serde;
+using NSmithy.Http;
 using NSmithy.Protocols.RestJson;
 
 namespace NSmithy.Protocols.RestXml;
