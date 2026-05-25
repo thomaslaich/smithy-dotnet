@@ -158,8 +158,3 @@ from the project directory. Credentials can also be provided via the
 For Maven Central, follow Sonatype's deployment procedure — `push` targets
 registries that accept direct HTTP PUT; the Central Portal's bundle-upload flow
 requires a different approach.
-
-## Related
-
-- [Contracts Project](/smithy-dotnet/guides/contracts-project/) — set up and reference a contracts project
-- [MSBuild Reference](/smithy-dotnet/reference/msbuild/) — all MSBuild properties and items
