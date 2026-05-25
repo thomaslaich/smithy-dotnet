@@ -886,7 +886,12 @@ public final class ClientGenerator implements Runnable {
                     .map(Node::expectStringNode)
                     .map(s -> s.getValue()))
         .map(CSharpNaming::formatString)
-        .orElse(CSharpNaming.formatString("gzip"));
+        .orElseThrow(
+            () ->
+                new IllegalStateException(
+                    "@requestCompression on "
+                        + op.getId()
+                        + " has no encodings — trait requires at least one"));
   }
 
   private String mediaTypeValue(Shape shape) {

@@ -63,10 +63,7 @@ public static class SmithyAspNetCoreProtocol
                 continue;
             }
 
-            if (query.Value.Count > 0 || query.Value.Count == 0)
-            {
-                values[query.Key] = query.Value.Select(value => value ?? string.Empty).ToArray();
-            }
+            values[query.Key] = query.Value.Select(value => value ?? string.Empty).ToArray();
         }
 
         return CreateQueryParamsMap<T>(values);
@@ -314,6 +311,8 @@ public static class SmithyAspNetCoreProtocol
         return content.Length == 0 ? null : Encoding.UTF8.GetString(content);
     }
 
+    // Reflection is used here to construct the map type at runtime. @httpQueryParams is not
+    // on the hot path for most services, so the overhead is acceptable.
     private static T CreateQueryParamsMap<T>(Dictionary<string, IReadOnlyList<string>> values)
     {
         if (values.Count == 0)

@@ -687,7 +687,7 @@ public static class RestJsonProtocol
     private static byte[] CompressGzip(byte[] content)
     {
         using var stream = new MemoryStream();
-        using (var gzip = new GZipStream(stream, CompressionLevel.Optimal, leaveOpen: true))
+        using (var gzip = new GZipStream(stream, CompressionLevel.Fastest, leaveOpen: true))
         {
             gzip.Write(content, 0, content.Length);
         }

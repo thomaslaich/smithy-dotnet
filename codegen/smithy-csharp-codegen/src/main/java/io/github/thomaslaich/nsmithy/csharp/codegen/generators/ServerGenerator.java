@@ -882,11 +882,8 @@ public final class ServerGenerator implements Runnable {
   private String deserializePayloadExpression(MemberShape member, boolean required) {
     Shape target = context.model().expectShape(member.getTarget());
     if (target.getType() == software.amazon.smithy.model.shapes.ShapeType.BLOB) {
-      return required
-          ? "await SmithyAspNetCoreProtocol.ReadPayloadBodyAsync(httpContext,"
-              + " cancellationToken).ConfigureAwait(false)"
-          : "await SmithyAspNetCoreProtocol.ReadPayloadBodyAsync(httpContext,"
-              + " cancellationToken).ConfigureAwait(false)";
+      return "await SmithyAspNetCoreProtocol.ReadPayloadBodyAsync(httpContext,"
+          + " cancellationToken).ConfigureAwait(false)";
     }
     if (rawRestJsonStringPayloads
         && target.getType() == software.amazon.smithy.model.shapes.ShapeType.STRING) {
