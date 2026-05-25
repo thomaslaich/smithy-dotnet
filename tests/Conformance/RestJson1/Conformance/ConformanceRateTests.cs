@@ -15,8 +15,12 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
     {
         var totalRequests = Model.EnumerateHttpRequestTests(RestJson1Allowlist.Protocol).Count();
         var totalResponses = Model.EnumerateHttpResponseTests(RestJson1Allowlist.Protocol).Count();
-        var execRequests = RestJson1Allowlist.ExecutableRequestCases.Count;
-        var execResponses = RestJson1Allowlist.ExecutableResponseCases.Count;
+        var execRequests =
+            RestJson1Allowlist.ExecutableRequestCases.Count
+            + RestJson1Allowlist.ExecutableServerRequestCases.Count;
+        var execResponses =
+            RestJson1Allowlist.ExecutableResponseCases.Count
+            + RestJson1Allowlist.ExecutableServerResponseCases.Count;
 
         output.WriteLine(
             $"[{RestJson1Allowlist.Protocol}] requests: {execRequests}/{totalRequests} ({Pct(execRequests, totalRequests)}), responses: {execResponses}/{totalResponses} ({Pct(execResponses, totalResponses)})"

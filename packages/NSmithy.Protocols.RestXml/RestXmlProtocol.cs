@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Xml.Linq;
 using NSmithy.Core.Serde;
+using NSmithy.Http;
 using NSmithy.Protocols.RestJson;
 
 namespace NSmithy.Protocols.RestXml;
@@ -97,6 +98,12 @@ public static class RestXmlProtocol
     {
         return RestJsonProtocol.GetRequiredPrefixedHeaders<T>(headers, prefix);
     }
+
+    public static void ApplyRequestCompression(SmithyHttpRequest request, string encoding) =>
+        RestJsonProtocol.ApplyRequestCompression(request, encoding);
+
+    public static void ApplyContentMd5(SmithyHttpRequest request) =>
+        RestJsonProtocol.ApplyContentMd5(request);
 
     private static XElement GetErrorRoot(byte[] content)
     {

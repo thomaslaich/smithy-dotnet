@@ -39,7 +39,7 @@ public final class ErrorGenerator implements Runnable {
     writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     Model model = context.model();
     String typeName = CSharpNaming.typeName(shape.getId().getName());
-    Optional<MemberShape> messageMember = ShapeSupport.errorMessageMember(shape);
+    Optional<MemberShape> messageMember = ShapeSupport.errorMessageMember(model, shape);
     List<MemberShape> members = ShapeSupport.sortedMembers(shape);
 
     writer.write(

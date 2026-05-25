@@ -28,6 +28,7 @@ import software.amazon.smithy.codegen.core.directed.GenerateResourceDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateServiceDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateStructureDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateUnionDirective;
+import software.amazon.smithy.model.shapes.EnumShape;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
 @SmithyUnstableApi
@@ -132,15 +133,21 @@ final class DirectedCSharpClientCodegen
   @Override
   public void generateEnumShape(
       GenerateEnumDirective<GenerationContext, CSharpSettings> directive) {
+    EnumShape enumShape =
+        directive
+            .shape()
+            .asEnumShape()
+            .or(() -> directive.shape().asStringShape().flatMap(EnumShape::fromStringShape))
+            .orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        "Expected enum shape for " + directive.shape().getId()));
     directive
         .context()
         .writerDelegator()
         .useShapeWriter(
-            directive.shape(),
-            writer ->
-                new StringEnumGenerator(
-                        directive.context(), writer, directive.shape().asEnumShape().get())
-                    .run());
+            enumShape,
+            writer -> new StringEnumGenerator(directive.context(), writer, enumShape).run());
   }
 
   @Override

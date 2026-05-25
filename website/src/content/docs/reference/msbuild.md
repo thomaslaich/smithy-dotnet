@@ -8,9 +8,6 @@ generation pipeline. It invokes the `smithy` CLI, which runs the
 `csharp-codegen` Java plugin to emit `.g.cs` files, then registers those files
 with the .NET toolchain.
 
-See [Codegen Architecture](/smithy-dotnet/design/codegen-architecture/) for the
-full build pipeline diagram.
-
 ## Properties
 
 ### Code generation

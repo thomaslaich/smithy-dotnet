@@ -16,7 +16,7 @@ as XML and decodes XML responses. Status: **Early preview, client-only**.
 ## NuGet Package
 
 ```xml
-<PackageReference Include="NSmithy.Codecs.Xml" Version="0.1.0-preview.10" />
+<PackageReference Include="NSmithy.Codecs.Xml" Version="0.1.0-preview.11" />
 ```
 
 ## Modeling

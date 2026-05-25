@@ -44,11 +44,14 @@ public final class ServerGenerator implements Runnable {
   private final GenerationContext context;
   private final CSharpWriter writer;
   private final ServiceShape service;
+  private final boolean rawRestJsonStringPayloads;
 
   public ServerGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
     this.writer = w;
     this.service = s;
+    this.rawRestJsonStringPayloads =
+        s.findTrait(io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds.REST_JSON_1).isPresent();
   }
 
   @Override
@@ -439,13 +442,14 @@ public final class ServerGenerator implements Runnable {
         "endpoints.MapMethods($L, [$L], async (HttpContext httpContext, $L handler,"
             + " System.Threading.CancellationToken cancellationToken) => {",
         "});",
-        CSharpNaming.formatString(http.getUri().toString()),
+        CSharpNaming.formatString(routePattern(http)),
         CSharpNaming.formatString(http.getMethod()),
         opInterface,
         () -> {
           writer.write("System.ArgumentNullException.ThrowIfNull(httpContext);");
           writer.write("System.ArgumentNullException.ThrowIfNull(handler);");
           writer.write("");
+          writeStaticQueryValidation(http);
           writeOperationBody(sp, op, contract);
         });
   }
@@ -560,17 +564,7 @@ public final class ServerGenerator implements Runnable {
               + ")";
     }
     if (ShapeSupport.isHttpQueryParams(m)) {
-      String excluded =
-          ShapeSupport.sortedMembers(input).stream()
-              .filter(ShapeSupport::isHttpQuery)
-              .map(qm -> CSharpNaming.formatString(qm.expectTrait(HttpQueryTrait.class).getValue()))
-              .collect(Collectors.joining(", "));
-      String expr =
-          "SmithyAspNetCoreProtocol.GetQueryParams<"
-              + memberType
-              + ">(httpContext, ["
-              + excluded
-              + "])";
+      String expr = "SmithyAspNetCoreProtocol.GetQueryParams<" + memberType + ">(httpContext, [])";
       return required ? expr + "!" : expr;
     }
     if (ShapeSupport.isHttpHeader(m)) {
@@ -601,7 +595,19 @@ public final class ServerGenerator implements Runnable {
       return deserializePayloadExpression(m, required);
     }
     if (bodyVar != null) {
-      return bodyVar + "." + CSharpNaming.propertyName(m.getMemberName());
+      String property = CSharpNaming.propertyName(m.getMemberName());
+      String access = bodyVar + "." + property;
+      if (ShapeSupport.isRequired(m)) {
+        return access;
+      }
+
+      String defaultValue =
+          ShapeSupport.defaultValueExpression(context.model(), context.symbolProvider(), m);
+      if (defaultValue != null) {
+        return bodyVar + " is null || " + access + " is null ? " + defaultValue + " : " + access;
+      }
+
+      return bodyVar + " is null ? default : " + access;
     }
     throw new RuntimeException("Body member without projection: " + m.getId());
   }
@@ -619,9 +625,18 @@ public final class ServerGenerator implements Runnable {
           writer.write("System.ArgumentNullException.ThrowIfNull(output);");
           for (MemberShape m : ShapeSupport.sortedMembers(output)) {
             if (ShapeSupport.isHttpResponseCode(m)) {
-              writer.write(
-                  "SmithyAspNetCoreProtocol.SetStatusCode(httpContext, output.$L);",
-                  CSharpNaming.propertyName(m.getMemberName()));
+              String property = "output." + CSharpNaming.propertyName(m.getMemberName());
+              if (ShapeSupport.isOptionalParameter(m)) {
+                writer.write("if ($L is { } statusCode)", property);
+                writer.openBlock(
+                    "{",
+                    "}",
+                    () ->
+                        writer.write(
+                            "SmithyAspNetCoreProtocol.SetStatusCode(httpContext, statusCode);"));
+              } else {
+                writer.write("SmithyAspNetCoreProtocol.SetStatusCode(httpContext, $L);", property);
+              }
             }
           }
           for (MemberShape m : ShapeSupport.sortedMembers(output)) {
@@ -648,11 +663,7 @@ public final class ServerGenerator implements Runnable {
                   .filter(ShapeSupport::isHttpPayload)
                   .findFirst();
           if (payload.isPresent()) {
-            writer.write(
-                "await $L.ConfigureAwait(false);",
-                serializePayloadResponseExpression(
-                    payload.get(),
-                    "output." + CSharpNaming.propertyName(payload.get().getMemberName())));
+            writePayloadResponseWriter(payload.get());
             return;
           }
           List<MemberShape> bodyMembers =
@@ -731,7 +742,7 @@ public final class ServerGenerator implements Runnable {
               () -> {
                 for (int i = 0; i < bodyMembers.size(); i++) {
                   MemberShape m = bodyMembers.get(i);
-                  String type = ShapeSupport.memberTypeExpr(sp, m, ShapeSupport.isNullable(m));
+                  String type = bodyProjectionMemberTypeExpr(sp, m);
                   writer.write(
                       "$L $L$L",
                       type,
@@ -751,7 +762,7 @@ public final class ServerGenerator implements Runnable {
           writer.write("}");
           writer.write("");
           for (MemberShape m : bodyMembers) {
-            String type = ShapeSupport.memberTypeExpr(sp, m, ShapeSupport.isNullable(m));
+            String type = bodyProjectionMemberTypeExpr(sp, m);
             writer.write(
                 "public $L $L { get; }", type, CSharpNaming.propertyName(m.getMemberName()));
             writer.write("");
@@ -774,7 +785,7 @@ public final class ServerGenerator implements Runnable {
                   String prop = CSharpNaming.propertyName(m.getMemberName());
                   String schema = SchemaGenerator.memberSchemaFieldName(m);
                   Shape target = context.model().expectShape(m.getTarget());
-                  if (ShapeSupport.isNullable(m)) {
+                  if (bodyProjectionMemberNullable(m)) {
                     String local = CSharpNaming.parameterName(m.getMemberName());
                     writer.write("if ($L is { } $L)", prop, local);
                     writer.openBlock(
@@ -870,6 +881,31 @@ public final class ServerGenerator implements Runnable {
 
   private String deserializePayloadExpression(MemberShape member, boolean required) {
     Shape target = context.model().expectShape(member.getTarget());
+    if (target.getType() == software.amazon.smithy.model.shapes.ShapeType.BLOB) {
+      return "await SmithyAspNetCoreProtocol.ReadPayloadBodyAsync(httpContext,"
+          + " cancellationToken).ConfigureAwait(false)";
+    }
+    if (rawRestJsonStringPayloads
+        && target.getType() == software.amazon.smithy.model.shapes.ShapeType.STRING) {
+      return required
+          ? "await SmithyAspNetCoreProtocol.ReadStringPayloadBodyAsync(httpContext,"
+              + " cancellationToken).ConfigureAwait(false) ?? string.Empty"
+          : "await SmithyAspNetCoreProtocol.ReadStringPayloadBodyAsync(httpContext,"
+              + " cancellationToken).ConfigureAwait(false)";
+    }
+    if (rawRestJsonStringPayloads
+        && target.getType() == software.amazon.smithy.model.shapes.ShapeType.ENUM) {
+      String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target));
+      return required
+          ? "new "
+              + type
+              + "(await SmithyAspNetCoreProtocol.ReadStringPayloadBodyAsync("
+              + "httpContext, cancellationToken).ConfigureAwait(false) ?? string.Empty)"
+          : "await SmithyAspNetCoreProtocol.ReadStringPayloadBodyAsync(httpContext,"
+              + " cancellationToken).ConfigureAwait(false) is { } payloadValue ? new "
+              + type
+              + "(payloadValue) : null";
+    }
     if (ShapeSupport.usesShapeSerde(target)) {
       String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target));
       return "await SmithyAspNetCoreProtocol."
@@ -894,6 +930,71 @@ public final class ServerGenerator implements Runnable {
     return "SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, serializer => "
         + stripTrailingSemicolon(serializePayloadValue(member, "serializer", valueExpr))
         + ", cancellationToken)";
+  }
+
+  private void writePayloadResponseWriter(MemberShape member) {
+    String valueExpr = "output." + CSharpNaming.propertyName(member.getMemberName());
+    if (ShapeSupport.isOptionalParameter(member)) {
+      String local = CSharpNaming.parameterName(member.getMemberName());
+      writer.write("if ($L is { } $L)", valueExpr, local);
+      writer.openBlock(
+          "{",
+          "}",
+          () ->
+              writer.write(
+                  "await $L.ConfigureAwait(false);",
+                  serializePayloadResponseExpression(member, local)));
+      return;
+    }
+
+    writer.write(
+        "await $L.ConfigureAwait(false);", serializePayloadResponseExpression(member, valueExpr));
+  }
+
+  private String bodyProjectionMemberTypeExpr(SymbolProvider sp, MemberShape member) {
+    return ShapeSupport.memberTypeExpr(sp, member, bodyProjectionMemberNullable(member));
+  }
+
+  private boolean bodyProjectionMemberNullable(MemberShape member) {
+    return !ShapeSupport.isRequired(member);
+  }
+
+  private String routePattern(HttpTrait http) {
+    String uri = http.getUri().toString();
+    int queryIndex = uri.indexOf('?');
+    return queryIndex >= 0 ? uri.substring(0, queryIndex) : uri;
+  }
+
+  private void writeStaticQueryValidation(HttpTrait http) {
+    String uri = http.getUri().toString();
+    int queryIndex = uri.indexOf('?');
+    if (queryIndex < 0 || queryIndex == uri.length() - 1) {
+      return;
+    }
+
+    String query = uri.substring(queryIndex + 1);
+    for (String segment : query.split("&")) {
+      if (segment.isEmpty()) {
+        continue;
+      }
+
+      int equalsIndex = segment.indexOf('=');
+      String name = equalsIndex >= 0 ? segment.substring(0, equalsIndex) : segment;
+      String value = equalsIndex >= 0 ? segment.substring(equalsIndex + 1) : null;
+      writer.write(
+          "if (!SmithyAspNetCoreProtocol.HasExpectedQueryLiteral(httpContext, $L, $L))",
+          CSharpNaming.formatString(name),
+          value == null ? "null" : CSharpNaming.formatString(value));
+      writer.openBlock(
+          "{",
+          "}",
+          () -> {
+            writer.write("httpContext.Response.StatusCode = StatusCodes.Status404NotFound;");
+            writer.write("return;");
+          });
+    }
+
+    writer.write("");
   }
 
   private String bodyProjectionConstructorArguments(List<MemberShape> bodyMembers) {
