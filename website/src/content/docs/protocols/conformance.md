@@ -38,7 +38,7 @@ models in this repository. They count official Smithy/Alloy
 Current snapshot:
 
 - `alloy#simpleRestJson` — `43/43` official cases (`100%`).
-- `aws.protocols#restJson1` — `234/272` official cases (`86.03%`).
+- `aws.protocols#restJson1` — `268/272` official cases (`98.53%`).
 - `smithy.protocols#rpcv2Cbor` — early preview; conformance test integration
   is in progress.
 - `alloy.proto#grpc` — not covered by Smithy's conformance suite; tested
@@ -52,18 +52,18 @@ Two different numbers are useful when reading the test projects:
   cases present in the pinned models
 
 For `simpleRestJson`, those numbers now line up because the full official corpus
-is executable. For `restJson1`, they do not: some remaining official cases are
-still outside the current client-executable surface or are more meaningful with
-server-side behavior.
+is executable. For `restJson1`, nearly all official cases are now executable as
+well; the remaining gap is the Glacier-specific fixture slice that is not yet
+projected into the conformance project.
 
 ## Skip Reasons
 
 Common reasons a case is skipped rather than failed:
 
-- **Server generation not implemented** — `restJson1` server surfaces and
-  malformed-request rejection are out of scope for this preview.
-- **Feature not yet implemented** — e.g. broader `restJson1` binding coverage,
-  additional request/response edge cases, or future malformed-input handling.
+- **Fixture projection not yet wired in** — e.g. the remaining Glacier-specific
+  `restJson1` cases.
+- **Feature not yet implemented** — e.g. broader malformed-input handling or
+  future protocol/runtime edge cases outside the current pinned corpus.
 - **AWS service-specific fixtures** — fixtures that depend on AWS-specific
   behavior outside the current generated-client slice.
 

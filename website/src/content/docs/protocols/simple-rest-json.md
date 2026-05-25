@@ -9,18 +9,18 @@ bindings:
 | Protocol | Trait | Status |
 | --- | --- | --- |
 | `alloy#simpleRestJson` | `@simpleRestJson` | Preview — client + server |
-| `aws.protocols#restJson1` | `@restJson1` | Early preview — client only |
+| `aws.protocols#restJson1` | `@restJson1` | Preview — client + server |
 
 `alloy#simpleRestJson` is the primary path in NSmithy: it has the broadest
 coverage, generates both client and server surfaces, and is the recommended
 starting point. `aws.protocols#restJson1` is available for consuming AWS-style
-REST/JSON services from a generated client; server generation is out of scope
-for this preview.
+REST/JSON services and now also generates ASP.NET Core server surfaces. The
+remaining conformance gap is concentrated in Glacier-specific fixtures.
 
 Current conformance snapshot from the pinned protocol-test models:
 
 - `alloy#simpleRestJson`: `43/43` official request/response cases (`100%`)
-- `aws.protocols#restJson1`: `234/272` official request/response cases (`86.03%`)
+- `aws.protocols#restJson1`: `268/272` official request/response cases (`98.53%`)
 
 The modeling syntax, HTTP binding traits, and generated C# shapes are identical
 between the two protocols — the only difference is the trait applied to the
