@@ -145,7 +145,9 @@ final class DirectedCSharpClientCodegen
     directive
         .context()
         .writerDelegator()
-        .useShapeWriter(enumShape, writer -> new StringEnumGenerator(directive.context(), writer, enumShape).run());
+        .useShapeWriter(
+            enumShape,
+            writer -> new StringEnumGenerator(directive.context(), writer, enumShape).run());
   }
 
   @Override

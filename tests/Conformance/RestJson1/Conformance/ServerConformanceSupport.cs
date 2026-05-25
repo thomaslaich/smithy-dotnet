@@ -84,7 +84,8 @@ internal sealed class RestJsonServerHost : IAsyncDisposable
     {
         var assembly = typeof(RestJsonServerHost).Assembly;
         var handlerName = "I" + operationName + "Handler";
-        return assembly.GetTypes()
+        return assembly
+            .GetTypes()
             .Single(t =>
                 t.IsInterface && string.Equals(t.Name, handlerName, StringComparison.Ordinal)
             );
@@ -128,8 +129,11 @@ internal sealed class RestJsonServerHost : IAsyncDisposable
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .Single(m => m.Name == nameof(DispatchProxy.Create) && m.IsGenericMethodDefinition)
             .MakeGenericMethod(aggregateHandler, typeof(RestJsonServerDispatchProxy));
-        var proxy = create.Invoke(null, null)
-            ?? throw new InvalidOperationException($"Unable to create proxy for {aggregateHandler}.");
+        var proxy =
+            create.Invoke(null, null)
+            ?? throw new InvalidOperationException(
+                $"Unable to create proxy for {aggregateHandler}."
+            );
         ((RestJsonServerDispatchProxy)proxy).Invoker = invoker;
         return proxy;
     }
