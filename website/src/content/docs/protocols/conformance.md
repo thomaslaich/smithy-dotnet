@@ -66,8 +66,3 @@ Common reasons a case is skipped rather than failed:
   future protocol/runtime edge cases outside the current pinned corpus.
 - **AWS service-specific fixtures** — fixtures that depend on AWS-specific
   behavior outside the current generated-client slice.
-
-## Related Docs
-
-- [Protocol Status](../)
-- [Known Limitations](../../reference/known-limitations/)

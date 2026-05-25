@@ -154,8 +154,3 @@ C# types. Use `SmithyBaseNamespace` to emit only shapes under your own namespace
 
 See the [MSBuild Reference](/smithy-dotnet/reference/msbuild/) for the full
 property list.
-
-## Related
-
-- [Distributing Contracts](/smithy-dotnet/guides/distributing-contracts/) — publish the contracts package to NuGet and Maven
-- [MSBuild Reference](/smithy-dotnet/reference/msbuild/) — all MSBuild properties and items

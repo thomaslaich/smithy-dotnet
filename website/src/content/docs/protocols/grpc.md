@@ -108,8 +108,3 @@ Console.WriteLine(response.Message); // Hello, world!
 - No streaming operations yet.
 - Cleartext development requires separate HTTP/1.1 and HTTP/2 ports.
 - Smallest conformance test surface of any supported protocol.
-
-## Related
-
-- [Multi-Protocol](/smithy-dotnet/guides/multi-protocol/) — serve one handler over both HTTP and gRPC
-- [Protocol Status](/smithy-dotnet/protocols/) — coverage overview

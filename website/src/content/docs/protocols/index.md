@@ -51,10 +51,3 @@ These protocols are not current NSmithy targets:
 
 - AWS JSON protocols
 - EC2 Query and AWS Query
-
-## Related Docs
-
-- [Known Limitations](../reference/known-limitations/)
-- [Multi-Protocol Guide](../guides/multi-protocol/)
-- [Conformance Matrix](./conformance/)
-- [Roadmap](../contributing/roadmap/)

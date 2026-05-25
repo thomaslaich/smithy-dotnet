@@ -108,8 +108,3 @@ that stub.
 `IHttpTransport` is not used for gRPC operations. The two transports (HTTP and
 gRPC) are selected at compile time by which generated client the consumer
 instantiates.
-
-## Related Docs
-
-- [Serialization](/smithy-dotnet/design/serialization/) — codec and protocol binding
-- [Multi-Protocol Guide](/smithy-dotnet/guides/multi-protocol/)
