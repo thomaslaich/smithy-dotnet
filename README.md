@@ -26,7 +26,7 @@
 
 NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io) model into idiomatic C# at build time. From a single contract you get typed clients, server scaffolding, and shared model types — fully integrated into your MSBuild workflow.
 
-**[smithy.io](https://smithy.io)** · **[NSmithy Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Design Docs](designs/README.md)**
+**[NSmithy Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
 
 ## Features
 
