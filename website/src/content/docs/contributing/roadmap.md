@@ -68,6 +68,23 @@ expanding that baseline rather than revisiting it.
 - Expand test coverage before broadening feature claims.
 - Clarify the model constraints required by the current generated path.
 
+### 7. XML doc comments from Smithy documentation traits
+
+Smithy's `@documentation` trait and `///` doc comments are not yet emitted as
+C# XML doc comments (`/// <summary>…</summary>`) on generated types and members.
+Adding this would improve the IDE experience for consumers of generated code —
+hover documentation, parameter hints, and `<IntelliSense>` would reflect the
+model's documentation rather than being empty.
+
+### 8. OpenAPI spec generation
+
+Wire `smithy-openapi` into the MSBuild pipeline so that `dotnet build` emits an
+`openapi.json` alongside the generated C# files. Because the spec is derived
+from the Smithy model it stays in sync with the source of truth automatically.
+The generated spec can then be served at runtime via Swagger UI or .NET 9's
+`Microsoft.AspNetCore.OpenApi` middleware without the overhead of runtime
+reflection over ASP.NET Core endpoints.
+
 ## Later Work
 
 These are plausible future areas, but they are not the current focus:
