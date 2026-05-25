@@ -17,6 +17,10 @@
       "path": "examples/simple-rest-json"
     },
     {
+      "name": "Example: RestJson1",
+      "path": "examples/rest-json1"
+    },
+    {
       "name": "Example: gRPC",
       "path": "examples/grpc"
     },

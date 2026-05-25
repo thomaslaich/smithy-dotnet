@@ -1,0 +1,12 @@
+[workspace]
+authors = ["Thomas Laich <thomaslaich@gmail.com>"]
+channels = ["conda-forge"]
+name = "rest-json1"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+openjdk = ">=25.0.2,<26"
+smithy = ">=1.70.0,<2"

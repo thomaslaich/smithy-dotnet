@@ -1,11 +1,11 @@
 # NSmithy simpleRestJson Example
 
-A Weather service built with `alloy#simpleRestJson`. The model is adapted from
-the [Smithy quickstart](https://smithy.io/2.0/quickstart.html) and demonstrates
-resources, pagination, errors, and HTTP binding traits.
+A Pizza Admin service built with `alloy#simpleRestJson`. The model is adapted from the
+[Alloy protocol tests](https://github.com/disneystreaming/alloy) and demonstrates
+unions, enums, maps, errors, HTTP header binding, and payload binding.
 
 - `contracts`: the Smithy model, packaged as a contracts project.
-- `server`: generated ASP.NET Core endpoints with a handwritten `IWeatherServiceHandler` implementation.
+- `server`: generated ASP.NET Core endpoints with a handwritten `IPizzaAdminServiceHandler` implementation.
 - `client`: generated typed client that calls the server.
 
 The server and client reference the contracts project directly. No
@@ -40,8 +40,30 @@ dotnet run --project client -- http://localhost:5000
 Or call the server directly:
 
 ```bash
-curl -i http://localhost:5000/current-time
-curl -i http://localhost:5000/cities
-curl -i http://localhost:5000/cities/SEA
-curl -i http://localhost:5000/cities/SEA/forecast
+curl -i http://localhost:5000/health
+curl -i http://localhost:5000/version
+curl -i http://localhost:5000/restaurant/napoli/menu
+curl -i -X POST http://localhost:5000/restaurant/napoli/menu/item \
+  -H 'Content-Type: application/json' \
+  -d '{"food":{"pizza":{"name":"Quattro Formaggi","base":"T","toppings":["CHEESE"]}},"price":11.0}'
 ```
+
+The `/openUnions` endpoint round-trips an `OpenUnionsPayload` union. There are two variants:
+
+**Tagged union** — the variant name is the key, and its value is the payload:
+
+```bash
+curl -i -X PUT http://localhost:5000/openUnions \
+  -H 'Content-Type: application/json' \
+  -d '{"tagged":{"str":"hello"}}'
+```
+
+**Discriminated union** — the discriminator field (`key`) is inlined into the object alongside the payload fields:
+
+```bash
+curl -i -X PUT http://localhost:5000/openUnions \
+  -H 'Content-Type: application/json' \
+  -d '{"discriminated":{"key":"smol","content":"hello"}}'
+```
+
+Both return the body echoed back with `200 OK`.

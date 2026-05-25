@@ -1,23 +1,42 @@
-using Example.Weather;
+using Alloy.Test;
 using NSmithy.Client;
 
 var endpoint = args.Length > 0 ? args[0] : "http://localhost:5000";
 
-var client = new WeatherClient(
+var client = new PizzaAdminServiceClient(
     new HttpClient(),
     new SmithyClientOptions { Endpoint = new Uri(endpoint) }
 );
 
-var time = await client.GetCurrentTimeAsync(new GetCurrentTimeInput());
-Console.WriteLine($"Current time: {time.Time}");
+var health = await client.HealthAsync(new HealthInput());
+Console.WriteLine($"Health: {health.Status}");
 
-var cities = await client.ListCitiesAsync(new ListCitiesInput(pageSize: 10));
-Console.WriteLine($"Cities ({cities.Items.Values.Count}):");
-foreach (var c in cities.Items.Values)
-    Console.WriteLine($"  {c.CityId}: {c.Name}");
+var version = await client.VersionAsync(new VersionInput());
+Console.WriteLine($"Version: {version.Version}");
 
-var seattle = await client.GetCityAsync(new GetCityInput("SEA"));
-Console.WriteLine($"Seattle: ({seattle.Coordinates.Latitude}, {seattle.Coordinates.Longitude})");
+var menu = await client.GetMenuAsync(new GetMenuInput("napoli"));
+Console.WriteLine($"Menu for napoli ({menu.Menu.Values.Count} items):");
+foreach (var (name, item) in menu.Menu.Values)
+    Console.WriteLine($"  {name}: ${item.Price:F2}");
 
-var forecast = await client.GetForecastAsync(new GetForecastInput("SEA"));
-Console.WriteLine($"Forecast for SEA: {forecast.ChanceOfRain:P0} chance of rain");
+var added = await client.AddMenuItemAsync(
+    new AddMenuItemInput(
+        new MenuItem(
+            Food.FromPizza(
+                new Pizza(
+                    PizzaBase.TOMATO,
+                    "Hawaii",
+                    new Ingredients([Ingredient.TOMATO, Ingredient.CHEESE, Ingredient.PINEAPPLE])
+                )
+            ),
+            12.50f
+        ),
+        "napoli"
+    )
+);
+Console.WriteLine($"Added item: {added.ItemId} at {added.Added:u}");
+
+menu = await client.GetMenuAsync(new GetMenuInput("napoli"));
+Console.WriteLine($"Updated menu ({menu.Menu.Values.Count} items):");
+foreach (var (name, item) in menu.Menu.Values)
+    Console.WriteLine($"  {name}: ${item.Price:F2}");

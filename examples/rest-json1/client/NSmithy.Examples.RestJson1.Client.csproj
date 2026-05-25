@@ -4,8 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <SmithyService>alloy.test#PizzaAdminService</SmithyService>
-    <SmithyGeneratedNamespaces>alloy.test</SmithyGeneratedNamespaces>
+    <SmithyService>example.weather#Weather</SmithyService>
+    <SmithyGeneratedNamespaces>example.weather</SmithyGeneratedNamespaces>
     <SmithyGenerateServer>false</SmithyGenerateServer>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
@@ -15,6 +15,6 @@
     <PackageReference Include="NSmithy.Client" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.1.0-SNAPSHOT" />
-    <ProjectReference Include="../contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj" />
+    <ProjectReference Include="../contracts/NSmithy.Examples.RestJson1.Contracts.csproj" />
   </ItemGroup>
 </Project>
