@@ -14,8 +14,7 @@ import software.amazon.smithy.utils.SmithyUnstableApi;
 @SmithyUnstableApi
 public final class CSharpClientCodegenPlugin implements SmithyBuildPlugin {
 
-  private static final Logger LOGGER =
-      Logger.getLogger(CSharpClientCodegenPlugin.class.getName());
+  private static final Logger LOGGER = Logger.getLogger(CSharpClientCodegenPlugin.class.getName());
 
   @Override
   public String getName() {
@@ -49,11 +48,18 @@ public final class CSharpClientCodegenPlugin implements SmithyBuildPlugin {
     String dir = outputDir.toAbsolutePath().toString();
     for (List<String> cmd :
         List.of(
-            List.of("csharpier", "format", "--include-generated", "--ignore-path", NULL_DEVICE, dir),
-            List.of("dotnet", "csharpier", "format", "--include-generated", "--ignore-path", NULL_DEVICE, dir))) {
+            List.of(
+                "csharpier", "format", "--include-generated", "--ignore-path", NULL_DEVICE, dir),
+            List.of(
+                "dotnet",
+                "csharpier",
+                "format",
+                "--include-generated",
+                "--ignore-path",
+                NULL_DEVICE,
+                dir))) {
       try {
-        int exit =
-            new ProcessBuilder(cmd).redirectErrorStream(true).inheritIO().start().waitFor();
+        int exit = new ProcessBuilder(cmd).redirectErrorStream(true).inheritIO().start().waitFor();
         if (exit == 0) return;
         LOGGER.fine(cmd + " exited with code " + exit + " — trying next");
       } catch (IOException | InterruptedException e) {
