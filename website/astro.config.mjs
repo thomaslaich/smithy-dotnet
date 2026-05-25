@@ -49,7 +49,7 @@ export default defineConfig({
 					label: 'Protocols',
 					items: [
 						{ label: 'Protocol Status', slug: 'protocols' },
-						{ label: 'REST JSON', slug: 'protocols/simple-rest-json' },
+						{ label: 'REST JSON', slug: 'protocols/rest-json' },
 						{ label: 'gRPC', slug: 'protocols/grpc' },
 						{
 							label: 'AWS Protocols',

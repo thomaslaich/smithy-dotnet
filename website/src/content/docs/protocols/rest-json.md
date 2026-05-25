@@ -11,20 +11,33 @@ bindings:
 | `alloy#simpleRestJson` | `@simpleRestJson` | Preview — client + server |
 | `aws.protocols#restJson1` | `@restJson1` | Preview — client + server |
 
-`alloy#simpleRestJson` is the primary path in NSmithy: it has the broadest
-coverage, generates both client and server surfaces, and is the recommended
-starting point. `aws.protocols#restJson1` is available for consuming AWS-style
-REST/JSON services and now also generates ASP.NET Core server surfaces. The
-remaining conformance gap is concentrated in Glacier-specific fixtures.
-
 Current conformance snapshot from the pinned protocol-test models:
 
 - `alloy#simpleRestJson`: `43/43` official request/response cases (`100%`)
 - `aws.protocols#restJson1`: `268/272` official request/response cases (`98.53%`)
 
-The modeling syntax, HTTP binding traits, and generated C# shapes are identical
-between the two protocols — the only difference is the trait applied to the
-service shape and the Maven dependency that brings it in.
+The modeling syntax, core HTTP binding traits, and generated C# shapes are
+nearly identical between the two protocols for common cases. The differences
+are in protocol-specific behavior: `restJson1` adds AWS-specific features such
+as raw string/blob payloads, `@requestCompression`, `@httpChecksumRequired`,
+and a different error deserialization convention.
+
+## Which Protocol Should I Use?
+
+**Use `alloy#simpleRestJson`** if you are defining your own service and your
+consumers are primarily .NET or Scala (via [Smithy4s](https://disneystreaming.github.io/smithy4s/)).
+It has full client and server generation in NSmithy, 100% conformance coverage,
+and is the smoothest end-to-end path.
+
+**Use `aws.protocols#restJson1`** if:
+
+- you need to call an existing AWS service or any other service that already uses `restJson1`
+- your C# server needs to be consumable by clients in other languages — most
+  official Smithy code generators (Java, TypeScript, Python, Swift, Rust, Go)
+  target `restJson1`, not `simpleRestJson`
+
+In short: `simpleRestJson` is the better choice when NSmithy owns both ends.
+`restJson1` is the better choice when you need broad cross-ecosystem compatibility.
 
 ## Maven Dependencies
 
