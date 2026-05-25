@@ -69,6 +69,35 @@ reflection over ASP.NET Core endpoints.
 - Expand test coverage before broadening feature claims.
 - Clarify the model constraints required by the current generated path.
 
+### 7. Split the C# and `.proto` code generators
+
+`ProtoGenerator` currently lives inside `smithy-csharp-codegen` alongside the
+C# generators. As the gRPC path matures it should move into its own module
+(`smithy-proto-codegen` or similar) so that:
+
+- The C# generator has no dependency on proto concerns.
+- The `.proto` generator can evolve, be versioned, and be distributed
+  independently.
+- Consumers who only need C# output do not pull in proto generation logic.
+
+### 8. AWS authentication — SigV4 signing
+
+Real AWS services require [SigV4](https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html)
+request signing via the `@aws.auth#sigv4` trait. Currently, generated clients
+send unsigned requests and cannot authenticate against AWS endpoints.
+
+This work involves:
+
+- Recognising `@aws.auth#sigv4` (and related auth traits) during codegen.
+- Providing a signing middleware or hook in `NSmithy.Client` so credentials can
+  be injected into the request pipeline.
+- Defining a credential-provider abstraction that fits the existing
+  `SmithyClientOptions` / `ISmithyClientMiddleware` model.
+
+Until this is in place, `aws.protocols#restJson1` clients work correctly for
+protocol-level correctness (conformance tests pass) but cannot call real AWS
+services.
+
 ## Later Work
 
 These are plausible future areas, but they are not the current focus:
