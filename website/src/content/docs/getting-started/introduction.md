@@ -20,6 +20,8 @@ NSmithy is a .NET implementation of the Smithy toolchain. It integrates with MSB
 - **Typed async client interfaces and implementations** per service.
 - **ASP.NET Core handler interfaces and routing adapters** per service.
 
+**No Gradle.** Other Smithy ecosystems (Java in particular) typically use Gradle to orchestrate codegen. NSmithy deliberately avoids this: the Smithy CLI is invoked as an MSBuild target, so `dotnet build` is the only build command you need.
+
 Protocol support includes `alloy#simpleRestJson`, `aws.protocols#restJson1`, `aws.protocols#restXml`, and `smithy.protocols#rpcv2Cbor`.
 
 See the [Quick Start](/smithy-dotnet/getting-started/quick-start/) to build your first service.

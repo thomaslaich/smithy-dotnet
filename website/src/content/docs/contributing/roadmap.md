@@ -22,28 +22,29 @@ expanding that baseline rather than revisiting it.
 
 ### 1. Expand AWS protocol coverage
 
-- Move AWS protocol work into the main near-term track.
 - Add support for additional AWS protocol families, especially AWS JSON,
   AWS Query, and EC2 Query.
+- Continue hardening `aws.protocols#restJson1`, `aws.protocols#restXml`, and
+  `smithy.protocols#rpcv2Cbor` as real preview surfaces.
 - Keep the scope driven by conformance and real runtime behavior rather than by
   marketing-level protocol checklists.
 
-### 2. Deepen the current AWS protocol slices
+### 2. XML doc comments from Smithy documentation traits
 
-- Continue hardening `aws.protocols#restJson1`, `aws.protocols#restXml`, and
-  `smithy.protocols#rpcv2Cbor` as real preview surfaces.
-- Expand protocol compliance and end-to-end coverage where the current runtime
-  seams already exist.
-- Tighten request/response binding behavior and protocol-specific error
-  handling.
+Smithy's `@documentation` trait and `///` doc comments are not yet emitted as
+C# XML doc comments (`/// <summary>…</summary>`) on generated types and members.
+Adding this would improve the IDE experience for consumers of generated code —
+hover documentation, parameter hints, and IntelliSense would reflect the
+model's documentation rather than being empty.
 
-### 3. Keep the REST JSON path strong
+### 3. OpenAPI spec generation
 
-- Maintain `alloy#simpleRestJson` as the most complete end-to-end path.
-- Keep client and ASP.NET Core server generation stable as new protocol work is
-  added.
-- Continue using the REST/JSON path as the main preview baseline for generated
-  developer experience.
+Wire `smithy-openapi` into the MSBuild pipeline so that `dotnet build` emits an
+`openapi.json` alongside the generated C# files. Because the spec is derived
+from the Smithy model it stays in sync with the source of truth automatically.
+The generated spec can then be served at runtime via Swagger UI or .NET 9's
+`Microsoft.AspNetCore.OpenApi` middleware without the overhead of runtime
+reflection over ASP.NET Core endpoints.
 
 ### 4. Improve generator clarity and diagnostics
 
@@ -67,23 +68,6 @@ expanding that baseline rather than revisiting it.
 - Keep `.proto` generation and gRPC support as an explicit preview track.
 - Expand test coverage before broadening feature claims.
 - Clarify the model constraints required by the current generated path.
-
-### 7. XML doc comments from Smithy documentation traits
-
-Smithy's `@documentation` trait and `///` doc comments are not yet emitted as
-C# XML doc comments (`/// <summary>…</summary>`) on generated types and members.
-Adding this would improve the IDE experience for consumers of generated code —
-hover documentation, parameter hints, and `<IntelliSense>` would reflect the
-model's documentation rather than being empty.
-
-### 8. OpenAPI spec generation
-
-Wire `smithy-openapi` into the MSBuild pipeline so that `dotnet build` emits an
-`openapi.json` alongside the generated C# files. Because the spec is derived
-from the Smithy model it stays in sync with the source of truth automatically.
-The generated spec can then be served at runtime via Swagger UI or .NET 9's
-`Microsoft.AspNetCore.OpenApi` middleware without the overhead of runtime
-reflection over ASP.NET Core endpoints.
 
 ## Later Work
 
