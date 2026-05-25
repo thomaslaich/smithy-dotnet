@@ -3,8 +3,6 @@ title: Serialization
 description: How NSmithy serializes and deserializes Smithy shapes at runtime.
 ---
 
-How NSmithy serializes and deserializes Smithy shapes at runtime.
-
 ## Goals
 
 - Protocol implementations must be **shared**: one codec for all clients and
@@ -171,4 +169,3 @@ runtime overhead and integrate with the .NET JSON ecosystem.
 
 - [Shape Mapping](/smithy-dotnet/design/shapes/) — C# type mapping
 - [HTTP Interfaces](/smithy-dotnet/design/http-interfaces/) — HTTP transport
-- [Codegen Architecture](/smithy-dotnet/design/codegen-architecture/) — codegen pipeline

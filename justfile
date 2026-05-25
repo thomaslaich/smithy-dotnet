@@ -62,3 +62,6 @@ refresh-examples:
     dotnet restore examples/polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj --no-cache --force
 
 ci: check-format build test pack
+
+docs:
+    cd website && npm run dev

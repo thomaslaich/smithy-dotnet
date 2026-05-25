@@ -3,19 +3,14 @@ title: Multi-Protocol
 description: Expose one Smithy service over both HTTP and gRPC with a single handler implementation.
 ---
 
-This guide shows how to expose one Smithy service over both HTTP and gRPC while
-keeping a single service implementation.
-
-The important architectural boundary in NSmithy is:
+NSmithy's architectural boundary is:
 
 - one modeled service
 - one generated handler contract
 - one handler implementation
 - multiple generated transport adapters
 
-In practice, that means your application code implements the generated handler
-once, and the generated HTTP and gRPC surfaces both call into that same
-implementation.
+Your application code implements the handler once; the generated HTTP and gRPC surfaces both call into it.
 
 ## Model
 
@@ -130,23 +125,7 @@ Both clients call the same service semantics through different transports.
 
 ## Example
 
-The full working example in this repository lives under `examples/grpc/dotnet`
-and shows:
-
-- one Smithy model with both traits
-- one handler implementation reused across transports
-- generated HTTP and gRPC server mappings
-- generated HTTP and gRPC clients
-
-If you are consuming NSmithy from NuGet, the important part is the hosting
-shape, not the repository workflow:
-
-- run your ASP.NET Core application with the HTTP and gRPC mappings enabled
-- target the HTTP client at `http://localhost:5000`
-- target the gRPC client at `http://localhost:5001`
-
-If you want to inspect a working end-to-end sample, see the repository example
-at `examples/grpc/dotnet`.
+The full working example is at `examples/grpc/dotnet` in the repository.
 
 ## Current Limits
 

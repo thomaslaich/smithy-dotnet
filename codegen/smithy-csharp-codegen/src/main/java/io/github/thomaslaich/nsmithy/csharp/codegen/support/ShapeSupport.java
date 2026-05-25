@@ -288,10 +288,10 @@ public final class ShapeSupport {
    * camelCase parameter form would be {@code message} still collides with the always-emitted
    * base-class message parameter on the generated constructor.
    */
-  public static Optional<MemberShape> errorMessageMember(StructureShape shape) {
+  public static Optional<MemberShape> errorMessageMember(Model model, StructureShape shape) {
     return shape.members().stream()
         .filter(m -> m.getMemberName().equalsIgnoreCase("message"))
-        .filter(m -> m.getTarget().toString().equals("smithy.api#String"))
+        .filter(m -> model.expectShape(m.getTarget()).getType() == ShapeType.STRING)
         .findFirst();
   }
 

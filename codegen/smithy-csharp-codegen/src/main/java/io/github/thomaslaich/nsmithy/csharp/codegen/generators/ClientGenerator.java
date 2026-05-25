@@ -37,6 +37,7 @@ import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
+import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
@@ -237,6 +238,9 @@ public final class ClientGenerator implements Runnable {
           } else if (input != null && !useDoc) {
             writeRequestHeaders(input);
           }
+          if (!rpc && !useDoc && output != null) {
+            writeAcceptHeader(output);
+          }
 
           // body
           if (rpc || useDoc) {
@@ -274,7 +278,7 @@ public final class ClientGenerator implements Runnable {
                               writer.write(
                                   "request.Content = $L;",
                                   serializePayloadExpression(pm, "payloadValue"));
-                              writer.write("request.ContentType = $L;", payloadContentType(pm));
+                              writePayloadContentTypeAssignment(input, pm);
                             });
                       });
                 } else {
@@ -291,7 +295,7 @@ public final class ClientGenerator implements Runnable {
                         writer.write(
                             "request.Content = $L;",
                             serializePayloadExpression(pm, "input." + prop));
-                        writer.write("request.ContentType = $L;", payloadContentType(pm));
+                        writePayloadContentTypeAssignment(input, pm);
                       });
                 }
               } else {
@@ -304,7 +308,7 @@ public final class ClientGenerator implements Runnable {
                         writer.write(
                             "request.Content = $L;",
                             serializePayloadExpression(pm, "payloadValue"));
-                        writer.write("request.ContentType = $L;", payloadContentType(pm));
+                        writePayloadContentTypeAssignment(input, pm);
                       });
                   if (isStructurePayload(pm)) {
                     writer.write("else");
@@ -313,18 +317,27 @@ public final class ClientGenerator implements Runnable {
                         "}",
                         () -> {
                           writer.write("request.Content = $L;", emptyPayloadExpression(pm));
-                          writer.write("request.ContentType = $L;", payloadContentType(pm));
+                          writePayloadContentTypeAssignment(input, pm);
                         });
                   }
                 } else {
                   writer.write(
                       "request.Content = $L;", serializePayloadExpression(pm, "input." + prop));
-                  writer.write("request.ContentType = $L;", payloadContentType(pm));
+                  writePayloadContentTypeAssignment(input, pm);
                 }
               }
             } else if (input != null && hasHttpBody(input)) {
               writeRequestBody(input);
             }
+          }
+          if (op.findTrait(TraitIds.REQUEST_COMPRESSION).isPresent()) {
+            writer.write(
+                "$L.ApplyRequestCompression(request, $L);",
+                runtime,
+                requestCompressionEncoding(op));
+          }
+          if (op.findTrait(TraitIds.HTTP_CHECKSUM_REQUIRED).isPresent()) {
+            writer.write("$L.ApplyContentMd5(request);", runtime);
           }
           writer.write("");
           writer.write(
@@ -429,12 +442,24 @@ public final class ClientGenerator implements Runnable {
     for (MemberShape m : ShapeSupport.sortedMembers(input)) {
       if (ShapeSupport.isHttpHeader(m)) {
         String name = m.expectTrait(HttpHeaderTrait.class).getValue();
-        writer.write(
-            "$L.AddHeader(request.Headers, $L, $L, input.$L);",
-            runtime,
-            CSharpNaming.formatString(name),
-            SchemaGenerator.memberSchemaExpr(context, m),
-            CSharpNaming.propertyName(m.getMemberName()));
+        if ("Content-Type".equalsIgnoreCase(name)) {
+          writer.write("if (input.$L is { } value)", CSharpNaming.propertyName(m.getMemberName()));
+          writer.openBlock("{", "}", () -> writer.write("request.ContentType = value;"));
+        } else if ("Content-Encoding".equalsIgnoreCase(name)) {
+          writer.write(
+              "$L.AddHeader(request.ContentHeaders, $L, $L, input.$L);",
+              runtime,
+              CSharpNaming.formatString(name),
+              SchemaGenerator.memberSchemaExpr(context, m),
+              CSharpNaming.propertyName(m.getMemberName()));
+        } else {
+          writer.write(
+              "$L.AddHeader(request.Headers, $L, $L, input.$L);",
+              runtime,
+              CSharpNaming.formatString(name),
+              SchemaGenerator.memberSchemaExpr(context, m),
+              CSharpNaming.propertyName(m.getMemberName()));
+        }
       } else if (ShapeSupport.isHttpPrefixHeaders(m)) {
         String prefix = m.expectTrait(HttpPrefixHeadersTrait.class).getValue();
         writer.write(
@@ -659,7 +684,7 @@ public final class ClientGenerator implements Runnable {
     // when the shape has no `message` member — that's how System.Exception.Message is wired)
     // followed by the remaining members in constructor order (required first, then optional,
     // each alphabetical) — NOT sortedMembers order, which would mis-align args with parameters.
-    Optional<MemberShape> mm = ShapeSupport.errorMessageMember(err);
+    Optional<MemberShape> mm = ShapeSupport.errorMessageMember(context.model(), err);
     List<MemberShape> ctor = ShapeSupport.constructorMembers(err, mm.orElse(null));
     StringBuilder sb =
         new StringBuilder("new ")
@@ -782,6 +807,10 @@ public final class ClientGenerator implements Runnable {
 
   private String payloadContentType(MemberShape member) {
     Shape target = context.model().expectShape(member.getTarget());
+    String explicitMediaType = mediaTypeValue(target);
+    if (explicitMediaType != null) {
+      return CSharpNaming.formatString(explicitMediaType);
+    }
     return switch (target.getType()) {
       case BLOB -> CSharpNaming.formatString("application/octet-stream");
       case STRING, ENUM ->
@@ -811,6 +840,65 @@ public final class ClientGenerator implements Runnable {
         CSharpSymbolProvider.qualified(
             context.symbolProvider().toSymbol(context.model().expectShape(member.getTarget())));
     return "DocumentCodec.Serialize(new " + type + "())";
+  }
+
+  private void writePayloadContentTypeAssignment(StructureShape input, MemberShape payload) {
+    String contentType = payloadContentType(payload, input);
+    if (contentType != null) {
+      writer.write("request.ContentType = $L;", contentType);
+    }
+  }
+
+  private void writeAcceptHeader(StructureShape output) {
+    String acceptType = acceptType(output);
+    if (acceptType != null) {
+      writer.write("request.Headers[\"Accept\"] = [$L];", acceptType);
+    }
+  }
+
+  private String acceptType(StructureShape output) {
+    return output.members().stream()
+        .filter(ShapeSupport::isHttpPayload)
+        .findFirst()
+        .map(this::payloadContentType)
+        .orElse("DocumentCodec.MediaType");
+  }
+
+  private String payloadContentType(MemberShape payload, StructureShape input) {
+    return hasExplicitContentTypeHeader(input) ? null : payloadContentType(payload);
+  }
+
+  private boolean hasExplicitContentTypeHeader(StructureShape input) {
+    return input.members().stream()
+        .filter(ShapeSupport::isHttpHeader)
+        .map(m -> m.expectTrait(HttpHeaderTrait.class).getValue())
+        .anyMatch("Content-Type"::equalsIgnoreCase);
+  }
+
+  private String requestCompressionEncoding(OperationShape op) {
+    return op.findTrait(TraitIds.REQUEST_COMPRESSION)
+        .map(t -> (Node) t.toNode())
+        .flatMap(
+            node ->
+                node.expectObjectNode()
+                    .getArrayMember("encodings")
+                    .flatMap(array -> array.getElements().stream().findFirst())
+                    .map(Node::expectStringNode)
+                    .map(s -> s.getValue()))
+        .map(CSharpNaming::formatString)
+        .orElseThrow(
+            () ->
+                new IllegalStateException(
+                    "@requestCompression on "
+                        + op.getId()
+                        + " has no encodings — trait requires at least one"));
+  }
+
+  private String mediaTypeValue(Shape shape) {
+    return shape
+        .findTrait(TraitIds.MEDIA_TYPE)
+        .map(t -> ((Node) t.toNode()).expectStringNode().getValue())
+        .orElse(null);
   }
 
   // ---------------- body projection types ----------------

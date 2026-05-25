@@ -169,7 +169,15 @@ internal static class RequestAssertions
                         + $"Sent headers: {string.Join(", ", actual.Headers.Keys)}"
                 );
             }
-            Xunit.Assert.Equal(value, string.Join(",", values));
+            var actualValue = string.Join(",", values);
+            if (
+                string.Equals(name, "Content-Encoding", StringComparison.OrdinalIgnoreCase)
+                && EqualHeaderTokenList(value, actualValue)
+            )
+            {
+                continue;
+            }
+            Xunit.Assert.Equal(value, actualValue);
         }
         foreach (var name in expected.RequireHeaders)
             Xunit.Assert.True(
@@ -187,6 +195,9 @@ internal static class RequestAssertions
 
     private static void AssertBody(HttpRequestTestCase expected, RecordedRequest actual)
     {
+        if (expected.Body is null)
+            return;
+
         var expectedBody = expected.Body ?? "";
         var actualBody = Encoding.UTF8.GetString(actual.Body);
         if (IsEmptyJsonEquivalent(expectedBody, actualBody))
@@ -261,6 +272,17 @@ internal static class RequestAssertions
         string.IsNullOrEmpty(query)
             ? []
             : query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+
+    private static bool EqualHeaderTokenList(string expected, string actual)
+    {
+        static string[] Split(string value) =>
+            value.Split(
+                ',',
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+            );
+
+        return Split(expected).SequenceEqual(Split(actual), StringComparer.Ordinal);
+    }
 
     private static IEnumerable<string> NormalizeQueryParams(IEnumerable<string> entries) =>
         entries.Select(NormalizeQueryParam);

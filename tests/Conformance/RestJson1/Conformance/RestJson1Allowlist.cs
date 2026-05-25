@@ -136,6 +136,22 @@ internal static class RestJson1Allowlist
         "RestJsonEndpointTrait",
         "RestJsonEndpointTraitWithHostLabel",
         "RestJsonHostWithPath",
+        "RestJsonInputAndOutputWithQuotedStringHeaders",
+        "RestJsonHttpPayloadTraitsWithMediaTypeWithBlob",
+        "RestJsonStreamingTraitsRequireLengthWithBlob",
+        "RestJsonStreamingTraitsRequireLengthWithNoBlobBody",
+        "RestJsonStreamingTraitsWithMediaTypeWithBlob",
+        "RestJsonTestBodyStructure",
+        "RestJsonTestPayloadBlob",
+        "RestJsonTestPayloadStructure",
+        "RestJsonTimestampFormatHeaders",
+        "RestJsonToleratesRegexCharsInSegments",
+        "RestJsonUnitInputAndOutput",
+        "RestJsonHttpChecksumRequired",
+        "SDKAppliedContentEncoding_restJson1",
+        "SDKAppendedGzipAfterProvidedEncoding_restJson1",
+        "RestJsonRecursiveStructuresValidate",
+        "ApiGatewayAccept",
     };
 
     public static readonly IReadOnlySet<string> ExecutableResponseCases = new HashSet<string>(
@@ -252,5 +268,38 @@ internal static class RestJson1Allowlist
         "MediaTypeHeaderOutputBase64",
         "RestJsonInputAndOutputWithQuotedStringHeaders",
         "RestJsonUnitInputAndOutputNoOutput",
+        "RestJsonHttpPayloadTraitsWithMediaTypeWithBlob",
+        "RestJsonStreamingTraitsWithMediaTypeWithBlob",
+    };
+
+    public static readonly IReadOnlySet<string> ExecutableServerRequestCases = new HashSet<string>(
+        StringComparer.Ordinal
+    )
+    {
+        "AcceptHeaderStarRequestTest",
+        "AcceptHeaderStarStarRequestTest",
+        "RestJsonMustSupportParametersInContentType",
+        "RestJsonHttpEmptyPrefixHeadersRequestServer",
+        "RestJsonHttpPayloadTraitsWithBlobAcceptsAllContentTypes",
+        "RestJsonHttpPayloadTraitsWithBlobAcceptsNoContentType",
+        "RestJsonHttpPayloadTraitsWithBlobAcceptsAllAccepts",
+        "RestJsonNoInputAllowsAccept",
+        "RestJsonNoInputAndOutputAllowsAccept",
+        "RestJsonServersAcceptStaticQueryParamAsEmptyString",
+        "RestJsonServersDontSerializeNullStructureValues",
+        "RestJsonServerPopulatesDefaultsWhenMissingInRequestBody",
+        "RestJsonServerPopulatesNestedDefaultsWhenMissingInRequestBody",
+        "RestJsonServersQueryParamsStringListMap",
+        "RestJsonServersPutAllQueryParamsInMap",
+        "RestJsonUnitInputAllowsAccept",
+    };
+
+    public static readonly IReadOnlySet<string> ExecutableServerResponseCases = new HashSet<string>(
+        StringComparer.Ordinal
+    )
+    {
+        "RestJsonHttpEmptyPrefixHeadersResponseServer",
+        "RestJsonServerPopulatesDefaultsInResponseWhenMissingInParams",
+        "RestJsonServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams",
     };
 }

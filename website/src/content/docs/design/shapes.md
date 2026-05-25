@@ -3,8 +3,6 @@ title: Shape Mapping
 description: How Smithy shapes map to C# types in generated NSmithy code.
 ---
 
-How Smithy shapes map to C# types in generated code.
-
 ## Simple Shapes
 
 | Smithy type | C# type |
@@ -133,9 +131,6 @@ A Smithy service shape produces two generated files:
   operation.
 - `<Service>Server.g.cs` — a handler interface (`I<Service>Handler`) and an
   ASP.NET Core adapter (`<Service>Server`).
-
-See [Codegen Architecture](/smithy-dotnet/design/codegen-architecture/) for the generator
-pipeline details.
 
 ## Namespace Mapping
 
