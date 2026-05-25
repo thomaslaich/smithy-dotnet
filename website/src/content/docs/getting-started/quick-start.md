@@ -124,10 +124,3 @@ internal sealed class HelloHandler : IHelloServiceHandler
     }
 }
 ```
-
-## Next Steps
-
-- [simple-rest-json example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/simple-rest-json) — a full working example with pixi environment
-- [MSBuild Reference](/smithy-dotnet/reference/msbuild/) — all MSBuild properties and items for `NSmithy.MSBuild`
-- [Multi-Protocol](/smithy-dotnet/guides/multi-protocol/) — expose one service over both HTTP and gRPC
-- [Protocol Status](/smithy-dotnet/protocols/) — what protocols are supported and at what stage

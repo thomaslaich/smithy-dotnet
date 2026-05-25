@@ -271,9 +271,3 @@ Console.WriteLine($"{seattle.Name} ({seattle.Coordinates.Latitude}, {seattle.Coo
 var forecast = await client.GetForecastAsync(new GetForecastInput("SEA"));
 Console.WriteLine($"Chance of rain: {forecast.ChanceOfRain:P0}");
 ```
-
-## Related
-
-- [Multi-Protocol](/smithy-dotnet/guides/multi-protocol/) — serve the same handler over HTTP and gRPC simultaneously
-- [Protocol Status](/smithy-dotnet/protocols/) — coverage overview
-- [Conformance Tests](/smithy-dotnet/protocols/conformance/) — how correctness is verified

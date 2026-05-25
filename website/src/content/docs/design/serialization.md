@@ -164,8 +164,3 @@ runtime overhead and integrate with the .NET JSON ecosystem.
 - Switching protocols (e.g. from JSON to CBOR) would require different
   attributes or converters on the same generated types.
 - The visitor pattern keeps the generated shape types protocol-neutral.
-
-## Related Docs
-
-- [Shape Mapping](/smithy-dotnet/design/shapes/) — C# type mapping
-- [HTTP Interfaces](/smithy-dotnet/design/http-interfaces/) — HTTP transport

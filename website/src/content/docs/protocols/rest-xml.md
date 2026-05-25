@@ -74,8 +74,3 @@ var client = new HelloServiceClient(
 var response = await client.SayHelloAsync(new SayHelloInput("world"));
 Console.WriteLine(response.Message);
 ```
-
-## Related
-
-- [Protocol Status](/smithy-dotnet/protocols/) — coverage overview and what "early preview" means
-- [Conformance Tests](/smithy-dotnet/protocols/conformance/) — how correctness is verified

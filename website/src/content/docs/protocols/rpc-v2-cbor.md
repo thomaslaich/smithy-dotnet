@@ -80,8 +80,3 @@ catch (InvalidNameException ex)
     Console.WriteLine($"Error: {ex.Message}");
 }
 ```
-
-## Related
-
-- [Protocol Status](/smithy-dotnet/protocols/) — coverage overview and what "early preview" means
-- [Conformance Tests](/smithy-dotnet/protocols/conformance/) — how correctness is verified
