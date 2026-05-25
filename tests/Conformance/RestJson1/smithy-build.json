@@ -1,5 +1,8 @@
 {
   "version": "1.0",
+  "sources": [
+    "model/accept-header-wrapper.smithy"
+  ],
   "maven": {
     "repositories": [
       {
@@ -30,6 +33,60 @@
       "plugins": {
         "csharp-codegen": {
           "service": "aws.protocoltests.restjson#RestJson",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "restjson1-misc-accept": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "restjsonone.local#AcceptHeaderStarHarness"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "restjsonone.local#AcceptHeaderStarHarness",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "restjson1-validation": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "restjsonone.local#RecursiveStructuresHarness"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "restjsonone.local#RecursiveStructuresHarness",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "restjson1-apigateway": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "com.amazonaws.apigateway#BackplaneControlService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "com.amazonaws.apigateway#BackplaneControlService",
           "baseNamespace": ""
         }
       }

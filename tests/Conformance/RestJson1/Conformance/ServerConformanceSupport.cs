@@ -39,6 +39,7 @@ internal sealed class RestJsonServerHost : IAsyncDisposable
     public HttpClient Client { get; }
 
     public static async Task<RestJsonServerHost> StartAsync(
+        string operationName,
         Func<MethodInfo, object?[]?, object?> invoker,
         CancellationToken cancellationToken = default
     )
@@ -46,17 +47,19 @@ internal sealed class RestJsonServerHost : IAsyncDisposable
         var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
 
-        var handler = DispatchProxy.Create<IRestJsonServiceHandler, RestJsonServerDispatchProxy>();
-        ((RestJsonServerDispatchProxy)(object)handler).Invoker = invoker;
+        var operationHandler = ResolveOperationHandlerInterface(operationName);
+        var aggregateHandler = ResolveAggregateHandlerInterface(operationHandler);
+        var mapMethod = ResolveMapMethod(aggregateHandler);
+        var handler = CreateProxy(aggregateHandler, invoker);
 
-        builder.Services.AddSingleton<IRestJsonServiceHandler>(handler);
-        foreach (var contract in typeof(IRestJsonServiceHandler).GetInterfaces())
+        builder.Services.AddSingleton(aggregateHandler, handler);
+        foreach (var contract in aggregateHandler.GetInterfaces())
         {
             builder.Services.AddSingleton(contract, _ => handler);
         }
 
         var app = builder.Build();
-        app.MapRestJsonServiceHttp();
+        mapMethod.Invoke(null, [app]);
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
 
         var address =
@@ -75,6 +78,60 @@ internal sealed class RestJsonServerHost : IAsyncDisposable
     {
         Client.Dispose();
         await app.DisposeAsync().ConfigureAwait(false);
+    }
+
+    private static Type ResolveOperationHandlerInterface(string operationName)
+    {
+        var assembly = typeof(RestJsonServerHost).Assembly;
+        var handlerName = "I" + operationName + "Handler";
+        return assembly.GetTypes()
+            .Single(t =>
+                t.IsInterface && string.Equals(t.Name, handlerName, StringComparison.Ordinal)
+            );
+    }
+
+    private static Type ResolveAggregateHandlerInterface(Type operationHandler)
+    {
+        return operationHandler
+            .Assembly.GetTypes()
+            .Single(t =>
+                t.IsInterface
+                && t != operationHandler
+                && t.Name.EndsWith("ServiceHandler", StringComparison.Ordinal)
+                && operationHandler.IsAssignableFrom(t)
+            );
+    }
+
+    private static MethodInfo ResolveMapMethod(Type aggregateHandler)
+    {
+        var serviceName = aggregateHandler.Name["I".Length..^"Handler".Length];
+        return aggregateHandler
+            .Assembly.GetTypes()
+            .Where(t => t.IsSealed && t.IsAbstract)
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))
+            .Single(m =>
+            {
+                var parameters = m.GetParameters();
+                return m.Name == $"Map{serviceName}Http"
+                    && parameters.Length == 1
+                    && parameters[0].ParameterType.FullName
+                        == "Microsoft.AspNetCore.Routing.IEndpointRouteBuilder";
+            });
+    }
+
+    private static object CreateProxy(
+        Type aggregateHandler,
+        Func<MethodInfo, object?[]?, object?> invoker
+    )
+    {
+        var create = typeof(DispatchProxy)
+            .GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .Single(m => m.Name == nameof(DispatchProxy.Create) && m.IsGenericMethodDefinition)
+            .MakeGenericMethod(aggregateHandler, typeof(RestJsonServerDispatchProxy));
+        var proxy = create.Invoke(null, null)
+            ?? throw new InvalidOperationException($"Unable to create proxy for {aggregateHandler}.");
+        ((RestJsonServerDispatchProxy)proxy).Invoker = invoker;
+        return proxy;
     }
 }
 

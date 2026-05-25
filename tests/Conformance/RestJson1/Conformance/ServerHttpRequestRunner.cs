@@ -12,6 +12,7 @@ internal static class ServerHttpRequestRunner
 
         await using var host = await RestJsonServerHost
             .StartAsync(
+                testCase.OperationName,
                 (method, args) =>
                 {
                     capturedMethod = method;

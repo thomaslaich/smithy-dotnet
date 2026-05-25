@@ -238,6 +238,9 @@ public final class ClientGenerator implements Runnable {
           } else if (input != null && !useDoc) {
             writeRequestHeaders(input);
           }
+          if (!rpc && !useDoc && output != null) {
+            writeAcceptHeader(output);
+          }
 
           // body
           if (rpc || useDoc) {
@@ -681,7 +684,7 @@ public final class ClientGenerator implements Runnable {
     // when the shape has no `message` member — that's how System.Exception.Message is wired)
     // followed by the remaining members in constructor order (required first, then optional,
     // each alphabetical) — NOT sortedMembers order, which would mis-align args with parameters.
-    Optional<MemberShape> mm = ShapeSupport.errorMessageMember(err);
+    Optional<MemberShape> mm = ShapeSupport.errorMessageMember(context.model(), err);
     List<MemberShape> ctor = ShapeSupport.constructorMembers(err, mm.orElse(null));
     StringBuilder sb =
         new StringBuilder("new ")
@@ -844,6 +847,21 @@ public final class ClientGenerator implements Runnable {
     if (contentType != null) {
       writer.write("request.ContentType = $L;", contentType);
     }
+  }
+
+  private void writeAcceptHeader(StructureShape output) {
+    String acceptType = acceptType(output);
+    if (acceptType != null) {
+      writer.write("request.Headers[\"Accept\"] = [$L];", acceptType);
+    }
+  }
+
+  private String acceptType(StructureShape output) {
+    return output.members().stream()
+        .filter(ShapeSupport::isHttpPayload)
+        .findFirst()
+        .map(this::payloadContentType)
+        .orElse("DocumentCodec.MediaType");
   }
 
   private String payloadContentType(MemberShape payload, StructureShape input) {

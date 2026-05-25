@@ -150,6 +150,8 @@ internal static class RestJson1Allowlist
         "RestJsonHttpChecksumRequired",
         "SDKAppliedContentEncoding_restJson1",
         "SDKAppendedGzipAfterProvidedEncoding_restJson1",
+        "RestJsonRecursiveStructuresValidate",
+        "ApiGatewayAccept",
     };
 
     public static readonly IReadOnlySet<string> ExecutableResponseCases = new HashSet<string>(
@@ -274,6 +276,8 @@ internal static class RestJson1Allowlist
         StringComparer.Ordinal
     )
     {
+        "AcceptHeaderStarRequestTest",
+        "AcceptHeaderStarStarRequestTest",
         "RestJsonMustSupportParametersInContentType",
         "RestJsonHttpEmptyPrefixHeadersRequestServer",
         "RestJsonHttpPayloadTraitsWithBlobAcceptsAllContentTypes",

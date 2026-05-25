@@ -23,6 +23,7 @@ internal static class ServerHttpResponseRunner
 
         await using var host = await RestJsonServerHost
             .StartAsync(
+                localOpName,
                 (method, args) =>
                 {
                     Assert.Equal(localOpName + "Async", method.Name);
