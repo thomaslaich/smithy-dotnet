@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text;
 using Microsoft.AspNetCore.Http;
 using NSmithy.Codecs.Json;
+using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Protocols.RestJson;
 
@@ -226,6 +227,24 @@ public static class SmithyAspNetCoreProtocol
         }
 
         httpContext.Response.Headers[name] = RestJsonProtocol.FormatHttpValue(value);
+    }
+
+    public static void AddResponseHeader(
+        HttpContext httpContext,
+        string name,
+        Schema schema,
+        object? value
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        if (value is null)
+        {
+            return;
+        }
+
+        httpContext.Response.Headers[name] = RestJsonProtocol.FormatHttpValue(schema, value);
     }
 
     public static void AddPrefixedResponseHeaders(

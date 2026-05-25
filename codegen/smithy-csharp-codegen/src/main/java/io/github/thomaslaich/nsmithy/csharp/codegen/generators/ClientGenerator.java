@@ -666,10 +666,31 @@ public final class ClientGenerator implements Runnable {
           }
           // fallback: first error. Wrap in an explicit block so the inner `var errorBody`
           // doesn't collide with the per-status branches above (CS0136).
+          // Guard against empty bodies: if we have nothing to deserialize we cannot
+          // recognise any error, so return null and let InvokeAsync throw a generic
+          // SmithyClientException instead of crashing with MissingMethodException.
           ShapeId fallback = errorIds.get(0);
           StructureShape err = model.expectShape(fallback, StructureShape.class);
+          boolean fallbackHasBody =
+              !ProtocolSupport.useDocumentBindings(kind) && !responseBodyMembers(err).isEmpty();
           writer.write("");
-          writer.openBlock("{", "}", () -> writeErrorReturn(sp, err));
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                if (fallbackHasBody) {
+                  writer.write("if (response.Content.Length == 0)");
+                  writer.openBlock(
+                      "{",
+                      "}",
+                      () ->
+                          writer.write(
+                              "return"
+                                  + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);"));
+                  writer.write("");
+                }
+                writeErrorReturn(sp, err);
+              });
         });
     writer.write("");
   }
