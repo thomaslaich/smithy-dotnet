@@ -1,5 +1,5 @@
 <p align="center">
-   <img src="website/public/brand/nsmithy_logo_1.png" alt="NSmithy logo" width="320" />
+   <img src="https://raw.githubusercontent.com/thomaslaich/smithy-dotnet/main/website/public/brand/nsmithy_logo_1.png" alt="NSmithy logo" width="320" />
 </p>
 
 <p align="center">
