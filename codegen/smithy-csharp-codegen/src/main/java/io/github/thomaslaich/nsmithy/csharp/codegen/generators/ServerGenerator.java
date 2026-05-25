@@ -643,8 +643,9 @@ public final class ServerGenerator implements Runnable {
             if (ShapeSupport.isHttpHeader(m)) {
               String name = m.expectTrait(HttpHeaderTrait.class).getValue();
               writer.write(
-                  "SmithyAspNetCoreProtocol.AddResponseHeader(httpContext, $L, output.$L);",
+                  "SmithyAspNetCoreProtocol.AddResponseHeader(httpContext, $L, $L, output.$L);",
                   CSharpNaming.formatString(name),
+                  SchemaGenerator.memberSchemaExpr(context, m),
                   CSharpNaming.propertyName(m.getMemberName()));
             }
           }
@@ -666,10 +667,7 @@ public final class ServerGenerator implements Runnable {
             writePayloadResponseWriter(payload.get());
             return;
           }
-          List<MemberShape> bodyMembers =
-              ShapeSupport.sortedMembers(output).stream()
-                  .filter(m -> ShapeSupport.isHttpBody(m) && !ShapeSupport.isHttpResponseCode(m))
-                  .collect(Collectors.toList());
+          List<MemberShape> bodyMembers = ClientGenerator.responseBodyMembers(output);
           if (bodyMembers.isEmpty()) return;
           writer.openBlock(
               "var responseBody = new $L(",

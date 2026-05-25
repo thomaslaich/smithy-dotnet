@@ -2,10 +2,10 @@ $version: "2"
 
 namespace example.weather
 
-use alloy#simpleRestJson
+use aws.protocols#restJson1
 
 /// Provides weather forecasts.
-@simpleRestJson
+@restJson1
 @paginated(inputToken: "nextToken", outputToken: "nextToken", pageSize: "pageSize")
 service Weather {
     version: "2006-03-01"
