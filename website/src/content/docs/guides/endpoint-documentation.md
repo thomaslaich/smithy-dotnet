@@ -17,6 +17,16 @@ Smithy model and wire them up alongside your server with a single call each:
 Both are opt-in MSBuild properties and both copy their output into `wwwroot/` so
 ASP.NET Core's built-in static file middleware serves them with zero extra config.
 
+<figure>
+  <img src="/smithy-dotnet/screenshots/scalar-ui.png" alt="Scalar interactive API explorer showing the GetForecast endpoint" style="border-radius: 0.5rem; border: 1px solid var(--sl-color-gray-5);" />
+  <figcaption>Scalar interactive API explorer at <code>/openapi</code></figcaption>
+</figure>
+
+<figure>
+  <img src="/smithy-dotnet/screenshots/smithy-docs.png" alt="smithy-docgen generated Sphinx HTML showing the GetForecast operation" style="border-radius: 0.5rem; border: 1px solid var(--sl-color-gray-5);" />
+  <figcaption>smithy-docgen generated reference documentation at <code>/docs</code></figcaption>
+</figure>
+
 ## Install the Package
 
 Add `NSmithy.AspNetCore.Docs` to your server project:
