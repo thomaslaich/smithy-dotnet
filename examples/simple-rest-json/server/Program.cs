@@ -1,9 +1,11 @@
 using Alloy.Test;
+using NSmithy.AspNetCore.Docs;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddPizzaAdminServiceHandler<PizzaHandler>();
 
 var app = builder.Build();
+app.MapSmithyDocs();
 app.MapPizzaAdminServiceHttp();
 app.Run();
 

@@ -1,9 +1,12 @@
 using Example.Weather;
+using NSmithy.AspNetCore.Docs;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddWeatherServiceHandler<WeatherHandler>();
 
 var app = builder.Build();
+app.MapSmithyOpenApi();
+app.MapSmithyDocs();
 app.MapWeatherServiceHttp();
 app.Run();
 

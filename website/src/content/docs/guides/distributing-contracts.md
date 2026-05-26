@@ -1,44 +1,93 @@
 ---
 title: Distributing Contracts
-description: Publish a contracts package to NuGet and produce a Maven-compatible JAR for cross-ecosystem consumers.
+description: Share your Smithy model across projects and ecosystems via a NuGet contracts package or a Maven-compatible JAR.
 ---
 
-A [contracts project](/smithy-dotnet/guides/contracts-project/) can be packed
-and published so teams outside the solution can consume the model — .NET
-consumers via NuGet, and Java/Smithy consumers via a Maven-compatible JAR. Both
-artifacts are produced by a single `dotnet pack` invocation.
+Distributing your Smithy model lets other projects consume it without copying
+files. There are two distribution paths:
 
-**Maven is generally the more universal distribution path.** Any Smithy-based
-toolchain — Java, TypeScript, Python, and .NET — can consume a JAR from a
-Maven registry without any NSmithy-specific setup. NuGet distribution is a good
-fit when your consumers are exclusively .NET and you would rather not maintain a
-Maven registry at all; if you already publish to Maven (or use a public registry
-like Maven Central), the JAR covers everyone and the NuGet package becomes
-optional.
+- **NuGet package** — .NET consumers reference it like any other package; NSmithy
+  picks up the model files and synthesizes a `smithy-build.json` automatically.
+- **Maven JAR** — any Smithy-based toolchain (Java, TypeScript, Python, and .NET)
+  can consume it from a Maven registry, making it the more universal option.
+
+Both paths require a **contracts project** — a dedicated class library that owns
+the model files and is set up to pack them into distributable artifacts.
+
+:::note[Optional]
+Distribution is not required to use NSmithy. If you only have a single server
+and a single client in the same solution, a `ProjectReference` to a shared
+contracts project (or model files directly in the server project) is enough.
+:::
+
+## Create a Contracts Project
+
+```shell
+dotnet new classlib -n MyService.Contracts
+```
+
+Replace the generated `.csproj` with:
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <SmithyPublish>true</SmithyPublish>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <SmithyMavenDependency Include="com.disneystreaming.alloy:alloy-core:0.3.38" />
+    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.11" />
+  </ItemGroup>
+</Project>
+```
+
+`SmithyPublish=true` activates the targets that expose model files to consumers
+and embed them into the NuGet package at pack time. Delete any generated
+`Class1.cs` — the contracts project holds only the model.
+
+Place your model under `model/` (default) or set `<SmithySources>` to a
+different path. Then add a `ProjectReference` from your server or client project:
+
+```xml
+<PropertyGroup>
+  <SmithyService>example.hello#HelloService</SmithyService>
+</PropertyGroup>
+
+<ItemGroup>
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.11" />
+  <ProjectReference Include="../MyService.Contracts/MyService.Contracts.csproj" />
+</ItemGroup>
+```
+
+NSmithy synthesizes a `smithy-build.json` under `obj/` from the collected model
+files and Maven dependencies and invokes `smithy build` automatically.
 
 ## NuGet Distribution
 
-### Packing
+### Pack
 
 ```shell
 dotnet pack MyService.Contracts --configuration Release
 ```
 
-`NSmithy.MSBuild` embeds the `.smithy` model files and the Maven dependency
-list into the package at pack time:
+`NSmithy.MSBuild` embeds the model and dependency metadata into the package:
 
 | Package path | Contents |
 | --- | --- |
 | `build/smithy/**/*.smithy` | model files |
 | `build/smithy-maven-deps.txt` | one Maven coordinate per line |
-| `build/NSmithy.MSBuild.props` | sets `SmithySources` default |
-| `buildTransitive/NSmithy.MSBuild.targets` | MSBuild targets imported by all consumers |
+| `build/NSmithy.MSBuild.props` | sets `SmithySources` for consumers |
+| `buildTransitive/NSmithy.MSBuild.targets` | MSBuild targets imported transitively |
 
-### Consuming via NuGet
+### Consume
 
-A project that references the published package picks up the model
-and Maven dependencies automatically through the `buildTransitive` targets. No
-`ProjectReference` is needed:
+A project that references the published package picks up the model and Maven
+dependencies automatically — no `ProjectReference` needed:
 
 ```xml
 <PropertyGroup>
@@ -51,36 +100,25 @@ and Maven dependencies automatically through the `buildTransitive` targets. No
 </ItemGroup>
 ```
 
-The behaviour is identical to a `ProjectReference`: NSmithy synthesizes a
-`smithy-build.json` under `obj/`, calls `smithy build`, and adds the generated
-`.g.cs` files to compilation.
+NSmithy synthesizes a `smithy-build.json` under `obj/`, invokes `smithy build`,
+and adds the generated `.g.cs` files to compilation — identical behaviour to a
+`ProjectReference`.
 
 ## Maven JAR Distribution
 
-Smithy's tooling — including the NSmithy codegen plugin — discovers model
-dependencies by scanning JARs on the Maven classpath. To make the contracts
-model consumable as a Smithy dependency (whether from Maven Central, a private
-Artifactory, or a local `~/.m2` repository), `dotnet pack` can emit a
-Maven-compatible JAR alongside the NuGet package.
-
-### Configure the Project
+### Configure
 
 Add `SmithyMavenGroupId` and `SmithyMavenArtifactId` to the contracts project:
 
 ```xml
 <PropertyGroup>
-  <PackageId>MyService.Contracts</PackageId>
-  <Version>1.0.0</Version>
   <SmithyPublish>true</SmithyPublish>
-
-  <!-- Maven coordinates for the emitted JAR -->
   <SmithyMavenGroupId>io.github.acme</SmithyMavenGroupId>
   <SmithyMavenArtifactId>my-service-contracts</SmithyMavenArtifactId>
 </PropertyGroup>
 ```
 
-The `Version` property is reused for the Maven version — no separate setting is
-needed.
+`Version` (or `VersionPrefix`/`VersionSuffix`) is reused as the Maven version.
 
 ### Pack
 
@@ -88,9 +126,8 @@ needed.
 dotnet pack MyService.Contracts --configuration Release
 ```
 
-When `SmithyMavenGroupId` is set, the `_CreateSmithyJar` target runs after
-`Pack` and writes the following files next to the `.nupkg` in the output
-directory:
+When `SmithyMavenGroupId` is set, the `_CreateSmithyJar` MSBuild target runs
+after `Pack` and writes the JAR alongside the `.nupkg`:
 
 ```
 bin/Release/
@@ -107,11 +144,11 @@ The JAR follows Smithy's model-discovery layout:
 
 ```
 META-INF/smithy/
-  manifest          ← newline-delimited list of model file paths
-  hello.smithy      ← model file(s) from model/
+  manifest        ← newline-delimited list of model file paths
+  hello.smithy    ← model file(s) from model/
 ```
 
-### Installing to the Local Maven Repository
+### Install Locally
 
 To make the JAR available to a local Smithy CLI invocation during development:
 
@@ -122,24 +159,10 @@ mvn install:install-file \
   -Dpackaging=jar
 ```
 
-Once installed, the dependency can be added to any `smithy-build.json`:
+### Publish to a Remote Registry
 
-```json
-{
-  "version": "1.0",
-  "sources": ["model"],
-  "maven": {
-    "dependencies": [
-      "io.github.acme:my-service-contracts:1.0.0"
-    ]
-  }
-}
-```
-
-### Publishing to a Remote Registry
-
-Use the `dotnet-nsmithy push` tool to upload the JAR, POM, and checksums to any
-Maven registry that accepts HTTP PUT (GitHub Packages, Artifactory, Nexus, etc.):
+Use the `dotnet-nsmithy push` tool to upload to any Maven registry that accepts
+HTTP PUT (GitHub Packages, Artifactory, Nexus, etc.):
 
 ```shell
 dotnet tool install -g dotnet-nsmithy
@@ -150,11 +173,6 @@ dotnet nsmithy push bin/Release \
   --token    $GITHUB_TOKEN
 ```
 
-`push` reads `SmithyMavenGroupId`, `SmithyMavenArtifactId`, and the version
-from the `.csproj` automatically, so no extra flags are needed if you run it
-from the project directory. Credentials can also be provided via the
-`MAVEN_USERNAME` / `MAVEN_TOKEN` environment variables.
-
-For Maven Central, follow Sonatype's deployment procedure — `push` targets
-registries that accept direct HTTP PUT; the Central Portal's bundle-upload flow
-requires a different approach.
+`push` reads the Maven coordinates and version from the `.csproj` automatically.
+Credentials can also be supplied via `MAVEN_USERNAME` / `MAVEN_TOKEN` environment
+variables.

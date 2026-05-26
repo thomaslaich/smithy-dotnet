@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <SmithyService>alloy.test#PizzaAdminService</SmithyService>
     <SmithyGeneratedNamespaces>alloy.test</SmithyGeneratedNamespaces>
+    <SmithyGenerateDocs>true</SmithyGenerateDocs>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
   </PropertyGroup>
@@ -12,6 +13,7 @@
   <ItemGroup>
     <PackageReference Include="NSmithy.Server" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.AspNetCore.Docs" Version="0.1.0-SNAPSHOT" />
     <ProjectReference Include="../contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj" />
   </ItemGroup>
 </Project>
