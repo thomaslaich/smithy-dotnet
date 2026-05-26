@@ -37,6 +37,12 @@ cd examples/simple-rest-json
 dotnet run --project client -- http://localhost:5000
 ```
 
+With the server running, open in your browser:
+
+| Route | Description |
+|-------|-------------|
+| [`/docs`](http://localhost:5000/docs) | smithy-docgen generated documentation |
+
 Or call the server directly:
 
 ```bash

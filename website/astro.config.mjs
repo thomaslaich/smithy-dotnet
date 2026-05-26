@@ -40,7 +40,7 @@ export default defineConfig({
 						{ label: 'Introduction', slug: 'getting-started/introduction' },
 						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
 						{ label: 'Environment Setup', slug: 'getting-started/environment' },
-						{ label: 'Contracts Project', slug: 'guides/contracts-project' },
+						{ label: 'Endpoint Documentation', slug: 'guides/endpoint-documentation' },
 						{ label: 'Distributing Contracts', slug: 'guides/distributing-contracts' },
 						{ label: 'Multi-Protocol', slug: 'guides/multi-protocol' },
 					],

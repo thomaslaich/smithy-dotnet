@@ -72,4 +72,4 @@ refresh-examples:
 ci: check-format build test pack
 
 docs:
-    cd website && npm run dev
+    cd website && npm install && npm run dev

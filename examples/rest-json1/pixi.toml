@@ -10,3 +10,4 @@ version = "0.1.0"
 [dependencies]
 openjdk = ">=25.0.2,<26"
 smithy = ">=1.70.0,<2"
+python = ">=3.11,<4"

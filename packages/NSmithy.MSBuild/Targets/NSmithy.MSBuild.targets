@@ -51,6 +51,13 @@
   -->
   <Target Name="GetSmithyMavenDependencies" Returns="@(SmithyMavenDependency)" />
 
+  <!--
+    Returns the SmithyBuildSuppression items declared in this project's .csproj.
+    Each item's identity is the suppression id; the Namespace metadata is required.
+    Called by _CollectSmithyItemsFromProjectReferences in dependent projects.
+  -->
+  <Target Name="GetSmithyBuildSuppressions" Returns="@(SmithyBuildSuppression)" />
+
   <!-- ================================================================
        Pack integration — SmithyPublish=true only
        ================================================================ -->
@@ -202,6 +209,15 @@
     >
       <Output TaskParameter="TargetOutputs" ItemName="SmithyMavenDependency" />
     </MSBuild>
+    <MSBuild
+      Projects="@(ProjectReference)"
+      Targets="GetSmithyBuildSuppressions"
+      Properties="BuildProjectReferences=false"
+      SkipNonexistentTargets="true"
+      RebaseOutputs="false"
+    >
+      <Output TaskParameter="TargetOutputs" ItemName="SmithyBuildSuppression" />
+    </MSBuild>
   </Target>
 
   <!--
@@ -232,8 +248,38 @@
       <_SmithySynthesizedBuildFile>$(IntermediateOutputPath)smithy-build.json</_SmithySynthesizedBuildFile>
     </PropertyGroup>
 
+    <!-- Collect optional plugin Maven dependencies. -->
+    <ItemGroup Condition="'$(_SmithyShouldSynthesize)' == 'true' and '$(SmithyGenerateDocs)' == 'true'">
+      <_SmithyExtraDep Include="software.amazon.smithy:smithy-docgen:$(SmithyVersion)" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(_SmithyShouldSynthesize)' == 'true' and '$(SmithyOpenApiProtocol)' != ''">
+      <_SmithyExtraDep Include="software.amazon.smithy:smithy-openapi:$(SmithyVersion)" />
+    </ItemGroup>
+
+    <!-- Build the combined deps array and the optional plugin JSON fragments. -->
     <PropertyGroup Condition="'$(_SmithyShouldSynthesize)' == 'true'">
-      <_SmithySynthesizedJson>{"version":"1.0","sources":[$(_SmithySourcesJson)],"maven":{"repositories":[{"url":"file://~/.m2/repository"},{"url":"https://repo.maven.apache.org/maven2/"}],"dependencies":[$(_SmithyDepsJson)]},"plugins":{"$(SmithyPlugin)":{"service":"$(SmithyService)","baseNamespace":"$(SmithyBaseNamespace)"}}}</_SmithySynthesizedJson>
+      <_SmithyExtraDepsJson>@(_SmithyExtraDep -> '"%(Identity)"', ',')</_SmithyExtraDepsJson>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(_SmithyShouldSynthesize)' == 'true'">
+      <_SmithyDepsSep Condition="'$(_SmithyDepsJson)' != '' and '$(_SmithyExtraDepsJson)' != ''"
+        >,</_SmithyDepsSep
+      >
+      <_SmithyAllDepsJson>$(_SmithyDepsJson)$(_SmithyDepsSep)$(_SmithyExtraDepsJson)</_SmithyAllDepsJson>
+      <!-- Leading comma because csharp-codegen is always the first plugin entry. -->
+      <_SmithyDocgenPlugin Condition="'$(SmithyGenerateDocs)' == 'true'"
+        >,"docgen":{"service":"$(SmithyService)"}</_SmithyDocgenPlugin
+      >
+      <_SmithyOpenApiPlugin Condition="'$(SmithyOpenApiProtocol)' != ''"
+        >,"openapi":{"service":"$(SmithyService)","protocol":"$(SmithyOpenApiProtocol)"}</_SmithyOpenApiPlugin
+      >
+    </PropertyGroup>
+
+    <PropertyGroup Condition="'$(_SmithyShouldSynthesize)' == 'true'">
+      <_SmithySuppressionsJson>@(SmithyBuildSuppression -> '{"id":"%(Identity)","namespace":"%(Namespace)"}', ',')</_SmithySuppressionsJson>
+      <_SmithySuppressionsSection Condition="'$(_SmithySuppressionsJson)' != ''"
+        >"suppressions":[$(_SmithySuppressionsJson)],</_SmithySuppressionsSection
+      >
+      <_SmithySynthesizedJson>{"version":"1.0",$(_SmithySuppressionsSection)"sources":[$(_SmithySourcesJson)],"maven":{"repositories":[{"url":"file://~/.m2/repository"},{"url":"https://repo.maven.apache.org/maven2/"}],"dependencies":[$(_SmithyAllDepsJson)]},"plugins":{"$(SmithyPlugin)":{"service":"$(SmithyService)","baseNamespace":"$(SmithyBaseNamespace)"}$(_SmithyDocgenPlugin)$(_SmithyOpenApiPlugin)}}</_SmithySynthesizedJson>
     </PropertyGroup>
 
     <MakeDir
@@ -313,5 +359,61 @@
       />
     </ItemGroup>
     <Message Importance="high" Text="NSmithy: registered Protobuf items: @(Protobuf)" />
+  </Target>
+
+  <!--
+    Copy the smithy-openapi output to wwwroot/openapi.json so that ASP.NET Core's
+    static file middleware can serve it at /openapi.json.
+    Only runs when SmithyOpenApiProtocol is set.
+  -->
+  <Target
+    Name="_CopyOpenApiToWwwroot"
+    AfterTargets="GenerateSmithyCode"
+    Condition="'$(SmithyOpenApiProtocol)' != ''"
+  >
+    <PropertyGroup>
+      <_SmithyOutputDir>$([MSBuild]::EnsureTrailingSlash('$(MSBuildProjectDirectory)'))$(SmithyBuildOutputPath)</_SmithyOutputDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_OpenApiJson Include="$(_SmithyOutputDir)**/openapi/*.json" />
+    </ItemGroup>
+    <MakeDir Directories="$(MSBuildProjectDirectory)/wwwroot" Condition="'@(_OpenApiJson)' != ''" />
+    <Copy
+      SourceFiles="@(_OpenApiJson)"
+      DestinationFiles="$(MSBuildProjectDirectory)/wwwroot/openapi.json"
+      Condition="'@(_OpenApiJson)' != ''"
+      OverwriteReadOnlyFiles="true"
+      SkipUnchangedFiles="true"
+    />
+  </Target>
+
+  <!--
+    Copy the smithy-docgen Sphinx HTML output to wwwroot/docs/ so that ASP.NET
+    Core's static file middleware can serve it at /docs/.
+    smithy-docgen bootstraps a self-contained Python venv with Sphinx inside the
+    output directory and runs sphinx-build itself, so the HTML is already at
+    source/docgen/build/html/ by the time GenerateSmithyCode completes.
+    Only runs when SmithyGenerateDocs is true.
+  -->
+  <Target
+    Name="_CopyDocgenToWwwroot"
+    AfterTargets="GenerateSmithyCode"
+    Condition="'$(SmithyGenerateDocs)' == 'true'"
+  >
+    <PropertyGroup>
+      <_SmithyDocgenHtmlDir>$([MSBuild]::EnsureTrailingSlash('$(MSBuildProjectDirectory)'))$(SmithyBuildOutputPath)source/docgen/build/html/</_SmithyDocgenHtmlDir>
+      <_SmithyDocsDestDir>$(MSBuildProjectDirectory)/wwwroot/docs/</_SmithyDocsDestDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_DocgenHtmlFiles Include="$(_SmithyDocgenHtmlDir)**/*.*" />
+    </ItemGroup>
+    <MakeDir Directories="$(_SmithyDocsDestDir)" Condition="'@(_DocgenHtmlFiles)' != ''" />
+    <Copy
+      SourceFiles="@(_DocgenHtmlFiles)"
+      DestinationFiles="@(_DocgenHtmlFiles -> '$(_SmithyDocsDestDir)%(RecursiveDir)%(Filename)%(Extension)')"
+      Condition="'@(_DocgenHtmlFiles)' != ''"
+      OverwriteReadOnlyFiles="true"
+      SkipUnchangedFiles="true"
+    />
   </Target>
 </Project>
