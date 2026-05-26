@@ -151,6 +151,7 @@
     >
     <SmithyGrpcServices Condition="'$(SmithyGrpcServices)' == ''">Both</SmithyGrpcServices>
     <SmithyCliPath Condition="'$(SmithyCliPath)' == ''">smithy</SmithyCliPath>
+    <SmithyExtraArgs Condition="'$(SmithyExtraArgs)' == ''"></SmithyExtraArgs>
     <SmithyGenerateClient Condition="'$(SmithyGenerateClient)' == ''">true</SmithyGenerateClient>
     <SmithyGenerateServer Condition="'$(SmithyGenerateServer)' == ''">true</SmithyGenerateServer>
     <SmithyEmitGeneratedFiles Condition="'$(SmithyEmitGeneratedFiles)' == ''"
@@ -261,7 +262,7 @@
   >
     <MakeDir Directories="$(SmithyBuildOutputPath)" />
     <Exec
-      Command="&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\\'))&quot;"
+      Command="&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\\'))&quot; $(SmithyExtraArgs)"
       WorkingDirectory="$(MSBuildProjectDirectory)"
     />
     <Touch Files="$(SmithyStampFile)" AlwaysCreate="true" />
