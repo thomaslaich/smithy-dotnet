@@ -27,22 +27,27 @@ import TypeHintCode from '../../components/TypeHintCode.astro';
 export const smithyCode = `\$version: "2"
 namespace example.hello
 
-use alloy#simpleRestJson
+use aws.protocols#restJson1
 
-@simpleRestJson
+/// A simple greeting service.
+@restJson1
 service HelloService {
+    version: "2024-01-01"
     operations: [SayHello]
 }
 
-@http(method: "GET", uri: "/hello/{name}")
+/// Returns a greeting for the given name.
 @readonly
+@http(method: "GET", uri: "/hello/{name}")
 operation SayHello {
     input := {
+        /// The name to include in the greeting.
         @required
         @httpLabel
         name: String
     }
     output := {
+        /// The greeting message, e.g. \`"Hello, World!"\`.
         @required
         message: String
     }
@@ -65,9 +70,9 @@ public class HelloHandler : IHelloServiceHandler
     }
 }
 
-builder.Services.AddSmithyServer<IHelloServiceHandler, HelloHandler>();
+builder.Services.AddHelloServiceHandler<HelloHandler>();
 //                               ^? IHelloServiceHandler
-app.MapHelloServiceRoutes();`;
+app.MapHelloServiceHttp();`;
 
 export const docsCode = `app.MapSmithyOpenApi(); // Scalar UI   →  /openapi
 app.MapSmithyDocs();    // Smithy Docs →  /docs`;
@@ -138,7 +143,6 @@ NSmithy generates a typed async client with one method per operation. Inputs and
   'SayHelloOutput': 'record SayHelloOutput(string Message)',
   'SayHelloAsync': 'Task<SayHelloOutput> IHelloServiceClient.SayHelloAsync(SayHelloInput input, [CancellationToken ct = default])',
 }} />
-
 <div>
 
 ### Document your APIs
@@ -152,12 +156,11 @@ served as static files by ASP.NET Core.
 <div>
 <Code code={docsCode} lang="csharp" />
 <img
-  src="/smithy-dotnet/screenshots/scalar-ui.png"
+  src="/smithy-dotnet/screenshots/landing-page-scalar-ui.png"
   alt="Scalar interactive API explorer showing the GetForecast endpoint"
   style="border-radius: 0.5rem; border: 1px solid var(--sl-color-gray-5); width: 100%;"
 />
 </div>
-
 </div>
 
 <CardGrid>

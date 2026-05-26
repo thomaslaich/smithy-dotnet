@@ -11,16 +11,14 @@ files. There are two distribution paths:
 - **Maven JAR** — any Smithy-based toolchain (Java, TypeScript, Python, and .NET)
   can consume it from a Maven registry, making it the more universal option.
 
-Both paths require a **contracts project** — a dedicated class library that owns
-the model files and is set up to pack them into distributable artifacts.
+## Create a Contracts Project
 
 :::note[Optional]
-Distribution is not required to use NSmithy. If you only have a single server
-and a single client in the same solution, a `ProjectReference` to a shared
-contracts project (or model files directly in the server project) is enough.
+A contracts project is not required for distribution. You only need one if you
+want to distribute via NuGet, or if you simply prefer the separation of a
+dedicated contracts project. For Maven JAR distribution you can add the relevant
+properties directly to an existing server project that already owns its model files.
 :::
-
-## Create a Contracts Project
 
 ```shell
 dotnet new classlib -n MyService.Contracts
