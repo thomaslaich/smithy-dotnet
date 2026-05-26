@@ -7,6 +7,10 @@ use alloy#jsonUnknown
 use alloy#discriminated
 use alloy#preserveKeyOrder
 
+/// A pizza restaurant administration service.
+///
+/// Demonstrates the `alloy#simpleRestJson` protocol with unions, enums,
+/// custom HTTP bindings, pagination, and primitive type encodings.
 @simpleRestJson
 service PizzaAdminService {
     version: "1.0.0",
@@ -14,6 +18,7 @@ service PizzaAdminService {
     operations: [AddMenuItem, GetMenu, Version, Health, HeaderEndpoint, RoundTrip, GetEnum, GetIntEnum, CustomCode, HttpPayloadWithDefault, HttpPayloadRequiredWithDefault, OpenUnions, Primitives, PreserveOrder]
 }
 
+/// Adds an item to a restaurant's menu.
 @http(method: "POST", uri: "/restaurant/{restaurant}/menu/item", code: 201)
 operation AddMenuItem {
     input: AddMenuItemInput,
@@ -21,6 +26,7 @@ operation AddMenuItem {
     output: AddMenuItemOutput
 }
 
+/// Returns the full menu for a restaurant.
 @readonly
 @http(method: "GET", uri: "/restaurant/{restaurant}/menu", code: 200)
 operation GetMenu {
@@ -75,6 +81,7 @@ operation RoundTrip {
     }
 }
 
+/// Returns the string value of a `TheEnum` member.
 @readonly
 @http(method: "GET", uri: "/get-enum/{aa}", code: 200)
 operation GetEnum {
@@ -83,6 +90,7 @@ operation GetEnum {
     errors: [ UnknownServerError ]
 }
 
+/// Returns a response with a custom HTTP status code.
 @readonly
 @http(method: "GET", uri: "/custom-code/{code}", code: 200)
 operation CustomCode {
@@ -91,6 +99,7 @@ operation CustomCode {
     errors: [ UnknownServerError ]
 }
 
+/// Returns the current service version.
 @readonly
 @http(method: "GET", uri: "/version", code: 200)
 operation Version {
@@ -109,9 +118,11 @@ structure AddMenuItemInput {
 
 @output
 structure AddMenuItemOutput {
+    /// The ID assigned to the newly created menu item.
     @httpPayload
     @required
     itemId: String,
+    /// The time at which the item was added, as Unix epoch seconds.
     @timestampFormat("epoch-seconds")
     @httpHeader("X-ADDED-AT")
     @required
@@ -125,10 +136,12 @@ structure VersionOutput {
     version: String
 }
 
+/// Returned when a menu item has an invalid price.
 @error("client")
 structure PriceError {
     @required
     message: String,
+    /// Machine-readable error code returned in the `X-CODE` response header.
     @required
     @httpHeader("X-CODE")
     code: Integer
@@ -148,6 +161,7 @@ structure GetMenuOutput {
     menu: Menu
 }
 
+/// Returned when the requested restaurant does not exist.
 @error("client")
 @httpError(404)
 structure NotFoundError {
@@ -155,20 +169,24 @@ structure NotFoundError {
     name: String
 }
 
+/// Catch-all client error.
 @error("client")
 structure FallbackError {
     @required
     error: String
 }
 
+/// A restaurant menu, mapping item IDs to menu items.
 map Menu {
     key: String,
     value: MenuItem
 }
 
+/// A single item on the menu.
 structure MenuItem {
     @required
     food: Food,
+    /// Price in the local currency.
     @required
     price: Float
 }
@@ -195,6 +213,7 @@ structure Pizza {
     toppings: Ingredients
 }
 
+/// The sauce base for a pizza.
 enum PizzaBase {
     CREAM = "C"
     TOMATO = "T"
@@ -218,6 +237,7 @@ list Ingredients {
     member: Ingredient
 }
 
+/// Unhandled server error.
 @error("server")
 @httpError(502)
 structure GenericServerError {
@@ -225,6 +245,7 @@ structure GenericServerError {
     message: String
 }
 
+/// Unhandled client error.
 @error("client")
 @httpError(418)
 structure GenericClientError {
@@ -232,6 +253,7 @@ structure GenericClientError {
     message: String
 }
 
+/// Returns the health status of the service.
 @readonly
 @http(method: "GET", uri: "/health", code: 200)
 operation Health {
@@ -242,6 +264,7 @@ operation Health {
 
 @input
 structure HealthInput {
+    /// Optional query string (max 5 characters) for diagnostic use.
     @httpQuery("query")
     @length(min: 0, max: 5)
     query: String
@@ -254,6 +277,7 @@ structure HealthOutput {
     status: String
 }
 
+/// Unhandled server error with an error code and optional diagnostic fields.
 @error("server")
 @httpError(500)
 structure UnknownServerError {
@@ -286,12 +310,13 @@ structure GetEnumOutput {
     result: String
 }
 
+/// A simple string enum with two values.
 enum TheEnum {
     V1 = "v1"
     V2 = "v2"
 }
 
-
+/// Returns the integer enum value for a given member.
 @readonly
 @http(method: "GET", uri: "/get-int-enum/{aa}", code: 200)
 operation GetIntEnum {
@@ -307,6 +332,7 @@ operation GetIntEnum {
     errors: [ UnknownServerError ]
 }
 
+/// An integer enum with two named values.
 intEnum EnumResult {
     FIRST = 1
     SECOND = 2
@@ -321,10 +347,12 @@ structure CustomCodeInput {
 
 @output
 structure CustomCodeOutput {
+    /// The HTTP status code echoed back from the request path.
     @httpResponseCode
     code: Integer
 }
 
+/// Echoes back a body string, using `"default value"` when the body is absent.
 @idempotent
 @http(uri: "/httpPayloadWithDefault", method: "PUT")
 operation HttpPayloadWithDefault {
@@ -340,6 +368,7 @@ operation HttpPayloadWithDefault {
     }
 }
 
+/// Like `HttpPayloadWithDefault`, but the body field is also `@required`.
 @idempotent
 @http(uri: "/httpPayloadRequiredWithDefault", method: "PUT")
 operation HttpPayloadRequiredWithDefault {
@@ -358,6 +387,8 @@ operation HttpPayloadRequiredWithDefault {
 }
 
 /// Demonstrates tagged and discriminated open unions.
+///
+/// Accepts an `OpenUnionsPayload` and echoes it back unchanged.
 @idempotent
 @http(uri: "/openUnions", method: "PUT")
 operation OpenUnions {
@@ -375,13 +406,19 @@ union OpenUnionsPayload {
     discriminated: OpenDiscriminatedUnion
 }
 
-/// A tagged union — the variant name is the key, its value is the payload.
+/// A tagged union — the variant name is the JSON key, its value is the payload.
+///
+/// Unknown variants are captured by the `other` member (annotated with
+/// `@jsonUnknown`) and round-tripped without data loss.
 union OpenTaggedUnion {
     str: String
     @jsonUnknown other: Document
 }
 
-/// A discriminated union — the discriminator field (`key`) is inlined alongside payload fields.
+/// A discriminated union — a `"key"` field inlined into the object identifies
+/// the variant, and the remaining fields are the variant's payload.
+///
+/// Unknown variants are captured by the `other` member.
 @discriminated("key")
 union OpenDiscriminatedUnion {
     smol: SmallStruct
@@ -392,6 +429,7 @@ structure SmallStruct {
     @required content: String
 }
 
+/// Echoes back a set of alloy primitive types.
 @http(uri: "/primitive/encoding", method: "POST", code: 200)
 operation Primitives {
     input := {
@@ -420,12 +458,14 @@ operation Primitives {
     }
 }
 
+/// A map that preserves the insertion order of its keys in JSON.
 @preserveKeyOrder
 map MyMap {
     key: String,
     value: Integer
 }
 
+/// Echoes back a key-order-preserving map and a document.
 @http(uri: "/preserveKeyOrder", method: "POST", code: 200)
 operation PreserveOrder {
     input := {
