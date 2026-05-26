@@ -43,6 +43,7 @@ export default defineConfig({
 						{ label: 'Contracts Project', slug: 'guides/contracts-project' },
 						{ label: 'Distributing Contracts', slug: 'guides/distributing-contracts' },
 						{ label: 'Multi-Protocol', slug: 'guides/multi-protocol' },
+						{ label: 'Endpoint Documentation', slug: 'guides/endpoint-documentation' },
 					],
 				},
 				{

@@ -37,6 +37,13 @@ cd examples/rest-json1
 dotnet run --project client -- http://localhost:5000
 ```
 
+With the server running, open in your browser:
+
+| Route | Description |
+|-------|-------------|
+| [`/openapi`](http://localhost:5000/openapi) | Scalar interactive API explorer |
+| [`/docs`](http://localhost:5000/docs) | smithy-docgen generated documentation |
+
 Or call the server directly:
 
 ```bash

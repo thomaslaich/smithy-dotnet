@@ -81,6 +81,10 @@ var response = await client.SayHelloAsync(new SayHelloInput("World"));
 //                                            ^? SayHelloInput
 Console.WriteLine(response.Message); // Hello, World!`;
 
+export const docsCode = `// NSmithy.AspNetCore.Docs
+app.MapSmithyOpenApi(); // Scalar UI  →  /openapi
+app.MapSmithyDocs();    // Sphinx HTML →  /docs`;
+
 <style>{`
   .how-it-works {
     display: grid;
@@ -134,6 +138,18 @@ NSmithy generates a typed async client with one method per operation. Inputs and
   'SayHelloOutput': 'record SayHelloOutput(string Message)',
   'SayHelloAsync': 'Task<SayHelloOutput> IHelloServiceClient.SayHelloAsync(SayHelloInput input, [CancellationToken ct = default])',
 }} />
+
+<div>
+
+### Document your APIs
+
+NSmithy generates an interactive [Scalar](https://scalar.com) OpenAPI explorer
+and [Sphinx](https://www.sphinx-doc.org) reference documentation straight from
+the Smithy model — no manual spec authoring. Both are built at compile time and
+served as static files by ASP.NET Core.
+
+</div>
+<Code code={docsCode} lang="csharp" />
 </div>
 
 <CardGrid>

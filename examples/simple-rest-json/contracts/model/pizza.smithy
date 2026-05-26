@@ -16,29 +16,63 @@ service PizzaAdminService {
 
 @http(method: "POST", uri: "/restaurant/{restaurant}/menu/item", code: 201)
 operation AddMenuItem {
-    input: AddMenuItemRequest,
+    input: AddMenuItemInput,
     errors: [PriceError],
-    output: AddMenuItemResult
+    output: AddMenuItemOutput
 }
 
 @readonly
 @http(method: "GET", uri: "/restaurant/{restaurant}/menu", code: 200)
 operation GetMenu {
-    input: GetMenuRequest,
+    input: GetMenuInput,
     errors: [NotFoundError, FallbackError],
-    output: GetMenuResult
+    output: GetMenuOutput
 }
 
+/// Echoes back all HTTP headers that were sent in the request.
 @http(method: "POST", uri: "/headers/", code: 200)
 operation HeaderEndpoint {
-    input: HeaderEndpointData,
-    output: HeaderEndpointData
+    input := {
+        @httpHeader("X-UPPERCASE-HEADER")
+        uppercaseHeader: String,
+        @httpHeader("X-Capitalized-Header")
+        capitalizedHeader: String,
+        @httpHeader("x-lowercase-header")
+        lowercaseHeader: String,
+        @httpHeader("x-MiXeD-hEaDEr")
+        mixedHeader: String,
+    }
+    output := {
+        @httpHeader("X-UPPERCASE-HEADER")
+        uppercaseHeader: String,
+        @httpHeader("X-Capitalized-Header")
+        capitalizedHeader: String,
+        @httpHeader("x-lowercase-header")
+        lowercaseHeader: String,
+        @httpHeader("x-MiXeD-hEaDEr")
+        mixedHeader: String,
+    }
 }
 
+/// Echoes back the label, header, query parameter, and body that were sent.
 @http(method: "POST", uri: "/roundTrip/{label}", code: 200)
 operation RoundTrip {
-    input: RoundTripData,
-    output: RoundTripData
+    input := {
+        @httpLabel
+        @required
+        label: String,
+        @httpHeader("HEADER")
+        header: String,
+        @httpQuery("query")
+        query: String,
+        body: String
+    }
+    output := {
+        label: String,
+        header: String,
+        query: String,
+        body: String
+    }
 }
 
 @readonly
@@ -63,30 +97,18 @@ operation Version {
     output: VersionOutput
 }
 
-
-structure RoundTripData {
+@input
+structure AddMenuItemInput {
     @httpLabel
     @required
-    label: String,
-    @httpHeader("HEADER")
-    header: String,
-    @httpQuery("query")
-    query: String,
-    body: String
+    restaurant: String,
+    @httpPayload
+    @required
+    menuItem: MenuItem
 }
 
-structure HeaderEndpointData {
-    @httpHeader("X-UPPERCASE-HEADER")
-    uppercaseHeader: String,
-    @httpHeader("X-Capitalized-Header")
-    capitalizedHeader: String,
-    @httpHeader("x-lowercase-header")
-    lowercaseHeader: String,
-    @httpHeader("x-MiXeD-hEaDEr")
-    mixedHeader: String,
-}
-
-structure AddMenuItemResult {
+@output
+structure AddMenuItemOutput {
     @httpPayload
     @required
     itemId: String,
@@ -96,7 +118,7 @@ structure AddMenuItemResult {
     added: Timestamp
 }
 
-
+@output
 structure VersionOutput {
     @httpPayload
     @required
@@ -112,13 +134,15 @@ structure PriceError {
     code: Integer
 }
 
-structure GetMenuRequest {
+@input
+structure GetMenuInput {
     @httpLabel
     @required
     restaurant: String
 }
 
-structure GetMenuResult {
+@output
+structure GetMenuOutput {
     @required
     @httpPayload
     menu: Menu
@@ -142,15 +166,6 @@ map Menu {
     value: MenuItem
 }
 
-structure AddMenuItemRequest {
-    @httpLabel
-    @required
-    restaurant: String,
-    @httpPayload
-    @required
-    menuItem: MenuItem
-}
-
 structure MenuItem {
     @required
     food: Food,
@@ -158,6 +173,7 @@ structure MenuItem {
     price: Float
 }
 
+/// A food item — either a pizza or a salad.
 union Food {
     pizza: Pizza,
     salad: Salad
@@ -219,19 +235,21 @@ structure GenericClientError {
 @readonly
 @http(method: "GET", uri: "/health", code: 200)
 operation Health {
-    input: HealthRequest,
-    output: HealthResponse,
+    input: HealthInput,
+    output: HealthOutput,
     errors: [ UnknownServerError ]
 }
 
-structure HealthRequest {
+@input
+structure HealthInput {
     @httpQuery("query")
     @length(min: 0, max: 5)
     query: String
 }
 
 @freeForm(i: 1, a: 2)
-structure HealthResponse {
+@output
+structure HealthOutput {
     @required
     status: String
 }
@@ -256,12 +274,14 @@ enum UnknownServerErrorCode {
 document freeForm
 
 
+@input
 structure GetEnumInput {
     @required
     @httpLabel
     aa: TheEnum
 }
 
+@output
 structure GetEnumOutput {
     result: String
 }
@@ -292,12 +312,14 @@ intEnum EnumResult {
     SECOND = 2
 }
 
+@input
 structure CustomCodeInput {
     @httpLabel
     @required
     code: Integer
 }
 
+@output
 structure CustomCodeOutput {
     @httpResponseCode
     code: Integer
@@ -306,30 +328,36 @@ structure CustomCodeOutput {
 @idempotent
 @http(uri: "/httpPayloadWithDefault", method: "PUT")
 operation HttpPayloadWithDefault {
-    input: HttpPayloadWithDefaultInputOutput,
-    output: HttpPayloadWithDefaultInputOutput
-}
-
-structure HttpPayloadWithDefaultInputOutput {
-    @httpPayload
-    @default("default value")
-    body: String,
+    input := {
+        @httpPayload
+        @default("default value")
+        body: String,
+    }
+    output := {
+        @httpPayload
+        @default("default value")
+        body: String,
+    }
 }
 
 @idempotent
 @http(uri: "/httpPayloadRequiredWithDefault", method: "PUT")
 operation HttpPayloadRequiredWithDefault {
-    input: HttpPayloadRequiredWithDefaultInputOutput
-    output: HttpPayloadRequiredWithDefaultInputOutput
+    input := {
+        @httpPayload
+        @default("default value")
+        @required
+        body: String
+    }
+    output := {
+        @httpPayload
+        @default("default value")
+        @required
+        body: String
+    }
 }
 
-structure HttpPayloadRequiredWithDefaultInputOutput {
-    @httpPayload
-    @default("default value")
-    @required
-    body: String
-}
-
+/// Demonstrates tagged and discriminated open unions.
 @idempotent
 @http(uri: "/openUnions", method: "PUT")
 operation OpenUnions {
@@ -341,16 +369,19 @@ operation OpenUnions {
     }
 }
 
+/// A payload that can be either a tagged union or a discriminated union.
 union OpenUnionsPayload {
     tagged: OpenTaggedUnion
     discriminated: OpenDiscriminatedUnion
 }
 
+/// A tagged union — the variant name is the key, its value is the payload.
 union OpenTaggedUnion {
     str: String
     @jsonUnknown other: Document
 }
 
+/// A discriminated union — the discriminator field (`key`) is inlined alongside payload fields.
 @discriminated("key")
 union OpenDiscriminatedUnion {
     smol: SmallStruct
@@ -363,21 +394,30 @@ structure SmallStruct {
 
 @http(uri: "/primitive/encoding", method: "POST", code: 200)
 operation Primitives {
-    input: PrimitiveEncodings
-    output: PrimitiveEncodings
-}
-
-structure PrimitiveEncodings {
-    @required
-    uuid: alloy#UUID
-    @required
-    localDate: alloy#LocalDate
-    @required
-    localTime: alloy#LocalTime
-    @required
-    duration: alloy#Duration
-    @required
-    offsetDateTime: alloy#OffsetDateTime
+    input := {
+        @required
+        uuid: alloy#UUID
+        @required
+        localDate: alloy#LocalDate
+        @required
+        localTime: alloy#LocalTime
+        @required
+        duration: alloy#Duration
+        @required
+        offsetDateTime: alloy#OffsetDateTime
+    }
+    output := {
+        @required
+        uuid: alloy#UUID
+        @required
+        localDate: alloy#LocalDate
+        @required
+        localTime: alloy#LocalTime
+        @required
+        duration: alloy#Duration
+        @required
+        offsetDateTime: alloy#OffsetDateTime
+    }
 }
 
 @preserveKeyOrder
@@ -388,12 +428,14 @@ map MyMap {
 
 @http(uri: "/preserveKeyOrder", method: "POST", code: 200)
 operation PreserveOrder {
-    input: PreserveOrderStruct
-    output: PreserveOrderStruct
-}
-
-structure PreserveOrderStruct {
-    map: MyMap
-    @preserveKeyOrder
-    document: Document
+    input := {
+        map: MyMap
+        @preserveKeyOrder
+        document: Document
+    }
+    output := {
+        map: MyMap
+        @preserveKeyOrder
+        document: Document
+    }
 }
