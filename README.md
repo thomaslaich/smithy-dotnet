@@ -24,9 +24,9 @@
 
 # NSmithy
 
-NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io) model into idiomatic C# at build time. From a single contract you get typed clients, server scaffolding, and shared model types — fully integrated into your MSBuild workflow.
-
 **[NSmithy Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
+
+NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io) model into idiomatic C# at build time. From a single contract you get typed clients, server scaffolding, and shared model types — fully integrated into your MSBuild workflow.
 
 ## Features
 
@@ -50,3 +50,11 @@ The recommended way to work on this repo is with [Nix](https://nixos.org/) (pref
    just docs     # start the documentation dev server
    just ci       # run the full CI pipeline locally
    ```
+
+## Related Projects
+
+- **[Smithy](https://smithy.io)** — the IDL and protocol framework NSmithy is built on.
+- **[smithy4s](https://disneystreaming.github.io/smithy4s/)** — the main inspiration for NSmithy; generates Scala code from Smithy models with similar goals, though with a more ambitious scope (own parser, independent toolchain).
+- **[alloy](https://github.com/disneystreaming/alloy)** — Smithy extensions used by NSmithy for `simpleRestJson` and gRPC protocols.
+- **[smithy-go](https://github.com/smithy-lang/smithy-go)** / **[smithy-typescript](https://github.com/smithy-lang/smithy-typescript)** — official Smithy codegen plugins for Go and TypeScript, which NSmithy draws inspiration from.
+- **[TypeSpec](https://typespec.io)** — Microsoft's alternative API description language with similar goals. Compiles to OpenAPI, JSON Schema, Protobuf, and more; has first-party .NET emitters.
