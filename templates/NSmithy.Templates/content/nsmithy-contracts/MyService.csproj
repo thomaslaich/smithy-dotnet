@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <SmithyPublish>true</SmithyPublish>
+    <!-- Remove the two lines below if you only need NuGet distribution -->
+    <SmithyMavenGroupId>io.github.YOUR_ORG</SmithyMavenGroupId>
+    <SmithyMavenArtifactId>my-service-contracts</SmithyMavenArtifactId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--#if (IsRestJson1)-->
+    <SmithyMavenDependency Include="software.amazon.smithy:smithy-aws-traits:1.68.0" />
+    <!--#endif-->
+    <!--#if (IsSimpleRestJson || IsGrpc)-->
+    <SmithyMavenDependency Include="com.disneystreaming.alloy:alloy-core:0.3.38" />
+    <!--#endif-->
+    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.11" />
+  </ItemGroup>
+</Project>

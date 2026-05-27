@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "NSmithy",
+  "classifications": ["NSmithy", "Smithy", "Contracts"],
+  "identity": "NSmithy.Templates.Contracts.CSharp",
+  "name": "NSmithy Contracts",
+  "shortName": "nsmithy-contracts",
+  "sourceName": "MyService",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "Protocol": {
+      "type": "parameter",
+      "datatype": "choice",
+      "choices": [
+        { "choice": "restJson1",     "description": "aws.protocols#restJson1 — AWS REST/JSON protocol" },
+        { "choice": "simpleRestJson","description": "alloy#simpleRestJson — Alloy REST/JSON protocol" },
+        { "choice": "grpc",          "description": "alloy.proto#grpc — gRPC protocol (experimental)" }
+      ],
+      "defaultValue": "restJson1",
+      "description": "The Smithy protocol the service uses"
+    },
+    "IsRestJson1":    { "type": "computed", "value": "(Protocol == \"restJson1\")" },
+    "IsSimpleRestJson":{ "type": "computed", "value": "(Protocol == \"simpleRestJson\")" },
+    "IsGrpc":         { "type": "computed", "value": "(Protocol == \"grpc\")" }
+  },
+  "specialCustomOperations": {
+    "**/*.smithy": {
+      "operations": [
+        {
+          "type": "conditional",
+          "configuration": {
+            "if":     ["//#if"],
+            "else":   ["//#else"],
+            "elseif": ["//#elseif"],
+            "endif":  ["//#endif"],
+            "trim": true,
+            "wholeLine": true,
+            "evaluator": "C++"
+          }
+        }
+      ]
+    }
+  }
+}
