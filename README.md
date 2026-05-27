@@ -36,7 +36,7 @@ NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io)
 
 ## Development
 
-The recommended way to work on this repo is with [Nix](https://nixos.org/) (preferably [Determinate Nix](https://determinate.systems/nix/)) and [devenv](https://devenv.sh/).
+The recommended way to work on this repo is with [Nix](https://nixos.org/) and [devenv](https://devenv.sh/).
 
 1. **Install Nix** (recommended: [Determinate Nix](https://determinate.systems/nix/)) and [devenv](https://devenv.sh/).
 2. **Optionally install [direnv](https://direnv.net/)** to activate the dev environment automatically when entering the directory (`direnv allow`). Without it, run `devenv shell` manually.
