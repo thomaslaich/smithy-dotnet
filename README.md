@@ -54,7 +54,7 @@ The recommended way to work on this repo is with [Nix](https://nixos.org/) (pref
 ## Related Projects
 
 - **[Smithy](https://smithy.io)** — the IDL and protocol framework NSmithy is built on.
-- **[smithy4s](https://disneystreaming.github.io/smithy4s/)** — the main inspiration for NSmithy; generates Scala code from Smithy models with similar goals, though with a more ambitious scope (own parser, independent toolchain).
+- **[smithy4s](https://disneystreaming.github.io/smithy4s/)** — the main inspiration for NSmithy; generates Scala code from Smithy models with similar goals, though with a more sophisticated typeclass-based codec architecture that cleanly separates schema interpretation from serialization.
 - **[alloy](https://github.com/disneystreaming/alloy)** — Smithy extensions used by NSmithy for `simpleRestJson` and gRPC protocols.
 - **[smithy-go](https://github.com/smithy-lang/smithy-go)** / **[smithy-typescript](https://github.com/smithy-lang/smithy-typescript)** — official Smithy codegen plugins for Go and TypeScript, which NSmithy draws inspiration from.
 - **[TypeSpec](https://typespec.io)** — Microsoft's alternative API description language with similar goals. Compiles to OpenAPI, JSON Schema, Protobuf, and more; has first-party .NET emitters.
