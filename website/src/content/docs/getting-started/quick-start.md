@@ -3,8 +3,37 @@ title: Quick Start
 description: Scaffold a contracts project, a server, and a client with NSmithy templates.
 ---
 
-This guide assumes the Smithy CLI and JDK are already available. If not, see
-[Environment Setup](/smithy-dotnet/getting-started/environment/) first.
+If you are new to Smithy, the [official Smithy quickstart](https://smithy.io/2.0/quickstart.html) is a good place to familiarize yourself with the IDL before continuing.
+
+## Prerequisites
+
+You need the [.NET SDK](https://dotnet.microsoft.com/download). That's it for
+basic builds — NSmithy bundles the Smithy CLI (including a JRE) inside the
+NuGet package, so no separate Java or Smithy CLI installation is required.
+
+If you enable `SmithyGenerateDocs` (Sphinx HTML docs), Python 3.11+ must also
+be on your PATH.
+
+Install [CSharpier](https://csharpier.com) to get formatted generated code.
+NSmithy runs it automatically after codegen if it is available, and silently
+skips formatting if it is not. Install it as a local tool (recommended) or
+globally:
+
+```shell
+# local (per-repo, committed to dotnet-tools.json)
+dotnet new tool-manifest  # skip if .config/dotnet-tools.json already exists
+dotnet tool install csharpier
+
+# global
+dotnet tool install -g csharpier
+```
+
+:::tip[Managed dev environments]
+For teams that prefer a fully reproducible setup — especially across Windows,
+macOS, and Linux — [pixi](https://pixi.sh), [devenv](https://devenv.sh), or a
+Docker devcontainer can manage .NET and Python together. For a devenv example
+see [`devenv.nix` at the repo root](https://github.com/thomaslaich/smithy-dotnet/blob/main/devenv.nix).
+:::
 
 ## Install Templates
 

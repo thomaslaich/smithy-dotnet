@@ -1,0 +1,4 @@
+# Downloaded Smithy CLI binaries — run ../download-smithy-cli.sh to populate.
+# These files are included in the NuGet package but not committed to git.
+*
+!.gitignore
