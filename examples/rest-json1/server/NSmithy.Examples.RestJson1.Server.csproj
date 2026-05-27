@@ -14,7 +14,7 @@
   <ItemGroup>
     <PackageReference Include="NSmithy.Server" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.AspNetCore.Docs" Version="0.1.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="0.1.0-SNAPSHOT" />
     <ProjectReference Include="../contracts/NSmithy.Examples.RestJson1.Contracts.csproj" />
   </ItemGroup>
 </Project>

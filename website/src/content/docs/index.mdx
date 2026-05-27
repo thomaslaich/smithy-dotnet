@@ -37,19 +37,15 @@ service HelloService {
 }
 
 /// Returns a greeting for the given name.
-@readonly
-@http(method: "GET", uri: "/hello/{name}")
+@readonly @http(method: "GET", uri: "/hello/{name}")
 operation SayHello {
     input := {
         /// The name to include in the greeting.
-        @required
-        @httpLabel
-        name: String
+        @required @httpLabel name: String
     }
     output := {
         /// The greeting message, e.g. \`"Hello, World!"\`.
-        @required
-        message: String
+        @required message: String
     }
 }`;
 
@@ -71,7 +67,7 @@ public class HelloHandler : IHelloServiceHandler
 }
 
 builder.Services.AddHelloServiceHandler<HelloHandler>();
-//                               ^? IHelloServiceHandler
+//                                      ^? IHelloServiceHandler
 app.MapHelloServiceHttp();`;
 
 export const docsCode = `app.MapSmithyOpenApi(); // Scalar UI   →  /openapi

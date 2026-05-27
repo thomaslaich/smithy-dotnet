@@ -1,5 +1,5 @@
 using Alloy.Test;
-using NSmithy.AspNetCore.Docs;
+using NSmithy.Server.AspNetCore.Docs;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddPizzaAdminServiceHandler<PizzaHandler>();

@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Scalar.AspNetCore;
 
-namespace NSmithy.AspNetCore.Docs;
+namespace NSmithy.Server.AspNetCore.Docs;
 
 public static class SmithyDocsExtensions
 {

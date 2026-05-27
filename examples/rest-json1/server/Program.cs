@@ -1,5 +1,5 @@
 using Example.Weather;
-using NSmithy.AspNetCore.Docs;
+using NSmithy.Server.AspNetCore.Docs;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddWeatherServiceHandler<WeatherHandler>();

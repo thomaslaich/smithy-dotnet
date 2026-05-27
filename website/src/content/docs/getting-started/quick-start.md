@@ -1,71 +1,107 @@
 ---
 title: Quick Start
-description: Get up and running with NSmithy.
+description: Scaffold a contracts project, a server, and a client with NSmithy templates.
 ---
 
-This guide assumes the Smithy CLI and JDK are already available in your build
-environment. If not, see [Environment Setup](/smithy-dotnet/getting-started/environment/) first.
+This guide assumes the Smithy CLI and JDK are already available. If not, see
+[Environment Setup](/smithy-dotnet/getting-started/environment/) first.
 
-## Configure The Project
+## Install Templates
 
-Add the following to your `.csproj`. The codegen MSBuild targets are pulled in
-automatically via `NSmithy.Server.AspNetCore` and `NSmithy.Client` — no
-separate `NSmithy.MSBuild` reference is needed.
+```shell
+dotnet new install NSmithy.Templates
+```
+
+## 1. Create the Contracts Project
+
+The contracts project owns the Smithy model and distributes it to the server
+and client.
+
+```shell
+mkdir HelloWorld && cd HelloWorld
+dotnet new nsmithy-contracts -n HelloWorld.Contracts
+```
+
+This generates:
+
+```
+HelloWorld.Contracts/
+  HelloWorld.Contracts.csproj
+  model/
+    service.smithy          ← starter restJson1 HelloService model
+```
+
+## 2. Create the Server
+
+```shell
+dotnet new nsmithy-server -n HelloWorld.Server --contracts HelloWorld.Contracts --with-docs
+```
+
+The `--contracts` flag sets the `ProjectReference` to the contracts project
+exactly. `--with-docs` enables the Smithy docs and OpenAPI endpoints. Build and run:
+
+```shell
+dotnet run --project HelloWorld.Server
+```
+
+The server listens on `http://localhost:5000`. Test it:
+
+```shell
+curl http://localhost:5000/hello/world
+# {"message":"Hello, world!"}
+```
+
+With `--with-docs`, two documentation UIs are also available:
+
+- **`/docs`** — Smithy-generated reference docs for your model
+- **`/openapi`** — interactive Scalar UI backed by a generated `openapi.json`
+
+See [Endpoint Documentation](/smithy-dotnet/guides/endpoint-documentation/) for details.
+
+## 3. Create the Client
+
+```shell
+dotnet new nsmithy-client -n HelloWorld.Client
+```
+
+The client template defaults to a Maven contracts reference for production use.
+For local development, open `HelloWorld.Client/HelloWorld.Client.csproj` and
+replace the `SmithyMavenDependency` placeholder with a `ProjectReference`:
 
 ```xml
-<ItemGroup>
-  <!-- client -->
-  <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.11" />
+<!-- remove this -->
+<SmithyMavenDependency Include="io.github.YOUR_ORG:your-service-contracts:1.0.0" />
 
-  <!-- server (ASP.NET Core) -->
-  <FrameworkReference Include="Microsoft.AspNetCore.App" />
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.11" />
-</ItemGroup>
+<!-- add this instead -->
+<ProjectReference Include="../HelloWorld.Contracts/HelloWorld.Contracts.csproj" />
 ```
 
-Remove the server lines if you only need a generated client.
+Then run the client with the server still running:
 
-The `smithy-build.json` next to the `.csproj` is picked up automatically.
-See the [MSBuild reference](/smithy-dotnet/reference/msbuild/) for the full property list.
-
-## Add A Model
-
-Add a `smithy-build.json` next to your `.csproj`:
-
-```json
-{
-  "version": "1.0",
-  "sources": ["model"],
-  "maven": {
-    "dependencies": [
-      "com.disneystreaming.alloy:alloy-core:0.3.38",
-      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.11"
-    ]
-  },
-  "plugins": {
-    "csharp-codegen": {
-      "service": "example.hello#HelloService",
-      "baseNamespace": ""
-    }
-  }
-}
+```shell
+dotnet run --project HelloWorld.Client
+# Hello, world!
 ```
 
-Add a model file at `model/hello.smithy`:
+When you're ready to distribute, see
+[Distributing Contracts](/smithy-dotnet/guides/distributing-contracts/) to
+publish the contracts JAR and switch back to a Maven reference.
+
+## Walking Through the Code
+
+### The Model
+
+Open `HelloWorld.Contracts/model/service.smithy`. The template generates a
+minimal `restJson1` service with a single operation:
 
 ```smithy
-$version: "2"
-
-namespace example.hello
-
-use alloy#simpleRestJson
-
-@simpleRestJson
+@restJson1
 service HelloService {
-    version: "2024-01-01"
+    version: "2006-03-01"
     operations: [SayHello]
 }
 
+@readonly
 @http(method: "GET", uri: "/hello/{name}")
 operation SayHello {
     input := {
@@ -73,7 +109,6 @@ operation SayHello {
         @httpLabel
         name: String
     }
-
     output := {
         @required
         message: String
@@ -81,46 +116,90 @@ operation SayHello {
 }
 ```
 
-## Use The Generated Client
+`@restJson1` is the protocol — it controls serialization and HTTP binding
+behaviour. `@http` binds the operation to a route. `@httpLabel` maps `name` to
+the `{name}` path segment. This is the source of truth for everything that
+follows — change the model, rebuild, and all generated code updates automatically.
 
-Run `dotnet build`. Generated files appear under `obj/<configuration>/<tfm>/Smithy/`.
+### Generated Types
+
+Running `dotnet build` invokes the Smithy CLI and generates C# types under
+`obj/`. For the model above you get:
 
 ```csharp
-using Example.Hello;
-using NSmithy.Client;
-
-var client = new HelloServiceClient(
-    new HttpClient(),
-    new SmithyClientOptions { Endpoint = new Uri("http://localhost:8082") }
-);
-
-var output = await client.SayHelloAsync(new SayHelloInput("world"));
-Console.WriteLine(output.Message);
+public sealed record SayHelloInput(string Name);
+public sealed record SayHelloOutput(string Message);
 ```
 
-## Use The Generated Server
-
-For `alloy#simpleRestJson`, implement the generated handler interface and map
-the routes:
+And a handler interface the server must implement:
 
 ```csharp
-using Example.Hello;
+public interface IHelloServiceHandler
+{
+    Task<SayHelloOutput> SayHelloAsync(
+        SayHelloInput input,
+        CancellationToken ct = default);
+}
+```
 
-var builder = WebApplication.CreateBuilder(args);
+### The Server Handler
+
+The generated `Program.cs` in `HelloWorld.Server` registers your handler and
+maps the routes:
+
+```csharp
 builder.Services.AddHelloServiceHandler<HelloHandler>();
 
-var app = builder.Build();
 app.MapHelloServiceHttp();
-app.Run();
+```
 
+`HelloHandler` (also generated as a starter) simply returns a greeting:
+
+```csharp
 internal sealed class HelloHandler : IHelloServiceHandler
 {
     public Task<SayHelloOutput> SayHelloAsync(
         SayHelloInput input,
         CancellationToken cancellationToken = default
-    )
-    {
-        return Task.FromResult(new SayHelloOutput($"hello, {input.Name}"));
-    }
+    ) => Task.FromResult(new SayHelloOutput($"Hello, {input.Name}!"));
 }
+```
+
+Replace the body with your real logic. The compiler enforces that every
+operation in the model has an implementation — add an operation to the model and
+the build breaks until you handle it.
+
+### The Generated Client
+
+`HelloWorld.Client/Program.cs` uses the generated typed client:
+
+```csharp
+var client = new HelloServiceClient(
+    new HttpClient(),
+    new SmithyClientOptions { Endpoint = new Uri(endpoint) }
+);
+
+var response = await client.SayHelloAsync(new SayHelloInput("world"));
+Console.WriteLine(response.Message);
+```
+
+The client and server share the same generated input/output types from the
+contracts project. There is no hand-written glue — the model is the contract.
+
+## Template Options
+
+All three templates accept `--protocol`:
+
+| Value | Protocol |
+| --- | --- |
+| `restJson1` | `aws.protocols#restJson1` (default) |
+| `simpleRestJson` | `alloy#simpleRestJson` |
+| `grpc` | `alloy.proto#grpc` (experimental) |
+
+Additional options:
+
+```shell
+dotnet new nsmithy-server --help
+dotnet new nsmithy-contracts --help
+dotnet new nsmithy-client --help
 ```

@@ -29,10 +29,10 @@ ASP.NET Core's built-in static file middleware serves them with zero extra confi
 
 ## Install the Package
 
-Add `NSmithy.AspNetCore.Docs` to your server project:
+Add `NSmithy.Server.AspNetCore.Docs` to your server project:
 
 ```xml
-<PackageReference Include="NSmithy.AspNetCore.Docs" Version="0.1.0-preview.11" />
+<PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="0.1.0-preview.11" />
 ```
 
 This package provides the `MapSmithyOpenApi()` and `MapSmithyDocs()` extension
@@ -66,7 +66,7 @@ for alloy-based services and use only `SmithyGenerateDocs`.
 Call the extension methods in `Program.cs`:
 
 ```csharp
-using NSmithy.AspNetCore.Docs;
+using NSmithy.Server.AspNetCore.Docs;
 
 var app = builder.Build();
 app.MapSmithyOpenApi(); // mounts Scalar at /openapi (requires SmithyOpenApiProtocol)

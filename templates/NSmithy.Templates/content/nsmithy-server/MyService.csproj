@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <SmithyService>example.hello#HelloService</SmithyService>
+    <SmithyGeneratedNamespaces>example.hello</SmithyGeneratedNamespaces>
+    <!--#if (WithDocs && IsRestJson1)-->
+    <SmithyGenerateDocs>true</SmithyGenerateDocs>
+    <SmithyOpenApiProtocol>aws.protocols#restJson1</SmithyOpenApiProtocol>
+    <!--#elif (WithDocs)-->
+    <SmithyGenerateDocs>true</SmithyGenerateDocs>
+    <!--#endif-->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSmithy.Server" Version="0.1.0-preview.11" />
+    <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.11" />
+    <!--#if (WithDocs)-->
+    <PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="0.1.0-preview.11" />
+    <!--#endif-->
+    <!--#if (IsGrpc)-->
+    <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="all" />
+    <!--#endif-->
+    <!--#if (WithContracts)-->
+    <ProjectReference Include="../ContractsName/ContractsName.csproj" />
+    <!--#endif-->
+  </ItemGroup>
+
+  <!--#if (!WithContracts)-->
+  <ItemGroup>
+    <SmithySource Include="model/**/*.smithy" />
+  </ItemGroup>
+
+  <!--#if (IsRestJson1)-->
+  <ItemGroup>
+    <SmithyMavenDependency Include="software.amazon.smithy:smithy-aws-traits:1.68.0" />
+    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.11" />
+  </ItemGroup>
+  <!--#endif-->
+  <!--#if (IsSimpleRestJson || IsGrpc)-->
+  <ItemGroup>
+    <SmithyMavenDependency Include="com.disneystreaming.alloy:alloy-core:0.3.38" />
+    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.11" />
+  </ItemGroup>
+  <!--#endif-->
+  <!--#endif-->
+</Project>

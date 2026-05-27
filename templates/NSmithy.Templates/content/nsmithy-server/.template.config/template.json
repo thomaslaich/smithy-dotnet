@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "NSmithy",
+  "classifications": ["NSmithy", "Smithy", "Web", "Server"],
+  "identity": "NSmithy.Templates.Server.CSharp",
+  "name": "NSmithy Server",
+  "shortName": "nsmithy-server",
+  "sourceName": "MyService",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "Protocol": {
+      "type": "parameter",
+      "datatype": "choice",
+      "choices": [
+        { "choice": "restJson1",     "description": "aws.protocols#restJson1 — AWS REST/JSON protocol" },
+        { "choice": "simpleRestJson","description": "alloy#simpleRestJson — Alloy REST/JSON protocol" },
+        { "choice": "grpc",          "description": "alloy.proto#grpc — gRPC protocol (experimental)" }
+      ],
+      "defaultValue": "restJson1",
+      "description": "The Smithy protocol the service uses"
+    },
+    "Contracts": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "",
+      "replaces": "ContractsName",
+      "description": "Name of the sibling contracts project to reference (e.g. HelloWorld.Contracts). Omit to own the model directly."
+    },
+    "WithContracts": {
+      "type": "computed",
+      "value": "(Contracts != \"\")"
+    },
+    "WithDocs": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "Add the Smithy docs endpoint (MapSmithyDocs)"
+    },
+    "IsRestJson1":    { "type": "computed", "value": "(Protocol == \"restJson1\")" },
+    "IsSimpleRestJson":{ "type": "computed", "value": "(Protocol == \"simpleRestJson\")" },
+    "IsGrpc":         { "type": "computed", "value": "(Protocol == \"grpc\")" },
+    "IsHttp":         { "type": "computed", "value": "(Protocol == \"restJson1\" || Protocol == \"simpleRestJson\")" }
+  },
+  "sources": [
+    {
+      "source": "./",
+      "target": "./",
+      "modifiers": [
+        {
+          "condition": "(WithContracts)",
+          "exclude": ["model/**"]
+        }
+      ]
+    }
+  ],
+  "specialCustomOperations": {
+    "**/*.smithy": {
+      "operations": [
+        {
+          "type": "conditional",
+          "configuration": {
+            "if":     ["//#if"],
+            "else":   ["//#else"],
+            "elseif": ["//#elseif"],
+            "endif":  ["//#endif"],
+            "trim": true,
+            "wholeLine": true,
+            "evaluator": "C++"
+          }
+        }
+      ]
+    }
+  }
+}
