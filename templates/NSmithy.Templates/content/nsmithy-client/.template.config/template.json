@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "NSmithy",
+  "classifications": ["NSmithy", "Smithy", "Client"],
+  "identity": "NSmithy.Templates.Client.CSharp",
+  "name": "NSmithy Client",
+  "shortName": "nsmithy-client",
+  "sourceName": "MyService",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "symbols": {
+    "Protocol": {
+      "type": "parameter",
+      "datatype": "choice",
+      "choices": [
+        { "choice": "restJson1",     "description": "aws.protocols#restJson1 — AWS REST/JSON protocol" },
+        { "choice": "simpleRestJson","description": "alloy#simpleRestJson — Alloy REST/JSON protocol" },
+        { "choice": "grpc",          "description": "alloy.proto#grpc — gRPC protocol (experimental)" }
+      ],
+      "defaultValue": "restJson1",
+      "description": "The Smithy protocol the service uses"
+    },
+    "Contracts": {
+      "type": "parameter",
+      "datatype": "choice",
+      "choices": [
+        { "choice": "maven", "description": "Reference contracts via a Maven JAR (works with local .m2 and remote registries)" },
+        { "choice": "nuget", "description": "Reference contracts via a NuGet package" }
+      ],
+      "defaultValue": "maven",
+      "description": "How to reference the contracts package"
+    },
+    "IsRestJson1":    { "type": "computed", "value": "(Protocol == \"restJson1\")" },
+    "IsSimpleRestJson":{ "type": "computed", "value": "(Protocol == \"simpleRestJson\")" },
+    "IsGrpc":         { "type": "computed", "value": "(Protocol == \"grpc\")" },
+    "IsMaven":        { "type": "computed", "value": "(Contracts == \"maven\")" },
+    "IsNuget":        { "type": "computed", "value": "(Contracts == \"nuget\")" }
+  }
+}
