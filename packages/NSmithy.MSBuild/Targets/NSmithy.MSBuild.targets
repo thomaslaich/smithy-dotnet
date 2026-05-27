@@ -199,8 +199,13 @@
   <PropertyGroup>
     <_SmithyBundledCliRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/smithy-cli'))</_SmithyBundledCliRoot>
     <!-- The CLI is a self-contained distribution; launcher lives under bin/ -->
-    <_SmithyBundledCliPath Condition="'$(_SmithyIsWindows)' == 'True'">$(_SmithyBundledCliRoot)/windows-x64/bin/smithy.bat</_SmithyBundledCliPath>
-    <_SmithyBundledCliPath Condition="'$(_SmithyIsWindows)' != 'True' and '$(_SmithyCliPlatform)' != ''">$(_SmithyBundledCliRoot)/$(_SmithyCliPlatform)/bin/smithy</_SmithyBundledCliPath>
+    <_SmithyBundledCliPath Condition="'$(_SmithyIsWindows)' == 'True'"
+      >$(_SmithyBundledCliRoot)/windows-x64/bin/smithy.bat</_SmithyBundledCliPath
+    >
+    <_SmithyBundledCliPath
+      Condition="'$(_SmithyIsWindows)' != 'True' and '$(_SmithyCliPlatform)' != ''"
+      >$(_SmithyBundledCliRoot)/$(_SmithyCliPlatform)/bin/smithy</_SmithyBundledCliPath
+    >
   </PropertyGroup>
 
   <!-- Use bundled CLI when SmithyCliPath is not set and the binary exists -->
