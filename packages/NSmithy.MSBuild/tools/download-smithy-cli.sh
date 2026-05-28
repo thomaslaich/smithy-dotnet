@@ -39,6 +39,9 @@ for platform in "${all_platforms[@]}"; do
   zip_url="${BASE_URL}/smithy-cli-${platform}.zip"
   zip_file="${dest}/smithy-cli.zip"
 
+  sha256_url="${BASE_URL}/smithy-cli-${platform}.zip.sha256"
+  sha256_file="${dest}/smithy-cli.zip.sha256"
+
   echo "  [$platform] $zip_url"
   if ! curl --fail --silent --show-error --location -o "$zip_file" "$zip_url"; then
     echo "  [$platform] download failed, skipping"
@@ -46,6 +49,30 @@ for platform in "${all_platforms[@]}"; do
     rmdir "$dest" 2>/dev/null || true
     continue
   fi
+
+  if ! curl --fail --silent --show-error --location -o "$sha256_file" "$sha256_url"; then
+    echo "  [$platform] checksum download failed, aborting" >&2
+    rm -f "$zip_file" "$sha256_file"
+    rm -rf "$dest"
+    exit 1
+  fi
+
+  expected_hash=$(awk '{print $1}' "$sha256_file")
+  if command -v sha256sum &>/dev/null; then
+    actual_hash=$(sha256sum "$zip_file" | awk '{print $1}')
+  else
+    actual_hash=$(shasum -a 256 "$zip_file" | awk '{print $1}')
+  fi
+
+  if [[ "$actual_hash" != "$expected_hash" ]]; then
+    echo "  [$platform] SHA256 mismatch! expected=$expected_hash actual=$actual_hash" >&2
+    rm -f "$zip_file" "$sha256_file"
+    rm -rf "$dest"
+    exit 1
+  fi
+
+  echo "  [$platform] checksum OK"
+  rm -f "$sha256_file"
 
   tmp_dir=$(mktemp -d)
   unzip -q "$zip_file" -d "$tmp_dir"
