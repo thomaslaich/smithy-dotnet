@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 //#endif
 //#if (WithDocs)
 using NSmithy.Server.AspNetCore.Docs;
-
 //#endif
 
 var builder = WebApplication.CreateBuilder(args);
