@@ -13,6 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="content/**" />
     <Content Include="content\**\*" Exclude="**\bin\**;**\obj\**" />
   </ItemGroup>
 </Project>
