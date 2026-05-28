@@ -10,9 +10,11 @@
     <ContentTargetFolders>content</ContentTargetFolders>
     <NoDefaultExcludes>true</NoDefaultExcludes>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="content/**" />
     <Content Include="content\**\*" Exclude="**\bin\**;**\obj\**" />
   </ItemGroup>
 </Project>

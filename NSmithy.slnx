@@ -14,6 +14,9 @@
     <Project Path="packages/NSmithy.Server/NSmithy.Server.csproj" />
     <Project Path="packages/NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
   </Folder>
+  <Folder Name="/templates/">
+    <Project Path="templates/NSmithy.Templates/NSmithy.Templates.csproj" />
+  </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/dotnet-nsmithy/dotnet-nsmithy.csproj" />
   </Folder>
