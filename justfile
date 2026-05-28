@@ -34,6 +34,7 @@ test:
     dotnet test NSmithy.slnx --configuration Release --no-build --disable-build-servers
 
 pack:
+    bash packages/NSmithy.MSBuild/tools/download-smithy-cli.sh
     dotnet pack NSmithy.slnx --configuration Release --no-build --output artifacts/packages ${VERSION:+-p:Version=$VERSION}
 
 refresh-examples:

@@ -3,7 +3,7 @@ title: Introduction
 description: What Smithy is and why NSmithy brings it to .NET.
 ---
 
-[Smithy](https://smithy.io) is a protocol-agnostic interface definition language (IDL) developed by AWS. You describe your API once — operations, input/output shapes, and traits — and tooling generates clients, servers, and documentation for any target language or protocol. It is the IDL behind AWS's public APIs and has first-class code generators for Java, TypeScript, Python, Rust, Swift, and Go.
+[Smithy](https://smithy.io) is a protocol-agnostic interface definition language (IDL) developed by AWS. You describe your API once — operations, input/output shapes, and traits — and tooling generates clients, servers, and documentation for any target language or protocol. It is the IDL behind AWS's public APIs and has first-class code generators for Java, Kotlin, TypeScript, Python, Rust, Swift, Go, Scala, Ruby, and now C#.
 
 ## Why Smithy?
 

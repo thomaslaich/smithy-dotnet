@@ -39,7 +39,6 @@ export default defineConfig({
 					items: [
 						{ label: 'Introduction', slug: 'getting-started/introduction' },
 						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
-						{ label: 'Environment Setup', slug: 'getting-started/environment' },
 						{ label: 'Endpoint Documentation', slug: 'guides/endpoint-documentation' },
 						{ label: 'Distributing Contracts', slug: 'guides/distributing-contracts' },
 						{ label: 'Multi-Protocol', slug: 'guides/multi-protocol' },
@@ -54,6 +53,7 @@ export default defineConfig({
 						{
 							label: 'AWS Protocols',
 							items: [
+								{ label: 'Overview', slug: 'protocols/aws-overview' },
 								{ label: 'REST XML', slug: 'protocols/rest-xml' },
 								{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor' },
 							],

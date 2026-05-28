@@ -74,8 +74,10 @@ cross-team model sharing outside the solution.
 
 ## Smithy CLI
 
-NSmithy expects the Smithy CLI to be on `PATH`. The recommended setup is a
-[pixi](https://pixi.sh) environment with the `smithy-cli` conda-forge package —
-see the [Environment guide](/smithy-dotnet/getting-started/environment/) for
-details. Set `SmithyCliPath` only when `smithy` is not on `PATH` or when the
-build needs to pin a specific executable.
+NSmithy bundles the Smithy CLI (version 1.68.0) inside `NSmithy.MSBuild` and
+selects the correct platform binary automatically. No separate installation is
+required. The bundle is self-contained and includes a JRE, so Java does not
+need to be installed either.
+
+Set `SmithyCliPath` to override the bundled binary with a specific executable,
+for example when testing against a different CLI version:
