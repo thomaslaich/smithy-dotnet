@@ -66,6 +66,10 @@ in
           "Directory.Packages.props"
           "Directory.Build.props"
         ];
+
+        formatter.csharpier.excludes = [
+          "templates/NSmithy.Templates/content/**"
+        ];
       };
     };
   };
