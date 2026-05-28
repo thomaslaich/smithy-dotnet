@@ -15,6 +15,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLI_DIR="$SCRIPT_DIR/smithy-cli"
 BASE_URL="https://github.com/smithy-lang/smithy/releases/download/${SMITHY_VERSION}"
 
+# SHA256 hashes for smithy-cli-{platform}.zip — update when bumping SMITHY_VERSION.
+declare -A PLATFORM_SHA256=(
+  ["darwin-aarch64"]="e836bb468eb117f05597fa263864681728950e32c10a85592eb4dd643cfdee88"
+  ["darwin-x86_64"]="55b5e397fd42fea407326e512daf9bcd38819c03534e1243e4a0fc71a9ec5ded"
+  ["linux-aarch64"]="2bbed6177b0c4fc2f75c4266a5cf72571ca35ce66da8800a90d4cf03c6bb2d42"
+  ["linux-x86_64"]="ee6e6d24416b53624ba7f323628b2ca8aa67a349fbe3b2e92e98172c3f3d6a45"
+  ["windows-x64"]="604f7017f4dfc50b802fa8d74401bbb4604ccbec5af2df39639897f467aaf663"
+)
+
 all_platforms=(
   "darwin-aarch64"
   "darwin-x86_64"
@@ -39,8 +48,7 @@ for platform in "${all_platforms[@]}"; do
   zip_url="${BASE_URL}/smithy-cli-${platform}.zip"
   zip_file="${dest}/smithy-cli.zip"
 
-  sha256_url="${BASE_URL}/smithy-cli-${platform}.zip.sha256"
-  sha256_file="${dest}/smithy-cli.zip.sha256"
+  expected_hash="${PLATFORM_SHA256[$platform]}"
 
   echo "  [$platform] $zip_url"
   if ! curl --fail --silent --show-error --location -o "$zip_file" "$zip_url"; then
@@ -50,14 +58,6 @@ for platform in "${all_platforms[@]}"; do
     continue
   fi
 
-  if ! curl --fail --silent --show-error --location -o "$sha256_file" "$sha256_url"; then
-    echo "  [$platform] checksum download failed, aborting" >&2
-    rm -f "$zip_file" "$sha256_file"
-    rm -rf "$dest"
-    exit 1
-  fi
-
-  expected_hash=$(awk '{print $1}' "$sha256_file")
   if command -v sha256sum &>/dev/null; then
     actual_hash=$(sha256sum "$zip_file" | awk '{print $1}')
   else
@@ -66,13 +66,12 @@ for platform in "${all_platforms[@]}"; do
 
   if [[ "$actual_hash" != "$expected_hash" ]]; then
     echo "  [$platform] SHA256 mismatch! expected=$expected_hash actual=$actual_hash" >&2
-    rm -f "$zip_file" "$sha256_file"
+    rm -f "$zip_file"
     rm -rf "$dest"
     exit 1
   fi
 
   echo "  [$platform] checksum OK"
-  rm -f "$sha256_file"
 
   tmp_dir=$(mktemp -d)
   unzip -q "$zip_file" -d "$tmp_dir"
