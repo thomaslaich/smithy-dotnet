@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.13" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.14" />
   </ItemGroup>
 
   <ItemGroup>
@@ -18,6 +18,6 @@
     <!--#if (IsSimpleRestJson || IsGrpc)-->
     <SmithyMavenDependency Include="com.disneystreaming.alloy:alloy-core:0.3.38" />
     <!--#endif-->
-    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.13" />
+    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.14" />
   </ItemGroup>
 </Project>
