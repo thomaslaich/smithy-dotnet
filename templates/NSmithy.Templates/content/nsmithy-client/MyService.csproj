@@ -11,19 +11,19 @@
 
   <ItemGroup>
     <!--#if (!IsGrpc)-->
-    <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.14" />
-    <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.14" />
-    <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.1.0-preview.14" />
+    <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.15" />
+    <PackageReference Include="NSmithy.Codecs.Json" Version="0.1.0-preview.15" />
+    <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.1.0-preview.15" />
     <!--#endif-->
     <!--#if (IsGrpc)-->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Google.Protobuf" Version="3.30.2" />
     <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
     <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="all" />
-    <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.14" />
-    <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.14" />
-    <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.14" />
-    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.14" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Client" Version="0.1.0-preview.15" />
+    <PackageReference Include="NSmithy.Core" Version="0.1.0-preview.15" />
+    <PackageReference Include="NSmithy.Http" Version="0.1.0-preview.15" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.15" PrivateAssets="all" />
     <!--#endif-->
     <!--#if (IsNuget)-->
     <!-- Replace with your actual contracts package name and version -->
