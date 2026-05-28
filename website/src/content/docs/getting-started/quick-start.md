@@ -14,28 +14,9 @@ NuGet package, so no separate Java or Smithy CLI installation is required.
 If you enable `SmithyGenerateDocs` (Sphinx HTML docs), Python 3.11+ must also
 be on your PATH.
 
-Install [CSharpier](https://csharpier.com) to get formatted generated code.
-NSmithy runs it automatically after codegen if it is available, and silently
-skips formatting if it is not. Install it as a local tool (recommended) or
-globally:
+Optionally install [CSharpier](https://csharpier.com) for formatted generated code — NSmithy runs it automatically after codegen if available, and silently skips it if not.
 
-```shell
-# local (per-repo, committed to dotnet-tools.json)
-dotnet new tool-manifest  # skip if .config/dotnet-tools.json already exists
-dotnet tool install csharpier
-
-# global
-dotnet tool install -g csharpier
-```
-
-:::tip[Managed dev environments]
-For teams that prefer a fully reproducible setup — especially across Windows,
-macOS, and Linux — [pixi](https://pixi.sh), [devenv](https://devenv.sh), or a
-Docker devcontainer can manage .NET and Python together. For a devenv example
-see [`devenv.nix` at the repo root](https://github.com/thomaslaich/smithy-dotnet/blob/main/devenv.nix).
-:::
-
-## Install Templates
+Install the NSmithy project templates (one-time):
 
 ```shell
 dotnet new install NSmithy.Templates
@@ -48,6 +29,9 @@ and client.
 
 ```shell
 mkdir HelloWorld && cd HelloWorld
+# optional: install CSharpier for formatted generated code
+dotnet new tool-manifest
+dotnet tool install csharpier
 dotnet new nsmithy-contracts -n HelloWorld.Contracts
 ```
 
