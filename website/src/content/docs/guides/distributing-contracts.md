@@ -34,12 +34,12 @@ Replace the generated `.csproj` with:
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.12" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.15" />
   </ItemGroup>
 
   <ItemGroup>
     <SmithyMavenDependency Include="com.disneystreaming.alloy:alloy-core:0.3.38" />
-    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.12" />
+    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.15" />
   </ItemGroup>
 </Project>
 ```
@@ -57,7 +57,7 @@ different path. Then add a `ProjectReference` from your server or client project
 </PropertyGroup>
 
 <ItemGroup>
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.12" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.15" />
   <ProjectReference Include="../MyService.Contracts/MyService.Contracts.csproj" />
 </ItemGroup>
 ```
@@ -93,7 +93,7 @@ dependencies automatically — no `ProjectReference` needed:
 </PropertyGroup>
 
 <ItemGroup>
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.12" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.15" />
   <PackageReference Include="MyService.Contracts" Version="1.0.0" />
 </ItemGroup>
 ```

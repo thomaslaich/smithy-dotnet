@@ -29,10 +29,12 @@ and client.
 
 ```shell
 mkdir HelloWorld && cd HelloWorld
+dotnet new slnx -n HelloWorld
 # optional: install CSharpier for formatted generated code
 dotnet new tool-manifest
 dotnet tool install csharpier
 dotnet new nsmithy-contracts -n HelloWorld.Contracts
+dotnet sln add HelloWorld.Contracts
 ```
 
 This generates:
@@ -48,6 +50,7 @@ HelloWorld.Contracts/
 
 ```shell
 dotnet new nsmithy-server -n HelloWorld.Server --contracts HelloWorld.Contracts --with-docs
+dotnet sln add HelloWorld.Server
 ```
 
 The `--contracts` flag sets the `ProjectReference` to the contracts project
@@ -75,6 +78,7 @@ See [Endpoint Documentation](/smithy-dotnet/guides/endpoint-documentation/) for 
 
 ```shell
 dotnet new nsmithy-client -n HelloWorld.Client
+dotnet sln add HelloWorld.Client
 ```
 
 The client template defaults to a Maven contracts reference for production use.
