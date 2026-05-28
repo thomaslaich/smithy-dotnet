@@ -94,10 +94,9 @@ On `dotnet build`, NSmithy:
 3. MSBuild copies the HTML to `wwwroot/docs/` and the OpenAPI spec to
    `wwwroot/openapi.json`.
 
-Python must be available on the host. If you are using a managed dev environment
-such as [pixi](https://pixi.sh) or [devenv](https://devenv.sh), declare Python
-as a dependency there. Otherwise a system Python installation (3.11+) is
-sufficient.
+Python (3.11+) must be available on the host. A system Python installation is
+sufficient. If you use [pixi](https://pixi.sh) or [devenv](https://devenv.sh),
+declare Python as a dependency there.
 
 Add `wwwroot/` to your `.gitignore` since the output is always regenerated at
 build time:

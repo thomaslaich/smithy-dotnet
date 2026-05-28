@@ -5,22 +5,6 @@ description: Current limitations and rough edges in the NSmithy preview.
 
 NSmithy is still a preview-stage implementation.
 
-## Smithy CLI And Build Environment
-
-`NSmithy.MSBuild` invokes an existing `smithy` executable. NSmithy does
-not download, bundle, or pin the Smithy CLI. Build environments are expected to
-provide it.
-
-That means:
-
-- builds depend on an external Smithy CLI installation
-- Java may also be required, depending on the selected Smithy CLI distribution
-- environment differences can show up as build differences if the CLI toolchain
-  is not managed consistently
-
-The recommended setup remains a managed project environment such as Pixi with
-`smithy-cli` from conda-forge.
-
 ## Protocol Coverage Is Still Narrow
 
 Current protocol support is intentionally selective:

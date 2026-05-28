@@ -39,5 +39,44 @@
       Pack="true"
       PackagePath="buildTransitive/NSmithy.MSBuild.targets"
     />
+
+    <!--
+      Bundled Smithy CLI — populated by tools/download-smithy-cli.sh.
+      Each platform's full self-contained distribution (launcher + bundled JRE)
+      is extracted into tools/smithy-cli/{platform}/ and packed here.
+      The targets file locates it via $(MSBuildThisFileDirectory)../tools/smithy-cli/.
+      Condition="Exists(...)" keeps packing idempotent when a platform is missing
+      (e.g. CI before the download script has run).
+    -->
+    <None
+      Include="tools/smithy-cli/darwin-aarch64/**/*"
+      Pack="true"
+      PackagePath="tools/smithy-cli/darwin-aarch64/"
+      Condition="Exists('tools/smithy-cli/darwin-aarch64/bin/smithy')"
+    />
+    <None
+      Include="tools/smithy-cli/darwin-x86_64/**/*"
+      Pack="true"
+      PackagePath="tools/smithy-cli/darwin-x86_64/"
+      Condition="Exists('tools/smithy-cli/darwin-x86_64/bin/smithy')"
+    />
+    <None
+      Include="tools/smithy-cli/linux-aarch64/**/*"
+      Pack="true"
+      PackagePath="tools/smithy-cli/linux-aarch64/"
+      Condition="Exists('tools/smithy-cli/linux-aarch64/bin/smithy')"
+    />
+    <None
+      Include="tools/smithy-cli/linux-x86_64/**/*"
+      Pack="true"
+      PackagePath="tools/smithy-cli/linux-x86_64/"
+      Condition="Exists('tools/smithy-cli/linux-x86_64/bin/smithy')"
+    />
+    <None
+      Include="tools/smithy-cli/windows-x64/**/*"
+      Pack="true"
+      PackagePath="tools/smithy-cli/windows-x64/"
+      Condition="Exists('tools/smithy-cli/windows-x64/bin/smithy.bat')"
+    />
   </ItemGroup>
 </Project>

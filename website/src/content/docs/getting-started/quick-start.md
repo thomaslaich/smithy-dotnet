@@ -3,10 +3,20 @@ title: Quick Start
 description: Scaffold a contracts project, a server, and a client with NSmithy templates.
 ---
 
-This guide assumes the Smithy CLI and JDK are already available. If not, see
-[Environment Setup](/smithy-dotnet/getting-started/environment/) first.
+If you are new to Smithy, the [official Smithy quickstart](https://smithy.io/2.0/quickstart.html) is a good place to familiarize yourself with the IDL before continuing.
 
-## Install Templates
+## Prerequisites
+
+You need the [.NET SDK](https://dotnet.microsoft.com/download). That's it for
+basic builds — NSmithy bundles the Smithy CLI (including a JRE) inside the
+NuGet package, so no separate Java or Smithy CLI installation is required.
+
+If you enable `SmithyGenerateDocs` (Sphinx HTML docs), Python 3.11+ must also
+be on your PATH.
+
+Optionally install [CSharpier](https://csharpier.com) for formatted generated code — NSmithy runs it automatically after codegen if available, and silently skips it if not.
+
+Install the NSmithy project templates (one-time):
 
 ```shell
 dotnet new install NSmithy.Templates
@@ -19,6 +29,9 @@ and client.
 
 ```shell
 mkdir HelloWorld && cd HelloWorld
+# optional: install CSharpier for formatted generated code
+dotnet new tool-manifest
+dotnet tool install csharpier
 dotnet new nsmithy-contracts -n HelloWorld.Contracts
 ```
 
