@@ -6,103 +6,18 @@ description: Share your Smithy model across projects and ecosystems via a NuGet 
 Distributing your Smithy model lets other projects consume it without copying
 files. There are two distribution paths:
 
-- **NuGet package** — .NET consumers reference it like any other package; NSmithy
-  picks up the model files and synthesizes a `smithy-build.json` automatically.
 - **Maven JAR** — any Smithy-based toolchain (Java, TypeScript, Python, and .NET)
   can consume it from a Maven registry, making it the more universal option.
-
-## Create a Contracts Project
-
-:::note[Optional]
-A contracts project is not required for distribution. You only need one if you
-want to distribute via NuGet, or if you simply prefer the separation of a
-dedicated contracts project. For Maven JAR distribution you can add the relevant
-properties directly to an existing server project that already owns its model files.
-:::
-
-```shell
-dotnet new classlib -n MyService.Contracts
-```
-
-Replace the generated `.csproj` with:
-
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <SmithyPublish>true</SmithyPublish>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-preview.15" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <SmithyMavenDependency Include="com.disneystreaming.alloy:alloy-core:0.3.38" />
-    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.15" />
-  </ItemGroup>
-</Project>
-```
-
-`SmithyPublish=true` activates the targets that expose model files to consumers
-and embed them into the NuGet package at pack time. Delete any generated
-`Class1.cs` — the contracts project holds only the model.
-
-Place your model under `model/` (default) or set `<SmithySources>` to a
-different path. Then add a `ProjectReference` from your server or client project:
-
-```xml
-<PropertyGroup>
-  <SmithyService>example.hello#HelloService</SmithyService>
-</PropertyGroup>
-
-<ItemGroup>
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.15" />
-  <ProjectReference Include="../MyService.Contracts/MyService.Contracts.csproj" />
-</ItemGroup>
-```
-
-NSmithy synthesizes a `smithy-build.json` under `obj/` from the collected model
-files and Maven dependencies and invokes `smithy build` automatically.
-
-## NuGet Distribution
-
-### Pack
-
-```shell
-dotnet pack MyService.Contracts --configuration Release
-```
-
-`NSmithy.MSBuild` embeds the model and dependency metadata into the package:
-
-| Package path | Contents |
-| --- | --- |
-| `build/smithy/**/*.smithy` | model files |
-| `build/smithy-maven-deps.txt` | one Maven coordinate per line |
-| `build/NSmithy.MSBuild.props` | sets `SmithySources` for consumers |
-| `buildTransitive/NSmithy.MSBuild.targets` | MSBuild targets imported transitively |
-
-### Consume
-
-A project that references the published package picks up the model and Maven
-dependencies automatically — no `ProjectReference` needed:
-
-```xml
-<PropertyGroup>
-  <SmithyService>example.hello#HelloService</SmithyService>
-</PropertyGroup>
-
-<ItemGroup>
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.15" />
-  <PackageReference Include="MyService.Contracts" Version="1.0.0" />
-</ItemGroup>
-```
-
-NSmithy synthesizes a `smithy-build.json` under `obj/`, invokes `smithy build`,
-and adds the generated `.g.cs` files to compilation — identical behaviour to a
-`ProjectReference`.
+- **NuGet package** — .NET consumers reference it like any other package; NSmithy
+  picks up the model files and synthesizes a `smithy-build.json` automatically.
 
 ## Maven JAR Distribution
+
+:::tip[Recommended]
+Maven JAR distribution is generally preferred — it works with any Smithy-based
+toolchain, not just .NET, so your model remains accessible to Java, TypeScript,
+Python, and other consumers without any extra steps.
+:::
 
 ### Configure
 
@@ -174,3 +89,50 @@ dotnet nsmithy push bin/Release \
 `push` reads the Maven coordinates and version from the `.csproj` automatically.
 Credentials can also be supplied via `MAVEN_USERNAME` / `MAVEN_TOKEN` environment
 variables.
+
+:::note
+Maven JAR distribution does not require a dedicated contracts project. You can
+add `SmithyMavenGroupId`, `SmithyMavenArtifactId`, and `SmithyPublish=true`
+directly to a server project that already owns its model files and `dotnet pack`
+will produce the JAR from there. That said, we still recommend splitting the
+model out into a separate contracts project — it keeps the model decoupled from
+any one implementation and makes it easier to share across server and client
+projects.
+:::
+
+## NuGet Distribution
+
+### Pack
+
+```shell
+dotnet pack MyService.Contracts --configuration Release
+```
+
+`NSmithy.MSBuild` embeds the model and dependency metadata into the package:
+
+| Package path | Contents |
+| --- | --- |
+| `build/smithy/**/*.smithy` | model files |
+| `build/smithy-maven-deps.txt` | one Maven coordinate per line |
+| `build/NSmithy.MSBuild.props` | sets `SmithySources` for consumers |
+| `buildTransitive/NSmithy.MSBuild.targets` | MSBuild targets imported transitively |
+
+### Consume
+
+A project that references the published package picks up the model and Maven
+dependencies automatically — no `ProjectReference` needed:
+
+```xml
+<PropertyGroup>
+  <SmithyService>example.hello#HelloService</SmithyService>
+</PropertyGroup>
+
+<ItemGroup>
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.15" />
+  <PackageReference Include="MyService.Contracts" Version="1.0.0" />
+</ItemGroup>
+```
+
+NSmithy synthesizes a `smithy-build.json` under `obj/`, invokes `smithy build`,
+and adds the generated `.g.cs` files to compilation — identical behaviour to a
+`ProjectReference`.

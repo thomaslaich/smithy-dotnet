@@ -41,13 +41,12 @@ export default defineConfig({
 						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
 						{ label: 'Endpoint Documentation', slug: 'guides/endpoint-documentation' },
 						{ label: 'Distributing Contracts', slug: 'guides/distributing-contracts' },
-						{ label: 'Multi-Protocol', slug: 'guides/multi-protocol' },
 					],
 				},
 				{
 					label: 'Protocols',
 					items: [
-						{ label: 'Protocol Status', slug: 'protocols' },
+						{ label: 'Overview', slug: 'protocols/overview' },
 						{ label: 'REST JSON', slug: 'protocols/rest-json' },
 						{ label: 'gRPC', slug: 'protocols/grpc' },
 						{
@@ -59,6 +58,7 @@ export default defineConfig({
 							],
 						},
 						{ label: 'Conformance Tests', slug: 'protocols/conformance' },
+						{ label: 'Protocol Status', slug: 'protocols/status' },
 					],
 				},
 				{
