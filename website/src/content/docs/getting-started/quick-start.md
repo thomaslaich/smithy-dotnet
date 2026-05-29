@@ -29,7 +29,7 @@ and client.
 
 ```shell
 mkdir HelloWorld && cd HelloWorld
-dotnet new slnx -n HelloWorld
+dotnet new sln -n HelloWorld
 # optional: install CSharpier for formatted generated code
 dotnet new tool-manifest
 dotnet tool install csharpier
@@ -220,3 +220,9 @@ dotnet new nsmithy-server --help
 dotnet new nsmithy-contracts --help
 dotnet new nsmithy-client --help
 ```
+
+## Example Repository
+
+For a more complete example with multiple operations, error types, and a working
+client/server setup you can clone and play around with, see
+[nsmithy-minimal](https://github.com/thomaslaich/nsmithy-minimal).
