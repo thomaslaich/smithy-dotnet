@@ -24,20 +24,15 @@ and a different error deserialization convention.
 
 ## Which Protocol Should I Use?
 
-**Use `alloy#simpleRestJson`** if you are defining your own service and your
-consumers are primarily .NET or Scala (via [Smithy4s](https://disneystreaming.github.io/smithy4s/)).
-It has full client and server generation in NSmithy, 100% conformance coverage,
-and is the smoothest end-to-end path.
+**Use `aws.protocols#restJson1`** for new services. It has broad cross-ecosystem
+compatibility — most official Smithy code generators (Java, TypeScript, Python,
+Swift, Rust, Go) target `restJson1` — and NSmithy generates OpenAPI from it,
+giving you Scalar UI and standard tooling out of the box.
 
-**Use `aws.protocols#restJson1`** if:
-
-- you need to call an existing AWS service or any other service that already uses `restJson1`
-- your C# server needs to be consumable by clients in other languages — most
-  official Smithy code generators (Java, TypeScript, Python, Swift, Rust, Go)
-  target `restJson1`, not `simpleRestJson`
-
-In short: `simpleRestJson` is the better choice when NSmithy owns both ends.
-`restJson1` is the better choice when you need broad cross-ecosystem compatibility.
+**Use `alloy#simpleRestJson`** if your consumers are exclusively .NET or Scala
+(via [Smithy4s](https://disneystreaming.github.io/smithy4s/)) and you don't need
+OpenAPI or cross-language reach. It has 100% conformance coverage but is narrower
+in ecosystem compatibility.
 
 ## Maven Dependencies
 
