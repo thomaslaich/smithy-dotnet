@@ -3,24 +3,11 @@
     <!-- Default location of smithy model files. Override in your .csproj if needed. -->
     <SmithySources Condition="'$(SmithySources)' == ''">$(MSBuildProjectDirectory)/model</SmithySources>
     <!--
-      Smithy SDK version used when automatically injecting plugin dependencies
-      (smithy-docgen, smithy-openapi) into the synthesized smithy-build.json.
-      Should match the smithy version your contracts package already depends on.
+      Version of the smithy-csharp-codegen Maven artifact injected into the synthesized
+      smithy-build.json for server/client projects. Override if you need to pin to a
+      specific version.
+      Example: <SmithyCSharpCodegenVersion>1.0.0</SmithyCSharpCodegenVersion>
     -->
-    <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.68.0</SmithyVersion>
-    <!--
-      Set to 'true' to add smithy-docgen to the synthesized smithy-build.json
-      and emit documentation alongside the generated C# code.
-      Example: <SmithyGenerateDocs>true</SmithyGenerateDocs>
-    -->
-    <SmithyGenerateDocs Condition="'$(SmithyGenerateDocs)' == ''">false</SmithyGenerateDocs>
-    <!--
-      Set to an HTTP protocol shape ID to add smithy-openapi to the synthesized
-      smithy-build.json and emit an openapi.json. Only meaningful for services that
-      use an HTTP-based protocol (e.g. aws.protocols#restJson1).
-      Leave empty (the default) to skip OpenAPI generation.
-      Example: <SmithyOpenApiProtocol>aws.protocols#restJson1</SmithyOpenApiProtocol>
-    -->
-    <SmithyOpenApiProtocol Condition="'$(SmithyOpenApiProtocol)' == ''"></SmithyOpenApiProtocol>
+    <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''">0.1.0-SNAPSHOT</SmithyCSharpCodegenVersion>
   </PropertyGroup>
 </Project>

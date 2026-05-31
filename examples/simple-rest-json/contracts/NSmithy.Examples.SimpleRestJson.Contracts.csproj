@@ -13,9 +13,4 @@
   <ItemGroup>
     <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-SNAPSHOT" />
   </ItemGroup>
-
-  <ItemGroup>
-    <SmithyMavenDependency Include="com.disneystreaming.alloy:alloy-core:0.3.38" />
-    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-SNAPSHOT" />
-  </ItemGroup>
 </Project>

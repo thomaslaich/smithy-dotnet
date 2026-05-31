@@ -5,8 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <SmithyService>alloy.test#PizzaAdminService</SmithyService>
     <SmithyGeneratedNamespaces>alloy.test</SmithyGeneratedNamespaces>
-    <SmithyGenerateDocs>true</SmithyGenerateDocs>
-    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+<ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
   </PropertyGroup>
 
