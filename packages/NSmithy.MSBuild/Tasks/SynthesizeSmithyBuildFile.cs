@@ -76,7 +76,7 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
                 deps.Add(dep.GetString()!);
         }
         var codegenDep = $"io.github.thomaslaich.nsmithy:smithy-csharp-codegen:{CSharpCodegenVersion}";
-        if (!deps.Any(d => d.StartsWith("io.github.thomaslaich.nsmithy:smithy-csharp-codegen:")))
+        if (!deps.Any(d => d.StartsWith("io.github.thomaslaich.nsmithy:smithy-csharp-codegen:", StringComparison.Ordinal)))
             deps.Add(codegenDep);
 
         // Collect suppressions from contracts.
