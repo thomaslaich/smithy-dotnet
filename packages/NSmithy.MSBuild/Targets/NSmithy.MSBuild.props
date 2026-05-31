@@ -8,6 +8,11 @@
       specific version.
       Example: <SmithyCSharpCodegenVersion>1.0.0</SmithyCSharpCodegenVersion>
     -->
+    <!--
+      Smithy CLI version bundled in this package. software.amazon.smithy:* Maven
+      artifacts in your contracts smithy-build.json should use this version.
+    -->
+    <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.68.0</SmithyVersion>
     <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''">0.1.0-SNAPSHOT</SmithyCSharpCodegenVersion>
   </PropertyGroup>
 </Project>
