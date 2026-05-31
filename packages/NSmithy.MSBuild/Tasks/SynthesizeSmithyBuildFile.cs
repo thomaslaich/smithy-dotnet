@@ -45,17 +45,24 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
         }
         catch (Exception ex)
         {
-            Log.LogError($"NSmithy: failed to read contracts smithy-build.json at '{ContractsBuildFile}': {ex.Message}");
+            Log.LogError(
+                $"NSmithy: failed to read contracts smithy-build.json at '{ContractsBuildFile}': {ex.Message}"
+            );
             return false;
         }
 
-        using var doc = JsonDocument.Parse(contractsJson, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
+        using var doc = JsonDocument.Parse(
+            contractsJson,
+            new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip }
+        );
         var root = doc.RootElement;
 
         // Collect Maven repositories from contracts (fall back to defaults).
         var repos = new List<string>();
-        if (root.TryGetProperty("maven", out var maven) &&
-            maven.TryGetProperty("repositories", out var reposEl))
+        if (
+            root.TryGetProperty("maven", out var maven)
+            && maven.TryGetProperty("repositories", out var reposEl)
+        )
         {
             foreach (var repo in reposEl.EnumerateArray())
                 if (repo.TryGetProperty("url", out var url))
@@ -69,14 +76,24 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
 
         // Collect Maven dependencies from contracts, then append smithy-csharp-codegen.
         var deps = new List<string>();
-        if (root.TryGetProperty("maven", out var maven2) &&
-            maven2.TryGetProperty("dependencies", out var depsEl))
+        if (
+            root.TryGetProperty("maven", out var maven2)
+            && maven2.TryGetProperty("dependencies", out var depsEl)
+        )
         {
             foreach (var dep in depsEl.EnumerateArray())
                 deps.Add(dep.GetString()!);
         }
-        var codegenDep = $"io.github.thomaslaich.nsmithy:smithy-csharp-codegen:{CSharpCodegenVersion}";
-        if (!deps.Any(d => d.StartsWith("io.github.thomaslaich.nsmithy:smithy-csharp-codegen:", StringComparison.Ordinal)))
+        var codegenDep =
+            $"io.github.thomaslaich.nsmithy:smithy-csharp-codegen:{CSharpCodegenVersion}";
+        if (
+            !deps.Any(d =>
+                d.StartsWith(
+                    "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:",
+                    StringComparison.Ordinal
+                )
+            )
+        )
             deps.Add(codegenDep);
 
         // Collect suppressions from contracts.
@@ -160,7 +177,11 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
 
         // Only write when content has changed to avoid unnecessary rebuilds.
         if (!File.Exists(OutputFile) || File.ReadAllText(OutputFile) != result)
-            File.WriteAllText(OutputFile, result, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            File.WriteAllText(
+                OutputFile,
+                result,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
+            );
 
         return true;
     }

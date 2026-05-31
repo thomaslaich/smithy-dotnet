@@ -380,5 +380,4 @@
     </ItemGroup>
     <Message Importance="high" Text="NSmithy: registered Protobuf items: @(Protobuf)" />
   </Target>
-
 </Project>
