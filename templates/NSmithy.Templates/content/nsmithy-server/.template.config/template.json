@@ -52,12 +52,28 @@
       "modifiers": [
         {
           "condition": "(WithContracts)",
-          "exclude": ["model/**"]
+          "exclude": ["model/**", "smithy-build.json"]
         }
       ]
     }
   ],
   "specialCustomOperations": {
+    "**/smithy-build.json": {
+      "operations": [
+        {
+          "type": "conditional",
+          "configuration": {
+            "if":     ["//#if"],
+            "else":   ["//#else"],
+            "elseif": ["//#elseif"],
+            "endif":  ["//#endif"],
+            "trim": true,
+            "wholeLine": true,
+            "evaluator": "C++"
+          }
+        }
+      ]
+    },
     "**/*.smithy": {
       "operations": [
         {

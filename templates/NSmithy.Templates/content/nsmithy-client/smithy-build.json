@@ -1,0 +1,14 @@
+{
+  "version": "1.0",
+  "maven": {
+    "dependencies": [
+      "io.github.YOUR_ORG:your-service-contracts:1.0.0",
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.15"
+    ]
+  },
+  "plugins": {
+    "csharp-codegen": {
+      "service": "example.hello#HelloService"
+    }
+  }
+}

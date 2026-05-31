@@ -85,10 +85,7 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
                     repos.Add(url.GetString()!);
         }
         if (repos.Count == 0)
-        {
-            repos.Add("file://~/.m2/repository");
             repos.Add("https://repo.maven.apache.org/maven2/");
-        }
 
         // Collect Maven dependencies from contracts, then append smithy-csharp-codegen.
         var deps = new List<string>();

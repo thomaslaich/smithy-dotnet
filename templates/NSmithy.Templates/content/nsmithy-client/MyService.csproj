@@ -31,13 +31,4 @@
     <!--#endif-->
   </ItemGroup>
 
-  <!--#if (IsMaven)-->
-  <ItemGroup>
-    <!-- Replace with your actual Maven coordinates and version.
-         Local dev: dotnet pack the contracts project, then run:
-           mvn install:install-file -Dfile=<path>.jar -DpomFile=<path>.pom -Dpackaging=jar
-         Remote publishing: dotnet nsmithy push -->
-    <SmithyMavenDependency Include="io.github.YOUR_ORG:your-service-contracts:1.0.0" />
-  </ItemGroup>
-  <!--#endif-->
 </Project>
