@@ -144,13 +144,45 @@
     <SmithyAllProjectionsGlob Condition="'$(SmithyAllProjectionsGlob)' == ''"
       >$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.g.cs</SmithyAllProjectionsGlob
     >
+    <SmithyProtoPlugin Condition="'$(SmithyProtoPlugin)' == ''">proto-codegen</SmithyProtoPlugin>
     <SmithyAllProtosGlob Condition="'$(SmithyAllProtosGlob)' == ''"
-      >$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.proto</SmithyAllProtosGlob
+      >$(SmithyBuildOutputPath)*/$(SmithyProtoPlugin)/**/*.proto</SmithyAllProtosGlob
     >
     <SmithyGrpcServices Condition="'$(SmithyGrpcServices)' == ''">Both</SmithyGrpcServices>
     <SmithyExtraArgs Condition="'$(SmithyExtraArgs)' == ''"></SmithyExtraArgs>
     <SmithyGenerateClient Condition="'$(SmithyGenerateClient)' == ''">true</SmithyGenerateClient>
   </PropertyGroup>
+
+  <!--
+    Pre-register the smithy-generated .proto as a <Protobuf> item STATICALLY
+    (outside any target body) so that Grpc.Tools' Protobuf_Compile target is
+    included in the build graph.
+
+    MSBuild evaluates Protobuf_Compile's Condition="'@(Protobuf)' != ''" at
+    graph-build time, before any targets run. Items added inside target bodies
+    (like _AddSmithyGeneratedProtoItems) are invisible at that point, so
+    Protobuf_Compile would be excluded from the graph and Grpc.Tools would
+    never generate C# from the proto file.
+
+    The glob here is identical to what _AddSmithyGeneratedProtoItems adds.
+    On the very first build after a clean obj (proto does not exist yet) the
+    glob expands to empty, Protobuf_Compile is skipped, and compilation fails.
+    Running 'dotnet build' a second time picks up the proto file that the
+    first-pass smithy build produced and compilation succeeds.
+
+    This is a known two-pass limitation for gRPC projects with a generated
+    proto. Checked-in proto files (e.g. non-smithy setups) do not have this
+    restriction.
+  -->
+  <ItemGroup Condition="'$(SmithyGrpc)' == 'true'">
+    <Protobuf
+      Include="$(SmithyAllProtosGlob)"
+      GrpcServices="$(SmithyGrpcServices)"
+      ProtoRoot="$(SmithyBuildOutputPath)"
+      Access="Public"
+      Visible="$(SmithyEmitGeneratedFiles)"
+    />
+  </ItemGroup>
 
   <!-- ================================================================
        Bundled Smithy CLI — select the platform-specific binary that was
@@ -300,6 +332,8 @@
       SmithyVersion="$(SmithyVersion)"
       GenerateDocs="$(SmithyGenerateDocs)"
       OpenApiProtocol="$(SmithyOpenApiProtocol)"
+      Grpc="$(SmithyGrpc)"
+      ProtoPlugin="$(SmithyProtoPlugin)"
       OutputFile="$(_SmithySynthesizedBuildFile)"
       Condition="'@(SmithySource)' != ''"
     />
@@ -366,11 +400,23 @@
     </ItemGroup>
   </Target>
 
+  <!--
+    Register the smithy-generated .proto file as a Grpc.Tools <Protobuf> item.
+    Must run right before _Protobuf_Compile_BeforeCsCompile so that Grpc.Tools
+    picks up the generated .proto and compiles it to C# in the same build pass.
+
+    We cannot use BeforeTargets="BeforeBuild" here because BeforeBuild runs
+    before _PrepareSmithyBuildFile updates SmithyBuildFile; at that early point
+    Exists('$(SmithyBuildFile)') is false and the target would be excluded from
+    the build graph. Using _Protobuf_Compile_BeforeCsCompile as the anchor
+    ensures our DependsOnTargets chain (_PrepareSmithyBuildFile → GenerateSmithyCode)
+    runs first, generating the .proto, before Grpc.Tools looks for proto items.
+  -->
   <Target
     Name="_AddSmithyGeneratedProtoItems"
     DependsOnTargets="GenerateSmithyCode"
-    BeforeTargets="Protobuf_BeforeCompile;Protobuf_PrepareCompile;BeforeBuild"
-    Condition="Exists('$(SmithyBuildFile)')"
+    BeforeTargets="_Protobuf_Compile_BeforeCsCompile"
+    Condition="'$(SmithyGrpc)' == 'true'"
   >
     <ItemGroup>
       <Protobuf

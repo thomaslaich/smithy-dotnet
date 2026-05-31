@@ -4,15 +4,15 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace></RootNamespace>
-    <SmithyService>example.library#LibraryService</SmithyService>
-    <SmithyGeneratedNamespaces>example.library</SmithyGeneratedNamespaces>
+    <SmithyService>example.metrics#MetricsService</SmithyService>
+    <SmithyGeneratedNamespaces>example.metrics</SmithyGeneratedNamespaces>
     <SmithyGrpc>true</SmithyGrpc>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../contracts/Library.Contracts.csproj" />
+    <ProjectReference Include="../contracts/Metrics.Contracts.csproj" />
     <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
     <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="all" />
     <PackageReference Include="NSmithy.Core" Version="0.1.0-SNAPSHOT" />

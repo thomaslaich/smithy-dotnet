@@ -51,6 +51,7 @@ import software.amazon.smithy.model.traits.HttpQueryTrait;
 import software.amazon.smithy.model.traits.HttpTrait;
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait;
 import software.amazon.smithy.model.traits.InputTrait;
+import software.amazon.smithy.model.traits.StreamingTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -1188,6 +1189,39 @@ public final class ClientGenerator implements Runnable {
   }
 
   // =====================================================================
+  // streaming detection
+  // =====================================================================
+
+  private enum StreamingKind {
+    NONE,
+    SERVER,
+    CLIENT,
+    BIDI
+  }
+
+  private boolean isStreamingShape(ShapeId id) {
+    if (isUnit(id)) return false;
+    Shape shape = context.model().expectShape(id);
+    if (shape.hasTrait(StreamingTrait.class)) return true;
+    if (shape instanceof StructureShape ss) {
+      return ss.members().stream()
+          .anyMatch(m -> context.model().expectShape(m.getTarget()).hasTrait(StreamingTrait.class));
+    }
+    return false;
+  }
+
+  private StreamingKind streamingKind(OperationShape op) {
+    boolean inputStreaming =
+        op.hasTrait(TraitIds.GRPC_CLIENT_STREAM) || isStreamingShape(op.getInputShape());
+    boolean outputStreaming =
+        op.hasTrait(TraitIds.GRPC_SERVER_STREAM) || isStreamingShape(op.getOutputShape());
+    if (inputStreaming && outputStreaming) return StreamingKind.BIDI;
+    if (inputStreaming) return StreamingKind.CLIENT;
+    if (outputStreaming) return StreamingKind.SERVER;
+    return StreamingKind.NONE;
+  }
+
+  // =====================================================================
   // gRPC client
   // =====================================================================
 
@@ -1234,6 +1268,15 @@ public final class ClientGenerator implements Runnable {
   }
 
   private void writeGrpcOperationMethod(SymbolProvider sp, Model model, OperationShape op) {
+    switch (streamingKind(op)) {
+      case SERVER -> writeGrpcClientServerStreamingMethod(sp, model, op);
+      case CLIENT -> writeGrpcClientClientStreamingMethod(sp, model, op);
+      case BIDI -> writeGrpcClientBidiMethod(sp, model, op);
+      default -> writeGrpcClientUnaryMethod(sp, model, op);
+    }
+  }
+
+  private void writeGrpcClientUnaryMethod(SymbolProvider sp, Model model, OperationShape op) {
     String operationName = CSharpNaming.typeName(op.getId().getName());
     boolean hasInput = !isUnit(op.getInputShape());
     boolean hasOutput = !isUnit(op.getOutputShape());
@@ -1241,7 +1284,7 @@ public final class ClientGenerator implements Runnable {
     String grpcInputExpr =
         hasInput
             ? GrpcConversions.smithyToGrpc(
-                sp, model.expectShape(op.getInputShape()), "input", grpcNamespace())
+                sp, model, model.expectShape(op.getInputShape()), "input", grpcNamespace())
             : "new Google.Protobuf.WellKnownTypes.Empty()";
 
     writer.write("public async $L", operationSignature(sp, op));
@@ -1262,13 +1305,150 @@ public final class ClientGenerator implements Runnable {
             writer.write(
                 "return $L;",
                 GrpcConversions.grpcToSmithy(
-                    sp, model.expectShape(op.getOutputShape()), "response"));
+                    sp, model, model.expectShape(op.getOutputShape()), "response"));
           } else {
             writer.write(
                 "await client.$LAsync(request,"
                     + " cancellationToken: cancellationToken).ResponseAsync.ConfigureAwait(false);",
                 operationName);
           }
+        });
+  }
+
+  private void writeGrpcClientServerStreamingMethod(
+      SymbolProvider sp, Model model, OperationShape op) {
+    String operationName = CSharpNaming.typeName(op.getId().getName());
+    boolean hasInput = !isUnit(op.getInputShape());
+    String grpcInputType = grpcMessageType(op.getInputShape());
+    String grpcInputExpr =
+        hasInput
+            ? GrpcConversions.smithyToGrpc(
+                sp, model, model.expectShape(op.getInputShape()), "input", grpcNamespace())
+            : "new Google.Protobuf.WellKnownTypes.Empty()";
+
+    writer.write("public async $L", operationSignatureWithEnumeratorCancellation(sp, op));
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          if (hasInput) {
+            writer.write("System.ArgumentNullException.ThrowIfNull(input);");
+            writer.write("");
+          }
+          writer.write("$L request = $L;", grpcInputType, grpcInputExpr);
+          writer.write(
+              "using var call = client.$L(request, cancellationToken: cancellationToken);",
+              operationName);
+          writer.write(
+              "await foreach (var item in call.ResponseStream.ReadAllAsync(cancellationToken))");
+          writer.openBlock(
+              "{",
+              "}",
+              () ->
+                  writer.write(
+                      "yield return $L;",
+                      GrpcConversions.grpcToSmithy(
+                          sp, model, model.expectShape(op.getOutputShape()), "item")));
+        });
+  }
+
+  private void writeGrpcClientClientStreamingMethod(
+      SymbolProvider sp, Model model, OperationShape op) {
+    String operationName = CSharpNaming.typeName(op.getId().getName());
+    boolean hasOutput = !isUnit(op.getOutputShape());
+    String grpcInputType = grpcMessageType(op.getInputShape());
+
+    writer.write("public async $L", operationSignature(sp, op));
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write("System.ArgumentNullException.ThrowIfNull(input);");
+          writer.write("");
+          writer.write(
+              "using var call = client.$L(cancellationToken: cancellationToken);", operationName);
+          writer.write("await foreach (var item in input.WithCancellation(cancellationToken))");
+          writer.openBlock(
+              "{",
+              "}",
+              () ->
+                  writer.write(
+                      "await call.RequestStream.WriteAsync($L).ConfigureAwait(false);",
+                      GrpcConversions.smithyToGrpc(
+                          sp,
+                          model,
+                          model.expectShape(op.getInputShape()),
+                          "item",
+                          grpcNamespace())));
+          writer.write("await call.RequestStream.CompleteAsync().ConfigureAwait(false);");
+          if (hasOutput) {
+            writer.write("var response = await call.ResponseAsync.ConfigureAwait(false);");
+            writer.write(
+                "return $L;",
+                GrpcConversions.grpcToSmithy(
+                    sp, model, model.expectShape(op.getOutputShape()), "response"));
+          }
+        });
+  }
+
+  private void writeGrpcClientBidiMethod(SymbolProvider sp, Model model, OperationShape op) {
+    String operationName = CSharpNaming.typeName(op.getId().getName());
+    String helperName = "WriteRequests_" + operationName;
+    String grpcInputType = grpcMessageType(op.getInputShape());
+    String smithyInputType =
+        CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())));
+
+    writer.write("public async $L", operationSignatureWithEnumeratorCancellation(sp, op));
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write("System.ArgumentNullException.ThrowIfNull(input);");
+          writer.write("");
+          writer.write(
+              "using var call = client.$L(cancellationToken: cancellationToken);", operationName);
+          writer.write(
+              "var writeTask = $L(input, call.RequestStream, cancellationToken);", helperName);
+          writer.write(
+              "await foreach (var item in call.ResponseStream.ReadAllAsync(cancellationToken))");
+          writer.openBlock(
+              "{",
+              "}",
+              () ->
+                  writer.write(
+                      "yield return $L;",
+                      GrpcConversions.grpcToSmithy(
+                          sp, model, model.expectShape(op.getOutputShape()), "item")));
+          writer.write("await writeTask.ConfigureAwait(false);");
+        });
+    writer.write("");
+    // Generate write-requests helper
+    writer.write(
+        "private static async System.Threading.Tasks.Task"
+            + " $L(System.Collections.Generic.IAsyncEnumerable<$L> input,"
+            + " global::Grpc.Core.IClientStreamWriter<$L> requestStream,"
+            + " System.Threading.CancellationToken cancellationToken)",
+        helperName,
+        smithyInputType,
+        grpcInputType);
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write("await foreach (var item in input.WithCancellation(cancellationToken))");
+          writer.openBlock(
+              "{",
+              "}",
+              () ->
+                  writer.write(
+                      "await requestStream.WriteAsync($L).ConfigureAwait(false);",
+                      GrpcConversions.smithyToGrpc(
+                          sp,
+                          model,
+                          model.expectShape(op.getInputShape()),
+                          "item",
+                          grpcNamespace())));
+          writer.write("await requestStream.CompleteAsync().ConfigureAwait(false);");
         });
   }
 
@@ -1319,27 +1499,71 @@ public final class ClientGenerator implements Runnable {
   }
 
   private String operationSignature(SymbolProvider sp, OperationShape op) {
+    StreamingKind kind = streamingKind(op);
     boolean hasInput = !isUnit(op.getInputShape());
     boolean hasOutput = !isUnit(op.getOutputShape());
     String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
-    String returnType =
-        hasOutput
-            ? "System.Threading.Tasks.Task<"
-                + CSharpSymbolProvider.qualified(
-                    sp.toSymbol(context.model().expectShape(op.getOutputShape())))
-                + ">"
-            : "System.Threading.Tasks.Task";
-    String params =
+    String inputType =
         hasInput
             ? CSharpSymbolProvider.qualified(
-                    sp.toSymbol(context.model().expectShape(op.getInputShape())))
-                + " input, "
-            : "";
+                sp.toSymbol(context.model().expectShape(op.getInputShape())))
+            : null;
+    String outputType =
+        hasOutput
+            ? CSharpSymbolProvider.qualified(
+                sp.toSymbol(context.model().expectShape(op.getOutputShape())))
+            : null;
+    String returnType;
+    String params;
+    switch (kind) {
+      case SERVER -> {
+        returnType = "System.Collections.Generic.IAsyncEnumerable<" + outputType + ">";
+        params = hasInput ? inputType + " input, " : "";
+      }
+      case CLIENT -> {
+        returnType =
+            hasOutput
+                ? "System.Threading.Tasks.Task<" + outputType + ">"
+                : "System.Threading.Tasks.Task";
+        params =
+            hasInput
+                ? "System.Collections.Generic.IAsyncEnumerable<" + inputType + "> input, "
+                : "";
+      }
+      case BIDI -> {
+        returnType = "System.Collections.Generic.IAsyncEnumerable<" + outputType + ">";
+        params =
+            hasInput
+                ? "System.Collections.Generic.IAsyncEnumerable<" + inputType + "> input, "
+                : "";
+      }
+      default -> {
+        returnType =
+            hasOutput
+                ? "System.Threading.Tasks.Task<" + outputType + ">"
+                : "System.Threading.Tasks.Task";
+        params = hasInput ? inputType + " input, " : "";
+      }
+    }
     return returnType
         + " "
         + name
         + "("
         + params
         + "System.Threading.CancellationToken cancellationToken = default)";
+  }
+
+  /**
+   * Signature variant for async iterator methods (server streaming, bidi) that adds the
+   * [EnumeratorCancellation] attribute to the cancellationToken parameter.
+   */
+  private String operationSignatureWithEnumeratorCancellation(
+      SymbolProvider sp, OperationShape op) {
+    // Replace the trailing "cancellationToken = default)" with the attributed version
+    String base = operationSignature(sp, op);
+    return base.replace(
+        "System.Threading.CancellationToken cancellationToken = default)",
+        "[System.Runtime.CompilerServices.EnumeratorCancellation]"
+            + " System.Threading.CancellationToken cancellationToken = default)");
   }
 }

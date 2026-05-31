@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <SmithyPublish>true</SmithyPublish>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-SNAPSHOT" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <SmithyMavenDependency Include="com.disneystreaming.alloy:alloy-core:0.3.38" />
+    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-SNAPSHOT" />
+    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-proto-codegen:0.1.0-SNAPSHOT" />
+  </ItemGroup>
+</Project>

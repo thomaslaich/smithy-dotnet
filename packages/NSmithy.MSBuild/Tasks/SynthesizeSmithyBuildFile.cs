@@ -48,6 +48,15 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
     /// </summary>
     public string OpenApiProtocol { get; set; } = "";
 
+    /// <summary>
+    /// When true, injects the smithy-proto-codegen Maven dep and the proto-codegen
+    /// plugin entry so a .proto file is generated for gRPC services.
+    /// </summary>
+    public bool Grpc { get; set; }
+
+    /// <summary>Name of the proto codegen plugin (defaults to proto-codegen).</summary>
+    public string ProtoPlugin { get; set; } = "proto-codegen";
+
     /// <summary>Path where the synthesized smithy-build.json should be written.</summary>
     [Required]
     public string OutputFile { get; set; } = "";
@@ -114,6 +123,13 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
 
         if (!string.IsNullOrEmpty(OpenApiProtocol))
             deps.Add($"software.amazon.smithy:smithy-openapi:{SmithyVersion}");
+
+        // smithy-proto-codegen is released in lockstep with smithy-csharp-codegen,
+        // so it shares the same version.
+        if (Grpc)
+            deps.Add(
+                $"io.github.thomaslaich.nsmithy:smithy-proto-codegen:{CSharpCodegenVersion}"
+            );
 
         // Collect suppressions from contracts.
         var suppressions = new List<(string Id, string Namespace)>();
@@ -199,6 +215,16 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
             writer.WriteStartObject();
             writer.WriteString("service", Service);
             writer.WriteString("protocol", OpenApiProtocol);
+            writer.WriteEndObject();
+        }
+
+        if (Grpc)
+        {
+            writer.WritePropertyName(ProtoPlugin);
+            writer.WriteStartObject();
+            writer.WriteString("service", Service);
+            if (!string.IsNullOrEmpty(BaseNamespace))
+                writer.WriteString("baseNamespace", BaseNamespace);
             writer.WriteEndObject();
         }
 
