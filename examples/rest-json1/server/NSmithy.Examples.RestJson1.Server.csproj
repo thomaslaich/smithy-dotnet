@@ -5,6 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <SmithyService>example.weather#Weather</SmithyService>
     <SmithyGeneratedNamespaces>example.weather</SmithyGeneratedNamespaces>
+    <SmithyGenerateDocs>true</SmithyGenerateDocs>
+    <SmithyOpenApiProtocol>aws.protocols#restJson1</SmithyOpenApiProtocol>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
   </PropertyGroup>

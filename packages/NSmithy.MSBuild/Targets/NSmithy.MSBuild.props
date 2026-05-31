@@ -14,5 +14,18 @@
     -->
     <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.68.0</SmithyVersion>
     <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''">0.1.0-SNAPSHOT</SmithyCSharpCodegenVersion>
+    <!--
+      Set to 'true' to inject the smithy-docgen plugin into the synthesized smithy-build.json
+      and copy the generated HTML docs to wwwroot/docs/.
+      Example: <SmithyGenerateDocs>true</SmithyGenerateDocs>
+    -->
+    <SmithyGenerateDocs Condition="'$(SmithyGenerateDocs)' == ''">false</SmithyGenerateDocs>
+    <!--
+      Set to an HTTP protocol shape ID to inject the smithy-openapi plugin into the
+      synthesized smithy-build.json and copy the generated openapi.json to wwwroot/.
+      Leave empty (the default) to skip OpenAPI generation.
+      Example: <SmithyOpenApiProtocol>aws.protocols#restJson1</SmithyOpenApiProtocol>
+    -->
+    <SmithyOpenApiProtocol Condition="'$(SmithyOpenApiProtocol)' == ''"></SmithyOpenApiProtocol>
   </PropertyGroup>
 </Project>

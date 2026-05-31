@@ -297,6 +297,9 @@
       Service="$(SmithyService)"
       BaseNamespace="$(SmithyBaseNamespace)"
       CSharpCodegenVersion="$(SmithyCSharpCodegenVersion)"
+      SmithyVersion="$(SmithyVersion)"
+      GenerateDocs="$(SmithyGenerateDocs)"
+      OpenApiProtocol="$(SmithyOpenApiProtocol)"
       OutputFile="$(_SmithySynthesizedBuildFile)"
       Condition="'@(SmithySource)' != ''"
     />
@@ -380,4 +383,58 @@
     </ItemGroup>
     <Message Importance="high" Text="NSmithy: registered Protobuf items: @(Protobuf)" />
   </Target>
+
+  <!--
+    Copy the smithy-openapi output to wwwroot/openapi.json so that ASP.NET Core's
+    static file middleware can serve it at /openapi.json.
+    Only runs when SmithyOpenApiProtocol is set.
+  -->
+  <Target
+    Name="_CopyOpenApiToWwwroot"
+    AfterTargets="GenerateSmithyCode"
+    Condition="'$(SmithyOpenApiProtocol)' != ''"
+  >
+    <PropertyGroup>
+      <_SmithyOutputDir>$([MSBuild]::EnsureTrailingSlash('$(MSBuildProjectDirectory)'))$(SmithyBuildOutputPath)</_SmithyOutputDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_OpenApiJson Include="$(_SmithyOutputDir)**/openapi/*.json" />
+    </ItemGroup>
+    <MakeDir Directories="$(MSBuildProjectDirectory)/wwwroot" Condition="'@(_OpenApiJson)' != ''" />
+    <Copy
+      SourceFiles="@(_OpenApiJson)"
+      DestinationFiles="$(MSBuildProjectDirectory)/wwwroot/openapi.json"
+      Condition="'@(_OpenApiJson)' != ''"
+      OverwriteReadOnlyFiles="true"
+      SkipUnchangedFiles="true"
+    />
+  </Target>
+
+  <!--
+    Copy the smithy-docgen Sphinx HTML output to wwwroot/docs/ so that ASP.NET
+    Core's static file middleware can serve it at /docs/.
+    Only runs when SmithyGenerateDocs is true.
+  -->
+  <Target
+    Name="_CopyDocgenToWwwroot"
+    AfterTargets="GenerateSmithyCode"
+    Condition="'$(SmithyGenerateDocs)' == 'true'"
+  >
+    <PropertyGroup>
+      <_SmithyDocgenHtmlDir>$([MSBuild]::EnsureTrailingSlash('$(MSBuildProjectDirectory)'))$(SmithyBuildOutputPath)source/docgen/build/html/</_SmithyDocgenHtmlDir>
+      <_SmithyDocsDestDir>$(MSBuildProjectDirectory)/wwwroot/docs/</_SmithyDocsDestDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_DocgenHtmlFiles Include="$(_SmithyDocgenHtmlDir)**/*.*" />
+    </ItemGroup>
+    <MakeDir Directories="$(_SmithyDocsDestDir)" Condition="'@(_DocgenHtmlFiles)' != ''" />
+    <Copy
+      SourceFiles="@(_DocgenHtmlFiles)"
+      DestinationFiles="@(_DocgenHtmlFiles -> '$(_SmithyDocsDestDir)%(RecursiveDir)%(Filename)%(Extension)')"
+      Condition="'@(_DocgenHtmlFiles)' != ''"
+      OverwriteReadOnlyFiles="true"
+      SkipUnchangedFiles="true"
+    />
+  </Target>
+
 </Project>

@@ -32,6 +32,22 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
     [Required]
     public string CSharpCodegenVersion { get; set; } = "";
 
+    /// <summary>
+    /// Smithy SDK version used when injecting optional plugin dependencies.
+    /// Should match the bundled Smithy CLI version.
+    /// </summary>
+    [Required]
+    public string SmithyVersion { get; set; } = "";
+
+    /// <summary>When true, injects the smithy-docgen Maven dep and docgen plugin entry.</summary>
+    public bool GenerateDocs { get; set; }
+
+    /// <summary>
+    /// When non-empty, injects the smithy-openapi Maven dep and openapi plugin entry
+    /// using this value as the protocol (e.g. aws.protocols#restJson1).
+    /// </summary>
+    public string OpenApiProtocol { get; set; } = "";
+
     /// <summary>Path where the synthesized smithy-build.json should be written.</summary>
     [Required]
     public string OutputFile { get; set; } = "";
@@ -96,6 +112,12 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
         )
             deps.Add(codegenDep);
 
+        if (GenerateDocs)
+            deps.Add($"software.amazon.smithy:smithy-docgen:{SmithyVersion}");
+
+        if (!string.IsNullOrEmpty(OpenApiProtocol))
+            deps.Add($"software.amazon.smithy:smithy-openapi:{SmithyVersion}");
+
         // Collect suppressions from contracts.
         var suppressions = new List<(string Id, string Namespace)>();
         if (root.TryGetProperty("suppressions", out var suppressionsEl))
@@ -158,12 +180,31 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
 
         writer.WritePropertyName("plugins");
         writer.WriteStartObject();
+
         writer.WritePropertyName("csharp-codegen");
         writer.WriteStartObject();
         writer.WriteString("service", Service);
         if (!string.IsNullOrEmpty(BaseNamespace))
             writer.WriteString("baseNamespace", BaseNamespace);
         writer.WriteEndObject();
+
+        if (GenerateDocs)
+        {
+            writer.WritePropertyName("docgen");
+            writer.WriteStartObject();
+            writer.WriteString("service", Service);
+            writer.WriteEndObject();
+        }
+
+        if (!string.IsNullOrEmpty(OpenApiProtocol))
+        {
+            writer.WritePropertyName("openapi");
+            writer.WriteStartObject();
+            writer.WriteString("service", Service);
+            writer.WriteString("protocol", OpenApiProtocol);
+            writer.WriteEndObject();
+        }
+
         writer.WriteEndObject(); // plugins
 
         writer.WriteEndObject(); // root
