@@ -28,22 +28,4 @@
     <!--#endif-->
   </ItemGroup>
 
-  <!--#if (!WithContracts)-->
-  <ItemGroup>
-    <SmithySource Include="model/**/*.smithy" />
-  </ItemGroup>
-
-  <!--#if (IsRestJson1)-->
-  <ItemGroup>
-    <SmithyMavenDependency Include="software.amazon.smithy:smithy-aws-traits:1.68.0" />
-    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.15" />
-  </ItemGroup>
-  <!--#endif-->
-  <!--#if (IsSimpleRestJson || IsGrpc)-->
-  <ItemGroup>
-    <SmithyMavenDependency Include="com.disneystreaming.alloy:alloy-core:0.3.38" />
-    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-preview.15" />
-  </ItemGroup>
-  <!--#endif-->
-  <!--#endif-->
 </Project>

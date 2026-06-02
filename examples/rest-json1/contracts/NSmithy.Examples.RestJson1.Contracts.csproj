@@ -13,9 +13,4 @@
   <ItemGroup>
     <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-SNAPSHOT" />
   </ItemGroup>
-
-  <ItemGroup>
-    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-SNAPSHOT" />
-    <SmithyMavenDependency Include="software.amazon.smithy:smithy-aws-traits:1.68.0" />
-  </ItemGroup>
 </Project>
