@@ -161,8 +161,8 @@ public interface IHelloServiceHandler
 
 ### The Server Handler
 
-The generated `Program.cs` in `HelloWorld.Server` registers your handler and
-maps the routes:
+The generated server uses [ASP.NET Core minimal API](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis).
+`Program.cs` registers your handler and maps the routes:
 
 ```csharp
 builder.Services.AddHelloServiceHandler<HelloHandler>();
