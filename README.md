@@ -33,7 +33,7 @@ NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io)
 
 ## Features
 
-- **MSBuild integration**: Generate C# models, typed clients, and ASP.NET Core server stubs from a Smithy IDL as part of `dotnet build` — no separate codegen step, no Java or JRE installation required.
+- **MSBuild integration**: Generate C# models, typed clients, and ASP.NET Core minimal API server stubs from a Smithy IDL as part of `dotnet build` — no separate codegen step, no Java or JRE installation required.
 - **Protocol support**: Implements `alloy#simpleRestJson`, `aws.protocols#restJson1`, `aws.protocols#restXml`, `smithy.protocols#rpcv2Cbor`, and `alloy.proto#grpc`.
 - **Conformance-tested**: Validated against official Smithy, AWS, and alloy conformance suites.
 
