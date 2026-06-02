@@ -127,9 +127,7 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
         // smithy-proto-codegen is released in lockstep with smithy-csharp-codegen,
         // so it shares the same version.
         if (Grpc)
-            deps.Add(
-                $"io.github.thomaslaich.nsmithy:smithy-proto-codegen:{CSharpCodegenVersion}"
-            );
+            deps.Add($"io.github.thomaslaich.nsmithy:smithy-proto-codegen:{CSharpCodegenVersion}");
 
         // Collect suppressions from contracts.
         var suppressions = new List<(string Id, string Namespace)>();
