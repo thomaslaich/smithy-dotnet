@@ -125,8 +125,17 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
             deps.Add($"software.amazon.smithy:smithy-openapi:{SmithyVersion}");
 
         // smithy-proto-codegen is released in lockstep with smithy-csharp-codegen,
-        // so it shares the same version.
-        if (Grpc)
+        // so it shares the same version. Skip if the contracts already declare it
+        // (a model using nsmithy.proto streaming traits must depend on it directly).
+        if (
+            Grpc
+            && !deps.Any(d =>
+                d.StartsWith(
+                    "io.github.thomaslaich.nsmithy:smithy-proto-codegen:",
+                    StringComparison.Ordinal
+                )
+            )
+        )
             deps.Add($"io.github.thomaslaich.nsmithy:smithy-proto-codegen:{CSharpCodegenVersion}");
 
         // Collect suppressions from contracts.
