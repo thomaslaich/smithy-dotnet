@@ -223,7 +223,8 @@ public final class ServerGenerator implements Runnable {
                     sp,
                     context.model(),
                     context.model().expectShape(op.getInputShape()),
-                    "request"));
+                    "request",
+                    grpcNamespace()));
           }
           String invokeArgs = (hasInput ? "smithyInput, " : "") + "context.CancellationToken";
           if (hasOutput) {
@@ -274,7 +275,8 @@ public final class ServerGenerator implements Runnable {
                     sp,
                     context.model(),
                     context.model().expectShape(op.getInputShape()),
-                    "request"));
+                    "request",
+                    grpcNamespace()));
           }
           String invokeArgs = (hasInput ? "smithyInput, " : "") + "context.CancellationToken";
           writer.write(
@@ -367,7 +369,8 @@ public final class ServerGenerator implements Runnable {
                           sp,
                           context.model(),
                           context.model().expectShape(op.getInputShape()),
-                          "item")));
+                          "item",
+                          grpcNamespace())));
         });
   }
 
@@ -439,7 +442,8 @@ public final class ServerGenerator implements Runnable {
                           sp,
                           context.model(),
                           context.model().expectShape(op.getInputShape()),
-                          "item")));
+                          "item",
+                          grpcNamespace())));
         });
   }
 

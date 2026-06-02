@@ -131,7 +131,8 @@ public final class GrpcConversions {
    * Build a Smithy structure value from a gRPC message. {@code src} is the C# expression yielding
    * the gRPC message (e.g. "response").
    */
-  public static String grpcToSmithy(SymbolProvider sp, Model model, Shape shape, String src) {
+  public static String grpcToSmithy(
+      SymbolProvider sp, Model model, Shape shape, String src, String grpcNs) {
     if (!(shape instanceof StructureShape s)) return src;
     String smithyType =
         io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider.qualified(sp.toSymbol(s));
@@ -141,7 +142,7 @@ public final class GrpcConversions {
       if (i > 0) sb.append(", ");
       MemberShape m = members.get(i);
       String propAccess = src + "." + CSharpNaming.propertyName(m.getMemberName());
-      String converted = grpcToSmithyMemberExpr(sp, model, s, m, src, propAccess);
+      String converted = grpcToSmithyMemberExpr(sp, model, s, m, src, propAccess, grpcNs);
       if (isProtoOptionalScalar(model, m)) {
         String prop = CSharpNaming.propertyName(m.getMemberName());
         converted = src + ".Has" + prop + " ? " + converted + " : null";
@@ -243,19 +244,25 @@ public final class GrpcConversions {
       StructureShape parent,
       MemberShape m,
       String src,
-      String expr) {
+      String expr,
+      String grpcNs) {
     Shape target = model.expectShape(m.getTarget());
     if (target.getType() == ShapeType.UNION && target.hasTrait(PROTO_INLINED_ONE_OF)) {
-      return grpcOneofToSmithyUnion(sp, model, parent, m, target, src);
+      return grpcOneofToSmithyUnion(sp, model, parent, m, target, src, grpcNs);
     }
-    return grpcToSmithyValueExpr(sp, model, target, m, expr);
+    return grpcToSmithyValueExpr(sp, model, target, m, expr, grpcNs);
   }
 
   private static String grpcToSmithyValueExpr(
-      SymbolProvider sp, Model model, Shape target, MemberShape member, String expr) {
+      SymbolProvider sp,
+      Model model,
+      Shape target,
+      MemberShape member,
+      String expr,
+      String grpcNs) {
     switch (target.getType()) {
       case STRUCTURE:
-        return nullGuard(member, expr, grpcToSmithy(sp, model, target, expr));
+        return nullGuard(member, expr, grpcToSmithy(sp, model, target, expr, grpcNs));
       case UNION:
         throw new IllegalArgumentException(
             "Non-inlined gRPC union conversion is not implemented for: " + target.getId());
@@ -271,9 +278,10 @@ public final class GrpcConversions {
             + expr
             + ", value => "
             + (ShapeSupport.isSparse(list)
-                ? grpcToSmithyValueExpr(sp, model, listMemberTarget, list.getMember(), "value")
+                ? grpcToSmithyValueExpr(
+                    sp, model, listMemberTarget, list.getMember(), "value", grpcNs)
                 : grpcToSmithyNonNullableValueExpr(
-                    sp, model, listMemberTarget, list.getMember(), "value"))
+                    sp, model, listMemberTarget, list.getMember(), "value", grpcNs))
             + "))";
       case MAP:
         MapShape map = (MapShape) target;
@@ -296,7 +304,7 @@ public final class GrpcConversions {
             + "System.Linq.Enumerable.ToDictionary("
             + expr
             + ", entry => entry.Key, entry => "
-            + grpcToSmithyValueExpr(sp, model, valueTarget, map.getValue(), "entry.Value")
+            + grpcToSmithyValueExpr(sp, model, valueTarget, map.getValue(), "entry.Value", grpcNs)
             + "))";
       case TIMESTAMP:
         return expr + ".ToDateTimeOffset()";
@@ -349,11 +357,16 @@ public final class GrpcConversions {
   }
 
   private static String grpcToSmithyNonNullableValueExpr(
-      SymbolProvider sp, Model model, Shape target, MemberShape member, String expr) {
+      SymbolProvider sp,
+      Model model,
+      Shape target,
+      MemberShape member,
+      String expr,
+      String grpcNs) {
     if (target.getType() == ShapeType.STRUCTURE) {
-      return grpcToSmithy(sp, model, target, expr);
+      return grpcToSmithy(sp, model, target, expr, grpcNs);
     }
-    return grpcToSmithyValueExpr(sp, model, target, member, expr);
+    return grpcToSmithyValueExpr(sp, model, target, member, expr, grpcNs);
   }
 
   private static String smithyToProtoValueExpr(Shape target, String expr) {
@@ -471,10 +484,12 @@ public final class GrpcConversions {
       StructureShape parent,
       MemberShape unionMember,
       Shape target,
-      String src) {
+      String src,
+      String grpcNs) {
     String grpcParentType = CSharpNaming.typeName(parent.getId().getName());
     String smithyUnionType = CSharpSymbolProvider.qualified(sp.toSymbol(target));
     String oneofCase = CSharpNaming.propertyName(unionMember.getMemberName()) + "Case";
+    String oneofCaseType = CSharpNaming.propertyName(unionMember.getMemberName()) + "OneofCase";
     StringBuilder sb = new StringBuilder(src).append(".").append(oneofCase).append(" switch { ");
     boolean first = true;
     for (MemberShape member : ShapeSupport.sortedMembers(target)) {
@@ -482,17 +497,19 @@ public final class GrpcConversions {
       Shape memberTarget = model.expectShape(member.getTarget());
       String prop = CSharpNaming.propertyName(member.getMemberName());
       sb.append("global::")
-          .append(grpcNamespaceFor(parent))
+          .append(grpcNs)
           .append(".")
           .append(grpcParentType)
-          .append(".FilterOneofCase.")
+          .append(".")
+          .append(oneofCaseType)
+          .append(".")
           .append(prop)
           .append(" => ")
           .append(smithyUnionType)
           .append(".From")
           .append(prop)
           .append("(")
-          .append(grpcToSmithyValueExpr(sp, model, memberTarget, member, src + "." + prop))
+          .append(grpcToSmithyValueExpr(sp, model, memberTarget, member, src + "." + prop, grpcNs))
           .append(")");
       first = false;
     }
@@ -520,17 +537,6 @@ public final class GrpcConversions {
     sb.append("default: throw new System.ArgumentOutOfRangeException(nameof(")
         .append(expr)
         .append(")); } ");
-  }
-
-  private static String grpcNamespaceFor(Shape shape) {
-    String ns = shape.getId().getNamespace();
-    String[] parts = ns.split("\\.");
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < parts.length; i++) {
-      if (i > 0) sb.append(".");
-      sb.append(CSharpNaming.typeName(parts[i]));
-    }
-    return sb.append(".Grpc").toString();
   }
 
   private static String protoEnumMemberName(String name) {

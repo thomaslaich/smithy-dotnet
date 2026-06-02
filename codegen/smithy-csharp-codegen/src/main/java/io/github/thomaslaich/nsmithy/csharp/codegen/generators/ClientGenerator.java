@@ -1305,7 +1305,11 @@ public final class ClientGenerator implements Runnable {
             writer.write(
                 "return $L;",
                 GrpcConversions.grpcToSmithy(
-                    sp, model, model.expectShape(op.getOutputShape()), "response"));
+                    sp,
+                    model,
+                    model.expectShape(op.getOutputShape()),
+                    "response",
+                    grpcNamespace()));
           } else {
             writer.write(
                 "await client.$LAsync(request,"
@@ -1348,7 +1352,11 @@ public final class ClientGenerator implements Runnable {
                   writer.write(
                       "yield return $L;",
                       GrpcConversions.grpcToSmithy(
-                          sp, model, model.expectShape(op.getOutputShape()), "item")));
+                          sp,
+                          model,
+                          model.expectShape(op.getOutputShape()),
+                          "item",
+                          grpcNamespace())));
         });
   }
 
@@ -1386,7 +1394,11 @@ public final class ClientGenerator implements Runnable {
             writer.write(
                 "return $L;",
                 GrpcConversions.grpcToSmithy(
-                    sp, model, model.expectShape(op.getOutputShape()), "response"));
+                    sp,
+                    model,
+                    model.expectShape(op.getOutputShape()),
+                    "response",
+                    grpcNamespace()));
           }
         });
   }
@@ -1418,7 +1430,11 @@ public final class ClientGenerator implements Runnable {
                   writer.write(
                       "yield return $L;",
                       GrpcConversions.grpcToSmithy(
-                          sp, model, model.expectShape(op.getOutputShape()), "item")));
+                          sp,
+                          model,
+                          model.expectShape(op.getOutputShape()),
+                          "item",
+                          grpcNamespace())));
           writer.write("await writeTask.ConfigureAwait(false);");
         });
     writer.write("");
