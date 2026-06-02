@@ -195,7 +195,7 @@ Members without an explicit binding go into the JSON body.
 ## Server
 
 NSmithy generates one `IWeatherServiceHandler` interface with a method for each
-operation. Implement it once; the generated ASP.NET Core adapter handles routing,
+operation. Implement it once; the generated ASP.NET Core minimal API adapter handles routing,
 serialization, and error dispatch.
 
 ```csharp
