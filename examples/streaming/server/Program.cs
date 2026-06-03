@@ -36,7 +36,7 @@ internal sealed class MetricsHandler : IMetricsServiceHandler
 
     // ── Server streaming ───────────────────────────────────────────────────────
 
-    public async IAsyncEnumerable<StreamMetricsOutput> StreamMetricsAsync(
+    public async IAsyncEnumerable<StreamMetricsOutputEvent> StreamMetricsAsync(
         StreamMetricsInput input,
         [System.Runtime.CompilerServices.EnumeratorCancellation]
             CancellationToken cancellationToken = default
@@ -56,7 +56,9 @@ internal sealed class MetricsHandler : IMetricsServiceHandler
                 if (!name.StartsWith(prefix, StringComparison.Ordinal))
                     continue;
 
-                yield return new StreamMetricsOutput(name, unit, valueFn());
+                yield return StreamMetricsOutputEvent.FromReading(
+                    new MetricReading(name, unit, valueFn())
+                );
                 emitted++;
 
                 if (maxSamples > 0 && emitted >= maxSamples)
@@ -70,13 +72,15 @@ internal sealed class MetricsHandler : IMetricsServiceHandler
     // ── Client streaming ───────────────────────────────────────────────────────
 
     public async Task<RecordMetricsOutput> RecordMetricsAsync(
-        IAsyncEnumerable<RecordMetricsInput> input,
+        IAsyncEnumerable<RecordMetricsInputEvent> input,
         CancellationToken cancellationToken = default
     )
     {
         int count = 0;
-        await foreach (var reading in input.WithCancellation(cancellationToken))
+        await foreach (var evt in input.WithCancellation(cancellationToken))
         {
+            if (evt is not RecordMetricsInputEvent.Reading { Value: var reading })
+                continue;
             Console.WriteLine($"  [record] {reading.Name} = {reading.Value} {reading.Unit}");
             count++;
         }
@@ -85,13 +89,13 @@ internal sealed class MetricsHandler : IMetricsServiceHandler
 
     // ── Bidirectional streaming ────────────────────────────────────────────────
 
-    public async IAsyncEnumerable<MonitorMetricsOutput> MonitorMetricsAsync(
-        IAsyncEnumerable<MonitorMetricsInput> input,
+    public async IAsyncEnumerable<MonitorMetricsOutputEvent> MonitorMetricsAsync(
+        IAsyncEnumerable<MonitorMetricsInputEvent> input,
         [System.Runtime.CompilerServices.EnumeratorCancellation]
             CancellationToken cancellationToken = default
     )
     {
-        // Current filter prefix — updated as client sends new MonitorMetricsInput messages.
+        // Current filter prefix — updated as client sends new MonitorMetricsInputEvent messages.
         var prefix = "";
         var filterLock = new object();
 
@@ -101,8 +105,10 @@ internal sealed class MetricsHandler : IMetricsServiceHandler
             {
                 await foreach (var msg in input.WithCancellation(cancellationToken))
                 {
+                    if (msg is not MonitorMetricsInputEvent.Filter { Value: var filter })
+                        continue;
                     lock (filterLock)
-                        prefix = msg.Prefix ?? "";
+                        prefix = filter.Prefix ?? "";
                 }
             },
             cancellationToken
@@ -123,7 +129,9 @@ internal sealed class MetricsHandler : IMetricsServiceHandler
                 if (!name.StartsWith(currentPrefix, StringComparison.Ordinal))
                     continue;
 
-                yield return new MonitorMetricsOutput(name, unit, valueFn());
+                yield return MonitorMetricsOutputEvent.FromReading(
+                    new MetricReading(name, unit, valueFn())
+                );
                 await Task.Delay(150, cancellationToken);
             }
         }

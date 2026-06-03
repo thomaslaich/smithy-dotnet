@@ -13,7 +13,10 @@ using var cts = new CancellationTokenSource();
 Console.WriteLine("=== StreamMetrics (server streaming — cpu.* prefix, 6 samples) ===");
 var streamInput = new StreamMetricsInput(prefix: "cpu", maxSamples: 6);
 await foreach (var reading in client.StreamMetricsAsync(streamInput, cts.Token))
-    Console.WriteLine($"  {reading.Name, 20}  {reading.Value, 10:F2}  {reading.Unit}");
+{
+    if (reading is StreamMetricsOutputEvent.Reading { Value: var metric })
+        Console.WriteLine($"  {metric.Name, 20}  {metric.Value, 10:F2}  {metric.Unit}");
+}
 
 Console.WriteLine();
 
@@ -21,21 +24,21 @@ Console.WriteLine();
 
 Console.WriteLine("=== RecordMetrics (client streaming — upload 5 readings) ===");
 
-static async IAsyncEnumerable<RecordMetricsInput> FakeReadings(
+static async IAsyncEnumerable<RecordMetricsInputEvent> FakeReadings(
     [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default
 )
 {
     var readings = new[]
     {
-        new RecordMetricsInput("cpu.usage", "percent", 42.5),
-        new RecordMetricsInput("memory.free_mb", "mb", 768.0),
-        new RecordMetricsInput("disk.read_mb", "mb/s", 55.3),
-        new RecordMetricsInput("net.rx_mb", "mb/s", 12.1),
-        new RecordMetricsInput("req.rate", "req/s", 340.0),
+        new MetricReading("cpu.usage", "percent", 42.5),
+        new MetricReading("memory.free_mb", "mb", 768.0),
+        new MetricReading("disk.read_mb", "mb/s", 55.3),
+        new MetricReading("net.rx_mb", "mb/s", 12.1),
+        new MetricReading("req.rate", "req/s", 340.0),
     };
     foreach (var r in readings)
     {
-        yield return r;
+        yield return RecordMetricsInputEvent.FromReading(r);
         await Task.Delay(100, ct);
     }
 }
@@ -50,13 +53,13 @@ Console.WriteLine();
 Console.WriteLine("=== MonitorMetrics (bidi streaming — switch filter mid-stream) ===");
 
 // Send filter updates: start with "net", then switch to "req" after a pause.
-static async IAsyncEnumerable<MonitorMetricsInput> FilterUpdates(
+static async IAsyncEnumerable<MonitorMetricsInputEvent> FilterUpdates(
     [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default
 )
 {
-    yield return new MonitorMetricsInput("net");
+    yield return MonitorMetricsInputEvent.FromFilter(new MonitorMetricsFilter("net"));
     await Task.Delay(600, ct);
-    yield return new MonitorMetricsInput("req");
+    yield return MonitorMetricsInputEvent.FromFilter(new MonitorMetricsFilter("req"));
     await Task.Delay(600, ct);
 }
 
@@ -69,7 +72,10 @@ try
     await foreach (
         var reading in client.MonitorMetricsAsync(FilterUpdates(monitorCts.Token), monitorCts.Token)
     )
-        Console.WriteLine($"  {reading.Name, 20}  {reading.Value, 10:F2}  {reading.Unit}");
+    {
+        if (reading is MonitorMetricsOutputEvent.Reading { Value: var metric })
+            Console.WriteLine($"  {metric.Name, 20}  {metric.Value, 10:F2}  {metric.Unit}");
+    }
 }
 catch (OperationCanceledException)
 { /* timed out — expected */

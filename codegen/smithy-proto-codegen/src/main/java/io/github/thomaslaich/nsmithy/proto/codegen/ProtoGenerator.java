@@ -70,8 +70,6 @@ public final class ProtoGenerator {
   private static final ShapeId PROTO_INDEX = ShapeId.from("alloy.proto#protoIndex");
   private static final ShapeId PROTO_NUM_TYPE = ShapeId.from("alloy.proto#protoNumType");
   private static final ShapeId PROTO_INLINED_ONE_OF = ShapeId.from("alloy.proto#protoInlinedOneOf");
-  private static final ShapeId GRPC_SERVER_STREAM = ShapeId.from("nsmithy.proto#grpcServerStream");
-  private static final ShapeId GRPC_CLIENT_STREAM = ShapeId.from("nsmithy.proto#grpcClientStream");
 
   // Well-known proto import paths
   private static final String IMPORT_EMPTY = "google/protobuf/empty.proto";
@@ -174,16 +172,13 @@ public final class ProtoGenerator {
     // Service block.
     sb.append("service ").append(serviceName).append(" {\n");
     for (OperationShape op : operations) {
-      String inputRef = messageRef(op.getInputShape(), serviceNs);
-      String outputRef = messageRef(op.getOutputShape(), serviceNs);
-      String streamIn =
-          (op.hasTrait(GRPC_CLIENT_STREAM) || isStreamingShape(op.getInputShape()))
-              ? "stream "
-              : "";
-      String streamOut =
-          (op.hasTrait(GRPC_SERVER_STREAM) || isStreamingShape(op.getOutputShape()))
-              ? "stream "
-              : "";
+      ShapeId inputMessage = streamingMemberTarget(op.getInputShape()).orElse(op.getInputShape());
+      ShapeId outputMessage =
+          streamingMemberTarget(op.getOutputShape()).orElse(op.getOutputShape());
+      String inputRef = messageRef(inputMessage, serviceNs);
+      String outputRef = messageRef(outputMessage, serviceNs);
+      String streamIn = isStreamingShape(op.getInputShape()) ? "stream " : "";
+      String streamOut = isStreamingShape(op.getOutputShape()) ? "stream " : "";
       sb.append("  rpc ").append(ProtoNaming.typeName(op.getId().getName())).append(" (");
       sb.append(streamIn).append(inputRef);
       sb.append(") returns (");
@@ -516,6 +511,19 @@ public final class ProtoGenerator {
       if (model.expectShape(m.getTarget()).hasTrait(StreamingTrait.class)) return true;
     }
     return false;
+  }
+
+  private Optional<ShapeId> streamingMemberTarget(ShapeId shapeId) {
+    if (isUnit(shapeId)) return Optional.empty();
+    Shape s = model.expectShape(shapeId);
+    if (s.hasTrait(StreamingTrait.class)) return Optional.of(shapeId);
+    return s.members().stream()
+        .filter(
+            m ->
+                m.hasTrait(StreamingTrait.class)
+                    || model.expectShape(m.getTarget()).hasTrait(StreamingTrait.class))
+        .map(MemberShape::getTarget)
+        .findFirst();
   }
 
   // ---- optional / required -----------------------------------------------

@@ -14,7 +14,6 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
@@ -146,11 +145,29 @@ public final class ServerGenerator implements Runnable {
     return false;
   }
 
+  private ShapeId streamingMessageShape(ShapeId id) {
+    return streamingMemberTarget(id).orElse(id);
+  }
+
+  private Optional<ShapeId> streamingMemberTarget(ShapeId id) {
+    if (id.equals(ShapeId.from("smithy.api#Unit"))) return Optional.empty();
+    Shape shape = context.model().expectShape(id);
+    if (shape.hasTrait(StreamingTrait.class)) return Optional.of(id);
+    if (shape instanceof StructureShape ss) {
+      return ss.members().stream()
+          .filter(
+              m ->
+                  m.hasTrait(StreamingTrait.class)
+                      || context.model().expectShape(m.getTarget()).hasTrait(StreamingTrait.class))
+          .map(MemberShape::getTarget)
+          .findFirst();
+    }
+    return Optional.empty();
+  }
+
   private StreamingKind streamingKind(OperationShape op) {
-    boolean inputStreaming =
-        op.hasTrait(TraitIds.GRPC_CLIENT_STREAM) || isStreamingShape(op.getInputShape());
-    boolean outputStreaming =
-        op.hasTrait(TraitIds.GRPC_SERVER_STREAM) || isStreamingShape(op.getOutputShape());
+    boolean inputStreaming = isStreamingShape(op.getInputShape());
+    boolean outputStreaming = isStreamingShape(op.getOutputShape());
     if (inputStreaming && outputStreaming) return StreamingKind.BIDI;
     if (inputStreaming) return StreamingKind.CLIENT;
     if (outputStreaming) return StreamingKind.SERVER;
@@ -251,8 +268,9 @@ public final class ServerGenerator implements Runnable {
   private void writeGrpcAdapterServerStreamingMethod(SymbolProvider sp, OperationShape op) {
     String operationName = CSharpNaming.typeName(op.getId().getName());
     boolean hasInput = !op.getInputShape().equals(ShapeId.from("smithy.api#Unit"));
+    ShapeId outputMessageShape = streamingMessageShape(op.getOutputShape());
     String grpcInputType = grpcMessageType(op.getInputShape());
-    String grpcOutputType = grpcMessageType(op.getOutputShape());
+    String grpcOutputType = grpcMessageType(outputMessageShape);
     writer.write(
         "public override async System.Threading.Tasks.Task $L($L request,"
             + " global::Grpc.Core.IServerStreamWriter<$L> responseStream, ServerCallContext"
@@ -292,7 +310,7 @@ public final class ServerGenerator implements Runnable {
                       GrpcConversions.smithyToGrpc(
                           sp,
                           context.model(),
-                          context.model().expectShape(op.getOutputShape()),
+                          context.model().expectShape(outputMessageShape),
                           "smithyItem",
                           grpcNamespace())));
         });
@@ -301,11 +319,11 @@ public final class ServerGenerator implements Runnable {
   private void writeGrpcAdapterClientStreamingMethod(SymbolProvider sp, OperationShape op) {
     String operationName = CSharpNaming.typeName(op.getId().getName());
     boolean hasOutput = !op.getOutputShape().equals(ShapeId.from("smithy.api#Unit"));
-    String grpcInputType = grpcMessageType(op.getInputShape());
+    ShapeId inputMessageShape = streamingMessageShape(op.getInputShape());
+    String grpcInputType = grpcMessageType(inputMessageShape);
     String grpcOutputType = grpcMessageType(op.getOutputShape());
     String smithyInputType =
-        CSharpSymbolProvider.qualified(
-            sp.toSymbol(context.model().expectShape(op.getInputShape())));
+        CSharpSymbolProvider.qualified(sp.toSymbol(context.model().expectShape(inputMessageShape)));
     String helperName = "ConvertInputStream_" + operationName;
     writer.write(
         "public override async System.Threading.Tasks.Task<$L>"
@@ -368,7 +386,7 @@ public final class ServerGenerator implements Runnable {
                       GrpcConversions.grpcToSmithy(
                           sp,
                           context.model(),
-                          context.model().expectShape(op.getInputShape()),
+                          context.model().expectShape(inputMessageShape),
                           "item",
                           grpcNamespace())));
         });
@@ -376,11 +394,12 @@ public final class ServerGenerator implements Runnable {
 
   private void writeGrpcAdapterBidiMethod(SymbolProvider sp, OperationShape op) {
     String operationName = CSharpNaming.typeName(op.getId().getName());
-    String grpcInputType = grpcMessageType(op.getInputShape());
-    String grpcOutputType = grpcMessageType(op.getOutputShape());
+    ShapeId inputMessageShape = streamingMessageShape(op.getInputShape());
+    ShapeId outputMessageShape = streamingMessageShape(op.getOutputShape());
+    String grpcInputType = grpcMessageType(inputMessageShape);
+    String grpcOutputType = grpcMessageType(outputMessageShape);
     String smithyInputType =
-        CSharpSymbolProvider.qualified(
-            sp.toSymbol(context.model().expectShape(op.getInputShape())));
+        CSharpSymbolProvider.qualified(sp.toSymbol(context.model().expectShape(inputMessageShape)));
     String helperName = "ConvertInputStream_" + operationName;
     writer.write(
         "public override async System.Threading.Tasks.Task"
@@ -413,7 +432,7 @@ public final class ServerGenerator implements Runnable {
                       GrpcConversions.smithyToGrpc(
                           sp,
                           context.model(),
-                          context.model().expectShape(op.getOutputShape()),
+                          context.model().expectShape(outputMessageShape),
                           "smithyItem",
                           grpcNamespace())));
         });
@@ -441,7 +460,7 @@ public final class ServerGenerator implements Runnable {
                       GrpcConversions.grpcToSmithy(
                           sp,
                           context.model(),
-                          context.model().expectShape(op.getInputShape()),
+                          context.model().expectShape(inputMessageShape),
                           "item",
                           grpcNamespace())));
         });
@@ -1346,12 +1365,13 @@ public final class ServerGenerator implements Runnable {
     String inputType =
         hasInput
             ? CSharpSymbolProvider.qualified(
-                sp.toSymbol(context.model().expectShape(op.getInputShape())))
+                sp.toSymbol(context.model().expectShape(streamingMessageShape(op.getInputShape()))))
             : null;
     String outputType =
         hasOutput
             ? CSharpSymbolProvider.qualified(
-                sp.toSymbol(context.model().expectShape(op.getOutputShape())))
+                sp.toSymbol(
+                    context.model().expectShape(streamingMessageShape(op.getOutputShape()))))
             : null;
     String returnType;
     String params;

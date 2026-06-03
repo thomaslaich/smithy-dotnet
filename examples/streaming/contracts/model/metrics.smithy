@@ -5,8 +5,6 @@ namespace example.metrics
 use alloy.proto#grpc
 use alloy.proto#protoIndex
 use alloy.proto#protoNumType
-use nsmithy.proto#grpcServerStream
-use nsmithy.proto#grpcClientStream
 
 // ─── Service ──────────────────────────────────────────────────────────────────
 
@@ -23,13 +21,12 @@ service MetricsService {
 
 // ─── Server streaming ─────────────────────────────────────────────────────────
 //
-//   proto:  rpc StreamMetrics (StreamMetricsInput) returns (stream StreamMetricsOutput);
-//   C# handler: IAsyncEnumerable<StreamMetricsOutput> StreamMetricsAsync(
+//   proto:  rpc StreamMetrics (StreamMetricsInput) returns (stream StreamMetricsOutputEvent);
+//   C# handler: IAsyncEnumerable<StreamMetricsOutputEvent> StreamMetricsAsync(
 //                   StreamMetricsInput input, CancellationToken ct);
 
-/// Subscribe to live metric updates. The server streams one StreamMetricsOutput
+/// Subscribe to live metric updates. The server streams one StreamMetricsOutputEvent
 /// per metric reading until the client cancels or the server exhausts the series.
-@grpcServerStream
 operation StreamMetrics {
     input: StreamMetricsInput
     output: StreamMetricsOutput
@@ -47,6 +44,17 @@ structure StreamMetricsInput {
 }
 
 structure StreamMetricsOutput {
+    @protoIndex(1)
+    events: StreamMetricsOutputEvent
+}
+
+@streaming
+union StreamMetricsOutputEvent {
+    @protoIndex(1)
+    reading: MetricReading
+}
+
+structure MetricReading {
     /// Metric name (e.g. "cpu.usage", "memory.free_mb").
     @required
     @protoIndex(1)
@@ -65,33 +73,26 @@ structure StreamMetricsOutput {
 
 // ─── Client streaming ─────────────────────────────────────────────────────────
 //
-//   proto:  rpc RecordMetrics (stream RecordMetricsInput) returns (RecordMetricsOutput);
+//   proto:  rpc RecordMetrics (stream RecordMetricsInputEvent) returns (RecordMetricsOutput);
 //   C# handler: Task<RecordMetricsOutput> RecordMetricsAsync(
-//                   IAsyncEnumerable<RecordMetricsInput> input, CancellationToken ct);
+//                   IAsyncEnumerable<RecordMetricsInputEvent> input, CancellationToken ct);
 
 /// Upload a stream of metric readings. Returns a summary once the client
 /// signals completion (closes the request stream).
-@grpcClientStream
 operation RecordMetrics {
     input: RecordMetricsInput
     output: RecordMetricsOutput
 }
 
 structure RecordMetricsInput {
-    /// Metric name.
-    @required
     @protoIndex(1)
-    name: String
+    events: RecordMetricsInputEvent
+}
 
-    /// Numeric value.
-    @required
-    @protoIndex(2)
-    value: Double
-
-    /// Unit string.
-    @required
-    @protoIndex(3)
-    unit: String
+@streaming
+union RecordMetricsInputEvent {
+    @protoIndex(1)
+    reading: MetricReading
 }
 
 structure RecordMetricsOutput {
@@ -104,21 +105,30 @@ structure RecordMetricsOutput {
 
 // ─── Bidirectional streaming ──────────────────────────────────────────────────
 //
-//   proto:  rpc MonitorMetrics (stream MonitorMetricsInput) returns (stream MonitorMetricsOutput);
-//   C# handler: IAsyncEnumerable<MonitorMetricsOutput> MonitorMetricsAsync(
-//                   IAsyncEnumerable<MonitorMetricsInput> input, CancellationToken ct);
+//   proto:  rpc MonitorMetrics (stream MonitorMetricsInputEvent) returns (stream MonitorMetricsOutputEvent);
+//   C# handler: IAsyncEnumerable<MonitorMetricsOutputEvent> MonitorMetricsAsync(
+//                   IAsyncEnumerable<MonitorMetricsInputEvent> input, CancellationToken ct);
 
 /// Live monitoring with dynamic filtering. The client streams filter-update
 /// messages; the server streams back every metric reading that matches the
 /// current filter. Sending a new filter replaces the previous one.
-@grpcServerStream
-@grpcClientStream
 operation MonitorMetrics {
     input: MonitorMetricsInput
     output: MonitorMetricsOutput
 }
 
 structure MonitorMetricsInput {
+    @protoIndex(1)
+    events: MonitorMetricsInputEvent
+}
+
+@streaming
+union MonitorMetricsInputEvent {
+    @protoIndex(1)
+    filter: MonitorMetricsFilter
+}
+
+structure MonitorMetricsFilter {
     /// Name prefix filter to apply from this point onwards (empty = all).
     @required
     @protoIndex(1)
@@ -126,18 +136,12 @@ structure MonitorMetricsInput {
 }
 
 structure MonitorMetricsOutput {
-    /// Metric name.
-    @required
     @protoIndex(1)
-    name: String
+    events: MonitorMetricsOutputEvent
+}
 
-    /// Numeric value.
-    @required
-    @protoIndex(2)
-    value: Double
-
-    /// Unit string.
-    @required
-    @protoIndex(3)
-    unit: String
+@streaming
+union MonitorMetricsOutputEvent {
+    @protoIndex(1)
+    reading: MetricReading
 }

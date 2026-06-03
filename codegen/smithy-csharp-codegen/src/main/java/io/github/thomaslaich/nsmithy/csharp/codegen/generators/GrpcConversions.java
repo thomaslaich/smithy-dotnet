@@ -42,6 +42,9 @@ public final class GrpcConversions {
    */
   public static String smithyToGrpc(
       SymbolProvider sp, Model model, Shape shape, String src, String grpcNs) {
+    if (shape.getType() == ShapeType.UNION) {
+      return smithyUnionToGrpcMessage(sp, model, shape, src, grpcNs);
+    }
     if (!(shape instanceof StructureShape s)) return src;
     String grpcType = "global::" + grpcNs + "." + CSharpNaming.typeName(s.getId().getName());
     StringBuilder sb =
@@ -133,6 +136,9 @@ public final class GrpcConversions {
    */
   public static String grpcToSmithy(
       SymbolProvider sp, Model model, Shape shape, String src, String grpcNs) {
+    if (shape.getType() == ShapeType.UNION) {
+      return grpcUnionMessageToSmithy(sp, model, shape, src, grpcNs);
+    }
     if (!(shape instanceof StructureShape s)) return src;
     String smithyType =
         io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider.qualified(sp.toSymbol(s));
@@ -478,6 +484,37 @@ public final class GrpcConversions {
     return sb.toString();
   }
 
+  private static String smithyUnionToGrpcMessage(
+      SymbolProvider sp, Model model, Shape target, String expr, String grpcNs) {
+    String grpcType = "global::" + grpcNs + "." + CSharpNaming.typeName(target.getId().getName());
+    StringBuilder sb =
+        new StringBuilder("((System.Func<")
+            .append(grpcType)
+            .append(">)(() => { var message = new ")
+            .append(grpcType)
+            .append("(); switch (")
+            .append(expr)
+            .append(") { ");
+    String smithyUnionType = CSharpSymbolProvider.qualified(sp.toSymbol(target));
+    for (MemberShape member : ShapeSupport.sortedMembers(target)) {
+      Shape memberTarget = model.expectShape(member.getTarget());
+      String prop = CSharpNaming.propertyName(member.getMemberName());
+      sb.append("case ")
+          .append(smithyUnionType)
+          .append(".")
+          .append(prop)
+          .append(" value: message.")
+          .append(prop)
+          .append(" = ")
+          .append(smithyToGrpcValueExpr(sp, model, memberTarget, member, "value.Value", grpcNs))
+          .append("; break; ");
+    }
+    sb.append("default: throw new System.ArgumentOutOfRangeException(nameof(")
+        .append(expr)
+        .append(")); } return message; }))()");
+    return sb.toString();
+  }
+
   private static String grpcOneofToSmithyUnion(
       SymbolProvider sp,
       Model model,
@@ -509,11 +546,43 @@ public final class GrpcConversions {
           .append(".From")
           .append(prop)
           .append("(")
-          .append(grpcToSmithyValueExpr(sp, model, memberTarget, member, src + "." + prop, grpcNs))
+          .append(
+              grpcToSmithyNonNullableValueExpr(
+                  sp, model, memberTarget, member, src + "." + prop, grpcNs))
           .append(")");
       first = false;
     }
     sb.append(", _ => null }");
+    return sb.toString();
+  }
+
+  private static String grpcUnionMessageToSmithy(
+      SymbolProvider sp, Model model, Shape target, String src, String grpcNs) {
+    String grpcType = "global::" + grpcNs + "." + CSharpNaming.typeName(target.getId().getName());
+    String smithyUnionType = CSharpSymbolProvider.qualified(sp.toSymbol(target));
+    StringBuilder sb = new StringBuilder(src).append(".ValueCase switch { ");
+    boolean first = true;
+    for (MemberShape member : ShapeSupport.sortedMembers(target)) {
+      if (!first) sb.append(", ");
+      Shape memberTarget = model.expectShape(member.getTarget());
+      String prop = CSharpNaming.propertyName(member.getMemberName());
+      sb.append(grpcType)
+          .append(".ValueOneofCase.")
+          .append(prop)
+          .append(" => ")
+          .append(smithyUnionType)
+          .append(".From")
+          .append(prop)
+          .append("(")
+          .append(
+              grpcToSmithyNonNullableValueExpr(
+                  sp, model, memberTarget, member, src + "." + prop, grpcNs))
+          .append(")");
+      first = false;
+    }
+    sb.append(", _ => throw new System.ArgumentOutOfRangeException(nameof(")
+        .append(src)
+        .append(")) }");
     return sb.toString();
   }
 

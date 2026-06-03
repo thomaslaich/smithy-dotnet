@@ -1210,11 +1210,29 @@ public final class ClientGenerator implements Runnable {
     return false;
   }
 
+  private ShapeId streamingMessageShape(ShapeId id) {
+    return streamingMemberTarget(id).orElse(id);
+  }
+
+  private Optional<ShapeId> streamingMemberTarget(ShapeId id) {
+    if (isUnit(id)) return Optional.empty();
+    Shape shape = context.model().expectShape(id);
+    if (shape.hasTrait(StreamingTrait.class)) return Optional.of(id);
+    if (shape instanceof StructureShape ss) {
+      return ss.members().stream()
+          .filter(
+              m ->
+                  m.hasTrait(StreamingTrait.class)
+                      || context.model().expectShape(m.getTarget()).hasTrait(StreamingTrait.class))
+          .map(MemberShape::getTarget)
+          .findFirst();
+    }
+    return Optional.empty();
+  }
+
   private StreamingKind streamingKind(OperationShape op) {
-    boolean inputStreaming =
-        op.hasTrait(TraitIds.GRPC_CLIENT_STREAM) || isStreamingShape(op.getInputShape());
-    boolean outputStreaming =
-        op.hasTrait(TraitIds.GRPC_SERVER_STREAM) || isStreamingShape(op.getOutputShape());
+    boolean inputStreaming = isStreamingShape(op.getInputShape());
+    boolean outputStreaming = isStreamingShape(op.getOutputShape());
     if (inputStreaming && outputStreaming) return StreamingKind.BIDI;
     if (inputStreaming) return StreamingKind.CLIENT;
     if (outputStreaming) return StreamingKind.SERVER;
@@ -1323,6 +1341,7 @@ public final class ClientGenerator implements Runnable {
       SymbolProvider sp, Model model, OperationShape op) {
     String operationName = CSharpNaming.typeName(op.getId().getName());
     boolean hasInput = !isUnit(op.getInputShape());
+    ShapeId outputMessageShape = streamingMessageShape(op.getOutputShape());
     String grpcInputType = grpcMessageType(op.getInputShape());
     String grpcInputExpr =
         hasInput
@@ -1354,7 +1373,7 @@ public final class ClientGenerator implements Runnable {
                       GrpcConversions.grpcToSmithy(
                           sp,
                           model,
-                          model.expectShape(op.getOutputShape()),
+                          model.expectShape(outputMessageShape),
                           "item",
                           grpcNamespace())));
         });
@@ -1364,7 +1383,8 @@ public final class ClientGenerator implements Runnable {
       SymbolProvider sp, Model model, OperationShape op) {
     String operationName = CSharpNaming.typeName(op.getId().getName());
     boolean hasOutput = !isUnit(op.getOutputShape());
-    String grpcInputType = grpcMessageType(op.getInputShape());
+    ShapeId inputMessageShape = streamingMessageShape(op.getInputShape());
+    String grpcInputType = grpcMessageType(inputMessageShape);
 
     writer.write("public async $L", operationSignature(sp, op));
     writer.openBlock(
@@ -1385,7 +1405,7 @@ public final class ClientGenerator implements Runnable {
                       GrpcConversions.smithyToGrpc(
                           sp,
                           model,
-                          model.expectShape(op.getInputShape()),
+                          model.expectShape(inputMessageShape),
                           "item",
                           grpcNamespace())));
           writer.write("await call.RequestStream.CompleteAsync().ConfigureAwait(false);");
@@ -1406,9 +1426,11 @@ public final class ClientGenerator implements Runnable {
   private void writeGrpcClientBidiMethod(SymbolProvider sp, Model model, OperationShape op) {
     String operationName = CSharpNaming.typeName(op.getId().getName());
     String helperName = "WriteRequests_" + operationName;
-    String grpcInputType = grpcMessageType(op.getInputShape());
+    ShapeId inputMessageShape = streamingMessageShape(op.getInputShape());
+    ShapeId outputMessageShape = streamingMessageShape(op.getOutputShape());
+    String grpcInputType = grpcMessageType(inputMessageShape);
     String smithyInputType =
-        CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())));
+        CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(inputMessageShape)));
 
     writer.write("public async $L", operationSignatureWithEnumeratorCancellation(sp, op));
     writer.openBlock(
@@ -1432,7 +1454,7 @@ public final class ClientGenerator implements Runnable {
                       GrpcConversions.grpcToSmithy(
                           sp,
                           model,
-                          model.expectShape(op.getOutputShape()),
+                          model.expectShape(outputMessageShape),
                           "item",
                           grpcNamespace())));
           writer.write("await writeTask.ConfigureAwait(false);");
@@ -1461,7 +1483,7 @@ public final class ClientGenerator implements Runnable {
                       GrpcConversions.smithyToGrpc(
                           sp,
                           model,
-                          model.expectShape(op.getInputShape()),
+                          model.expectShape(inputMessageShape),
                           "item",
                           grpcNamespace())));
           writer.write("await requestStream.CompleteAsync().ConfigureAwait(false);");
@@ -1522,12 +1544,13 @@ public final class ClientGenerator implements Runnable {
     String inputType =
         hasInput
             ? CSharpSymbolProvider.qualified(
-                sp.toSymbol(context.model().expectShape(op.getInputShape())))
+                sp.toSymbol(context.model().expectShape(streamingMessageShape(op.getInputShape()))))
             : null;
     String outputType =
         hasOutput
             ? CSharpSymbolProvider.qualified(
-                sp.toSymbol(context.model().expectShape(op.getOutputShape())))
+                sp.toSymbol(
+                    context.model().expectShape(streamingMessageShape(op.getOutputShape()))))
             : null;
     String returnType;
     String params;
