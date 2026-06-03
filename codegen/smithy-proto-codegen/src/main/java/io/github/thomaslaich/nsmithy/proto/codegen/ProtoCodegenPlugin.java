@@ -2,6 +2,8 @@ package io.github.thomaslaich.nsmithy.proto.codegen;
 
 import software.amazon.smithy.build.PluginContext;
 import software.amazon.smithy.build.SmithyBuildPlugin;
+import software.amazon.smithy.model.node.Node;
+import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.utils.SmithyUnstableApi;
@@ -16,13 +18,27 @@ import software.amazon.smithy.utils.SmithyUnstableApi;
  * "plugins": {
  *   "proto-codegen": {
  *     "service": "my.namespace#MyService",
- *     "baseNamespace": "My.Base"
+ *     "baseNamespace": "My.Base",
+ *     "fileOptions": {
+ *       "csharp_namespace": {
+ *         "suffix": "Grpc",
+ *         "case": "pascal"
+ *       },
+ *       "java_package": {
+ *         "prefix": "com.myorg",
+ *         "suffix": "grpc",
+ *         "case": "lower"
+ *       },
+ *       "java_multiple_files": true
+ *     }
  *   }
  * }
  * }</pre>
  *
- * <p>{@code baseNamespace} is optional. When set, the generated {@code option csharp_namespace}
- * will be prefixed with it, matching what {@code smithy-csharp-codegen} produces.
+ * <p>{@code fileOptions} is optional. String, boolean, and number values are emitted as protobuf
+ * file options. Object values derive a namespace-like option value from the Smithy namespace using
+ * optional {@code prefix}, {@code suffix}, and {@code case} members. When a file option object
+ * omits {@code prefix}, the top-level {@code baseNamespace} is used.
  */
 @SmithyUnstableApi
 public final class ProtoCodegenPlugin implements SmithyBuildPlugin {
@@ -51,11 +67,17 @@ public final class ProtoCodegenPlugin implements SmithyBuildPlugin {
 
     ServiceShape service = context.getModel().expectShape(serviceId, ServiceShape.class);
 
-    String csharpNamespace =
-        ProtoNaming.namespaceFor(service.getId().getNamespace(), baseNamespace);
+    ObjectNode fileOptions = settingsFileOptions(settings);
 
     new ProtoGenerator(
-            context.getModel(), service, csharpNamespace, baseNamespace, context.getFileManifest())
+            context.getModel(), service, baseNamespace, fileOptions, context.getFileManifest())
         .run();
+  }
+
+  private static ObjectNode settingsFileOptions(ObjectNode settings) {
+    return settings
+        .getMember("fileOptions")
+        .flatMap(Node::asObjectNode)
+        .orElseGet(Node::objectNode);
   }
 }

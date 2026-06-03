@@ -594,7 +594,7 @@ public final class ClientGenerator implements Runnable {
   private void writeErrorDeserializer(SymbolProvider sp, Model model, OperationShape op) {
     String opName = CSharpNaming.typeName(op.getId().getName());
     String methodName = "Deserialize" + opName + "ErrorAsync";
-    List<ShapeId> errorIds = new ArrayList<>(op.getErrors());
+    List<ShapeId> errorIds = new ArrayList<>(op.getErrors(service));
     errorIds.sort(Comparator.comparing(ShapeId::toString));
 
     writer.write(
@@ -947,7 +947,7 @@ public final class ClientGenerator implements Runnable {
       }
     }
     for (OperationShape op : ops) {
-      for (ShapeId errId : op.getErrors()) {
+      for (ShapeId errId : op.getErrors(service)) {
         if (!emitted.add(errId)) continue;
         StructureShape err = model.expectShape(errId, StructureShape.class);
         List<MemberShape> bodyMembers = responseBodyMembers(err);

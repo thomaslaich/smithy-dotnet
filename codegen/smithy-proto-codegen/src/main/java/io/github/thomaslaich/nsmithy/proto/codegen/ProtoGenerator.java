@@ -4,12 +4,10 @@
  * Conventions:
  *   - Every member of a structure/error/union targeted by the service must carry
  *     an alloy @protoIndex trait (1-based field number).
- *   - The service file is placed at {csharpNamespaceDir}/{ServiceName}.proto and
- *     carries `option csharp_namespace = "{csharpNamespace}.Grpc"`.
+ *   - The service file is placed at {outputNamespaceDir}/{ServiceName}.proto.
  *   - Shapes from other Smithy namespaces are collected into per-namespace
- *     types.proto files placed at {foreignCsharpNsDir}/types.proto, each with
- *     its own `package` and `csharp_namespace`. The service file imports them
- *     and references their types by fully-qualified proto name.
+ *     types.proto files placed at {foreignOutputNamespaceDir}/types.proto. The service file imports
+ *     them and references their types by fully-qualified proto name.
  *   - TIMESTAMP maps to google.protobuf.Timestamp (not int64).
  *   - DOCUMENT maps to google.protobuf.Value.
  *   - @sparse maps use google.protobuf.Value as the value type.
@@ -31,6 +29,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -41,6 +40,8 @@ import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.node.Node;
+import software.amazon.smithy.model.node.ObjectNode;
+import software.amazon.smithy.model.node.StringNode;
 import software.amazon.smithy.model.shapes.EnumShape;
 import software.amazon.smithy.model.shapes.IntEnumShape;
 import software.amazon.smithy.model.shapes.ListShape;
@@ -78,20 +79,20 @@ public final class ProtoGenerator {
 
   private final Model model;
   private final ServiceShape service;
-  private final String csharpNamespace;
   private final String baseNamespace;
+  private final ObjectNode fileOptions;
   private final FileManifest fileManifest;
 
   public ProtoGenerator(
       Model model,
       ServiceShape service,
-      String csharpNamespace,
       String baseNamespace,
+      ObjectNode fileOptions,
       FileManifest fileManifest) {
     this.model = model;
     this.service = service;
-    this.csharpNamespace = csharpNamespace;
     this.baseNamespace = baseNamespace;
+    this.fileOptions = fileOptions;
     this.fileManifest = fileManifest;
   }
 
@@ -123,10 +124,10 @@ public final class ProtoGenerator {
     for (var entry : byNamespace.entrySet()) {
       String ns = entry.getKey();
       if (ns.equals(serviceNs)) continue;
-      String foreignCsharpNs = ProtoNaming.namespaceFor(ns, baseNamespace);
-      String importPath = foreignCsharpNs.replace('.', '/') + "/types.proto";
+      String foreignOutputNamespace = outputNamespaceFor(ns);
+      String importPath = foreignOutputNamespace.replace('.', '/') + "/types.proto";
       nsToImportPath.put(ns, importPath);
-      generateTypesFile(ns, foreignCsharpNs, importPath, entry.getValue());
+      generateTypesFile(ns, importPath, entry.getValue());
     }
 
     // Generate the main service file.
@@ -150,7 +151,8 @@ public final class ProtoGenerator {
 
     String serviceNs = service.getId().getNamespace();
     String serviceName = ProtoNaming.typeName(service.getId().getName());
-    String path = csharpNamespace.replace('.', '/') + "/" + serviceName + ".proto";
+    String outputNamespace = outputNamespaceFor(serviceNs);
+    String path = outputNamespace.replace('.', '/') + "/" + serviceName + ".proto";
 
     // Determine required well-known imports.
     Set<String> imports = new LinkedHashSet<>(nsToImportPath.values());
@@ -167,7 +169,7 @@ public final class ProtoGenerator {
     }
 
     StringBuilder sb = new StringBuilder();
-    writeFileHeader(sb, serviceNs, csharpNamespace + ".Grpc", imports);
+    writeFileHeader(sb, serviceNs, imports);
 
     // Service block.
     sb.append("service ").append(serviceName).append(" {\n");
@@ -197,15 +199,14 @@ public final class ProtoGenerator {
    * Emits a types.proto file for shapes from a non-service Smithy namespace. No gRPC service block
    * — only message/enum definitions.
    */
-  private void generateTypesFile(
-      String smithyNamespace, String csharpNs, String path, List<ShapeId> shapes) {
+  private void generateTypesFile(String smithyNamespace, String path, List<ShapeId> shapes) {
 
     Set<String> imports = new LinkedHashSet<>();
     if (shapesNeedTimestamp(shapes)) imports.add(IMPORT_TIMESTAMP);
     if (shapesNeedValue(shapes)) imports.add(IMPORT_VALUE);
 
     StringBuilder sb = new StringBuilder();
-    writeFileHeader(sb, smithyNamespace, csharpNs, imports);
+    writeFileHeader(sb, smithyNamespace, imports);
 
     List<ShapeId> sorted = shapes.stream().sorted(Comparator.comparing(ShapeId::toString)).toList();
     writeShapes(sb, sorted, smithyNamespace);
@@ -215,17 +216,68 @@ public final class ProtoGenerator {
 
   // ---- common helpers ----------------------------------------------------
 
-  private void writeFileHeader(
-      StringBuilder sb, String protoPackage, String csharpNs, Set<String> imports) {
+  private void writeFileHeader(StringBuilder sb, String protoPackage, Set<String> imports) {
     sb.append("// <auto-generated />\n");
     sb.append("// Generated by smithy-proto-codegen. DO NOT EDIT.\n");
     sb.append("syntax = \"proto3\";\n\n");
     sb.append("package ").append(protoPackage).append(";\n\n");
-    sb.append("option csharp_namespace = \"").append(csharpNs).append("\";\n\n");
+    for (Map.Entry<StringNode, Node> option : fileOptions.getMembers().entrySet()) {
+      sb.append("option ")
+          .append(option.getKey().getValue())
+          .append(" = ")
+          .append(fileOptionValue(option.getValue(), protoPackage))
+          .append(";\n");
+    }
+    if (!fileOptions.getMembers().isEmpty()) sb.append("\n");
     for (String imp : imports) {
       sb.append("import \"").append(imp).append("\";\n");
     }
     if (!imports.isEmpty()) sb.append("\n");
+  }
+
+  private String outputNamespaceFor(String smithyNamespace) {
+    return ProtoNaming.namespaceFor(smithyNamespace, baseNamespace);
+  }
+
+  private String fileOptionValue(Node value, String smithyNamespace) {
+    if (value.isStringNode()) {
+      return quote(value.expectStringNode().getValue());
+    }
+    if (value.isBooleanNode()) {
+      return Boolean.toString(value.expectBooleanNode().getValue());
+    }
+    if (value.isNumberNode()) {
+      return value.expectNumberNode().getValue().toString();
+    }
+    if (value.isObjectNode()) {
+      return quote(derivedNamespace(value.expectObjectNode(), smithyNamespace));
+    }
+    throw new IllegalArgumentException("Unsupported proto file option value: " + value);
+  }
+
+  private String derivedNamespace(ObjectNode config, String smithyNamespace) {
+    String prefix = config.getStringMember("prefix").map(s -> s.getValue()).orElse(baseNamespace);
+    String suffix = config.getStringMember("suffix").map(s -> s.getValue()).orElse("");
+    String namespaceCase = config.getStringMember("case").map(s -> s.getValue()).orElse("preserve");
+    String namespace =
+        switch (namespaceCase) {
+          case "pascal" -> ProtoNaming.namespaceFor(smithyNamespace, prefix);
+          case "lower" -> appendNamespace(prefix, smithyNamespace.toLowerCase(Locale.ROOT));
+          case "preserve" -> appendNamespace(prefix, smithyNamespace);
+          default ->
+              throw new IllegalArgumentException("Unsupported namespace case: " + namespaceCase);
+        };
+    return appendNamespace(namespace, suffix);
+  }
+
+  private static String appendNamespace(String prefix, String suffix) {
+    if (prefix == null || prefix.isBlank()) return suffix;
+    if (suffix == null || suffix.isBlank()) return prefix;
+    return prefix + "." + suffix;
+  }
+
+  private static String quote(String value) {
+    return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
   }
 
   private void writeShapes(StringBuilder sb, List<ShapeId> shapeIds, String localNs) {
@@ -258,7 +310,7 @@ public final class ProtoGenerator {
     for (OperationShape op : operations) {
       collect(op.getInputShape(), result, seen);
       collect(op.getOutputShape(), result, seen);
-      for (ShapeId errId : op.getErrors()) collect(errId, result, seen);
+      for (ShapeId errId : op.getErrors(service)) collect(errId, result, seen);
     }
     return result;
   }

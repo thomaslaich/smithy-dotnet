@@ -231,6 +231,14 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
             writer.WriteString("service", Service);
             if (!string.IsNullOrEmpty(BaseNamespace))
                 writer.WriteString("baseNamespace", BaseNamespace);
+            writer.WritePropertyName("fileOptions");
+            writer.WriteStartObject();
+            writer.WritePropertyName("csharp_namespace");
+            writer.WriteStartObject();
+            writer.WriteString("suffix", "Grpc");
+            writer.WriteString("case", "pascal");
+            writer.WriteEndObject();
+            writer.WriteEndObject();
             writer.WriteEndObject();
         }
 

@@ -31,6 +31,7 @@ build: codegen restore
     dotnet build NSmithy.slnx --configuration Release --no-restore --disable-build-servers ${VERSION:+-p:Version=$VERSION}
 
 test:
+    cd codegen && gradle test
     dotnet test NSmithy.slnx --configuration Release --no-build --disable-build-servers
 
 pack:

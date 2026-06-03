@@ -22,8 +22,8 @@ final class ProtoNaming {
   }
 
   /**
-   * Converts a Smithy namespace to a C# namespace, optionally prefixed by {@code baseNamespace}.
-   * Mirrors {@code CSharpNaming.namespaceFor}.
+   * Converts a Smithy namespace to a PascalCase namespace, optionally prefixed by {@code
+   * baseNamespace}.
    *
    * <p>Example: {@code "example.hello"} → {@code "Example.Hello"}.
    */
