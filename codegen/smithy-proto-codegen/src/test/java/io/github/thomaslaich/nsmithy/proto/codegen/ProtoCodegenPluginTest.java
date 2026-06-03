@@ -458,8 +458,7 @@ final class ProtoCodegenPluginTest {
                         .build())
                 .build());
 
-    String proto =
-        Files.readString(tempDir.resolve("Example/Wellknown/WellKnownService.proto"));
+    String proto = Files.readString(tempDir.resolve("Example/Wellknown/WellKnownService.proto"));
     assertTrue(proto.contains("import \"google/protobuf/empty.proto\";"), proto);
     assertTrue(proto.contains("import \"google/protobuf/timestamp.proto\";"), proto);
     assertTrue(proto.contains("import \"google/protobuf/struct.proto\";"), proto);
@@ -489,7 +488,8 @@ final class ProtoCodegenPluginTest {
                             .fileManifest(manifest)
                             .settings(
                                 ObjectNode.builder()
-                                    .withMember("service", Node.from("example.invalid#InvalidService"))
+                                    .withMember(
+                                        "service", Node.from("example.invalid#InvalidService"))
                                     .build())
                             .build()));
 

@@ -36,7 +36,6 @@ import software.amazon.smithy.model.traits.HttpHeaderTrait;
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait;
 import software.amazon.smithy.model.traits.HttpQueryTrait;
 import software.amazon.smithy.model.traits.HttpTrait;
-import software.amazon.smithy.model.traits.StreamingTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -134,40 +133,9 @@ public final class ServerGenerator implements Runnable {
     BIDI
   }
 
-  private boolean isStreamingShape(ShapeId id) {
-    if (id.equals(ShapeId.from("smithy.api#Unit"))) return false;
-    Shape shape = context.model().expectShape(id);
-    if (shape.hasTrait(StreamingTrait.class)) return true;
-    if (shape instanceof StructureShape ss) {
-      return ss.members().stream()
-          .anyMatch(m -> context.model().expectShape(m.getTarget()).hasTrait(StreamingTrait.class));
-    }
-    return false;
-  }
-
-  private ShapeId streamingMessageShape(ShapeId id) {
-    return streamingMemberTarget(id).orElse(id);
-  }
-
-  private Optional<ShapeId> streamingMemberTarget(ShapeId id) {
-    if (id.equals(ShapeId.from("smithy.api#Unit"))) return Optional.empty();
-    Shape shape = context.model().expectShape(id);
-    if (shape.hasTrait(StreamingTrait.class)) return Optional.of(id);
-    if (shape instanceof StructureShape ss) {
-      return ss.members().stream()
-          .filter(
-              m ->
-                  m.hasTrait(StreamingTrait.class)
-                      || context.model().expectShape(m.getTarget()).hasTrait(StreamingTrait.class))
-          .map(MemberShape::getTarget)
-          .findFirst();
-    }
-    return Optional.empty();
-  }
-
   private StreamingKind streamingKind(OperationShape op) {
-    boolean inputStreaming = isStreamingShape(op.getInputShape());
-    boolean outputStreaming = isStreamingShape(op.getOutputShape());
+    boolean inputStreaming = ShapeSupport.isStreamingShape(context.model(), op.getInputShape());
+    boolean outputStreaming = ShapeSupport.isStreamingShape(context.model(), op.getOutputShape());
     if (inputStreaming && outputStreaming) return StreamingKind.BIDI;
     if (inputStreaming) return StreamingKind.CLIENT;
     if (outputStreaming) return StreamingKind.SERVER;
@@ -216,8 +184,8 @@ public final class ServerGenerator implements Runnable {
 
   private void writeGrpcAdapterUnaryMethod(SymbolProvider sp, OperationShape op) {
     String operationName = CSharpNaming.typeName(op.getId().getName());
-    boolean hasInput = !op.getInputShape().equals(ShapeId.from("smithy.api#Unit"));
-    boolean hasOutput = !op.getOutputShape().equals(ShapeId.from("smithy.api#Unit"));
+    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
+    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String grpcInputType = grpcMessageType(op.getInputShape());
     String grpcOutputType = grpcMessageType(op.getOutputShape());
     writer.write(
@@ -267,8 +235,9 @@ public final class ServerGenerator implements Runnable {
 
   private void writeGrpcAdapterServerStreamingMethod(SymbolProvider sp, OperationShape op) {
     String operationName = CSharpNaming.typeName(op.getId().getName());
-    boolean hasInput = !op.getInputShape().equals(ShapeId.from("smithy.api#Unit"));
-    ShapeId outputMessageShape = streamingMessageShape(op.getOutputShape());
+    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
+    ShapeId outputMessageShape =
+        ShapeSupport.streamingMessageShape(context.model(), op.getOutputShape());
     String grpcInputType = grpcMessageType(op.getInputShape());
     String grpcOutputType = grpcMessageType(outputMessageShape);
     writer.write(
@@ -318,8 +287,9 @@ public final class ServerGenerator implements Runnable {
 
   private void writeGrpcAdapterClientStreamingMethod(SymbolProvider sp, OperationShape op) {
     String operationName = CSharpNaming.typeName(op.getId().getName());
-    boolean hasOutput = !op.getOutputShape().equals(ShapeId.from("smithy.api#Unit"));
-    ShapeId inputMessageShape = streamingMessageShape(op.getInputShape());
+    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
+    ShapeId inputMessageShape =
+        ShapeSupport.streamingMessageShape(context.model(), op.getInputShape());
     String grpcInputType = grpcMessageType(inputMessageShape);
     String grpcOutputType = grpcMessageType(op.getOutputShape());
     String smithyInputType =
@@ -394,8 +364,10 @@ public final class ServerGenerator implements Runnable {
 
   private void writeGrpcAdapterBidiMethod(SymbolProvider sp, OperationShape op) {
     String operationName = CSharpNaming.typeName(op.getId().getName());
-    ShapeId inputMessageShape = streamingMessageShape(op.getInputShape());
-    ShapeId outputMessageShape = streamingMessageShape(op.getOutputShape());
+    ShapeId inputMessageShape =
+        ShapeSupport.streamingMessageShape(context.model(), op.getInputShape());
+    ShapeId outputMessageShape =
+        ShapeSupport.streamingMessageShape(context.model(), op.getOutputShape());
     String grpcInputType = grpcMessageType(inputMessageShape);
     String grpcOutputType = grpcMessageType(outputMessageShape);
     String smithyInputType =
@@ -489,7 +461,7 @@ public final class ServerGenerator implements Runnable {
   }
 
   private String grpcMessageType(ShapeId id) {
-    if (id.equals(ShapeId.from("smithy.api#Unit"))) {
+    if (ShapeSupport.isUnit(id)) {
       return "Google.Protobuf.WellKnownTypes.Empty";
     }
     return "global::" + grpcNamespace() + "." + CSharpNaming.typeName(id.getName());
@@ -541,8 +513,8 @@ public final class ServerGenerator implements Runnable {
     String descriptorName = CSharpNaming.typeName(op.getId().getName());
     String methodName = descriptorName + "Async";
     String opInterface = opHandlerName(op);
-    boolean hasInput = !op.getInputShape().equals(ShapeId.from("smithy.api#Unit"));
-    boolean hasOutput = !op.getOutputShape().equals(ShapeId.from("smithy.api#Unit"));
+    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
+    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String inputType =
         hasInput
             ? CSharpSymbolProvider.qualified(
@@ -692,7 +664,7 @@ public final class ServerGenerator implements Runnable {
           // Bound response writers
           Set<ShapeId> emittedWriters = new HashSet<>();
           for (OperationShape op : ops) {
-            if (op.getOutputShape().equals(ShapeId.from("smithy.api#Unit"))) continue;
+            if (ShapeSupport.isUnit(op.getOutputShape())) continue;
             if (!emittedWriters.add(op.getOutputShape())) continue;
             StructureShape output =
                 context.model().expectShape(op.getOutputShape(), StructureShape.class);
@@ -725,8 +697,8 @@ public final class ServerGenerator implements Runnable {
   }
 
   private void writeOperationBody(SymbolProvider sp, OperationShape op, String contract) {
-    boolean hasInput = !op.getInputShape().equals(ShapeId.from("smithy.api#Unit"));
-    boolean hasOutput = !op.getOutputShape().equals(ShapeId.from("smithy.api#Unit"));
+    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
+    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String descriptorAccess =
         contract + "Descriptor." + CSharpNaming.typeName(op.getId().getName());
 
@@ -960,8 +932,7 @@ public final class ServerGenerator implements Runnable {
   private void writeAspNetCoreBodyProjectionTypes(SymbolProvider sp, List<OperationShape> ops) {
     Set<ShapeId> emitted = new HashSet<>();
     for (OperationShape op : ops) {
-      if (!op.getInputShape().equals(ShapeId.from("smithy.api#Unit"))
-          && emitted.add(op.getInputShape())) {
+      if (!ShapeSupport.isUnit(op.getInputShape()) && emitted.add(op.getInputShape())) {
         StructureShape input =
             context.model().expectShape(op.getInputShape(), StructureShape.class);
         List<MemberShape> bodyMembers =
@@ -973,8 +944,7 @@ public final class ServerGenerator implements Runnable {
           writeBodyProjectionType(sp, input, bodyMembers);
         }
       }
-      if (!op.getOutputShape().equals(ShapeId.from("smithy.api#Unit"))
-          && emitted.add(op.getOutputShape())) {
+      if (!ShapeSupport.isUnit(op.getOutputShape()) && emitted.add(op.getOutputShape())) {
         StructureShape output =
             context.model().expectShape(op.getOutputShape(), StructureShape.class);
         if (ClientGenerator.hasResponseBindings(output)) {
@@ -1359,19 +1329,28 @@ public final class ServerGenerator implements Runnable {
 
   private String serverOperationSignature(SymbolProvider sp, OperationShape op) {
     StreamingKind kind = streamingKind(op);
-    boolean hasInput = !op.getInputShape().equals(ShapeId.from("smithy.api#Unit"));
-    boolean hasOutput = !op.getOutputShape().equals(ShapeId.from("smithy.api#Unit"));
+    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
+    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
     String inputType =
         hasInput
             ? CSharpSymbolProvider.qualified(
-                sp.toSymbol(context.model().expectShape(streamingMessageShape(op.getInputShape()))))
+                sp.toSymbol(
+                    context
+                        .model()
+                        .expectShape(
+                            ShapeSupport.streamingMessageShape(
+                                context.model(), op.getInputShape()))))
             : null;
     String outputType =
         hasOutput
             ? CSharpSymbolProvider.qualified(
                 sp.toSymbol(
-                    context.model().expectShape(streamingMessageShape(op.getOutputShape()))))
+                    context
+                        .model()
+                        .expectShape(
+                            ShapeSupport.streamingMessageShape(
+                                context.model(), op.getOutputShape()))))
             : null;
     String returnType;
     String params;

@@ -15,6 +15,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.Shape;
+import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.model.traits.ClientOptionalTrait;
@@ -28,12 +29,50 @@ import software.amazon.smithy.model.traits.HttpQueryTrait;
 import software.amazon.smithy.model.traits.HttpResponseCodeTrait;
 import software.amazon.smithy.model.traits.RequiredTrait;
 import software.amazon.smithy.model.traits.SparseTrait;
+import software.amazon.smithy.model.traits.StreamingTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
 public final class ShapeSupport {
 
+  private static final ShapeId UNIT = ShapeId.from("smithy.api#Unit");
+
   private ShapeSupport() {}
+
+  public static boolean isUnit(ShapeId id) {
+    return UNIT.equals(id);
+  }
+
+  public static boolean isStreamingShape(Model model, ShapeId id) {
+    if (isUnit(id)) return false;
+    Shape shape = model.expectShape(id);
+    if (shape.hasTrait(StreamingTrait.class)) return true;
+    if (shape instanceof StructureShape ss) {
+      return ss.members().stream()
+          .anyMatch(m -> model.expectShape(m.getTarget()).hasTrait(StreamingTrait.class));
+    }
+    return false;
+  }
+
+  public static ShapeId streamingMessageShape(Model model, ShapeId id) {
+    return streamingMemberTarget(model, id).orElse(id);
+  }
+
+  public static Optional<ShapeId> streamingMemberTarget(Model model, ShapeId id) {
+    if (isUnit(id)) return Optional.empty();
+    Shape shape = model.expectShape(id);
+    if (shape.hasTrait(StreamingTrait.class)) return Optional.of(id);
+    if (shape instanceof StructureShape ss) {
+      return ss.members().stream()
+          .filter(
+              m ->
+                  m.hasTrait(StreamingTrait.class)
+                      || model.expectShape(m.getTarget()).hasTrait(StreamingTrait.class))
+          .map(MemberShape::getTarget)
+          .findFirst();
+    }
+    return Optional.empty();
+  }
 
   public static boolean isRequired(MemberShape member) {
     return member.hasTrait(RequiredTrait.class);
