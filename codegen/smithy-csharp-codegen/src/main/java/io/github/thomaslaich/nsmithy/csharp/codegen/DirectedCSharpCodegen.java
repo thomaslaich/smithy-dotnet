@@ -5,13 +5,11 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ErrorGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.IntEnumGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ListGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.MapGenerator;
-import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ProtoGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ServerGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StringEnumGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StructureGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.UnionGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.codegen.core.directed.CreateContextDirective;
@@ -32,7 +30,7 @@ import software.amazon.smithy.model.shapes.EnumShape;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
 @SmithyUnstableApi
-final class DirectedCSharpClientCodegen
+final class DirectedCSharpCodegen
     implements DirectedCodegen<GenerationContext, CSharpSettings, CSharpIntegration> {
 
   @Override
@@ -73,10 +71,6 @@ final class DirectedCSharpClientCodegen
             dir + "/" + typeName + "Server.g.cs",
             csNamespace,
             writer -> new ServerGenerator(ctx, writer, directive.shape()).run());
-
-    if (ProtocolSupport.isGrpcService(directive.shape())) {
-      new ProtoGenerator(ctx, directive.shape()).run();
-    }
   }
 
   @Override

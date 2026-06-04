@@ -1,10 +1,11 @@
-// C# codegen module. Layout mirrors the upstream Smithy-recommended pattern,
-// e.g. smithy-python/codegen/core: a thin SmithyBuildPlugin entry point that
-// drives a DirectedCodegen implementation through a CodegenDirector, with
-// SymbolProvider, SymbolWriter, WriterDelegator, CodegenContext and a
-// SmithyIntegration SPI hook all wired up.
+// Proto codegen module. Emits proto3 .proto files for Smithy services annotated
+// with alloy's @grpc trait. Registered as the `proto-codegen` SmithyBuildPlugin.
 //
-// Plugin name registered with smithy-build: `csharp-codegen`.
+// Intentionally standalone — no dependency on smithy-csharp-codegen — so the
+// proto plugin can be swapped out independently (e.g. replaced by smithy-translate
+// when it ships a proper SmithyBuildPlugin). It also acts as a test harness for
+// the future NSmithy.Codecs.Protobuf codec: run both plugins against the same
+// Smithy model and verify wire compatibility.
 
 import com.vanniktech.maven.publish.JavaLibrary
 import com.vanniktech.maven.publish.JavadocJar
@@ -31,23 +32,18 @@ tasks.test {
 }
 
 mavenPublishing {
-    // Targets the new Sonatype Central Portal (https://central.sonatype.com).
-    // Requires MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD secrets (user token).
     publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
-    // Sign publications when a PGP key is supplied via env vars
-    // ORG_GRADLE_PROJECT_signingInMemoryKey / signingInMemoryKeyPassword.
-    // Skipped for local `publishToMavenLocal` runs that don't carry secrets.
     if (providers.environmentVariable("ORG_GRADLE_PROJECT_signingInMemoryKey").isPresent) {
         signAllPublications()
     }
 
     configure(JavaLibrary(javadocJar = JavadocJar.Empty(), sourcesJar = true))
 
-    coordinates(group.toString(), "smithy-csharp-codegen", version.toString())
+    coordinates(group.toString(), "smithy-proto-codegen", version.toString())
 
     pom {
-        name.set("NSmithy smithy-csharp-codegen Smithy plugin")
-        description.set("Smithy build plugin that generates C# client/server code for Smithy models. Consumed by NSmithy.MSBuild via the Smithy CLI.")
+        name.set("NSmithy smithy-proto-codegen Smithy plugin")
+        description.set("Smithy build plugin that generates proto3 .proto files for services annotated with alloy's @grpc trait.")
         url.set("https://github.com/thomaslaich/smithy-dotnet")
         inceptionYear.set("2026")
         licenses {

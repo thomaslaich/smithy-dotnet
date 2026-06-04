@@ -12,9 +12,9 @@ import software.amazon.smithy.codegen.core.directed.CodegenDirector;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
 @SmithyUnstableApi
-public final class CSharpClientCodegenPlugin implements SmithyBuildPlugin {
+public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
 
-  private static final Logger LOGGER = Logger.getLogger(CSharpClientCodegenPlugin.class.getName());
+  private static final Logger LOGGER = Logger.getLogger(CSharpCodegenPlugin.class.getName());
 
   @Override
   public String getName() {
@@ -29,7 +29,7 @@ public final class CSharpClientCodegenPlugin implements SmithyBuildPlugin {
     CSharpSettings settings = CSharpSettings.fromNode(context.getSettings());
 
     runner.settings(settings);
-    runner.directedCodegen(new DirectedCSharpClientCodegen());
+    runner.directedCodegen(new DirectedCSharpCodegen());
     runner.fileManifest(context.getFileManifest());
     runner.service(settings.service());
     runner.model(context.getModel());

@@ -24,6 +24,25 @@ public static class SmithyDocsExtensions
     }
 
     /// <summary>
+    /// Serves the bote AsyncAPI generated <c>asyncapi.json</c> as a static file at
+    /// <c>/asyncapi.json</c> and mounts the Scalar interactive reference at <c>/asyncapi</c>.
+    /// Pair with <c>&lt;SmithyGenerateAsyncApi&gt;true&lt;/SmithyGenerateAsyncApi&gt;</c>, which
+    /// generates the document and copies it to <c>wwwroot/asyncapi.json</c>.
+    /// </summary>
+    public static WebApplication MapSmithyAsyncApi(this WebApplication app)
+    {
+        app.UseStaticFiles();
+        app.MapScalarApiReference(
+            "/asyncapi",
+            options =>
+            {
+                options.OpenApiRoutePattern = "/asyncapi.json";
+            }
+        );
+        return app;
+    }
+
+    /// <summary>
     /// Serves the smithy-docgen generated documentation at <c>/docs</c>.
     /// Redirects <c>/docs</c> to <c>/docs/index.html</c> so the Sphinx entry point
     /// is served without requiring an explicit filename in the URL.

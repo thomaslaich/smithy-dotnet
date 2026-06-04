@@ -1,9 +1,9 @@
 <Solution>
-  <Folder Name="/client-grpc/">
-    <Project Path="client-grpc/NSmithy.Examples.Grpc.ClientGrpc.csproj" />
+  <Folder Name="/contracts/">
+    <Project Path="contracts/Library.Contracts.csproj" />
   </Folder>
-  <Folder Name="/client-rest/">
-    <Project Path="client-rest/NSmithy.Examples.Grpc.ClientRest.csproj" />
+  <Folder Name="/client/">
+    <Project Path="client/NSmithy.Examples.Grpc.Client.csproj" />
   </Folder>
   <Folder Name="/server/">
     <Project Path="server/NSmithy.Examples.Grpc.Server.csproj" />
