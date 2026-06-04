@@ -3,6 +3,7 @@ using Example.Hello;
 using Grpc.Net.Client;
 //#else
 using NSmithy.Client;
+
 //#endif
 
 //#if (IsGrpc)
@@ -18,6 +19,7 @@ var client = new HelloServiceClient(
     new HttpClient(),
     new SmithyClientOptions { Endpoint = new Uri(endpoint) }
 );
+
 //#endif
 
 var response = await client.SayHelloAsync(new SayHelloInput("world"));
