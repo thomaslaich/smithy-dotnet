@@ -248,6 +248,16 @@
     <SmithyStampFile Condition="'$(SmithyStampFile)' == ''"
       >$(SmithyBuildOutputPath)NSmithy.Generated.stamp</SmithyStampFile
     >
+    <SmithyMavenLocalRepository
+      Condition="'$(SmithyMavenLocalRepository)' == '' and '$(USERPROFILE)' != ''"
+      >$(USERPROFILE)/.m2/repository</SmithyMavenLocalRepository
+    >
+    <SmithyMavenLocalRepository
+      Condition="'$(SmithyMavenLocalRepository)' == '' and '$(HOME)' != ''"
+      >$(HOME)/.m2/repository</SmithyMavenLocalRepository
+    >
+    <_SmithyCSharpCodegenJar>$(SmithyMavenLocalRepository)/io/github/thomaslaich/nsmithy/smithy-csharp-codegen/$(SmithyCSharpCodegenVersion)/smithy-csharp-codegen-$(SmithyCSharpCodegenVersion).jar</_SmithyCSharpCodegenJar>
+    <_SmithyProtoCodegenJar>$(SmithyMavenLocalRepository)/io/github/thomaslaich/nsmithy/smithy-proto-codegen/$(SmithyCSharpCodegenVersion)/smithy-proto-codegen-$(SmithyCSharpCodegenVersion).jar</_SmithyProtoCodegenJar>
     <SmithyBaseNamespace Condition="'$(SmithyBaseNamespace)' == ''"></SmithyBaseNamespace>
   </PropertyGroup>
 
@@ -257,6 +267,14 @@
       Exclude="$(MSBuildProjectDirectory)/obj/**;$(MSBuildProjectDirectory)/bin/**;$(SmithyBuildOutputPath)**"
     />
     <_SmithyGeneratorInput Include="$(SmithyBuildFile)" Condition="Exists('$(SmithyBuildFile)')" />
+    <_SmithyGeneratorInput
+      Include="$(_SmithyCSharpCodegenJar)"
+      Condition="Exists('$(_SmithyCSharpCodegenJar)')"
+    />
+    <_SmithyGeneratorInput
+      Include="$(_SmithyProtoCodegenJar)"
+      Condition="'$(SmithyGrpc)' == 'true' and Exists('$(_SmithyProtoCodegenJar)')"
+    />
     <Watch Include="$(SmithyBuildFile)" Condition="Exists('$(SmithyBuildFile)')" />
     <Watch Include="@(_SmithyGeneratorInput)" />
   </ItemGroup>

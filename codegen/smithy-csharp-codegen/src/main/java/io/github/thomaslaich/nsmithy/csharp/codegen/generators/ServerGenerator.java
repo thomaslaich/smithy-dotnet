@@ -124,24 +124,6 @@ public final class ServerGenerator implements Runnable {
     }
   }
 
-  // ---------------- streaming detection ----------------
-
-  private enum StreamingKind {
-    NONE,
-    SERVER,
-    CLIENT,
-    BIDI
-  }
-
-  private StreamingKind streamingKind(OperationShape op) {
-    boolean inputStreaming = ShapeSupport.isStreamingShape(context.model(), op.getInputShape());
-    boolean outputStreaming = ShapeSupport.isStreamingShape(context.model(), op.getOutputShape());
-    if (inputStreaming && outputStreaming) return StreamingKind.BIDI;
-    if (inputStreaming) return StreamingKind.CLIENT;
-    if (outputStreaming) return StreamingKind.SERVER;
-    return StreamingKind.NONE;
-  }
-
   // ---------------- gRPC adapter ----------------
 
   private void writeGrpcAdapter(
@@ -174,12 +156,7 @@ public final class ServerGenerator implements Runnable {
   }
 
   private void writeGrpcAdapterMethod(SymbolProvider sp, OperationShape op) {
-    switch (streamingKind(op)) {
-      case SERVER -> writeGrpcAdapterServerStreamingMethod(sp, op);
-      case CLIENT -> writeGrpcAdapterClientStreamingMethod(sp, op);
-      case BIDI -> writeGrpcAdapterBidiMethod(sp, op);
-      default -> writeGrpcAdapterUnaryMethod(sp, op);
-    }
+    writeGrpcAdapterUnaryMethod(sp, op);
   }
 
   private void writeGrpcAdapterUnaryMethod(SymbolProvider sp, OperationShape op) {
@@ -233,211 +210,6 @@ public final class ServerGenerator implements Runnable {
         });
   }
 
-  private void writeGrpcAdapterServerStreamingMethod(SymbolProvider sp, OperationShape op) {
-    String operationName = CSharpNaming.typeName(op.getId().getName());
-    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
-    ShapeId outputMessageShape =
-        ShapeSupport.streamingMessageShape(context.model(), op.getOutputShape());
-    String grpcInputType = grpcMessageType(op.getInputShape());
-    String grpcOutputType = grpcMessageType(outputMessageShape);
-    writer.write(
-        "public override async System.Threading.Tasks.Task $L($L request,"
-            + " global::Grpc.Core.IServerStreamWriter<$L> responseStream, ServerCallContext"
-            + " context)",
-        operationName,
-        grpcInputType,
-        grpcOutputType);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(request);");
-          writer.write("System.ArgumentNullException.ThrowIfNull(responseStream);");
-          writer.write("System.ArgumentNullException.ThrowIfNull(context);");
-          writer.write("");
-          if (hasInput) {
-            writer.write(
-                "var smithyInput = $L;",
-                GrpcConversions.grpcToSmithy(
-                    sp,
-                    context.model(),
-                    context.model().expectShape(op.getInputShape()),
-                    "request",
-                    grpcNamespace()));
-          }
-          String invokeArgs = (hasInput ? "smithyInput, " : "") + "context.CancellationToken";
-          writer.write(
-              "await foreach (var smithyItem in handler.$LAsync($L).ConfigureAwait(false))",
-              operationName,
-              invokeArgs);
-          writer.openBlock(
-              "{",
-              "}",
-              () ->
-                  writer.write(
-                      "await responseStream.WriteAsync($L).ConfigureAwait(false);",
-                      GrpcConversions.smithyToGrpc(
-                          sp,
-                          context.model(),
-                          context.model().expectShape(outputMessageShape),
-                          "smithyItem",
-                          grpcNamespace())));
-        });
-  }
-
-  private void writeGrpcAdapterClientStreamingMethod(SymbolProvider sp, OperationShape op) {
-    String operationName = CSharpNaming.typeName(op.getId().getName());
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
-    ShapeId inputMessageShape =
-        ShapeSupport.streamingMessageShape(context.model(), op.getInputShape());
-    String grpcInputType = grpcMessageType(inputMessageShape);
-    String grpcOutputType = grpcMessageType(op.getOutputShape());
-    String smithyInputType =
-        CSharpSymbolProvider.qualified(sp.toSymbol(context.model().expectShape(inputMessageShape)));
-    String helperName = "ConvertInputStream_" + operationName;
-    writer.write(
-        "public override async System.Threading.Tasks.Task<$L>"
-            + " $L(global::Grpc.Core.IAsyncStreamReader<$L> requestStream, ServerCallContext"
-            + " context)",
-        grpcOutputType,
-        operationName,
-        grpcInputType);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(requestStream);");
-          writer.write("System.ArgumentNullException.ThrowIfNull(context);");
-          writer.write("");
-          writer.write(
-              "var smithyInput = $L(requestStream, context.CancellationToken);", helperName);
-          if (hasOutput) {
-            writer.write(
-                "var smithyOutput = await handler.$LAsync(smithyInput,"
-                    + " context.CancellationToken).ConfigureAwait(false);",
-                operationName);
-            writer.write(
-                "return $L;",
-                GrpcConversions.smithyToGrpc(
-                    sp,
-                    context.model(),
-                    context.model().expectShape(op.getOutputShape()),
-                    "smithyOutput",
-                    grpcNamespace()));
-          } else {
-            writer.write(
-                "await handler.$LAsync(smithyInput,"
-                    + " context.CancellationToken).ConfigureAwait(false);",
-                operationName);
-            writer.write("return new Google.Protobuf.WellKnownTypes.Empty();");
-          }
-        });
-    writer.write("");
-    // Generate stream conversion helper
-    writer.write(
-        "private static async System.Collections.Generic.IAsyncEnumerable<$L>"
-            + " $L(global::Grpc.Core.IAsyncStreamReader<$L> reader,"
-            + " [System.Runtime.CompilerServices.EnumeratorCancellation]"
-            + " System.Threading.CancellationToken cancellationToken)",
-        smithyInputType,
-        helperName,
-        grpcInputType);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("await foreach (var item in reader.ReadAllAsync(cancellationToken))");
-          writer.openBlock(
-              "{",
-              "}",
-              () ->
-                  writer.write(
-                      "yield return $L;",
-                      GrpcConversions.grpcToSmithy(
-                          sp,
-                          context.model(),
-                          context.model().expectShape(inputMessageShape),
-                          "item",
-                          grpcNamespace())));
-        });
-  }
-
-  private void writeGrpcAdapterBidiMethod(SymbolProvider sp, OperationShape op) {
-    String operationName = CSharpNaming.typeName(op.getId().getName());
-    ShapeId inputMessageShape =
-        ShapeSupport.streamingMessageShape(context.model(), op.getInputShape());
-    ShapeId outputMessageShape =
-        ShapeSupport.streamingMessageShape(context.model(), op.getOutputShape());
-    String grpcInputType = grpcMessageType(inputMessageShape);
-    String grpcOutputType = grpcMessageType(outputMessageShape);
-    String smithyInputType =
-        CSharpSymbolProvider.qualified(sp.toSymbol(context.model().expectShape(inputMessageShape)));
-    String helperName = "ConvertInputStream_" + operationName;
-    writer.write(
-        "public override async System.Threading.Tasks.Task"
-            + " $L(global::Grpc.Core.IAsyncStreamReader<$L> requestStream,"
-            + " global::Grpc.Core.IServerStreamWriter<$L> responseStream, ServerCallContext"
-            + " context)",
-        operationName,
-        grpcInputType,
-        grpcOutputType);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(requestStream);");
-          writer.write("System.ArgumentNullException.ThrowIfNull(responseStream);");
-          writer.write("System.ArgumentNullException.ThrowIfNull(context);");
-          writer.write("");
-          writer.write(
-              "var smithyInput = $L(requestStream, context.CancellationToken);", helperName);
-          writer.write(
-              "await foreach (var smithyItem in handler.$LAsync(smithyInput,"
-                  + " context.CancellationToken).ConfigureAwait(false))",
-              operationName);
-          writer.openBlock(
-              "{",
-              "}",
-              () ->
-                  writer.write(
-                      "await responseStream.WriteAsync($L).ConfigureAwait(false);",
-                      GrpcConversions.smithyToGrpc(
-                          sp,
-                          context.model(),
-                          context.model().expectShape(outputMessageShape),
-                          "smithyItem",
-                          grpcNamespace())));
-        });
-    writer.write("");
-    // Generate stream conversion helper
-    writer.write(
-        "private static async System.Collections.Generic.IAsyncEnumerable<$L>"
-            + " $L(global::Grpc.Core.IAsyncStreamReader<$L> reader,"
-            + " [System.Runtime.CompilerServices.EnumeratorCancellation]"
-            + " System.Threading.CancellationToken cancellationToken)",
-        smithyInputType,
-        helperName,
-        grpcInputType);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("await foreach (var item in reader.ReadAllAsync(cancellationToken))");
-          writer.openBlock(
-              "{",
-              "}",
-              () ->
-                  writer.write(
-                      "yield return $L;",
-                      GrpcConversions.grpcToSmithy(
-                          sp,
-                          context.model(),
-                          context.model().expectShape(inputMessageShape),
-                          "item",
-                          grpcNamespace())));
-        });
-  }
-
   private void writeGrpcMapExtensions(String contract, String serviceTypeName) {
     String adapterName = serviceTypeName + "GrpcAdapter";
     writer.write("public static class $LGrpcExtensions", contract);
@@ -475,17 +247,12 @@ public final class ServerGenerator implements Runnable {
 
   private void writeDescriptor(
       SymbolProvider sp, List<OperationShape> ops, String contract, String aggInterface) {
-    // Only unary ops participate in SmithyOperationDescriptor (used for HTTP routing).
-    List<OperationShape> unaryOps =
-        ops.stream()
-            .filter(op -> streamingKind(op) == StreamingKind.NONE)
-            .collect(Collectors.toList());
     writer.write("public static class $LDescriptor", contract);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          for (OperationShape op : unaryOps) {
+          for (OperationShape op : ops) {
             writeOperationDescriptor(sp, op);
             writer.write("");
           }
@@ -501,7 +268,7 @@ public final class ServerGenerator implements Runnable {
                     "[",
                     "]",
                     () -> {
-                      for (OperationShape op : unaryOps) {
+                      for (OperationShape op : ops) {
                         writer.write("$L,", CSharpNaming.typeName(op.getId().getName()));
                       }
                     });
@@ -1328,62 +1095,24 @@ public final class ServerGenerator implements Runnable {
   }
 
   private String serverOperationSignature(SymbolProvider sp, OperationShape op) {
-    StreamingKind kind = streamingKind(op);
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
     String inputType =
         hasInput
             ? CSharpSymbolProvider.qualified(
-                sp.toSymbol(
-                    context
-                        .model()
-                        .expectShape(
-                            ShapeSupport.streamingMessageShape(
-                                context.model(), op.getInputShape()))))
+                sp.toSymbol(context.model().expectShape(op.getInputShape())))
             : null;
     String outputType =
         hasOutput
             ? CSharpSymbolProvider.qualified(
-                sp.toSymbol(
-                    context
-                        .model()
-                        .expectShape(
-                            ShapeSupport.streamingMessageShape(
-                                context.model(), op.getOutputShape()))))
+                sp.toSymbol(context.model().expectShape(op.getOutputShape())))
             : null;
-    String returnType;
-    String params;
-    switch (kind) {
-      case SERVER -> {
-        returnType = "System.Collections.Generic.IAsyncEnumerable<" + outputType + ">";
-        params = hasInput ? inputType + " input, " : "";
-      }
-      case CLIENT -> {
-        returnType =
-            hasOutput
-                ? "System.Threading.Tasks.Task<" + outputType + ">"
-                : "System.Threading.Tasks.Task";
-        params =
-            hasInput
-                ? "System.Collections.Generic.IAsyncEnumerable<" + inputType + "> input, "
-                : "";
-      }
-      case BIDI -> {
-        returnType = "System.Collections.Generic.IAsyncEnumerable<" + outputType + ">";
-        params =
-            hasInput
-                ? "System.Collections.Generic.IAsyncEnumerable<" + inputType + "> input, "
-                : "";
-      }
-      default -> {
-        returnType =
-            hasOutput
-                ? "System.Threading.Tasks.Task<" + outputType + ">"
-                : "System.Threading.Tasks.Task";
-        params = hasInput ? inputType + " input, " : "";
-      }
-    }
+    String returnType =
+        hasOutput
+            ? "System.Threading.Tasks.Task<" + outputType + ">"
+            : "System.Threading.Tasks.Task";
+    String params = hasInput ? inputType + " input, " : "";
     return returnType
         + " "
         + name

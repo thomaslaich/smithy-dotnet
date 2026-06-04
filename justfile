@@ -46,8 +46,6 @@ refresh-examples:
     dotnet clean examples/aws/client/NSmithy.Examples.Aws.Client.csproj --verbosity minimal
     dotnet clean examples/grpc/server/NSmithy.Examples.Grpc.Server.csproj --verbosity minimal
     dotnet clean examples/grpc/client/NSmithy.Examples.Grpc.Client.csproj --verbosity minimal
-    dotnet clean examples/streaming/server/NSmithy.Examples.Streaming.Server.csproj --verbosity minimal
-    dotnet clean examples/streaming/client/NSmithy.Examples.Streaming.Client.csproj --verbosity minimal
     dotnet clean examples/polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj --verbosity minimal
     rm -rf examples/simple-rest-json/contracts/obj
     rm -rf examples/simple-rest-json/server/obj
@@ -59,9 +57,6 @@ refresh-examples:
     rm -rf examples/grpc/contracts/obj
     rm -rf examples/grpc/server/obj
     rm -rf examples/grpc/client/obj
-    rm -rf examples/streaming/contracts/obj
-    rm -rf examples/streaming/server/obj
-    rm -rf examples/streaming/client/obj
     rm -rf examples/polyglot/dotnet/obj
     dotnet restore examples/simple-rest-json/contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj --no-cache --force
     dotnet restore examples/simple-rest-json/server/NSmithy.Examples.SimpleRestJson.Server.csproj --no-cache --force
@@ -73,9 +68,6 @@ refresh-examples:
     dotnet restore examples/grpc/contracts/Library.Contracts.csproj --no-cache --force
     dotnet restore examples/grpc/server/NSmithy.Examples.Grpc.Server.csproj --no-cache --force
     dotnet restore examples/grpc/client/NSmithy.Examples.Grpc.Client.csproj --no-cache --force
-    dotnet restore examples/streaming/contracts/Metrics.Contracts.csproj --no-cache --force
-    dotnet restore examples/streaming/server/NSmithy.Examples.Streaming.Server.csproj --no-cache --force
-    dotnet restore examples/streaming/client/NSmithy.Examples.Streaming.Client.csproj --no-cache --force
     dotnet restore examples/polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj --no-cache --force
     # gRPC examples need two build passes: the first generates the .proto file via the
     # smithy build, the second picks it up via the static <Protobuf> glob and compiles
@@ -83,8 +75,6 @@ refresh-examples:
     # graph-build time, before dynamic items added inside target bodies are visible.)
     dotnet build examples/grpc/server/NSmithy.Examples.Grpc.Server.csproj --verbosity minimal 2>/dev/null || true
     dotnet build examples/grpc/client/NSmithy.Examples.Grpc.Client.csproj --verbosity minimal 2>/dev/null || true
-    dotnet build examples/streaming/server/NSmithy.Examples.Streaming.Server.csproj --verbosity minimal 2>/dev/null || true
-    dotnet build examples/streaming/client/NSmithy.Examples.Streaming.Client.csproj --verbosity minimal 2>/dev/null || true
 
 ci: check-format build test pack
 
