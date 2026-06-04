@@ -7,14 +7,7 @@ public interface IFunctionalCodec<TValue, TPayload>
     TValue Deserialize(TPayload payload);
 }
 
-public interface IFunctionalObjectCodec<TPayload>
-{
-    TPayload Serialize(object? value);
-
-    object? Deserialize(TPayload payload);
-}
-
 public interface IFunctionalCodecFactory<TPayload>
 {
-    IFunctionalObjectCodec<TPayload> FromSchema(FunctionalSchema schema);
+    IFunctionalCodec<object?, TPayload> FromSchema(FunctionalSchema schema);
 }

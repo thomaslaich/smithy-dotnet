@@ -7,165 +7,250 @@ How NSmithy serializes and deserializes Smithy shapes at runtime.
 
 ## Goals
 
-- Protocol implementations must be **shared**: one codec for all clients and
-  servers using the same wire format, not one per service.
-- Codecs must be **swappable** at runtime: a consumer can provide a different
-  JSON implementation without regenerating code.
-- Serialization logic must be **allocation-friendly** on the hot path: avoid
-  boxing, reflection, and closures in the common case.
-- Codecs must be **schema-aware**: they consult Smithy traits (`@xmlName`,
-  `@httpHeader`, `@timestampFormat`, etc.) at the correct layer rather than
-  embedding protocol logic in generated code.
+- Generated model types should be plain C# data types. They do not know about
+  JSON, XML, CBOR, HTTP bindings, or serializer visitors.
+- Schemas are the runtime source of truth for Smithy shape metadata, member
+  access, builders, and traits.
+- Codecs are schema-bound values with simple `Serialize` and `Deserialize`
+  methods.
+- Protocol implementations compose schemas and codecs instead of generating
+  protocol-specific serialization code into every shape.
+- Runtime behavior should be easy to reason about first, while still leaving a
+  direct path to precomputed metadata and generated delegates for performance.
 
 ## Schema
 
-`Schema` (in `NSmithy.Core`) is a runtime description of a Smithy shape. It is
-generated once per shape (as a `static readonly` field on the generated type)
-and shared across all serialize/deserialize calls.
+`Schema` (in `NSmithy.Core`) is a runtime description of a Smithy shape. The
+generator emits one immutable schema graph per service closure. The generated
+POCO type and the schema live separately:
+
+```csharp
+public sealed record GetWidgetInput(string Id, string? Filter);
+
+public static class GetWidgetInputSchemas
+{
+    public static readonly Schema<GetWidgetInput> Schema = ...;
+}
+```
 
 A schema carries:
 
 - `ShapeId Id` — the fully qualified Smithy shape identifier.
-- `ShapeKind Kind` — the shape kind (Structure, Union, List, Map, String, etc.).
-- `IReadOnlyDictionary<ShapeId, Trait> Traits` — traits applied to the shape,
-  keyed by trait id.
-- `IReadOnlyList<Schema> Members` — member schemas in declaration order
-  (structures and unions only).
-- `Schema? Target` — the target shape for a member schema.
-- `Schema? ListMember`, `Schema? MapKey`, `Schema? MapValue` — element/key/value
-  schemas for collection shapes.
+- `ShapeKind Kind` — the shape kind (`Structure`, `Union`, `List`, `Map`,
+  `String`, etc.).
+- `IReadOnlyDictionary<ShapeId, Trait> Traits` — traits applied to the shape.
+- Member metadata for structures and unions, including Smithy member name,
+  target schema, required/default metadata, member traits, and typed accessors.
+- Element/key/value schemas for lists and maps.
+- Builder metadata for aggregate shapes that need staged construction during
+  deserialization.
+- Lazy schema references for recursive shape graphs.
 
-Codecs read traits from schemas rather than from generated code, keeping
-protocol-specific binding decisions out of the generated layer.
+The typed schema is used when generated or handwritten code has the static C#
+type available. The erased `Schema` base is used by protocol code that walks an
+operation generically.
+
+Traits stay on schemas and members. Core schemas can carry any Smithy trait, but
+protocol packages decide which traits they interpret. For example, REST
+protocols interpret `@httpLabel`, `@httpHeader`, `@httpPayload`, and
+`@timestampFormat`; a gRPC protocol can ignore those REST bindings and serialize
+the input into its binary body representation.
+
+Structure schemas expose ordered traversal, name lookup, and a typed member
+visitor:
+
+```csharp
+public interface IStructSchema<T> : IStructSchema
+{
+    void VisitMembers(IMemberVisitor<T> visitor);
+}
+
+public interface IMemberVisitor<TContainer>
+{
+    void Visit<TValue>(IMemberSchema<TContainer, TValue> member);
+}
+```
+
+The ordered member list and `GetMember(name)` support generic protocol and
+deserialization code. The visitor preserves member value types during typed
+serialization, so codecs can read `MemberSchema<Person, int>` without boxing the
+member through `object`.
+
+Recursive schemas use lazy references:
+
+```csharp
+var nodeListSchema = Schemas.List(
+    ShapeId.Parse("example#NodeList"),
+    Schemas.Lazy(() => NodeSchemas.Schema)
+);
+```
 
 ## Codec Interface
 
-`ISmithyCodec` (in `NSmithy.Core.Serde`) is the top-level factory:
+A codec is bound to a schema. After construction, callers only pass values and
+payloads:
 
 ```csharp
-public interface ISmithyCodec
+public interface ICodec<TValue, TPayload>
 {
-    string MediaType { get; }
-    IShapeSerializer CreateSerializer(Stream sink);
-    IShapeDeserializer CreateDeserializer(ReadOnlySequence<byte> source);
+    TPayload Serialize(TValue value);
+    TValue Deserialize(TPayload payload);
+}
+
+public interface ICodecFactory<TPayload>
+{
+    ICodec<object?, TPayload> FromSchema(Schema schema);
 }
 ```
 
-Implementations: `NSmithy.Codecs.Json`, `NSmithy.Codecs.Xml`, `NSmithy.Codecs.Cbor`.
-
-## Serializer
-
-`IShapeSerializer` is a visitor that writes one shape value to the codec's
-output:
+JSON codecs expose the same shape-specific API:
 
 ```csharp
-public interface IShapeSerializer : IDisposable
-{
-    void WriteStruct(Schema schema, ISerializableStruct value);
-    void WriteList<TState>(Schema schema, TState state, int size,
-        Action<TState, IShapeSerializer> consumer);
-    void WriteMap<TState>(Schema schema, TState state, int size,
-        Action<TState, IMapSerializer> consumer);
-    void WriteBoolean(Schema schema, bool value);
-    void WriteString(Schema schema, string value);
-    // ... one method per Smithy scalar type ...
-    void WriteNull(Schema schema);
-    void Flush();
-}
+var personCodec = JsonCodec.FromSchema(PersonSchemas.Schema);
+var json = personCodec.Serialize(person);
+var roundTrip = personCodec.Deserialize(json);
 ```
 
-`WriteList` and `WriteMap` use a generic state parameter to pass loop state
-without allocating a closure.
+The factory overload is intentionally erased because some protocol paths start
+from an erased schema, for example synthetic REST body projections. Generated
+clients and user code should prefer the typed codec where the shape type is
+known.
 
-## Deserializer
+## Codec Responsibilities
 
-`IShapeDeserializer` is the mirror: a visitor that reads one shape value from
-the codec's source. Generated shapes call the appropriate `Read*` method for
-each member.
+Codecs serialize Smithy data shapes into a wire payload for a particular body
+format:
 
-## Generated Shape Contracts
+- `NSmithy.Codecs.Json` handles JSON documents.
+- `NSmithy.Codecs.Xml` handles XML documents.
+- `NSmithy.Codecs.Cbor` handles CBOR documents.
 
-Every generated structure implements two interfaces:
-
-```csharp
-public interface ISerializableShape
-{
-    void Serialize(IShapeSerializer serializer);
-}
-
-public interface IDeserializableShape
-{
-    static abstract TSelf Deserialize(IShapeDeserializer deserializer);
-}
-```
-
-A generated structure calls `WriteStruct`, which calls back into the structure's
-`ISerializableStruct` implementation to write each member. The struct
-implementation calls the appropriate `Write*` method per member, passing the
-member's `Schema` so the codec can apply traits.
-
-## Separation of Concerns
-
-The serialization design keeps three concerns separate:
-
-1. **Shape data** — the generated C# type (`record`, `class`, etc.).
-2. **Shape metadata** — the `Schema` field on the type.
-3. **Wire format** — the codec implementation (`NSmithy.Codecs.*`).
-
-Generated code only calls the codec through the `IShapeSerializer` /
-`IShapeDeserializer` interfaces. It never accesses JSON, XML, or CBOR APIs
-directly. This means the wire format can be swapped at runtime by providing a
-different `ISmithyCodec` without regenerating or recompiling the service model
-types.
+Codecs read schema metadata directly. They know about body-format traits such
+as XML names, timestamp formats, enum values, sparse collections, and document
+nodes. They do not know how to build an HTTP request, expand URI labels, choose
+headers, or map status codes; those are protocol responsibilities.
 
 ## Protocol Binding
 
-`ISmithyCodec` handles the body. Protocols like `alloy#simpleRestJson` need to
-bind additional Smithy traits to the HTTP layer:
+Protocols bind operation schemas to transports. For HTTP REST-style protocols,
+`NSmithy.Protocols.Rest` provides the shared projection:
 
-- `@httpHeader` / `@httpPrefixHeaders` — member goes into a request/response
-  header, not the body.
-- `@httpLabel` — member is bound to a URI template segment.
-- `@httpQuery` / `@httpQueryParams` — member is bound to a query parameter.
-- `@httpPayload` — member is the entire HTTP body.
-- `@httpResponseCode` — member receives the HTTP status code.
+- `@http` selects method, URI template, and success status code.
+- `@httpLabel` expands labels in the URI path, including greedy labels.
+- `@httpQuery` and `@httpQueryParams` write or read query string values.
+- `@httpHeader` and `@httpPrefixHeaders` write or read headers.
+- `@httpPayload` binds a member to the entire HTTP body.
+- `@httpResponseCode` binds a member to the response status code.
+- Unbound members are projected into an anonymous body structure and passed to
+  the body codec.
 
-Protocol implementations in `NSmithy.Protocols.*` compose `IShapeSerializer`
-and `IShapeDeserializer` instances for the body with additional binding for
-these HTTP-level traits. An `InterceptingSerializer` pattern dispatches member
-writes to different sinks (body writer vs. header writer) based on the member's
-schema traits.
+REST JSON and REST XML do not duplicate this binding logic. They supply body
+codec factories to the shared REST protocol projection:
+
+```csharp
+var request = RestProtocol.SerializeRequest(
+    operationSchema,
+    input,
+    JsonCodec.Factory,
+    endpoint
+);
+```
+
+This keeps the layering explicit:
+
+1. **Schema** describes Smithy shapes, members, traits, and construction.
+2. **Codec** converts Smithy data shapes to and from a body payload.
+3. **Protocol** projects operation input/output between schemas, codecs, and
+   transport-specific fields.
+4. **Transport** sends and receives bytes, headers, method, URI, and status.
+
+## HTTP Value Codecs
+
+HTTP labels, query parameters, and headers are not JSON values. REST protocols
+format them with Smithy HTTP binding rules:
+
+- strings and enums are written as their string values.
+- numbers and booleans use Smithy string representations.
+- floats and doubles support `NaN`, `Infinity`, and `-Infinity`.
+- timestamps use the binding's timestamp format, defaulting to `http-date` for
+  headers.
+- `@mediaType` strings are base64 encoded for HTTP binding values.
+- header lists are comma-separated with string quoting and escaping rules.
+
+These conversions are narrow HTTP binding codecs, separate from JSON or XML
+body codecs.
+
+## Generated Code Shape
+
+For each shape, the generator emits:
+
+1. The plain C# type.
+2. A builder type when deserialization needs staged construction.
+3. A static schema description with typed accessors, builder hooks, member
+   schemas, and traits.
+
+For each operation, the generator emits an operation schema that references the
+input, output, and error schemas plus operation traits. Generated clients and
+servers pass operation schemas to protocol implementations.
+
+Model types do not implement serialization interfaces and do not contain
+serializer callbacks. This keeps generated POCOs usable as ordinary domain
+objects and keeps all wire-format behavior in the schema, codec, and protocol
+layers.
+
+## Performance Direction
+
+The schema graph is immutable and generated once. That gives the runtime a
+natural place to precompute:
+
+- member arrays in declaration order.
+- name-to-member lookup tables for deserialization.
+- typed getter and builder setter delegates.
+- typed member visitor dispatch.
+- protocol projections for body/header/query/label partitions.
+- schema-bound codec instances.
+
+The initial design can prioritize clarity, but the model does not require
+reflection or per-call shape analysis. Hot paths can cache schema-bound codecs
+and protocol projections without changing the public API.
 
 ## Alternatives Considered
 
 ### Reflection-based serialization
 
-Scanning properties at runtime via reflection is common in .NET serializers
-(e.g. `System.Text.Json` without source generation).
+Scanning properties at runtime via reflection is common in .NET serializers.
 
 **Rejected because:**
 
-- Reflection loses the Smithy schema: there is no general way to recover
-  `@xmlName`, `@httpHeader`, or `@timestampFormat` from a C# property attribute
-  without coupling the generated code to a specific serializer.
-- Reflection is slower and produces more allocations than a direct visitor call.
-- Source-generated serialization (like `System.Text.Json` source generation)
-  requires annotating generated types with serializer-specific attributes, which
-  couples the model layer to one codec.
+- Reflection loses Smithy member metadata unless generated POCOs are annotated
+  with serializer-specific attributes.
+- Multiple protocols would need competing attributes or converters on the same
+  model type.
+- Reflection makes protocol projections harder to precompute and reason about.
 
-### Source-generated JSON via `System.Text.Json`
+### Per-shape serializer methods
 
-Using `[JsonSerializable]` attributes and source generation would reduce
-runtime overhead and integrate with the .NET JSON ecosystem.
+Generated shapes could contain explicit methods that call a serializer visitor.
 
-**Rejected (for now) because:**
+**Rejected because:**
 
-- `System.Text.Json` does not natively understand Smithy traits. Custom
-  converters would be required for every trait that affects wire representation,
-  recreating the schema-awareness problem.
-- Switching protocols (e.g. from JSON to CBOR) would require different
-  attributes or converters on the same generated types.
-- The visitor pattern keeps the generated shape types protocol-neutral.
+- It couples the POCO to serialization mechanics.
+- Protocol projections still need to intercept or redirect member writes.
+- Deserialization becomes callback-heavy and less direct than constructing from
+  schema builder metadata.
+
+### Protocol locations in core schema metadata
+
+Core member metadata could store a normalized location such as `Body`,
+`Header`, `Query`, or `Label`.
+
+**Rejected because:**
+
+- A single Smithy model can be used by multiple protocols.
+- Location is a protocol interpretation of traits, not an intrinsic property of
+  the shape.
+- Shared traits should remain available to protocols without forcing every
+  protocol to agree on one projection.
 
 ## Related Docs
 

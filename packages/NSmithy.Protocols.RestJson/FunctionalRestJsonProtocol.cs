@@ -49,7 +49,7 @@ public static class FunctionalRestJsonProtocol
         public IFunctionalRestBodyCodec FromSchema(FunctionalSchema schema) =>
             new FunctionalRestJsonBodyCodec(schema);
 
-        IFunctionalObjectCodec<byte[]> IFunctionalCodecFactory<byte[]>.FromSchema(
+        IFunctionalCodec<object?, byte[]> IFunctionalCodecFactory<byte[]>.FromSchema(
             FunctionalSchema schema
         ) => FromSchema(schema);
     }
@@ -57,7 +57,9 @@ public static class FunctionalRestJsonProtocol
     private sealed class FunctionalRestJsonBodyCodec(FunctionalSchema schema)
         : IFunctionalRestBodyCodec
     {
-        private readonly IFunctionalJsonObjectCodec codec = FunctionalJsonCodec.FromSchema(schema);
+        private readonly IFunctionalJsonCodec<object?> codec = FunctionalJsonCodec.FromSchema(
+            schema
+        );
 
         public byte[] Serialize(object? value) => Encoding.UTF8.GetBytes(codec.Serialize(value));
 

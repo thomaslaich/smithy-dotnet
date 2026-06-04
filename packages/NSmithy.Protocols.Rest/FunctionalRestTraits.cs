@@ -22,6 +22,10 @@ public static class FunctionalRestTraits
 
     public static ShapeId HttpResponseCode { get; } = new(SmithyApi, "httpResponseCode");
 
+    public static ShapeId TimestampFormat { get; } = new(SmithyApi, "timestampFormat");
+
+    public static ShapeId MediaType { get; } = new(SmithyApi, "mediaType");
+
     public static Trait HttpTrait(string method, string uri)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(method);
@@ -63,4 +67,16 @@ public static class FunctionalRestTraits
     public static Trait HttpPayloadTrait { get; } = new(HttpPayload);
 
     public static Trait HttpResponseCodeTrait { get; } = new(HttpResponseCode);
+
+    public static Trait TimestampFormatTrait(string format)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(format);
+        return new Trait(TimestampFormat, Document.From(format));
+    }
+
+    public static Trait MediaTypeTrait(string mediaType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(mediaType);
+        return new Trait(MediaType, Document.From(mediaType));
+    }
 }

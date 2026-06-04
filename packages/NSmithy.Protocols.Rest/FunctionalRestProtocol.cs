@@ -17,7 +17,7 @@ public interface IFunctionalRestBodyCodecFactory : IFunctionalCodecFactory<byte[
     new IFunctionalRestBodyCodec FromSchema(FunctionalSchema schema);
 }
 
-public interface IFunctionalRestBodyCodec : IFunctionalObjectCodec<byte[]> { }
+public interface IFunctionalRestBodyCodec : IFunctionalCodec<object?, byte[]> { }
 
 public static class FunctionalRestProtocol
 {
@@ -126,7 +126,10 @@ public static class FunctionalRestProtocol
             {
                 if (labels.TryGetValue(member.Name, out var labelValue))
                 {
-                    member.SetObject(builder, ParseHttpValue(member.Target, labelValue));
+                    member.SetObject(
+                        builder,
+                        ParseHttpValue(member.Target, member.Traits, labelValue)
+                    );
                 }
             }
             else if (
@@ -137,7 +140,10 @@ public static class FunctionalRestProtocol
                     TryGetFirstHeader(request.Headers, headerTrait.Value.AsString(), out var header)
                 )
                 {
-                    member.SetObject(builder, ParseHttpBindingValue(member.Target, header));
+                    member.SetObject(
+                        builder,
+                        ParseHttpBindingValue(member.Target, member.Traits, header)
+                    );
                 }
             }
             else if (
@@ -161,7 +167,10 @@ public static class FunctionalRestProtocol
                 var name = queryTrait.Value.AsString();
                 if (query.TryGetValue(name, out var values) && values.Count > 0)
                 {
-                    member.SetObject(builder, ParseHttpBindingValues(member.Target, values));
+                    member.SetObject(
+                        builder,
+                        ParseHttpBindingValues(member.Target, member.Traits, values)
+                    );
                 }
             }
             else if (member.Traits.ContainsKey(FunctionalRestTraits.HttpQueryParams))
@@ -302,7 +311,10 @@ public static class FunctionalRestProtocol
                     )
                 )
                 {
-                    member.SetObject(builder, ParseHttpBindingValue(member.Target, header));
+                    member.SetObject(
+                        builder,
+                        ParseHttpBindingValue(member.Target, member.Traits, header)
+                    );
                 }
             }
             else if (
@@ -482,11 +494,17 @@ public static class FunctionalRestProtocol
                 );
             }
 
-            requestUri = requestUri.Replace(
-                "{" + member.Name + "}",
-                Uri.EscapeDataString(FormatHttpValue(member.Target, value)),
-                StringComparison.Ordinal
-            );
+            requestUri = requestUri
+                .Replace(
+                    "{" + member.Name + "+}",
+                    EscapeGreedyLabel(member.Target, member.Traits, value),
+                    StringComparison.Ordinal
+                )
+                .Replace(
+                    "{" + member.Name + "}",
+                    Uri.EscapeDataString(FormatHttpValue(member.Target, member.Traits, value)),
+                    StringComparison.Ordinal
+                );
         }
 
         return requestUri;
@@ -505,7 +523,7 @@ public static class FunctionalRestProtocol
             return;
         }
 
-        headers[name] = [FormatHttpHeaderValue(member.Target, value)];
+        headers[name] = [FormatHttpHeaderValue(member, value)];
     }
 
     private static void AddPrefixedHeaders<TInput>(
@@ -600,7 +618,7 @@ public static class FunctionalRestProtocol
         }
 
         var builder = new StringBuilder(requestUri);
-        AppendQueryValue(builder, name, member.Target, value);
+        AppendQueryValue(builder, name, member.Target, member.Traits, value);
         return builder.ToString();
     }
 
@@ -643,6 +661,14 @@ public static class FunctionalRestProtocol
         string name,
         FunctionalSchema schema,
         object value
+    ) => AppendQueryValue(builder, name, schema, traits: null, value);
+
+    private static void AppendQueryValue(
+        StringBuilder builder,
+        string name,
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
+        object value
     )
     {
         if (schema is IFunctionalListSchema listSchema)
@@ -651,46 +677,58 @@ public static class FunctionalRestProtocol
             {
                 if (element is not null)
                 {
-                    AppendPrimitiveQueryValue(builder, name, listSchema.Element, element);
+                    AppendPrimitiveQueryValue(builder, name, listSchema.Element, traits, element);
                 }
             }
 
             return;
         }
 
-        AppendPrimitiveQueryValue(builder, name, schema, value);
+        AppendPrimitiveQueryValue(builder, name, schema, traits, value);
     }
 
     private static void AppendPrimitiveQueryValue(
         StringBuilder builder,
         string name,
         FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
         object value
     )
     {
         builder.Append(builder.ToString().Contains('?') ? '&' : '?');
         builder.Append(Uri.EscapeDataString(name));
         builder.Append('=');
-        builder.Append(Uri.EscapeDataString(FormatHttpValue(schema, value)));
+        builder.Append(Uri.EscapeDataString(FormatHttpValue(schema, traits, value)));
     }
 
-    private static string FormatHttpHeaderValue(FunctionalSchema schema, object value)
+    private static string FormatHttpHeaderValue(IFunctionalMemberSchema member, object value)
     {
-        if (schema is IFunctionalListSchema listSchema)
+        if (member.Target is IFunctionalListSchema listSchema)
         {
             return string.Join(
                 ", ",
                 listSchema
                     .GetElementsObject(value)
                     .Where(element => element is not null)
-                    .Select(element => FormatHttpValue(listSchema.Element, element!))
+                    .Select(element =>
+                        FormatHttpHeaderListValue(listSchema.Element, member.Traits, element!)
+                    )
             );
         }
 
-        return FormatHttpValue(schema, value);
+        return FormatHttpValue(member.Target, member.Traits, value);
     }
 
     private static string FormatHttpValue(FunctionalSchema schema, object value)
+    {
+        return FormatHttpValue(schema, traits: null, value);
+    }
+
+    private static string FormatHttpValue(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
+        object value
+    )
     {
         return schema.Kind switch
         {
@@ -699,58 +737,94 @@ public static class FunctionalRestProtocol
             ShapeKind.Short => ((short)value).ToString(CultureInfo.InvariantCulture),
             ShapeKind.Integer => ((int)value).ToString(CultureInfo.InvariantCulture),
             ShapeKind.Long => ((long)value).ToString(CultureInfo.InvariantCulture),
-            ShapeKind.Float => ((float)value).ToString(CultureInfo.InvariantCulture),
-            ShapeKind.Double => ((double)value).ToString(CultureInfo.InvariantCulture),
+            ShapeKind.Float => FormatFloat((float)value),
+            ShapeKind.Double => FormatDouble((double)value),
             ShapeKind.BigInteger => ((BigInteger)value).ToString(CultureInfo.InvariantCulture),
             ShapeKind.BigDecimal => ((decimal)value).ToString(CultureInfo.InvariantCulture),
-            ShapeKind.String => (string)value,
+            ShapeKind.String => HasTrait(schema, traits, FunctionalRestTraits.MediaType)
+                ? Convert.ToBase64String(Encoding.UTF8.GetBytes((string)value))
+                : (string)value,
             ShapeKind.Blob => Convert.ToBase64String((byte[])value),
-            ShapeKind.Timestamp => ((DateTimeOffset)value).ToString(
-                "O",
-                CultureInfo.InvariantCulture
-            ),
+            ShapeKind.Timestamp => FormatTimestamp(schema, traits, (DateTimeOffset)value),
             _ => throw new NotSupportedException(
                 $"RestJson HTTP binding codec does not support schema kind '{schema.Kind}'."
             ),
         };
     }
 
+    private static string FormatHttpHeaderListValue(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
+        object value
+    )
+    {
+        var formatted = FormatHttpValue(schema, traits, value);
+        if (schema.Kind != ShapeKind.String)
+        {
+            return formatted;
+        }
+
+        return NeedsQuotedHeaderValue(formatted) ? QuoteHeaderValue(formatted) : formatted;
+    }
+
     private static object? ParseHttpBindingValue(FunctionalSchema schema, string value)
+    {
+        return ParseHttpBindingValue(schema, traits: null, value);
+    }
+
+    private static object? ParseHttpBindingValue(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
+        string value
+    )
     {
         if (schema is IFunctionalListSchema listSchema)
         {
             return ParseHttpBindingValues(
                 schema,
-                value.Split(
-                    ',',
-                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
-                )
+                traits,
+                SplitHeaderList(value, listSchema.Element.Kind).ToArray()
             );
         }
 
-        return ParseHttpValue(schema, value);
+        return ParseHttpValue(schema, traits, value);
     }
 
     private static object? ParseHttpBindingValues(
         FunctionalSchema schema,
         IReadOnlyList<string> values
+    ) => ParseHttpBindingValues(schema, traits: null, values);
+
+    private static object? ParseHttpBindingValues(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
+        IReadOnlyList<string> values
     )
     {
         if (schema is not IFunctionalListSchema listSchema)
         {
-            return values.Count > 0 ? ParseHttpValue(schema, values[0]) : null;
+            return values.Count > 0 ? ParseHttpValue(schema, traits, values[0]) : null;
         }
 
         var builder = listSchema.CreateBuilder();
         foreach (var value in values)
         {
-            listSchema.AddObject(builder, ParseHttpValue(listSchema.Element, value));
+            listSchema.AddObject(builder, ParseHttpValue(listSchema.Element, traits, value));
         }
 
         return listSchema.BuildObject(builder);
     }
 
     private static object? ParseHttpValue(FunctionalSchema schema, string value)
+    {
+        return ParseHttpValue(schema, traits: null, value);
+    }
+
+    private static object? ParseHttpValue(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
+        string value
+    )
     {
         return schema.Kind switch
         {
@@ -759,22 +833,292 @@ public static class FunctionalRestProtocol
             ShapeKind.Short => short.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.Integer => int.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.Long => long.Parse(value, CultureInfo.InvariantCulture),
-            ShapeKind.Float => float.Parse(value, CultureInfo.InvariantCulture),
-            ShapeKind.Double => double.Parse(value, CultureInfo.InvariantCulture),
+            ShapeKind.Float => ParseFloat(value),
+            ShapeKind.Double => ParseDouble(value),
             ShapeKind.BigInteger => BigInteger.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.BigDecimal => decimal.Parse(value, CultureInfo.InvariantCulture),
-            ShapeKind.String => value,
+            ShapeKind.String => HasTrait(schema, traits, FunctionalRestTraits.MediaType)
+                ? Encoding.UTF8.GetString(Convert.FromBase64String(value))
+                : value,
             ShapeKind.Blob => Convert.FromBase64String(value),
-            ShapeKind.Timestamp => DateTimeOffset.Parse(
-                value,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind
-            ),
+            ShapeKind.Timestamp => ParseTimestamp(schema, traits, value),
             _ => throw new NotSupportedException(
                 $"RestJson HTTP binding codec does not support schema kind '{schema.Kind}'."
             ),
         };
     }
+
+    private static string EscapeGreedyLabel(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
+        object value
+    )
+    {
+        return string.Join(
+            "/",
+            FormatHttpValue(schema, traits, value).Split('/').Select(Uri.EscapeDataString)
+        );
+    }
+
+    private static string FormatFloat(float value)
+    {
+        if (float.IsNaN(value))
+        {
+            return "NaN";
+        }
+
+        if (float.IsPositiveInfinity(value))
+        {
+            return "Infinity";
+        }
+
+        if (float.IsNegativeInfinity(value))
+        {
+            return "-Infinity";
+        }
+
+        return value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatDouble(double value)
+    {
+        if (double.IsNaN(value))
+        {
+            return "NaN";
+        }
+
+        if (double.IsPositiveInfinity(value))
+        {
+            return "Infinity";
+        }
+
+        if (double.IsNegativeInfinity(value))
+        {
+            return "-Infinity";
+        }
+
+        return value.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static float ParseFloat(string value) =>
+        value switch
+        {
+            "NaN" => float.NaN,
+            "Infinity" => float.PositiveInfinity,
+            "-Infinity" => float.NegativeInfinity,
+            _ => float.Parse(value, CultureInfo.InvariantCulture),
+        };
+
+    private static double ParseDouble(string value) =>
+        value switch
+        {
+            "NaN" => double.NaN,
+            "Infinity" => double.PositiveInfinity,
+            "-Infinity" => double.NegativeInfinity,
+            _ => double.Parse(value, CultureInfo.InvariantCulture),
+        };
+
+    private static string FormatTimestamp(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
+        DateTimeOffset value
+    )
+    {
+        return GetTimestampFormat(schema, traits) switch
+        {
+            "epoch-seconds" => FormatEpochSeconds(value),
+            "http-date" => value
+                .ToUniversalTime()
+                .ToString("ddd, dd MMM yyyy HH':'mm':'ss 'GMT'", CultureInfo.InvariantCulture),
+            "date-time" => value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
+            var format => throw new NotSupportedException(
+                $"Timestamp format '{format}' is not supported."
+            ),
+        };
+    }
+
+    private static DateTimeOffset ParseTimestamp(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
+        string value
+    )
+    {
+        return GetTimestampFormat(schema, traits) switch
+        {
+            "epoch-seconds" => ParseEpochSeconds(value),
+            "http-date" => DateTimeOffset.ParseExact(value, "r", CultureInfo.InvariantCulture),
+            "date-time" => DateTimeOffset.Parse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind
+            ),
+            var format => throw new NotSupportedException(
+                $"Timestamp format '{format}' is not supported."
+            ),
+        };
+    }
+
+    private static string GetTimestampFormat(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits
+    )
+    {
+        if (TryGetTrait(schema, traits, FunctionalRestTraits.TimestampFormat, out var trait))
+        {
+            return trait.Value.AsString();
+        }
+
+        if (HasTrait(schema, traits, FunctionalRestTraits.HttpHeader))
+        {
+            return "http-date";
+        }
+
+        return "date-time";
+    }
+
+    private static DateTimeOffset ParseEpochSeconds(string value)
+    {
+        var seconds = decimal.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture);
+        var wholeSeconds = decimal.Truncate(seconds);
+        var fractionalSeconds = seconds - wholeSeconds;
+        return DateTimeOffset
+            .FromUnixTimeSeconds((long)wholeSeconds)
+            .AddTicks((long)(fractionalSeconds * TimeSpan.TicksPerSecond));
+    }
+
+    private static string FormatEpochSeconds(DateTimeOffset value)
+    {
+        var unixSeconds = value.ToUnixTimeSeconds();
+        var fractionalTicks = value.ToUniversalTime().Ticks % TimeSpan.TicksPerSecond;
+        if (fractionalTicks == 0)
+        {
+            return unixSeconds.ToString(CultureInfo.InvariantCulture);
+        }
+
+        var fractional = ((decimal)fractionalTicks / TimeSpan.TicksPerSecond).ToString(
+            "0.################",
+            CultureInfo.InvariantCulture
+        );
+        return $"{unixSeconds}{fractional[1..]}";
+    }
+
+    private static bool HasTrait(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
+        ShapeId id
+    ) => TryGetTrait(schema, traits, id, out _);
+
+    private static bool TryGetTrait(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
+        ShapeId id,
+        out Trait trait
+    )
+    {
+        if (traits?.TryGetValue(id, out trait) == true)
+        {
+            return true;
+        }
+
+        if (schema.Traits.TryGetValue(id, out trait))
+        {
+            return true;
+        }
+
+        trait = default;
+        return false;
+    }
+
+    private static IEnumerable<string> SplitHeaderList(string value, ShapeKind elementKind)
+    {
+        if (
+            elementKind == ShapeKind.Timestamp
+            && value.Contains("GMT,", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            var segments = value.Split("GMT,", StringSplitOptions.None);
+            for (var i = 0; i < segments.Length; i++)
+            {
+                var segment = segments[i].Trim();
+                if (segment.Length == 0)
+                {
+                    continue;
+                }
+
+                yield return i < segments.Length - 1 ? segment + " GMT" : segment;
+            }
+
+            yield break;
+        }
+
+        if (elementKind == ShapeKind.String && value.Contains('"', StringComparison.Ordinal))
+        {
+            foreach (var part in ParseQuotedHeaderList(value))
+            {
+                yield return part;
+            }
+
+            yield break;
+        }
+
+        foreach (var part in value.Split(','))
+        {
+            yield return part.Trim();
+        }
+    }
+
+    private static IEnumerable<string> ParseQuotedHeaderList(string value)
+    {
+        var builder = new StringBuilder();
+        var inQuotes = false;
+        var escaping = false;
+        foreach (var ch in value)
+        {
+            if (escaping)
+            {
+                builder.Append(ch);
+                escaping = false;
+                continue;
+            }
+
+            if (ch == '\\' && inQuotes)
+            {
+                escaping = true;
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (ch == ',' && !inQuotes)
+            {
+                yield return builder.ToString().Trim();
+                builder.Clear();
+                continue;
+            }
+
+            builder.Append(ch);
+        }
+
+        if (builder.Length > 0 || (value.Length > 0 && value[^1] == ','))
+        {
+            yield return builder.ToString().Trim();
+        }
+    }
+
+    private static bool NeedsQuotedHeaderValue(string value) =>
+        value.Length == 0
+        || value.Any(ch => ch == ',' || ch == '"' || ch == '\\' || char.IsWhiteSpace(ch));
+
+    private static string QuoteHeaderValue(string value) =>
+        "\""
+        + value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("\"", "\\\"", StringComparison.Ordinal)
+        + "\"";
 
     private static string RequireHttpUri<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation
@@ -801,6 +1145,19 @@ public static class FunctionalRestProtocol
         for (var i = 0; i < patternSegments.Length && i < pathSegments.Length; i++)
         {
             var patternSegment = patternSegments[i];
+            if (
+                patternSegment.Length > 3
+                && patternSegment[0] == '{'
+                && patternSegment[^2] == '+'
+                && patternSegment[^1] == '}'
+            )
+            {
+                labels[patternSegment[1..^2]] = Uri.UnescapeDataString(
+                    string.Join("/", pathSegments.Skip(i))
+                );
+                break;
+            }
+
             if (patternSegment.Length > 2 && patternSegment[0] == '{' && patternSegment[^1] == '}')
             {
                 labels[patternSegment[1..^1]] = Uri.UnescapeDataString(pathSegments[i]);
@@ -916,6 +1273,20 @@ public static class FunctionalRestProtocol
     {
         public IReadOnlyList<IFunctionalMemberSchema> Members { get; } =
             members.Select(member => new FunctionalRestBodyMember(member)).ToArray();
+
+        public IFunctionalMemberSchema? GetMember(string name)
+        {
+            ArgumentNullException.ThrowIfNull(name);
+            foreach (var member in Members)
+            {
+                if (string.Equals(member.Name, name, StringComparison.Ordinal))
+                {
+                    return member;
+                }
+            }
+
+            return null;
+        }
 
         public object CreateBuilder() => new Dictionary<string, object?>(StringComparer.Ordinal);
 

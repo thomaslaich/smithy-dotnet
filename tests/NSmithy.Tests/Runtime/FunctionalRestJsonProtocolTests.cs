@@ -336,6 +336,268 @@ public sealed class FunctionalRestJsonProtocolTests
         Assert.Equal("abc", input.ExtraHeaders["Trace"]);
     }
 
+    public sealed record RequestValueParityInput(
+        string Key,
+        DateTimeOffset Modified,
+        IReadOnlyList<string> Tags,
+        string Media,
+        float Ratio,
+        double Score,
+        DateTimeOffset Created
+    );
+
+    public sealed class RequestValueParityInputBuilder
+    {
+        public string? Key { get; set; }
+
+        public DateTimeOffset Modified { get; set; }
+
+        public IReadOnlyList<string>? Tags { get; set; }
+
+        public string? Media { get; set; }
+
+        public float Ratio { get; set; }
+
+        public double Score { get; set; }
+
+        public DateTimeOffset Created { get; set; }
+    }
+
+    public sealed record RequestValueParityOutput;
+
+    public sealed class RequestValueParityOutputBuilder { }
+
+    [Fact]
+    public void FunctionalRestJsonProtocolSerializesRequestHttpValueParity()
+    {
+        var tagListSchema = FunctionalSchemas.List(
+            new ShapeId("example", "ParityTagList"),
+            FunctionalSchemas.String
+        );
+        var inputSchema = FunctionalSchemas
+            .Structure<RequestValueParityInput, RequestValueParityInputBuilder>(
+                new ShapeId("example", "RequestValueParityInput")
+            )
+            .Required(
+                "key",
+                static input => input.Key,
+                static (builder, value) => builder.Key = value,
+                FunctionalSchemas.String,
+                traits: [FunctionalRestTraits.HttpLabelTrait]
+            )
+            .Required(
+                "modified",
+                static input => input.Modified,
+                static (builder, value) => builder.Modified = value,
+                FunctionalSchemas.Timestamp,
+                traits: [FunctionalRestTraits.HttpHeaderTrait("Last-Modified")]
+            )
+            .Required(
+                "tags",
+                static input => input.Tags,
+                static (builder, value) => builder.Tags = value,
+                tagListSchema,
+                traits: [FunctionalRestTraits.HttpHeaderTrait("X-Tags")]
+            )
+            .Required(
+                "media",
+                static input => input.Media,
+                static (builder, value) => builder.Media = value,
+                FunctionalSchemas.String,
+                traits:
+                [
+                    FunctionalRestTraits.HttpQueryTrait("media"),
+                    FunctionalRestTraits.MediaTypeTrait("text/plain"),
+                ]
+            )
+            .Required(
+                "ratio",
+                static input => input.Ratio,
+                static (builder, value) => builder.Ratio = value,
+                FunctionalSchemas.Float,
+                traits: [FunctionalRestTraits.HttpQueryTrait("ratio")]
+            )
+            .Required(
+                "score",
+                static input => input.Score,
+                static (builder, value) => builder.Score = value,
+                FunctionalSchemas.Double,
+                traits: [FunctionalRestTraits.HttpQueryTrait("score")]
+            )
+            .Required(
+                "created",
+                static input => input.Created,
+                static (builder, value) => builder.Created = value,
+                FunctionalSchemas.Timestamp,
+                traits:
+                [
+                    FunctionalRestTraits.HttpQueryTrait("created"),
+                    FunctionalRestTraits.TimestampFormatTrait("epoch-seconds"),
+                ]
+            )
+            .Build(
+                static () => new RequestValueParityInputBuilder(),
+                static builder => new RequestValueParityInput(
+                    builder.Key!,
+                    builder.Modified,
+                    builder.Tags!,
+                    builder.Media!,
+                    builder.Ratio,
+                    builder.Score,
+                    builder.Created
+                )
+            );
+        var outputSchema = FunctionalSchemas
+            .Structure<RequestValueParityOutput, RequestValueParityOutputBuilder>(
+                new ShapeId("example", "RequestValueParityOutput")
+            )
+            .Build(
+                static () => new RequestValueParityOutputBuilder(),
+                static _ => new RequestValueParityOutput()
+            );
+        var operation = FunctionalSchemas.Operation(
+            new ShapeId("example", "RequestValueParity"),
+            inputSchema,
+            outputSchema,
+            traits: [FunctionalRestTraits.HttpTrait("GET", "/objects/{key+}")]
+        );
+        var modified = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var created = modified.AddMilliseconds(250);
+        var input = new RequestValueParityInput(
+            "folder/photo 1.jpg",
+            modified,
+            ["a,b", "plain"],
+            "hello world",
+            float.NaN,
+            double.PositiveInfinity,
+            created
+        );
+
+        var request = FunctionalRestJsonProtocol.SerializeRequest(operation, input);
+
+        Assert.Equal(
+            "/objects/folder/photo%201.jpg?media=aGVsbG8gd29ybGQ%3D&ratio=NaN&score=Infinity&created=1577836800.25",
+            request.RequestUri
+        );
+        Assert.Equal("Wed, 01 Jan 2020 00:00:00 GMT", request.Headers["Last-Modified"].Single());
+        Assert.Equal("\"a,b\", plain", request.Headers["X-Tags"].Single());
+    }
+
+    [Fact]
+    public void FunctionalRestJsonProtocolDeserializesRequestHttpValueParity()
+    {
+        var tagListSchema = FunctionalSchemas.List(
+            new ShapeId("example", "ParityTagList"),
+            FunctionalSchemas.String
+        );
+        var inputSchema = FunctionalSchemas
+            .Structure<RequestValueParityInput, RequestValueParityInputBuilder>(
+                new ShapeId("example", "RequestValueParityInput")
+            )
+            .Required(
+                "key",
+                static input => input.Key,
+                static (builder, value) => builder.Key = value,
+                FunctionalSchemas.String,
+                traits: [FunctionalRestTraits.HttpLabelTrait]
+            )
+            .Required(
+                "modified",
+                static input => input.Modified,
+                static (builder, value) => builder.Modified = value,
+                FunctionalSchemas.Timestamp,
+                traits: [FunctionalRestTraits.HttpHeaderTrait("Last-Modified")]
+            )
+            .Required(
+                "tags",
+                static input => input.Tags,
+                static (builder, value) => builder.Tags = value,
+                tagListSchema,
+                traits: [FunctionalRestTraits.HttpHeaderTrait("X-Tags")]
+            )
+            .Required(
+                "media",
+                static input => input.Media,
+                static (builder, value) => builder.Media = value,
+                FunctionalSchemas.String,
+                traits:
+                [
+                    FunctionalRestTraits.HttpQueryTrait("media"),
+                    FunctionalRestTraits.MediaTypeTrait("text/plain"),
+                ]
+            )
+            .Required(
+                "ratio",
+                static input => input.Ratio,
+                static (builder, value) => builder.Ratio = value,
+                FunctionalSchemas.Float,
+                traits: [FunctionalRestTraits.HttpQueryTrait("ratio")]
+            )
+            .Required(
+                "score",
+                static input => input.Score,
+                static (builder, value) => builder.Score = value,
+                FunctionalSchemas.Double,
+                traits: [FunctionalRestTraits.HttpQueryTrait("score")]
+            )
+            .Required(
+                "created",
+                static input => input.Created,
+                static (builder, value) => builder.Created = value,
+                FunctionalSchemas.Timestamp,
+                traits:
+                [
+                    FunctionalRestTraits.HttpQueryTrait("created"),
+                    FunctionalRestTraits.TimestampFormatTrait("epoch-seconds"),
+                ]
+            )
+            .Build(
+                static () => new RequestValueParityInputBuilder(),
+                static builder => new RequestValueParityInput(
+                    builder.Key!,
+                    builder.Modified,
+                    builder.Tags!,
+                    builder.Media!,
+                    builder.Ratio,
+                    builder.Score,
+                    builder.Created
+                )
+            );
+        var outputSchema = FunctionalSchemas
+            .Structure<RequestValueParityOutput, RequestValueParityOutputBuilder>(
+                new ShapeId("example", "RequestValueParityOutput")
+            )
+            .Build(
+                static () => new RequestValueParityOutputBuilder(),
+                static _ => new RequestValueParityOutput()
+            );
+        var operation = FunctionalSchemas.Operation(
+            new ShapeId("example", "RequestValueParity"),
+            inputSchema,
+            outputSchema,
+            traits: [FunctionalRestTraits.HttpTrait("GET", "/objects/{key+}")]
+        );
+        var request = new SmithyHttpRequest(
+            HttpMethod.Get,
+            "/objects/folder/photo%201.jpg?media=aGVsbG8gd29ybGQ%3D&ratio=NaN&score=Infinity&created=1577836800.25"
+        );
+        request.Headers["Last-Modified"] = ["Wed, 01 Jan 2020 00:00:00 GMT"];
+        request.Headers["X-Tags"] = ["\"a,b\", plain"];
+
+        var input = FunctionalRestJsonProtocol.DeserializeRequest(operation, request);
+
+        Assert.Equal("folder/photo 1.jpg", input.Key);
+        Assert.Equal(new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), input.Modified);
+        Assert.Equal(["a,b", "plain"], input.Tags);
+        Assert.Equal("hello world", input.Media);
+        Assert.True(float.IsNaN(input.Ratio));
+        Assert.Equal(double.PositiveInfinity, input.Score);
+        Assert.Equal(
+            new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero).AddMilliseconds(250),
+            input.Created
+        );
+    }
+
     public sealed record UploadUserAvatarInput(string UserId, string Checksum, byte[] Payload);
 
     public sealed class UploadUserAvatarInputBuilder

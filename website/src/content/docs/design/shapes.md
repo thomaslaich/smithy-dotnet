@@ -62,7 +62,9 @@ public readonly record struct Priority(int Value)
 Structures are generated as C# `record` types with positional constructor
 parameters for required members and optional (nullable) properties for
 non-required members. Required members that carry a default value in the Smithy
-model are generated with that default.
+model are generated with that default. Structures are plain model types: they
+do not implement serialization interfaces and do not contain wire-format
+callbacks.
 
 ```csharp
 // Smithy:
@@ -73,9 +75,19 @@ model are generated with that default.
 public record GetWidgetInput(string Id, string? Filter = null);
 ```
 
-Each generated structure implements `ISerializableShape` and
-`IDeserializableShape` (see [Serialization](/smithy-dotnet/design/serialization/)) and carries a
-`static readonly Schema` field.
+Schema metadata is emitted separately, usually in a generated companion type:
+
+```csharp
+public static class GetWidgetInputSchemas
+{
+    public static readonly Schema<GetWidgetInput> Schema = ...;
+}
+```
+
+The schema contains Smithy member names, traits, target schemas, typed member
+accessors, and builder hooks used by codecs during deserialization. Keeping the
+schema separate lets the POCO remain useful as an ordinary C# type while still
+giving protocols and codecs full Smithy metadata.
 
 ## Errors
 
@@ -112,16 +124,21 @@ public abstract record Shape
 
 This enables exhaustiveness checks via `switch` expressions in C# 8+.
 
+The union schema is emitted separately and describes each union case, its Smithy
+member name, traits, target schema, case matcher, and case constructor.
+
 ## Lists
 
 Smithy `list` shapes are generated as `IReadOnlyList<T>` at usage sites. There
 is no standalone generated class for a list shape; the element type is resolved
-recursively and the list is represented inline.
+recursively and the list is represented inline. The generated schema still
+contains the list shape id, traits, and member target schema.
 
 ## Maps
 
 Smithy `map` shapes are generated as `IReadOnlyDictionary<TKey, TValue>`. Keys
-must be `string` or a string-like type.
+must be `string` or a string-like type. The generated schema contains the map
+shape id, traits, key schema, and value schema.
 
 ## Services
 

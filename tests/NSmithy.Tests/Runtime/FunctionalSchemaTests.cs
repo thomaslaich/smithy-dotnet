@@ -77,6 +77,105 @@ public sealed class FunctionalSchemaTests
         Assert.Equal("address", personSchema.GetMember("address")?.Name);
     }
 
+    public sealed record VisitorInput(string Name, int Age);
+
+    public sealed class VisitorInputBuilder
+    {
+        public string? Name { get; set; }
+
+        public int Age { get; set; }
+    }
+
+    [Fact]
+    public void FunctionalStructSchemaVisitsMembersWithTypedAccessors()
+    {
+        var input = new VisitorInput("Ada", 36);
+        var schema = FunctionalSchemas
+            .Structure<VisitorInput, VisitorInputBuilder>(new ShapeId("example", "VisitorInput"))
+            .Required(
+                "name",
+                static value => value.Name,
+                static (builder, value) => builder.Name = value,
+                FunctionalSchemas.String
+            )
+            .Required(
+                "age",
+                static value => value.Age,
+                static (builder, value) => builder.Age = value,
+                FunctionalSchemas.Integer
+            )
+            .Build(
+                static () => new VisitorInputBuilder(),
+                static builder => new VisitorInput(builder.Name!, builder.Age)
+            );
+        var visitor = new VisitorInputMemberVisitor(input);
+
+        schema.VisitMembers(visitor);
+
+        Assert.Equal(["name:String:Ada", "age:Int32:36"], visitor.Visited);
+    }
+
+    private sealed class VisitorInputMemberVisitor(VisitorInput input)
+        : IFunctionalMemberVisitor<VisitorInput>
+    {
+        public List<string> Visited { get; } = [];
+
+        public void Visit<TValue>(IFunctionalMemberSchema<VisitorInput, TValue> member)
+        {
+            Visited.Add($"{member.Name}:{typeof(TValue).Name}:{member.GetValue(input)}");
+        }
+    }
+
+    public sealed record TreeNode(string Value, IReadOnlyList<TreeNode>? Children = null);
+
+    public sealed class TreeNodeBuilder
+    {
+        public string? Value { get; set; }
+
+        public IReadOnlyList<TreeNode>? Children { get; set; }
+    }
+
+    [Fact]
+    public void FunctionalJsonCodecRoundTripsRecursiveSchemaWithLazyReference()
+    {
+        var input = new TreeNode("root", [new TreeNode("leaf")]);
+        var expectedJson = "{\"value\":\"root\",\"children\":[{\"value\":\"leaf\"}]}";
+
+        FunctionalStructSchema<TreeNode, TreeNodeBuilder>? treeSchema = null;
+        var childrenSchema = FunctionalSchemas.List(
+            new ShapeId("example", "TreeNodeList"),
+            FunctionalSchemas.Lazy(() => treeSchema!)
+        );
+        treeSchema = FunctionalSchemas
+            .Structure<TreeNode, TreeNodeBuilder>(new ShapeId("example", "TreeNode"))
+            .Required(
+                "value",
+                static value => value.Value,
+                static (builder, value) => builder.Value = value,
+                FunctionalSchemas.String
+            )
+            .Optional(
+                "children",
+                static value => value.Children!,
+                static (builder, value) => builder.Children = value,
+                childrenSchema
+            )
+            .Build(
+                static () => new TreeNodeBuilder(),
+                static builder => new TreeNode(builder.Value!, builder.Children)
+            );
+        var codec = FunctionalJsonCodec.FromSchema(treeSchema);
+
+        var json = codec.Serialize(input);
+        var decoded = codec.Deserialize(json);
+
+        Assert.Equal(expectedJson, json);
+        Assert.Equal(input.Value, decoded.Value);
+        Assert.Equal(input.Children!.Single().Value, decoded.Children!.Single().Value);
+        Assert.Null(decoded.Children!.Single().Children);
+        Assert.Equal(new ShapeId("example", "TreeNode"), childrenSchema.Element.Id);
+    }
+
     public sealed record CollectionInput(
         string Name,
         IReadOnlyList<string> Tags,

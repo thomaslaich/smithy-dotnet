@@ -5,18 +5,22 @@ namespace NSmithy.Core.Functional;
 
 public abstract class FunctionalSchema
 {
+    private readonly ShapeId id;
+    private readonly ShapeKind kind;
+    private readonly IReadOnlyDictionary<ShapeId, Trait> traits;
+
     protected FunctionalSchema(ShapeId id, ShapeKind kind, IEnumerable<Trait>? traits = null)
     {
-        Id = id;
-        Kind = kind;
-        Traits = BuildTraits(traits);
+        this.id = id;
+        this.kind = kind;
+        this.traits = BuildTraits(traits);
     }
 
-    public ShapeId Id { get; }
+    public virtual ShapeId Id => id;
 
-    public ShapeKind Kind { get; }
+    public virtual ShapeKind Kind => kind;
 
-    public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
+    public virtual IReadOnlyDictionary<ShapeId, Trait> Traits => traits;
 
     public bool IsMember => Id.IsMember;
 
@@ -46,13 +50,90 @@ public sealed class FunctionalPrimitiveSchema<T> : FunctionalSchema<T>
         : base(id, kind, traits) { }
 }
 
+public sealed class FunctionalLazySchema<T>
+    : FunctionalSchema<T>,
+        IFunctionalStructSchema,
+        IFunctionalStructSchema<T>,
+        IFunctionalListSchema,
+        IFunctionalMapSchema,
+        IFunctionalUnionSchema
+{
+    private readonly Lazy<FunctionalSchema<T>> target;
+
+    internal FunctionalLazySchema(Func<FunctionalSchema<T>> resolve)
+        : base(new ShapeId("smithy.synthetic", "Lazy"), ShapeKind.Document)
+    {
+        ArgumentNullException.ThrowIfNull(resolve);
+        target = new Lazy<FunctionalSchema<T>>(resolve);
+    }
+
+    public FunctionalSchema<T> TargetSchema => target.Value;
+
+    public override ShapeId Id => TargetSchema.Id;
+
+    public override ShapeKind Kind => TargetSchema.Kind;
+
+    public override IReadOnlyDictionary<ShapeId, Trait> Traits => TargetSchema.Traits;
+
+    public IReadOnlyList<IFunctionalMemberSchema> Members =>
+        ((IFunctionalStructSchema)TargetSchema).Members;
+
+    public IFunctionalMemberSchema? GetMember(string name) =>
+        ((IFunctionalStructSchema)TargetSchema).GetMember(name);
+
+    public void VisitMembers(IFunctionalMemberVisitor<T> visitor) =>
+        ((IFunctionalStructSchema<T>)TargetSchema).VisitMembers(visitor);
+
+    public FunctionalSchema Element => ((IFunctionalListSchema)TargetSchema).Element;
+
+    public FunctionalSchema Value => ((IFunctionalMapSchema)TargetSchema).Value;
+
+    public IReadOnlyList<IFunctionalUnionCaseSchema> Cases =>
+        ((IFunctionalUnionSchema)TargetSchema).Cases;
+
+    public object CreateBuilder() => ((IFunctionalStructSchema)TargetSchema).CreateBuilder();
+
+    public object BuildObject(object builder) =>
+        ((IFunctionalStructSchema)TargetSchema).BuildObject(builder);
+
+    public IEnumerable<object?> GetElementsObject(object value) =>
+        ((IFunctionalListSchema)TargetSchema).GetElementsObject(value);
+
+    public void AddObject(object builder, object? value) =>
+        ((IFunctionalListSchema)TargetSchema).AddObject(builder, value);
+
+    public IEnumerable<KeyValuePair<string, object?>> GetEntriesObject(object value) =>
+        ((IFunctionalMapSchema)TargetSchema).GetEntriesObject(value);
+
+    public void AddObject(object builder, string key, object? value) =>
+        ((IFunctionalMapSchema)TargetSchema).AddObject(builder, key, value);
+
+    public IFunctionalUnionCaseSchema? GetCase(string name) =>
+        ((IFunctionalUnionSchema)TargetSchema).GetCase(name);
+
+    public IFunctionalUnionCaseSchema GetCaseObject(object value) =>
+        ((IFunctionalUnionSchema)TargetSchema).GetCaseObject(value);
+}
+
 public interface IFunctionalStructSchema
 {
     IReadOnlyList<IFunctionalMemberSchema> Members { get; }
 
+    IFunctionalMemberSchema? GetMember(string name);
+
     object CreateBuilder();
 
     object BuildObject(object builder);
+}
+
+public interface IFunctionalStructSchema<T> : IFunctionalStructSchema
+{
+    void VisitMembers(IFunctionalMemberVisitor<T> visitor);
+}
+
+public interface IFunctionalMemberVisitor<TContainer>
+{
+    void Visit<TValue>(IFunctionalMemberSchema<TContainer, TValue> member);
 }
 
 public interface IFunctionalListSchema
@@ -118,6 +199,18 @@ public interface IFunctionalMemberSchema
     object? GetObject(object container);
 
     void SetObject(object builder, object? value);
+}
+
+public interface IFunctionalMemberSchema<TContainer> : IFunctionalMemberSchema
+{
+    void Accept(IFunctionalMemberVisitor<TContainer> visitor);
+}
+
+public interface IFunctionalMemberSchema<TContainer, TValue> : IFunctionalMemberSchema<TContainer>
+{
+    FunctionalSchema<TValue> TargetSchema { get; }
+
+    TValue GetValue(TContainer container);
 }
 
 public sealed class FunctionalListSchema<TElement>
@@ -331,7 +424,7 @@ public sealed class FunctionalUnionSchema<T> : FunctionalSchema<T>, IFunctionalU
 
 public sealed class FunctionalMemberSchema<TContainer, TBuilder, TValue>
     : FunctionalSchema<TValue>,
-        IFunctionalMemberSchema
+        IFunctionalMemberSchema<TContainer, TValue>
 {
     private readonly Func<TContainer, TValue> get;
     private readonly Action<TBuilder, TValue> set;
@@ -369,9 +462,11 @@ public sealed class FunctionalMemberSchema<TContainer, TBuilder, TValue>
 
     public FunctionalSchema Target => TargetSchema;
 
-    public TValue Get(TContainer container) => get(container);
+    public TValue GetValue(TContainer container) => get(container);
 
     public void Set(TBuilder builder, TValue value) => set(builder, value);
+
+    public void Accept(IFunctionalMemberVisitor<TContainer> visitor) => visitor.Visit(this);
 
     public object? GetObject(object container) => get((TContainer)container);
 
@@ -380,7 +475,7 @@ public sealed class FunctionalMemberSchema<TContainer, TBuilder, TValue>
 
 public sealed class FunctionalStructSchema<T, TBuilder>
     : FunctionalSchema<T>,
-        IFunctionalStructSchema
+        IFunctionalStructSchema<T>
 {
     private readonly Func<TBuilder> createBuilder;
     private readonly Func<TBuilder, T> build;
@@ -417,6 +512,15 @@ public sealed class FunctionalStructSchema<T, TBuilder>
     public object CreateBuilder() => createBuilder()!;
 
     public object BuildObject(object builder) => build((TBuilder)builder)!;
+
+    public void VisitMembers(IFunctionalMemberVisitor<T> visitor)
+    {
+        ArgumentNullException.ThrowIfNull(visitor);
+        foreach (var member in members)
+        {
+            ((IFunctionalMemberSchema<T>)member).Accept(visitor);
+        }
+    }
 
     private static Dictionary<string, IFunctionalMemberSchema> BuildMembersByName(
         ReadOnlyCollection<IFunctionalMemberSchema> members
@@ -644,6 +748,9 @@ public static class FunctionalSchemas
             new ShapeId(PreludeNamespace, "Document"),
             ShapeKind.Document
         );
+
+    public static FunctionalSchema<T> Lazy<T>(Func<FunctionalSchema<T>> resolve) =>
+        new FunctionalLazySchema<T>(resolve);
 
     public static FunctionalStructSchemaBuilder<T, TBuilder> Structure<T, TBuilder>(
         ShapeId id,

@@ -18,8 +18,8 @@ The two sides of the architecture are:
 - **.NET (runtime + build integration)**: `NSmithy.MSBuild` invokes `smithy build`,
   picks up the generated files, and adds them to the `dotnet build` compilation.
   The `.NET` runtime packages (`NSmithy.Core`, `NSmithy.Protocols.*`, etc.) provide
-  the protocol dispatch, schema metadata, and transport abstractions that the
-  generated code depends on.
+  the protocol dispatch, schema metadata, codec interfaces, and transport
+  abstractions that the generated code depends on.
 
 ## Goals
 
@@ -167,8 +167,9 @@ Generated code depends on .NET packages published to NuGet:
 - `NSmithy.Http` — `IHttpTransport`, `SmithyHttpRequest`, `SmithyHttpResponse`
 - `NSmithy.Client` — `ISmithyClient`, `SmithyClientOptions`
 - `NSmithy.Server` / `NSmithy.Server.AspNetCore` — server framework
-- `NSmithy.Codecs.Json/Xml/Cbor` — codec implementations
-- `NSmithy.Protocols.RestJson/RestXml/RpcV2Cbor` — protocol binding
+- `NSmithy.Codecs.Json/Xml/Cbor` — schema-bound body codec implementations
+- `NSmithy.Protocols.Rest` — shared REST HTTP binding projection
+- `NSmithy.Protocols.RestJson/RestXml/RpcV2Cbor` — protocol adapters
 
 These packages are independent of the Java plugin. A consumer project references
 them in its `.csproj`; the generated `.g.cs` files import the matching types.
@@ -178,10 +179,10 @@ them in its `.csproj`; the generated `.g.cs` files import the matching types.
 Each generated shape file contains:
 
 1. A C# record or class for the shape (see [Shape Mapping](/smithy-dotnet/design/shapes/)).
-2. A `static readonly Schema` field describing the shape's kind, traits, and
-   members at runtime (see [Serialization](/smithy-dotnet/design/serialization/)).
-3. Explicit `ISerializableShape` and `IDeserializableShape` implementations that
-   call through to the runtime codec system.
+2. A generated builder type when deserialization needs staged construction.
+3. A separate static schema description containing the shape kind, traits,
+   member schemas, typed accessors, and builder hooks at runtime (see
+   [Serialization](/smithy-dotnet/design/serialization/)).
 
 Service files additionally contain:
 
@@ -189,6 +190,12 @@ Service files additionally contain:
   and transport at construction time.
 - `I<Service>Handler` / `<Service>Server` — server-side handler interface and
   ASP.NET Core adapter.
+
+Operation metadata is emitted as operation schemas. A generated client method
+passes the operation schema, typed input value, selected protocol adapter, and
+transport options into the runtime protocol pipeline. The protocol adapter
+projects the operation into transport fields and delegates body payloads to a
+schema-bound codec such as `JsonCodec`.
 
 ## Tradeoffs
 

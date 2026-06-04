@@ -8,11 +8,9 @@ namespace NSmithy.Codecs.Json;
 
 public interface IFunctionalJsonCodec<T> : IFunctionalCodec<T, string> { }
 
-public interface IFunctionalJsonObjectCodec : IFunctionalObjectCodec<string> { }
-
 public static class FunctionalJsonCodec
 {
-    public static IFunctionalJsonObjectCodec FromSchema(FunctionalSchema schema)
+    public static IFunctionalJsonCodec<object?> FromSchema(FunctionalSchema schema)
     {
         ArgumentNullException.ThrowIfNull(schema);
         return new CompiledFunctionalJsonObjectCodec(schema);
@@ -27,23 +25,27 @@ public static class FunctionalJsonCodec
     private sealed class CompiledFunctionalJsonCodec<T>(FunctionalSchema<T> schema)
         : IFunctionalJsonCodec<T>
     {
-        private readonly IFunctionalJsonObjectCodec objectCodec = FromSchema(
-            (FunctionalSchema)schema
-        );
-
         public string Serialize(T value)
         {
-            return objectCodec.Serialize(value);
+            using var stream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(stream))
+            {
+                WriteValue(writer, schema, value);
+            }
+
+            return System.Text.Encoding.UTF8.GetString(stream.ToArray());
         }
 
         public T Deserialize(string payload)
         {
-            return (T)objectCodec.Deserialize(payload)!;
+            ArgumentNullException.ThrowIfNull(payload);
+            using var document = JsonDocument.Parse(payload);
+            return (T)ReadValue(schema, document.RootElement)!;
         }
     }
 
     private sealed class CompiledFunctionalJsonObjectCodec(FunctionalSchema schema)
-        : IFunctionalJsonObjectCodec
+        : IFunctionalJsonCodec<object?>
     {
         public string Serialize(object? value)
         {
@@ -135,6 +137,52 @@ public static class FunctionalJsonCodec
                 throw new NotSupportedException(
                     $"JSON codec does not support schema kind '{schema.Kind}'."
                 );
+        }
+    }
+
+    private static void WriteValue<T>(Utf8JsonWriter writer, FunctionalSchema<T> schema, T value)
+    {
+        if (value is null)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        if (schema is IFunctionalStructSchema<T> structSchema)
+        {
+            WriteStructure(writer, structSchema, value);
+            return;
+        }
+
+        WriteValue(writer, (FunctionalSchema)schema, value);
+    }
+
+    private static void WriteStructure<T>(
+        Utf8JsonWriter writer,
+        IFunctionalStructSchema<T> schema,
+        T value
+    )
+    {
+        writer.WriteStartObject();
+        schema.VisitMembers(new JsonWriteMemberVisitor<T>(writer, value));
+        writer.WriteEndObject();
+    }
+
+    private sealed class JsonWriteMemberVisitor<TContainer>(
+        Utf8JsonWriter writer,
+        TContainer container
+    ) : IFunctionalMemberVisitor<TContainer>
+    {
+        public void Visit<TValue>(IFunctionalMemberSchema<TContainer, TValue> member)
+        {
+            var memberValue = member.GetValue(container);
+            if (memberValue is null && !member.IsRequired)
+            {
+                return;
+            }
+
+            writer.WritePropertyName(member.Name);
+            WriteValue(writer, member.TargetSchema, memberValue);
         }
     }
 
