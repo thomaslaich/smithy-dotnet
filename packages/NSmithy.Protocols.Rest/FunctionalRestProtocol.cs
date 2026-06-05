@@ -8,27 +8,31 @@ using NSmithy.Http;
 
 namespace NSmithy.Protocols.Rest;
 
-public interface IFunctionalRestBodyCodecFactory : IFunctionalCodecFactory<byte[]>
+public interface IFunctionalRestBodyFormat
 {
     string ContentType { get; }
 
     string BlobContentType { get; }
 
-    new IFunctionalRestBodyCodec FromSchema(FunctionalSchema schema);
-}
+    byte[] Serialize<T>(FunctionalSchema<T> schema, T value);
 
-public interface IFunctionalRestBodyCodec : IFunctionalCodec<object?, byte[]> { }
+    T Deserialize<T>(FunctionalSchema<T> schema, byte[] content);
+
+    byte[] Serialize<T>(FunctionalStructProjection<T> projection, T value);
+
+    void ReadInto<T>(FunctionalStructProjection<T> projection, byte[] content, object builder);
+}
 
 public static class FunctionalRestProtocol
 {
     public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation,
         TInput input,
-        IFunctionalRestBodyCodecFactory bodyCodecFactory
+        IFunctionalRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
-        ArgumentNullException.ThrowIfNull(bodyCodecFactory);
+        ArgumentNullException.ThrowIfNull(bodyFormat);
 
         var inputSchema = RequireInputStructure(operation);
         var httpTrait = operation.GetTrait(FunctionalRestTraits.Http);
@@ -79,40 +83,35 @@ public static class FunctionalRestProtocol
             }
         }
 
-        var payloadMember = inputSchema.Members.SingleOrDefault(member =>
+        var payloadMember = inputSchema.TypedMembers.SingleOrDefault(member =>
             member.Traits.ContainsKey(FunctionalRestTraits.HttpPayload)
         );
         if (payloadMember is not null)
         {
-            WritePayload(request, payloadMember, input!, bodyCodecFactory);
+            WritePayload(request, payloadMember, input!, bodyFormat);
             return request;
         }
 
-        var bodyMembers = inputSchema.Members.Where(IsDocumentBodyMember).ToArray();
+        var bodyMembers = inputSchema.TypedMembers.Where(IsDocumentBodyMember).ToArray();
         if (bodyMembers.Length == 0)
         {
             return request;
         }
 
-        var bodySchema = new FunctionalRestBodySchema<TInput>(bodyMembers);
-        WriteBody(
-            request,
-            bodySchema,
-            FunctionalRestBodyValue.FromSource(input!),
-            bodyCodecFactory
-        );
+        var bodyProjection = FunctionalSchemas.Project(inputSchema, bodyMembers);
+        WriteProjectionBody(request, bodyProjection, input!, bodyFormat);
         return request;
     }
 
     public static TInput DeserializeRequest<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation,
         SmithyHttpRequest request,
-        IFunctionalRestBodyCodecFactory bodyCodecFactory
+        IFunctionalRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(bodyCodecFactory);
+        ArgumentNullException.ThrowIfNull(bodyFormat);
 
         var inputSchema = RequireInputStructure(operation);
         var builder = inputSchema.CreateBuilder();
@@ -120,7 +119,7 @@ public static class FunctionalRestProtocol
         var query = ParseQuery(request.RequestUri);
         var boundQueryNames = GetBoundQueryNames(inputSchema);
 
-        foreach (var member in inputSchema.Members)
+        foreach (var member in inputSchema.TypedMembers)
         {
             if (member.Traits.ContainsKey(FunctionalRestTraits.HttpLabel))
             {
@@ -179,19 +178,15 @@ public static class FunctionalRestProtocol
             }
             else if (member.Traits.ContainsKey(FunctionalRestTraits.HttpPayload))
             {
-                ReadPayload(builder, member, request.Content, bodyCodecFactory);
+                ReadPayload(builder, member, request.Content, bodyFormat);
             }
         }
 
-        var bodyMembers = inputSchema.Members.Where(IsDocumentBodyMember).ToArray();
+        var bodyMembers = inputSchema.TypedMembers.Where(IsDocumentBodyMember).ToArray();
         if (bodyMembers.Length > 0 && request.Content is { Length: > 0 } content)
         {
-            var bodySchema = new FunctionalRestBodySchema<TInput>(bodyMembers);
-            ApplyBodyValues(
-                builder,
-                bodyMembers,
-                bodyCodecFactory.FromSchema(bodySchema).Deserialize(content)
-            );
+            var bodyProjection = FunctionalSchemas.Project(inputSchema, bodyMembers);
+            bodyFormat.ReadInto(bodyProjection, content, builder);
         }
 
         return (TInput)inputSchema.BuildObject(builder);
@@ -200,11 +195,11 @@ public static class FunctionalRestProtocol
     public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation,
         TOutput output,
-        IFunctionalRestBodyCodecFactory bodyCodecFactory
+        IFunctionalRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
-        ArgumentNullException.ThrowIfNull(bodyCodecFactory);
+        ArgumentNullException.ThrowIfNull(bodyFormat);
 
         var outputSchema = RequireOutputStructure(operation);
         var headers = new Dictionary<string, IReadOnlyList<string>>(
@@ -244,24 +239,24 @@ public static class FunctionalRestProtocol
         }
 
         byte[] content = [];
-        var payloadMember = outputSchema.Members.SingleOrDefault(member =>
+        var payloadMember = outputSchema.TypedMembers.SingleOrDefault(member =>
             member.Traits.ContainsKey(FunctionalRestTraits.HttpPayload)
         );
         if (payloadMember is not null)
         {
-            content = SerializePayload(payloadMember, output!, contentHeaders, bodyCodecFactory);
+            content = SerializePayload(payloadMember, output!, contentHeaders, bodyFormat);
         }
         else
         {
-            var bodyMembers = outputSchema.Members.Where(IsDocumentBodyMember).ToArray();
+            var bodyMembers = outputSchema.TypedMembers.Where(IsDocumentBodyMember).ToArray();
             if (bodyMembers.Length > 0)
             {
-                var bodySchema = new FunctionalRestBodySchema<TOutput>(bodyMembers);
-                content = SerializeBody(
-                    bodySchema,
-                    FunctionalRestBodyValue.FromSource(output!),
+                var bodyProjection = FunctionalSchemas.Project(outputSchema, bodyMembers);
+                content = SerializeProjectionBody(
+                    bodyProjection,
+                    output!,
                     contentHeaders,
-                    bodyCodecFactory
+                    bodyFormat
                 );
             }
         }
@@ -272,17 +267,17 @@ public static class FunctionalRestProtocol
     public static TOutput DeserializeResponse<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation,
         SmithyHttpResponse response,
-        IFunctionalRestBodyCodecFactory bodyCodecFactory
+        IFunctionalRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
         ArgumentNullException.ThrowIfNull(response);
-        ArgumentNullException.ThrowIfNull(bodyCodecFactory);
+        ArgumentNullException.ThrowIfNull(bodyFormat);
 
         var outputSchema = RequireOutputStructure(operation);
         var builder = outputSchema.CreateBuilder();
 
-        foreach (var member in outputSchema.Members)
+        foreach (var member in outputSchema.TypedMembers)
         {
             if (member.Traits.ContainsKey(FunctionalRestTraits.HttpResponseCode))
             {
@@ -335,19 +330,15 @@ public static class FunctionalRestProtocol
             }
             else if (member.Traits.ContainsKey(FunctionalRestTraits.HttpPayload))
             {
-                ReadPayload(builder, member, response.Content, bodyCodecFactory);
+                ReadPayload(builder, member, response.Content, bodyFormat);
             }
         }
 
-        var bodyMembers = outputSchema.Members.Where(IsDocumentBodyMember).ToArray();
+        var bodyMembers = outputSchema.TypedMembers.Where(IsDocumentBodyMember).ToArray();
         if (bodyMembers.Length > 0 && response.Content.Length > 0)
         {
-            var bodySchema = new FunctionalRestBodySchema<TOutput>(bodyMembers);
-            ApplyBodyValues(
-                builder,
-                bodyMembers,
-                bodyCodecFactory.FromSchema(bodySchema).Deserialize(response.Content)
-            );
+            var bodyProjection = FunctionalSchemas.Project(outputSchema, bodyMembers);
+            bodyFormat.ReadInto(bodyProjection, response.Content, builder);
         }
 
         return (TOutput)outputSchema.BuildObject(builder);
@@ -364,32 +355,16 @@ public static class FunctionalRestProtocol
 
     private static void WritePayload<TInput>(
         SmithyHttpRequest request,
-        IFunctionalMemberSchema member,
+        IFunctionalMemberSchema<TInput> member,
         TInput input,
-        IFunctionalRestBodyCodecFactory bodyCodecFactory
-    )
-    {
-        var value = member.GetObject(input!);
-        if (value is null)
-        {
-            return;
-        }
+        IFunctionalRestBodyFormat bodyFormat
+    ) => member.Accept(new WritePayloadVisitor<TInput>(request, input, bodyFormat));
 
-        if (member.Target.Kind == ShapeKind.Blob)
-        {
-            request.Content = (byte[])value;
-            request.ContentType = bodyCodecFactory.BlobContentType;
-            return;
-        }
-
-        WriteBody(request, member.Target, value, bodyCodecFactory);
-    }
-
-    private static void ReadPayload(
+    private static void ReadPayload<TContainer>(
         object builder,
-        IFunctionalMemberSchema member,
+        IFunctionalMemberSchema<TContainer> member,
         byte[]? content,
-        IFunctionalRestBodyCodecFactory bodyCodecFactory
+        IFunctionalRestBodyFormat bodyFormat
     )
     {
         if (content is null or { Length: 0 })
@@ -397,78 +372,133 @@ public static class FunctionalRestProtocol
             return;
         }
 
-        if (member.Target.Kind == ShapeKind.Blob)
-        {
-            member.SetObject(builder, content);
-            return;
-        }
-
-        member.SetObject(builder, bodyCodecFactory.FromSchema(member.Target).Deserialize(content));
+        member.Accept(new ReadPayloadVisitor<TContainer>(builder, content, bodyFormat));
     }
 
-    private static byte[] SerializePayload(
-        IFunctionalMemberSchema member,
-        object output,
+    private static byte[] SerializePayload<TOutput>(
+        IFunctionalMemberSchema<TOutput> member,
+        TOutput output,
         Dictionary<string, IReadOnlyList<string>> contentHeaders,
-        IFunctionalRestBodyCodecFactory bodyCodecFactory
+        IFunctionalRestBodyFormat bodyFormat
+    ) => new SerializePayloadVisitor<TOutput>(output, contentHeaders, bodyFormat).Serialize(member);
+
+    private static byte[] SerializeBody<T>(
+        FunctionalSchema<T> schema,
+        T value,
+        Dictionary<string, IReadOnlyList<string>> contentHeaders,
+        IFunctionalRestBodyFormat bodyFormat
     )
     {
-        var value = member.GetObject(output);
-        if (value is null)
-        {
-            return [];
-        }
-
-        if (member.Target.Kind == ShapeKind.Blob)
-        {
-            contentHeaders["Content-Type"] = [bodyCodecFactory.BlobContentType];
-            return (byte[])value;
-        }
-
-        return SerializeBody(member.Target, value, contentHeaders, bodyCodecFactory);
+        contentHeaders["Content-Type"] = [bodyFormat.ContentType];
+        return bodyFormat.Serialize(schema, value);
     }
 
-    private static byte[] SerializeBody(
-        FunctionalSchema schema,
-        object? value,
+    private static byte[] SerializeProjectionBody<T>(
+        FunctionalStructProjection<T> projection,
+        T value,
         Dictionary<string, IReadOnlyList<string>> contentHeaders,
-        IFunctionalRestBodyCodecFactory bodyCodecFactory
+        IFunctionalRestBodyFormat bodyFormat
     )
     {
-        contentHeaders["Content-Type"] = [bodyCodecFactory.ContentType];
-        return bodyCodecFactory.FromSchema(schema).Serialize(value);
+        contentHeaders["Content-Type"] = [bodyFormat.ContentType];
+        return bodyFormat.Serialize(projection, value);
     }
 
-    private static void WriteBody(
+    private static void WriteBody<T>(
         SmithyHttpRequest request,
-        FunctionalSchema schema,
-        object? value,
-        IFunctionalRestBodyCodecFactory bodyCodecFactory
+        FunctionalSchema<T> schema,
+        T value,
+        IFunctionalRestBodyFormat bodyFormat
     )
     {
-        request.Content = bodyCodecFactory.FromSchema(schema).Serialize(value);
-        request.ContentType = bodyCodecFactory.ContentType;
+        request.Content = bodyFormat.Serialize(schema, value);
+        request.ContentType = bodyFormat.ContentType;
     }
 
-    private static void ApplyBodyValues(
-        object builder,
-        IReadOnlyList<IFunctionalMemberSchema> members,
-        object? value
+    private static void WriteProjectionBody<T>(
+        SmithyHttpRequest request,
+        FunctionalStructProjection<T> projection,
+        T value,
+        IFunctionalRestBodyFormat bodyFormat
     )
     {
-        if (value is not FunctionalRestBodyValue bodyValue)
+        request.Content = bodyFormat.Serialize(projection, value);
+        request.ContentType = bodyFormat.ContentType;
+    }
+
+    private sealed class WritePayloadVisitor<TInput>(
+        SmithyHttpRequest request,
+        TInput input,
+        IFunctionalRestBodyFormat bodyFormat
+    ) : IFunctionalMemberVisitor<TInput>
+    {
+        public void Visit<TValue>(IFunctionalMemberSchema<TInput, TValue> member)
         {
-            throw new InvalidOperationException(
-                $"Expected a REST body projection but found '{value?.GetType().FullName ?? "null"}'."
-            );
+            var value = member.GetValue(input);
+            if (value is null)
+            {
+                return;
+            }
+
+            if (member.TargetSchema.Kind == ShapeKind.Blob)
+            {
+                request.Content = (byte[])(object)value;
+                request.ContentType = bodyFormat.BlobContentType;
+                return;
+            }
+
+            WriteBody(request, member.TargetSchema, value, bodyFormat);
+        }
+    }
+
+    private sealed class ReadPayloadVisitor<TContainer>(
+        object builder,
+        byte[] content,
+        IFunctionalRestBodyFormat bodyFormat
+    ) : IFunctionalMemberVisitor<TContainer>
+    {
+        public void Visit<TValue>(IFunctionalMemberSchema<TContainer, TValue> member)
+        {
+            if (member.TargetSchema.Kind == ShapeKind.Blob)
+            {
+                member.SetObject(builder, content);
+                return;
+            }
+
+            member.SetObject(builder, bodyFormat.Deserialize(member.TargetSchema, content));
+        }
+    }
+
+    private sealed class SerializePayloadVisitor<TOutput>(
+        TOutput output,
+        Dictionary<string, IReadOnlyList<string>> contentHeaders,
+        IFunctionalRestBodyFormat bodyFormat
+    ) : IFunctionalMemberVisitor<TOutput>
+    {
+        private byte[] content = [];
+
+        public byte[] Serialize(IFunctionalMemberSchema<TOutput> member)
+        {
+            member.Accept(this);
+            return content;
         }
 
-        foreach (var member in members)
+        public void Visit<TValue>(IFunctionalMemberSchema<TOutput, TValue> member)
         {
-            if (bodyValue.Values.TryGetValue(member.Name, out var memberValue))
+            var value = member.GetValue(output);
+            if (value is null)
             {
-                member.SetObject(builder, memberValue);
+                return;
             }
+
+            if (member.TargetSchema.Kind == ShapeKind.Blob)
+            {
+                contentHeaders["Content-Type"] = [bodyFormat.BlobContentType];
+                content = (byte[])(object)value;
+                return;
+            }
+
+            content = SerializeBody(member.TargetSchema, value, contentHeaders, bodyFormat);
         }
     }
 
@@ -1242,106 +1272,25 @@ public static class FunctionalRestProtocol
         return names;
     }
 
-    private static IFunctionalStructSchema RequireInputStructure<TInput, TOutput>(
+    private static IFunctionalStructSchema<TInput> RequireInputStructure<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation
     )
     {
-        return operation.Input is IFunctionalStructSchema inputSchema
+        return operation.Input is IFunctionalStructSchema<TInput> inputSchema
             ? inputSchema
             : throw new InvalidOperationException(
                 $"Operation schema '{operation.Id}' input must be a structure schema."
             );
     }
 
-    private static IFunctionalStructSchema RequireOutputStructure<TInput, TOutput>(
+    private static IFunctionalStructSchema<TOutput> RequireOutputStructure<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation
     )
     {
-        return operation.Output is IFunctionalStructSchema outputSchema
+        return operation.Output is IFunctionalStructSchema<TOutput> outputSchema
             ? outputSchema
             : throw new InvalidOperationException(
                 $"Operation schema '{operation.Id}' output must be a structure schema."
             );
-    }
-
-    private sealed class FunctionalRestBodySchema<T>(IReadOnlyList<IFunctionalMemberSchema> members)
-        : FunctionalSchema<FunctionalRestBodyValue>(
-            new ShapeId("smithy.synthetic", $"RestBody{typeof(T).Name}"),
-            ShapeKind.Structure
-        ),
-            IFunctionalStructSchema
-    {
-        public IReadOnlyList<IFunctionalMemberSchema> Members { get; } =
-            members.Select(member => new FunctionalRestBodyMember(member)).ToArray();
-
-        public IFunctionalMemberSchema? GetMember(string name)
-        {
-            ArgumentNullException.ThrowIfNull(name);
-            foreach (var member in Members)
-            {
-                if (string.Equals(member.Name, name, StringComparison.Ordinal))
-                {
-                    return member;
-                }
-            }
-
-            return null;
-        }
-
-        public object CreateBuilder() => new Dictionary<string, object?>(StringComparer.Ordinal);
-
-        public object BuildObject(object builder) =>
-            FunctionalRestBodyValue.FromValues((Dictionary<string, object?>)builder);
-    }
-
-    private sealed class FunctionalRestBodyMember(IFunctionalMemberSchema source)
-        : IFunctionalMemberSchema
-    {
-        public string Name => source.Name;
-
-        public IReadOnlyDictionary<ShapeId, Trait> Traits => source.Traits;
-
-        public FunctionalSchema Target => source.Target;
-
-        public bool IsRequired => source.IsRequired;
-
-        public object? GetObject(object container)
-        {
-            var value = (FunctionalRestBodyValue)container;
-            if (value.Source is not null)
-            {
-                return source.GetObject(value.Source);
-            }
-
-            return value.Values.TryGetValue(Name, out var memberValue) ? memberValue : null;
-        }
-
-        public void SetObject(object builder, object? value) =>
-            ((Dictionary<string, object?>)builder)[Name] = value;
-    }
-
-    private sealed class FunctionalRestBodyValue
-    {
-        private FunctionalRestBodyValue(object? source, IReadOnlyDictionary<string, object?> values)
-        {
-            Source = source;
-            Values = values;
-        }
-
-        public object? Source { get; }
-
-        public IReadOnlyDictionary<string, object?> Values { get; }
-
-        public static FunctionalRestBodyValue FromSource(object source)
-        {
-            ArgumentNullException.ThrowIfNull(source);
-            return new FunctionalRestBodyValue(
-                source,
-                new Dictionary<string, object?>(StringComparer.Ordinal)
-            );
-        }
-
-        public static FunctionalRestBodyValue FromValues(Dictionary<string, object?> values) =>
-            new(null, new Dictionary<string, object?>(values, StringComparer.Ordinal));
     }
 }

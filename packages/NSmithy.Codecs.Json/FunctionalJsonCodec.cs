@@ -10,16 +10,18 @@ public interface IFunctionalJsonCodec<T> : IFunctionalCodec<T, string> { }
 
 public static class FunctionalJsonCodec
 {
-    public static IFunctionalJsonCodec<object?> FromSchema(FunctionalSchema schema)
-    {
-        ArgumentNullException.ThrowIfNull(schema);
-        return new CompiledFunctionalJsonObjectCodec(schema);
-    }
-
     public static IFunctionalJsonCodec<T> FromSchema<T>(FunctionalSchema<T> schema)
     {
         ArgumentNullException.ThrowIfNull(schema);
         return new CompiledFunctionalJsonCodec<T>(schema);
+    }
+
+    public static IFunctionalProjectionCodec<T, string> FromProjection<T>(
+        FunctionalStructProjection<T> projection
+    )
+    {
+        ArgumentNullException.ThrowIfNull(projection);
+        return new CompiledFunctionalJsonProjectionCodec<T>(projection);
     }
 
     private sealed class CompiledFunctionalJsonCodec<T>(FunctionalSchema<T> schema)
@@ -44,25 +46,28 @@ public static class FunctionalJsonCodec
         }
     }
 
-    private sealed class CompiledFunctionalJsonObjectCodec(FunctionalSchema schema)
-        : IFunctionalJsonCodec<object?>
+    private sealed class CompiledFunctionalJsonProjectionCodec<T>(
+        FunctionalStructProjection<T> projection
+    ) : IFunctionalProjectionCodec<T, string>
     {
-        public string Serialize(object? value)
+        public string Serialize(T value)
         {
             using var stream = new MemoryStream();
             using (var writer = new Utf8JsonWriter(stream))
             {
-                WriteValue(writer, schema, value);
+                WriteProjection(writer, projection, value);
             }
 
             return System.Text.Encoding.UTF8.GetString(stream.ToArray());
         }
 
-        public object? Deserialize(string payload)
+        public void ReadInto(string payload, object builder)
         {
             ArgumentNullException.ThrowIfNull(payload);
+            ArgumentNullException.ThrowIfNull(builder);
+
             using var document = JsonDocument.Parse(payload);
-            return ReadValue(schema, document.RootElement);
+            ReadProjectionInto(projection, document.RootElement, builder);
         }
     }
 
@@ -165,6 +170,17 @@ public static class FunctionalJsonCodec
     {
         writer.WriteStartObject();
         schema.VisitMembers(new JsonWriteMemberVisitor<T>(writer, value));
+        writer.WriteEndObject();
+    }
+
+    private static void WriteProjection<T>(
+        Utf8JsonWriter writer,
+        FunctionalStructProjection<T> projection,
+        T value
+    )
+    {
+        writer.WriteStartObject();
+        projection.VisitMembers(new JsonWriteMemberVisitor<T>(writer, value));
         writer.WriteEndObject();
     }
 
@@ -324,6 +340,50 @@ public static class FunctionalJsonCodec
         }
 
         return schema.BuildObject(builder);
+    }
+
+    private static void ReadProjectionInto<T>(
+        FunctionalStructProjection<T> projection,
+        JsonElement value,
+        object builder
+    )
+    {
+        if (value.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidOperationException(
+                $"Expected JSON object but found {value.ValueKind}."
+            );
+        }
+
+        foreach (var member in projection.TypedMembers)
+        {
+            if (!value.TryGetProperty(member.Name, out var memberValue))
+            {
+                if (member.IsRequired)
+                {
+                    throw new InvalidOperationException(
+                        $"Missing required member '{member.Name}'."
+                    );
+                }
+
+                continue;
+            }
+
+            if (memberValue.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            {
+                if (member.IsRequired)
+                {
+                    throw new InvalidOperationException(
+                        $"Required member '{member.Name}' cannot be null."
+                    );
+                }
+
+                member.SetObject(builder, null);
+                continue;
+            }
+
+            member.SetObject(builder, ReadValue(member.Target, memberValue));
+        }
     }
 
     private static object ReadUnion(IFunctionalUnionSchema schema, JsonElement value)

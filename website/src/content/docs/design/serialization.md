@@ -83,6 +83,33 @@ var nodeListSchema = Schemas.List(
 );
 ```
 
+Top-level structure projections are first-class projection values. A projection
+keeps the same container type but narrows the visible member set:
+
+```csharp
+var bodyProjection = Schemas.Project(
+    UpdateInputSchemas.Schema,
+    [UpdateInputSchemas.Name, UpdateInputSchemas.Age]
+);
+```
+
+Projection codecs can serialize a projection with the original value:
+
+```csharp
+JsonCodec.FromProjection(bodyProjection).Serialize(input);
+```
+
+Projection codecs do not expose `Deserialize(payload) -> T`, because a
+projection often carries only part of `T`. They expose a merge operation instead:
+
+```csharp
+JsonCodec.FromProjection(bodyProjection).ReadInto(payload, builder);
+```
+
+This is how REST protocols keep body serialization typed and body
+deserialization explicit when labels, headers, or query parameters are excluded
+from the document body.
+
 ## Codec Interface
 
 A codec is bound to a schema. After construction, callers only pass values and
@@ -97,7 +124,13 @@ public interface ICodec<TValue, TPayload>
 
 public interface ICodecFactory<TPayload>
 {
-    ICodec<object?, TPayload> FromSchema(Schema schema);
+    ICodec<TValue, TPayload> FromSchema<TValue>(Schema<TValue> schema);
+}
+
+public interface IProjectionCodec<TValue, TPayload>
+{
+    TPayload Serialize(TValue value);
+    void ReadInto(TPayload payload, object builder);
 }
 ```
 
@@ -109,10 +142,11 @@ var json = personCodec.Serialize(person);
 var roundTrip = personCodec.Deserialize(json);
 ```
 
-The factory overload is intentionally erased because some protocol paths start
-from an erased schema, for example synthetic REST body projections. Generated
-clients and user code should prefer the typed codec where the shape type is
-known.
+Codec factories preserve the schema value type. Protocols that select members
+from a structure use typed member dispatch and typed structure projections
+rather than asking a body codec factory to compile an erased schema. Full
+schemas use `FromSchema`; projections use a separate `FromProjection` operation
+and a projection codec.
 
 ## Codec Responsibilities
 
@@ -139,8 +173,8 @@ Protocols bind operation schemas to transports. For HTTP REST-style protocols,
 - `@httpHeader` and `@httpPrefixHeaders` write or read headers.
 - `@httpPayload` binds a member to the entire HTTP body.
 - `@httpResponseCode` binds a member to the response status code.
-- Unbound members are projected into an anonymous body structure and passed to
-  the body codec.
+- Unbound members are projected into a typed body projection and passed to the
+  body format.
 
 REST JSON and REST XML do not duplicate this binding logic. They supply body
 codec factories to the shared REST protocol projection:
@@ -205,6 +239,7 @@ natural place to precompute:
 - name-to-member lookup tables for deserialization.
 - typed getter and builder setter delegates.
 - typed member visitor dispatch.
+- top-level structure projections.
 - protocol projections for body/header/query/label partitions.
 - schema-bound codec instances.
 

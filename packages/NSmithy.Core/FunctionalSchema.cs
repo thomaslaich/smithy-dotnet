@@ -16,6 +16,11 @@ public abstract class FunctionalSchema
         this.traits = BuildTraits(traits);
     }
 
+    protected FunctionalSchema()
+    {
+        traits = new Dictionary<ShapeId, Trait>();
+    }
+
     public virtual ShapeId Id => id;
 
     public virtual ShapeKind Kind => kind;
@@ -36,6 +41,9 @@ public abstract class FunctionalSchema
 
 public abstract class FunctionalSchema<T> : FunctionalSchema
 {
+    protected FunctionalSchema()
+        : base() { }
+
     protected FunctionalSchema(ShapeId id, ShapeKind kind, IEnumerable<Trait>? traits = null)
         : base(id, kind, traits) { }
 }
@@ -61,7 +69,7 @@ public sealed class FunctionalLazySchema<T>
     private readonly Lazy<FunctionalSchema<T>> target;
 
     internal FunctionalLazySchema(Func<FunctionalSchema<T>> resolve)
-        : base(new ShapeId("smithy.synthetic", "Lazy"), ShapeKind.Document)
+        : base()
     {
         ArgumentNullException.ThrowIfNull(resolve);
         target = new Lazy<FunctionalSchema<T>>(resolve);
@@ -80,6 +88,9 @@ public sealed class FunctionalLazySchema<T>
 
     public IFunctionalMemberSchema? GetMember(string name) =>
         ((IFunctionalStructSchema)TargetSchema).GetMember(name);
+
+    public IReadOnlyList<IFunctionalMemberSchema<T>> TypedMembers =>
+        ((IFunctionalStructSchema<T>)TargetSchema).TypedMembers;
 
     public void VisitMembers(IFunctionalMemberVisitor<T> visitor) =>
         ((IFunctionalStructSchema<T>)TargetSchema).VisitMembers(visitor);
@@ -128,7 +139,16 @@ public interface IFunctionalStructSchema
 
 public interface IFunctionalStructSchema<T> : IFunctionalStructSchema
 {
+    IReadOnlyList<IFunctionalMemberSchema<T>> TypedMembers { get; }
+
     void VisitMembers(IFunctionalMemberVisitor<T> visitor);
+}
+
+public interface IFunctionalStructSchema<T, TBuilder> : IFunctionalStructSchema<T>
+{
+    TBuilder CreateTypedBuilder();
+
+    T Build(TBuilder builder);
 }
 
 public interface IFunctionalMemberVisitor<TContainer>
@@ -475,11 +495,12 @@ public sealed class FunctionalMemberSchema<TContainer, TBuilder, TValue>
 
 public sealed class FunctionalStructSchema<T, TBuilder>
     : FunctionalSchema<T>,
-        IFunctionalStructSchema<T>
+        IFunctionalStructSchema<T, TBuilder>
 {
     private readonly Func<TBuilder> createBuilder;
     private readonly Func<TBuilder, T> build;
     private readonly ReadOnlyCollection<IFunctionalMemberSchema> members;
+    private readonly ReadOnlyCollection<IFunctionalMemberSchema<T>> typedMembers;
     private readonly Dictionary<string, IFunctionalMemberSchema> membersByName;
 
     internal FunctionalStructSchema(
@@ -494,10 +515,15 @@ public sealed class FunctionalStructSchema<T, TBuilder>
         this.createBuilder = createBuilder;
         this.build = build;
         this.members = new ReadOnlyCollection<IFunctionalMemberSchema>(members.ToArray());
+        typedMembers = new ReadOnlyCollection<IFunctionalMemberSchema<T>>(
+            this.members.Cast<IFunctionalMemberSchema<T>>().ToArray()
+        );
         membersByName = BuildMembersByName(this.members);
     }
 
     public IReadOnlyList<IFunctionalMemberSchema> Members => members;
+
+    public IReadOnlyList<IFunctionalMemberSchema<T>> TypedMembers => typedMembers;
 
     public IFunctionalMemberSchema? GetMember(string name)
     {
@@ -516,9 +542,9 @@ public sealed class FunctionalStructSchema<T, TBuilder>
     public void VisitMembers(IFunctionalMemberVisitor<T> visitor)
     {
         ArgumentNullException.ThrowIfNull(visitor);
-        foreach (var member in members)
+        foreach (var member in typedMembers)
         {
-            ((IFunctionalMemberSchema<T>)member).Accept(visitor);
+            member.Accept(visitor);
         }
     }
 
@@ -527,6 +553,57 @@ public sealed class FunctionalStructSchema<T, TBuilder>
     )
     {
         var byName = new Dictionary<string, IFunctionalMemberSchema>(StringComparer.Ordinal);
+        foreach (var member in members)
+        {
+            byName.Add(member.Name, member);
+        }
+
+        return byName;
+    }
+}
+
+public sealed class FunctionalStructProjection<T>
+{
+    private readonly IFunctionalStructSchema<T> source;
+    private readonly ReadOnlyCollection<IFunctionalMemberSchema<T>> typedMembers;
+    private readonly Dictionary<string, IFunctionalMemberSchema<T>> membersByName;
+
+    internal FunctionalStructProjection(
+        IFunctionalStructSchema<T> source,
+        IReadOnlyList<IFunctionalMemberSchema<T>> members
+    )
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(members);
+        this.source = source;
+        typedMembers = new ReadOnlyCollection<IFunctionalMemberSchema<T>>(members.ToArray());
+        membersByName = BuildMembersByName(typedMembers);
+    }
+
+    public IFunctionalStructSchema<T> Source => source;
+
+    public IReadOnlyList<IFunctionalMemberSchema<T>> TypedMembers => typedMembers;
+
+    public IFunctionalMemberSchema<T>? GetMember(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        return membersByName.TryGetValue(name, out var member) ? member : null;
+    }
+
+    public void VisitMembers(IFunctionalMemberVisitor<T> visitor)
+    {
+        ArgumentNullException.ThrowIfNull(visitor);
+        foreach (var member in typedMembers)
+        {
+            member.Accept(visitor);
+        }
+    }
+
+    private static Dictionary<string, IFunctionalMemberSchema<T>> BuildMembersByName(
+        ReadOnlyCollection<IFunctionalMemberSchema<T>> members
+    )
+    {
+        var byName = new Dictionary<string, IFunctionalMemberSchema<T>>(StringComparer.Ordinal);
         foreach (var member in members)
         {
             byName.Add(member.Name, member);
@@ -786,4 +863,9 @@ public static class FunctionalSchemas
         FunctionalSchema<TOutput> output,
         IEnumerable<Trait>? traits = null
     ) => new(id, input, output, traits);
+
+    public static FunctionalStructProjection<T> Project<T>(
+        IFunctionalStructSchema<T> source,
+        IReadOnlyList<IFunctionalMemberSchema<T>> members
+    ) => new(source, members);
 }

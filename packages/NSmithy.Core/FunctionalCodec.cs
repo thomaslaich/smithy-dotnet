@@ -9,5 +9,12 @@ public interface IFunctionalCodec<TValue, TPayload>
 
 public interface IFunctionalCodecFactory<TPayload>
 {
-    IFunctionalCodec<object?, TPayload> FromSchema(FunctionalSchema schema);
+    IFunctionalCodec<TValue, TPayload> FromSchema<TValue>(FunctionalSchema<TValue> schema);
+}
+
+public interface IFunctionalProjectionCodec<TValue, TPayload>
+{
+    TPayload Serialize(TValue value);
+
+    void ReadInto(TPayload payload, object builder);
 }
