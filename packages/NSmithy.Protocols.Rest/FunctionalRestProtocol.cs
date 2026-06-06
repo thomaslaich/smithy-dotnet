@@ -25,6 +25,8 @@ public interface IFunctionalRestBodyFormat
 
 public static class FunctionalRestProtocol
 {
+    private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
+
     public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation,
         TInput input,
@@ -369,6 +371,11 @@ public static class FunctionalRestProtocol
     {
         if (content is null or { Length: 0 })
         {
+            if (TryCreateDefaultValue(member.Target, member.Traits, out var defaultValue))
+            {
+                member.SetObject(builder, defaultValue);
+            }
+
             return;
         }
 
@@ -436,6 +443,11 @@ public static class FunctionalRestProtocol
         {
             var value = member.GetValue(input);
             if (value is null)
+            {
+                return;
+            }
+
+            if (IsDefaultValue(member.TargetSchema, member.Traits, value))
             {
                 return;
             }
@@ -760,6 +772,7 @@ public static class FunctionalRestProtocol
         object value
     )
     {
+        schema = UnwrapNullable(schema);
         return schema.Kind switch
         {
             ShapeKind.Boolean => ((bool)value).ToString().ToLowerInvariant(),
@@ -774,6 +787,10 @@ public static class FunctionalRestProtocol
             ShapeKind.String => HasTrait(schema, traits, FunctionalRestTraits.MediaType)
                 ? Convert.ToBase64String(Encoding.UTF8.GetBytes((string)value))
                 : (string)value,
+            ShapeKind.Enum => ((IFunctionalStringEnumValue)value).Value,
+            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)schema)
+                .GetIntegerValueObject(value)
+                .ToString(CultureInfo.InvariantCulture),
             ShapeKind.Blob => Convert.ToBase64String((byte[])value),
             ShapeKind.Timestamp => FormatTimestamp(schema, traits, (DateTimeOffset)value),
             _ => throw new NotSupportedException(
@@ -788,8 +805,9 @@ public static class FunctionalRestProtocol
         object value
     )
     {
+        schema = UnwrapNullable(schema);
         var formatted = FormatHttpValue(schema, traits, value);
-        if (schema.Kind != ShapeKind.String)
+        if (schema.Kind is not (ShapeKind.String or ShapeKind.Enum))
         {
             return formatted;
         }
@@ -810,10 +828,11 @@ public static class FunctionalRestProtocol
     {
         if (schema is IFunctionalListSchema listSchema)
         {
+            var element = UnwrapNullable(listSchema.Element);
             return ParseHttpBindingValues(
                 schema,
                 traits,
-                SplitHeaderList(value, listSchema.Element.Kind).ToArray()
+                SplitHeaderList(value, element.Kind).ToArray()
             );
         }
 
@@ -839,7 +858,10 @@ public static class FunctionalRestProtocol
         var builder = listSchema.CreateBuilder();
         foreach (var value in values)
         {
-            listSchema.AddObject(builder, ParseHttpValue(listSchema.Element, traits, value));
+            listSchema.AddObject(
+                builder,
+                ParseHttpValue(UnwrapNullable(listSchema.Element), traits, value)
+            );
         }
 
         return listSchema.BuildObject(builder);
@@ -856,6 +878,7 @@ public static class FunctionalRestProtocol
         string value
     )
     {
+        schema = UnwrapNullable(schema);
         return schema.Kind switch
         {
             ShapeKind.Boolean => bool.Parse(value),
@@ -870,11 +893,73 @@ public static class FunctionalRestProtocol
             ShapeKind.String => HasTrait(schema, traits, FunctionalRestTraits.MediaType)
                 ? Encoding.UTF8.GetString(Convert.FromBase64String(value))
                 : value,
+            ShapeKind.Enum => ((IFunctionalStringEnumSchema)schema).CreateObject(value),
+            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)schema).CreateObject(
+                int.Parse(value, CultureInfo.InvariantCulture)
+            ),
             ShapeKind.Blob => Convert.FromBase64String(value),
             ShapeKind.Timestamp => ParseTimestamp(schema, traits, value),
             _ => throw new NotSupportedException(
                 $"RestJson HTTP binding codec does not support schema kind '{schema.Kind}'."
             ),
+        };
+    }
+
+    private static FunctionalSchema UnwrapNullable(FunctionalSchema schema) =>
+        schema is IFunctionalNullableSchema nullable ? nullable.Target : schema;
+
+    private static bool IsDefaultValue(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        object value
+    )
+    {
+        if (!TryCreateDefaultValue(schema, traits, out var defaultValue))
+        {
+            return false;
+        }
+
+        return value is byte[] bytes && defaultValue is byte[] defaultBytes
+            ? bytes.SequenceEqual(defaultBytes)
+            : EqualityComparer<object>.Default.Equals(value, defaultValue);
+    }
+
+    private static bool TryCreateDefaultValue(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        out object? value
+    )
+    {
+        if (!traits.TryGetValue(DefaultTrait, out var trait))
+        {
+            value = null;
+            return false;
+        }
+
+        value = CreateDefaultValue(UnwrapNullable(schema), trait.Value);
+        return true;
+    }
+
+    private static object? CreateDefaultValue(FunctionalSchema schema, Document value)
+    {
+        return schema.Kind switch
+        {
+            ShapeKind.Boolean => value.AsBoolean(),
+            ShapeKind.Byte => (sbyte)value.AsNumber(),
+            ShapeKind.Short => (short)value.AsNumber(),
+            ShapeKind.Integer => (int)value.AsNumber(),
+            ShapeKind.Long => (long)value.AsNumber(),
+            ShapeKind.Float => (float)value.AsNumber(),
+            ShapeKind.Double => (double)value.AsNumber(),
+            ShapeKind.BigInteger => new BigInteger(value.AsNumber()),
+            ShapeKind.BigDecimal => value.AsNumber(),
+            ShapeKind.String => value.AsString(),
+            ShapeKind.Enum => ((IFunctionalStringEnumSchema)schema).CreateObject(value.AsString()),
+            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)schema).CreateObject(
+                (int)value.AsNumber()
+            ),
+            ShapeKind.Blob => Convert.FromBase64String(value.AsString()),
+            _ => null,
         };
     }
 
@@ -1081,7 +1166,10 @@ public static class FunctionalRestProtocol
             yield break;
         }
 
-        if (elementKind == ShapeKind.String && value.Contains('"', StringComparison.Ordinal))
+        if (
+            elementKind is ShapeKind.String or ShapeKind.Enum
+            && value.Contains('"', StringComparison.Ordinal)
+        )
         {
             foreach (var part in ParseQuotedHeaderList(value))
             {

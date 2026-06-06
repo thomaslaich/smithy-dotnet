@@ -29,11 +29,13 @@ public final class StringEnumGenerator implements Runnable {
 
   @Override
   public void run() {
+    writer.addImport(RuntimeTypes.NSMITHY_CORE_FUNCTIONAL);
     writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     writer.write(
         "public readonly partial record struct $L(string Value) : ISerializableShape,"
-            + " IDeserializableShape<$L>",
+            + " IDeserializableShape<$L>, IFunctionalStringEnumValue<$L>",
+        typeName,
         typeName,
         typeName);
     writer.openBlock(
@@ -51,6 +53,9 @@ public final class StringEnumGenerator implements Runnable {
                 writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
                 writer.write("serializer.WriteString(Schema, Value);");
               });
+          writer.write("");
+          writer.write("public static $L FromValue(string value)", typeName);
+          writer.openBlock("{", "}", () -> writer.write("return new $L(value);", typeName));
           writer.write("");
           writer.write("public static $L Deserialize(IShapeDeserializer deserializer)", typeName);
           writer.openBlock(
@@ -77,5 +82,7 @@ public final class StringEnumGenerator implements Runnable {
           writer.write("public override string ToString()");
           writer.openBlock("{", "}", () -> writer.write("return Value;"));
         });
+    writer.write("");
+    SchemaGenerator.writeFunctionalSimpleSchema(writer, shape);
   }
 }

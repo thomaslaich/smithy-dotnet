@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Numerics;
 
 namespace NSmithy.Core.Functional;
@@ -56,6 +57,100 @@ public sealed class FunctionalPrimitiveSchema<T> : FunctionalSchema<T>
         IEnumerable<Trait>? traits = null
     )
         : base(id, kind, traits) { }
+}
+
+public sealed class FunctionalUnitSchema
+    : FunctionalSchema<SmithyUnit>,
+        IFunctionalStructSchema<SmithyUnit>
+{
+    private static readonly IReadOnlyList<IFunctionalMemberSchema> EmptyMembers =
+        Array.Empty<IFunctionalMemberSchema>();
+
+    private static readonly IReadOnlyList<IFunctionalMemberSchema<SmithyUnit>> EmptyTypedMembers =
+        Array.Empty<IFunctionalMemberSchema<SmithyUnit>>();
+
+    internal FunctionalUnitSchema()
+        : base(new ShapeId("smithy.api", "Unit"), ShapeKind.Structure) { }
+
+    public IReadOnlyList<IFunctionalMemberSchema> Members => EmptyMembers;
+
+    public IReadOnlyList<IFunctionalMemberSchema<SmithyUnit>> TypedMembers => EmptyTypedMembers;
+
+    public IFunctionalMemberSchema? GetMember(string name) => null;
+
+    public void VisitMembers(IFunctionalMemberVisitor<SmithyUnit> visitor) { }
+
+    public object CreateBuilder() => SmithyUnit.Value;
+
+    public object BuildObject(object builder) => SmithyUnit.Value;
+}
+
+public interface IFunctionalNullableSchema
+{
+    FunctionalSchema Target { get; }
+}
+
+public sealed class FunctionalNullableSchema<T> : FunctionalSchema<T?>, IFunctionalNullableSchema
+    where T : struct
+{
+    internal FunctionalNullableSchema(FunctionalSchema<T> target)
+        : base(target.Id, target.Kind, target.Traits.Values)
+    {
+        TargetSchema = target;
+    }
+
+    public FunctionalSchema<T> TargetSchema { get; }
+
+    public FunctionalSchema Target => TargetSchema;
+}
+
+public interface IFunctionalStringEnumSchema
+{
+    object CreateObject(string value);
+}
+
+public interface IFunctionalStringEnumValue
+{
+    string Value { get; }
+}
+
+public interface IFunctionalStringEnumValue<TSelf> : IFunctionalStringEnumValue
+    where TSelf : IFunctionalStringEnumValue<TSelf>
+{
+    static abstract TSelf FromValue(string value);
+}
+
+public sealed class FunctionalStringEnumSchema<T> : FunctionalSchema<T>, IFunctionalStringEnumSchema
+    where T : IFunctionalStringEnumValue<T>
+{
+    internal FunctionalStringEnumSchema(ShapeId id, IEnumerable<Trait>? traits = null)
+        : base(id, ShapeKind.Enum, traits) { }
+
+    public T Create(string value) => T.FromValue(value);
+
+    public object CreateObject(string value) => T.FromValue(value)!;
+}
+
+public interface IFunctionalIntEnumSchema
+{
+    int GetIntegerValueObject(object value);
+
+    object CreateObject(int value);
+}
+
+public sealed class FunctionalIntEnumSchema<T> : FunctionalSchema<T>, IFunctionalIntEnumSchema
+    where T : struct, Enum
+{
+    internal FunctionalIntEnumSchema(ShapeId id, IEnumerable<Trait>? traits = null)
+        : base(id, ShapeKind.IntEnum, traits) { }
+
+    public int GetIntegerValue(T value) => Convert.ToInt32(value, CultureInfo.InvariantCulture);
+
+    public T Create(int value) => (T)Enum.ToObject(typeof(T), value);
+
+    public int GetIntegerValueObject(object value) => GetIntegerValue((T)value);
+
+    public object CreateObject(int value) => Create(value);
 }
 
 public sealed class FunctionalLazySchema<T>
@@ -270,6 +365,60 @@ public sealed class FunctionalListSchema<TElement>
         new ReadOnlyCollection<TElement>(((List<TElement>)builder).ToArray());
 }
 
+public sealed class FunctionalCollectionSchema<TCollection, TElement, TBuilder>
+    : FunctionalSchema<TCollection>,
+        IFunctionalListSchema
+{
+    private readonly Func<TCollection, IEnumerable<TElement>> getElements;
+    private readonly Func<TBuilder> createBuilder;
+    private readonly Action<TBuilder, TElement> add;
+    private readonly Func<TBuilder, TCollection> build;
+
+    internal FunctionalCollectionSchema(
+        ShapeId id,
+        ShapeKind kind,
+        FunctionalSchema<TElement> element,
+        Func<TCollection, IEnumerable<TElement>> getElements,
+        Func<TBuilder> createBuilder,
+        Action<TBuilder, TElement> add,
+        Func<TBuilder, TCollection> build,
+        IEnumerable<Trait>? traits = null
+    )
+        : base(id, kind, traits)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(getElements);
+        ArgumentNullException.ThrowIfNull(createBuilder);
+        ArgumentNullException.ThrowIfNull(add);
+        ArgumentNullException.ThrowIfNull(build);
+
+        ElementSchema = element;
+        this.getElements = getElements;
+        this.createBuilder = createBuilder;
+        this.add = add;
+        this.build = build;
+    }
+
+    public FunctionalSchema<TElement> ElementSchema { get; }
+
+    public FunctionalSchema Element => ElementSchema;
+
+    public IEnumerable<object?> GetElementsObject(object value)
+    {
+        foreach (var element in getElements((TCollection)value))
+        {
+            yield return element;
+        }
+    }
+
+    public object CreateBuilder() => createBuilder()!;
+
+    public void AddObject(object builder, object? value) =>
+        add((TBuilder)builder, (TElement)value!);
+
+    public object BuildObject(object builder) => build((TBuilder)builder)!;
+}
+
 public sealed class FunctionalSetSchema<TElement>
     : FunctionalSchema<IReadOnlySet<TElement>>,
         IFunctionalListSchema
@@ -339,6 +488,59 @@ public sealed class FunctionalMapSchema<TValue>
 
     public object BuildObject(object builder) =>
         new ReadOnlyDictionary<string, TValue>((Dictionary<string, TValue>)builder);
+}
+
+public sealed class FunctionalDictionarySchema<TDictionary, TValue, TBuilder>
+    : FunctionalSchema<TDictionary>,
+        IFunctionalMapSchema
+{
+    private readonly Func<TDictionary, IEnumerable<KeyValuePair<string, TValue>>> getEntries;
+    private readonly Func<TBuilder> createBuilder;
+    private readonly Action<TBuilder, string, TValue> add;
+    private readonly Func<TBuilder, TDictionary> build;
+
+    internal FunctionalDictionarySchema(
+        ShapeId id,
+        FunctionalSchema<TValue> value,
+        Func<TDictionary, IEnumerable<KeyValuePair<string, TValue>>> getEntries,
+        Func<TBuilder> createBuilder,
+        Action<TBuilder, string, TValue> add,
+        Func<TBuilder, TDictionary> build,
+        IEnumerable<Trait>? traits = null
+    )
+        : base(id, ShapeKind.Map, traits)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(getEntries);
+        ArgumentNullException.ThrowIfNull(createBuilder);
+        ArgumentNullException.ThrowIfNull(add);
+        ArgumentNullException.ThrowIfNull(build);
+
+        ValueSchema = value;
+        this.getEntries = getEntries;
+        this.createBuilder = createBuilder;
+        this.add = add;
+        this.build = build;
+    }
+
+    public FunctionalSchema<TValue> ValueSchema { get; }
+
+    public FunctionalSchema Value => ValueSchema;
+
+    public IEnumerable<KeyValuePair<string, object?>> GetEntriesObject(object value)
+    {
+        foreach (var entry in getEntries((TDictionary)value))
+        {
+            yield return new KeyValuePair<string, object?>(entry.Key, entry.Value);
+        }
+    }
+
+    public object CreateBuilder() => createBuilder()!;
+
+    public void AddObject(object builder, string key, object? value) =>
+        add((TBuilder)builder, key, (TValue)value!);
+
+    public object BuildObject(object builder) => build((TBuilder)builder)!;
 }
 
 public sealed class FunctionalUnionCaseSchema<TUnion, TValue> : IFunctionalUnionCaseSchema
@@ -826,8 +1028,28 @@ public static class FunctionalSchemas
             ShapeKind.Document
         );
 
+    public static FunctionalSchema<SmithyUnit> Unit { get; } = new FunctionalUnitSchema();
+
     public static FunctionalSchema<T> Lazy<T>(Func<FunctionalSchema<T>> resolve) =>
         new FunctionalLazySchema<T>(resolve);
+
+    public static FunctionalSchema<T?> Nullable<T>(FunctionalSchema<T> target)
+        where T : struct => new FunctionalNullableSchema<T>(target);
+
+    public static FunctionalSchema<T?> NullableReference<T>(FunctionalSchema<T> target)
+        where T : class => (FunctionalSchema<T?>)(object)target;
+
+    public static FunctionalStringEnumSchema<T> StringEnum<T>(
+        ShapeId id,
+        IEnumerable<Trait>? traits = null
+    )
+        where T : IFunctionalStringEnumValue<T> => new(id, traits);
+
+    public static FunctionalIntEnumSchema<T> IntEnum<T>(
+        ShapeId id,
+        IEnumerable<Trait>? traits = null
+    )
+        where T : struct, Enum => new(id, traits);
 
     public static FunctionalStructSchemaBuilder<T, TBuilder> Structure<T, TBuilder>(
         ShapeId id,
@@ -845,17 +1067,59 @@ public static class FunctionalSchemas
         IEnumerable<Trait>? traits = null
     ) => new(id, ShapeKind.List, element, traits);
 
+    public static FunctionalCollectionSchema<TCollection, TElement, TBuilder> List<
+        TCollection,
+        TElement,
+        TBuilder
+    >(
+        ShapeId id,
+        FunctionalSchema<TElement> element,
+        Func<TCollection, IEnumerable<TElement>> getElements,
+        Func<TBuilder> createBuilder,
+        Action<TBuilder, TElement> add,
+        Func<TBuilder, TCollection> build,
+        IEnumerable<Trait>? traits = null
+    ) => new(id, ShapeKind.List, element, getElements, createBuilder, add, build, traits);
+
     public static FunctionalSetSchema<TElement> Set<TElement>(
         ShapeId id,
         FunctionalSchema<TElement> element,
         IEnumerable<Trait>? traits = null
     ) => new(id, element, traits);
 
+    public static FunctionalCollectionSchema<TCollection, TElement, TBuilder> Set<
+        TCollection,
+        TElement,
+        TBuilder
+    >(
+        ShapeId id,
+        FunctionalSchema<TElement> element,
+        Func<TCollection, IEnumerable<TElement>> getElements,
+        Func<TBuilder> createBuilder,
+        Action<TBuilder, TElement> add,
+        Func<TBuilder, TCollection> build,
+        IEnumerable<Trait>? traits = null
+    ) => new(id, ShapeKind.Set, element, getElements, createBuilder, add, build, traits);
+
     public static FunctionalMapSchema<TValue> Map<TValue>(
         ShapeId id,
         FunctionalSchema<TValue> value,
         IEnumerable<Trait>? traits = null
     ) => new(id, value, traits);
+
+    public static FunctionalDictionarySchema<TDictionary, TValue, TBuilder> Map<
+        TDictionary,
+        TValue,
+        TBuilder
+    >(
+        ShapeId id,
+        FunctionalSchema<TValue> value,
+        Func<TDictionary, IEnumerable<KeyValuePair<string, TValue>>> getEntries,
+        Func<TBuilder> createBuilder,
+        Action<TBuilder, string, TValue> add,
+        Func<TBuilder, TDictionary> build,
+        IEnumerable<Trait>? traits = null
+    ) => new(id, value, getEntries, createBuilder, add, build, traits);
 
     public static FunctionalOperationSchema<TInput, TOutput> Operation<TInput, TOutput>(
         ShapeId id,

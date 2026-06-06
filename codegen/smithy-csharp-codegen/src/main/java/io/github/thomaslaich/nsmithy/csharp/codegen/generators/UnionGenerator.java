@@ -227,6 +227,8 @@ public final class UnionGenerator implements Runnable {
                 writer.write("};");
               });
         });
+    writer.write("");
+    SchemaGenerator.writeFunctionalUnionSchema(writer, context, shape, members);
   }
 
   private void writeDeserialize(String typeName, List<MemberShape> members) {

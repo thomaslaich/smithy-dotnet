@@ -68,6 +68,8 @@ public final class ListGenerator implements Runnable {
           writer.write("");
           writeDeserialize(typeName, memberType);
         });
+    writer.write("");
+    SchemaGenerator.writeFunctionalListSchema(writer, context, shape);
   }
 
   private void writeSerialize() {

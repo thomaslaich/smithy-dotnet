@@ -367,6 +367,75 @@ public sealed class FunctionalRestJsonProtocolTests
 
     public sealed class RequestValueParityOutputBuilder { }
 
+    public readonly record struct HeaderStatus(string Value)
+        : IFunctionalStringEnumValue<HeaderStatus>
+    {
+        public static readonly HeaderStatus ActiveBlue = new("ACTIVE,BLUE");
+
+        public static readonly HeaderStatus Pending = new("PENDING");
+
+        public static HeaderStatus FromValue(string value) => new(value);
+    }
+
+    public sealed record EnumHeaderListInput(IReadOnlyList<HeaderStatus> Statuses);
+
+    public sealed class EnumHeaderListInputBuilder
+    {
+        public IReadOnlyList<HeaderStatus>? Statuses { get; set; }
+    }
+
+    public sealed record EnumHeaderListOutput;
+
+    public sealed class EnumHeaderListOutputBuilder { }
+
+    [Fact]
+    public void FunctionalRestJsonProtocolRoundTripsStringEnumHeaderListWithQuotedComma()
+    {
+        var statusSchema = FunctionalSchemas.StringEnum<HeaderStatus>(
+            new ShapeId("example", "HeaderStatus")
+        );
+        var statusListSchema = FunctionalSchemas.List(
+            new ShapeId("example", "HeaderStatusList"),
+            statusSchema
+        );
+        var inputSchema = FunctionalSchemas
+            .Structure<EnumHeaderListInput, EnumHeaderListInputBuilder>(
+                new ShapeId("example", "EnumHeaderListInput")
+            )
+            .Required(
+                "statuses",
+                static input => input.Statuses,
+                static (builder, value) => builder.Statuses = value,
+                statusListSchema,
+                traits: [FunctionalRestTraits.HttpHeaderTrait("X-Status")]
+            )
+            .Build(
+                static () => new EnumHeaderListInputBuilder(),
+                static builder => new EnumHeaderListInput(builder.Statuses!)
+            );
+        var outputSchema = FunctionalSchemas
+            .Structure<EnumHeaderListOutput, EnumHeaderListOutputBuilder>(
+                new ShapeId("example", "EnumHeaderListOutput")
+            )
+            .Build(
+                static () => new EnumHeaderListOutputBuilder(),
+                static _ => new EnumHeaderListOutput()
+            );
+        var operation = FunctionalSchemas.Operation(
+            new ShapeId("example", "EnumHeaderList"),
+            inputSchema,
+            outputSchema,
+            traits: [FunctionalRestTraits.HttpTrait("GET", "/statuses")]
+        );
+        var input = new EnumHeaderListInput([HeaderStatus.ActiveBlue, HeaderStatus.Pending]);
+
+        var request = FunctionalRestJsonProtocol.SerializeRequest(operation, input);
+        var decoded = FunctionalRestJsonProtocol.DeserializeRequest(operation, request);
+
+        Assert.Equal("\"ACTIVE,BLUE\", PENDING", request.Headers["X-Status"].Single());
+        Assert.Equal(input.Statuses, decoded.Statuses);
+    }
+
     [Fact]
     public void FunctionalRestJsonProtocolSerializesRequestHttpValueParity()
     {

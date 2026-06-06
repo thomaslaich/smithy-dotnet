@@ -5,6 +5,7 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import software.amazon.smithy.model.shapes.IntEnumShape;
@@ -27,6 +28,8 @@ public final class IntEnumGenerator implements Runnable {
 
   @Override
   public void run() {
+    writer.addImport(RuntimeTypes.NSMITHY_CORE);
+    writer.addImport(RuntimeTypes.NSMITHY_CORE_FUNCTIONAL);
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     writer.write("public enum $L", typeName);
     writer.openBlock(
@@ -44,5 +47,18 @@ public final class IntEnumGenerator implements Runnable {
             }
           }
         });
+    writer.write("");
+    writer.write("public static partial class $LSchema", typeName);
+    writer.openBlock(
+        "{",
+        "}",
+        () ->
+            writer.write(
+                "public static FunctionalSchema<$L> FunctionalSchema { get; } ="
+                    + " FunctionalSchemas.IntEnum<$L>($L, $L);",
+                typeName,
+                typeName,
+                SchemaGenerator.shapeIdExpr(shape.getId()),
+                SchemaGenerator.traitsExpr(shape.getAllTraits().values())));
   }
 }

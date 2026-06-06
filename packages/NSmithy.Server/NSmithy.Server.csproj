@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <ProjectReference Include="../NSmithy.Core/NSmithy.Core.csproj" />
+
     <!--
       NSmithy.MSBuild carries the smithy codegen MSBuild targets. We keep it out of the
       compile/runtime closure (it produces no DLL) but leave "build" un-private so its

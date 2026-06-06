@@ -80,6 +80,8 @@ public final class MapGenerator implements Runnable {
           writer.write("");
           writeDeserialize(typeName, keyType, valueType);
         });
+    writer.write("");
+    SchemaGenerator.writeFunctionalMapSchema(writer, context, shape);
   }
 
   private void writeSerialize() {

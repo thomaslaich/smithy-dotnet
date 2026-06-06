@@ -5,6 +5,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ErrorGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.IntEnumGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ListGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.MapGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.generators.OperationSchemaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ServerGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StringEnumGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StructureGenerator;
@@ -160,7 +161,11 @@ final class DirectedCSharpCodegen
 
   @Override
   public void generateOperation(GenerateOperationDirective<GenerationContext, CSharpSettings> d) {
-    /* covered by generateService */
+    d.context()
+        .writerDelegator()
+        .useShapeWriter(
+            d.shape(),
+            writer -> new OperationSchemaGenerator(d.context(), writer, d.shape()).run());
   }
 
   @Override

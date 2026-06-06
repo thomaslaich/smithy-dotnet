@@ -79,6 +79,8 @@ public static class FunctionalJsonCodec
             return;
         }
 
+        schema = UnwrapNullable(schema);
+
         switch (schema.Kind)
         {
             case ShapeKind.Boolean:
@@ -113,6 +115,14 @@ public static class FunctionalJsonCodec
                 break;
             case ShapeKind.String:
                 writer.WriteStringValue((string)value);
+                break;
+            case ShapeKind.Enum:
+                writer.WriteStringValue(((IFunctionalStringEnumValue)value).Value);
+                break;
+            case ShapeKind.IntEnum:
+                writer.WriteNumberValue(
+                    ((IFunctionalIntEnumSchema)schema).GetIntegerValueObject(value)
+                );
                 break;
             case ShapeKind.Blob:
                 writer.WriteBase64StringValue((byte[])value);
@@ -267,6 +277,8 @@ public static class FunctionalJsonCodec
             return null;
         }
 
+        schema = UnwrapNullable(schema);
+
         return schema.Kind switch
         {
             ShapeKind.Boolean => value.GetBoolean(),
@@ -282,6 +294,10 @@ public static class FunctionalJsonCodec
             ),
             ShapeKind.BigDecimal => value.GetDecimal(),
             ShapeKind.String => value.GetString(),
+            ShapeKind.Enum => ((IFunctionalStringEnumSchema)schema).CreateObject(
+                value.GetString()!
+            ),
+            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)schema).CreateObject(value.GetInt32()),
             ShapeKind.Blob => value.GetBytesFromBase64(),
             ShapeKind.Timestamp => DateTimeOffset.Parse(
                 value.GetString()!,
@@ -298,6 +314,9 @@ public static class FunctionalJsonCodec
             ),
         };
     }
+
+    private static FunctionalSchema UnwrapNullable(FunctionalSchema schema) =>
+        schema is IFunctionalNullableSchema nullable ? nullable.Target : schema;
 
     private static object ReadStructure(IFunctionalStructSchema schema, JsonElement value)
     {

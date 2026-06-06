@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using NSmithy.Codecs.Json;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.Http;
 using NSmithy.Protocols.RestJson;
 
 namespace NSmithy.Server.AspNetCore;
@@ -14,6 +15,60 @@ public static class SmithyAspNetCoreProtocol
 {
     private const string JsonRequestBodyItemKey = "NSmithy.Server.AspNetCore.JsonRequestBody";
     private static readonly SmithyJsonCodec JsonCodec = SmithyJsonCodec.Default;
+
+    public static async Task<SmithyHttpRequest> CreateSmithyHttpRequestAsync(
+        HttpContext httpContext,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
+        var requestUri = httpContext.Request.PathBase + httpContext.Request.Path;
+        requestUri += httpContext.Request.QueryString;
+        var request = new SmithyHttpRequest(
+            new System.Net.Http.HttpMethod(httpContext.Request.Method),
+            requestUri
+        );
+        foreach (var header in httpContext.Request.Headers)
+        {
+            request.Headers[header.Key] = header
+                .Value.Select(value => value ?? string.Empty)
+                .ToArray();
+        }
+
+        request.ContentType = httpContext.Request.ContentType;
+        request.Content = await ReadJsonRequestBodyContentAsync(httpContext, cancellationToken)
+            .ConfigureAwait(false);
+        return request;
+    }
+
+    public static async Task WriteSmithyHttpResponseAsync(
+        HttpContext httpContext,
+        SmithyHttpResponse response,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(response);
+
+        httpContext.Response.StatusCode = (int)response.StatusCode;
+        foreach (var header in response.Headers)
+        {
+            httpContext.Response.Headers[header.Key] = header.Value.ToArray();
+        }
+
+        foreach (var header in response.ContentHeaders)
+        {
+            httpContext.Response.Headers[header.Key] = header.Value.ToArray();
+        }
+
+        if (response.Content.Length > 0)
+        {
+            await httpContext
+                .Response.Body.WriteAsync(response.Content, cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
 
     public static T GetRouteValue<T>(HttpContext httpContext, string name)
     {

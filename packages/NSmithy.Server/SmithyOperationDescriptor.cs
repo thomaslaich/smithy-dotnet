@@ -1,3 +1,5 @@
+using NSmithy.Core;
+
 namespace NSmithy.Server;
 
 public sealed class SmithyOperationDescriptor<THandler, TInput, TOutput>

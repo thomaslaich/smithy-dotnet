@@ -69,6 +69,8 @@ public final class StructureGenerator implements Runnable {
           writer.write("");
           writeDeserialize(typeName, sp, model, members);
         });
+    writer.write("");
+    SchemaGenerator.writeFunctionalStructureSchema(writer, context, shape, members);
   }
 
   private void writeConstructor(String typeName) {

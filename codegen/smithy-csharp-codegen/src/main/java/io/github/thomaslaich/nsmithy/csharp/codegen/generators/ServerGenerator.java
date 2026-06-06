@@ -72,6 +72,9 @@ public final class ServerGenerator implements Runnable {
     writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     writer.addImport(RuntimeTypes.MS_EXT_DI);
     if (emitsAspNet) {
+      writer.addImport(RuntimeTypes.NSMITHY_CORE_FUNCTIONAL);
+      writer.addImport(RuntimeTypes.NSMITHY_HTTP);
+      writer.addImport(RuntimeTypes.NSMITHY_PROTOCOLS_RESTJSON);
       writer.addImport(RuntimeTypes.NSMITHY_SERVER_ASPNETCORE);
       writer.addImport(RuntimeTypes.MS_ASPNETCORE_BUILDER);
       writer.addImport(RuntimeTypes.MS_ASPNETCORE_HTTP);
@@ -465,39 +468,30 @@ public final class ServerGenerator implements Runnable {
 
   private void writeOperationBody(SymbolProvider sp, OperationShape op, String contract) {
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String descriptorAccess =
         contract + "Descriptor." + CSharpNaming.typeName(op.getId().getName());
+    String opName = CSharpNaming.typeName(op.getId().getName());
 
+    writer.write(
+        "var smithyRequest = await SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync("
+            + "httpContext, cancellationToken).ConfigureAwait(false);");
     if (hasInput) {
-      StructureShape input = context.model().expectShape(op.getInputShape(), StructureShape.class);
-      String inputType = CSharpSymbolProvider.qualified(sp.toSymbol(input));
-      writeInputBinding(sp, input, inputType);
       writer.write(
-          "$L $L.InvokeAsync(handler, input, cancellationToken).ConfigureAwait(false);",
-          hasOutput ? "var output = await" : "await",
-          descriptorAccess);
+          "var input = FunctionalRestJsonProtocol.DeserializeRequest($L," + " smithyRequest);",
+          SchemaGenerator.functionalOperationSchemaAccessor(context, op));
     } else {
-      writer.write(
-          "$L $L.InvokeAsync(handler, SmithyUnit.Value, cancellationToken).ConfigureAwait(false);",
-          hasOutput ? "var output = await" : "await",
-          descriptorAccess);
+      writer.write("var input = SmithyUnit.Value;");
     }
-    if (!hasOutput) {
-      writer.write("httpContext.Response.StatusCode = StatusCodes.Status204NoContent;");
-    } else {
-      StructureShape output =
-          context.model().expectShape(op.getOutputShape(), StructureShape.class);
-      if (ClientGenerator.hasResponseBindings(output)) {
-        writer.write(
-            "await WriteBoundResponseAsync(httpContext, output,"
-                + " cancellationToken).ConfigureAwait(false);");
-      } else {
-        writer.write(
-            "await SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, output,"
-                + " cancellationToken).ConfigureAwait(false);");
-      }
-    }
+    writer.write(
+        "var output = await $L.InvokeAsync(handler, input, cancellationToken)"
+            + ".ConfigureAwait(false);",
+        descriptorAccess);
+    writer.write(
+        "var smithyResponse = FunctionalRestJsonProtocol.SerializeResponse($L," + " output);",
+        SchemaGenerator.functionalOperationSchemaAccessor(context, op));
+    writer.write(
+        "await SmithyAspNetCoreProtocol.WriteSmithyHttpResponseAsync(httpContext, smithyResponse,"
+            + " cancellationToken).ConfigureAwait(false);");
   }
 
   private void writeInputBinding(SymbolProvider sp, StructureShape input, String inputType) {

@@ -76,6 +76,8 @@ public final class ErrorGenerator implements Runnable {
           writer.write("");
           writeDeserialize(typeName, sp, model, members, messageMember.orElse(null));
         });
+    writer.write("");
+    SchemaGenerator.writeFunctionalStructureSchema(writer, context, shape, members);
   }
 
   private void writeConstructor(String typeName, MemberShape messageMember) {

@@ -1,4 +1,4 @@
-namespace NSmithy.Server;
+namespace NSmithy.Core;
 
 public readonly record struct SmithyUnit
 {

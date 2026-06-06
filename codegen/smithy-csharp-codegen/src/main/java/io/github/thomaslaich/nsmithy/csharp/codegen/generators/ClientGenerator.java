@@ -108,6 +108,9 @@ public final class ClientGenerator implements Runnable {
       writer.addImport(RuntimeTypes.NSMITHY_CLIENT);
       writer.addImport(RuntimeTypes.NSMITHY_HTTP);
       writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
+      if (kind == Kind.REST_JSON) {
+        writer.addImport(RuntimeTypes.NSMITHY_CORE_FUNCTIONAL);
+      }
       writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kind));
       writer.addImport(ProtocolSupport.codecNamespace(kind));
       writeHttpClient(sp, model, operations, typeName, interfaceName);
@@ -190,6 +193,11 @@ public final class ClientGenerator implements Runnable {
   // ---------------- per-operation method ----------------
 
   private void writeOperationMethod(SymbolProvider sp, Model model, OperationShape op) {
+    if (kind == Kind.REST_JSON) {
+      writeFunctionalRestJsonOperationMethod(sp, model, op);
+      return;
+    }
+
     StructureShape input =
         ShapeSupport.isUnit(op.getInputShape())
             ? null
@@ -350,6 +358,56 @@ public final class ClientGenerator implements Runnable {
           } else {
             writer.write("");
             writeResponseReturn(sp, output);
+          }
+        });
+    writer.write("");
+  }
+
+  private void writeFunctionalRestJsonOperationMethod(
+      SymbolProvider sp, Model model, OperationShape op) {
+    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
+    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
+    String opName = CSharpNaming.typeName(op.getId().getName());
+    String deserName = "Deserialize" + opName + "ErrorAsync";
+
+    writer.write("public async $L", operationSignature(sp, op));
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          if (hasInput) {
+            writer.write("System.ArgumentNullException.ThrowIfNull(input);");
+          }
+
+          writer.write(
+              "var request = FunctionalRestJsonProtocol.SerializeRequest($L, $L);",
+              SchemaGenerator.functionalOperationSchemaAccessor(context, op),
+              hasInput ? "input" : "SmithyUnit.Value");
+
+          if (op.findTrait(TraitIds.REQUEST_COMPRESSION).isPresent()) {
+            writer.write(
+                "FunctionalRestJsonProtocol.ApplyRequestCompression(request, $L);",
+                requestCompressionEncoding(op));
+          }
+          if (op.findTrait(TraitIds.HTTP_CHECKSUM_REQUIRED).isPresent()) {
+            writer.write("FunctionalRestJsonProtocol.ApplyContentMd5(request);");
+          }
+
+          writer.write("");
+          writer.write(
+              "var response = await invoker.InvokeAsync($L, $L, request, $L,"
+                  + " cancellationToken).ConfigureAwait(false);",
+              CSharpNaming.formatString(service.getId().getName()),
+              CSharpNaming.formatString(op.getId().getName()),
+              deserName);
+
+          if (hasOutput) {
+            writer.write("");
+            writer.write(
+                "return FunctionalRestJsonProtocol.DeserializeResponse($L," + " response);",
+                SchemaGenerator.functionalOperationSchemaAccessor(context, op));
+          } else {
+            writer.write("return;");
           }
         });
     writer.write("");

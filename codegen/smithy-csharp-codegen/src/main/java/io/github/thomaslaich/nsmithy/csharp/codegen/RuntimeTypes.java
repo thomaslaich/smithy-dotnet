@@ -9,6 +9,7 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 @SmithyInternalApi
 public final class RuntimeTypes {
   public static final String NSMITHY_CORE = "NSmithy.Core";
+  public static final String NSMITHY_CORE_FUNCTIONAL = "NSmithy.Core.Functional";
   public static final String NSMITHY_CORE_ANNOTATIONS = "NSmithy.Core.Annotations";
   public static final String NSMITHY_CORE_SERDE = "NSmithy.Core.Serde";
   public static final String NSMITHY_CLIENT = "NSmithy.Client";

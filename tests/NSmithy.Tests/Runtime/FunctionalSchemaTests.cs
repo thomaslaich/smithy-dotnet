@@ -295,6 +295,82 @@ public sealed class FunctionalSchemaTests
         Assert.Equal(36, decoded);
     }
 
+    public readonly record struct Status(string Value) : IFunctionalStringEnumValue<Status>
+    {
+        public static readonly Status Active = new("ACTIVE");
+
+        public static readonly Status Inactive = new("INACTIVE");
+
+        public static Status FromValue(string value) => new(value);
+    }
+
+    public sealed record Job(string Name, Status Status);
+
+    public sealed class JobBuilder
+    {
+        public string? Name { get; set; }
+
+        public Status Status { get; set; }
+    }
+
+    [Fact]
+    public void FunctionalStringEnumSchemaModelsEnumWireValue()
+    {
+        var statusSchema = FunctionalSchemas.StringEnum<Status>(new ShapeId("example", "Status"));
+
+        Assert.Equal(new ShapeId("example", "Status"), statusSchema.Id);
+        Assert.Equal(ShapeKind.Enum, statusSchema.Kind);
+        Assert.Equal("ACTIVE", ((IFunctionalStringEnumValue)Status.Active).Value);
+        Assert.Equal(Status.Inactive, statusSchema.Create("INACTIVE"));
+    }
+
+    [Fact]
+    public void FunctionalJsonCodecRoundTripsStringEnumSchema()
+    {
+        var statusSchema = FunctionalSchemas.StringEnum<Status>(new ShapeId("example", "Status"));
+        var codec = FunctionalJsonCodec.FromSchema(statusSchema);
+
+        var json = codec.Serialize(Status.Active);
+        var decoded = codec.Deserialize(json);
+
+        Assert.Equal("\"ACTIVE\"", json);
+        Assert.Equal(Status.Active, decoded);
+    }
+
+    [Fact]
+    public void FunctionalJsonCodecRoundTripsStructureWithStringEnumMember()
+    {
+        var input = new Job("deploy", Status.Active);
+        var expectedJson = "{\"name\":\"deploy\",\"status\":\"ACTIVE\"}";
+
+        var statusSchema = FunctionalSchemas.StringEnum<Status>(new ShapeId("example", "Status"));
+        var jobSchema = FunctionalSchemas
+            .Structure<Job, JobBuilder>(new ShapeId("example", "Job"))
+            .Required(
+                "name",
+                static job => job.Name,
+                static (builder, value) => builder.Name = value,
+                FunctionalSchemas.String
+            )
+            .Required(
+                "status",
+                static job => job.Status,
+                static (builder, value) => builder.Status = value,
+                statusSchema
+            )
+            .Build(
+                static () => new JobBuilder(),
+                static builder => new Job(builder.Name!, builder.Status)
+            );
+        var codec = FunctionalJsonCodec.FromSchema(jobSchema);
+
+        var json = codec.Serialize(input);
+        var decoded = codec.Deserialize(json);
+
+        Assert.Equal(expectedJson, json);
+        Assert.Equal(input, decoded);
+    }
+
     public abstract record Choice
     {
         public sealed record StringChoice(string Value) : Choice;
