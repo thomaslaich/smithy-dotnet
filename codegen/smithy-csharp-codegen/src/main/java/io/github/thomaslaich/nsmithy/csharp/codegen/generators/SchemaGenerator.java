@@ -113,7 +113,15 @@ public final class SchemaGenerator {
     }
 
     if (shape.getType() == ShapeType.TIMESTAMP) {
-      return "FunctionalSchemas.Timestamp";
+      // Carry @timestampFormat into the schema so codecs resolve the wire format from it
+      // (covers struct members, list elements, and map values uniformly).
+      List<Trait> tsTraits =
+          shape.getAllTraits().values().stream()
+              .filter(t -> t.toShapeId().toString().equals("smithy.api#timestampFormat"))
+              .collect(Collectors.toList());
+      return tsTraits.isEmpty()
+          ? "FunctionalSchemas.Timestamp"
+          : "FunctionalSchemas.TimestampWithTraits(" + traitsExpr(tsTraits) + ")";
     }
 
     String preludeSchema =
@@ -499,7 +507,7 @@ public final class SchemaGenerator {
 
   private static String functionalMemberTargetExpr(GenerationContext context, MemberShape member) {
     Shape target = context.model().expectShape(member.getTarget());
-    String targetExpr = functionalShapeSchemaAccessor(context, target);
+    String targetExpr = functionalTargetSchemaExpr(context, member, target);
     String nullableMemberType = ShapeSupport.memberTypeExpr(context.symbolProvider(), member, true);
     if (!nullableMemberType.endsWith("?")) {
       return targetExpr;
@@ -514,6 +522,25 @@ public final class SchemaGenerator {
   private static String functionalRawMemberTargetExpr(
       GenerationContext context, MemberShape member) {
     Shape target = context.model().expectShape(member.getTarget());
+    return functionalTargetSchemaExpr(context, member, target);
+  }
+
+  /**
+   * Target schema for a member, honoring a member-level {@code @timestampFormat} (which takes
+   * precedence over the target shape's format). Baking the format into the target schema lets the
+   * codec resolve it from the schema without threading member traits.
+   */
+  private static String functionalTargetSchemaExpr(
+      GenerationContext context, MemberShape member, Shape target) {
+    if (target.getType() == ShapeType.TIMESTAMP) {
+      List<Trait> memberFormat =
+          member.getAllTraits().values().stream()
+              .filter(t -> t.toShapeId().toString().equals("smithy.api#timestampFormat"))
+              .collect(Collectors.toList());
+      if (!memberFormat.isEmpty()) {
+        return "FunctionalSchemas.TimestampWithTraits(" + traitsExpr(memberFormat) + ")";
+      }
+    }
     return functionalShapeSchemaAccessor(context, target);
   }
 

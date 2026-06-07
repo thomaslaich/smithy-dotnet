@@ -1139,6 +1139,17 @@ public static class FunctionalSchemas
             ShapeKind.Timestamp
         );
 
+    /// <summary>
+    /// A timestamp schema carrying traits (e.g. <c>@timestampFormat</c>) so codecs can resolve the
+    /// wire format from the schema rather than a shared singleton.
+    /// </summary>
+    public static FunctionalSchema<DateTimeOffset> TimestampWithTraits(IEnumerable<Trait>? traits) =>
+        new FunctionalPrimitiveSchema<DateTimeOffset>(
+            new ShapeId(PreludeNamespace, "Timestamp"),
+            ShapeKind.Timestamp,
+            traits
+        );
+
     public static FunctionalSchema<Document> Document { get; } =
         new FunctionalPrimitiveSchema<Document>(
             new ShapeId(PreludeNamespace, "Document"),

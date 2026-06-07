@@ -121,7 +121,9 @@ public static class FunctionalJsonCodec
                 ShapeKind.Enum => (IJsonValueReader<T>)CompileStringEnum((dynamic)resolved),
                 ShapeKind.IntEnum => (IJsonValueReader<T>)CompileIntEnum((dynamic)resolved),
                 ShapeKind.Blob => Cast<T>(new BlobJsonValueReader()),
-                ShapeKind.Timestamp => Cast<T>(new TimestampJsonValueReader()),
+                ShapeKind.Timestamp => Cast<T>(
+                    new TimestampJsonValueReader(TimestampFormat.Resolve(null, resolved))
+                ),
                 ShapeKind.Document => Cast<T>(new DocumentJsonValueReader()),
                 ShapeKind.Structure => (IJsonValueReader<T>)CompileStructure((dynamic)resolved),
                 ShapeKind.Union => (IJsonValueReader<T>)CompileUnion((dynamic)resolved),
@@ -483,14 +485,9 @@ public static class FunctionalJsonCodec
         public byte[] Read(JsonElement value) => value.GetBytesFromBase64();
     }
 
-    private sealed class TimestampJsonValueReader : IJsonValueReader<DateTimeOffset>
+    private sealed class TimestampJsonValueReader(string format) : IJsonValueReader<DateTimeOffset>
     {
-        public DateTimeOffset Read(JsonElement value) =>
-            DateTimeOffset.Parse(
-                value.GetString()!,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind
-            );
+        public DateTimeOffset Read(JsonElement value) => TimestampFormat.Read(value, format);
     }
 
     private sealed class DocumentJsonValueReader : IJsonValueReader<Document>
@@ -602,7 +599,9 @@ public static class FunctionalJsonCodec
                 ShapeKind.Enum => (IJsonValueWriter<T>)CompileStringEnum((dynamic)resolved),
                 ShapeKind.IntEnum => (IJsonValueWriter<T>)CompileIntEnum((dynamic)resolved),
                 ShapeKind.Blob => Cast<T>(new BlobJsonValueWriter()),
-                ShapeKind.Timestamp => Cast<T>(new TimestampJsonValueWriter()),
+                ShapeKind.Timestamp => Cast<T>(
+                    new TimestampJsonValueWriter(TimestampFormat.Resolve(null, resolved))
+                ),
                 ShapeKind.Document => Cast<T>(new DocumentJsonValueWriter()),
                 ShapeKind.Structure when resolved is IFunctionalStructSchema<T> structSchema =>
                     CompileStructure(structSchema),
@@ -957,10 +956,96 @@ public static class FunctionalJsonCodec
         }
     }
 
-    private sealed class TimestampJsonValueWriter : IJsonValueWriter<DateTimeOffset>
+    private sealed class TimestampJsonValueWriter(string format) : IJsonValueWriter<DateTimeOffset>
     {
         public void Write(Utf8JsonWriter writer, DateTimeOffset value) =>
-            writer.WriteStringValue(value.ToString("O", CultureInfo.InvariantCulture));
+            TimestampFormat.Write(writer, value, format);
+    }
+
+    /// <summary>
+    /// Smithy timestamp wire formats for JSON bodies. The body default is <c>epoch-seconds</c>;
+    /// <c>@timestampFormat</c> on the member or target shape overrides it.
+    /// </summary>
+    private static class TimestampFormat
+    {
+        private static readonly ShapeId TimestampFormatTrait = new("smithy.api", "timestampFormat");
+
+        public static string Resolve(
+            IReadOnlyDictionary<ShapeId, Trait>? memberTraits,
+            FunctionalSchema schema
+        )
+        {
+            if (
+                memberTraits is not null
+                && memberTraits.TryGetValue(TimestampFormatTrait, out var memberTrait)
+            )
+            {
+                return memberTrait.Value.AsString();
+            }
+
+            if (schema.Resolved.Traits.TryGetValue(TimestampFormatTrait, out var schemaTrait))
+            {
+                return schemaTrait.Value.AsString();
+            }
+
+            return "epoch-seconds";
+        }
+
+        public static void Write(Utf8JsonWriter writer, DateTimeOffset value, string format)
+        {
+            switch (format)
+            {
+                case "epoch-seconds":
+                    var utcTicks = value.ToUniversalTime().Ticks;
+                    if (utcTicks % TimeSpan.TicksPerSecond == 0)
+                    {
+                        writer.WriteNumberValue(value.ToUnixTimeSeconds());
+                    }
+                    else
+                    {
+                        writer.WriteNumberValue(value.ToUnixTimeMilliseconds() / 1000.0m);
+                    }
+
+                    break;
+                case "http-date":
+                    writer.WriteStringValue(
+                        value.ToUniversalTime().ToString("r", CultureInfo.InvariantCulture)
+                    );
+                    break;
+                default: // date-time (RFC3339)
+                    var utc = value.ToUniversalTime();
+                    var text =
+                        utc.Ticks % TimeSpan.TicksPerSecond == 0
+                            ? utc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)
+                            : utc.ToString(
+                                "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'",
+                                CultureInfo.InvariantCulture
+                            );
+                    writer.WriteStringValue(text);
+                    break;
+            }
+        }
+
+        public static DateTimeOffset Read(JsonElement value, string format)
+        {
+            return format switch
+            {
+                "epoch-seconds" => DateTimeOffset.FromUnixTimeMilliseconds(
+                    (long)(value.GetDouble() * 1000)
+                ),
+                "http-date" => DateTimeOffset.ParseExact(
+                    value.GetString()!,
+                    "r",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None
+                ),
+                _ => DateTimeOffset.Parse(
+                    value.GetString()!,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind
+                ),
+            };
+        }
     }
 
     private sealed class DocumentJsonValueWriter : IJsonValueWriter<Document>
@@ -1026,8 +1111,10 @@ public static class FunctionalJsonCodec
                 writer.WriteBase64StringValue((byte[])value);
                 break;
             case ShapeKind.Timestamp:
-                writer.WriteStringValue(
-                    ((DateTimeOffset)value).ToString("O", CultureInfo.InvariantCulture)
+                TimestampFormat.Write(
+                    writer,
+                    (DateTimeOffset)value,
+                    TimestampFormat.Resolve(null, schema)
                 );
                 break;
             case ShapeKind.Document:
@@ -1197,11 +1284,7 @@ public static class FunctionalJsonCodec
             ),
             ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)schema).CreateObject(value.GetInt32()),
             ShapeKind.Blob => value.GetBytesFromBase64(),
-            ShapeKind.Timestamp => DateTimeOffset.Parse(
-                value.GetString()!,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind
-            ),
+            ShapeKind.Timestamp => TimestampFormat.Read(value, TimestampFormat.Resolve(null, schema)),
             ShapeKind.Document => Document.FromJsonElement(value),
             ShapeKind.Structure => ReadStructure((IFunctionalStructSchema)schema, value),
             ShapeKind.Union => ReadUnion((IFunctionalUnionSchema)schema, value),
