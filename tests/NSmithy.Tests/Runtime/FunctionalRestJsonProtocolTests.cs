@@ -910,4 +910,170 @@ public sealed class FunctionalRestJsonProtocolTests
         Assert.Equal(new GetUserProfileOutput(201, "etag-1", output.ExtraHeaders, "Ada"), output);
         Assert.Equal("abc", output.ExtraHeaders["Trace"]);
     }
+
+    public sealed record ListInput(string? NextToken = null, int? PageSize = null);
+
+    public sealed class ListInputBuilder
+    {
+        public string? NextToken { get; set; }
+        public int? PageSize { get; set; }
+    }
+
+    public sealed record ListOutput(string? NextToken = null);
+
+    public sealed class ListOutputBuilder
+    {
+        public string? NextToken { get; set; }
+    }
+
+    [Fact]
+    public void QueryParameterRoundTripPreservesNonNullToken()
+    {
+        var inputSchema = FunctionalSchemas
+            .Structure<ListInput, ListInputBuilder>(new ShapeId("example", "ListInput"))
+            .Optional(
+                "nextToken",
+                static i => i.NextToken!,
+                static (b, v) => b.NextToken = v,
+                FunctionalSchemas.NullableReference(FunctionalSchemas.String),
+                traits: [FunctionalRestTraits.HttpQueryTrait("nextToken")]
+            )
+            .Optional(
+                "pageSize",
+                static i => i.PageSize,
+                static (b, v) => b.PageSize = v,
+                FunctionalSchemas.Nullable(FunctionalSchemas.Integer),
+                traits: [FunctionalRestTraits.HttpQueryTrait("pageSize")]
+            )
+            .Build(
+                static () => new ListInputBuilder(),
+                static b => new ListInput(b.NextToken, b.PageSize)
+            );
+        var outputSchema = FunctionalSchemas
+            .Structure<ListOutput, ListOutputBuilder>(new ShapeId("example", "ListOutput"))
+            .Optional(
+                "nextToken",
+                static o => o.NextToken!,
+                static (b, v) => b.NextToken = v,
+                FunctionalSchemas.NullableReference(FunctionalSchemas.String)
+            )
+            .Build(static () => new ListOutputBuilder(), static b => new ListOutput(b.NextToken));
+        var operation = FunctionalSchemas.Operation(
+            new ShapeId("example", "ListItems"),
+            inputSchema,
+            outputSchema,
+            traits: [FunctionalRestTraits.HttpTrait("GET", "/items")]
+        );
+
+        // Client serializes request with non-null nextToken
+        var request = FunctionalRestJsonProtocol.SerializeRequest(
+            operation,
+            new ListInput(NextToken: "page2-token", PageSize: 10)
+        );
+
+        Assert.Contains("nextToken=page2-token", request.RequestUri);
+        Assert.Contains("pageSize=10", request.RequestUri);
+
+        // Server deserializes the same request
+        var deserializedInput = FunctionalRestJsonProtocol.DeserializeRequest(operation, request);
+
+        Assert.Equal("page2-token", deserializedInput.NextToken);
+        Assert.Equal(10, deserializedInput.PageSize);
+    }
+
+    [Fact]
+    public void QueryParameterRoundTripHandlesNullToken()
+    {
+        var inputSchema = FunctionalSchemas
+            .Structure<ListInput, ListInputBuilder>(new ShapeId("example", "ListInput2"))
+            .Optional(
+                "nextToken",
+                static i => i.NextToken!,
+                static (b, v) => b.NextToken = v,
+                FunctionalSchemas.NullableReference(FunctionalSchemas.String),
+                traits: [FunctionalRestTraits.HttpQueryTrait("nextToken")]
+            )
+            .Build(static () => new ListInputBuilder(), static b => new ListInput(b.NextToken));
+        var outputSchema = FunctionalSchemas
+            .Structure<ListOutput, ListOutputBuilder>(new ShapeId("example", "ListOutput2"))
+            .Build(static () => new ListOutputBuilder(), static b => new ListOutput());
+        var operation = FunctionalSchemas.Operation(
+            new ShapeId("example", "ListItems2"),
+            inputSchema,
+            outputSchema,
+            traits: [FunctionalRestTraits.HttpTrait("GET", "/items")]
+        );
+
+        // First page: no nextToken
+        var request = FunctionalRestJsonProtocol.SerializeRequest(
+            operation,
+            new ListInput(NextToken: null)
+        );
+
+        Assert.DoesNotContain("nextToken", request.RequestUri);
+
+        var input = FunctionalRestJsonProtocol.DeserializeRequest(operation, request);
+        Assert.Null(input.NextToken);
+    }
+
+    [Fact]
+    public void DeserializeReadsQueryFromServerStyleRequestUri()
+    {
+        var inputSchema = FunctionalSchemas
+            .Structure<ListInput, ListInputBuilder>(new ShapeId("example", "ListInput3"))
+            .Optional(
+                "nextToken",
+                static i => i.NextToken!,
+                static (b, v) => b.NextToken = v,
+                FunctionalSchemas.NullableReference(FunctionalSchemas.String),
+                traits: [FunctionalRestTraits.HttpQueryTrait("nextToken")]
+            )
+            .Optional(
+                "pageSize",
+                static i => i.PageSize,
+                static (b, v) => b.PageSize = v,
+                FunctionalSchemas.Nullable(FunctionalSchemas.Integer),
+                traits: [FunctionalRestTraits.HttpQueryTrait("pageSize")]
+            )
+            .Build(
+                static () => new ListInputBuilder(),
+                static b => new ListInput(b.NextToken, b.PageSize)
+            );
+        var outputSchema = FunctionalSchemas
+            .Structure<ListOutput, ListOutputBuilder>(new ShapeId("example", "ListOutput3"))
+            .Build(static () => new ListOutputBuilder(), static b => new ListOutput());
+        var operation = FunctionalSchemas.Operation(
+            new ShapeId("example", "ListItems3"),
+            inputSchema,
+            outputSchema,
+            traits: [FunctionalRestTraits.HttpTrait("GET", "/cities")]
+        );
+
+        // Exactly what SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync builds:
+        // a relative path + query string, query params in the order the client sent them.
+        var request = new SmithyHttpRequest(HttpMethod.Get, "/cities?pageSize=3&nextToken=LAX");
+
+        var input = FunctionalRestJsonProtocol.DeserializeRequest(operation, request);
+
+        Assert.Equal("LAX", input.NextToken);
+        Assert.Equal(3, input.PageSize);
+    }
+
+    [Fact]
+    public async Task CreateSmithyHttpRequestPreservesQueryString()
+    {
+        var httpContext = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        httpContext.Request.Method = "GET";
+        httpContext.Request.Path = "/cities";
+        httpContext.Request.QueryString = new Microsoft.AspNetCore.Http.QueryString(
+            "?pageSize=3&nextToken=LAX"
+        );
+
+        var request =
+            await NSmithy.Server.AspNetCore.SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync(
+                httpContext
+            );
+
+        Assert.Equal("/cities?pageSize=3&nextToken=LAX", request.RequestUri);
+    }
 }

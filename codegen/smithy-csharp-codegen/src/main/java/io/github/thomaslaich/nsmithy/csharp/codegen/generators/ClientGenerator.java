@@ -131,7 +131,7 @@ public final class ClientGenerator implements Runnable {
       String typeName,
       String interfaceName) {
     writer.write("public sealed class $L : $L", typeName, interfaceName);
-      writer.openBlock(
+    writer.openBlock(
         "{",
         "}",
         () -> {
@@ -252,8 +252,7 @@ public final class ClientGenerator implements Runnable {
           if (rpc || useDoc) {
             if (input != null) {
               writer.write(
-                  "request.Content = $L;",
-                  serializeDocumentBodyExpression(input, "input"));
+                  "request.Content = $L;", serializeDocumentBodyExpression(input, "input"));
               writer.write("request.ContentType = $L;", mediaTypeLiteral());
             }
           } else {
@@ -444,7 +443,8 @@ public final class ClientGenerator implements Runnable {
   private String serializeDocumentBodyExpression(Shape shape, String valueExpr) {
     String codec = codecFromSchema(shape);
     return switch (kind) {
-      case REST_XML -> "System.Text.Encoding.UTF8.GetBytes(" + codec + ".Serialize(" + valueExpr + "))";
+      case REST_XML ->
+          "System.Text.Encoding.UTF8.GetBytes(" + codec + ".Serialize(" + valueExpr + "))";
       case RPC_V2_CBOR -> codec + ".Serialize(" + valueExpr + ")";
       case REST_JSON -> "DocumentCodec.Serialize(" + valueExpr + ")";
     };
