@@ -426,14 +426,27 @@ public static class FunctionalRestProtocol
                 return;
             }
 
-            if (member.TargetSchema.Kind == ShapeKind.Blob)
+            var mediaType = GetMediaType(member.Traits);
+            switch (member.TargetSchema.Resolved.Kind)
             {
-                request.Content = (byte[])(object)value;
-                request.ContentType = bodyFormat.BlobContentType;
-                return;
+                case ShapeKind.Blob:
+                    request.Content = (byte[])(object)value;
+                    request.ContentType = mediaType ?? bodyFormat.BlobContentType;
+                    break;
+                case ShapeKind.String:
+                    request.Content = Encoding.UTF8.GetBytes((string)(object)value);
+                    request.ContentType = mediaType ?? "text/plain";
+                    break;
+                case ShapeKind.Enum:
+                    request.Content = Encoding.UTF8.GetBytes(
+                        ((IFunctionalStringEnumValue)(object)value).Value
+                    );
+                    request.ContentType = mediaType ?? "text/plain";
+                    break;
+                default:
+                    WriteBody(request, member.TargetSchema, value, bodyFormat);
+                    break;
             }
-
-            WriteBody(request, member.TargetSchema, value, bodyFormat);
         }
     }
 
@@ -1003,6 +1016,14 @@ public static class FunctionalRestProtocol
             _ => double.Parse(value, CultureInfo.InvariantCulture),
         };
 
+    private static string FormatRfc3339(DateTimeOffset value)
+    {
+        var utc = value.ToUniversalTime();
+        return utc.Ticks % TimeSpan.TicksPerSecond == 0
+            ? utc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)
+            : utc.ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'", CultureInfo.InvariantCulture);
+    }
+
     private static string FormatTimestamp(
         FunctionalSchema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
@@ -1015,7 +1036,7 @@ public static class FunctionalRestProtocol
             "http-date" => value
                 .ToUniversalTime()
                 .ToString("ddd, dd MMM yyyy HH':'mm':'ss 'GMT'", CultureInfo.InvariantCulture),
-            "date-time" => value.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture),
+            "date-time" => FormatRfc3339(value),
             var format => throw new NotSupportedException(
                 $"Timestamp format '{format}' is not supported."
             ),

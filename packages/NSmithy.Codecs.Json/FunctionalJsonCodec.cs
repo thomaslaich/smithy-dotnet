@@ -230,7 +230,7 @@ public static class FunctionalJsonCodec
         IJsonValueReader<TValue> valueReader
     ) : IJsonMemberReader<TBuilder>
     {
-        public string Name => member.Name;
+        public string Name => WireName(member.Traits, member.Name);
 
         public bool IsRequired => member.IsRequired;
 
@@ -312,7 +312,7 @@ public static class FunctionalJsonCodec
         IJsonValueReader<TValue> valueReader
     ) : IJsonUnionCaseReader<TUnion>
     {
-        public string Name => unionCase.Name;
+        public string Name => WireName(unionCase.Traits, unionCase.Name);
 
         public TUnion Read(JsonElement value) => unionCase.Create(valueReader.Read(value));
     }
@@ -719,7 +719,7 @@ public static class FunctionalJsonCodec
                 return;
             }
 
-            writer.WritePropertyName(member.Name);
+            writer.WritePropertyName(WireName(member.Traits, member.Name));
             valueWriter.Write(writer, value);
         }
     }
@@ -754,7 +754,7 @@ public static class FunctionalJsonCodec
                 return false;
             }
 
-            writer.WritePropertyName(@case.Name);
+            writer.WritePropertyName(WireName(@case.Traits, @case.Name));
             valueWriter.Write(writer, @case.GetValue(value));
             return true;
         }
@@ -1192,7 +1192,7 @@ public static class FunctionalJsonCodec
                 return;
             }
 
-            writer.WritePropertyName(member.Name);
+            writer.WritePropertyName(WireName(member.Traits, member.Name));
             WriteValue(writer, member.TargetSchema, memberValue);
         }
     }
@@ -1212,7 +1212,7 @@ public static class FunctionalJsonCodec
                 continue;
             }
 
-            writer.WritePropertyName(member.Name);
+            writer.WritePropertyName(WireName(member.Traits, member.Name));
             WriteValue(writer, member.Target, memberValue);
         }
 
@@ -1227,7 +1227,7 @@ public static class FunctionalJsonCodec
     {
         var @case = schema.GetCaseObject(value);
         writer.WriteStartObject();
-        writer.WritePropertyName(@case.Name);
+        writer.WritePropertyName(WireName(@case.Traits, @case.Name));
         WriteValue(writer, @case.Target, @case.GetObject(value));
         writer.WriteEndObject();
     }
@@ -1302,6 +1302,12 @@ public static class FunctionalJsonCodec
         return resolved is IFunctionalNullableSchema nullable ? nullable.Target.Resolved : resolved;
     }
 
+    private static readonly ShapeId JsonNameTrait = new("smithy.api", "jsonName");
+
+    // The JSON property name for a member or union case: @jsonName if present, else the name.
+    private static string WireName(IReadOnlyDictionary<ShapeId, Trait> traits, string fallback) =>
+        traits.TryGetValue(JsonNameTrait, out var trait) ? trait.Value.AsString() : fallback;
+
     private static object ReadStructure(IFunctionalStructSchema schema, JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.Object)
@@ -1314,7 +1320,7 @@ public static class FunctionalJsonCodec
         var builder = schema.CreateBuilder();
         foreach (var member in schema.Members)
         {
-            if (!value.TryGetProperty(member.Name, out var memberValue))
+            if (!value.TryGetProperty(WireName(member.Traits, member.Name), out var memberValue))
             {
                 if (member.IsRequired)
                 {
@@ -1359,7 +1365,7 @@ public static class FunctionalJsonCodec
 
         foreach (var member in projection.TypedMembers)
         {
-            if (!value.TryGetProperty(member.Name, out var memberValue))
+            if (!value.TryGetProperty(WireName(member.Traits, member.Name), out var memberValue))
             {
                 if (member.IsRequired)
                 {
@@ -1406,7 +1412,7 @@ public static class FunctionalJsonCodec
 
         var property = properties[0];
         var @case =
-            schema.GetCase(property.Name)
+            schema.Cases.FirstOrDefault(c => WireName(c.Traits, c.Name) == property.Name)
             ?? throw new InvalidOperationException($"Unknown union member '{property.Name}'.");
         return @case.CreateObject(ReadValue(@case.Target, property.Value));
     }
