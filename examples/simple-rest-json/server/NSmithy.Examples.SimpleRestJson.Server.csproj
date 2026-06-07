@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <SmithyService>alloy.test#PizzaAdminService</SmithyService>
     <SmithyGeneratedNamespaces>alloy.test</SmithyGeneratedNamespaces>
+    <!-- Server-only project: generate the server stub + shapes, not the client
+         (the client lives in ../client and references NSmithy.Client). -->
+    <SmithyGenerateClient>false</SmithyGenerateClient>
     <SmithyGenerateDocs>true</SmithyGenerateDocs>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>

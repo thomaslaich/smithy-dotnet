@@ -185,7 +185,7 @@ internal sealed record class RpcV2ErrorEnvelope(string Type, string? Message)
                 "message",
                 static value => value.Message,
                 static (builder, value) => builder.Message = value,
-                Schemas.String
+                Schemas.NullableReference(Schemas.String)
             )
             .Build(
                 static () => new Builder(),

@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <SmithyService>example.weather#Weather</SmithyService>
     <SmithyGeneratedNamespaces>example.weather</SmithyGeneratedNamespaces>
+    <!-- Server-only project: generate the server stub + shapes, not the client
+         (the client lives in ../client and references NSmithy.Client). -->
+    <SmithyGenerateClient>false</SmithyGenerateClient>
     <SmithyGenerateDocs>true</SmithyGenerateDocs>
     <SmithyOpenApiProtocol>aws.protocols#restJson1</SmithyOpenApiProtocol>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
