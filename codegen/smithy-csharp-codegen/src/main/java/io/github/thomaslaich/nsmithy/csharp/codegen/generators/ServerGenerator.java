@@ -45,6 +45,7 @@ public final class ServerGenerator implements Runnable {
   private final CSharpWriter writer;
   private final ServiceShape service;
   private final boolean rawRestJsonStringPayloads;
+  private final ProtocolSupport.Kind kind;
 
   public ServerGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
@@ -52,6 +53,8 @@ public final class ServerGenerator implements Runnable {
     this.service = s;
     this.rawRestJsonStringPayloads =
         s.findTrait(io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds.REST_JSON_1).isPresent();
+    this.kind =
+        ProtocolSupport.emitsHttpClient(s) ? ProtocolSupport.kindOf(s) : ProtocolSupport.Kind.REST_JSON;
   }
 
   @Override
@@ -68,8 +71,6 @@ public final class ServerGenerator implements Runnable {
     boolean emitsGrpc = ProtocolSupport.isGrpcService(service);
 
     writer.addImport(RuntimeTypes.NSMITHY_CORE);
-    writer.addImport(RuntimeTypes.NSMITHY_SERVER);
-    writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     writer.addImport(RuntimeTypes.MS_EXT_DI);
     if (emitsAspNet) {
       writer.addImport(RuntimeTypes.NSMITHY_CORE_FUNCTIONAL);
@@ -103,10 +104,6 @@ public final class ServerGenerator implements Runnable {
             ? ""
             : " : " + ops.stream().map(this::opHandlerName).collect(Collectors.joining(", "));
     writer.write("public interface $L$L { }", aggInterface, inherits);
-    writer.write("");
-
-    // Descriptor
-    writeDescriptor(sp, ops, contract, aggInterface);
     writer.write("");
 
     // ServerExtensions (DI)
@@ -248,129 +245,6 @@ public final class ServerGenerator implements Runnable {
 
   // ---------------- descriptor ----------------
 
-  private void writeDescriptor(
-      SymbolProvider sp, List<OperationShape> ops, String contract, String aggInterface) {
-    writer.write("public static class $LDescriptor", contract);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          for (OperationShape op : ops) {
-            writeOperationDescriptor(sp, op);
-            writer.write("");
-          }
-          writer.openBlock(
-              "public static SmithyServiceDescriptor<$L> Service { get; } = new(",
-              ");",
-              aggInterface,
-              () -> {
-                writer.write("$L,", CSharpNaming.formatString(service.getId().toString()));
-                writer.write("$L,", CSharpNaming.formatString(service.getId().getName()));
-                writer.write("$L,", traitDescriptorsExpr(service.getAllTraits().values()));
-                writer.openBlock(
-                    "[",
-                    "]",
-                    () -> {
-                      for (OperationShape op : ops) {
-                        writer.write("$L,", CSharpNaming.typeName(op.getId().getName()));
-                      }
-                    });
-              });
-        });
-  }
-
-  private void writeOperationDescriptor(SymbolProvider sp, OperationShape op) {
-    String descriptorName = CSharpNaming.typeName(op.getId().getName());
-    String methodName = descriptorName + "Async";
-    String opInterface = opHandlerName(op);
-    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
-    String inputType =
-        hasInput
-            ? CSharpSymbolProvider.qualified(
-                sp.toSymbol(context.model().expectShape(op.getInputShape())))
-            : "SmithyUnit";
-    String outputType =
-        hasOutput
-            ? CSharpSymbolProvider.qualified(
-                sp.toSymbol(context.model().expectShape(op.getOutputShape())))
-            : "SmithyUnit";
-
-    writer.openBlock(
-        "public static SmithyOperationDescriptor<$L, $L, $L> $L { get; } = new(",
-        ");",
-        opInterface,
-        inputType,
-        outputType,
-        descriptorName,
-        () -> {
-          writer.write("$L,", CSharpNaming.formatString(op.getId().toString()));
-          writer.write("$L,", CSharpNaming.formatString(op.getId().getName()));
-          writer.write("$L,", traitDescriptorsExpr(op.getAllTraits().values()));
-          if (hasInput && hasOutput) {
-            writer.write(
-                "static (handler, input, cancellationToken) => handler.$L(input,"
-                    + " cancellationToken)",
-                methodName);
-          } else if (hasInput) {
-            writer.openBlock(
-                "static async (handler, input, cancellationToken) => {",
-                "}",
-                () -> {
-                  writer.write(
-                      "await handler.$L(input, cancellationToken).ConfigureAwait(false);",
-                      methodName);
-                  writer.write("return SmithyUnit.Value;");
-                });
-          } else if (hasOutput) {
-            writer.write(
-                "static (handler, _, cancellationToken) => handler.$L(cancellationToken)",
-                methodName);
-          } else {
-            writer.openBlock(
-                "static async (handler, _, cancellationToken) => {",
-                "}",
-                () -> {
-                  writer.write(
-                      "await handler.$L(cancellationToken).ConfigureAwait(false);", methodName);
-                  writer.write("return SmithyUnit.Value;");
-                });
-          }
-        });
-  }
-
-  private String traitDescriptorsExpr(
-      java.util.Collection<? extends software.amazon.smithy.model.traits.Trait> traits) {
-    if (traits.isEmpty()) return "[]";
-    return "["
-        + traits.stream()
-            .sorted(Comparator.comparing(t -> t.toShapeId().toString()))
-            .map(
-                t -> {
-                  Optional<String> v = traitValueLiteral(t);
-                  String id = CSharpNaming.formatString(t.toShapeId().toString());
-                  return v.isPresent()
-                      ? "new SmithyTraitDescriptor("
-                          + id
-                          + ", "
-                          + CSharpNaming.formatString(v.get())
-                          + ")"
-                      : "new SmithyTraitDescriptor(" + id + ")";
-                })
-            .collect(Collectors.joining(", "))
-        + "]";
-  }
-
-  private static Optional<String> traitValueLiteral(software.amazon.smithy.model.traits.Trait t) {
-    var n = t.toNode();
-    return switch (n.getType()) {
-      case BOOLEAN -> Optional.of(Boolean.toString(n.expectBooleanNode().getValue()));
-      case NUMBER -> Optional.of(n.expectNumberNode().getValue().toString());
-      case STRING -> Optional.of(n.expectStringNode().getValue());
-      default -> Optional.empty();
-    };
-  }
-
   // ---------------- DI registration ----------------
 
   private void writeServerExtensions(
@@ -431,19 +305,6 @@ public final class ServerGenerator implements Runnable {
                 }
                 writer.write("return endpoints;");
               });
-          // Bound response writers
-          Set<ShapeId> emittedWriters = new HashSet<>();
-          for (OperationShape op : ops) {
-            if (ShapeSupport.isUnit(op.getOutputShape())) continue;
-            if (!emittedWriters.add(op.getOutputShape())) continue;
-            StructureShape output =
-                context.model().expectShape(op.getOutputShape(), StructureShape.class);
-            if (!ClientGenerator.hasResponseBindings(output)) continue;
-            writeBoundResponseWriter(sp, output);
-            writer.write("");
-          }
-          // Body projection types (input + output bound)
-          writeAspNetCoreBodyProjectionTypes(sp, ops);
         });
   }
 
@@ -462,500 +323,41 @@ public final class ServerGenerator implements Runnable {
           writer.write("System.ArgumentNullException.ThrowIfNull(handler);");
           writer.write("");
           writeStaticQueryValidation(http);
-          writeOperationBody(sp, op, contract);
+          writeOperationBody(sp, op);
         });
   }
 
-  private void writeOperationBody(SymbolProvider sp, OperationShape op, String contract) {
+  private void writeOperationBody(SymbolProvider sp, OperationShape op) {
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
-    String descriptorAccess =
-        contract + "Descriptor." + CSharpNaming.typeName(op.getId().getName());
-    String opName = CSharpNaming.typeName(op.getId().getName());
+    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
+    String methodName = CSharpNaming.typeName(op.getId().getName()) + "Async";
+    String protocol = ProtocolSupport.functionalProtocolType(kind);
+    String opSchema = SchemaGenerator.functionalOperationSchemaAccessor(context, op);
 
-    writer.write(
-        "var smithyRequest = await SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync("
-            + "httpContext, cancellationToken).ConfigureAwait(false);");
+    // Call the handler interface method directly — the operation schema carries the
+    // serialization metadata, so a separate per-operation descriptor is unnecessary.
+    String handlerCall;
     if (hasInput) {
       writer.write(
-          "var input = FunctionalRestJsonProtocol.DeserializeRequest($L," + " smithyRequest);",
-          SchemaGenerator.functionalOperationSchemaAccessor(context, op));
+          "var smithyRequest = await SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync("
+              + "httpContext, cancellationToken).ConfigureAwait(false);");
+      writer.write("var input = $L.DeserializeRequest($L, smithyRequest);", protocol, opSchema);
+      handlerCall = "handler." + methodName + "(input, cancellationToken)";
     } else {
-      writer.write("var input = SmithyUnit.Value;");
+      handlerCall = "handler." + methodName + "(cancellationToken)";
     }
-    writer.write(
-        "var output = await $L.InvokeAsync(handler, input, cancellationToken)"
-            + ".ConfigureAwait(false);",
-        descriptorAccess);
-    writer.write(
-        "var smithyResponse = FunctionalRestJsonProtocol.SerializeResponse($L," + " output);",
-        SchemaGenerator.functionalOperationSchemaAccessor(context, op));
+
+    if (hasOutput) {
+      writer.write("var output = await $L.ConfigureAwait(false);", handlerCall);
+    } else {
+      writer.write("await $L.ConfigureAwait(false);", handlerCall);
+      writer.write("var output = SmithyUnit.Value;");
+    }
+
+    writer.write("var smithyResponse = $L.SerializeResponse($L, output);", protocol, opSchema);
     writer.write(
         "await SmithyAspNetCoreProtocol.WriteSmithyHttpResponseAsync(httpContext, smithyResponse,"
             + " cancellationToken).ConfigureAwait(false);");
-  }
-
-  private void writeInputBinding(SymbolProvider sp, StructureShape input, String inputType) {
-    List<MemberShape> members = ShapeSupport.constructorMembers(input);
-    List<MemberShape> bodyMembers =
-        members.stream().filter(ShapeSupport::isHttpBody).collect(Collectors.toList());
-    if (members.isEmpty()) {
-      writer.write("var input = new $L();", inputType);
-      return;
-    }
-    String bodyVar = null;
-    if (!bodyMembers.isEmpty()) {
-      boolean requiresBody = bodyMembers.stream().anyMatch(this::isRequiredHttpInputMember);
-      String bodyType = ClientGenerator.bodyProjectionName(input);
-      if (requiresBody) {
-        writer.write(
-            "var body = await"
-                + " SmithyAspNetCoreProtocol.ReadRequiredJsonRequestBodyAsync<$L>(httpContext,"
-                + " cancellationToken).ConfigureAwait(false);",
-            bodyType);
-      } else {
-        writer.write(
-            "var body = await SmithyAspNetCoreProtocol.ReadJsonRequestBodyAsync<$L>(httpContext,"
-                + " cancellationToken).ConfigureAwait(false);",
-            bodyType);
-      }
-      writer.write("");
-      bodyVar = "body";
-    }
-    final String bv = bodyVar;
-    writer.openBlock(
-        "var input = new $L(",
-        ");",
-        inputType,
-        () -> {
-          for (int i = 0; i < members.size(); i++) {
-            writer.write(
-                "$L$L",
-                inputMemberExpression(sp, input, members.get(i), bv),
-                i == members.size() - 1 ? "" : ",");
-          }
-        });
-  }
-
-  private boolean isRequiredHttpInputMember(MemberShape m) {
-    if (ShapeSupport.isHttpLabel(m)) return true;
-    return ShapeSupport.isRequired(m);
-  }
-
-  private String inputMemberExpression(
-      SymbolProvider sp, StructureShape input, MemberShape m, String bodyVar) {
-    String memberType = ShapeSupport.parameterTypeExpr(sp, m);
-    boolean required = isRequiredHttpInputMember(m);
-    if (ShapeSupport.isHttpLabel(m)) {
-      return "SmithyAspNetCoreProtocol.GetRouteValue<"
-          + memberType
-          + ">(httpContext, "
-          + CSharpNaming.formatString(m.getMemberName())
-          + ")";
-    }
-    if (ShapeSupport.isHttpQuery(m)) {
-      String qn = m.expectTrait(HttpQueryTrait.class).getValue();
-      return required
-          ? "SmithyAspNetCoreProtocol.GetRequiredQueryValue<"
-              + memberType
-              + ">(httpContext, "
-              + CSharpNaming.formatString(qn)
-              + ")"
-          : "SmithyAspNetCoreProtocol.GetQueryValue<"
-              + memberType
-              + ">(httpContext, "
-              + CSharpNaming.formatString(qn)
-              + ")";
-    }
-    if (ShapeSupport.isHttpQueryParams(m)) {
-      String expr = "SmithyAspNetCoreProtocol.GetQueryParams<" + memberType + ">(httpContext, [])";
-      return required ? expr + "!" : expr;
-    }
-    if (ShapeSupport.isHttpHeader(m)) {
-      String name = m.expectTrait(HttpHeaderTrait.class).getValue();
-      return required
-          ? "SmithyAspNetCoreProtocol.GetRequiredHeaderValue<"
-              + memberType
-              + ">(httpContext, "
-              + CSharpNaming.formatString(name)
-              + ")"
-          : "SmithyAspNetCoreProtocol.GetHeaderValue<"
-              + memberType
-              + ">(httpContext, "
-              + CSharpNaming.formatString(name)
-              + ")";
-    }
-    if (ShapeSupport.isHttpPrefixHeaders(m)) {
-      String prefix = m.expectTrait(HttpPrefixHeadersTrait.class).getValue();
-      String expr =
-          "SmithyAspNetCoreProtocol.GetPrefixedHeaders<"
-              + memberType
-              + ">(httpContext, "
-              + CSharpNaming.formatString(prefix)
-              + ")";
-      return required ? expr + "!" : expr;
-    }
-    if (ShapeSupport.isHttpPayload(m)) {
-      return deserializePayloadExpression(m, required);
-    }
-    if (bodyVar != null) {
-      String property = CSharpNaming.propertyName(m.getMemberName());
-      String access = bodyVar + "." + property;
-      if (ShapeSupport.isRequired(m)) {
-        return access;
-      }
-
-      String defaultValue =
-          ShapeSupport.defaultValueExpression(context.model(), context.symbolProvider(), m);
-      if (defaultValue != null) {
-        return bodyVar + " is null || " + access + " is null ? " + defaultValue + " : " + access;
-      }
-
-      return bodyVar + " is null ? default : " + access;
-    }
-    throw new RuntimeException("Body member without projection: " + m.getId());
-  }
-
-  private void writeBoundResponseWriter(SymbolProvider sp, StructureShape output) {
-    String outputType = CSharpSymbolProvider.qualified(sp.toSymbol(output));
-    writer.write(
-        "private static async System.Threading.Tasks.Task WriteBoundResponseAsync(HttpContext"
-            + " httpContext, $L output, System.Threading.CancellationToken cancellationToken)",
-        outputType);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(output);");
-          for (MemberShape m : ShapeSupport.sortedMembers(output)) {
-            if (ShapeSupport.isHttpResponseCode(m)) {
-              String property = "output." + CSharpNaming.propertyName(m.getMemberName());
-              if (ShapeSupport.isOptionalParameter(m)) {
-                writer.write("if ($L is { } statusCode)", property);
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () ->
-                        writer.write(
-                            "SmithyAspNetCoreProtocol.SetStatusCode(httpContext, statusCode);"));
-              } else {
-                writer.write("SmithyAspNetCoreProtocol.SetStatusCode(httpContext, $L);", property);
-              }
-            }
-          }
-          for (MemberShape m : ShapeSupport.sortedMembers(output)) {
-            if (ShapeSupport.isHttpHeader(m)) {
-              String name = m.expectTrait(HttpHeaderTrait.class).getValue();
-              writer.write(
-                  "SmithyAspNetCoreProtocol.AddResponseHeader(httpContext, $L, $L, output.$L);",
-                  CSharpNaming.formatString(name),
-                  SchemaGenerator.memberSchemaExpr(context, m),
-                  CSharpNaming.propertyName(m.getMemberName()));
-            }
-          }
-          for (MemberShape m : ShapeSupport.sortedMembers(output)) {
-            if (ShapeSupport.isHttpPrefixHeaders(m)) {
-              String prefix = m.expectTrait(HttpPrefixHeadersTrait.class).getValue();
-              writer.write(
-                  "SmithyAspNetCoreProtocol.AddPrefixedResponseHeaders(httpContext, $L,"
-                      + " output.$L);",
-                  CSharpNaming.formatString(prefix),
-                  CSharpNaming.propertyName(m.getMemberName()));
-            }
-          }
-          Optional<MemberShape> payload =
-              ShapeSupport.sortedMembers(output).stream()
-                  .filter(ShapeSupport::isHttpPayload)
-                  .findFirst();
-          if (payload.isPresent()) {
-            writePayloadResponseWriter(payload.get());
-            return;
-          }
-          List<MemberShape> bodyMembers = ClientGenerator.responseBodyMembers(output);
-          if (bodyMembers.isEmpty()) return;
-          writer.openBlock(
-              "var responseBody = new $L(",
-              ");",
-              ClientGenerator.bodyProjectionName(output),
-              () -> {
-                for (int i = 0; i < bodyMembers.size(); i++) {
-                  writer.write(
-                      "output.$L$L",
-                      CSharpNaming.propertyName(bodyMembers.get(i).getMemberName()),
-                      i == bodyMembers.size() - 1 ? "" : ",");
-                }
-              });
-          writer.write(
-              "await SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, responseBody,"
-                  + " cancellationToken).ConfigureAwait(false);");
-        });
-  }
-
-  private void writeAspNetCoreBodyProjectionTypes(SymbolProvider sp, List<OperationShape> ops) {
-    Set<ShapeId> emitted = new HashSet<>();
-    for (OperationShape op : ops) {
-      if (!ShapeSupport.isUnit(op.getInputShape()) && emitted.add(op.getInputShape())) {
-        StructureShape input =
-            context.model().expectShape(op.getInputShape(), StructureShape.class);
-        List<MemberShape> bodyMembers =
-            ShapeSupport.constructorMembers(input).stream()
-                .filter(ShapeSupport::isHttpBody)
-                .collect(Collectors.toList());
-        if (!bodyMembers.isEmpty()) {
-          writer.write("");
-          writeBodyProjectionType(sp, input, bodyMembers);
-        }
-      }
-      if (!ShapeSupport.isUnit(op.getOutputShape()) && emitted.add(op.getOutputShape())) {
-        StructureShape output =
-            context.model().expectShape(op.getOutputShape(), StructureShape.class);
-        if (ClientGenerator.hasResponseBindings(output)) {
-          List<MemberShape> bodyMembers = ClientGenerator.responseBodyMembers(output);
-          if (!bodyMembers.isEmpty()) {
-            writer.write("");
-            writeBodyProjectionType(sp, output, bodyMembers);
-          }
-        }
-      }
-    }
-  }
-
-  private void writeBodyProjectionType(
-      SymbolProvider sp, StructureShape shape, List<MemberShape> bodyMembers) {
-    String typeName = ClientGenerator.bodyProjectionName(shape);
-    writer.write(
-        "private sealed class $L : ISerializableStruct, IDeserializableShape<$L>",
-        typeName,
-        typeName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("");
-          SchemaGenerator.writeStructureSchema(writer, context, shape, bodyMembers);
-          writer.write("Schema ISerializableShape.Schema => Schema;");
-          writer.write("");
-          writer.openBlock(
-              "public $L(",
-              ")",
-              typeName,
-              () -> {
-                for (int i = 0; i < bodyMembers.size(); i++) {
-                  MemberShape m = bodyMembers.get(i);
-                  String type = bodyProjectionMemberTypeExpr(sp, m);
-                  writer.write(
-                      "$L $L$L",
-                      type,
-                      CSharpNaming.parameterName(m.getMemberName()),
-                      i == bodyMembers.size() - 1 ? "" : ",");
-                }
-              });
-          writer.write("{");
-          writer.indent();
-          for (MemberShape m : bodyMembers) {
-            writer.write(
-                "$L = $L;",
-                CSharpNaming.propertyName(m.getMemberName()),
-                CSharpNaming.parameterName(m.getMemberName()));
-          }
-          writer.dedent();
-          writer.write("}");
-          writer.write("");
-          for (MemberShape m : bodyMembers) {
-            String type = bodyProjectionMemberTypeExpr(sp, m);
-            writer.write(
-                "public $L $L { get; }", type, CSharpNaming.propertyName(m.getMemberName()));
-            writer.write("");
-          }
-          writer.write("public void Serialize(IShapeSerializer serializer)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
-                writer.write("serializer.WriteStruct(Schema, this);");
-              });
-          writer.write("");
-          writer.write("public void SerializeMembers(IShapeSerializer serializer)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                for (MemberShape m : bodyMembers) {
-                  String prop = CSharpNaming.propertyName(m.getMemberName());
-                  String schema = SchemaGenerator.memberSchemaFieldName(m);
-                  Shape target = context.model().expectShape(m.getTarget());
-                  if (bodyProjectionMemberNullable(m)) {
-                    String local = CSharpNaming.parameterName(m.getMemberName());
-                    writer.write("if ($L is { } $L)", prop, local);
-                    writer.openBlock(
-                        "{",
-                        "}",
-                        () ->
-                            writer.write(writeValueStatement(target, "serializer", schema, local)));
-                  } else {
-                    writer.write(writeValueStatement(target, "serializer", schema, prop));
-                  }
-                }
-              });
-          writer.write("");
-          writer.write("public static $L Deserialize(IShapeDeserializer deserializer)", typeName);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(deserializer);");
-                for (MemberShape m : bodyMembers) {
-                  writer.write(
-                      "$L $L = null;",
-                      ShapeSupport.memberTypeExpr(sp, m, true),
-                      CSharpNaming.parameterName(m.getMemberName()));
-                }
-                writer.write("");
-                writer.write(
-                    "deserializer.ReadStruct<object?>(Schema, null, new"
-                        + " StructMemberConsumer<object?>(");
-                writer.write("Member: (_, field, reader) =>");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      for (int i = 0; i < bodyMembers.size(); i++) {
-                        MemberShape m = bodyMembers.get(i);
-                        String local = CSharpNaming.parameterName(m.getMemberName());
-                        String schema = SchemaGenerator.memberSchemaFieldName(m);
-                        Shape target = context.model().expectShape(m.getTarget());
-                        String keyword = i == 0 ? "if" : "else if";
-                        writer.write(
-                            keyword + " (field.MemberName == $L)",
-                            CSharpNaming.formatString(m.getMemberName()));
-                        writer.openBlock(
-                            "{",
-                            "}",
-                            () -> {
-                              if (ShapeSupport.isNullable(m)) {
-                                writer.write("if (reader.IsNull())");
-                                writer.openBlock(
-                                    "{", "}", () -> writer.write("reader.ReadNull();"));
-                                writer.write("else");
-                                writer.openBlock(
-                                    "{",
-                                    "}",
-                                    () ->
-                                        writer.write(
-                                            local
-                                                + " = "
-                                                + readValueExpression(target, "reader", schema)
-                                                + ";"));
-                              } else {
-                                writer.write(
-                                    local
-                                        + " = "
-                                        + readValueExpression(target, "reader", schema)
-                                        + ";");
-                              }
-                            });
-                      }
-                    });
-                writer.write("));");
-                writer.write("");
-                writer.write(
-                    "return new $L($L);",
-                    typeName,
-                    bodyProjectionConstructorArguments(bodyMembers));
-              });
-        });
-  }
-
-  private String serializePayloadValue(MemberShape member, String serializerVar, String valueExpr) {
-    Shape target = context.model().expectShape(member.getTarget());
-    return writeValueStatement(
-        target, serializerVar, SchemaGenerator.memberSchemaExpr(context, member), valueExpr);
-  }
-
-  private String deserializePayloadValue(MemberShape member, String deserializerVar) {
-    Shape target = context.model().expectShape(member.getTarget());
-    return readValueExpression(
-        target, deserializerVar, SchemaGenerator.memberSchemaExpr(context, member));
-  }
-
-  private String deserializePayloadExpression(MemberShape member, boolean required) {
-    Shape target = context.model().expectShape(member.getTarget());
-    if (target.getType() == software.amazon.smithy.model.shapes.ShapeType.BLOB) {
-      return "await SmithyAspNetCoreProtocol.ReadPayloadBodyAsync(httpContext,"
-          + " cancellationToken).ConfigureAwait(false)";
-    }
-    if (rawRestJsonStringPayloads
-        && target.getType() == software.amazon.smithy.model.shapes.ShapeType.STRING) {
-      return required
-          ? "await SmithyAspNetCoreProtocol.ReadStringPayloadBodyAsync(httpContext,"
-              + " cancellationToken).ConfigureAwait(false) ?? string.Empty"
-          : "await SmithyAspNetCoreProtocol.ReadStringPayloadBodyAsync(httpContext,"
-              + " cancellationToken).ConfigureAwait(false)";
-    }
-    if (rawRestJsonStringPayloads
-        && target.getType() == software.amazon.smithy.model.shapes.ShapeType.ENUM) {
-      String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target));
-      return required
-          ? "new "
-              + type
-              + "(await SmithyAspNetCoreProtocol.ReadStringPayloadBodyAsync("
-              + "httpContext, cancellationToken).ConfigureAwait(false) ?? string.Empty)"
-          : "await SmithyAspNetCoreProtocol.ReadStringPayloadBodyAsync(httpContext,"
-              + " cancellationToken).ConfigureAwait(false) is { } payloadValue ? new "
-              + type
-              + "(payloadValue) : null";
-    }
-    if (ShapeSupport.usesShapeSerde(target)) {
-      String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target));
-      return "await SmithyAspNetCoreProtocol."
-          + (required ? "ReadRequiredJsonRequestBodyAsync<" : "ReadJsonRequestBodyAsync<")
-          + type
-          + ">(httpContext, cancellationToken).ConfigureAwait(false)";
-    }
-    return "await SmithyAspNetCoreProtocol."
-        + (required ? "ReadRequiredJsonRequestBodyAsync(" : "ReadJsonRequestBodyAsync(")
-        + "httpContext, reader => "
-        + deserializePayloadValue(member, "reader")
-        + ", cancellationToken).ConfigureAwait(false)";
-  }
-
-  private String serializePayloadResponseExpression(MemberShape member, String valueExpr) {
-    Shape target = context.model().expectShape(member.getTarget());
-    if (ShapeSupport.usesShapeSerde(target)) {
-      return "SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, "
-          + valueExpr
-          + ", cancellationToken)";
-    }
-    return "SmithyAspNetCoreProtocol.WriteJsonResponseAsync(httpContext, serializer => "
-        + stripTrailingSemicolon(serializePayloadValue(member, "serializer", valueExpr))
-        + ", cancellationToken)";
-  }
-
-  private void writePayloadResponseWriter(MemberShape member) {
-    String valueExpr = "output." + CSharpNaming.propertyName(member.getMemberName());
-    if (ShapeSupport.isOptionalParameter(member)) {
-      String local = CSharpNaming.parameterName(member.getMemberName());
-      writer.write("if ($L is { } $L)", valueExpr, local);
-      writer.openBlock(
-          "{",
-          "}",
-          () ->
-              writer.write(
-                  "await $L.ConfigureAwait(false);",
-                  serializePayloadResponseExpression(member, local)));
-      return;
-    }
-
-    writer.write(
-        "await $L.ConfigureAwait(false);", serializePayloadResponseExpression(member, valueExpr));
-  }
-
-  private String bodyProjectionMemberTypeExpr(SymbolProvider sp, MemberShape member) {
-    return ShapeSupport.memberTypeExpr(sp, member, bodyProjectionMemberNullable(member));
-  }
-
-  private boolean bodyProjectionMemberNullable(MemberShape member) {
-    return !ShapeSupport.isRequired(member);
   }
 
   private String routePattern(HttpTrait http) {

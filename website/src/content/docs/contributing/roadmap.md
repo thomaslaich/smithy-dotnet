@@ -20,12 +20,17 @@ expanding that baseline rather than revisiting it.
 
 ## Near-Term Priorities
 
-### 1. Expand AWS protocol coverage
+### 1. Expand AWS protocol coverage and AWS readiness
 
 - Add support for additional AWS protocol families, especially AWS JSON,
   AWS Query, and EC2 Query.
 - Continue hardening `aws.protocols#restJson1`, `aws.protocols#restXml`, and
   `smithy.protocols#rpcv2Cbor` as real preview surfaces.
+- Implement AWS authentication support, especially SigV4 signing driven by
+  `@aws.auth#sigv4`, so generated clients can call real AWS-compatible
+  endpoints.
+- Add an integration test suite against LocalStack to validate generated AWS
+  clients against realistic protocol, signing, and endpoint behavior.
 - Keep the scope driven by conformance and real runtime behavior rather than by
   marketing-level protocol checklists.
 
@@ -37,66 +42,74 @@ Adding this would improve the IDE experience for consumers of generated code —
 hover documentation, parameter hints, and IntelliSense would reflect the
 model's documentation rather than being empty.
 
-### 3. OpenAPI spec generation
-
-Wire `smithy-openapi` into the MSBuild pipeline so that `dotnet build` emits an
-`openapi.json` alongside the generated C# files. Because the spec is derived
-from the Smithy model it stays in sync with the source of truth automatically.
-The generated spec can then be served at runtime via Swagger UI or .NET 9's
-`Microsoft.AspNetCore.OpenApi` middleware without the overhead of runtime
-reflection over ASP.NET Core endpoints.
-
-### 4. Improve generator clarity and diagnostics
+### 3. Improve generator clarity and diagnostics
 
 - Keep generated output predictable and easy to inspect.
 - Improve unsupported-shape and unsupported-trait diagnostics.
 - Continue simplifying generator internals where semantics are harder to follow
   than they need to be.
 
-### 5. Expand the `dotnet nsmithy` tool
+### 4. Improve CBOR and XML codec performance through schema-compiled codecs
 
-- Grow `dotnet nsmithy` into the .NET workflow companion for NSmithy rather
-  than a second general-purpose Smithy CLI.
-- Add project-bootstrap ergonomics such as `init` or scaffold commands for
-  common NSmithy layouts and examples.
-- Keep the tool focused on .NET-specific workflows such as scaffolding,
-  packaging, publishing, and diagnostics while leaving Smithy model semantics
-  to Smithy CLI.
+JSON already benefits from compiling codec state once from the schema so the
+runtime can cache structural decisions such as dispatch and boxing behavior.
+CBOR and XML should move in the same direction so runtime performance does not
+depend on repeating more dynamic codec work in the hot path.
 
-### 6. Mature the gRPC path
+This work includes:
 
-- Keep `.proto` generation and gRPC support as an explicit preview track.
-- Expand test coverage before broadening feature claims.
-- Clarify the model constraints required by the current generated path.
+- Compiling CBOR codecs from schema once, using the same general approach
+  already used for JSON.
+- Compiling XML codecs from schema once where the shape model allows it.
+- Caching the same kind of per-shape decisions that let the JSON path avoid
+  unnecessary boxing and repeated dynamic dispatch.
+- Keeping the generated codec path explicit enough that performance work does
+  not make diagnostics and debuggability worse.
 
-### 7. Split the C# and `.proto` code generators
+### 5. Implement native proto codecs and first-class gRPC generators
 
-`ProtoGenerator` currently lives inside `smithy-csharp-codegen` alongside the
-C# generators. As the gRPC path matures it should move into its own module
-(`smithy-proto-codegen` or similar) so that:
+The temporary template-based path is enough to keep examples moving, but it is
+not the long-term shape of NSmithy's gRPC support. The next step is to make
+proto and gRPC first-class runtime and generator concerns rather than a thin
+layer around generated templates.
 
-- The C# generator has no dependency on proto concerns.
-- The `.proto` generator can evolve, be versioned, and be distributed
-  independently.
-- Consumers who only need C# output do not pull in proto generation logic.
+This work includes:
 
-### 8. AWS authentication — SigV4 signing
+- Implementing native proto codecs in the runtime and generated code path.
+- Generating first-class gRPC clients and servers from Smithy models.
+- Tightening the contract between Smithy models, emitted `.proto`, and the
+  generated .NET surface so the gRPC path can be tested and versioned as a real
+  product surface.
 
-Real AWS services require [SigV4](https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html)
-request signing via the `@aws.auth#sigv4` trait. Currently, generated clients
-send unsigned requests and cannot authenticate against AWS endpoints.
+### 6. Expand to async protocols
 
-This work involves:
+NSmithy's current protocol work is mostly request/response oriented. A separate
+near-term goal is to validate that the runtime and generator model can also
+support async protocol families cleanly.
 
-- Recognising `@aws.auth#sigv4` (and related auth traits) during codegen.
-- Providing a signing middleware or hook in `NSmithy.Client` so credentials can
-  be injected into the request pipeline.
-- Defining a credential-provider abstraction that fits the existing
-  `SmithyClientOptions` / `ISmithyClientMiddleware` model.
+This work includes:
 
-Until this is in place, `aws.protocols#restJson1` clients work correctly for
-protocol-level correctness (conformance tests pass) but cannot call real AWS
-services.
+- Exploring first-class support for Kafka-oriented messaging workflows.
+- Exploring AMQP-based protocols and the runtime abstractions they require.
+- Exploring Redis-oriented protocol patterns where Smithy models map cleanly to
+  command and messaging semantics.
+- Using these protocols to pressure-test the existing transport, codec, and
+  client/server seams beyond HTTP-centric assumptions.
+
+### 7. Support Smithy AI traits and MCP generation
+
+Smithy's AI-oriented traits open up another important integration surface for
+NSmithy. Supporting them cleanly should make it possible to generate useful
+.NET and protocol artifacts for tool-driven and agent-driven workflows rather
+than treating them as out-of-band metadata.
+
+This work includes:
+
+- Supporting relevant Smithy AI traits during model interpretation and codegen.
+- Generating Model Context Protocol (MCP) surfaces from Smithy models where the
+  modeled contract maps cleanly to MCP tools, resources, and prompts.
+- Defining the runtime and generation boundaries needed so AI-trait-aware
+  models remain inspectable, testable, and versionable.
 
 ## Later Work
 

@@ -1,6 +1,7 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ClientGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ErrorGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.IntEnumGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ListGenerator;
@@ -61,15 +62,18 @@ final class DirectedCSharpCodegen
     String typeName = CSharpNaming.typeName(directive.shape().getId().getName());
     String dir = csNamespace.replace('.', '/');
 
+    // Service-level files use a dotted ".Client"/".Server" suffix so the MSBuild
+    // include/exclude globs (*.Client.g.cs / *.Server.g.cs) can distinguish them from
+    // shape files for operations whose names happen to end in "Client" or "Server".
     ctx.writerDelegator()
         .useFileWriter(
-            dir + "/" + typeName + "Client.g.cs",
+            dir + "/" + typeName + ".Client.g.cs",
             csNamespace,
             writer -> new ClientGenerator(ctx, writer, directive.shape()).run());
 
     ctx.writerDelegator()
         .useFileWriter(
-            dir + "/" + typeName + "Server.g.cs",
+            dir + "/" + typeName + ".Server.g.cs",
             csNamespace,
             writer -> new ServerGenerator(ctx, writer, directive.shape()).run());
   }
@@ -77,6 +81,10 @@ final class DirectedCSharpCodegen
   @Override
   public void generateStructure(
       GenerateStructureDirective<GenerationContext, CSharpSettings> directive) {
+    // smithy.api#Unit maps to the runtime SmithyUnit type, so no record is generated for it.
+    if (ShapeSupport.isUnit(directive.shape().getId())) {
+      return;
+    }
     directive
         .context()
         .writerDelegator()

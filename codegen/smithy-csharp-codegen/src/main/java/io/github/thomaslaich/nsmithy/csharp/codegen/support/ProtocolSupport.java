@@ -66,6 +66,20 @@ public final class ProtocolSupport {
     };
   }
 
+  /** Functional protocol helper class for the given protocol. */
+  public static String functionalProtocolType(Kind kind) {
+    return switch (kind) {
+      case REST_JSON -> "FunctionalRestJsonProtocol";
+      case REST_XML -> "FunctionalRestXmlProtocol";
+      case RPC_V2_CBOR -> "FunctionalRpcV2CborProtocol";
+    };
+  }
+
+  /** True for REST protocols whose HTTP bindings are handled by FunctionalRestProtocol. */
+  public static boolean usesFunctionalRestProtocol(Kind kind) {
+    return kind == Kind.REST_JSON || kind == Kind.REST_XML;
+  }
+
   /** Static expression yielding the document codec singleton. */
   public static String codecExpression(Kind kind) {
     return switch (kind) {

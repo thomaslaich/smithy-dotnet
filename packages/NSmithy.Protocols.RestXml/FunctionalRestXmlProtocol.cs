@@ -1,14 +1,14 @@
-using NSmithy.Codecs.Json;
+using NSmithy.Codecs.Xml;
 using NSmithy.Core.Functional;
 using NSmithy.Http;
 using NSmithy.Protocols.Rest;
 
-namespace NSmithy.Protocols.RestJson;
+namespace NSmithy.Protocols.RestXml;
 
-public static class FunctionalRestJsonProtocol
+public static class FunctionalRestXmlProtocol
 {
     private static readonly IFunctionalRestBodyFormat BodyFormat =
-        new FunctionalRestJsonBodyFormat();
+        new FunctionalRestXmlBodyFormat();
 
     public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation,
@@ -51,33 +51,33 @@ public static class FunctionalRestJsonProtocol
         );
 
     public static string? DeserializeErrorType(SmithyHttpResponse response) =>
-        RestJsonProtocol.DeserializeErrorType(response);
+        RestXmlProtocol.DeserializeErrorCode(response.Content);
 
     public static void ApplyRequestCompression(SmithyHttpRequest request, string encoding) =>
-        RestJsonProtocol.ApplyRequestCompression(request, encoding);
+        RestXmlProtocol.ApplyRequestCompression(request, encoding);
 
     public static void ApplyContentMd5(SmithyHttpRequest request) =>
-        RestJsonProtocol.ApplyContentMd5(request);
+        RestXmlProtocol.ApplyContentMd5(request);
 
-    private sealed class FunctionalRestJsonBodyFormat : IFunctionalRestBodyFormat
+    private sealed class FunctionalRestXmlBodyFormat : IFunctionalRestBodyFormat
     {
-        public string ContentType => "application/json";
+        public string ContentType => "application/xml";
 
         public string BlobContentType => "application/octet-stream";
 
         public byte[] Serialize<T>(FunctionalSchema<T> schema, T value) =>
-            FunctionalJsonCodec.FromSchema(schema).Serialize(value);
+            FunctionalXmlCodec.FromSchema(schema).Serialize(value);
 
         public T Deserialize<T>(FunctionalSchema<T> schema, byte[] content) =>
-            FunctionalJsonCodec.FromSchema(schema).Deserialize(content);
+            FunctionalXmlCodec.FromSchema(schema).Deserialize(content);
 
         public byte[] Serialize<T>(FunctionalStructProjection<T> projection, T value) =>
-            FunctionalJsonCodec.FromProjection(projection).Serialize(value);
+            FunctionalXmlCodec.FromProjection(projection).Serialize(value);
 
         public void ReadInto<T>(
             FunctionalStructProjection<T> projection,
             byte[] content,
             object builder
-        ) => FunctionalJsonCodec.FromProjection(projection).ReadInto(content, builder);
+        ) => FunctionalXmlCodec.FromProjection(projection).ReadInto(content, builder);
     }
 }

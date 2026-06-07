@@ -6,7 +6,7 @@ using NSmithy.Core.Functional;
 
 namespace NSmithy.Codecs.Json;
 
-public interface IFunctionalJsonCodec<T> : IFunctionalCodec<T, string> { }
+public interface IFunctionalJsonCodec<T> : IFunctionalCodec<T> { }
 
 public static class FunctionalJsonCodec
 {
@@ -16,7 +16,7 @@ public static class FunctionalJsonCodec
         return new CompiledFunctionalJsonCodec<T>(schema);
     }
 
-    public static IFunctionalProjectionCodec<T, string> FromProjection<T>(
+    public static IFunctionalProjectionCodec<T> FromProjection<T>(
         FunctionalStructProjection<T> projection
     )
     {
@@ -30,7 +30,7 @@ public static class FunctionalJsonCodec
         private readonly IJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(schema);
         private readonly IJsonValueReader<T> valueReader = JsonReaderCompiler.Compile(schema);
 
-        public string Serialize(T value)
+        public byte[] Serialize(T value)
         {
             using var stream = new MemoryStream();
             using (var writer = new Utf8JsonWriter(stream))
@@ -38,10 +38,10 @@ public static class FunctionalJsonCodec
                 valueWriter.Write(writer, value);
             }
 
-            return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+            return stream.ToArray();
         }
 
-        public T Deserialize(string payload)
+        public T Deserialize(byte[] payload)
         {
             ArgumentNullException.ThrowIfNull(payload);
             using var document = JsonDocument.Parse(payload);
@@ -500,13 +500,13 @@ public static class FunctionalJsonCodec
 
     private sealed class CompiledFunctionalJsonProjectionCodec<T>(
         FunctionalStructProjection<T> projection
-    ) : IFunctionalProjectionCodec<T, string>
+    ) : IFunctionalProjectionCodec<T>
     {
         private readonly StructureJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(
             projection
         );
 
-        public string Serialize(T value)
+        public byte[] Serialize(T value)
         {
             using var stream = new MemoryStream();
             using (var writer = new Utf8JsonWriter(stream))
@@ -514,10 +514,10 @@ public static class FunctionalJsonCodec
                 valueWriter.Write(writer, value);
             }
 
-            return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+            return stream.ToArray();
         }
 
-        public void ReadInto(string payload, object builder)
+        public void ReadInto(byte[] payload, object builder)
         {
             ArgumentNullException.ThrowIfNull(payload);
             ArgumentNullException.ThrowIfNull(builder);

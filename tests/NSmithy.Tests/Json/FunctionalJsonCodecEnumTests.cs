@@ -49,8 +49,8 @@ public sealed class FunctionalJsonCodecEnumTests
             );
         var codec = FunctionalJsonCodec.FromSchema(deploymentSchema);
 
-        var json = codec.Serialize(input);
-        var decoded = codec.Deserialize(json);
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
 
         Assert.Equal(expectedJson, json);
         Assert.Equal(input, decoded);
@@ -100,8 +100,8 @@ public sealed class FunctionalJsonCodecEnumTests
             );
         var codec = FunctionalJsonCodec.FromSchema(workItemSchema);
 
-        var json = codec.Serialize(input);
-        var decoded = codec.Deserialize(json);
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
 
         Assert.Equal(expectedJson, json);
         Assert.Equal(input, decoded);

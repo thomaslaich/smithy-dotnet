@@ -68,8 +68,8 @@ public sealed class FunctionalSchemaTests
 
         var personCodec = FunctionalJsonCodec.FromSchema(personSchema);
 
-        var json = personCodec.Serialize(input);
-        var decoded = personCodec.Deserialize(json);
+        var json = personCodec.SerializeText(input);
+        var decoded = personCodec.DeserializeText(json);
 
         Assert.Equal(expectedJson, json);
         Assert.Equal(input, decoded);
@@ -166,8 +166,8 @@ public sealed class FunctionalSchemaTests
             );
         var codec = FunctionalJsonCodec.FromSchema(treeSchema);
 
-        var json = codec.Serialize(input);
-        var decoded = codec.Deserialize(json);
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
 
         Assert.Equal(expectedJson, json);
         Assert.Equal(input.Value, decoded.Value);
@@ -272,8 +272,8 @@ public sealed class FunctionalSchemaTests
             );
         var codec = FunctionalJsonCodec.FromSchema(inputSchema);
 
-        var json = codec.Serialize(input);
-        var decoded = codec.Deserialize(json);
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
 
         Assert.Equal(expectedJson, json);
         Assert.Equal(input.Name, decoded.Name);
@@ -288,8 +288,8 @@ public sealed class FunctionalSchemaTests
     {
         var codec = FunctionalJsonCodec.FromSchema(FunctionalSchemas.Integer);
 
-        var json = codec.Serialize(36);
-        var decoded = codec.Deserialize(json);
+        var json = codec.SerializeText(36);
+        var decoded = codec.DeserializeText(json);
 
         Assert.Equal("36", json);
         Assert.Equal(36, decoded);
@@ -330,8 +330,8 @@ public sealed class FunctionalSchemaTests
         var statusSchema = FunctionalSchemas.StringEnum<Status>(new ShapeId("example", "Status"));
         var codec = FunctionalJsonCodec.FromSchema(statusSchema);
 
-        var json = codec.Serialize(Status.Active);
-        var decoded = codec.Deserialize(json);
+        var json = codec.SerializeText(Status.Active);
+        var decoded = codec.DeserializeText(json);
 
         Assert.Equal("\"ACTIVE\"", json);
         Assert.Equal(Status.Active, decoded);
@@ -364,8 +364,8 @@ public sealed class FunctionalSchemaTests
             );
         var codec = FunctionalJsonCodec.FromSchema(jobSchema);
 
-        var json = codec.Serialize(input);
-        var decoded = codec.Deserialize(json);
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
 
         Assert.Equal(expectedJson, json);
         Assert.Equal(input, decoded);
@@ -402,8 +402,8 @@ public sealed class FunctionalSchemaTests
             .Build();
         var codec = FunctionalJsonCodec.FromSchema(choiceSchema);
 
-        var json = codec.Serialize(input);
-        var decoded = codec.Deserialize(json);
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
 
         Assert.Equal(expectedJson, json);
         Assert.Equal(input, decoded);
@@ -427,7 +427,7 @@ public sealed class FunctionalSchemaTests
         var codec = FunctionalJsonCodec.FromSchema(choiceSchema);
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            codec.Deserialize("{\"missing\":\"hello\"}")
+            codec.DeserializeText("{\"missing\":\"hello\"}")
         );
 
         Assert.Equal("Unknown union member 'missing'.", ex.Message);
@@ -459,7 +459,7 @@ public sealed class FunctionalSchemaTests
             );
         var codec = FunctionalJsonCodec.FromSchema(schema);
 
-        var ex = Assert.Throws<InvalidOperationException>(() => codec.Deserialize("{}"));
+        var ex = Assert.Throws<InvalidOperationException>(() => codec.DeserializeText("{}"));
 
         Assert.Equal("Missing required member 'name'.", ex.Message);
     }
@@ -484,7 +484,7 @@ public sealed class FunctionalSchemaTests
         var codec = FunctionalJsonCodec.FromSchema(schema);
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            codec.Deserialize("{\"name\":null}")
+            codec.DeserializeText("{\"name\":null}")
         );
 
         Assert.Equal("Required member 'name' cannot be null.", ex.Message);

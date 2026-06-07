@@ -6,7 +6,7 @@ using NSmithy.Core.Functional;
 
 namespace NSmithy.Codecs.Xml;
 
-public interface IFunctionalXmlCodec<T> : IFunctionalCodec<T, string> { }
+public interface IFunctionalXmlCodec<T> : IFunctionalCodec<T> { }
 
 public static class FunctionalXmlCodec
 {
@@ -16,16 +16,57 @@ public static class FunctionalXmlCodec
         return new FunctionalXmlCodecImpl<T>(schema);
     }
 
+    public static IFunctionalProjectionCodec<T> FromProjection<T>(
+        FunctionalStructProjection<T> projection
+    )
+    {
+        ArgumentNullException.ThrowIfNull(projection);
+        return new FunctionalXmlProjectionCodec<T>(projection);
+    }
+
+    private sealed class FunctionalXmlProjectionCodec<T>(FunctionalStructProjection<T> projection)
+        : IFunctionalProjectionCodec<T>
+    {
+        public byte[] Serialize(T value)
+        {
+            var root = new XElement(RootElementName((FunctionalSchema)projection.Source));
+            foreach (var member in projection.TypedMembers)
+            {
+                WriteMember(root, member, value!);
+            }
+
+            return System.Text.Encoding.UTF8.GetBytes(root.ToString(SaveOptions.DisableFormatting));
+        }
+
+        public void ReadInto(byte[] payload, object builder)
+        {
+            ArgumentNullException.ThrowIfNull(payload);
+            ArgumentNullException.ThrowIfNull(builder);
+            if (payload.Length == 0)
+            {
+                return;
+            }
+
+            var root = XElement.Parse(System.Text.Encoding.UTF8.GetString(payload));
+            foreach (var member in projection.TypedMembers)
+            {
+                ReadMember(builder, root, member);
+            }
+        }
+    }
+
     private sealed class FunctionalXmlCodecImpl<T>(FunctionalSchema<T> schema)
         : IFunctionalXmlCodec<T>
     {
-        public string Serialize(T value)
+        public byte[] Serialize(T value)
         {
             var element = WriteRoot(schema, value);
-            return element.ToString(SaveOptions.DisableFormatting);
+            return System.Text.Encoding.UTF8.GetBytes(
+                element.ToString(SaveOptions.DisableFormatting)
+            );
         }
 
-        public T Deserialize(string payload)
+        public T Deserialize(byte[] payload)
         {
             ArgumentNullException.ThrowIfNull(payload);
             if (payload.Length == 0)
@@ -33,7 +74,7 @@ public static class FunctionalXmlCodec
                 return default!;
             }
 
-            var root = XElement.Parse(payload);
+            var root = XElement.Parse(System.Text.Encoding.UTF8.GetString(payload));
             return (T)ReadValue(schema, root)!;
         }
     }
@@ -90,31 +131,36 @@ public static class FunctionalXmlCodec
     {
         foreach (var member in schema.Members)
         {
-            var memberValue = member.GetObject(value);
-            if (memberValue is null && !member.IsRequired)
-            {
-                continue;
-            }
-
-            if (XmlTraits.IsXmlAttribute(member))
-            {
-                element.SetAttributeValue(
-                    ElementName(member),
-                    FormatScalar(member.Target, member.Traits, memberValue)
-                );
-                continue;
-            }
-
-            if (XmlTraits.IsXmlFlattened(member))
-            {
-                WriteFlattenedMember(element, member, memberValue);
-                continue;
-            }
-
-            var child = new XElement(ElementName(member));
-            WriteElementValue(child, member.Target, memberValue);
-            element.Add(child);
+            WriteMember(element, member, value);
         }
+    }
+
+    private static void WriteMember(XElement element, IFunctionalMemberSchema member, object value)
+    {
+        var memberValue = member.GetObject(value);
+        if (memberValue is null && !member.IsRequired)
+        {
+            return;
+        }
+
+        if (XmlTraits.IsXmlAttribute(member))
+        {
+            element.SetAttributeValue(
+                ElementName(member),
+                FormatScalar(member.Target, member.Traits, memberValue)
+            );
+            return;
+        }
+
+        if (XmlTraits.IsXmlFlattened(member))
+        {
+            WriteFlattenedMember(element, member, memberValue);
+            return;
+        }
+
+        var child = new XElement(ElementName(member));
+        WriteElementValue(child, member.Target, memberValue);
+        element.Add(child);
     }
 
     private static void WriteFlattenedMember(
@@ -246,45 +292,48 @@ public static class FunctionalXmlCodec
         var builder = schema.CreateBuilder();
         foreach (var member in schema.Members)
         {
-            if (XmlTraits.IsXmlAttribute(member))
-            {
-                var attr = element.Attribute(ElementName(member));
-                if (attr is not null)
-                {
-                    member.SetObject(builder, ReadScalar(member.Target, member.Traits, attr.Value));
-                }
-                else if (member.IsRequired)
-                {
-                    throw new InvalidOperationException(
-                        $"Missing required member '{member.Name}'."
-                    );
-                }
+            ReadMember(builder, element, member);
+        }
 
-                continue;
-            }
+        return schema.BuildObject(builder);
+    }
 
-            if (XmlTraits.IsXmlFlattened(member))
+    private static void ReadMember(object builder, XElement element, IFunctionalMemberSchema member)
+    {
+        if (XmlTraits.IsXmlAttribute(member))
+        {
+            var attr = element.Attribute(ElementName(member));
+            if (attr is not null)
             {
-                ReadFlattenedMember(builder, element, member);
-                continue;
-            }
-
-            var child = element
-                .Elements()
-                .FirstOrDefault(e =>
-                    string.Equals(e.Name.LocalName, ElementName(member), StringComparison.Ordinal)
-                );
-            if (child is not null)
-            {
-                member.SetObject(builder, ReadValue(member.Target, child));
+                member.SetObject(builder, ReadScalar(member.Target, member.Traits, attr.Value));
             }
             else if (member.IsRequired)
             {
                 throw new InvalidOperationException($"Missing required member '{member.Name}'.");
             }
+
+            return;
         }
 
-        return schema.BuildObject(builder);
+        if (XmlTraits.IsXmlFlattened(member))
+        {
+            ReadFlattenedMember(builder, element, member);
+            return;
+        }
+
+        var child = element
+            .Elements()
+            .FirstOrDefault(e =>
+                string.Equals(e.Name.LocalName, ElementName(member), StringComparison.Ordinal)
+            );
+        if (child is not null)
+        {
+            member.SetObject(builder, ReadValue(member.Target, child));
+        }
+        else if (member.IsRequired)
+        {
+            throw new InvalidOperationException($"Missing required member '{member.Name}'.");
+        }
     }
 
     private static void ReadFlattenedMember(

@@ -6,13 +6,13 @@ namespace NSmithy.Protocols.RpcV2Cbor;
 
 public static class RpcV2CborProtocol
 {
-    public static T DeserializeBody<T>(IFunctionalCodec<T, byte[]> codec, byte[] content)
+    public static T DeserializeBody<T>(IFunctionalCodec<T> codec, byte[] content)
     {
         ArgumentNullException.ThrowIfNull(codec);
         return content.Length == 0 ? default! : codec.Deserialize(content);
     }
 
-    public static T DeserializeRequiredBody<T>(IFunctionalCodec<T, byte[]> codec, byte[] content)
+    public static T DeserializeRequiredBody<T>(IFunctionalCodec<T> codec, byte[] content)
     {
         ArgumentNullException.ThrowIfNull(codec);
         if (content.Length == 0)

@@ -54,10 +54,10 @@ public static class RestXmlProtocol
         return RestJsonProtocol.DeserializeBody<T>(codec, content);
     }
 
-    public static T DeserializeBody<T>(IFunctionalCodec<T, string> codec, byte[] content)
+    public static T DeserializeBody<T>(IFunctionalCodec<T> codec, byte[] content)
     {
         ArgumentNullException.ThrowIfNull(codec);
-        return content.Length == 0 ? default! : codec.Deserialize(Encoding.UTF8.GetString(content));
+        return content.Length == 0 ? default! : codec.Deserialize(content);
     }
 
     public static T DeserializeRequiredBody<T>(ISmithyCodec codec, byte[] content)
@@ -66,7 +66,7 @@ public static class RestXmlProtocol
         return RestJsonProtocol.DeserializeRequiredBody<T>(codec, content);
     }
 
-    public static T DeserializeRequiredBody<T>(IFunctionalCodec<T, string> codec, byte[] content)
+    public static T DeserializeRequiredBody<T>(IFunctionalCodec<T> codec, byte[] content)
     {
         ArgumentNullException.ThrowIfNull(codec);
         if (content.Length == 0)
@@ -74,7 +74,7 @@ public static class RestXmlProtocol
             throw new InvalidOperationException("Response body is required but was empty.");
         }
 
-        return codec.Deserialize(Encoding.UTF8.GetString(content));
+        return codec.Deserialize(content);
     }
 
     public static string? DeserializeErrorCode(byte[] content)

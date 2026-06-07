@@ -66,8 +66,8 @@ public sealed class FunctionalXmlCodecTests
             );
         var codec = FunctionalXmlCodec.FromSchema(personSchema);
 
-        var xml = codec.Serialize(input);
-        var decoded = codec.Deserialize(xml);
+        var xml = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(xml);
 
         Assert.Equal(expectedXml, xml);
         Assert.Equal(input, decoded);

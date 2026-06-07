@@ -1,15 +1,18 @@
 namespace NSmithy.Core.Functional;
 
-public interface IFunctionalCodec<TValue, TPayload>
+// Codecs serialize Smithy shapes to and from the wire. The wire is always bytes;
+// text formats (JSON, XML) encode to UTF-8 internally. A string view, when useful
+// for debugging or tests, belongs in a format-specific convenience extension.
+public interface IFunctionalCodec<TValue>
 {
-    TPayload Serialize(TValue value);
+    byte[] Serialize(TValue value);
 
-    TValue Deserialize(TPayload payload);
+    TValue Deserialize(byte[] payload);
 }
 
-public interface IFunctionalProjectionCodec<TValue, TPayload>
+public interface IFunctionalProjectionCodec<TValue>
 {
-    TPayload Serialize(TValue value);
+    byte[] Serialize(TValue value);
 
-    void ReadInto(TPayload payload, object builder);
+    void ReadInto(byte[] payload, object builder);
 }

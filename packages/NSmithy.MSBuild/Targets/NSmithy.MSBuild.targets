@@ -403,11 +403,11 @@
     <ItemGroup>
       <Compile Remove="$(SmithyAllProjectionsGlob)" />
       <_SmithyExcludedGeneratedCompile
-        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*Client.g.cs"
+        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.Client.g.cs"
         Condition="'$(SmithyGenerateClient)' != 'true'"
       />
       <_SmithyExcludedGeneratedCompile
-        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*Server.g.cs"
+        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.Server.g.cs"
         Condition="'$(SmithyGenerateServer)' != 'true'"
       />
       <Compile

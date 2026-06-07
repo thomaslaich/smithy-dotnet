@@ -6,7 +6,7 @@ using NSmithy.Core.Functional;
 
 namespace NSmithy.Codecs.Cbor;
 
-public interface IFunctionalCborCodec<T> : IFunctionalCodec<T, byte[]> { }
+public interface IFunctionalCborCodec<T> : IFunctionalCodec<T> { }
 
 public static class FunctionalCborCodec
 {

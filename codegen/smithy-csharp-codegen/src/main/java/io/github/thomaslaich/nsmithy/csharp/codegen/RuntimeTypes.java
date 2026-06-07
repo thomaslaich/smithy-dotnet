@@ -20,7 +20,6 @@ public final class RuntimeTypes {
   public static final String NSMITHY_CODECS_JSON = "NSmithy.Codecs.Json";
   public static final String NSMITHY_CODECS_XML = "NSmithy.Codecs.Xml";
   public static final String NSMITHY_CODECS_CBOR = "NSmithy.Codecs.Cbor";
-  public static final String NSMITHY_SERVER = "NSmithy.Server";
   public static final String NSMITHY_SERVER_ASPNETCORE = "NSmithy.Server.AspNetCore";
 
   public static final String MS_EXT_DI = "Microsoft.Extensions.DependencyInjection";

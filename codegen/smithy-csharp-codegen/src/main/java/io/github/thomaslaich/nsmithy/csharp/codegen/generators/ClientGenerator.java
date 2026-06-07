@@ -193,8 +193,8 @@ public final class ClientGenerator implements Runnable {
   // ---------------- per-operation method ----------------
 
   private void writeOperationMethod(SymbolProvider sp, Model model, OperationShape op) {
-    if (kind == Kind.REST_JSON) {
-      writeFunctionalRestJsonOperationMethod(sp, model, op);
+    if (ProtocolSupport.usesFunctionalRestProtocol(kind)) {
+      writeFunctionalRestOperationMethod(sp, model, op);
       return;
     }
 
@@ -364,12 +364,13 @@ public final class ClientGenerator implements Runnable {
     writer.write("");
   }
 
-  private void writeFunctionalRestJsonOperationMethod(
+  private void writeFunctionalRestOperationMethod(
       SymbolProvider sp, Model model, OperationShape op) {
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String opName = CSharpNaming.typeName(op.getId().getName());
     String deserName = "Deserialize" + opName + "ErrorAsync";
+    String protocol = ProtocolSupport.functionalProtocolType(kind);
 
     writer.write("public async $L", operationSignature(sp, op));
     writer.openBlock(
@@ -381,17 +382,19 @@ public final class ClientGenerator implements Runnable {
           }
 
           writer.write(
-              "var request = FunctionalRestJsonProtocol.SerializeRequest($L, $L);",
+              "var request = $L.SerializeRequest($L, $L);",
+              protocol,
               SchemaGenerator.functionalOperationSchemaAccessor(context, op),
               hasInput ? "input" : "SmithyUnit.Value");
 
           if (op.findTrait(TraitIds.REQUEST_COMPRESSION).isPresent()) {
             writer.write(
-                "FunctionalRestJsonProtocol.ApplyRequestCompression(request, $L);",
+                "$L.ApplyRequestCompression(request, $L);",
+                protocol,
                 requestCompressionEncoding(op));
           }
           if (op.findTrait(TraitIds.HTTP_CHECKSUM_REQUIRED).isPresent()) {
-            writer.write("FunctionalRestJsonProtocol.ApplyContentMd5(request);");
+            writer.write("$L.ApplyContentMd5(request);", protocol);
           }
 
           writer.write("");
@@ -405,7 +408,8 @@ public final class ClientGenerator implements Runnable {
           if (hasOutput) {
             writer.write("");
             writer.write(
-                "return FunctionalRestJsonProtocol.DeserializeResponse($L," + " response);",
+                "return $L.DeserializeResponse($L, response);",
+                protocol,
                 SchemaGenerator.functionalOperationSchemaAccessor(context, op));
           } else {
             writer.write("return;");
