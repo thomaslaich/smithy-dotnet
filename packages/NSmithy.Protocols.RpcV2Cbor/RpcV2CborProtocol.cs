@@ -1,3 +1,4 @@
+using NSmithy.Core.Functional;
 using NSmithy.Core.Serde;
 using NSmithy.Http;
 
@@ -5,6 +6,23 @@ namespace NSmithy.Protocols.RpcV2Cbor;
 
 public static class RpcV2CborProtocol
 {
+    public static T DeserializeBody<T>(IFunctionalCodec<T, byte[]> codec, byte[] content)
+    {
+        ArgumentNullException.ThrowIfNull(codec);
+        return content.Length == 0 ? default! : codec.Deserialize(content);
+    }
+
+    public static T DeserializeRequiredBody<T>(IFunctionalCodec<T, byte[]> codec, byte[] content)
+    {
+        ArgumentNullException.ThrowIfNull(codec);
+        if (content.Length == 0)
+        {
+            throw new InvalidOperationException("Response body is required but was empty.");
+        }
+
+        return codec.Deserialize(content);
+    }
+
     public static T DeserializeBody<T>(ISmithyCodec codec, byte[] content)
         where T : IDeserializableShape<T>
     {

@@ -34,32 +34,20 @@ public final class UnionGenerator implements Runnable {
   @Override
   public void run() {
     SymbolProvider sp = context.symbolProvider();
-    writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     Model model = context.model();
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     List<MemberShape> members = ShapeSupport.sortedMembers(shape);
 
-    writer.write(
-        "public abstract partial record class $L : ISerializableShape, IDeserializableShape<$L>",
-        typeName,
-        typeName);
+    writer.write("public abstract partial record class $L", typeName);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          SchemaGenerator.writeStructureSchema(writer, context, shape, members);
-          writer.write("Schema ISerializableShape.Schema => Schema;");
-          writer.write("");
           writer.write("private protected $L() { }", typeName);
-          writer.write("");
-          writer.write("public abstract void Serialize(IShapeSerializer serializer);");
-          writer.write(
-              "public abstract void Serialize(IShapeSerializer serializer, Schema schema);");
           writer.write("");
           for (MemberShape m : members) {
             String variantName = CSharpNaming.typeName(m.getMemberName());
             String valueType = ShapeSupport.memberTypeExpr(sp, m, false);
-            Shape target = model.expectShape(m.getTarget());
             writer.write("public sealed partial record class $L : $L", variantName, typeName);
             writer.openBlock(
                 "{",
@@ -80,45 +68,6 @@ public final class UnionGenerator implements Runnable {
                       });
                   writer.write("");
                   writer.write("public $L Value { get; }", valueType);
-                  writer.write("");
-                  writer.write("public override void Serialize(IShapeSerializer serializer)");
-                  writer.openBlock("{", "}", () -> writer.write("Serialize(serializer, Schema);"));
-                  writer.write("");
-                  writer.write(
-                      "public override void Serialize(IShapeSerializer serializer, Schema schema)");
-                  writer.openBlock(
-                      "{",
-                      "}",
-                      () -> {
-                        writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
-                        writer.write("serializer.WriteStruct(schema, new UnionMembers(this));");
-                      });
-                  writer.write("");
-                  writer.write(
-                      "private sealed class UnionMembers($L owner) : ISerializableStruct",
-                      variantName);
-                  writer.openBlock(
-                      "{",
-                      "}",
-                      () -> {
-                        writer.write("public Schema Schema => $L.Schema;", typeName);
-                        writer.write("");
-                        writer.write("public void Serialize(IShapeSerializer serializer)");
-                        writer.openBlock(
-                            "{", "}", () -> writer.write("serializer.WriteStruct(Schema, this);"));
-                        writer.write("");
-                        writer.write("public void SerializeMembers(IShapeSerializer serializer)");
-                        writer.openBlock(
-                            "{",
-                            "}",
-                            () ->
-                                writer.write(
-                                    writeValueStatement(
-                                        target,
-                                        "serializer",
-                                        variantName + "Schema",
-                                        "owner.Value")));
-                      });
                 });
             writer.write("");
             writer.write("public static $L From$L($L value)", typeName, variantName, valueType);
@@ -144,54 +93,10 @@ public final class UnionGenerator implements Runnable {
                 writer.write("");
                 writer.write("public string Tag { get; }");
                 writer.write("public Document Value { get; }");
-                writer.write("");
-                writer.write("public override void Serialize(IShapeSerializer serializer)");
-                writer.openBlock("{", "}", () -> writer.write("Serialize(serializer, Schema);"));
-                writer.write("");
-                writer.write(
-                    "public override void Serialize(IShapeSerializer serializer, Schema schema)");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
-                      writer.write("serializer.WriteStruct(schema, new UnionMembers(this));");
-                    });
-                writer.write("");
-                writer.write(
-                    "private sealed class UnionMembers(Unknown owner) : ISerializableStruct");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      writer.write("public Schema Schema => $L.Schema;", typeName);
-                      writer.write("");
-                      writer.write("public void Serialize(IShapeSerializer serializer)");
-                      writer.openBlock(
-                          "{", "}", () -> writer.write("serializer.WriteStruct(Schema, this);"));
-                      writer.write("");
-                      writer.write("public void SerializeMembers(IShapeSerializer serializer)");
-                      writer.openBlock(
-                          "{",
-                          "}",
-                          () ->
-                              writer.write("serializer.WriteDocument(TagSchema(), owner.Value);"));
-                      writer.write("");
-                      writer.write("private Schema TagSchema()");
-                      writer.openBlock(
-                          "{",
-                          "}",
-                          () ->
-                              writer.write(
-                                  "return Schema.CreateMember(new ShapeId(Schema.Id.Namespace,"
-                                      + " Schema.Id.Name, owner.Tag), PreludeSchemas.Document);"));
-                    });
               });
           writer.write("");
           writer.write("public static $L FromUnknown(string tag, Document value)", typeName);
           writer.openBlock("{", "}", () -> writer.write("return new Unknown(tag, value);"));
-          writer.write("");
-          writeDeserialize(typeName, members);
           writer.write("");
 
           // Match method

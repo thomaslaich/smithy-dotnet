@@ -7,11 +7,6 @@ public interface IFunctionalCodec<TValue, TPayload>
     TValue Deserialize(TPayload payload);
 }
 
-public interface IFunctionalCodecFactory<TPayload>
-{
-    IFunctionalCodec<TValue, TPayload> FromSchema<TValue>(FunctionalSchema<TValue> schema);
-}
-
 public interface IFunctionalProjectionCodec<TValue, TPayload>
 {
     TPayload Serialize(TValue value);

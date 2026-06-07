@@ -107,10 +107,7 @@ public final class ClientGenerator implements Runnable {
     if (emitsHttp) {
       writer.addImport(RuntimeTypes.NSMITHY_CLIENT);
       writer.addImport(RuntimeTypes.NSMITHY_HTTP);
-      writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
-      if (kind == Kind.REST_JSON) {
-        writer.addImport(RuntimeTypes.NSMITHY_CORE_FUNCTIONAL);
-      }
+      writer.addImport(RuntimeTypes.NSMITHY_CORE_FUNCTIONAL);
       writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kind));
       writer.addImport(ProtocolSupport.codecNamespace(kind));
       writeHttpClient(sp, model, operations, typeName, interfaceName);
@@ -134,14 +131,17 @@ public final class ClientGenerator implements Runnable {
       String typeName,
       String interfaceName) {
     writer.write("public sealed class $L : $L", typeName, interfaceName);
-    writer.openBlock(
+      writer.openBlock(
         "{",
         "}",
         () -> {
-          writer.write(
-              "private static readonly $L DocumentCodec = $L;",
-              ProtocolSupport.codecType(kind),
-              ProtocolSupport.codecExpression(kind));
+          if (usesLegacyDocumentCodec()) {
+            writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
+            writer.write(
+                "private static readonly $L DocumentCodec = $L;",
+                ProtocolSupport.codecType(kind),
+                ProtocolSupport.codecExpression(kind));
+          }
           writer.write("private readonly SmithyOperationInvoker invoker;");
           writer.write("private readonly SmithyClientOptions options;");
           writer.write("");
@@ -240,7 +240,7 @@ public final class ClientGenerator implements Runnable {
 
           if (rpc) {
             writer.write("request.Headers[\"Smithy-Protocol\"] = [\"rpc-v2-cbor\"];");
-            writer.write("request.Headers[\"Accept\"] = [DocumentCodec.MediaType];");
+            writer.write("request.Headers[\"Accept\"] = [$L];", mediaTypeLiteral());
           } else if (input != null && !useDoc) {
             writeRequestHeaders(input);
           }
@@ -251,8 +251,10 @@ public final class ClientGenerator implements Runnable {
           // body
           if (rpc || useDoc) {
             if (input != null) {
-              writer.write("request.Content = DocumentCodec.Serialize(input);");
-              writer.write("request.ContentType = DocumentCodec.MediaType;");
+              writer.write(
+                  "request.Content = $L;",
+                  serializeDocumentBodyExpression(input, "input"));
+              writer.write("request.ContentType = $L;", mediaTypeLiteral());
             }
           } else {
             Optional<MemberShape> payload =
@@ -413,6 +415,41 @@ public final class ClientGenerator implements Runnable {
     writer.write("");
   }
 
+  private boolean usesLegacyDocumentCodec() {
+    return kind == Kind.REST_JSON;
+  }
+
+  private boolean usesFunctionalDocumentCodec() {
+    return kind == Kind.REST_XML || kind == Kind.RPC_V2_CBOR;
+  }
+
+  private String mediaTypeLiteral() {
+    return CSharpNaming.formatString(ProtocolSupport.mediaType(kind));
+  }
+
+  private String codecFromSchema(Shape shape) {
+    return switch (kind) {
+      case REST_XML ->
+          "FunctionalXmlCodec.FromSchema("
+              + SchemaGenerator.functionalShapeSchemaAccessor(context, shape)
+              + ")";
+      case RPC_V2_CBOR ->
+          "FunctionalCborCodec.FromSchema("
+              + SchemaGenerator.functionalShapeSchemaAccessor(context, shape)
+              + ")";
+      case REST_JSON -> "DocumentCodec";
+    };
+  }
+
+  private String serializeDocumentBodyExpression(Shape shape, String valueExpr) {
+    String codec = codecFromSchema(shape);
+    return switch (kind) {
+      case REST_XML -> "System.Text.Encoding.UTF8.GetBytes(" + codec + ".Serialize(" + valueExpr + "))";
+      case RPC_V2_CBOR -> codec + ".Serialize(" + valueExpr + ")";
+      case REST_JSON -> "DocumentCodec.Serialize(" + valueExpr + ")";
+    };
+  }
+
   private void writeRequestUriBuilder(StructureShape input, String uri) {
     writer.write(
         "var requestUriBuilder = new System.Text.StringBuilder($L);",
@@ -554,10 +591,17 @@ public final class ClientGenerator implements Runnable {
     boolean useDoc = ProtocolSupport.useDocumentBindings(kind) || kind == Kind.RPC_V2_CBOR;
     if (useDoc || !hasResponseBindings(output)) {
       String outputType = CSharpSymbolProvider.qualified(sp.toSymbol(output));
-      writer.write(
-          "return $L.DeserializeRequiredBody<$L>(DocumentCodec, response.Content);",
-          runtime,
-          outputType);
+      if (usesFunctionalDocumentCodec()) {
+        writer.write(
+            "return $L.DeserializeRequiredBody($L, response.Content);",
+            runtime,
+            codecFromSchema(output));
+      } else {
+        writer.write(
+            "return $L.DeserializeRequiredBody<$L>(DocumentCodec, response.Content);",
+            runtime,
+            outputType);
+      }
       return;
     }
     List<MemberShape> bodyMembers = responseBodyMembers(output);
@@ -660,7 +704,7 @@ public final class ClientGenerator implements Runnable {
         "{",
         "}",
         () -> {
-          if (errorIds.isEmpty()) {
+          if (errorIds.isEmpty() || kind == Kind.REST_JSON) {
             writer.write("");
             writer.write(
                 "return System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);");
@@ -934,6 +978,10 @@ public final class ClientGenerator implements Runnable {
   }
 
   private String acceptType(StructureShape output) {
+    if (usesFunctionalDocumentCodec()) {
+      return mediaTypeLiteral();
+    }
+
     return output.members().stream()
         .filter(ShapeSupport::isHttpPayload)
         .findFirst()
@@ -981,8 +1029,9 @@ public final class ClientGenerator implements Runnable {
   // ---------------- body projection types ----------------
 
   private void writeBodyProjectionTypes(SymbolProvider sp, Model model, List<OperationShape> ops) {
-    if (ProtocolSupport.useDocumentBindings(kind)) {
-      // Whole shape is the body; no projection types needed.
+    if (ProtocolSupport.useDocumentBindings(kind) || kind == Kind.REST_JSON) {
+      // Whole-shape/document protocols and the functional restJson path do not need generated
+      // private body DTOs.
       return;
     }
     Set<ShapeId> emitted = new HashSet<>();

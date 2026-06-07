@@ -28,81 +28,100 @@ public static class FunctionalRestProtocol
     private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
 
     public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
+        RestOperationBinding<TInput, TOutput> binding,
+        TInput input,
+        IFunctionalRestBodyFormat bodyFormat
+    )
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(bodyFormat);
+
+        var requestUri = BuildRequestUri(binding.UriTemplate, binding.LabelMembers, input!);
+
+        foreach (var (member, queryName) in binding.QueryMembers)
+            requestUri = AppendQuery(requestUri, queryName, member, input!);
+        if (binding.QueryParamsMember is { } qpMember)
+            requestUri = AppendQueryParams(requestUri, qpMember, input!);
+
+        var request = new SmithyHttpRequest(binding.HttpMethod, requestUri);
+
+        foreach (var (member, headerName) in binding.RequestHeaderMembers)
+            AddHeader(request.Headers, headerName, member, input!);
+        if (binding.RequestPrefixHeadersMember is { } phMember)
+            AddPrefixedHeaders(request.Headers, phMember.Prefix, phMember.Member, input!);
+
+        if (binding.InputPayloadMember is not null)
+        {
+            WritePayload(request, binding.InputPayloadMember, input!, bodyFormat);
+            return request;
+        }
+        if (binding.InputBodyProjection is not null)
+            WriteProjectionBody(request, binding.InputBodyProjection, input!, bodyFormat);
+
+        return request;
+    }
+
+    public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation,
         TInput input,
         IFunctionalRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
+        return SerializeRequest(RestOperationBinding.From(operation), input, bodyFormat);
+    }
+
+    public static TInput DeserializeRequest<TInput, TOutput>(
+        RestOperationBinding<TInput, TOutput> binding,
+        SmithyHttpRequest request,
+        IFunctionalRestBodyFormat bodyFormat
+    )
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(bodyFormat);
 
-        var inputSchema = RequireInputStructure(operation);
-        var httpTrait = operation.GetTrait(FunctionalRestTraits.Http);
-        if (httpTrait is null)
+        var builder = binding.InputSchema.CreateBuilder();
+        var labels = ExtractLabels(binding.UriTemplate, request.RequestUri);
+        var query = ParseQuery(request.RequestUri);
+
+        foreach (var member in binding.LabelMembers)
         {
-            throw new InvalidOperationException(
-                $"Operation schema '{operation.Id}' requires an http trait."
-            );
+            if (labels.TryGetValue(member.Name, out var labelValue))
+                member.SetObject(builder, ParseHttpValue(member.Target, member.Traits, labelValue));
         }
-
-        var http = httpTrait.Value.Value.AsObject();
-        var method = http["method"].AsString();
-        var requestUri = BuildRequestUri(http["uri"].AsString(), inputSchema, input!);
-
-        foreach (var member in inputSchema.Members)
+        foreach (var (member, headerName) in binding.RequestHeaderMembers)
         {
-            if (member.Traits.TryGetValue(FunctionalRestTraits.HttpQuery, out var queryTrait))
-            {
-                requestUri = AppendQuery(requestUri, queryTrait.Value.AsString(), member, input!);
-            }
-            else if (member.Traits.ContainsKey(FunctionalRestTraits.HttpQueryParams))
-            {
-                requestUri = AppendQueryParams(requestUri, member, input!);
-            }
-        }
-
-        var request = new SmithyHttpRequest(new HttpMethod(method), requestUri);
-
-        foreach (var member in inputSchema.Members)
-        {
-            if (member.Traits.TryGetValue(FunctionalRestTraits.HttpHeader, out var headerTrait))
-            {
-                AddHeader(request.Headers, headerTrait.Value.AsString(), member, input!);
-            }
-            else if (
-                member.Traits.TryGetValue(
-                    FunctionalRestTraits.HttpPrefixHeaders,
-                    out var prefixHeadersTrait
-                )
-            )
-            {
-                AddPrefixedHeaders(
-                    request.Headers,
-                    prefixHeadersTrait.Value.AsString(),
-                    member,
-                    input!
+            if (TryGetFirstHeader(request.Headers, headerName, out var header))
+                member.SetObject(
+                    builder,
+                    ParseHttpBindingValue(member.Target, member.Traits, header)
                 );
-            }
         }
-
-        var payloadMember = inputSchema.TypedMembers.SingleOrDefault(member =>
-            member.Traits.ContainsKey(FunctionalRestTraits.HttpPayload)
-        );
-        if (payloadMember is not null)
+        if (binding.RequestPrefixHeadersMember is { } reqPhMember)
+            reqPhMember.Member.SetObject(
+                builder,
+                ReadPrefixedHeaders(reqPhMember.Member, request.Headers, reqPhMember.Prefix)
+            );
+        foreach (var (member, queryName) in binding.QueryMembers)
         {
-            WritePayload(request, payloadMember, input!, bodyFormat);
-            return request;
+            if (query.TryGetValue(queryName, out var values) && values.Count > 0)
+                member.SetObject(
+                    builder,
+                    ParseHttpBindingValues(member.Target, member.Traits, values)
+                );
         }
+        if (binding.QueryParamsMember is { } qpMember)
+            qpMember.SetObject(builder, ReadQueryParams(qpMember, query, binding.BoundQueryNames));
+        if (binding.InputPayloadMember is { } payloadMember)
+            ReadPayload(builder, payloadMember, request.Content, bodyFormat);
+        else if (
+            binding.InputBodyProjection is { } projection
+            && request.Content is { Length: > 0 } content
+        )
+            bodyFormat.ReadInto(projection, content, builder);
 
-        var bodyMembers = inputSchema.TypedMembers.Where(IsDocumentBodyMember).ToArray();
-        if (bodyMembers.Length == 0)
-        {
-            return request;
-        }
-
-        var bodyProjection = FunctionalSchemas.Project(inputSchema, bodyMembers);
-        WriteProjectionBody(request, bodyProjection, input!, bodyFormat);
-        return request;
+        return (TInput)binding.InputSchema.BuildObject(builder);
     }
 
     public static TInput DeserializeRequest<TInput, TOutput>(
@@ -112,86 +131,55 @@ public static class FunctionalRestProtocol
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
-        ArgumentNullException.ThrowIfNull(request);
+        return DeserializeRequest(RestOperationBinding.From(operation), request, bodyFormat);
+    }
+
+    public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
+        RestOperationBinding<TInput, TOutput> binding,
+        TOutput output,
+        IFunctionalRestBodyFormat bodyFormat
+    )
+    {
+        ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(bodyFormat);
 
-        var inputSchema = RequireInputStructure(operation);
-        var builder = inputSchema.CreateBuilder();
-        var labels = ExtractLabels(RequireHttpUri(operation), request.RequestUri);
-        var query = ParseQuery(request.RequestUri);
-        var boundQueryNames = GetBoundQueryNames(inputSchema);
+        var headers = new Dictionary<string, IReadOnlyList<string>>(
+            StringComparer.OrdinalIgnoreCase
+        );
+        var contentHeaders = new Dictionary<string, IReadOnlyList<string>>(
+            StringComparer.OrdinalIgnoreCase
+        );
+        var statusCode = HttpStatusCode.OK;
 
-        foreach (var member in inputSchema.TypedMembers)
+        if (binding.ResponseCodeMember is { } codeMember)
         {
-            if (member.Traits.ContainsKey(FunctionalRestTraits.HttpLabel))
-            {
-                if (labels.TryGetValue(member.Name, out var labelValue))
-                {
-                    member.SetObject(
-                        builder,
-                        ParseHttpValue(member.Target, member.Traits, labelValue)
-                    );
-                }
-            }
-            else if (
-                member.Traits.TryGetValue(FunctionalRestTraits.HttpHeader, out var headerTrait)
-            )
-            {
-                if (
-                    TryGetFirstHeader(request.Headers, headerTrait.Value.AsString(), out var header)
-                )
-                {
-                    member.SetObject(
-                        builder,
-                        ParseHttpBindingValue(member.Target, member.Traits, header)
-                    );
-                }
-            }
-            else if (
-                member.Traits.TryGetValue(
-                    FunctionalRestTraits.HttpPrefixHeaders,
-                    out var prefixHeadersTrait
-                )
-            )
-            {
-                member.SetObject(
-                    builder,
-                    ReadPrefixedHeaders(
-                        member,
-                        request.Headers,
-                        prefixHeadersTrait.Value.AsString()
-                    )
-                );
-            }
-            else if (member.Traits.TryGetValue(FunctionalRestTraits.HttpQuery, out var queryTrait))
-            {
-                var name = queryTrait.Value.AsString();
-                if (query.TryGetValue(name, out var values) && values.Count > 0)
-                {
-                    member.SetObject(
-                        builder,
-                        ParseHttpBindingValues(member.Target, member.Traits, values)
-                    );
-                }
-            }
-            else if (member.Traits.ContainsKey(FunctionalRestTraits.HttpQueryParams))
-            {
-                member.SetObject(builder, ReadQueryParams(member, query, boundQueryNames));
-            }
-            else if (member.Traits.ContainsKey(FunctionalRestTraits.HttpPayload))
-            {
-                ReadPayload(builder, member, request.Content, bodyFormat);
-            }
+            var value = codeMember.GetObject(output!);
+            if (value is not null)
+                statusCode = (HttpStatusCode)
+                    (int)ParseHttpValue(FunctionalSchemas.Integer, value.ToString()!)!;
         }
+        foreach (var (member, headerName) in binding.ResponseHeaderMembers)
+            AddHeader(headers, headerName, member, output!);
+        if (binding.ResponsePrefixHeadersMember is { } respPhMember)
+            AddPrefixedHeaders(headers, respPhMember.Prefix, respPhMember.Member, output!);
 
-        var bodyMembers = inputSchema.TypedMembers.Where(IsDocumentBodyMember).ToArray();
-        if (bodyMembers.Length > 0 && request.Content is { Length: > 0 } content)
-        {
-            var bodyProjection = FunctionalSchemas.Project(inputSchema, bodyMembers);
-            bodyFormat.ReadInto(bodyProjection, content, builder);
-        }
+        byte[] content = [];
+        if (binding.OutputPayloadMember is not null)
+            content = SerializePayload(
+                binding.OutputPayloadMember,
+                output!,
+                contentHeaders,
+                bodyFormat
+            );
+        else if (binding.OutputBodyProjection is not null)
+            content = SerializeProjectionBody(
+                binding.OutputBodyProjection,
+                output!,
+                contentHeaders,
+                bodyFormat
+            );
 
-        return (TInput)inputSchema.BuildObject(builder);
+        return new SmithyHttpResponse(statusCode, null, content, headers, contentHeaders);
     }
 
     public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
@@ -201,69 +189,53 @@ public static class FunctionalRestProtocol
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
+        return SerializeResponse(RestOperationBinding.From(operation), output, bodyFormat);
+    }
+
+    public static TOutput DeserializeResponse<TInput, TOutput>(
+        RestOperationBinding<TInput, TOutput> binding,
+        SmithyHttpResponse response,
+        IFunctionalRestBodyFormat bodyFormat
+    )
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(response);
         ArgumentNullException.ThrowIfNull(bodyFormat);
 
-        var outputSchema = RequireOutputStructure(operation);
-        var headers = new Dictionary<string, IReadOnlyList<string>>(
-            StringComparer.OrdinalIgnoreCase
-        );
-        var contentHeaders = new Dictionary<string, IReadOnlyList<string>>(
-            StringComparer.OrdinalIgnoreCase
-        );
-        var statusCode = HttpStatusCode.OK;
+        var builder = binding.OutputSchema.CreateBuilder();
 
-        foreach (var member in outputSchema.Members)
-        {
-            if (member.Traits.ContainsKey(FunctionalRestTraits.HttpResponseCode))
-            {
-                var value = member.GetObject(output!);
-                if (value is not null)
-                {
-                    statusCode = (HttpStatusCode)
-                        (int)ParseHttpValue(FunctionalSchemas.Integer, value.ToString()!)!;
-                }
-            }
-            else if (
-                member.Traits.TryGetValue(FunctionalRestTraits.HttpHeader, out var headerTrait)
-            )
-            {
-                AddHeader(headers, headerTrait.Value.AsString(), member, output!);
-            }
-            else if (
-                member.Traits.TryGetValue(
-                    FunctionalRestTraits.HttpPrefixHeaders,
-                    out var prefixHeadersTrait
+        if (binding.ResponseCodeMember is { } codeMember)
+            codeMember.SetObject(
+                builder,
+                ParseHttpValue(
+                    codeMember.Target,
+                    ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture)
                 )
+            );
+        foreach (var (member, headerName) in binding.ResponseHeaderMembers)
+        {
+            if (
+                TryGetFirstHeader(response.Headers, headerName, out var header)
+                || TryGetFirstHeader(response.ContentHeaders, headerName, out header)
             )
             {
-                AddPrefixedHeaders(headers, prefixHeadersTrait.Value.AsString(), member, output!);
-            }
-        }
-
-        byte[] content = [];
-        var payloadMember = outputSchema.TypedMembers.SingleOrDefault(member =>
-            member.Traits.ContainsKey(FunctionalRestTraits.HttpPayload)
-        );
-        if (payloadMember is not null)
-        {
-            content = SerializePayload(payloadMember, output!, contentHeaders, bodyFormat);
-        }
-        else
-        {
-            var bodyMembers = outputSchema.TypedMembers.Where(IsDocumentBodyMember).ToArray();
-            if (bodyMembers.Length > 0)
-            {
-                var bodyProjection = FunctionalSchemas.Project(outputSchema, bodyMembers);
-                content = SerializeProjectionBody(
-                    bodyProjection,
-                    output!,
-                    contentHeaders,
-                    bodyFormat
+                member.SetObject(
+                    builder,
+                    ParseHttpBindingValue(member.Target, member.Traits, header)
                 );
             }
         }
+        if (binding.ResponsePrefixHeadersMember is { } respPhMember)
+            respPhMember.Member.SetObject(
+                builder,
+                ReadPrefixedHeaders(respPhMember.Member, response.Headers, respPhMember.Prefix)
+            );
+        if (binding.OutputPayloadMember is { } payloadMember)
+            ReadPayload(builder, payloadMember, response.Content, bodyFormat);
+        else if (binding.OutputBodyProjection is { } projection && response.Content.Length > 0)
+            bodyFormat.ReadInto(projection, response.Content, builder);
 
-        return new SmithyHttpResponse(statusCode, null, content, headers, contentHeaders);
+        return (TOutput)binding.OutputSchema.BuildObject(builder);
     }
 
     public static TOutput DeserializeResponse<TInput, TOutput>(
@@ -273,87 +245,8 @@ public static class FunctionalRestProtocol
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
-        ArgumentNullException.ThrowIfNull(response);
-        ArgumentNullException.ThrowIfNull(bodyFormat);
-
-        var outputSchema = RequireOutputStructure(operation);
-        var builder = outputSchema.CreateBuilder();
-
-        foreach (var member in outputSchema.TypedMembers)
-        {
-            if (member.Traits.ContainsKey(FunctionalRestTraits.HttpResponseCode))
-            {
-                member.SetObject(
-                    builder,
-                    ParseHttpValue(
-                        member.Target,
-                        ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture)
-                    )
-                );
-            }
-            else if (
-                member.Traits.TryGetValue(FunctionalRestTraits.HttpHeader, out var headerTrait)
-            )
-            {
-                if (
-                    TryGetFirstHeader(
-                        response.Headers,
-                        headerTrait.Value.AsString(),
-                        out var header
-                    )
-                    || TryGetFirstHeader(
-                        response.ContentHeaders,
-                        headerTrait.Value.AsString(),
-                        out header
-                    )
-                )
-                {
-                    member.SetObject(
-                        builder,
-                        ParseHttpBindingValue(member.Target, member.Traits, header)
-                    );
-                }
-            }
-            else if (
-                member.Traits.TryGetValue(
-                    FunctionalRestTraits.HttpPrefixHeaders,
-                    out var prefixHeadersTrait
-                )
-            )
-            {
-                member.SetObject(
-                    builder,
-                    ReadPrefixedHeaders(
-                        member,
-                        response.Headers,
-                        prefixHeadersTrait.Value.AsString()
-                    )
-                );
-            }
-            else if (member.Traits.ContainsKey(FunctionalRestTraits.HttpPayload))
-            {
-                ReadPayload(builder, member, response.Content, bodyFormat);
-            }
-        }
-
-        var bodyMembers = outputSchema.TypedMembers.Where(IsDocumentBodyMember).ToArray();
-        if (bodyMembers.Length > 0 && response.Content.Length > 0)
-        {
-            var bodyProjection = FunctionalSchemas.Project(outputSchema, bodyMembers);
-            bodyFormat.ReadInto(bodyProjection, response.Content, builder);
-        }
-
-        return (TOutput)outputSchema.BuildObject(builder);
+        return DeserializeResponse(RestOperationBinding.From(operation), response, bodyFormat);
     }
-
-    private static bool IsDocumentBodyMember(IFunctionalMemberSchema member) =>
-        !member.Traits.ContainsKey(FunctionalRestTraits.HttpLabel)
-        && !member.Traits.ContainsKey(FunctionalRestTraits.HttpHeader)
-        && !member.Traits.ContainsKey(FunctionalRestTraits.HttpPrefixHeaders)
-        && !member.Traits.ContainsKey(FunctionalRestTraits.HttpQuery)
-        && !member.Traits.ContainsKey(FunctionalRestTraits.HttpQueryParams)
-        && !member.Traits.ContainsKey(FunctionalRestTraits.HttpPayload)
-        && !member.Traits.ContainsKey(FunctionalRestTraits.HttpResponseCode);
 
     private static void WritePayload<TInput>(
         SmithyHttpRequest request,
@@ -515,26 +408,19 @@ public static class FunctionalRestProtocol
     }
 
     private static string BuildRequestUri<TInput>(
-        string uri,
-        IFunctionalStructSchema inputSchema,
+        string uriTemplate,
+        IReadOnlyList<IFunctionalMemberSchema> labelMembers,
         TInput input
     )
     {
-        var requestUri = uri;
-        foreach (var member in inputSchema.Members)
+        var requestUri = uriTemplate;
+        foreach (var member in labelMembers)
         {
-            if (!member.Traits.ContainsKey(FunctionalRestTraits.HttpLabel))
-            {
-                continue;
-            }
-
             var value = member.GetObject(input!);
             if (value is null)
-            {
                 throw new InvalidOperationException(
                     $"HTTP label member '{member.Name}' cannot be null."
                 );
-            }
 
             requestUri = requestUri
                 .Replace(
@@ -692,7 +578,7 @@ public static class FunctionalRestProtocol
     }
 
     private static IFunctionalMapSchema RequireMap(IFunctionalMemberSchema member) =>
-        member.Target is IFunctionalMapSchema mapSchema
+        member.Target.Resolved is IFunctionalMapSchema mapSchema
             ? mapSchema
             : throw new InvalidOperationException(
                 $"HTTP binding member '{member.Name}' must target a map schema."
@@ -713,7 +599,7 @@ public static class FunctionalRestProtocol
         object value
     )
     {
-        if (schema is IFunctionalListSchema listSchema)
+        if (schema.Resolved is IFunctionalListSchema listSchema)
         {
             foreach (var element in listSchema.GetElementsObject(value))
             {
@@ -745,7 +631,7 @@ public static class FunctionalRestProtocol
 
     private static string FormatHttpHeaderValue(IFunctionalMemberSchema member, object value)
     {
-        if (member.Target is IFunctionalListSchema listSchema)
+        if (member.Target.Resolved is IFunctionalListSchema listSchema)
         {
             return string.Join(
                 ", ",
@@ -905,8 +791,11 @@ public static class FunctionalRestProtocol
         };
     }
 
-    private static FunctionalSchema UnwrapNullable(FunctionalSchema schema) =>
-        schema is IFunctionalNullableSchema nullable ? nullable.Target : schema;
+    private static FunctionalSchema UnwrapNullable(FunctionalSchema schema)
+    {
+        var resolved = schema.Resolved;
+        return resolved is IFunctionalNullableSchema nullable ? nullable.Target.Resolved : resolved;
+    }
 
     private static bool IsDefaultValue(
         FunctionalSchema schema,
@@ -1238,21 +1127,6 @@ public static class FunctionalRestProtocol
             .Replace("\"", "\\\"", StringComparison.Ordinal)
         + "\"";
 
-    private static string RequireHttpUri<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation
-    )
-    {
-        var httpTrait = operation.GetTrait(FunctionalRestTraits.Http);
-        if (httpTrait is null)
-        {
-            throw new InvalidOperationException(
-                $"Operation schema '{operation.Id}' requires an http trait."
-            );
-        }
-
-        return httpTrait.Value.Value.AsObject()["uri"].AsString();
-    }
-
     private static Dictionary<string, string> ExtractLabels(string pattern, string requestUri)
     {
         var labels = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -1344,41 +1218,5 @@ public static class FunctionalRestProtocol
 
         value = string.Empty;
         return false;
-    }
-
-    private static HashSet<string> GetBoundQueryNames(IFunctionalStructSchema schema)
-    {
-        var names = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var member in schema.Members)
-        {
-            if (member.Traits.TryGetValue(FunctionalRestTraits.HttpQuery, out var queryTrait))
-            {
-                names.Add(queryTrait.Value.AsString());
-            }
-        }
-
-        return names;
-    }
-
-    private static IFunctionalStructSchema<TInput> RequireInputStructure<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation
-    )
-    {
-        return operation.Input is IFunctionalStructSchema<TInput> inputSchema
-            ? inputSchema
-            : throw new InvalidOperationException(
-                $"Operation schema '{operation.Id}' input must be a structure schema."
-            );
-    }
-
-    private static IFunctionalStructSchema<TOutput> RequireOutputStructure<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation
-    )
-    {
-        return operation.Output is IFunctionalStructSchema<TOutput> outputSchema
-            ? outputSchema
-            : throw new InvalidOperationException(
-                $"Operation schema '{operation.Id}' output must be a structure schema."
-            );
     }
 }

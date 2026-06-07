@@ -70,14 +70,22 @@ public final class ProtocolSupport {
   public static String codecExpression(Kind kind) {
     return switch (kind) {
       case REST_JSON -> "SmithyJsonCodec.Default";
-      case REST_XML -> "SmithyXmlCodec.Default";
-      case RPC_V2_CBOR -> "SmithyCborCodec.Default";
+      case REST_XML -> "FunctionalXmlCodec";
+      case RPC_V2_CBOR -> "FunctionalCborCodec";
     };
   }
 
   /** Codec interface type used by generated clients for the given protocol. */
   public static String codecType(Kind kind) {
     return "ISmithyCodec";
+  }
+
+  public static String mediaType(Kind kind) {
+    return switch (kind) {
+      case REST_JSON -> "application/json";
+      case REST_XML -> "application/xml";
+      case RPC_V2_CBOR -> "application/cbor";
+    };
   }
 
   /** Runtime namespace housing the protocol class. */

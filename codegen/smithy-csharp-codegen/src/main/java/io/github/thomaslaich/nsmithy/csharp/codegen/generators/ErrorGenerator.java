@@ -8,7 +8,6 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
-import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
@@ -36,25 +35,16 @@ public final class ErrorGenerator implements Runnable {
   @Override
   public void run() {
     SymbolProvider sp = context.symbolProvider();
-    writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     Model model = context.model();
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     Optional<MemberShape> messageMember = ShapeSupport.errorMessageMember(model, shape);
     List<MemberShape> members = ShapeSupport.sortedMembers(shape);
 
-    writer.write(
-        "public sealed partial class $L : System.Exception, ISerializableStruct,"
-            + " IDeserializableShape<$L>",
-        typeName,
-        typeName);
+    writer.write("public sealed partial class $L : System.Exception", typeName);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          writer.write("");
-          SchemaGenerator.writeStructureSchema(writer, context, shape, members);
-          writer.write("Schema ISerializableShape.Schema => Schema;");
-          writer.write("");
           writeConstructor(typeName, messageMember.orElse(null));
           messageMember.ifPresent(
               mm -> {
@@ -62,19 +52,6 @@ public final class ErrorGenerator implements Runnable {
                 writer.write("");
               });
           writeProperties(sp, model, messageMember.orElse(null));
-          writer.write("");
-          writer.write("public void Serialize(IShapeSerializer serializer)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
-                writer.write("serializer.WriteStruct(Schema, this);");
-              });
-          writer.write("");
-          writeSerializeMembers(model, members, messageMember.orElse(null));
-          writer.write("");
-          writeDeserialize(typeName, sp, model, members, messageMember.orElse(null));
         });
     writer.write("");
     SchemaGenerator.writeFunctionalStructureSchema(writer, context, shape, members);

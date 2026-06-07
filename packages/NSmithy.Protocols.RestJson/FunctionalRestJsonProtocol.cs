@@ -14,22 +14,42 @@ public static class FunctionalRestJsonProtocol
     public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation,
         TInput input
-    ) => FunctionalRestProtocol.SerializeRequest(operation, input, BodyFormat);
+    ) =>
+        FunctionalRestProtocol.SerializeRequest(
+            RestOperationBinding.From(operation),
+            input,
+            BodyFormat
+        );
 
     public static TInput DeserializeRequest<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation,
         SmithyHttpRequest request
-    ) => FunctionalRestProtocol.DeserializeRequest(operation, request, BodyFormat);
+    ) =>
+        FunctionalRestProtocol.DeserializeRequest(
+            RestOperationBinding.From(operation),
+            request,
+            BodyFormat
+        );
 
     public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation,
         TOutput output
-    ) => FunctionalRestProtocol.SerializeResponse(operation, output, BodyFormat);
+    ) =>
+        FunctionalRestProtocol.SerializeResponse(
+            RestOperationBinding.From(operation),
+            output,
+            BodyFormat
+        );
 
     public static TOutput DeserializeResponse<TInput, TOutput>(
         FunctionalOperationSchema<TInput, TOutput> operation,
         SmithyHttpResponse response
-    ) => FunctionalRestProtocol.DeserializeResponse(operation, response, BodyFormat);
+    ) =>
+        FunctionalRestProtocol.DeserializeResponse(
+            RestOperationBinding.From(operation),
+            response,
+            BodyFormat
+        );
 
     public static string? DeserializeErrorType(SmithyHttpResponse response) =>
         RestJsonProtocol.DeserializeErrorType(response);

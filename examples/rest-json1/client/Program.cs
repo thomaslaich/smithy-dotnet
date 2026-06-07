@@ -18,7 +18,7 @@ var page = 1;
 do
 {
     var result = await client.ListCitiesAsync(
-        new ListCitiesInput(nextToken: nextToken, pageSize: 3)
+        new ListCitiesInput(NextToken: nextToken, PageSize: 3)
     );
     Console.WriteLine($"  Page {page++}:");
     foreach (var city in result.Items.Values)

@@ -27,12 +27,15 @@ public static class FunctionalJsonCodec
     private sealed class CompiledFunctionalJsonCodec<T>(FunctionalSchema<T> schema)
         : IFunctionalJsonCodec<T>
     {
+        private readonly IJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(schema);
+        private readonly IJsonValueReader<T> valueReader = JsonReaderCompiler.Compile(schema);
+
         public string Serialize(T value)
         {
             using var stream = new MemoryStream();
             using (var writer = new Utf8JsonWriter(stream))
             {
-                WriteValue(writer, schema, value);
+                valueWriter.Write(writer, value);
             }
 
             return System.Text.Encoding.UTF8.GetString(stream.ToArray());
@@ -42,20 +45,473 @@ public static class FunctionalJsonCodec
         {
             ArgumentNullException.ThrowIfNull(payload);
             using var document = JsonDocument.Parse(payload);
-            return (T)ReadValue(schema, document.RootElement)!;
+            return valueReader.Read(document.RootElement);
         }
+    }
+
+    private interface IJsonValueReader<T>
+    {
+        T Read(JsonElement value);
+    }
+
+    private interface IJsonMemberReader<in TBuilder>
+    {
+        string Name { get; }
+
+        bool IsRequired { get; }
+
+        void ReadInto(TBuilder builder, JsonElement value);
+    }
+
+    private interface IJsonUnionCaseReader<out TUnion>
+    {
+        string Name { get; }
+
+        TUnion Read(JsonElement value);
+    }
+
+    private sealed class JsonReaderCompiler
+    {
+        private readonly Dictionary<FunctionalSchema, object> cache = new(
+            ReferenceEqualityComparer.Instance
+        );
+
+        public static IJsonValueReader<T> Compile<T>(FunctionalSchema<T> schema)
+        {
+            ArgumentNullException.ThrowIfNull(schema);
+            return new JsonReaderCompiler().CompileValue(schema);
+        }
+
+        public IJsonValueReader<T> CompileValue<T>(FunctionalSchema<T> schema)
+        {
+            var resolved = schema.Resolved;
+            if (cache.TryGetValue(resolved, out var cached))
+            {
+                return (IJsonValueReader<T>)cached;
+            }
+
+            var deferred = new DeferredJsonValueReader<T>();
+            cache.Add(resolved, deferred);
+            deferred.Set(CompileValueCore(schema, resolved));
+            return deferred;
+        }
+
+        private IJsonValueReader<T> CompileValueCore<T>(
+            FunctionalSchema<T> schema,
+            FunctionalSchema resolved
+        )
+        {
+            if (resolved is IFunctionalNullableSchema)
+            {
+                return (IJsonValueReader<T>)CompileNullable((dynamic)resolved);
+            }
+
+            return resolved.Kind switch
+            {
+                ShapeKind.Boolean => Cast<T>(new BooleanJsonValueReader()),
+                ShapeKind.Byte => Cast<T>(new ByteJsonValueReader()),
+                ShapeKind.Short => Cast<T>(new ShortJsonValueReader()),
+                ShapeKind.Integer => Cast<T>(new IntegerJsonValueReader()),
+                ShapeKind.Long => Cast<T>(new LongJsonValueReader()),
+                ShapeKind.Float => Cast<T>(new FloatJsonValueReader()),
+                ShapeKind.Double => Cast<T>(new DoubleJsonValueReader()),
+                ShapeKind.BigInteger => Cast<T>(new BigIntegerJsonValueReader()),
+                ShapeKind.BigDecimal => Cast<T>(new BigDecimalJsonValueReader()),
+                ShapeKind.String => Cast<T>(new StringJsonValueReader()),
+                ShapeKind.Enum => (IJsonValueReader<T>)CompileStringEnum((dynamic)resolved),
+                ShapeKind.IntEnum => (IJsonValueReader<T>)CompileIntEnum((dynamic)resolved),
+                ShapeKind.Blob => Cast<T>(new BlobJsonValueReader()),
+                ShapeKind.Timestamp => Cast<T>(new TimestampJsonValueReader()),
+                ShapeKind.Document => Cast<T>(new DocumentJsonValueReader()),
+                ShapeKind.Structure => (IJsonValueReader<T>)CompileStructure((dynamic)resolved),
+                ShapeKind.Union => (IJsonValueReader<T>)CompileUnion((dynamic)resolved),
+                ShapeKind.List or ShapeKind.Set => (IJsonValueReader<T>)
+                    CompileList((dynamic)resolved),
+                ShapeKind.Map => (IJsonValueReader<T>)CompileMap((dynamic)resolved),
+                _ => throw new NotSupportedException(
+                    $"JSON codec does not support schema kind '{schema.Kind}'."
+                ),
+            };
+        }
+
+        private NullableJsonValueReader<T> CompileNullable<T>(FunctionalNullableSchema<T> schema)
+            where T : struct => new(CompileValue(schema.TargetSchema));
+
+        private static StringEnumJsonValueReader<T> CompileStringEnum<T>(
+            FunctionalStringEnumSchema<T> schema
+        )
+            where T : IFunctionalStringEnumValue<T> => new(schema);
+
+        private static IntEnumJsonValueReader<T> CompileIntEnum<T>(
+            FunctionalIntEnumSchema<T> schema
+        )
+            where T : struct, Enum => new(schema);
+
+        private StructureJsonValueReader<T, TBuilder> CompileStructure<T, TBuilder>(
+            IFunctionalStructSchema<T, TBuilder> schema
+        )
+        {
+            var visitor = new JsonMemberReaderCompiler<T, TBuilder>(this);
+            schema.VisitMembers(visitor);
+            return new StructureJsonValueReader<T, TBuilder>(
+                schema.CreateTypedBuilder,
+                schema.Build,
+                visitor.Readers
+            );
+        }
+
+        private ListJsonValueReader<TCollection, TElement, TBuilder> CompileList<
+            TCollection,
+            TElement,
+            TBuilder
+        >(IFunctionalListSchema<TCollection, TElement, TBuilder> schema) =>
+            new(schema, CompileValue(schema.ElementSchema));
+
+        private MapJsonValueReader<TDictionary, TValue, TBuilder> CompileMap<
+            TDictionary,
+            TValue,
+            TBuilder
+        >(IFunctionalMapSchema<TDictionary, TValue, TBuilder> schema) =>
+            new(schema, CompileValue(schema.ValueSchema));
+
+        private UnionJsonValueReader<T> CompileUnion<T>(IFunctionalUnionSchema<T> schema)
+        {
+            var visitor = new JsonUnionCaseReaderCompiler<T>(this);
+            schema.VisitCases(visitor);
+            return new UnionJsonValueReader<T>(visitor.Readers);
+        }
+
+        private static IJsonValueReader<T> Cast<T>(object reader) => (IJsonValueReader<T>)reader;
+    }
+
+    private sealed class DeferredJsonValueReader<T> : IJsonValueReader<T>
+    {
+        private IJsonValueReader<T>? inner;
+
+        public void Set(IJsonValueReader<T> reader)
+        {
+            ArgumentNullException.ThrowIfNull(reader);
+            inner = reader;
+        }
+
+        public T Read(JsonElement value)
+        {
+            if (inner is null)
+            {
+                throw new InvalidOperationException("JSON reader has not been initialized.");
+            }
+
+            return inner.Read(value);
+        }
+    }
+
+    private sealed class JsonMemberReaderCompiler<TContainer, TBuilder>(JsonReaderCompiler compiler)
+        : IFunctionalMemberVisitor<TContainer, TBuilder>
+    {
+        private readonly List<IJsonMemberReader<TBuilder>> readers = [];
+
+        public IReadOnlyList<IJsonMemberReader<TBuilder>> Readers => readers;
+
+        public void Visit<TValue>(IFunctionalMemberSchema<TContainer, TBuilder, TValue> member)
+        {
+            readers.Add(
+                new JsonMemberReader<TContainer, TBuilder, TValue>(
+                    member,
+                    compiler.CompileValue(member.TargetSchema)
+                )
+            );
+        }
+    }
+
+    private sealed class JsonMemberReader<TContainer, TBuilder, TValue>(
+        IFunctionalMemberSchema<TContainer, TBuilder, TValue> member,
+        IJsonValueReader<TValue> valueReader
+    ) : IJsonMemberReader<TBuilder>
+    {
+        public string Name => member.Name;
+
+        public bool IsRequired => member.IsRequired;
+
+        public void ReadInto(TBuilder builder, JsonElement value)
+        {
+            member.SetValue(builder, valueReader.Read(value));
+        }
+    }
+
+    private sealed class StructureJsonValueReader<T, TBuilder>(
+        Func<TBuilder> createBuilder,
+        Func<TBuilder, T> build,
+        IReadOnlyList<IJsonMemberReader<TBuilder>> memberReaders
+    ) : IJsonValueReader<T>
+    {
+        public T Read(JsonElement value)
+        {
+            if (value.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidOperationException(
+                    $"Expected JSON object but found {value.ValueKind}."
+                );
+            }
+
+            var builder = createBuilder();
+            foreach (var memberReader in memberReaders)
+            {
+                if (!value.TryGetProperty(memberReader.Name, out var memberValue))
+                {
+                    if (memberReader.IsRequired)
+                    {
+                        throw new InvalidOperationException(
+                            $"Missing required member '{memberReader.Name}'."
+                        );
+                    }
+
+                    continue;
+                }
+
+                if (memberValue.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+                {
+                    if (memberReader.IsRequired)
+                    {
+                        throw new InvalidOperationException(
+                            $"Required member '{memberReader.Name}' cannot be null."
+                        );
+                    }
+
+                    continue;
+                }
+
+                memberReader.ReadInto(builder, memberValue);
+            }
+
+            return build(builder);
+        }
+    }
+
+    private sealed class JsonUnionCaseReaderCompiler<TUnion>(JsonReaderCompiler compiler)
+        : IFunctionalUnionCaseVisitor<TUnion>
+    {
+        private readonly List<IJsonUnionCaseReader<TUnion>> readers = [];
+
+        public IReadOnlyList<IJsonUnionCaseReader<TUnion>> Readers => readers;
+
+        public void Visit<TValue>(IFunctionalUnionCaseSchema<TUnion, TValue> unionCase)
+        {
+            readers.Add(
+                new JsonUnionCaseReader<TUnion, TValue>(
+                    unionCase,
+                    compiler.CompileValue(unionCase.TargetSchema)
+                )
+            );
+        }
+    }
+
+    private sealed class JsonUnionCaseReader<TUnion, TValue>(
+        IFunctionalUnionCaseSchema<TUnion, TValue> unionCase,
+        IJsonValueReader<TValue> valueReader
+    ) : IJsonUnionCaseReader<TUnion>
+    {
+        public string Name => unionCase.Name;
+
+        public TUnion Read(JsonElement value) => unionCase.Create(valueReader.Read(value));
+    }
+
+    private sealed class UnionJsonValueReader<T> : IJsonValueReader<T>
+    {
+        private readonly Dictionary<string, IJsonUnionCaseReader<T>> readersByName;
+
+        public UnionJsonValueReader(IReadOnlyList<IJsonUnionCaseReader<T>> readers)
+        {
+            readersByName = readers.ToDictionary(reader => reader.Name, StringComparer.Ordinal);
+        }
+
+        public T Read(JsonElement value)
+        {
+            if (value.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidOperationException(
+                    $"Expected JSON object but found {value.ValueKind}."
+                );
+            }
+
+            var properties = value.EnumerateObject().ToArray();
+            if (properties.Length != 1)
+            {
+                throw new InvalidOperationException(
+                    "Expected union value to contain exactly one member but found "
+                        + $"{properties.Length}."
+                );
+            }
+
+            var property = properties[0];
+            if (!readersByName.TryGetValue(property.Name, out var reader))
+            {
+                throw new InvalidOperationException($"Unknown union member '{property.Name}'.");
+            }
+
+            return reader.Read(property.Value);
+        }
+    }
+
+    private sealed class ListJsonValueReader<TCollection, TElement, TBuilder>(
+        IFunctionalListSchema<TCollection, TElement, TBuilder> schema,
+        IJsonValueReader<TElement> elementReader
+    ) : IJsonValueReader<TCollection>
+    {
+        public TCollection Read(JsonElement value)
+        {
+            if (value.ValueKind != JsonValueKind.Array)
+            {
+                throw new InvalidOperationException(
+                    $"Expected JSON array but found {value.ValueKind}."
+                );
+            }
+
+            var builder = schema.CreateTypedBuilder();
+            foreach (var element in value.EnumerateArray())
+            {
+                schema.Add(builder, elementReader.Read(element));
+            }
+
+            return schema.Build(builder);
+        }
+    }
+
+    private sealed class MapJsonValueReader<TDictionary, TValue, TBuilder>(
+        IFunctionalMapSchema<TDictionary, TValue, TBuilder> schema,
+        IJsonValueReader<TValue> valueReader
+    ) : IJsonValueReader<TDictionary>
+    {
+        public TDictionary Read(JsonElement value)
+        {
+            if (value.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidOperationException(
+                    $"Expected JSON object but found {value.ValueKind}."
+                );
+            }
+
+            var builder = schema.CreateTypedBuilder();
+            foreach (var property in value.EnumerateObject())
+            {
+                schema.Add(builder, property.Name, valueReader.Read(property.Value));
+            }
+
+            return schema.Build(builder);
+        }
+    }
+
+    private sealed class NullableJsonValueReader<T>(IJsonValueReader<T> inner)
+        : IJsonValueReader<T?>
+        where T : struct
+    {
+        public T? Read(JsonElement value) =>
+            value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+                ? null
+                : inner.Read(value);
+    }
+
+    private sealed class BooleanJsonValueReader : IJsonValueReader<bool>
+    {
+        public bool Read(JsonElement value) => value.GetBoolean();
+    }
+
+    private sealed class ByteJsonValueReader : IJsonValueReader<sbyte>
+    {
+        public sbyte Read(JsonElement value) => value.GetSByte();
+    }
+
+    private sealed class ShortJsonValueReader : IJsonValueReader<short>
+    {
+        public short Read(JsonElement value) => value.GetInt16();
+    }
+
+    private sealed class IntegerJsonValueReader : IJsonValueReader<int>
+    {
+        public int Read(JsonElement value) => value.GetInt32();
+    }
+
+    private sealed class LongJsonValueReader : IJsonValueReader<long>
+    {
+        public long Read(JsonElement value) => value.GetInt64();
+    }
+
+    private sealed class FloatJsonValueReader : IJsonValueReader<float>
+    {
+        public float Read(JsonElement value) => ReadFloat(value);
+    }
+
+    private sealed class DoubleJsonValueReader : IJsonValueReader<double>
+    {
+        public double Read(JsonElement value) => ReadDouble(value);
+    }
+
+    private sealed class BigIntegerJsonValueReader : IJsonValueReader<BigInteger>
+    {
+        public BigInteger Read(JsonElement value) =>
+            BigInteger.Parse(value.GetRawText(), CultureInfo.InvariantCulture);
+    }
+
+    private sealed class BigDecimalJsonValueReader : IJsonValueReader<decimal>
+    {
+        public decimal Read(JsonElement value) => value.GetDecimal();
+    }
+
+    private sealed class StringJsonValueReader : IJsonValueReader<string>
+    {
+        public string Read(JsonElement value) =>
+            value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+                ? null!
+                : value.GetString()!;
+    }
+
+    private sealed class StringEnumJsonValueReader<T>(FunctionalStringEnumSchema<T> schema)
+        : IJsonValueReader<T>
+        where T : IFunctionalStringEnumValue<T>
+    {
+        public T Read(JsonElement value) => schema.Create(value.GetString()!);
+    }
+
+    private sealed class IntEnumJsonValueReader<T>(FunctionalIntEnumSchema<T> schema)
+        : IJsonValueReader<T>
+        where T : struct, Enum
+    {
+        public T Read(JsonElement value) => schema.Create(value.GetInt32());
+    }
+
+    private sealed class BlobJsonValueReader : IJsonValueReader<byte[]>
+    {
+        public byte[] Read(JsonElement value) => value.GetBytesFromBase64();
+    }
+
+    private sealed class TimestampJsonValueReader : IJsonValueReader<DateTimeOffset>
+    {
+        public DateTimeOffset Read(JsonElement value) =>
+            DateTimeOffset.Parse(
+                value.GetString()!,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind
+            );
+    }
+
+    private sealed class DocumentJsonValueReader : IJsonValueReader<Document>
+    {
+        public Document Read(JsonElement value) => Document.FromJsonElement(value);
     }
 
     private sealed class CompiledFunctionalJsonProjectionCodec<T>(
         FunctionalStructProjection<T> projection
     ) : IFunctionalProjectionCodec<T, string>
     {
+        private readonly StructureJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(
+            projection
+        );
+
         public string Serialize(T value)
         {
             using var stream = new MemoryStream();
             using (var writer = new Utf8JsonWriter(stream))
             {
-                WriteProjection(writer, projection, value);
+                valueWriter.Write(writer, value);
             }
 
             return System.Text.Encoding.UTF8.GetString(stream.ToArray());
@@ -69,6 +525,448 @@ public static class FunctionalJsonCodec
             using var document = JsonDocument.Parse(payload);
             ReadProjectionInto(projection, document.RootElement, builder);
         }
+    }
+
+    private interface IJsonValueWriter<in T>
+    {
+        void Write(Utf8JsonWriter writer, T value);
+    }
+
+    private interface IJsonMemberWriter<in TContainer>
+    {
+        void Write(Utf8JsonWriter writer, TContainer container);
+    }
+
+    private interface IJsonUnionCaseWriter<in TUnion>
+    {
+        bool TryWrite(Utf8JsonWriter writer, TUnion value);
+    }
+
+    private sealed class JsonWriterCompiler
+    {
+        private readonly Dictionary<FunctionalSchema, object> cache = new(
+            ReferenceEqualityComparer.Instance
+        );
+
+        public static IJsonValueWriter<T> Compile<T>(FunctionalSchema<T> schema)
+        {
+            ArgumentNullException.ThrowIfNull(schema);
+            return new JsonWriterCompiler().CompileValue(schema);
+        }
+
+        public static StructureJsonValueWriter<T> Compile<T>(
+            FunctionalStructProjection<T> projection
+        )
+        {
+            ArgumentNullException.ThrowIfNull(projection);
+            var compiler = new JsonWriterCompiler();
+            return compiler.CompileProjection(projection);
+        }
+
+        public IJsonValueWriter<T> CompileValue<T>(FunctionalSchema<T> schema)
+        {
+            var resolved = schema.Resolved;
+            if (cache.TryGetValue(resolved, out var cached))
+            {
+                return (IJsonValueWriter<T>)cached;
+            }
+
+            var deferred = new DeferredJsonValueWriter<T>();
+            cache.Add(resolved, deferred);
+            deferred.Set(CompileValueCore(schema, resolved));
+            return deferred;
+        }
+
+        private IJsonValueWriter<T> CompileValueCore<T>(
+            FunctionalSchema<T> schema,
+            FunctionalSchema resolved
+        )
+        {
+            if (resolved is IFunctionalNullableSchema)
+            {
+                return (IJsonValueWriter<T>)CompileNullable((dynamic)resolved);
+            }
+
+            return resolved.Kind switch
+            {
+                ShapeKind.Boolean => Cast<T>(new BooleanJsonValueWriter()),
+                ShapeKind.Byte => Cast<T>(new ByteJsonValueWriter()),
+                ShapeKind.Short => Cast<T>(new ShortJsonValueWriter()),
+                ShapeKind.Integer => Cast<T>(new IntegerJsonValueWriter()),
+                ShapeKind.Long => Cast<T>(new LongJsonValueWriter()),
+                ShapeKind.Float => Cast<T>(new FloatJsonValueWriter()),
+                ShapeKind.Double => Cast<T>(new DoubleJsonValueWriter()),
+                ShapeKind.BigInteger => Cast<T>(new BigIntegerJsonValueWriter()),
+                ShapeKind.BigDecimal => Cast<T>(new BigDecimalJsonValueWriter()),
+                ShapeKind.String => Cast<T>(new StringJsonValueWriter()),
+                ShapeKind.Enum => (IJsonValueWriter<T>)CompileStringEnum((dynamic)resolved),
+                ShapeKind.IntEnum => (IJsonValueWriter<T>)CompileIntEnum((dynamic)resolved),
+                ShapeKind.Blob => Cast<T>(new BlobJsonValueWriter()),
+                ShapeKind.Timestamp => Cast<T>(new TimestampJsonValueWriter()),
+                ShapeKind.Document => Cast<T>(new DocumentJsonValueWriter()),
+                ShapeKind.Structure when resolved is IFunctionalStructSchema<T> structSchema =>
+                    CompileStructure(structSchema),
+                ShapeKind.Union when resolved is IFunctionalUnionSchema<T> unionSchema =>
+                    CompileUnion(unionSchema),
+                ShapeKind.List or ShapeKind.Set => (IJsonValueWriter<T>)
+                    CompileList((dynamic)resolved),
+                ShapeKind.Map => (IJsonValueWriter<T>)CompileMap((dynamic)resolved),
+                _ => throw new NotSupportedException(
+                    $"JSON codec does not support schema kind '{schema.Kind}'."
+                ),
+            };
+        }
+
+        private NullableJsonValueWriter<T> CompileNullable<T>(FunctionalNullableSchema<T> schema)
+            where T : struct => new NullableJsonValueWriter<T>(CompileValue(schema.TargetSchema));
+
+        private static StringEnumJsonValueWriter<T> CompileStringEnum<T>(
+            FunctionalStringEnumSchema<T> schema
+        )
+            where T : IFunctionalStringEnumValue<T> => new StringEnumJsonValueWriter<T>();
+
+        private static IntEnumJsonValueWriter<T> CompileIntEnum<T>(
+            FunctionalIntEnumSchema<T> schema
+        )
+            where T : struct, Enum => new IntEnumJsonValueWriter<T>(schema);
+
+        private StructureJsonValueWriter<T> CompileStructure<T>(IFunctionalStructSchema<T> schema)
+        {
+            var visitor = new JsonMemberWriterCompiler<T>(this);
+            schema.VisitMembers(visitor);
+            return new StructureJsonValueWriter<T>(visitor.Writers);
+        }
+
+        private StructureJsonValueWriter<T> CompileProjection<T>(
+            FunctionalStructProjection<T> projection
+        )
+        {
+            var visitor = new JsonMemberWriterCompiler<T>(this);
+            projection.VisitMembers(visitor);
+            return new StructureJsonValueWriter<T>(visitor.Writers);
+        }
+
+        private ListJsonValueWriter<TCollection, TElement> CompileList<TCollection, TElement>(
+            IFunctionalListSchema<TCollection, TElement> schema
+        ) =>
+            new ListJsonValueWriter<TCollection, TElement>(
+                schema,
+                CompileValue(schema.ElementSchema)
+            );
+
+        private MapJsonValueWriter<TDictionary, TValue> CompileMap<TDictionary, TValue>(
+            IFunctionalMapSchema<TDictionary, TValue> schema
+        ) => new MapJsonValueWriter<TDictionary, TValue>(schema, CompileValue(schema.ValueSchema));
+
+        private UnionJsonValueWriter<T> CompileUnion<T>(IFunctionalUnionSchema<T> schema)
+        {
+            var visitor = new JsonUnionCaseWriterCompiler<T>(this);
+            schema.VisitCases(visitor);
+            return new UnionJsonValueWriter<T>(visitor.Writers);
+        }
+
+        private static IJsonValueWriter<T> Cast<T>(object writer) => (IJsonValueWriter<T>)writer;
+    }
+
+    private sealed class DeferredJsonValueWriter<T> : IJsonValueWriter<T>
+    {
+        private IJsonValueWriter<T>? inner;
+
+        public void Set(IJsonValueWriter<T> writer)
+        {
+            ArgumentNullException.ThrowIfNull(writer);
+            inner = writer;
+        }
+
+        public void Write(Utf8JsonWriter writer, T value)
+        {
+            if (inner is null)
+            {
+                throw new InvalidOperationException("JSON writer has not been initialized.");
+            }
+
+            inner.Write(writer, value);
+        }
+    }
+
+    private sealed class JsonMemberWriterCompiler<TContainer>(JsonWriterCompiler compiler)
+        : IFunctionalMemberVisitor<TContainer>
+    {
+        private readonly List<IJsonMemberWriter<TContainer>> writers = [];
+
+        public IReadOnlyList<IJsonMemberWriter<TContainer>> Writers => writers;
+
+        public void Visit<TValue>(IFunctionalMemberSchema<TContainer, TValue> member)
+        {
+            writers.Add(
+                new JsonMemberWriter<TContainer, TValue>(
+                    member,
+                    compiler.CompileValue(member.TargetSchema)
+                )
+            );
+        }
+    }
+
+    private sealed class JsonMemberWriter<TContainer, TValue>(
+        IFunctionalMemberSchema<TContainer, TValue> member,
+        IJsonValueWriter<TValue> valueWriter
+    ) : IJsonMemberWriter<TContainer>
+    {
+        public void Write(Utf8JsonWriter writer, TContainer container)
+        {
+            var value = member.GetValue(container);
+            if (value is null && !member.IsRequired)
+            {
+                return;
+            }
+
+            writer.WritePropertyName(member.Name);
+            valueWriter.Write(writer, value);
+        }
+    }
+
+    private sealed class JsonUnionCaseWriterCompiler<TUnion>(JsonWriterCompiler compiler)
+        : IFunctionalUnionCaseVisitor<TUnion>
+    {
+        private readonly List<IJsonUnionCaseWriter<TUnion>> writers = [];
+
+        public IReadOnlyList<IJsonUnionCaseWriter<TUnion>> Writers => writers;
+
+        public void Visit<TValue>(IFunctionalUnionCaseSchema<TUnion, TValue> @case)
+        {
+            writers.Add(
+                new JsonUnionCaseWriter<TUnion, TValue>(
+                    @case,
+                    compiler.CompileValue(@case.TargetSchema)
+                )
+            );
+        }
+    }
+
+    private sealed class JsonUnionCaseWriter<TUnion, TValue>(
+        IFunctionalUnionCaseSchema<TUnion, TValue> @case,
+        IJsonValueWriter<TValue> valueWriter
+    ) : IJsonUnionCaseWriter<TUnion>
+    {
+        public bool TryWrite(Utf8JsonWriter writer, TUnion value)
+        {
+            if (!@case.Matches(value))
+            {
+                return false;
+            }
+
+            writer.WritePropertyName(@case.Name);
+            valueWriter.Write(writer, @case.GetValue(value));
+            return true;
+        }
+    }
+
+    private sealed class StructureJsonValueWriter<T>(
+        IReadOnlyList<IJsonMemberWriter<T>> memberWriters
+    ) : IJsonValueWriter<T>
+    {
+        public void Write(Utf8JsonWriter writer, T value)
+        {
+            if (value is null)
+            {
+                writer.WriteNullValue();
+                return;
+            }
+
+            writer.WriteStartObject();
+            foreach (var memberWriter in memberWriters)
+            {
+                memberWriter.Write(writer, value);
+            }
+            writer.WriteEndObject();
+        }
+    }
+
+    private sealed class UnionJsonValueWriter<T>(IReadOnlyList<IJsonUnionCaseWriter<T>> caseWriters)
+        : IJsonValueWriter<T>
+    {
+        public void Write(Utf8JsonWriter writer, T value)
+        {
+            if (value is null)
+            {
+                writer.WriteNullValue();
+                return;
+            }
+
+            writer.WriteStartObject();
+            foreach (var caseWriter in caseWriters)
+            {
+                if (caseWriter.TryWrite(writer, value))
+                {
+                    writer.WriteEndObject();
+                    return;
+                }
+            }
+
+            throw new InvalidOperationException($"No union case matched '{typeof(T).Name}'.");
+        }
+    }
+
+    private sealed class ListJsonValueWriter<TCollection, TElement>(
+        IFunctionalListSchema<TCollection, TElement> schema,
+        IJsonValueWriter<TElement> elementWriter
+    ) : IJsonValueWriter<TCollection>
+    {
+        public void Write(Utf8JsonWriter writer, TCollection value)
+        {
+            if (value is null)
+            {
+                writer.WriteNullValue();
+                return;
+            }
+
+            writer.WriteStartArray();
+            foreach (var element in schema.GetElements(value))
+            {
+                elementWriter.Write(writer, element);
+            }
+            writer.WriteEndArray();
+        }
+    }
+
+    private sealed class MapJsonValueWriter<TDictionary, TValue>(
+        IFunctionalMapSchema<TDictionary, TValue> schema,
+        IJsonValueWriter<TValue> valueWriter
+    ) : IJsonValueWriter<TDictionary>
+    {
+        public void Write(Utf8JsonWriter writer, TDictionary value)
+        {
+            if (value is null)
+            {
+                writer.WriteNullValue();
+                return;
+            }
+
+            writer.WriteStartObject();
+            foreach (var entry in schema.GetEntries(value))
+            {
+                writer.WritePropertyName(entry.Key);
+                valueWriter.Write(writer, entry.Value);
+            }
+            writer.WriteEndObject();
+        }
+    }
+
+    private sealed class NullableJsonValueWriter<T>(IJsonValueWriter<T> inner)
+        : IJsonValueWriter<T?>
+        where T : struct
+    {
+        public void Write(Utf8JsonWriter writer, T? value)
+        {
+            if (value.HasValue)
+            {
+                inner.Write(writer, value.Value);
+            }
+            else
+            {
+                writer.WriteNullValue();
+            }
+        }
+    }
+
+    private sealed class BooleanJsonValueWriter : IJsonValueWriter<bool>
+    {
+        public void Write(Utf8JsonWriter writer, bool value) => writer.WriteBooleanValue(value);
+    }
+
+    private sealed class ByteJsonValueWriter : IJsonValueWriter<sbyte>
+    {
+        public void Write(Utf8JsonWriter writer, sbyte value) => writer.WriteNumberValue(value);
+    }
+
+    private sealed class ShortJsonValueWriter : IJsonValueWriter<short>
+    {
+        public void Write(Utf8JsonWriter writer, short value) => writer.WriteNumberValue(value);
+    }
+
+    private sealed class IntegerJsonValueWriter : IJsonValueWriter<int>
+    {
+        public void Write(Utf8JsonWriter writer, int value) => writer.WriteNumberValue(value);
+    }
+
+    private sealed class LongJsonValueWriter : IJsonValueWriter<long>
+    {
+        public void Write(Utf8JsonWriter writer, long value) => writer.WriteNumberValue(value);
+    }
+
+    private sealed class FloatJsonValueWriter : IJsonValueWriter<float>
+    {
+        public void Write(Utf8JsonWriter writer, float value) => WriteFloat(writer, value);
+    }
+
+    private sealed class DoubleJsonValueWriter : IJsonValueWriter<double>
+    {
+        public void Write(Utf8JsonWriter writer, double value) => WriteDouble(writer, value);
+    }
+
+    private sealed class BigIntegerJsonValueWriter : IJsonValueWriter<BigInteger>
+    {
+        public void Write(Utf8JsonWriter writer, BigInteger value) =>
+            writer.WriteRawValue(value.ToString(CultureInfo.InvariantCulture), true);
+    }
+
+    private sealed class BigDecimalJsonValueWriter : IJsonValueWriter<decimal>
+    {
+        public void Write(Utf8JsonWriter writer, decimal value) => writer.WriteNumberValue(value);
+    }
+
+    private sealed class StringJsonValueWriter : IJsonValueWriter<string>
+    {
+        public void Write(Utf8JsonWriter writer, string value)
+        {
+            if (value is null)
+            {
+                writer.WriteNullValue();
+                return;
+            }
+
+            writer.WriteStringValue(value);
+        }
+    }
+
+    private sealed class StringEnumJsonValueWriter<T> : IJsonValueWriter<T>
+        where T : IFunctionalStringEnumValue<T>
+    {
+        public void Write(Utf8JsonWriter writer, T value) => writer.WriteStringValue(value.Value);
+    }
+
+    private sealed class IntEnumJsonValueWriter<T>(FunctionalIntEnumSchema<T> schema)
+        : IJsonValueWriter<T>
+        where T : struct, Enum
+    {
+        public void Write(Utf8JsonWriter writer, T value) =>
+            writer.WriteNumberValue(schema.GetIntegerValue(value));
+    }
+
+    private sealed class BlobJsonValueWriter : IJsonValueWriter<byte[]>
+    {
+        public void Write(Utf8JsonWriter writer, byte[] value)
+        {
+            if (value is null)
+            {
+                writer.WriteNullValue();
+                return;
+            }
+
+            writer.WriteBase64StringValue(value);
+        }
+    }
+
+    private sealed class TimestampJsonValueWriter : IJsonValueWriter<DateTimeOffset>
+    {
+        public void Write(Utf8JsonWriter writer, DateTimeOffset value) =>
+            writer.WriteStringValue(value.ToString("O", CultureInfo.InvariantCulture));
+    }
+
+    private sealed class DocumentJsonValueWriter : IJsonValueWriter<Document>
+    {
+        public void Write(Utf8JsonWriter writer, Document value) =>
+            DocumentJsonWriter.Write(writer, value);
     }
 
     private static void WriteValue(Utf8JsonWriter writer, FunctionalSchema schema, object? value)
@@ -163,7 +1061,7 @@ public static class FunctionalJsonCodec
             return;
         }
 
-        if (schema is IFunctionalStructSchema<T> structSchema)
+        if (schema.Resolved is IFunctionalStructSchema<T> structSchema)
         {
             WriteStructure(writer, structSchema, value);
             return;
@@ -315,8 +1213,11 @@ public static class FunctionalJsonCodec
         };
     }
 
-    private static FunctionalSchema UnwrapNullable(FunctionalSchema schema) =>
-        schema is IFunctionalNullableSchema nullable ? nullable.Target : schema;
+    private static FunctionalSchema UnwrapNullable(FunctionalSchema schema)
+    {
+        var resolved = schema.Resolved;
+        return resolved is IFunctionalNullableSchema nullable ? nullable.Target.Resolved : resolved;
+    }
 
     private static object ReadStructure(IFunctionalStructSchema schema, JsonElement value)
     {
@@ -351,7 +1252,6 @@ public static class FunctionalJsonCodec
                     );
                 }
 
-                member.SetObject(builder, null);
                 continue;
             }
 
@@ -397,7 +1297,6 @@ public static class FunctionalJsonCodec
                     );
                 }
 
-                member.SetObject(builder, null);
                 continue;
             }
 

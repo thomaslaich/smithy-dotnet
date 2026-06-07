@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Xml.Linq;
+using NSmithy.Core.Functional;
 using NSmithy.Core.Serde;
 using NSmithy.Http;
 using NSmithy.Protocols.RestJson;
@@ -53,10 +54,27 @@ public static class RestXmlProtocol
         return RestJsonProtocol.DeserializeBody<T>(codec, content);
     }
 
+    public static T DeserializeBody<T>(IFunctionalCodec<T, string> codec, byte[] content)
+    {
+        ArgumentNullException.ThrowIfNull(codec);
+        return content.Length == 0 ? default! : codec.Deserialize(Encoding.UTF8.GetString(content));
+    }
+
     public static T DeserializeRequiredBody<T>(ISmithyCodec codec, byte[] content)
         where T : IDeserializableShape<T>
     {
         return RestJsonProtocol.DeserializeRequiredBody<T>(codec, content);
+    }
+
+    public static T DeserializeRequiredBody<T>(IFunctionalCodec<T, string> codec, byte[] content)
+    {
+        ArgumentNullException.ThrowIfNull(codec);
+        if (content.Length == 0)
+        {
+            throw new InvalidOperationException("Response body is required but was empty.");
+        }
+
+        return codec.Deserialize(Encoding.UTF8.GetString(content));
     }
 
     public static string? DeserializeErrorCode(byte[] content)
