@@ -4,9 +4,9 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Tests.Json;
 
-public sealed class FunctionalJsonCodecEnumTests
+public sealed class JsonCodecEnumTests
 {
-    public readonly record struct Status(string Value) : IFunctionalStringEnumValue<Status>
+    public readonly record struct Status(string Value) : IStringEnumValue<Status>
     {
         public static readonly Status Active = new("ACTIVE");
 
@@ -23,19 +23,19 @@ public sealed class FunctionalJsonCodecEnumTests
     }
 
     [Fact]
-    public void FunctionalJsonCodecRoundTripsStringEnumMember()
+    public void JsonCodecRoundTripsStringEnumMember()
     {
         var input = new Deployment("deploy-api", Status.Active);
         var expectedJson = "{\"name\":\"deploy-api\",\"status\":\"ACTIVE\"}";
 
-        var statusSchema = FunctionalSchemas.StringEnum<Status>(new ShapeId("example", "Status"));
-        var deploymentSchema = FunctionalSchemas
+        var statusSchema = Schemas.StringEnum<Status>(new ShapeId("example", "Status"));
+        var deploymentSchema = Schemas
             .Structure<Deployment, DeploymentBuilder>(new ShapeId("example", "Deployment"))
             .Required(
                 "name",
                 static deployment => deployment.Name,
                 static (builder, value) => builder.Name = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Required(
                 "status",
@@ -47,7 +47,7 @@ public sealed class FunctionalJsonCodecEnumTests
                 static () => new DeploymentBuilder(),
                 static builder => new Deployment(builder.Name!, builder.Status)
             );
-        var codec = FunctionalJsonCodec.FromSchema(deploymentSchema);
+        var codec = JsonCodec.FromSchema(deploymentSchema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -72,21 +72,19 @@ public sealed class FunctionalJsonCodecEnumTests
     }
 
     [Fact]
-    public void FunctionalJsonCodecRoundTripsIntEnumMember()
+    public void JsonCodecRoundTripsIntEnumMember()
     {
         var input = new WorkItem("rollback", Priority.High);
         var expectedJson = "{\"title\":\"rollback\",\"priority\":2}";
 
-        var prioritySchema = FunctionalSchemas.IntEnum<Priority>(
-            new ShapeId("example", "Priority")
-        );
-        var workItemSchema = FunctionalSchemas
+        var prioritySchema = Schemas.IntEnum<Priority>(new ShapeId("example", "Priority"));
+        var workItemSchema = Schemas
             .Structure<WorkItem, WorkItemBuilder>(new ShapeId("example", "WorkItem"))
             .Required(
                 "title",
                 static workItem => workItem.Title,
                 static (builder, value) => builder.Title = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Required(
                 "priority",
@@ -98,7 +96,7 @@ public sealed class FunctionalJsonCodecEnumTests
                 static () => new WorkItemBuilder(),
                 static builder => new WorkItem(builder.Title!, builder.Priority)
             );
-        var codec = FunctionalJsonCodec.FromSchema(workItemSchema);
+        var codec = JsonCodec.FromSchema(workItemSchema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);

@@ -2,7 +2,7 @@ using NSmithy.Core;
 
 namespace NSmithy.Protocols.Rest;
 
-public static class FunctionalRestTraits
+public static class RestTraits
 {
     private const string SmithyApi = "smithy.api";
 

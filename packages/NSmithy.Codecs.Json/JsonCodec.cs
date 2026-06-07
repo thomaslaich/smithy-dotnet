@@ -6,30 +6,26 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Json;
 
-public interface IFunctionalJsonCodec<T> : IFunctionalCodec<T> { }
+public interface IJsonCodec<T> : ICodec<T> { }
 
-public static class FunctionalJsonCodec
+public static class JsonCodec
 {
-    public static IFunctionalJsonCodec<T> FromSchema<T>(FunctionalSchema<T> schema)
+    public static IJsonCodec<T> FromSchema<T>(Schema<T> schema)
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new CompiledFunctionalJsonCodec<T>(schema);
+        return new CompiledJsonCodec<T>(schema);
     }
 
-    public static IFunctionalProjectionCodec<T> FromProjection<T>(
-        FunctionalStructProjection<T> projection,
+    public static IProjectionCodec<T> FromProjection<T>(
+        StructProjection<T> projection,
         bool materializeTopLevelDefaults = true
     )
     {
         ArgumentNullException.ThrowIfNull(projection);
-        return new CompiledFunctionalJsonProjectionCodec<T>(
-            projection,
-            materializeTopLevelDefaults
-        );
+        return new CompiledJsonProjectionCodec<T>(projection, materializeTopLevelDefaults);
     }
 
-    private sealed class CompiledFunctionalJsonCodec<T>(FunctionalSchema<T> schema)
-        : IFunctionalJsonCodec<T>
+    private sealed class CompiledJsonCodec<T>(Schema<T> schema) : IJsonCodec<T>
     {
         private readonly IJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(schema);
         private readonly IJsonValueReader<T> valueReader = JsonReaderCompiler.Compile(schema);
@@ -78,17 +74,15 @@ public static class FunctionalJsonCodec
 
     private sealed class JsonReaderCompiler
     {
-        private readonly Dictionary<FunctionalSchema, object> cache = new(
-            ReferenceEqualityComparer.Instance
-        );
+        private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
 
-        public static IJsonValueReader<T> Compile<T>(FunctionalSchema<T> schema)
+        public static IJsonValueReader<T> Compile<T>(Schema<T> schema)
         {
             ArgumentNullException.ThrowIfNull(schema);
             return new JsonReaderCompiler().CompileValue(schema);
         }
 
-        public IJsonValueReader<T> CompileValue<T>(FunctionalSchema<T> schema)
+        public IJsonValueReader<T> CompileValue<T>(Schema<T> schema)
         {
             var resolved = schema.Resolved;
             if (cache.TryGetValue(resolved, out var cached))
@@ -102,12 +96,9 @@ public static class FunctionalJsonCodec
             return deferred;
         }
 
-        private IJsonValueReader<T> CompileValueCore<T>(
-            FunctionalSchema<T> schema,
-            FunctionalSchema resolved
-        )
+        private IJsonValueReader<T> CompileValueCore<T>(Schema<T> schema, Schema resolved)
         {
-            if (resolved is IFunctionalNullableSchema)
+            if (resolved is INullableSchema)
             {
                 return (IJsonValueReader<T>)CompileNullable((dynamic)resolved);
             }
@@ -142,21 +133,17 @@ public static class FunctionalJsonCodec
             };
         }
 
-        private NullableJsonValueReader<T> CompileNullable<T>(FunctionalNullableSchema<T> schema)
+        private NullableJsonValueReader<T> CompileNullable<T>(NullableSchema<T> schema)
             where T : struct => new(CompileValue(schema.TargetSchema));
 
-        private static StringEnumJsonValueReader<T> CompileStringEnum<T>(
-            FunctionalStringEnumSchema<T> schema
-        )
-            where T : IFunctionalStringEnumValue<T> => new(schema);
+        private static StringEnumJsonValueReader<T> CompileStringEnum<T>(StringEnumSchema<T> schema)
+            where T : IStringEnumValue<T> => new(schema);
 
-        private static IntEnumJsonValueReader<T> CompileIntEnum<T>(
-            FunctionalIntEnumSchema<T> schema
-        )
+        private static IntEnumJsonValueReader<T> CompileIntEnum<T>(IntEnumSchema<T> schema)
             where T : struct, Enum => new(schema);
 
         private StructureJsonValueReader<T, TBuilder> CompileStructure<T, TBuilder>(
-            IFunctionalStructSchema<T, TBuilder> schema
+            IStructSchema<T, TBuilder> schema
         )
         {
             var visitor = new JsonMemberReaderCompiler<T, TBuilder>(this);
@@ -172,17 +159,17 @@ public static class FunctionalJsonCodec
             TCollection,
             TElement,
             TBuilder
-        >(IFunctionalListSchema<TCollection, TElement, TBuilder> schema) =>
+        >(IListSchema<TCollection, TElement, TBuilder> schema) =>
             new(schema, CompileValue(schema.ElementSchema));
 
         private MapJsonValueReader<TDictionary, TValue, TBuilder> CompileMap<
             TDictionary,
             TValue,
             TBuilder
-        >(IFunctionalMapSchema<TDictionary, TValue, TBuilder> schema) =>
+        >(IMapSchema<TDictionary, TValue, TBuilder> schema) =>
             new(schema, CompileValue(schema.ValueSchema));
 
-        private IJsonValueReader<T> CompileUnion<T>(IFunctionalUnionSchema<T> schema)
+        private IJsonValueReader<T> CompileUnion<T>(IUnionSchema<T> schema)
         {
             if (IsOpenUnion(schema))
             {
@@ -225,13 +212,13 @@ public static class FunctionalJsonCodec
     }
 
     private sealed class JsonMemberReaderCompiler<TContainer, TBuilder>(JsonReaderCompiler compiler)
-        : IFunctionalMemberVisitor<TContainer, TBuilder>
+        : IMemberVisitor<TContainer, TBuilder>
     {
         private readonly List<IJsonMemberReader<TBuilder>> readers = [];
 
         public IReadOnlyList<IJsonMemberReader<TBuilder>> Readers => readers;
 
-        public void Visit<TValue>(IFunctionalMemberSchema<TContainer, TBuilder, TValue> member)
+        public void Visit<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member)
         {
             readers.Add(
                 new JsonMemberReader<TContainer, TBuilder, TValue>(
@@ -243,7 +230,7 @@ public static class FunctionalJsonCodec
     }
 
     private sealed class JsonMemberReader<TContainer, TBuilder, TValue>(
-        IFunctionalMemberSchema<TContainer, TBuilder, TValue> member,
+        IMemberSchema<TContainer, TBuilder, TValue> member,
         IJsonValueReader<TValue> valueReader
     ) : IJsonMemberReader<TBuilder>
     {
@@ -316,13 +303,13 @@ public static class FunctionalJsonCodec
     }
 
     private sealed class JsonUnionCaseReaderCompiler<TUnion>(JsonReaderCompiler compiler)
-        : IFunctionalUnionCaseVisitor<TUnion>
+        : IUnionCaseVisitor<TUnion>
     {
         private readonly List<IJsonUnionCaseReader<TUnion>> readers = [];
 
         public IReadOnlyList<IJsonUnionCaseReader<TUnion>> Readers => readers;
 
-        public void Visit<TValue>(IFunctionalUnionCaseSchema<TUnion, TValue> unionCase)
+        public void Visit<TValue>(IUnionCaseSchema<TUnion, TValue> unionCase)
         {
             readers.Add(
                 new JsonUnionCaseReader<TUnion, TValue>(
@@ -334,7 +321,7 @@ public static class FunctionalJsonCodec
     }
 
     private sealed class JsonUnionCaseReader<TUnion, TValue>(
-        IFunctionalUnionCaseSchema<TUnion, TValue> unionCase,
+        IUnionCaseSchema<TUnion, TValue> unionCase,
         IJsonValueReader<TValue> valueReader
     ) : IJsonUnionCaseReader<TUnion>
     {
@@ -381,7 +368,7 @@ public static class FunctionalJsonCodec
     }
 
     private sealed class ListJsonValueReader<TCollection, TElement, TBuilder>(
-        IFunctionalListSchema<TCollection, TElement, TBuilder> schema,
+        IListSchema<TCollection, TElement, TBuilder> schema,
         IJsonValueReader<TElement> elementReader
     ) : IJsonValueReader<TCollection>
     {
@@ -405,7 +392,7 @@ public static class FunctionalJsonCodec
     }
 
     private sealed class MapJsonValueReader<TDictionary, TValue, TBuilder>(
-        IFunctionalMapSchema<TDictionary, TValue, TBuilder> schema,
+        IMapSchema<TDictionary, TValue, TBuilder> schema,
         IJsonValueReader<TValue> valueReader
     ) : IJsonValueReader<TDictionary>
     {
@@ -492,15 +479,14 @@ public static class FunctionalJsonCodec
                 : value.GetString()!;
     }
 
-    private sealed class StringEnumJsonValueReader<T>(FunctionalStringEnumSchema<T> schema)
+    private sealed class StringEnumJsonValueReader<T>(StringEnumSchema<T> schema)
         : IJsonValueReader<T>
-        where T : IFunctionalStringEnumValue<T>
+        where T : IStringEnumValue<T>
     {
         public T Read(JsonElement value) => schema.Create(value.GetString()!);
     }
 
-    private sealed class IntEnumJsonValueReader<T>(FunctionalIntEnumSchema<T> schema)
-        : IJsonValueReader<T>
+    private sealed class IntEnumJsonValueReader<T>(IntEnumSchema<T> schema) : IJsonValueReader<T>
         where T : struct, Enum
     {
         public T Read(JsonElement value) => schema.Create(value.GetInt32());
@@ -521,10 +507,10 @@ public static class FunctionalJsonCodec
         public Document Read(JsonElement value) => Document.FromJsonElement(value);
     }
 
-    private sealed class CompiledFunctionalJsonProjectionCodec<T>(
-        FunctionalStructProjection<T> projection,
+    private sealed class CompiledJsonProjectionCodec<T>(
+        StructProjection<T> projection,
         bool materializeTopLevelDefaults
-    ) : IFunctionalProjectionCodec<T>
+    ) : IProjectionCodec<T>
     {
         private readonly StructureJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(
             projection,
@@ -569,18 +555,16 @@ public static class FunctionalJsonCodec
 
     private sealed class JsonWriterCompiler
     {
-        private readonly Dictionary<FunctionalSchema, object> cache = new(
-            ReferenceEqualityComparer.Instance
-        );
+        private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
 
-        public static IJsonValueWriter<T> Compile<T>(FunctionalSchema<T> schema)
+        public static IJsonValueWriter<T> Compile<T>(Schema<T> schema)
         {
             ArgumentNullException.ThrowIfNull(schema);
             return new JsonWriterCompiler().CompileValue(schema);
         }
 
         public static StructureJsonValueWriter<T> Compile<T>(
-            FunctionalStructProjection<T> projection,
+            StructProjection<T> projection,
             bool materializeTopLevelDefaults = true
         )
         {
@@ -589,7 +573,7 @@ public static class FunctionalJsonCodec
             return compiler.CompileProjection(projection, materializeTopLevelDefaults);
         }
 
-        public IJsonValueWriter<T> CompileValue<T>(FunctionalSchema<T> schema)
+        public IJsonValueWriter<T> CompileValue<T>(Schema<T> schema)
         {
             var resolved = schema.Resolved;
             if (cache.TryGetValue(resolved, out var cached))
@@ -603,12 +587,9 @@ public static class FunctionalJsonCodec
             return deferred;
         }
 
-        private IJsonValueWriter<T> CompileValueCore<T>(
-            FunctionalSchema<T> schema,
-            FunctionalSchema resolved
-        )
+        private IJsonValueWriter<T> CompileValueCore<T>(Schema<T> schema, Schema resolved)
         {
-            if (resolved is IFunctionalNullableSchema)
+            if (resolved is INullableSchema)
             {
                 return (IJsonValueWriter<T>)CompileNullable((dynamic)resolved);
             }
@@ -632,10 +613,11 @@ public static class FunctionalJsonCodec
                     new TimestampJsonValueWriter(TimestampFormat.Resolve(null, resolved))
                 ),
                 ShapeKind.Document => Cast<T>(new DocumentJsonValueWriter()),
-                ShapeKind.Structure when resolved is IFunctionalStructSchema<T> structSchema =>
+                ShapeKind.Structure when resolved is IStructSchema<T> structSchema =>
                     CompileStructure(structSchema),
-                ShapeKind.Union when resolved is IFunctionalUnionSchema<T> unionSchema =>
-                    CompileUnion(unionSchema),
+                ShapeKind.Union when resolved is IUnionSchema<T> unionSchema => CompileUnion(
+                    unionSchema
+                ),
                 ShapeKind.List or ShapeKind.Set => (IJsonValueWriter<T>)
                     CompileList((dynamic)resolved),
                 ShapeKind.Map => (IJsonValueWriter<T>)CompileMap((dynamic)resolved),
@@ -645,20 +627,16 @@ public static class FunctionalJsonCodec
             };
         }
 
-        private NullableJsonValueWriter<T> CompileNullable<T>(FunctionalNullableSchema<T> schema)
+        private NullableJsonValueWriter<T> CompileNullable<T>(NullableSchema<T> schema)
             where T : struct => new NullableJsonValueWriter<T>(CompileValue(schema.TargetSchema));
 
-        private static StringEnumJsonValueWriter<T> CompileStringEnum<T>(
-            FunctionalStringEnumSchema<T> schema
-        )
-            where T : IFunctionalStringEnumValue<T> => new StringEnumJsonValueWriter<T>();
+        private static StringEnumJsonValueWriter<T> CompileStringEnum<T>(StringEnumSchema<T> schema)
+            where T : IStringEnumValue<T> => new StringEnumJsonValueWriter<T>();
 
-        private static IntEnumJsonValueWriter<T> CompileIntEnum<T>(
-            FunctionalIntEnumSchema<T> schema
-        )
+        private static IntEnumJsonValueWriter<T> CompileIntEnum<T>(IntEnumSchema<T> schema)
             where T : struct, Enum => new IntEnumJsonValueWriter<T>(schema);
 
-        private StructureJsonValueWriter<T> CompileStructure<T>(IFunctionalStructSchema<T> schema)
+        private StructureJsonValueWriter<T> CompileStructure<T>(IStructSchema<T> schema)
         {
             var visitor = new JsonMemberWriterCompiler<T>(this, materializeDefaults: true);
             schema.VisitMembers(visitor);
@@ -666,7 +644,7 @@ public static class FunctionalJsonCodec
         }
 
         private StructureJsonValueWriter<T> CompileProjection<T>(
-            FunctionalStructProjection<T> projection,
+            StructProjection<T> projection,
             bool materializeTopLevelDefaults
         )
         {
@@ -676,7 +654,7 @@ public static class FunctionalJsonCodec
         }
 
         private ListJsonValueWriter<TCollection, TElement> CompileList<TCollection, TElement>(
-            IFunctionalListSchema<TCollection, TElement> schema
+            IListSchema<TCollection, TElement> schema
         ) =>
             new ListJsonValueWriter<TCollection, TElement>(
                 schema,
@@ -684,10 +662,10 @@ public static class FunctionalJsonCodec
             );
 
         private MapJsonValueWriter<TDictionary, TValue> CompileMap<TDictionary, TValue>(
-            IFunctionalMapSchema<TDictionary, TValue> schema
+            IMapSchema<TDictionary, TValue> schema
         ) => new MapJsonValueWriter<TDictionary, TValue>(schema, CompileValue(schema.ValueSchema));
 
-        private IJsonValueWriter<T> CompileUnion<T>(IFunctionalUnionSchema<T> schema)
+        private IJsonValueWriter<T> CompileUnion<T>(IUnionSchema<T> schema)
         {
             if (IsOpenUnion(schema))
             {
@@ -734,13 +712,13 @@ public static class FunctionalJsonCodec
     private sealed class JsonMemberWriterCompiler<TContainer>(
         JsonWriterCompiler compiler,
         bool materializeDefaults
-    ) : IFunctionalMemberVisitor<TContainer>
+    ) : IMemberVisitor<TContainer>
     {
         private readonly List<IJsonMemberWriter<TContainer>> writers = [];
 
         public IReadOnlyList<IJsonMemberWriter<TContainer>> Writers => writers;
 
-        public void Visit<TValue>(IFunctionalMemberSchema<TContainer, TValue> member)
+        public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
         {
             writers.Add(
                 new JsonMemberWriter<TContainer, TValue>(
@@ -753,7 +731,7 @@ public static class FunctionalJsonCodec
     }
 
     private sealed class JsonMemberWriter<TContainer, TValue>(
-        IFunctionalMemberSchema<TContainer, TValue> member,
+        IMemberSchema<TContainer, TValue> member,
         IJsonValueWriter<TValue> valueWriter,
         bool materializeDefault
     ) : IJsonMemberWriter<TContainer>
@@ -784,13 +762,13 @@ public static class FunctionalJsonCodec
     }
 
     private sealed class JsonUnionCaseWriterCompiler<TUnion>(JsonWriterCompiler compiler)
-        : IFunctionalUnionCaseVisitor<TUnion>
+        : IUnionCaseVisitor<TUnion>
     {
         private readonly List<IJsonUnionCaseWriter<TUnion>> writers = [];
 
         public IReadOnlyList<IJsonUnionCaseWriter<TUnion>> Writers => writers;
 
-        public void Visit<TValue>(IFunctionalUnionCaseSchema<TUnion, TValue> @case)
+        public void Visit<TValue>(IUnionCaseSchema<TUnion, TValue> @case)
         {
             writers.Add(
                 new JsonUnionCaseWriter<TUnion, TValue>(
@@ -802,7 +780,7 @@ public static class FunctionalJsonCodec
     }
 
     private sealed class JsonUnionCaseWriter<TUnion, TValue>(
-        IFunctionalUnionCaseSchema<TUnion, TValue> @case,
+        IUnionCaseSchema<TUnion, TValue> @case,
         IJsonValueWriter<TValue> valueWriter
     ) : IJsonUnionCaseWriter<TUnion>
     {
@@ -866,7 +844,7 @@ public static class FunctionalJsonCodec
     }
 
     private sealed class ListJsonValueWriter<TCollection, TElement>(
-        IFunctionalListSchema<TCollection, TElement> schema,
+        IListSchema<TCollection, TElement> schema,
         IJsonValueWriter<TElement> elementWriter
     ) : IJsonValueWriter<TCollection>
     {
@@ -888,7 +866,7 @@ public static class FunctionalJsonCodec
     }
 
     private sealed class MapJsonValueWriter<TDictionary, TValue>(
-        IFunctionalMapSchema<TDictionary, TValue> schema,
+        IMapSchema<TDictionary, TValue> schema,
         IJsonValueWriter<TValue> valueWriter
     ) : IJsonValueWriter<TDictionary>
     {
@@ -988,13 +966,12 @@ public static class FunctionalJsonCodec
     }
 
     private sealed class StringEnumJsonValueWriter<T> : IJsonValueWriter<T>
-        where T : IFunctionalStringEnumValue<T>
+        where T : IStringEnumValue<T>
     {
         public void Write(Utf8JsonWriter writer, T value) => writer.WriteStringValue(value.Value);
     }
 
-    private sealed class IntEnumJsonValueWriter<T>(FunctionalIntEnumSchema<T> schema)
-        : IJsonValueWriter<T>
+    private sealed class IntEnumJsonValueWriter<T>(IntEnumSchema<T> schema) : IJsonValueWriter<T>
         where T : struct, Enum
     {
         public void Write(Utf8JsonWriter writer, T value) =>
@@ -1031,7 +1008,7 @@ public static class FunctionalJsonCodec
 
         public static string Resolve(
             IReadOnlyDictionary<ShapeId, Trait>? memberTraits,
-            FunctionalSchema schema
+            Schema schema
         )
         {
             if (
@@ -1113,7 +1090,7 @@ public static class FunctionalJsonCodec
             DocumentJsonWriter.Write(writer, value);
     }
 
-    private static void WriteValue(Utf8JsonWriter writer, FunctionalSchema schema, object? value)
+    private static void WriteValue(Utf8JsonWriter writer, Schema schema, object? value)
     {
         if (value is null)
         {
@@ -1159,12 +1136,10 @@ public static class FunctionalJsonCodec
                 writer.WriteStringValue((string)value);
                 break;
             case ShapeKind.Enum:
-                writer.WriteStringValue(((IFunctionalStringEnumValue)value).Value);
+                writer.WriteStringValue(((IStringEnumValue)value).Value);
                 break;
             case ShapeKind.IntEnum:
-                writer.WriteNumberValue(
-                    ((IFunctionalIntEnumSchema)schema).GetIntegerValueObject(value)
-                );
+                writer.WriteNumberValue(((IIntEnumSchema)schema).GetIntegerValueObject(value));
                 break;
             case ShapeKind.Blob:
                 writer.WriteBase64StringValue((byte[])value);
@@ -1180,17 +1155,17 @@ public static class FunctionalJsonCodec
                 DocumentJsonWriter.Write(writer, (Document)value);
                 break;
             case ShapeKind.Structure:
-                WriteStructure(writer, (IFunctionalStructSchema)schema, value);
+                WriteStructure(writer, (IStructSchema)schema, value);
                 break;
             case ShapeKind.Union:
-                WriteUnion(writer, (IFunctionalUnionSchema)schema, value);
+                WriteUnion(writer, (IUnionSchema)schema, value);
                 break;
             case ShapeKind.List:
             case ShapeKind.Set:
-                WriteList(writer, (IFunctionalListSchema)schema, value);
+                WriteList(writer, (IListSchema)schema, value);
                 break;
             case ShapeKind.Map:
-                WriteMap(writer, (IFunctionalMapSchema)schema, value);
+                WriteMap(writer, (IMapSchema)schema, value);
                 break;
             default:
                 throw new NotSupportedException(
@@ -1199,7 +1174,7 @@ public static class FunctionalJsonCodec
         }
     }
 
-    private static void WriteValue<T>(Utf8JsonWriter writer, FunctionalSchema<T> schema, T value)
+    private static void WriteValue<T>(Utf8JsonWriter writer, Schema<T> schema, T value)
     {
         if (value is null)
         {
@@ -1207,20 +1182,16 @@ public static class FunctionalJsonCodec
             return;
         }
 
-        if (schema.Resolved is IFunctionalStructSchema<T> structSchema)
+        if (schema.Resolved is IStructSchema<T> structSchema)
         {
             WriteStructure(writer, structSchema, value);
             return;
         }
 
-        WriteValue(writer, (FunctionalSchema)schema, value);
+        WriteValue(writer, (Schema)schema, value);
     }
 
-    private static void WriteStructure<T>(
-        Utf8JsonWriter writer,
-        IFunctionalStructSchema<T> schema,
-        T value
-    )
+    private static void WriteStructure<T>(Utf8JsonWriter writer, IStructSchema<T> schema, T value)
     {
         writer.WriteStartObject();
         schema.VisitMembers(new JsonWriteMemberVisitor<T>(writer, value));
@@ -1229,7 +1200,7 @@ public static class FunctionalJsonCodec
 
     private static void WriteProjection<T>(
         Utf8JsonWriter writer,
-        FunctionalStructProjection<T> projection,
+        StructProjection<T> projection,
         T value
     )
     {
@@ -1241,9 +1212,9 @@ public static class FunctionalJsonCodec
     private sealed class JsonWriteMemberVisitor<TContainer>(
         Utf8JsonWriter writer,
         TContainer container
-    ) : IFunctionalMemberVisitor<TContainer>
+    ) : IMemberVisitor<TContainer>
     {
-        public void Visit<TValue>(IFunctionalMemberSchema<TContainer, TValue> member)
+        public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
         {
             var memberValue = member.GetValue(container);
             if (memberValue is null && !member.IsRequired)
@@ -1263,11 +1234,7 @@ public static class FunctionalJsonCodec
         }
     }
 
-    private static void WriteStructure(
-        Utf8JsonWriter writer,
-        IFunctionalStructSchema schema,
-        object value
-    )
+    private static void WriteStructure(Utf8JsonWriter writer, IStructSchema schema, object value)
     {
         writer.WriteStartObject();
         foreach (var member in schema.Members)
@@ -1288,11 +1255,7 @@ public static class FunctionalJsonCodec
         writer.WriteEndObject();
     }
 
-    private static void WriteUnion(
-        Utf8JsonWriter writer,
-        IFunctionalUnionSchema schema,
-        object value
-    )
+    private static void WriteUnion(Utf8JsonWriter writer, IUnionSchema schema, object value)
     {
         if (TryGetDiscriminatorName(schema, out var discriminatorName))
         {
@@ -1315,7 +1278,7 @@ public static class FunctionalJsonCodec
 
     private static void WriteDiscriminatedUnion(
         Utf8JsonWriter writer,
-        IFunctionalUnionSchema schema,
+        IUnionSchema schema,
         string discriminatorName,
         object value
     )
@@ -1358,7 +1321,7 @@ public static class FunctionalJsonCodec
         writer.WriteEndObject();
     }
 
-    private static void WriteList(Utf8JsonWriter writer, IFunctionalListSchema schema, object value)
+    private static void WriteList(Utf8JsonWriter writer, IListSchema schema, object value)
     {
         writer.WriteStartArray();
         foreach (var element in schema.GetElementsObject(value))
@@ -1369,7 +1332,7 @@ public static class FunctionalJsonCodec
         writer.WriteEndArray();
     }
 
-    private static void WriteMap(Utf8JsonWriter writer, IFunctionalMapSchema schema, object value)
+    private static void WriteMap(Utf8JsonWriter writer, IMapSchema schema, object value)
     {
         writer.WriteStartObject();
         foreach (var entry in schema.GetEntriesObject(value))
@@ -1381,7 +1344,7 @@ public static class FunctionalJsonCodec
         writer.WriteEndObject();
     }
 
-    private static object? ReadValue(FunctionalSchema schema, JsonElement value)
+    private static object? ReadValue(Schema schema, JsonElement value)
     {
         if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
         {
@@ -1405,30 +1368,28 @@ public static class FunctionalJsonCodec
             ),
             ShapeKind.BigDecimal => value.GetDecimal(),
             ShapeKind.String => value.GetString(),
-            ShapeKind.Enum => ((IFunctionalStringEnumSchema)schema).CreateObject(
-                value.GetString()!
-            ),
-            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)schema).CreateObject(value.GetInt32()),
+            ShapeKind.Enum => ((IStringEnumSchema)schema).CreateObject(value.GetString()!),
+            ShapeKind.IntEnum => ((IIntEnumSchema)schema).CreateObject(value.GetInt32()),
             ShapeKind.Blob => value.GetBytesFromBase64(),
             ShapeKind.Timestamp => TimestampFormat.Read(
                 value,
                 TimestampFormat.Resolve(null, schema)
             ),
             ShapeKind.Document => Document.FromJsonElement(value),
-            ShapeKind.Structure => ReadStructure((IFunctionalStructSchema)schema, value),
-            ShapeKind.Union => ReadUnion((IFunctionalUnionSchema)schema, value),
-            ShapeKind.List or ShapeKind.Set => ReadList((IFunctionalListSchema)schema, value),
-            ShapeKind.Map => ReadMap((IFunctionalMapSchema)schema, value),
+            ShapeKind.Structure => ReadStructure((IStructSchema)schema, value),
+            ShapeKind.Union => ReadUnion((IUnionSchema)schema, value),
+            ShapeKind.List or ShapeKind.Set => ReadList((IListSchema)schema, value),
+            ShapeKind.Map => ReadMap((IMapSchema)schema, value),
             _ => throw new NotSupportedException(
                 $"JSON codec does not support schema kind '{schema.Kind}'."
             ),
         };
     }
 
-    private static FunctionalSchema UnwrapNullable(FunctionalSchema schema)
+    private static Schema UnwrapNullable(Schema schema)
     {
         var resolved = schema.Resolved;
-        return resolved is IFunctionalNullableSchema nullable ? nullable.Target.Resolved : resolved;
+        return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;
     }
 
     private static readonly ShapeId ClientOptionalTrait = new("smithy.api", "clientOptional");
@@ -1441,12 +1402,12 @@ public static class FunctionalJsonCodec
     private static string WireName(IReadOnlyDictionary<ShapeId, Trait> traits, string fallback) =>
         traits.TryGetValue(JsonNameTrait, out var trait) ? trait.Value.AsString() : fallback;
 
-    private static bool IsOpenUnion(IFunctionalUnionSchema schema) =>
-        ((FunctionalSchema)schema).Traits.ContainsKey(AlloyDiscriminatedTrait)
+    private static bool IsOpenUnion(IUnionSchema schema) =>
+        ((Schema)schema).Traits.ContainsKey(AlloyDiscriminatedTrait)
         || GetJsonUnknownCase(schema) is not null;
 
     private static bool TryCreateDefaultValue(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait> traits,
         out object? value
     )
@@ -1465,7 +1426,7 @@ public static class FunctionalJsonCodec
         return value is not null;
     }
 
-    private static object? CreateDefaultValue(FunctionalSchema schema, Document value)
+    private static object? CreateDefaultValue(Schema schema, Document value)
     {
         return schema.Kind switch
         {
@@ -1479,24 +1440,19 @@ public static class FunctionalJsonCodec
             ShapeKind.BigInteger => new BigInteger(value.AsNumber()),
             ShapeKind.BigDecimal => value.AsNumber(),
             ShapeKind.String => value.AsString(),
-            ShapeKind.Enum => ((IFunctionalStringEnumSchema)schema).CreateObject(value.AsString()),
-            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)schema).CreateObject(
-                (int)value.AsNumber()
-            ),
+            ShapeKind.Enum => ((IStringEnumSchema)schema).CreateObject(value.AsString()),
+            ShapeKind.IntEnum => ((IIntEnumSchema)schema).CreateObject((int)value.AsNumber()),
             ShapeKind.Blob => Convert.FromBase64String(value.AsString()),
             ShapeKind.Timestamp => DateTimeOffset.FromUnixTimeSeconds((long)value.AsNumber()),
             ShapeKind.Document => value,
-            ShapeKind.List or ShapeKind.Set when schema.Resolved is IFunctionalListSchema list =>
+            ShapeKind.List or ShapeKind.Set when schema.Resolved is IListSchema list =>
                 CreateDefaultList(list, value),
-            ShapeKind.Map when schema.Resolved is IFunctionalMapSchema map => CreateDefaultMap(
-                map,
-                value
-            ),
+            ShapeKind.Map when schema.Resolved is IMapSchema map => CreateDefaultMap(map, value),
             _ => null,
         };
     }
 
-    private static object CreateDefaultList(IFunctionalListSchema schema, Document value)
+    private static object CreateDefaultList(IListSchema schema, Document value)
     {
         var builder = schema.CreateBuilder();
         foreach (var item in value.AsArray())
@@ -1507,7 +1463,7 @@ public static class FunctionalJsonCodec
         return schema.BuildObject(builder);
     }
 
-    private static object CreateDefaultMap(IFunctionalMapSchema schema, Document value)
+    private static object CreateDefaultMap(IMapSchema schema, Document value)
     {
         var builder = schema.CreateBuilder();
         foreach (var entry in value.AsObject())
@@ -1522,12 +1478,9 @@ public static class FunctionalJsonCodec
         return schema.BuildObject(builder);
     }
 
-    private static bool TryGetDiscriminatorName(
-        IFunctionalUnionSchema schema,
-        out string discriminatorName
-    )
+    private static bool TryGetDiscriminatorName(IUnionSchema schema, out string discriminatorName)
     {
-        if (((FunctionalSchema)schema).Traits.TryGetValue(AlloyDiscriminatedTrait, out var trait))
+        if (((Schema)schema).Traits.TryGetValue(AlloyDiscriminatedTrait, out var trait))
         {
             discriminatorName = trait.Value.AsString();
             return true;
@@ -1537,13 +1490,13 @@ public static class FunctionalJsonCodec
         return false;
     }
 
-    private static IFunctionalUnionCaseSchema? GetJsonUnknownCase(IFunctionalUnionSchema schema) =>
+    private static IUnionCaseSchema? GetJsonUnknownCase(IUnionSchema schema) =>
         schema.Cases.FirstOrDefault(IsJsonUnknownCase);
 
-    private static bool IsJsonUnknownCase(IFunctionalUnionCaseSchema @case) =>
+    private static bool IsJsonUnknownCase(IUnionCaseSchema @case) =>
         @case.Traits.ContainsKey(AlloyJsonUnknownTrait);
 
-    private static object ReadStructure(IFunctionalStructSchema schema, JsonElement value)
+    private static object ReadStructure(IStructSchema schema, JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.Object)
         {
@@ -1596,7 +1549,7 @@ public static class FunctionalJsonCodec
     }
 
     private static void ReadProjectionInto<T>(
-        FunctionalStructProjection<T> projection,
+        StructProjection<T> projection,
         JsonElement value,
         object builder
     )
@@ -1638,7 +1591,7 @@ public static class FunctionalJsonCodec
         }
     }
 
-    private static object ReadUnion(IFunctionalUnionSchema schema, JsonElement value)
+    private static object ReadUnion(IUnionSchema schema, JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.Object)
         {
@@ -1677,7 +1630,7 @@ public static class FunctionalJsonCodec
     }
 
     private static object ReadDiscriminatedUnion(
-        IFunctionalUnionSchema schema,
+        IUnionSchema schema,
         string discriminatorName,
         JsonElement value
     )
@@ -1713,12 +1666,12 @@ public static class FunctionalJsonCodec
         var unknownCase =
             GetJsonUnknownCase(schema)
             ?? throw new InvalidOperationException(
-                $"Discriminated union '{((FunctionalSchema)schema).Id}' is missing an unknown JSON case."
+                $"Discriminated union '{((Schema)schema).Id}' is missing an unknown JSON case."
             );
         return unknownCase.CreateObject(Document.FromJsonElement(value));
     }
 
-    private static object ReadList(IFunctionalListSchema schema, JsonElement value)
+    private static object ReadList(IListSchema schema, JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.Array)
         {
@@ -1736,7 +1689,7 @@ public static class FunctionalJsonCodec
         return schema.BuildObject(builder);
     }
 
-    private static object ReadMap(IFunctionalMapSchema schema, JsonElement value)
+    private static object ReadMap(IMapSchema schema, JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.Object)
         {

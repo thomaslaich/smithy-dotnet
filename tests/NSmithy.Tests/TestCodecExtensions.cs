@@ -9,9 +9,9 @@ namespace NSmithy.Tests;
 /// </summary>
 internal static class TestCodecExtensions
 {
-    public static string SerializeText<T>(this IFunctionalCodec<T> codec, T value) =>
+    public static string SerializeText<T>(this ICodec<T> codec, T value) =>
         Encoding.UTF8.GetString(codec.Serialize(value));
 
-    public static T DeserializeText<T>(this IFunctionalCodec<T> codec, string payload) =>
+    public static T DeserializeText<T>(this ICodec<T> codec, string payload) =>
         codec.Deserialize(Encoding.UTF8.GetBytes(payload));
 }

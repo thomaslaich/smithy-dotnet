@@ -4,7 +4,7 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Tests.Runtime;
 
-public sealed class FunctionalXmlCodecTests
+public sealed class XmlCodecTests
 {
     public sealed record Address(string City);
 
@@ -25,34 +25,34 @@ public sealed class FunctionalXmlCodecTests
     }
 
     [Fact]
-    public void FunctionalXmlCodecRoundTripsNestedStructure()
+    public void XmlCodecRoundTripsNestedStructure()
     {
         var input = new Person("Ada", 36, new Address("London"));
         var expectedXml =
             "<Person><name>Ada</name><age>36</age><address><city>London</city></address></Person>";
 
-        var addressSchema = FunctionalSchemas
+        var addressSchema = Schemas
             .Structure<Address, AddressBuilder>(new ShapeId("example", "Address"))
             .Required(
                 "city",
                 static address => address.City,
                 static (builder, value) => builder.City = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Build(static () => new AddressBuilder(), static builder => new Address(builder.City!));
-        var personSchema = FunctionalSchemas
+        var personSchema = Schemas
             .Structure<Person, PersonBuilder>(new ShapeId("example", "Person"))
             .Required(
                 "name",
                 static person => person.Name,
                 static (builder, value) => builder.Name = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Required(
                 "age",
                 static person => person.Age,
                 static (builder, value) => builder.Age = value,
-                FunctionalSchemas.Integer
+                Schemas.Integer
             )
             .Required(
                 "address",
@@ -64,7 +64,7 @@ public sealed class FunctionalXmlCodecTests
                 static () => new PersonBuilder(),
                 static builder => new Person(builder.Name!, builder.Age, builder.Address!)
             );
-        var codec = FunctionalXmlCodec.FromSchema(personSchema);
+        var codec = XmlCodec.FromSchema(personSchema);
 
         var xml = codec.SerializeText(input);
         var decoded = codec.DeserializeText(xml);

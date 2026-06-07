@@ -6,18 +6,17 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Cbor;
 
-public interface IFunctionalCborCodec<T> : IFunctionalCodec<T> { }
+public interface ICborCodec<T> : ICodec<T> { }
 
-public static class FunctionalCborCodec
+public static class CborCodec
 {
-    public static IFunctionalCborCodec<T> FromSchema<T>(FunctionalSchema<T> schema)
+    public static ICborCodec<T> FromSchema<T>(Schema<T> schema)
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new FunctionalCborCodecImpl<T>(schema);
+        return new CborCodecImpl<T>(schema);
     }
 
-    private sealed class FunctionalCborCodecImpl<T>(FunctionalSchema<T> schema)
-        : IFunctionalCborCodec<T>
+    private sealed class CborCodecImpl<T>(Schema<T> schema) : ICborCodec<T>
     {
         public byte[] Serialize(T value)
         {
@@ -40,7 +39,7 @@ public static class FunctionalCborCodec
         }
     }
 
-    private static void WriteValue(CborWriter writer, FunctionalSchema schema, object? value)
+    private static void WriteValue(CborWriter writer, Schema schema, object? value)
     {
         var resolved = schema.Resolved;
         if (value is null)
@@ -49,7 +48,7 @@ public static class FunctionalCborCodec
             return;
         }
 
-        if (resolved is IFunctionalNullableSchema nullable)
+        if (resolved is INullableSchema nullable)
         {
             WriteValue(writer, nullable.Target, value);
             return;
@@ -88,12 +87,10 @@ public static class FunctionalCborCodec
                 writer.WriteTextString((string)value);
                 break;
             case ShapeKind.Enum:
-                writer.WriteTextString(((IFunctionalStringEnumValue)value).Value);
+                writer.WriteTextString(((IStringEnumValue)value).Value);
                 break;
             case ShapeKind.IntEnum:
-                writer.WriteInt32(
-                    ((IFunctionalIntEnumSchema)resolved).GetIntegerValueObject(value)
-                );
+                writer.WriteInt32(((IIntEnumSchema)resolved).GetIntegerValueObject(value));
                 break;
             case ShapeKind.Blob:
                 writer.WriteByteString((byte[])value);
@@ -106,17 +103,17 @@ public static class FunctionalCborCodec
                     "Smithy Document values are not supported by rpcv2Cbor."
                 );
             case ShapeKind.Structure:
-                WriteStructure(writer, (IFunctionalStructSchema)resolved, value);
+                WriteStructure(writer, (IStructSchema)resolved, value);
                 break;
             case ShapeKind.Union:
-                WriteUnion(writer, (IFunctionalUnionSchema)resolved, value);
+                WriteUnion(writer, (IUnionSchema)resolved, value);
                 break;
             case ShapeKind.List:
             case ShapeKind.Set:
-                WriteList(writer, (IFunctionalListSchema)resolved, value);
+                WriteList(writer, (IListSchema)resolved, value);
                 break;
             case ShapeKind.Map:
-                WriteMap(writer, (IFunctionalMapSchema)resolved, value);
+                WriteMap(writer, (IMapSchema)resolved, value);
                 break;
             default:
                 throw new NotSupportedException(
@@ -125,11 +122,7 @@ public static class FunctionalCborCodec
         }
     }
 
-    private static void WriteStructure(
-        CborWriter writer,
-        IFunctionalStructSchema schema,
-        object value
-    )
+    private static void WriteStructure(CborWriter writer, IStructSchema schema, object value)
     {
         writer.WriteStartMap(null);
         foreach (var member in schema.Members)
@@ -147,7 +140,7 @@ public static class FunctionalCborCodec
         writer.WriteEndMap();
     }
 
-    private static void WriteUnion(CborWriter writer, IFunctionalUnionSchema schema, object value)
+    private static void WriteUnion(CborWriter writer, IUnionSchema schema, object value)
     {
         var @case = schema.GetCaseObject(value);
         writer.WriteStartMap(1);
@@ -156,7 +149,7 @@ public static class FunctionalCborCodec
         writer.WriteEndMap();
     }
 
-    private static void WriteList(CborWriter writer, IFunctionalListSchema schema, object value)
+    private static void WriteList(CborWriter writer, IListSchema schema, object value)
     {
         var elements = schema.GetElementsObject(value).ToArray();
         writer.WriteStartArray(elements.Length);
@@ -168,7 +161,7 @@ public static class FunctionalCborCodec
         writer.WriteEndArray();
     }
 
-    private static void WriteMap(CborWriter writer, IFunctionalMapSchema schema, object value)
+    private static void WriteMap(CborWriter writer, IMapSchema schema, object value)
     {
         var entries = schema.GetEntriesObject(value).ToArray();
         writer.WriteStartMap(entries.Length);
@@ -195,7 +188,7 @@ public static class FunctionalCborCodec
         }
     }
 
-    private static object? Materialize(FunctionalSchema schema, object? value)
+    private static object? Materialize(Schema schema, object? value)
     {
         var resolved = schema.Resolved;
         if (value is null)
@@ -203,7 +196,7 @@ public static class FunctionalCborCodec
             return null;
         }
 
-        if (resolved is IFunctionalNullableSchema nullable)
+        if (resolved is INullableSchema nullable)
         {
             return Materialize(nullable.Target, value);
         }
@@ -222,8 +215,8 @@ public static class FunctionalCborCodec
                 : new BigInteger(Convert.ToInt64(value, CultureInfo.InvariantCulture)),
             ShapeKind.BigDecimal => Convert.ToDecimal(value, CultureInfo.InvariantCulture),
             ShapeKind.String => (string)value,
-            ShapeKind.Enum => ((IFunctionalStringEnumSchema)resolved).CreateObject((string)value),
-            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)resolved).CreateObject(
+            ShapeKind.Enum => ((IStringEnumSchema)resolved).CreateObject((string)value),
+            ShapeKind.IntEnum => ((IIntEnumSchema)resolved).CreateObject(
                 Convert.ToInt32(value, CultureInfo.InvariantCulture)
             ),
             ShapeKind.Blob => (byte[])value,
@@ -231,20 +224,17 @@ public static class FunctionalCborCodec
             ShapeKind.Document => throw new NotSupportedException(
                 "Smithy Document values are not supported by rpcv2Cbor."
             ),
-            ShapeKind.Structure => MaterializeStructure((IFunctionalStructSchema)resolved, value),
-            ShapeKind.Union => MaterializeUnion((IFunctionalUnionSchema)resolved, value),
-            ShapeKind.List or ShapeKind.Set => MaterializeList(
-                (IFunctionalListSchema)resolved,
-                value
-            ),
-            ShapeKind.Map => MaterializeMap((IFunctionalMapSchema)resolved, value),
+            ShapeKind.Structure => MaterializeStructure((IStructSchema)resolved, value),
+            ShapeKind.Union => MaterializeUnion((IUnionSchema)resolved, value),
+            ShapeKind.List or ShapeKind.Set => MaterializeList((IListSchema)resolved, value),
+            ShapeKind.Map => MaterializeMap((IMapSchema)resolved, value),
             _ => throw new NotSupportedException(
                 $"CBOR codec does not support schema kind '{resolved.Kind}'."
             ),
         };
     }
 
-    private static object MaterializeStructure(IFunctionalStructSchema schema, object value)
+    private static object MaterializeStructure(IStructSchema schema, object value)
     {
         if (value is not IReadOnlyDictionary<string, object?> map)
         {
@@ -267,7 +257,7 @@ public static class FunctionalCborCodec
         return schema.BuildObject(builder);
     }
 
-    private static object MaterializeUnion(IFunctionalUnionSchema schema, object value)
+    private static object MaterializeUnion(IUnionSchema schema, object value)
     {
         if (value is not IReadOnlyDictionary<string, object?> map || map.Count == 0)
         {
@@ -281,7 +271,7 @@ public static class FunctionalCborCodec
         return @case.CreateObject(Materialize(@case.Target, entry.Value));
     }
 
-    private static object MaterializeList(IFunctionalListSchema schema, object value)
+    private static object MaterializeList(IListSchema schema, object value)
     {
         if (value is not IReadOnlyList<object?> list)
         {
@@ -297,7 +287,7 @@ public static class FunctionalCborCodec
         return schema.BuildObject(builder);
     }
 
-    private static object MaterializeMap(IFunctionalMapSchema schema, object value)
+    private static object MaterializeMap(IMapSchema schema, object value)
     {
         if (value is not IReadOnlyDictionary<string, object?> map)
         {

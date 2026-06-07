@@ -6,30 +6,27 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Xml;
 
-public interface IFunctionalXmlCodec<T> : IFunctionalCodec<T> { }
+public interface IXmlCodec<T> : ICodec<T> { }
 
-public static class FunctionalXmlCodec
+public static class XmlCodec
 {
-    public static IFunctionalXmlCodec<T> FromSchema<T>(FunctionalSchema<T> schema)
+    public static IXmlCodec<T> FromSchema<T>(Schema<T> schema)
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new FunctionalXmlCodecImpl<T>(schema);
+        return new XmlCodecImpl<T>(schema);
     }
 
-    public static IFunctionalProjectionCodec<T> FromProjection<T>(
-        FunctionalStructProjection<T> projection
-    )
+    public static IProjectionCodec<T> FromProjection<T>(StructProjection<T> projection)
     {
         ArgumentNullException.ThrowIfNull(projection);
-        return new FunctionalXmlProjectionCodec<T>(projection);
+        return new XmlProjectionCodec<T>(projection);
     }
 
-    private sealed class FunctionalXmlProjectionCodec<T>(FunctionalStructProjection<T> projection)
-        : IFunctionalProjectionCodec<T>
+    private sealed class XmlProjectionCodec<T>(StructProjection<T> projection) : IProjectionCodec<T>
     {
         public byte[] Serialize(T value)
         {
-            var root = new XElement(RootElementName((FunctionalSchema)projection.Source));
+            var root = new XElement(RootElementName((Schema)projection.Source));
             foreach (var member in projection.TypedMembers)
             {
                 WriteMember(root, member, value!);
@@ -55,8 +52,7 @@ public static class FunctionalXmlCodec
         }
     }
 
-    private sealed class FunctionalXmlCodecImpl<T>(FunctionalSchema<T> schema)
-        : IFunctionalXmlCodec<T>
+    private sealed class XmlCodecImpl<T>(Schema<T> schema) : IXmlCodec<T>
     {
         public byte[] Serialize(T value)
         {
@@ -79,14 +75,14 @@ public static class FunctionalXmlCodec
         }
     }
 
-    private static XElement WriteRoot(FunctionalSchema schema, object? value)
+    private static XElement WriteRoot(Schema schema, object? value)
     {
         var root = new XElement(RootElementName(schema));
         WriteElementValue(root, schema, value);
         return root;
     }
 
-    private static void WriteElementValue(XElement element, FunctionalSchema schema, object? value)
+    private static void WriteElementValue(XElement element, Schema schema, object? value)
     {
         var resolved = schema.Resolved;
         if (value is null)
@@ -94,7 +90,7 @@ public static class FunctionalXmlCodec
             return;
         }
 
-        if (resolved is IFunctionalNullableSchema nullable)
+        if (resolved is INullableSchema nullable)
         {
             WriteElementValue(element, nullable.Target, value);
             return;
@@ -103,17 +99,17 @@ public static class FunctionalXmlCodec
         switch (resolved.Kind)
         {
             case ShapeKind.Structure:
-                WriteStructure(element, (IFunctionalStructSchema)resolved, value);
+                WriteStructure(element, (IStructSchema)resolved, value);
                 break;
             case ShapeKind.List:
             case ShapeKind.Set:
-                WriteList(element, (IFunctionalListSchema)resolved, value);
+                WriteList(element, (IListSchema)resolved, value);
                 break;
             case ShapeKind.Map:
-                WriteMap(element, (IFunctionalMapSchema)resolved, value);
+                WriteMap(element, (IMapSchema)resolved, value);
                 break;
             case ShapeKind.Union:
-                WriteUnion(element, (IFunctionalUnionSchema)resolved, value);
+                WriteUnion(element, (IUnionSchema)resolved, value);
                 break;
             case ShapeKind.Document:
                 throw new NotSupportedException("Smithy Document values are not supported in XML.");
@@ -123,11 +119,7 @@ public static class FunctionalXmlCodec
         }
     }
 
-    private static void WriteStructure(
-        XElement element,
-        IFunctionalStructSchema schema,
-        object value
-    )
+    private static void WriteStructure(XElement element, IStructSchema schema, object value)
     {
         foreach (var member in schema.Members)
         {
@@ -135,7 +127,7 @@ public static class FunctionalXmlCodec
         }
     }
 
-    private static void WriteMember(XElement element, IFunctionalMemberSchema member, object value)
+    private static void WriteMember(XElement element, IMemberSchema member, object value)
     {
         var memberValue = member.GetObject(value);
         if (memberValue is null && !member.IsRequired)
@@ -163,11 +155,7 @@ public static class FunctionalXmlCodec
         element.Add(child);
     }
 
-    private static void WriteFlattenedMember(
-        XElement parent,
-        IFunctionalMemberSchema member,
-        object? value
-    )
+    private static void WriteFlattenedMember(XElement parent, IMemberSchema member, object? value)
     {
         var target = member.Target.Resolved;
         if (value is null)
@@ -175,7 +163,7 @@ public static class FunctionalXmlCodec
             return;
         }
 
-        if (target is IFunctionalListSchema listSchema)
+        if (target is IListSchema listSchema)
         {
             foreach (var item in listSchema.GetElementsObject(value))
             {
@@ -187,7 +175,7 @@ public static class FunctionalXmlCodec
             return;
         }
 
-        if (target is IFunctionalMapSchema mapSchema)
+        if (target is IMapSchema mapSchema)
         {
             foreach (var entry in mapSchema.GetEntriesObject(value))
             {
@@ -207,7 +195,7 @@ public static class FunctionalXmlCodec
         parent.Add(element);
     }
 
-    private static void WriteUnion(XElement element, IFunctionalUnionSchema schema, object value)
+    private static void WriteUnion(XElement element, IUnionSchema schema, object value)
     {
         var @case = schema.GetCaseObject(value);
         var child = new XElement(@case.Name);
@@ -215,7 +203,7 @@ public static class FunctionalXmlCodec
         element.Add(child);
     }
 
-    private static void WriteList(XElement element, IFunctionalListSchema schema, object value)
+    private static void WriteList(XElement element, IListSchema schema, object value)
     {
         var itemName = ListItemName(schema);
         foreach (var item in schema.GetElementsObject(value))
@@ -226,7 +214,7 @@ public static class FunctionalXmlCodec
         }
     }
 
-    private static void WriteMap(XElement element, IFunctionalMapSchema schema, object value)
+    private static void WriteMap(XElement element, IMapSchema schema, object value)
     {
         foreach (var entry in schema.GetEntriesObject(value))
         {
@@ -239,7 +227,7 @@ public static class FunctionalXmlCodec
         }
     }
 
-    private static object? ReadValue(FunctionalSchema schema, XElement? element)
+    private static object? ReadValue(Schema schema, XElement? element)
     {
         var resolved = schema.Resolved;
         if (element is null)
@@ -247,7 +235,7 @@ public static class FunctionalXmlCodec
             return null;
         }
 
-        if (resolved is IFunctionalNullableSchema nullable)
+        if (resolved is INullableSchema nullable)
         {
             return ReadValue(nullable.Target, element);
         }
@@ -268,8 +256,8 @@ public static class FunctionalXmlCodec
             ShapeKind.BigInteger => BigInteger.Parse(element.Value, CultureInfo.InvariantCulture),
             ShapeKind.BigDecimal => decimal.Parse(element.Value, CultureInfo.InvariantCulture),
             ShapeKind.String => element.Value,
-            ShapeKind.Enum => ((IFunctionalStringEnumSchema)resolved).CreateObject(element.Value),
-            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)resolved).CreateObject(
+            ShapeKind.Enum => ((IStringEnumSchema)resolved).CreateObject(element.Value),
+            ShapeKind.IntEnum => ((IIntEnumSchema)resolved).CreateObject(
                 int.Parse(element.Value, CultureInfo.InvariantCulture)
             ),
             ShapeKind.Blob => Convert.FromBase64String(element.Value),
@@ -277,17 +265,17 @@ public static class FunctionalXmlCodec
             ShapeKind.Document => throw new NotSupportedException(
                 "Smithy Document values are not supported in XML."
             ),
-            ShapeKind.Structure => ReadStructure((IFunctionalStructSchema)resolved, element),
-            ShapeKind.Union => ReadUnion((IFunctionalUnionSchema)resolved, element),
-            ShapeKind.List or ShapeKind.Set => ReadList((IFunctionalListSchema)resolved, element),
-            ShapeKind.Map => ReadMap((IFunctionalMapSchema)resolved, element),
+            ShapeKind.Structure => ReadStructure((IStructSchema)resolved, element),
+            ShapeKind.Union => ReadUnion((IUnionSchema)resolved, element),
+            ShapeKind.List or ShapeKind.Set => ReadList((IListSchema)resolved, element),
+            ShapeKind.Map => ReadMap((IMapSchema)resolved, element),
             _ => throw new NotSupportedException(
                 $"XML codec does not support schema kind '{resolved.Kind}'."
             ),
         };
     }
 
-    private static object ReadStructure(IFunctionalStructSchema schema, XElement element)
+    private static object ReadStructure(IStructSchema schema, XElement element)
     {
         var builder = schema.CreateBuilder();
         foreach (var member in schema.Members)
@@ -298,7 +286,7 @@ public static class FunctionalXmlCodec
         return schema.BuildObject(builder);
     }
 
-    private static void ReadMember(object builder, XElement element, IFunctionalMemberSchema member)
+    private static void ReadMember(object builder, XElement element, IMemberSchema member)
     {
         if (XmlTraits.IsXmlAttribute(member))
         {
@@ -336,14 +324,10 @@ public static class FunctionalXmlCodec
         }
     }
 
-    private static void ReadFlattenedMember(
-        object builder,
-        XElement parent,
-        IFunctionalMemberSchema member
-    )
+    private static void ReadFlattenedMember(object builder, XElement parent, IMemberSchema member)
     {
         var target = member.Target.Resolved;
-        if (target is IFunctionalListSchema listSchema)
+        if (target is IListSchema listSchema)
         {
             var listBuilder = listSchema.CreateBuilder();
             foreach (var child in parent.Elements(ElementName(member)))
@@ -355,7 +339,7 @@ public static class FunctionalXmlCodec
             return;
         }
 
-        if (target is IFunctionalMapSchema mapSchema)
+        if (target is IMapSchema mapSchema)
         {
             var mapBuilder = mapSchema.CreateBuilder();
             foreach (var child in parent.Elements(ElementName(member)))
@@ -377,7 +361,7 @@ public static class FunctionalXmlCodec
         }
     }
 
-    private static object ReadUnion(IFunctionalUnionSchema schema, XElement element)
+    private static object ReadUnion(IUnionSchema schema, XElement element)
     {
         var child =
             element.Elements().FirstOrDefault()
@@ -390,7 +374,7 @@ public static class FunctionalXmlCodec
         return @case.CreateObject(ReadValue(@case.Target, child));
     }
 
-    private static object ReadList(IFunctionalListSchema schema, XElement element)
+    private static object ReadList(IListSchema schema, XElement element)
     {
         var builder = schema.CreateBuilder();
         foreach (var child in element.Elements(ListItemName(schema)))
@@ -401,7 +385,7 @@ public static class FunctionalXmlCodec
         return schema.BuildObject(builder);
     }
 
-    private static object ReadMap(IFunctionalMapSchema schema, XElement element)
+    private static object ReadMap(IMapSchema schema, XElement element)
     {
         var builder = schema.CreateBuilder();
         foreach (var entry in element.Elements())
@@ -419,13 +403,13 @@ public static class FunctionalXmlCodec
     }
 
     private static object? ReadScalar(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         string value
     )
     {
         var resolved = schema.Resolved;
-        if (resolved is IFunctionalNullableSchema nullable)
+        if (resolved is INullableSchema nullable)
         {
             return ReadScalar(nullable.Target, traits, value);
         }
@@ -442,8 +426,8 @@ public static class FunctionalXmlCodec
             ShapeKind.BigInteger => BigInteger.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.BigDecimal => decimal.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.String => value,
-            ShapeKind.Enum => ((IFunctionalStringEnumSchema)resolved).CreateObject(value),
-            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)resolved).CreateObject(
+            ShapeKind.Enum => ((IStringEnumSchema)resolved).CreateObject(value),
+            ShapeKind.IntEnum => ((IIntEnumSchema)resolved).CreateObject(
                 int.Parse(value, CultureInfo.InvariantCulture)
             ),
             ShapeKind.Blob => Convert.FromBase64String(value),
@@ -455,13 +439,13 @@ public static class FunctionalXmlCodec
     }
 
     private static string FormatScalar(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         object? value
     )
     {
         var resolved = schema.Resolved;
-        if (resolved is IFunctionalNullableSchema nullable)
+        if (resolved is INullableSchema nullable)
         {
             return FormatScalar(nullable.Target, traits, value);
         }
@@ -478,8 +462,8 @@ public static class FunctionalXmlCodec
             ShapeKind.BigInteger => ((BigInteger)value!).ToString(CultureInfo.InvariantCulture),
             ShapeKind.BigDecimal => ((decimal)value!).ToString(CultureInfo.InvariantCulture),
             ShapeKind.String => (string)value!,
-            ShapeKind.Enum => ((IFunctionalStringEnumValue)value!).Value,
-            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)resolved)
+            ShapeKind.Enum => ((IStringEnumValue)value!).Value,
+            ShapeKind.IntEnum => ((IIntEnumSchema)resolved)
                 .GetIntegerValueObject(value!)
                 .ToString(CultureInfo.InvariantCulture),
             ShapeKind.Blob => Convert.ToBase64String((byte[])value!),
@@ -491,7 +475,7 @@ public static class FunctionalXmlCodec
     }
 
     private static string FormatTimestamp(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         DateTimeOffset value
     )
@@ -507,7 +491,7 @@ public static class FunctionalXmlCodec
     }
 
     private static DateTimeOffset ParseTimestamp(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         string value
     )
@@ -531,12 +515,12 @@ public static class FunctionalXmlCodec
         };
     }
 
-    private static string ListItemName(IFunctionalListSchema schema) =>
+    private static string ListItemName(IListSchema schema) =>
         XmlTraits.GetXmlName(schema.Element) ?? schema.Element.MemberName ?? "member";
 
-    private static string ElementName(IFunctionalMemberSchema member) =>
+    private static string ElementName(IMemberSchema member) =>
         XmlTraits.GetXmlName(member) ?? member.Name;
 
-    private static string RootElementName(FunctionalSchema schema) =>
+    private static string RootElementName(Schema schema) =>
         XmlTraits.GetXmlName(schema) ?? schema.Id.Name;
 }

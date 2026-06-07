@@ -11,41 +11,25 @@ namespace NSmithy.Protocols.RestXml;
 
 public static class RestXmlProtocol
 {
-    private static readonly IFunctionalRestBodyFormat BodyFormat =
-        new FunctionalRestXmlBodyFormat();
+    private static readonly IRestBodyFormat BodyFormat = new RestXmlBodyFormat();
 
     public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation,
+        OperationSchema<TInput, TOutput> operation,
         TInput input
-    ) =>
-        RestProtocol.SerializeRequest(
-            RestOperationBinding.From(operation),
-            input,
-            BodyFormat
-        );
+    ) => RestProtocol.SerializeRequest(RestOperationBinding.From(operation), input, BodyFormat);
 
     public static TInput DeserializeRequest<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation,
+        OperationSchema<TInput, TOutput> operation,
         SmithyHttpRequest request
-    ) =>
-        RestProtocol.DeserializeRequest(
-            RestOperationBinding.From(operation),
-            request,
-            BodyFormat
-        );
+    ) => RestProtocol.DeserializeRequest(RestOperationBinding.From(operation), request, BodyFormat);
 
     public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation,
+        OperationSchema<TInput, TOutput> operation,
         TOutput output
-    ) =>
-        RestProtocol.SerializeResponse(
-            RestOperationBinding.From(operation),
-            output,
-            BodyFormat
-        );
+    ) => RestProtocol.SerializeResponse(RestOperationBinding.From(operation), output, BodyFormat);
 
     public static TOutput DeserializeResponse<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation,
+        OperationSchema<TInput, TOutput> operation,
         SmithyHttpResponse response
     ) =>
         RestProtocol.DeserializeResponse(
@@ -82,7 +66,7 @@ public static class RestXmlProtocol
     }
 
     public static TError DeserializeError<TError>(
-        FunctionalSchema<TError> errorSchema,
+        Schema<TError> errorSchema,
         SmithyHttpResponse response
     ) => RestProtocol.DeserializeError(errorSchema, response, BodyFormat);
 
@@ -136,35 +120,32 @@ public static class RestXmlProtocol
     }
 #pragma warning restore CA5351
 
-    private sealed class FunctionalRestXmlBodyFormat : IFunctionalRestBodyFormat
+    private sealed class RestXmlBodyFormat : IRestBodyFormat
     {
         public string ContentType => "application/xml";
 
         public string BlobContentType => "application/octet-stream";
 
-        public byte[] Serialize<T>(FunctionalSchema<T> schema, T value) =>
-            FunctionalXmlCodec.FromSchema(schema).Serialize(value);
+        public byte[] Serialize<T>(Schema<T> schema, T value) =>
+            XmlCodec.FromSchema(schema).Serialize(value);
 
-        public byte[] Serialize(FunctionalSchema schema, object value) =>
+        public byte[] Serialize(Schema schema, object value) =>
             SerializeObject((dynamic)schema, value);
 
-        public T Deserialize<T>(FunctionalSchema<T> schema, byte[] content) =>
-            FunctionalXmlCodec.FromSchema(schema).Deserialize(content);
+        public T Deserialize<T>(Schema<T> schema, byte[] content) =>
+            XmlCodec.FromSchema(schema).Deserialize(content);
 
         public byte[] Serialize<T>(
-            FunctionalStructProjection<T> projection,
+            StructProjection<T> projection,
             T value,
             bool materializeTopLevelDefaults = true
-        ) => FunctionalXmlCodec.FromProjection(projection).Serialize(value);
+        ) => XmlCodec.FromProjection(projection).Serialize(value);
 
-        public void ReadInto<T>(
-            FunctionalStructProjection<T> projection,
-            byte[] content,
-            object builder
-        ) => FunctionalXmlCodec.FromProjection(projection).ReadInto(content, builder);
+        public void ReadInto<T>(StructProjection<T> projection, byte[] content, object builder) =>
+            XmlCodec.FromProjection(projection).ReadInto(content, builder);
 
-        private static byte[] SerializeObject<T>(FunctionalSchema<T> schema, object value) =>
-            FunctionalXmlCodec.FromSchema(schema).Serialize((T)value);
+        private static byte[] SerializeObject<T>(Schema<T> schema, object value) =>
+            XmlCodec.FromSchema(schema).Serialize((T)value);
     }
 
     private static byte[] CompressGzip(byte[] content)

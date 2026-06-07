@@ -54,6 +54,6 @@ public final class ListGenerator implements Runnable {
               "public System.Collections.Generic.IReadOnlyList<$L> Values { get; }", memberType);
         });
     writer.write("");
-    SchemaGenerator.writeFunctionalListSchema(writer, context, shape);
+    SchemaGenerator.writeListSchema(writer, context, shape);
   }
 }

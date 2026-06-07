@@ -4,38 +4,32 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Protocols.Rest;
 
-public readonly record struct QueryMemberBinding(IFunctionalMemberSchema Member, string QueryName);
+public readonly record struct QueryMemberBinding(IMemberSchema Member, string QueryName);
 
-public readonly record struct HeaderMemberBinding(
-    IFunctionalMemberSchema Member,
-    string HeaderName
-);
+public readonly record struct HeaderMemberBinding(IMemberSchema Member, string HeaderName);
 
-public readonly record struct PrefixHeaderMemberBinding(
-    IFunctionalMemberSchema Member,
-    string Prefix
-);
+public readonly record struct PrefixHeaderMemberBinding(IMemberSchema Member, string Prefix);
 
 public sealed class RestOperationBinding<TInput, TOutput>
 {
     private RestOperationBinding(
         HttpMethod httpMethod,
         string uriTemplate,
-        IFunctionalStructSchema<TInput> inputSchema,
-        IReadOnlyList<IFunctionalMemberSchema> labelMembers,
+        IStructSchema<TInput> inputSchema,
+        IReadOnlyList<IMemberSchema> labelMembers,
         IReadOnlyList<QueryMemberBinding> queryMembers,
-        IFunctionalMemberSchema? queryParamsMember,
+        IMemberSchema? queryParamsMember,
         IReadOnlyList<HeaderMemberBinding> requestHeaderMembers,
         PrefixHeaderMemberBinding? requestPrefixHeadersMember,
-        IFunctionalMemberSchema<TInput>? inputPayloadMember,
-        FunctionalStructProjection<TInput>? inputBodyProjection,
+        IMemberSchema<TInput>? inputPayloadMember,
+        StructProjection<TInput>? inputBodyProjection,
         HashSet<string> boundQueryNames,
-        IFunctionalStructSchema<TOutput> outputSchema,
-        IFunctionalMemberSchema? responseCodeMember,
+        IStructSchema<TOutput> outputSchema,
+        IMemberSchema? responseCodeMember,
         IReadOnlyList<HeaderMemberBinding> responseHeaderMembers,
         PrefixHeaderMemberBinding? responsePrefixHeadersMember,
-        IFunctionalMemberSchema<TOutput>? outputPayloadMember,
-        FunctionalStructProjection<TOutput>? outputBodyProjection
+        IMemberSchema<TOutput>? outputPayloadMember,
+        StructProjection<TOutput>? outputBodyProjection
     )
     {
         HttpMethod = httpMethod;
@@ -61,32 +55,32 @@ public sealed class RestOperationBinding<TInput, TOutput>
     public string UriTemplate { get; }
 
     // Input
-    public IFunctionalStructSchema<TInput> InputSchema { get; }
-    public IReadOnlyList<IFunctionalMemberSchema> LabelMembers { get; }
+    public IStructSchema<TInput> InputSchema { get; }
+    public IReadOnlyList<IMemberSchema> LabelMembers { get; }
     public IReadOnlyList<QueryMemberBinding> QueryMembers { get; }
-    public IFunctionalMemberSchema? QueryParamsMember { get; }
+    public IMemberSchema? QueryParamsMember { get; }
     public IReadOnlyList<HeaderMemberBinding> RequestHeaderMembers { get; }
     public PrefixHeaderMemberBinding? RequestPrefixHeadersMember { get; }
-    public IFunctionalMemberSchema<TInput>? InputPayloadMember { get; }
-    public FunctionalStructProjection<TInput>? InputBodyProjection { get; }
+    public IMemberSchema<TInput>? InputPayloadMember { get; }
+    public StructProjection<TInput>? InputBodyProjection { get; }
     public HashSet<string> BoundQueryNames { get; }
 
     // Output
-    public IFunctionalStructSchema<TOutput> OutputSchema { get; }
-    public IFunctionalMemberSchema? ResponseCodeMember { get; }
+    public IStructSchema<TOutput> OutputSchema { get; }
+    public IMemberSchema? ResponseCodeMember { get; }
     public IReadOnlyList<HeaderMemberBinding> ResponseHeaderMembers { get; }
     public PrefixHeaderMemberBinding? ResponsePrefixHeadersMember { get; }
-    public IFunctionalMemberSchema<TOutput>? OutputPayloadMember { get; }
-    public FunctionalStructProjection<TOutput>? OutputBodyProjection { get; }
+    public IMemberSchema<TOutput>? OutputPayloadMember { get; }
+    public StructProjection<TOutput>? OutputBodyProjection { get; }
 
     internal static RestOperationBinding<TInput, TOutput> CreateFrom(
-        FunctionalOperationSchema<TInput, TOutput> operation
+        OperationSchema<TInput, TOutput> operation
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
 
         var httpTrait =
-            operation.GetTrait(FunctionalRestTraits.Http)
+            operation.GetTrait(RestTraits.Http)
             ?? throw new InvalidOperationException(
                 $"Operation '{operation.Id}' is missing the @http trait."
             );
@@ -95,63 +89,56 @@ public sealed class RestOperationBinding<TInput, TOutput>
         var uriTemplate = http["uri"].AsString();
 
         var inputSchema =
-            operation.Input.Resolved as IFunctionalStructSchema<TInput>
+            operation.Input.Resolved as IStructSchema<TInput>
             ?? throw new InvalidOperationException(
                 $"Operation '{operation.Id}' input must be a structure schema."
             );
         var outputSchema =
-            operation.Output.Resolved as IFunctionalStructSchema<TOutput>
+            operation.Output.Resolved as IStructSchema<TOutput>
             ?? throw new InvalidOperationException(
                 $"Operation '{operation.Id}' output must be a structure schema."
             );
 
         // Partition input members in a single pass
-        var labelMembers = new List<IFunctionalMemberSchema>();
+        var labelMembers = new List<IMemberSchema>();
         var queryMembers = new List<QueryMemberBinding>();
-        IFunctionalMemberSchema? queryParamsMember = null;
+        IMemberSchema? queryParamsMember = null;
         var requestHeaderMembers = new List<HeaderMemberBinding>();
         PrefixHeaderMemberBinding? requestPrefixHeadersMember = null;
-        IFunctionalMemberSchema<TInput>? inputPayloadMember = null;
-        var inputBodyMembers = new List<IFunctionalMemberSchema<TInput>>();
+        IMemberSchema<TInput>? inputPayloadMember = null;
+        var inputBodyMembers = new List<IMemberSchema<TInput>>();
         var boundQueryNames = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var member in inputSchema.TypedMembers)
         {
-            if (member.Traits.ContainsKey(FunctionalRestTraits.HttpLabel))
+            if (member.Traits.ContainsKey(RestTraits.HttpLabel))
             {
                 labelMembers.Add(member);
             }
-            else if (member.Traits.TryGetValue(FunctionalRestTraits.HttpQuery, out var queryTrait))
+            else if (member.Traits.TryGetValue(RestTraits.HttpQuery, out var queryTrait))
             {
                 var name = queryTrait.Value.AsString();
                 queryMembers.Add(new QueryMemberBinding(member, name));
                 boundQueryNames.Add(name);
             }
-            else if (member.Traits.ContainsKey(FunctionalRestTraits.HttpQueryParams))
+            else if (member.Traits.ContainsKey(RestTraits.HttpQueryParams))
             {
                 queryParamsMember = member;
             }
-            else if (
-                member.Traits.TryGetValue(FunctionalRestTraits.HttpHeader, out var headerTrait)
-            )
+            else if (member.Traits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
             {
                 requestHeaderMembers.Add(
                     new HeaderMemberBinding(member, headerTrait.Value.AsString())
                 );
             }
-            else if (
-                member.Traits.TryGetValue(
-                    FunctionalRestTraits.HttpPrefixHeaders,
-                    out var prefixTrait
-                )
-            )
+            else if (member.Traits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait))
             {
                 requestPrefixHeadersMember = new PrefixHeaderMemberBinding(
                     member,
                     prefixTrait.Value.AsString()
                 );
             }
-            else if (member.Traits.ContainsKey(FunctionalRestTraits.HttpPayload))
+            else if (member.Traits.ContainsKey(RestTraits.HttpPayload))
             {
                 inputPayloadMember = member;
             }
@@ -161,44 +148,37 @@ public sealed class RestOperationBinding<TInput, TOutput>
             }
         }
 
-        FunctionalStructProjection<TInput>? inputBodyProjection = null;
+        StructProjection<TInput>? inputBodyProjection = null;
         if (inputPayloadMember is null && inputBodyMembers.Count > 0)
-            inputBodyProjection = FunctionalSchemas.Project(inputSchema, inputBodyMembers);
+            inputBodyProjection = Schemas.Project(inputSchema, inputBodyMembers);
 
         // Partition output members in a single pass
-        IFunctionalMemberSchema? responseCodeMember = null;
+        IMemberSchema? responseCodeMember = null;
         var responseHeaderMembers = new List<HeaderMemberBinding>();
         PrefixHeaderMemberBinding? responsePrefixHeadersMember = null;
-        IFunctionalMemberSchema<TOutput>? outputPayloadMember = null;
-        var outputBodyMembers = new List<IFunctionalMemberSchema<TOutput>>();
+        IMemberSchema<TOutput>? outputPayloadMember = null;
+        var outputBodyMembers = new List<IMemberSchema<TOutput>>();
 
         foreach (var member in outputSchema.TypedMembers)
         {
-            if (member.Traits.ContainsKey(FunctionalRestTraits.HttpResponseCode))
+            if (member.Traits.ContainsKey(RestTraits.HttpResponseCode))
             {
                 responseCodeMember = member;
             }
-            else if (
-                member.Traits.TryGetValue(FunctionalRestTraits.HttpHeader, out var headerTrait)
-            )
+            else if (member.Traits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
             {
                 responseHeaderMembers.Add(
                     new HeaderMemberBinding(member, headerTrait.Value.AsString())
                 );
             }
-            else if (
-                member.Traits.TryGetValue(
-                    FunctionalRestTraits.HttpPrefixHeaders,
-                    out var prefixTrait
-                )
-            )
+            else if (member.Traits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait))
             {
                 responsePrefixHeadersMember = new PrefixHeaderMemberBinding(
                     member,
                     prefixTrait.Value.AsString()
                 );
             }
-            else if (member.Traits.ContainsKey(FunctionalRestTraits.HttpPayload))
+            else if (member.Traits.ContainsKey(RestTraits.HttpPayload))
             {
                 outputPayloadMember = member;
             }
@@ -208,9 +188,9 @@ public sealed class RestOperationBinding<TInput, TOutput>
             }
         }
 
-        FunctionalStructProjection<TOutput>? outputBodyProjection = null;
+        StructProjection<TOutput>? outputBodyProjection = null;
         if (outputPayloadMember is null && outputBodyMembers.Count > 0)
-            outputBodyProjection = FunctionalSchemas.Project(outputSchema, outputBodyMembers);
+            outputBodyProjection = Schemas.Project(outputSchema, outputBodyMembers);
 
         return new RestOperationBinding<TInput, TOutput>(
             httpMethod,
@@ -255,7 +235,7 @@ public static class RestOperationBinding
     > Cache = new();
 
     public static RestOperationBinding<TInput, TOutput> From<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation
+        OperationSchema<TInput, TOutput> operation
     )
     {
         if (Cache.TryGetValue(operation, out var cached))

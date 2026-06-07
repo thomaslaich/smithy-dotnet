@@ -32,7 +32,7 @@ public final class StringEnumGenerator implements Runnable {
     writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     writer.write(
-        "public readonly partial record struct $L(string Value) : IFunctionalStringEnumValue<$L>",
+        "public readonly partial record struct $L(string Value) : IStringEnumValue<$L>",
         typeName,
         typeName);
     writer.openBlock(
@@ -59,6 +59,6 @@ public final class StringEnumGenerator implements Runnable {
           writer.openBlock("{", "}", () -> writer.write("return Value;"));
         });
     writer.write("");
-    SchemaGenerator.writeFunctionalSimpleSchema(writer, shape);
+    SchemaGenerator.writeSimpleSchema(writer, shape);
   }
 }

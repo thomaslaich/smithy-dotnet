@@ -162,8 +162,8 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
   @Override
   public Symbol structureShape(StructureShape s) {
     // smithy.api#Unit maps to the runtime SmithyUnit value type, not a generated record,
-    // so union members and other references agree with FunctionalSchemas.Unit
-    // (FunctionalSchema<SmithyUnit>).
+    // so union members and other references agree with Schemas.Unit
+    // (Schema<SmithyUnit>).
     if (ShapeSupport.isUnit(s.getId())) {
       return primitive(RuntimeTypes.NSMITHY_CORE, "SmithyUnit", true);
     }

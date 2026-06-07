@@ -216,10 +216,10 @@ internal static class ConformanceObjectFactory
         // The functional schema lives on the generated companion `{Type}Schema` class.
         var schemaType = type.Assembly.GetType(type.FullName + "Schema");
         var schemaProp = schemaType?.GetProperty(
-            "FunctionalSchema",
+            "Schema",
             BindingFlags.Public | BindingFlags.Static
         );
-        return (schemaProp?.GetValue(null) as FunctionalSchema)?.Kind;
+        return (schemaProp?.GetValue(null) as Schema)?.Kind;
     }
 }
 

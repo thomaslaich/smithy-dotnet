@@ -28,7 +28,7 @@ public sealed class RestJsonProtocolTests
     [Fact]
     public void RestJsonProtocolSerializesLabelsHeadersAndBodySeparately()
     {
-        var inputSchema = FunctionalSchemas
+        var inputSchema = Schemas
             .Structure<UpdateUserInput, UpdateUserInputBuilder>(
                 new ShapeId("example", "UpdateUserInput")
             )
@@ -36,21 +36,21 @@ public sealed class RestJsonProtocolTests
                 "userId",
                 static input => input.UserId,
                 static (builder, value) => builder.UserId = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpLabelTrait]
+                Schemas.String,
+                traits: [RestTraits.HttpLabelTrait]
             )
             .Optional(
                 "requestToken",
                 static input => input.RequestToken!,
                 static (builder, value) => builder.RequestToken = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpHeaderTrait("X-Request-Token")]
+                Schemas.String,
+                traits: [RestTraits.HttpHeaderTrait("X-Request-Token")]
             )
             .Required(
                 "displayName",
                 static input => input.DisplayName,
                 static (builder, value) => builder.DisplayName = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Build(
                 static () => new UpdateUserInputBuilder(),
@@ -60,16 +60,16 @@ public sealed class RestJsonProtocolTests
                     builder.DisplayName!
                 )
             );
-        var outputSchema = FunctionalSchemas
+        var outputSchema = Schemas
             .Structure<UpdateUserOutput, UpdateUserOutputBuilder>(
                 new ShapeId("example", "UpdateUserOutput")
             )
             .Build(static () => new UpdateUserOutputBuilder(), static _ => new UpdateUserOutput());
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "UpdateUser"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("PUT", "/users/{userId}")]
+            traits: [RestTraits.HttpTrait("PUT", "/users/{userId}")]
         );
         var input = new UpdateUserInput("ada lovelace", "token-123", "Ada");
 
@@ -85,7 +85,7 @@ public sealed class RestJsonProtocolTests
     [Fact]
     public void RestJsonProtocolDeserializesLabelsHeadersAndBodySeparately()
     {
-        var inputSchema = FunctionalSchemas
+        var inputSchema = Schemas
             .Structure<UpdateUserInput, UpdateUserInputBuilder>(
                 new ShapeId("example", "UpdateUserInput")
             )
@@ -93,21 +93,21 @@ public sealed class RestJsonProtocolTests
                 "userId",
                 static input => input.UserId,
                 static (builder, value) => builder.UserId = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpLabelTrait]
+                Schemas.String,
+                traits: [RestTraits.HttpLabelTrait]
             )
             .Optional(
                 "requestToken",
                 static input => input.RequestToken!,
                 static (builder, value) => builder.RequestToken = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpHeaderTrait("X-Request-Token")]
+                Schemas.String,
+                traits: [RestTraits.HttpHeaderTrait("X-Request-Token")]
             )
             .Required(
                 "displayName",
                 static input => input.DisplayName,
                 static (builder, value) => builder.DisplayName = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Build(
                 static () => new UpdateUserInputBuilder(),
@@ -117,16 +117,16 @@ public sealed class RestJsonProtocolTests
                     builder.DisplayName!
                 )
             );
-        var outputSchema = FunctionalSchemas
+        var outputSchema = Schemas
             .Structure<UpdateUserOutput, UpdateUserOutputBuilder>(
                 new ShapeId("example", "UpdateUserOutput")
             )
             .Build(static () => new UpdateUserOutputBuilder(), static _ => new UpdateUserOutput());
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "UpdateUser"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("PUT", "/users/{userId}")]
+            traits: [RestTraits.HttpTrait("PUT", "/users/{userId}")]
         );
         var request = new SmithyHttpRequest(HttpMethod.Put, "/users/ada%20lovelace")
         {
@@ -168,50 +168,44 @@ public sealed class RestJsonProtocolTests
     [Fact]
     public void RestJsonProtocolSerializesAllRequestHttpBindings()
     {
-        var tagListSchema = FunctionalSchemas.List(
-            new ShapeId("example", "TagList"),
-            FunctionalSchemas.String
-        );
-        var stringMapSchema = FunctionalSchemas.Map(
-            new ShapeId("example", "StringMap"),
-            FunctionalSchemas.String
-        );
-        var inputSchema = FunctionalSchemas
+        var tagListSchema = Schemas.List(new ShapeId("example", "TagList"), Schemas.String);
+        var stringMapSchema = Schemas.Map(new ShapeId("example", "StringMap"), Schemas.String);
+        var inputSchema = Schemas
             .Structure<GetUserInput, GetUserInputBuilder>(new ShapeId("example", "GetUserInput"))
             .Required(
                 "userId",
                 static input => input.UserId,
                 static (builder, value) => builder.UserId = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpLabelTrait]
+                Schemas.String,
+                traits: [RestTraits.HttpLabelTrait]
             )
             .Required(
                 "includeDetails",
                 static input => input.IncludeDetails,
                 static (builder, value) => builder.IncludeDetails = value,
-                FunctionalSchemas.Boolean,
-                traits: [FunctionalRestTraits.HttpQueryTrait("includeDetails")]
+                Schemas.Boolean,
+                traits: [RestTraits.HttpQueryTrait("includeDetails")]
             )
             .Required(
                 "tags",
                 static input => input.Tags,
                 static (builder, value) => builder.Tags = value,
                 tagListSchema,
-                traits: [FunctionalRestTraits.HttpQueryTrait("tag")]
+                traits: [RestTraits.HttpQueryTrait("tag")]
             )
             .Required(
                 "extraQuery",
                 static input => input.ExtraQuery,
                 static (builder, value) => builder.ExtraQuery = value,
                 stringMapSchema,
-                traits: [FunctionalRestTraits.HttpQueryParamsTrait]
+                traits: [RestTraits.HttpQueryParamsTrait]
             )
             .Required(
                 "extraHeaders",
                 static input => input.ExtraHeaders,
                 static (builder, value) => builder.ExtraHeaders = value,
                 stringMapSchema,
-                traits: [FunctionalRestTraits.HttpPrefixHeadersTrait("X-Extra-")]
+                traits: [RestTraits.HttpPrefixHeadersTrait("X-Extra-")]
             )
             .Build(
                 static () => new GetUserInputBuilder(),
@@ -223,14 +217,14 @@ public sealed class RestJsonProtocolTests
                     builder.ExtraHeaders!
                 )
             );
-        var outputSchema = FunctionalSchemas
+        var outputSchema = Schemas
             .Structure<GetUserOutput, GetUserOutputBuilder>(new ShapeId("example", "GetUserOutput"))
             .Build(static () => new GetUserOutputBuilder(), static _ => new GetUserOutput());
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "GetUser"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("GET", "/users/{userId}")]
+            traits: [RestTraits.HttpTrait("GET", "/users/{userId}")]
         );
         var input = new GetUserInput(
             "ada lovelace",
@@ -255,50 +249,44 @@ public sealed class RestJsonProtocolTests
     [Fact]
     public void RestJsonProtocolDeserializesAllRequestHttpBindings()
     {
-        var tagListSchema = FunctionalSchemas.List(
-            new ShapeId("example", "TagList"),
-            FunctionalSchemas.String
-        );
-        var stringMapSchema = FunctionalSchemas.Map(
-            new ShapeId("example", "StringMap"),
-            FunctionalSchemas.String
-        );
-        var inputSchema = FunctionalSchemas
+        var tagListSchema = Schemas.List(new ShapeId("example", "TagList"), Schemas.String);
+        var stringMapSchema = Schemas.Map(new ShapeId("example", "StringMap"), Schemas.String);
+        var inputSchema = Schemas
             .Structure<GetUserInput, GetUserInputBuilder>(new ShapeId("example", "GetUserInput"))
             .Required(
                 "userId",
                 static input => input.UserId,
                 static (builder, value) => builder.UserId = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpLabelTrait]
+                Schemas.String,
+                traits: [RestTraits.HttpLabelTrait]
             )
             .Required(
                 "includeDetails",
                 static input => input.IncludeDetails,
                 static (builder, value) => builder.IncludeDetails = value,
-                FunctionalSchemas.Boolean,
-                traits: [FunctionalRestTraits.HttpQueryTrait("includeDetails")]
+                Schemas.Boolean,
+                traits: [RestTraits.HttpQueryTrait("includeDetails")]
             )
             .Required(
                 "tags",
                 static input => input.Tags,
                 static (builder, value) => builder.Tags = value,
                 tagListSchema,
-                traits: [FunctionalRestTraits.HttpQueryTrait("tag")]
+                traits: [RestTraits.HttpQueryTrait("tag")]
             )
             .Required(
                 "extraQuery",
                 static input => input.ExtraQuery,
                 static (builder, value) => builder.ExtraQuery = value,
                 stringMapSchema,
-                traits: [FunctionalRestTraits.HttpQueryParamsTrait]
+                traits: [RestTraits.HttpQueryParamsTrait]
             )
             .Required(
                 "extraHeaders",
                 static input => input.ExtraHeaders,
                 static (builder, value) => builder.ExtraHeaders = value,
                 stringMapSchema,
-                traits: [FunctionalRestTraits.HttpPrefixHeadersTrait("X-Extra-")]
+                traits: [RestTraits.HttpPrefixHeadersTrait("X-Extra-")]
             )
             .Build(
                 static () => new GetUserInputBuilder(),
@@ -310,14 +298,14 @@ public sealed class RestJsonProtocolTests
                     builder.ExtraHeaders!
                 )
             );
-        var outputSchema = FunctionalSchemas
+        var outputSchema = Schemas
             .Structure<GetUserOutput, GetUserOutputBuilder>(new ShapeId("example", "GetUserOutput"))
             .Build(static () => new GetUserOutputBuilder(), static _ => new GetUserOutput());
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "GetUser"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("GET", "/users/{userId}")]
+            traits: [RestTraits.HttpTrait("GET", "/users/{userId}")]
         );
         var request = new SmithyHttpRequest(
             HttpMethod.Get,
@@ -367,8 +355,7 @@ public sealed class RestJsonProtocolTests
 
     public sealed class RequestValueParityOutputBuilder { }
 
-    public readonly record struct HeaderStatus(string Value)
-        : IFunctionalStringEnumValue<HeaderStatus>
+    public readonly record struct HeaderStatus(string Value) : IStringEnumValue<HeaderStatus>
     {
         public static readonly HeaderStatus ActiveBlue = new("ACTIVE,BLUE");
 
@@ -391,14 +378,12 @@ public sealed class RestJsonProtocolTests
     [Fact]
     public void RestJsonProtocolRoundTripsStringEnumHeaderListWithQuotedComma()
     {
-        var statusSchema = FunctionalSchemas.StringEnum<HeaderStatus>(
-            new ShapeId("example", "HeaderStatus")
-        );
-        var statusListSchema = FunctionalSchemas.List(
+        var statusSchema = Schemas.StringEnum<HeaderStatus>(new ShapeId("example", "HeaderStatus"));
+        var statusListSchema = Schemas.List(
             new ShapeId("example", "HeaderStatusList"),
             statusSchema
         );
-        var inputSchema = FunctionalSchemas
+        var inputSchema = Schemas
             .Structure<EnumHeaderListInput, EnumHeaderListInputBuilder>(
                 new ShapeId("example", "EnumHeaderListInput")
             )
@@ -407,13 +392,13 @@ public sealed class RestJsonProtocolTests
                 static input => input.Statuses,
                 static (builder, value) => builder.Statuses = value,
                 statusListSchema,
-                traits: [FunctionalRestTraits.HttpHeaderTrait("X-Status")]
+                traits: [RestTraits.HttpHeaderTrait("X-Status")]
             )
             .Build(
                 static () => new EnumHeaderListInputBuilder(),
                 static builder => new EnumHeaderListInput(builder.Statuses!)
             );
-        var outputSchema = FunctionalSchemas
+        var outputSchema = Schemas
             .Structure<EnumHeaderListOutput, EnumHeaderListOutputBuilder>(
                 new ShapeId("example", "EnumHeaderListOutput")
             )
@@ -421,11 +406,11 @@ public sealed class RestJsonProtocolTests
                 static () => new EnumHeaderListOutputBuilder(),
                 static _ => new EnumHeaderListOutput()
             );
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "EnumHeaderList"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("GET", "/statuses")]
+            traits: [RestTraits.HttpTrait("GET", "/statuses")]
         );
         var input = new EnumHeaderListInput([HeaderStatus.ActiveBlue, HeaderStatus.Pending]);
 
@@ -439,11 +424,8 @@ public sealed class RestJsonProtocolTests
     [Fact]
     public void RestJsonProtocolSerializesRequestHttpValueParity()
     {
-        var tagListSchema = FunctionalSchemas.List(
-            new ShapeId("example", "ParityTagList"),
-            FunctionalSchemas.String
-        );
-        var inputSchema = FunctionalSchemas
+        var tagListSchema = Schemas.List(new ShapeId("example", "ParityTagList"), Schemas.String);
+        var inputSchema = Schemas
             .Structure<RequestValueParityInput, RequestValueParityInputBuilder>(
                 new ShapeId("example", "RequestValueParityInput")
             )
@@ -451,57 +433,57 @@ public sealed class RestJsonProtocolTests
                 "key",
                 static input => input.Key,
                 static (builder, value) => builder.Key = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpLabelTrait]
+                Schemas.String,
+                traits: [RestTraits.HttpLabelTrait]
             )
             .Required(
                 "modified",
                 static input => input.Modified,
                 static (builder, value) => builder.Modified = value,
-                FunctionalSchemas.Timestamp,
-                traits: [FunctionalRestTraits.HttpHeaderTrait("Last-Modified")]
+                Schemas.Timestamp,
+                traits: [RestTraits.HttpHeaderTrait("Last-Modified")]
             )
             .Required(
                 "tags",
                 static input => input.Tags,
                 static (builder, value) => builder.Tags = value,
                 tagListSchema,
-                traits: [FunctionalRestTraits.HttpHeaderTrait("X-Tags")]
+                traits: [RestTraits.HttpHeaderTrait("X-Tags")]
             )
             .Required(
                 "media",
                 static input => input.Media,
                 static (builder, value) => builder.Media = value,
-                FunctionalSchemas.String,
+                Schemas.String,
                 traits:
                 [
-                    FunctionalRestTraits.HttpQueryTrait("media"),
-                    FunctionalRestTraits.MediaTypeTrait("text/plain"),
+                    RestTraits.HttpQueryTrait("media"),
+                    RestTraits.MediaTypeTrait("text/plain"),
                 ]
             )
             .Required(
                 "ratio",
                 static input => input.Ratio,
                 static (builder, value) => builder.Ratio = value,
-                FunctionalSchemas.Float,
-                traits: [FunctionalRestTraits.HttpQueryTrait("ratio")]
+                Schemas.Float,
+                traits: [RestTraits.HttpQueryTrait("ratio")]
             )
             .Required(
                 "score",
                 static input => input.Score,
                 static (builder, value) => builder.Score = value,
-                FunctionalSchemas.Double,
-                traits: [FunctionalRestTraits.HttpQueryTrait("score")]
+                Schemas.Double,
+                traits: [RestTraits.HttpQueryTrait("score")]
             )
             .Required(
                 "created",
                 static input => input.Created,
                 static (builder, value) => builder.Created = value,
-                FunctionalSchemas.Timestamp,
+                Schemas.Timestamp,
                 traits:
                 [
-                    FunctionalRestTraits.HttpQueryTrait("created"),
-                    FunctionalRestTraits.TimestampFormatTrait("epoch-seconds"),
+                    RestTraits.HttpQueryTrait("created"),
+                    RestTraits.TimestampFormatTrait("epoch-seconds"),
                 ]
             )
             .Build(
@@ -516,7 +498,7 @@ public sealed class RestJsonProtocolTests
                     builder.Created
                 )
             );
-        var outputSchema = FunctionalSchemas
+        var outputSchema = Schemas
             .Structure<RequestValueParityOutput, RequestValueParityOutputBuilder>(
                 new ShapeId("example", "RequestValueParityOutput")
             )
@@ -524,11 +506,11 @@ public sealed class RestJsonProtocolTests
                 static () => new RequestValueParityOutputBuilder(),
                 static _ => new RequestValueParityOutput()
             );
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "RequestValueParity"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("GET", "/objects/{key+}")]
+            traits: [RestTraits.HttpTrait("GET", "/objects/{key+}")]
         );
         var modified = new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var created = modified.AddMilliseconds(250);
@@ -555,11 +537,8 @@ public sealed class RestJsonProtocolTests
     [Fact]
     public void RestJsonProtocolDeserializesRequestHttpValueParity()
     {
-        var tagListSchema = FunctionalSchemas.List(
-            new ShapeId("example", "ParityTagList"),
-            FunctionalSchemas.String
-        );
-        var inputSchema = FunctionalSchemas
+        var tagListSchema = Schemas.List(new ShapeId("example", "ParityTagList"), Schemas.String);
+        var inputSchema = Schemas
             .Structure<RequestValueParityInput, RequestValueParityInputBuilder>(
                 new ShapeId("example", "RequestValueParityInput")
             )
@@ -567,57 +546,57 @@ public sealed class RestJsonProtocolTests
                 "key",
                 static input => input.Key,
                 static (builder, value) => builder.Key = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpLabelTrait]
+                Schemas.String,
+                traits: [RestTraits.HttpLabelTrait]
             )
             .Required(
                 "modified",
                 static input => input.Modified,
                 static (builder, value) => builder.Modified = value,
-                FunctionalSchemas.Timestamp,
-                traits: [FunctionalRestTraits.HttpHeaderTrait("Last-Modified")]
+                Schemas.Timestamp,
+                traits: [RestTraits.HttpHeaderTrait("Last-Modified")]
             )
             .Required(
                 "tags",
                 static input => input.Tags,
                 static (builder, value) => builder.Tags = value,
                 tagListSchema,
-                traits: [FunctionalRestTraits.HttpHeaderTrait("X-Tags")]
+                traits: [RestTraits.HttpHeaderTrait("X-Tags")]
             )
             .Required(
                 "media",
                 static input => input.Media,
                 static (builder, value) => builder.Media = value,
-                FunctionalSchemas.String,
+                Schemas.String,
                 traits:
                 [
-                    FunctionalRestTraits.HttpQueryTrait("media"),
-                    FunctionalRestTraits.MediaTypeTrait("text/plain"),
+                    RestTraits.HttpQueryTrait("media"),
+                    RestTraits.MediaTypeTrait("text/plain"),
                 ]
             )
             .Required(
                 "ratio",
                 static input => input.Ratio,
                 static (builder, value) => builder.Ratio = value,
-                FunctionalSchemas.Float,
-                traits: [FunctionalRestTraits.HttpQueryTrait("ratio")]
+                Schemas.Float,
+                traits: [RestTraits.HttpQueryTrait("ratio")]
             )
             .Required(
                 "score",
                 static input => input.Score,
                 static (builder, value) => builder.Score = value,
-                FunctionalSchemas.Double,
-                traits: [FunctionalRestTraits.HttpQueryTrait("score")]
+                Schemas.Double,
+                traits: [RestTraits.HttpQueryTrait("score")]
             )
             .Required(
                 "created",
                 static input => input.Created,
                 static (builder, value) => builder.Created = value,
-                FunctionalSchemas.Timestamp,
+                Schemas.Timestamp,
                 traits:
                 [
-                    FunctionalRestTraits.HttpQueryTrait("created"),
-                    FunctionalRestTraits.TimestampFormatTrait("epoch-seconds"),
+                    RestTraits.HttpQueryTrait("created"),
+                    RestTraits.TimestampFormatTrait("epoch-seconds"),
                 ]
             )
             .Build(
@@ -632,7 +611,7 @@ public sealed class RestJsonProtocolTests
                     builder.Created
                 )
             );
-        var outputSchema = FunctionalSchemas
+        var outputSchema = Schemas
             .Structure<RequestValueParityOutput, RequestValueParityOutputBuilder>(
                 new ShapeId("example", "RequestValueParityOutput")
             )
@@ -640,11 +619,11 @@ public sealed class RestJsonProtocolTests
                 static () => new RequestValueParityOutputBuilder(),
                 static _ => new RequestValueParityOutput()
             );
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "RequestValueParity"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("GET", "/objects/{key+}")]
+            traits: [RestTraits.HttpTrait("GET", "/objects/{key+}")]
         );
         var request = new SmithyHttpRequest(
             HttpMethod.Get,
@@ -685,7 +664,7 @@ public sealed class RestJsonProtocolTests
     [Fact]
     public void RestJsonProtocolSerializesHttpPayload()
     {
-        var inputSchema = FunctionalSchemas
+        var inputSchema = Schemas
             .Structure<UploadUserAvatarInput, UploadUserAvatarInputBuilder>(
                 new ShapeId("example", "UploadUserAvatarInput")
             )
@@ -693,22 +672,22 @@ public sealed class RestJsonProtocolTests
                 "userId",
                 static input => input.UserId,
                 static (builder, value) => builder.UserId = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpLabelTrait]
+                Schemas.String,
+                traits: [RestTraits.HttpLabelTrait]
             )
             .Required(
                 "checksum",
                 static input => input.Checksum,
                 static (builder, value) => builder.Checksum = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpHeaderTrait("X-Checksum")]
+                Schemas.String,
+                traits: [RestTraits.HttpHeaderTrait("X-Checksum")]
             )
             .Required(
                 "payload",
                 static input => input.Payload,
                 static (builder, value) => builder.Payload = value,
-                FunctionalSchemas.Blob,
-                traits: [FunctionalRestTraits.HttpPayloadTrait]
+                Schemas.Blob,
+                traits: [RestTraits.HttpPayloadTrait]
             )
             .Build(
                 static () => new UploadUserAvatarInputBuilder(),
@@ -718,7 +697,7 @@ public sealed class RestJsonProtocolTests
                     builder.Payload!
                 )
             );
-        var outputSchema = FunctionalSchemas
+        var outputSchema = Schemas
             .Structure<UploadUserAvatarOutput, UploadUserAvatarOutputBuilder>(
                 new ShapeId("example", "UploadUserAvatarOutput")
             )
@@ -726,11 +705,11 @@ public sealed class RestJsonProtocolTests
                 static () => new UploadUserAvatarOutputBuilder(),
                 static _ => new UploadUserAvatarOutput()
             );
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "UploadUserAvatar"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("PUT", "/users/{userId}/avatar")]
+            traits: [RestTraits.HttpTrait("PUT", "/users/{userId}/avatar")]
         );
         var payload = "avatar bytes"u8.ToArray();
         var input = new UploadUserAvatarInput("ada", "abc123", payload);
@@ -765,14 +744,11 @@ public sealed class RestJsonProtocolTests
     [Fact]
     public void RestJsonProtocolSerializesResponseBindingsAndBody()
     {
-        var inputSchema = FunctionalSchemas
+        var inputSchema = Schemas
             .Structure<GetUserOutput, GetUserOutputBuilder>(new ShapeId("example", "GetUserInput"))
             .Build(static () => new GetUserOutputBuilder(), static _ => new GetUserOutput());
-        var stringMapSchema = FunctionalSchemas.Map(
-            new ShapeId("example", "StringMap"),
-            FunctionalSchemas.String
-        );
-        var outputSchema = FunctionalSchemas
+        var stringMapSchema = Schemas.Map(new ShapeId("example", "StringMap"), Schemas.String);
+        var outputSchema = Schemas
             .Structure<GetUserProfileOutput, GetUserProfileOutputBuilder>(
                 new ShapeId("example", "GetUserProfileOutput")
             )
@@ -780,28 +756,28 @@ public sealed class RestJsonProtocolTests
                 "statusCode",
                 static output => output.StatusCode,
                 static (builder, value) => builder.StatusCode = value,
-                FunctionalSchemas.Integer,
-                traits: [FunctionalRestTraits.HttpResponseCodeTrait]
+                Schemas.Integer,
+                traits: [RestTraits.HttpResponseCodeTrait]
             )
             .Required(
                 "eTag",
                 static output => output.ETag,
                 static (builder, value) => builder.ETag = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpHeaderTrait("ETag")]
+                Schemas.String,
+                traits: [RestTraits.HttpHeaderTrait("ETag")]
             )
             .Required(
                 "extraHeaders",
                 static output => output.ExtraHeaders,
                 static (builder, value) => builder.ExtraHeaders = value,
                 stringMapSchema,
-                traits: [FunctionalRestTraits.HttpPrefixHeadersTrait("X-Extra-")]
+                traits: [RestTraits.HttpPrefixHeadersTrait("X-Extra-")]
             )
             .Required(
                 "displayName",
                 static output => output.DisplayName,
                 static (builder, value) => builder.DisplayName = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Build(
                 static () => new GetUserProfileOutputBuilder(),
@@ -812,11 +788,11 @@ public sealed class RestJsonProtocolTests
                     builder.DisplayName!
                 )
             );
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "GetUserProfile"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("GET", "/users/{userId}")]
+            traits: [RestTraits.HttpTrait("GET", "/users/{userId}")]
         );
         var output = new GetUserProfileOutput(
             201,
@@ -837,14 +813,11 @@ public sealed class RestJsonProtocolTests
     [Fact]
     public void RestJsonProtocolDeserializesResponseBindingsAndBody()
     {
-        var inputSchema = FunctionalSchemas
+        var inputSchema = Schemas
             .Structure<GetUserOutput, GetUserOutputBuilder>(new ShapeId("example", "GetUserInput"))
             .Build(static () => new GetUserOutputBuilder(), static _ => new GetUserOutput());
-        var stringMapSchema = FunctionalSchemas.Map(
-            new ShapeId("example", "StringMap"),
-            FunctionalSchemas.String
-        );
-        var outputSchema = FunctionalSchemas
+        var stringMapSchema = Schemas.Map(new ShapeId("example", "StringMap"), Schemas.String);
+        var outputSchema = Schemas
             .Structure<GetUserProfileOutput, GetUserProfileOutputBuilder>(
                 new ShapeId("example", "GetUserProfileOutput")
             )
@@ -852,28 +825,28 @@ public sealed class RestJsonProtocolTests
                 "statusCode",
                 static output => output.StatusCode,
                 static (builder, value) => builder.StatusCode = value,
-                FunctionalSchemas.Integer,
-                traits: [FunctionalRestTraits.HttpResponseCodeTrait]
+                Schemas.Integer,
+                traits: [RestTraits.HttpResponseCodeTrait]
             )
             .Required(
                 "eTag",
                 static output => output.ETag,
                 static (builder, value) => builder.ETag = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpHeaderTrait("ETag")]
+                Schemas.String,
+                traits: [RestTraits.HttpHeaderTrait("ETag")]
             )
             .Required(
                 "extraHeaders",
                 static output => output.ExtraHeaders,
                 static (builder, value) => builder.ExtraHeaders = value,
                 stringMapSchema,
-                traits: [FunctionalRestTraits.HttpPrefixHeadersTrait("X-Extra-")]
+                traits: [RestTraits.HttpPrefixHeadersTrait("X-Extra-")]
             )
             .Required(
                 "displayName",
                 static output => output.DisplayName,
                 static (builder, value) => builder.DisplayName = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Build(
                 static () => new GetUserProfileOutputBuilder(),
@@ -884,11 +857,11 @@ public sealed class RestJsonProtocolTests
                     builder.DisplayName!
                 )
             );
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "GetUserProfile"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("GET", "/users/{userId}")]
+            traits: [RestTraits.HttpTrait("GET", "/users/{userId}")]
         );
         var response = new SmithyHttpResponse(
             HttpStatusCode.Created,
@@ -929,40 +902,40 @@ public sealed class RestJsonProtocolTests
     [Fact]
     public void QueryParameterRoundTripPreservesNonNullToken()
     {
-        var inputSchema = FunctionalSchemas
+        var inputSchema = Schemas
             .Structure<ListInput, ListInputBuilder>(new ShapeId("example", "ListInput"))
             .Optional(
                 "nextToken",
                 static i => i.NextToken!,
                 static (b, v) => b.NextToken = v,
-                FunctionalSchemas.NullableReference(FunctionalSchemas.String),
-                traits: [FunctionalRestTraits.HttpQueryTrait("nextToken")]
+                Schemas.NullableReference(Schemas.String),
+                traits: [RestTraits.HttpQueryTrait("nextToken")]
             )
             .Optional(
                 "pageSize",
                 static i => i.PageSize,
                 static (b, v) => b.PageSize = v,
-                FunctionalSchemas.Nullable(FunctionalSchemas.Integer),
-                traits: [FunctionalRestTraits.HttpQueryTrait("pageSize")]
+                Schemas.Nullable(Schemas.Integer),
+                traits: [RestTraits.HttpQueryTrait("pageSize")]
             )
             .Build(
                 static () => new ListInputBuilder(),
                 static b => new ListInput(b.NextToken, b.PageSize)
             );
-        var outputSchema = FunctionalSchemas
+        var outputSchema = Schemas
             .Structure<ListOutput, ListOutputBuilder>(new ShapeId("example", "ListOutput"))
             .Optional(
                 "nextToken",
                 static o => o.NextToken!,
                 static (b, v) => b.NextToken = v,
-                FunctionalSchemas.NullableReference(FunctionalSchemas.String)
+                Schemas.NullableReference(Schemas.String)
             )
             .Build(static () => new ListOutputBuilder(), static b => new ListOutput(b.NextToken));
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "ListItems"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("GET", "/items")]
+            traits: [RestTraits.HttpTrait("GET", "/items")]
         );
 
         // Client serializes request with non-null nextToken
@@ -984,31 +957,28 @@ public sealed class RestJsonProtocolTests
     [Fact]
     public void QueryParameterRoundTripHandlesNullToken()
     {
-        var inputSchema = FunctionalSchemas
+        var inputSchema = Schemas
             .Structure<ListInput, ListInputBuilder>(new ShapeId("example", "ListInput2"))
             .Optional(
                 "nextToken",
                 static i => i.NextToken!,
                 static (b, v) => b.NextToken = v,
-                FunctionalSchemas.NullableReference(FunctionalSchemas.String),
-                traits: [FunctionalRestTraits.HttpQueryTrait("nextToken")]
+                Schemas.NullableReference(Schemas.String),
+                traits: [RestTraits.HttpQueryTrait("nextToken")]
             )
             .Build(static () => new ListInputBuilder(), static b => new ListInput(b.NextToken));
-        var outputSchema = FunctionalSchemas
+        var outputSchema = Schemas
             .Structure<ListOutput, ListOutputBuilder>(new ShapeId("example", "ListOutput2"))
             .Build(static () => new ListOutputBuilder(), static b => new ListOutput());
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "ListItems2"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("GET", "/items")]
+            traits: [RestTraits.HttpTrait("GET", "/items")]
         );
 
         // First page: no nextToken
-        var request = RestJsonProtocol.SerializeRequest(
-            operation,
-            new ListInput(NextToken: null)
-        );
+        var request = RestJsonProtocol.SerializeRequest(operation, new ListInput(NextToken: null));
 
         Assert.DoesNotContain("nextToken", request.RequestUri);
 
@@ -1019,34 +989,34 @@ public sealed class RestJsonProtocolTests
     [Fact]
     public void DeserializeReadsQueryFromServerStyleRequestUri()
     {
-        var inputSchema = FunctionalSchemas
+        var inputSchema = Schemas
             .Structure<ListInput, ListInputBuilder>(new ShapeId("example", "ListInput3"))
             .Optional(
                 "nextToken",
                 static i => i.NextToken!,
                 static (b, v) => b.NextToken = v,
-                FunctionalSchemas.NullableReference(FunctionalSchemas.String),
-                traits: [FunctionalRestTraits.HttpQueryTrait("nextToken")]
+                Schemas.NullableReference(Schemas.String),
+                traits: [RestTraits.HttpQueryTrait("nextToken")]
             )
             .Optional(
                 "pageSize",
                 static i => i.PageSize,
                 static (b, v) => b.PageSize = v,
-                FunctionalSchemas.Nullable(FunctionalSchemas.Integer),
-                traits: [FunctionalRestTraits.HttpQueryTrait("pageSize")]
+                Schemas.Nullable(Schemas.Integer),
+                traits: [RestTraits.HttpQueryTrait("pageSize")]
             )
             .Build(
                 static () => new ListInputBuilder(),
                 static b => new ListInput(b.NextToken, b.PageSize)
             );
-        var outputSchema = FunctionalSchemas
+        var outputSchema = Schemas
             .Structure<ListOutput, ListOutputBuilder>(new ShapeId("example", "ListOutput3"))
             .Build(static () => new ListOutputBuilder(), static b => new ListOutput());
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "ListItems3"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("GET", "/cities")]
+            traits: [RestTraits.HttpTrait("GET", "/cities")]
         );
 
         // Exactly what SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync builds:

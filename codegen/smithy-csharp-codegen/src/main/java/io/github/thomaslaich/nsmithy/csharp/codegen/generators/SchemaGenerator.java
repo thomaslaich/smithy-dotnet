@@ -14,7 +14,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
-import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.node.ArrayNode;
 import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
@@ -36,28 +35,28 @@ public final class SchemaGenerator {
 
   private SchemaGenerator() {}
 
-  public static void addFunctionalImports(CSharpWriter writer) {
+  public static void addImports(CSharpWriter writer) {
     writer.addImport(RuntimeTypes.NSMITHY_CORE);
     writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
   }
 
-  public static String functionalShapeSchemaAccessor(GenerationContext context, Shape shape) {
+  public static String shapeSchemaAccessor(GenerationContext context, Shape shape) {
     if ("smithy.api".equals(shape.getId().getNamespace())) {
       return switch (shape.getId().getName()) {
-        case "Boolean" -> "FunctionalSchemas.Boolean";
-        case "Byte" -> "FunctionalSchemas.Byte";
-        case "Short" -> "FunctionalSchemas.Short";
-        case "Integer" -> "FunctionalSchemas.Integer";
-        case "Long" -> "FunctionalSchemas.Long";
-        case "Float" -> "FunctionalSchemas.Float";
-        case "Double" -> "FunctionalSchemas.Double";
-        case "BigInteger" -> "FunctionalSchemas.BigInteger";
-        case "BigDecimal" -> "FunctionalSchemas.BigDecimal";
-        case "String" -> "FunctionalSchemas.String";
-        case "Blob" -> "FunctionalSchemas.Blob";
-        case "Timestamp" -> "FunctionalSchemas.Timestamp";
-        case "Document" -> "FunctionalSchemas.Document";
-        case "Unit" -> "FunctionalSchemas.Unit";
+        case "Boolean" -> "Schemas.Boolean";
+        case "Byte" -> "Schemas.Byte";
+        case "Short" -> "Schemas.Short";
+        case "Integer" -> "Schemas.Integer";
+        case "Long" -> "Schemas.Long";
+        case "Float" -> "Schemas.Float";
+        case "Double" -> "Schemas.Double";
+        case "BigInteger" -> "Schemas.BigInteger";
+        case "BigDecimal" -> "Schemas.BigDecimal";
+        case "String" -> "Schemas.String";
+        case "Blob" -> "Schemas.Blob";
+        case "Timestamp" -> "Schemas.Timestamp";
+        case "Document" -> "Schemas.Document";
+        case "Unit" -> "Schemas.Unit";
         default ->
             throw new IllegalArgumentException("Unsupported prelude shape: " + shape.getId());
       };
@@ -71,28 +70,24 @@ public final class SchemaGenerator {
               .filter(t -> t.toShapeId().toString().equals("smithy.api#timestampFormat"))
               .collect(Collectors.toList());
       return tsTraits.isEmpty()
-          ? "FunctionalSchemas.Timestamp"
-          : "FunctionalSchemas.TimestampWithTraits(" + traitsExpr(tsTraits) + ")";
+          ? "Schemas.Timestamp"
+          : "Schemas.TimestampWithTraits(" + traitsExpr(tsTraits) + ")";
     }
 
     String preludeSchema =
-        shape.getType() == ShapeType.ENUM
-            ? null
-            : primitiveTypeToFunctionalPreludeSchema(shape.getType());
+        shape.getType() == ShapeType.ENUM ? null : primitiveTypeToPreludeSchema(shape.getType());
     if (preludeSchema != null) {
       return preludeSchema;
     }
 
-    String accessor = functionalSchemaClassName(context, shape) + ".FunctionalSchema";
+    String accessor = schemaClassName(context, shape) + ".Schema";
 
     // Aggregate shapes can participate in recursive graphs (a shape referencing itself
     // directly or through a cycle). A direct static reference would observe null while the
     // referenced schema's static initializer is still running, so defer it lazily. The
     // null-forgiving '!' suppresses the nullable-flow warning for self-references where the
     // property is not yet definitely assigned at the point the lambda is created.
-    return isCycleCapable(shape.getType())
-        ? "FunctionalSchemas.Lazy(() => " + accessor + "!)"
-        : accessor;
+    return isCycleCapable(shape.getType()) ? "Schemas.Lazy(() => " + accessor + "!)" : accessor;
   }
 
   private static boolean isCycleCapable(ShapeType type) {
@@ -102,25 +97,24 @@ public final class SchemaGenerator {
     };
   }
 
-  public static String functionalSchemaClassName(GenerationContext context, Shape shape) {
+  public static String schemaClassName(GenerationContext context, Shape shape) {
     return CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(shape)) + "Schema";
   }
 
-  public static String functionalOperationSchemaAccessor(
-      GenerationContext context, OperationShape shape) {
+  public static String operationSchemaAccessor(GenerationContext context, OperationShape shape) {
     return CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(shape))
-        + "Schema.FunctionalSchema";
+        + "Schema.Schema";
   }
 
-  public static String functionalOperationShapeType(GenerationContext context, ShapeId id) {
+  public static String operationShapeType(GenerationContext context, ShapeId id) {
     if (ShapeSupport.isUnit(id)) return "SmithyUnit";
     return CSharpSymbolProvider.qualified(
         context.symbolProvider().toSymbol(context.model().expectShape(id)));
   }
 
-  public static String functionalOperationShapeSchema(GenerationContext context, ShapeId id) {
-    if (ShapeSupport.isUnit(id)) return "FunctionalSchemas.Unit";
-    return functionalShapeSchemaAccessor(context, context.model().expectShape(id));
+  public static String operationShapeSchema(GenerationContext context, ShapeId id) {
+    if (ShapeSupport.isUnit(id)) return "Schemas.Unit";
+    return shapeSchemaAccessor(context, context.model().expectShape(id));
   }
 
   private static String localSchemaClassName(Shape shape) {
@@ -153,9 +147,9 @@ public final class SchemaGenerator {
         + "]";
   }
 
-  public static void writeFunctionalStructureSchema(
+  public static void writeStructureSchema(
       CSharpWriter writer, GenerationContext context, Shape shape, List<MemberShape> members) {
-    addFunctionalImports(writer);
+    addImports(writer);
     SymbolProvider sp = context.symbolProvider();
     String typeName = CSharpSymbolProvider.qualified(sp.toSymbol(shape));
 
@@ -164,7 +158,7 @@ public final class SchemaGenerator {
         "{",
         "}",
         () -> {
-          writer.write("public sealed class FunctionalBuilder");
+          writer.write("public sealed class Builder");
           writer.openBlock(
               "{",
               "}",
@@ -177,10 +171,10 @@ public final class SchemaGenerator {
                 }
               });
           writer.write("");
-          writer.write("public static FunctionalSchema<$L> FunctionalSchema { get; } =", typeName);
+          writer.write("public static Schema<$L> Schema { get; } =", typeName);
           writer.indent();
           writer.write(
-              "FunctionalSchemas.Structure<$L, FunctionalBuilder>($L, $L)",
+              "Schemas.Structure<$L, Builder>($L, $L)",
               typeName,
               shapeIdExpr(shape.getId()),
               traitsExpr(shape.getAllTraits().values()));
@@ -194,17 +188,17 @@ public final class SchemaGenerator {
             writer.write("$L,", CSharpNaming.formatString(name));
             writer.write("static value => value.$L,", prop);
             writer.write("static (builder, value) => builder.$L = value,", prop);
-            writer.write("$L,", functionalMemberTargetExpr(context, member));
+            writer.write("$L,", memberTargetExpr(context, member));
             writer.write("$L)", memberTraitsExpr(context, member));
             writer.dedent();
           }
           writer.write(".Build(");
           writer.indent();
-          writer.write("static () => new FunctionalBuilder(),");
+          writer.write("static () => new Builder(),");
           writer.write(
               "static builder => new $L($L))",
               typeName,
-              functionalConstructorArguments(context, shape, members));
+              constructorArguments(context, shape, members));
           writer.dedent();
           writer.write(";");
           writer.dedent();
@@ -213,9 +207,9 @@ public final class SchemaGenerator {
         });
   }
 
-  public static void writeFunctionalListSchema(
+  public static void writeListSchema(
       CSharpWriter writer, GenerationContext context, ListShape shape) {
-    addFunctionalImports(writer);
+    addImports(writer);
     SymbolProvider sp = context.symbolProvider();
     Shape memberTarget = context.model().expectShape(shape.getMember().getTarget());
     String typeName = CSharpSymbolProvider.qualified(sp.toSymbol(shape));
@@ -224,18 +218,17 @@ public final class SchemaGenerator {
         CSharpSymbolProvider.qualified(sp.toSymbol(memberTarget)) + (sparse ? "?" : "");
     String builderType = "System.Collections.Generic.List<" + memberType + ">";
     String factory = shape.getType() == ShapeType.SET ? "Set" : "List";
-    String elementSchema =
-        functionalElementSchemaExpr(context, shape.getMember(), memberTarget, sparse);
+    String elementSchema = elementSchemaExpr(context, shape.getMember(), memberTarget, sparse);
 
     writer.write("public static partial class $L", localSchemaClassName(shape));
     writer.openBlock(
         "{",
         "}",
         () -> {
-          writer.write("public static FunctionalSchema<$L> FunctionalSchema { get; } =", typeName);
+          writer.write("public static Schema<$L> Schema { get; } =", typeName);
           writer.indent();
           writer.write(
-              "FunctionalSchemas.$L<$L, $L, $L>($L, $L,",
+              "Schemas.$L<$L, $L, $L>($L, $L,",
               factory,
               typeName,
               memberType,
@@ -254,9 +247,9 @@ public final class SchemaGenerator {
         });
   }
 
-  public static void writeFunctionalMapSchema(
+  public static void writeMapSchema(
       CSharpWriter writer, GenerationContext context, MapShape shape) {
-    addFunctionalImports(writer);
+    addImports(writer);
     SymbolProvider sp = context.symbolProvider();
     Shape valueTarget = context.model().expectShape(shape.getValue().getTarget());
     String typeName = CSharpSymbolProvider.qualified(sp.toSymbol(shape));
@@ -264,18 +257,17 @@ public final class SchemaGenerator {
     String valueType =
         CSharpSymbolProvider.qualified(sp.toSymbol(valueTarget)) + (sparse ? "?" : "");
     String builderType = "System.Collections.Generic.Dictionary<string, " + valueType + ">";
-    String valueSchema =
-        functionalElementSchemaExpr(context, shape.getValue(), valueTarget, sparse);
+    String valueSchema = elementSchemaExpr(context, shape.getValue(), valueTarget, sparse);
 
     writer.write("public static partial class $L", localSchemaClassName(shape));
     writer.openBlock(
         "{",
         "}",
         () -> {
-          writer.write("public static FunctionalSchema<$L> FunctionalSchema { get; } =", typeName);
+          writer.write("public static Schema<$L> Schema { get; } =", typeName);
           writer.indent();
           writer.write(
-              "FunctionalSchemas.Map<$L, $L, $L>($L, $L,",
+              "Schemas.Map<$L, $L, $L>($L, $L,",
               typeName,
               valueType,
               builderType,
@@ -293,8 +285,8 @@ public final class SchemaGenerator {
         });
   }
 
-  public static void writeFunctionalSimpleSchema(CSharpWriter writer, Shape shape) {
-    addFunctionalImports(writer);
+  public static void writeSimpleSchema(CSharpWriter writer, Shape shape) {
+    addImports(writer);
     writer.write("public static partial class $L", localSchemaClassName(shape));
     writer.openBlock(
         "{",
@@ -303,8 +295,8 @@ public final class SchemaGenerator {
           if (shape.getType() == ShapeType.ENUM) {
             String typeName = CSharpNaming.typeName(shape.getId().getName());
             writer.write(
-                "public static FunctionalSchema<$L> FunctionalSchema { get; } ="
-                    + " FunctionalSchemas.StringEnum<$L>($L, traits: $L);",
+                "public static Schema<$L> Schema { get; } ="
+                    + " Schemas.StringEnum<$L>($L, traits: $L);",
                 typeName,
                 typeName,
                 shapeIdExpr(shape.getId()),
@@ -313,21 +305,21 @@ public final class SchemaGenerator {
             return;
           }
 
-          String prelude = primitiveTypeToFunctionalPreludeSchema(shape.getType());
+          String prelude = primitiveTypeToPreludeSchema(shape.getType());
           if (prelude == null) {
-            prelude = "FunctionalSchemas.String";
+            prelude = "Schemas.String";
           }
           writer.write(
-              "public static FunctionalSchema<$L> FunctionalSchema { get; } = $L;",
+              "public static Schema<$L> Schema { get; } = $L;",
               CSharpNaming.typeName(shape.getId().getName()),
               prelude);
           writer.write("");
         });
   }
 
-  public static void writeFunctionalUnionSchema(
+  public static void writeUnionSchema(
       CSharpWriter writer, GenerationContext context, UnionShape shape, List<MemberShape> members) {
-    addFunctionalImports(writer);
+    addImports(writer);
     String typeName = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(shape));
 
     writer.write("public static partial class $L", localSchemaClassName(shape));
@@ -335,10 +327,10 @@ public final class SchemaGenerator {
         "{",
         "}",
         () -> {
-          writer.write("public static FunctionalSchema<$L> FunctionalSchema { get; } =", typeName);
+          writer.write("public static Schema<$L> Schema { get; } =", typeName);
           writer.indent();
           writer.write(
-              "FunctionalSchemas.Union<$L>($L, $L)",
+              "Schemas.Union<$L>($L, $L)",
               typeName,
               shapeIdExpr(shape.getId()),
               traitsExpr(shape.getAllTraits().values()));
@@ -351,7 +343,7 @@ public final class SchemaGenerator {
             writer.write("static value => value is $L.$L,", typeName, variantName);
             writer.write("static value => (($L.$L)value).Value,", typeName, variantName);
             writer.write("static value => new $L.$L(value!),", typeName, variantName);
-            writer.write("$L,", functionalRawMemberTargetExpr(context, member));
+            writer.write("$L,", rawMemberTargetExpr(context, member));
             writer.write("$L)", memberTraitsExpr(context, member));
             writer.dedent();
           }
@@ -362,24 +354,23 @@ public final class SchemaGenerator {
         });
   }
 
-  private static String functionalMemberTargetExpr(GenerationContext context, MemberShape member) {
+  private static String memberTargetExpr(GenerationContext context, MemberShape member) {
     Shape target = context.model().expectShape(member.getTarget());
-    String targetExpr = functionalTargetSchemaExpr(context, member, target);
+    String targetExpr = targetSchemaExpr(context, member, target);
     String nullableMemberType = ShapeSupport.memberTypeExpr(context.symbolProvider(), member, true);
     if (!nullableMemberType.endsWith("?")) {
       return targetExpr;
     }
 
     if (!ShapeSupport.isReferenceType(context.model(), member)) {
-      return "FunctionalSchemas.Nullable(" + targetExpr + ")";
+      return "Schemas.Nullable(" + targetExpr + ")";
     }
-    return "FunctionalSchemas.NullableReference(" + targetExpr + ")";
+    return "Schemas.NullableReference(" + targetExpr + ")";
   }
 
-  private static String functionalRawMemberTargetExpr(
-      GenerationContext context, MemberShape member) {
+  private static String rawMemberTargetExpr(GenerationContext context, MemberShape member) {
     Shape target = context.model().expectShape(member.getTarget());
-    return functionalTargetSchemaExpr(context, member, target);
+    return targetSchemaExpr(context, member, target);
   }
 
   /**
@@ -387,7 +378,7 @@ public final class SchemaGenerator {
    * precedence over the target shape's format). Baking the format into the target schema lets the
    * codec resolve it from the schema without threading member traits.
    */
-  private static String functionalTargetSchemaExpr(
+  private static String targetSchemaExpr(
       GenerationContext context, MemberShape member, Shape target) {
     if (target.getType() == ShapeType.TIMESTAMP) {
       List<Trait> memberFormat =
@@ -395,10 +386,10 @@ public final class SchemaGenerator {
               .filter(t -> t.toShapeId().toString().equals("smithy.api#timestampFormat"))
               .collect(Collectors.toList());
       if (!memberFormat.isEmpty()) {
-        return "FunctionalSchemas.TimestampWithTraits(" + traitsExpr(memberFormat) + ")";
+        return "Schemas.TimestampWithTraits(" + traitsExpr(memberFormat) + ")";
       }
     }
-    return functionalShapeSchemaAccessor(context, target);
+    return shapeSchemaAccessor(context, target);
   }
 
   /**
@@ -406,18 +397,18 @@ public final class SchemaGenerator {
    * enclosing collection is {@code @sparse}. Sparse collections carry nullable elements/values in
    * the generated model type, so the schema's element type must match.
    */
-  private static String functionalElementSchemaExpr(
+  private static String elementSchemaExpr(
       GenerationContext context, MemberShape member, Shape target, boolean sparse) {
-    String targetExpr = functionalShapeSchemaAccessor(context, target);
+    String targetExpr = shapeSchemaAccessor(context, target);
     if (!sparse) {
       return targetExpr;
     }
     return ShapeSupport.isReferenceType(context.model(), member)
-        ? "FunctionalSchemas.NullableReference(" + targetExpr + ")"
-        : "FunctionalSchemas.Nullable(" + targetExpr + ")";
+        ? "Schemas.NullableReference(" + targetExpr + ")"
+        : "Schemas.Nullable(" + targetExpr + ")";
   }
 
-  private static String functionalConstructorArguments(
+  private static String constructorArguments(
       GenerationContext context, Shape shape, List<MemberShape> members) {
     if (!shape.isStructureShape()) {
       return members.stream()
@@ -542,24 +533,22 @@ public final class SchemaGenerator {
         + "}";
   }
 
-
-  private static String primitiveTypeToFunctionalPreludeSchema(ShapeType t) {
+  private static String primitiveTypeToPreludeSchema(ShapeType t) {
     return switch (t) {
-      case BOOLEAN -> "FunctionalSchemas.Boolean";
-      case BYTE -> "FunctionalSchemas.Byte";
-      case SHORT -> "FunctionalSchemas.Short";
-      case INTEGER -> "FunctionalSchemas.Integer";
-      case LONG -> "FunctionalSchemas.Long";
-      case FLOAT -> "FunctionalSchemas.Float";
-      case DOUBLE -> "FunctionalSchemas.Double";
-      case BIG_INTEGER -> "FunctionalSchemas.BigInteger";
-      case BIG_DECIMAL -> "FunctionalSchemas.BigDecimal";
-      case STRING -> "FunctionalSchemas.String";
-      case BLOB -> "FunctionalSchemas.Blob";
-      case TIMESTAMP -> "FunctionalSchemas.Timestamp";
-      case DOCUMENT -> "FunctionalSchemas.Document";
+      case BOOLEAN -> "Schemas.Boolean";
+      case BYTE -> "Schemas.Byte";
+      case SHORT -> "Schemas.Short";
+      case INTEGER -> "Schemas.Integer";
+      case LONG -> "Schemas.Long";
+      case FLOAT -> "Schemas.Float";
+      case DOUBLE -> "Schemas.Double";
+      case BIG_INTEGER -> "Schemas.BigInteger";
+      case BIG_DECIMAL -> "Schemas.BigDecimal";
+      case STRING -> "Schemas.String";
+      case BLOB -> "Schemas.Blob";
+      case TIMESTAMP -> "Schemas.Timestamp";
+      case DOCUMENT -> "Schemas.Document";
       default -> null;
     };
   }
-
 }

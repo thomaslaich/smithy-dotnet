@@ -36,7 +36,7 @@ public final class StructureGenerator implements Runnable {
 
     writer.write("public sealed record class $L$L;", typeName, primaryConstructorParameters(sp));
     writer.write("");
-    SchemaGenerator.writeFunctionalStructureSchema(writer, context, shape, members);
+    SchemaGenerator.writeStructureSchema(writer, context, shape, members);
   }
 
   private String primaryConstructorParameters(SymbolProvider sp) {

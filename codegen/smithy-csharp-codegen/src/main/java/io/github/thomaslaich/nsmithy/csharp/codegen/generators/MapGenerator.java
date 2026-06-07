@@ -66,6 +66,6 @@ public final class MapGenerator implements Runnable {
               valueType);
         });
     writer.write("");
-    SchemaGenerator.writeFunctionalMapSchema(writer, context, shape);
+    SchemaGenerator.writeMapSchema(writer, context, shape);
   }
 }

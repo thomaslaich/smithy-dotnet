@@ -327,7 +327,7 @@ public final class ServerGenerator implements Runnable {
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String methodName = CSharpNaming.typeName(op.getId().getName()) + "Async";
     String protocol = ProtocolSupport.protocolType(kind);
-    String opSchema = SchemaGenerator.functionalOperationSchemaAccessor(context, op);
+    String opSchema = SchemaGenerator.operationSchemaAccessor(context, op);
 
     // Call the handler interface method directly — the operation schema carries the
     // serialization metadata, so a separate per-operation descriptor is unnecessary.

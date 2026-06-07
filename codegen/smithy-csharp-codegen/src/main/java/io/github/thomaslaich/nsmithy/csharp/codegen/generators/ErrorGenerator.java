@@ -6,7 +6,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
@@ -15,7 +14,6 @@ import java.util.Optional;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.MemberShape;
-import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -54,7 +52,7 @@ public final class ErrorGenerator implements Runnable {
           writeProperties(sp, model, messageMember.orElse(null));
         });
     writer.write("");
-    SchemaGenerator.writeFunctionalStructureSchema(writer, context, shape, members);
+    SchemaGenerator.writeStructureSchema(writer, context, shape, members);
   }
 
   private void writeConstructor(String typeName, MemberShape messageMember) {
@@ -109,5 +107,4 @@ public final class ErrorGenerator implements Runnable {
       writer.write("public $L $L { get; }", type, prop);
     }
   }
-
 }

@@ -32,15 +32,15 @@ public final class OperationSchemaGenerator implements Runnable {
         "}",
         () -> {
           writer.write(
-              "public static FunctionalOperationSchema<$L, $L> FunctionalSchema { get; } =",
-              SchemaGenerator.functionalOperationShapeType(context, shape.getInputShape()),
-              SchemaGenerator.functionalOperationShapeType(context, shape.getOutputShape()));
+              "public static OperationSchema<$L, $L> Schema { get; } =",
+              SchemaGenerator.operationShapeType(context, shape.getInputShape()),
+              SchemaGenerator.operationShapeType(context, shape.getOutputShape()));
           writer.indent();
           writer.write(
-              "FunctionalSchemas.Operation($L, $L, $L, $L);",
+              "Schemas.Operation($L, $L, $L, $L);",
               SchemaGenerator.shapeIdExpr(shape.getId()),
-              SchemaGenerator.functionalOperationShapeSchema(context, shape.getInputShape()),
-              SchemaGenerator.functionalOperationShapeSchema(context, shape.getOutputShape()),
+              SchemaGenerator.operationShapeSchema(context, shape.getInputShape()),
+              SchemaGenerator.operationShapeSchema(context, shape.getOutputShape()),
               SchemaGenerator.traitsExpr(shape.getAllTraits().values()));
           writer.dedent();
         });

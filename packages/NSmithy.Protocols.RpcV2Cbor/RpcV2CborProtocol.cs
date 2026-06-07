@@ -12,7 +12,7 @@ public static class RpcV2CborProtocol
     private const string ContentType = "application/cbor";
 
     public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation,
+        OperationSchema<TInput, TOutput> operation,
         TInput input,
         string requestUri
     )
@@ -26,7 +26,7 @@ public static class RpcV2CborProtocol
 
         if (typeof(TInput) != typeof(SmithyUnit))
         {
-            request.Content = FunctionalCborCodec.FromSchema(operation.Input).Serialize(input);
+            request.Content = CborCodec.FromSchema(operation.Input).Serialize(input);
             request.ContentType = ContentType;
         }
 
@@ -34,7 +34,7 @@ public static class RpcV2CborProtocol
     }
 
     public static TOutput DeserializeResponse<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation,
+        OperationSchema<TInput, TOutput> operation,
         SmithyHttpResponse response
     )
     {
@@ -47,33 +47,27 @@ public static class RpcV2CborProtocol
             return (TOutput)(object)SmithyUnit.Value;
         }
 
-        return DeserializeRequiredBody(
-            FunctionalCborCodec.FromSchema(operation.Output),
-            response.Content
-        );
+        return DeserializeRequiredBody(CborCodec.FromSchema(operation.Output), response.Content);
     }
 
     public static TError DeserializeError<TError>(
-        FunctionalSchema<TError> errorSchema,
+        Schema<TError> errorSchema,
         SmithyHttpResponse response
     )
     {
         ArgumentNullException.ThrowIfNull(errorSchema);
         ArgumentNullException.ThrowIfNull(response);
 
-        return DeserializeRequiredBody(
-            FunctionalCborCodec.FromSchema(errorSchema),
-            response.Content
-        );
+        return DeserializeRequiredBody(CborCodec.FromSchema(errorSchema), response.Content);
     }
 
-    public static T DeserializeBody<T>(IFunctionalCodec<T> codec, byte[] content)
+    public static T DeserializeBody<T>(ICodec<T> codec, byte[] content)
     {
         ArgumentNullException.ThrowIfNull(codec);
         return content.Length == 0 ? default! : codec.Deserialize(content);
     }
 
-    public static T DeserializeRequiredBody<T>(IFunctionalCodec<T> codec, byte[] content)
+    public static T DeserializeRequiredBody<T>(ICodec<T> codec, byte[] content)
     {
         ArgumentNullException.ThrowIfNull(codec);
         if (content.Length == 0)

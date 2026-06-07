@@ -8,25 +8,25 @@ using NSmithy.Http;
 
 namespace NSmithy.Protocols.Rest;
 
-public interface IFunctionalRestBodyFormat
+public interface IRestBodyFormat
 {
     string ContentType { get; }
 
     string BlobContentType { get; }
 
-    byte[] Serialize<T>(FunctionalSchema<T> schema, T value);
+    byte[] Serialize<T>(Schema<T> schema, T value);
 
-    byte[] Serialize(FunctionalSchema schema, object value);
+    byte[] Serialize(Schema schema, object value);
 
-    T Deserialize<T>(FunctionalSchema<T> schema, byte[] content);
+    T Deserialize<T>(Schema<T> schema, byte[] content);
 
     byte[] Serialize<T>(
-        FunctionalStructProjection<T> projection,
+        StructProjection<T> projection,
         T value,
         bool materializeTopLevelDefaults = true
     );
 
-    void ReadInto<T>(FunctionalStructProjection<T> projection, byte[] content, object builder);
+    void ReadInto<T>(StructProjection<T> projection, byte[] content, object builder);
 }
 
 public static class RestProtocol
@@ -36,7 +36,7 @@ public static class RestProtocol
     public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
         TInput input,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(binding);
@@ -69,9 +69,9 @@ public static class RestProtocol
     }
 
     public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation,
+        OperationSchema<TInput, TOutput> operation,
         TInput input,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -81,7 +81,7 @@ public static class RestProtocol
     public static TInput DeserializeRequest<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
         SmithyHttpRequest request,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(binding);
@@ -132,9 +132,9 @@ public static class RestProtocol
     }
 
     public static TInput DeserializeRequest<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation,
+        OperationSchema<TInput, TOutput> operation,
         SmithyHttpRequest request,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -144,7 +144,7 @@ public static class RestProtocol
     public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
         TOutput output,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(binding);
@@ -163,7 +163,7 @@ public static class RestProtocol
             var value = codeMember.GetObject(output!);
             if (value is not null)
                 statusCode = (HttpStatusCode)
-                    (int)ParseHttpValue(FunctionalSchemas.Integer, value.ToString()!)!;
+                    (int)ParseHttpValue(Schemas.Integer, value.ToString()!)!;
         }
         foreach (var (member, headerName) in binding.ResponseHeaderMembers)
             AddHeader(headers, headerName, member, output!);
@@ -190,9 +190,9 @@ public static class RestProtocol
     }
 
     public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation,
+        OperationSchema<TInput, TOutput> operation,
         TOutput output,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -202,7 +202,7 @@ public static class RestProtocol
     public static TOutput DeserializeResponse<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
         SmithyHttpResponse response,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(binding);
@@ -246,9 +246,9 @@ public static class RestProtocol
     }
 
     public static TOutput DeserializeResponse<TInput, TOutput>(
-        FunctionalOperationSchema<TInput, TOutput> operation,
+        OperationSchema<TInput, TOutput> operation,
         SmithyHttpResponse response,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -260,16 +260,16 @@ public static class RestProtocol
     /// response. Error members are partitioned per call; errors are off the hot path.
     /// </summary>
     public static TError DeserializeError<TError>(
-        FunctionalSchema<TError> errorSchema,
+        Schema<TError> errorSchema,
         SmithyHttpResponse response,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         ArgumentNullException.ThrowIfNull(errorSchema);
         ArgumentNullException.ThrowIfNull(response);
         ArgumentNullException.ThrowIfNull(bodyFormat);
 
-        if (errorSchema.Resolved is not IFunctionalStructSchema<TError> schema)
+        if (errorSchema.Resolved is not IStructSchema<TError> schema)
         {
             throw new InvalidOperationException(
                 $"Error schema '{errorSchema.Id}' must be a structure schema."
@@ -277,11 +277,11 @@ public static class RestProtocol
         }
 
         var builder = schema.CreateBuilder();
-        var bodyMembers = new List<IFunctionalMemberSchema<TError>>();
+        var bodyMembers = new List<IMemberSchema<TError>>();
 
         foreach (var member in schema.TypedMembers)
         {
-            if (member.Traits.ContainsKey(FunctionalRestTraits.HttpResponseCode))
+            if (member.Traits.ContainsKey(RestTraits.HttpResponseCode))
             {
                 member.SetObject(
                     builder,
@@ -291,9 +291,7 @@ public static class RestProtocol
                     )
                 );
             }
-            else if (
-                member.Traits.TryGetValue(FunctionalRestTraits.HttpHeader, out var headerTrait)
-            )
+            else if (member.Traits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
             {
                 var name = headerTrait.Value.AsString();
                 if (
@@ -307,19 +305,14 @@ public static class RestProtocol
                     );
                 }
             }
-            else if (
-                member.Traits.TryGetValue(
-                    FunctionalRestTraits.HttpPrefixHeaders,
-                    out var prefixTrait
-                )
-            )
+            else if (member.Traits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait))
             {
                 member.SetObject(
                     builder,
                     ReadPrefixedHeaders(member, response.Headers, prefixTrait.Value.AsString())
                 );
             }
-            else if (member.Traits.ContainsKey(FunctionalRestTraits.HttpPayload))
+            else if (member.Traits.ContainsKey(RestTraits.HttpPayload))
             {
                 ReadPayload(builder, member, response.Content, bodyFormat);
             }
@@ -331,7 +324,7 @@ public static class RestProtocol
 
         if (bodyMembers.Count > 0 && response.Content.Length > 0)
         {
-            var projection = FunctionalSchemas.Project(schema, bodyMembers);
+            var projection = Schemas.Project(schema, bodyMembers);
             bodyFormat.ReadInto(projection, response.Content, builder);
         }
 
@@ -340,16 +333,16 @@ public static class RestProtocol
 
     private static void WritePayload<TInput>(
         SmithyHttpRequest request,
-        IFunctionalMemberSchema<TInput> member,
+        IMemberSchema<TInput> member,
         TInput input,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     ) => member.Accept(new WritePayloadVisitor<TInput>(request, input, bodyFormat));
 
     private static void ReadPayload<TContainer>(
         object builder,
-        IFunctionalMemberSchema<TContainer> member,
+        IMemberSchema<TContainer> member,
         byte[]? content,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         if (content is null or { Length: 0 })
@@ -366,17 +359,17 @@ public static class RestProtocol
     }
 
     private static byte[] SerializePayload<TOutput>(
-        IFunctionalMemberSchema<TOutput> member,
+        IMemberSchema<TOutput> member,
         TOutput output,
         Dictionary<string, IReadOnlyList<string>> contentHeaders,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     ) => new SerializePayloadVisitor<TOutput>(output, contentHeaders, bodyFormat).Serialize(member);
 
     private static byte[] SerializeBody<T>(
-        FunctionalSchema<T> schema,
+        Schema<T> schema,
         T value,
         Dictionary<string, IReadOnlyList<string>> contentHeaders,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         contentHeaders["Content-Type"] = [bodyFormat.ContentType];
@@ -384,10 +377,10 @@ public static class RestProtocol
     }
 
     private static byte[] SerializeProjectionBody<T>(
-        FunctionalStructProjection<T> projection,
+        StructProjection<T> projection,
         T value,
         Dictionary<string, IReadOnlyList<string>> contentHeaders,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         contentHeaders["Content-Type"] = [bodyFormat.ContentType];
@@ -396,9 +389,9 @@ public static class RestProtocol
 
     private static void WriteBody<T>(
         SmithyHttpRequest request,
-        FunctionalSchema<T> schema,
+        Schema<T> schema,
         T value,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         request.Content = bodyFormat.Serialize(schema, value);
@@ -407,9 +400,9 @@ public static class RestProtocol
 
     private static void WriteBodyObject(
         SmithyHttpRequest request,
-        FunctionalSchema schema,
+        Schema schema,
         object value,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         request.Content = bodyFormat.Serialize(schema, value);
@@ -418,9 +411,9 @@ public static class RestProtocol
 
     private static void WriteProjectionBody<T>(
         SmithyHttpRequest request,
-        FunctionalStructProjection<T> projection,
+        StructProjection<T> projection,
         T value,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         request.Content = bodyFormat.Serialize(
@@ -441,7 +434,7 @@ public static class RestProtocol
 
     private static string GetAcceptType<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         return binding.OutputPayloadMember is { } payloadMember
@@ -450,9 +443,9 @@ public static class RestProtocol
     }
 
     private static string GetPayloadContentType(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait> traits,
-        IFunctionalRestBodyFormat bodyFormat
+        IRestBodyFormat bodyFormat
     )
     {
         if (GetMediaType(schema, traits) is { } mediaType)
@@ -472,10 +465,10 @@ public static class RestProtocol
     private sealed class WritePayloadVisitor<TInput>(
         SmithyHttpRequest request,
         TInput input,
-        IFunctionalRestBodyFormat bodyFormat
-    ) : IFunctionalMemberVisitor<TInput>
+        IRestBodyFormat bodyFormat
+    ) : IMemberVisitor<TInput>
     {
-        public void Visit<TValue>(IFunctionalMemberSchema<TInput, TValue> member)
+        public void Visit<TValue>(IMemberSchema<TInput, TValue> member)
         {
             var value = member.GetValue(input);
             if (value is null)
@@ -522,7 +515,7 @@ public static class RestProtocol
                     if (mediaType is not null)
                     {
                         request.Content = Encoding.UTF8.GetBytes(
-                            ((IFunctionalStringEnumValue)(object)value).Value
+                            ((IStringEnumValue)(object)value).Value
                         );
                         SetContentTypeIfMissing(request, mediaType);
                     }
@@ -533,7 +526,7 @@ public static class RestProtocol
                     else
                     {
                         request.Content = Encoding.UTF8.GetBytes(
-                            ((IFunctionalStringEnumValue)(object)value).Value
+                            ((IStringEnumValue)(object)value).Value
                         );
                         SetContentTypeIfMissing(request, "text/plain");
                     }
@@ -548,10 +541,10 @@ public static class RestProtocol
     private sealed class ReadPayloadVisitor<TContainer>(
         object builder,
         byte[] content,
-        IFunctionalRestBodyFormat bodyFormat
-    ) : IFunctionalMemberVisitor<TContainer>
+        IRestBodyFormat bodyFormat
+    ) : IMemberVisitor<TContainer>
     {
-        public void Visit<TValue>(IFunctionalMemberSchema<TContainer, TValue> member)
+        public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
         {
             if (member.TargetSchema.Kind == ShapeKind.Blob)
             {
@@ -566,7 +559,7 @@ public static class RestProtocol
                 member.SetObject(
                     builder,
                     target.Kind == ShapeKind.Enum
-                        ? ((IFunctionalStringEnumSchema)target).CreateObject(text)
+                        ? ((IStringEnumSchema)target).CreateObject(text)
                         : text
                 );
                 return;
@@ -579,18 +572,18 @@ public static class RestProtocol
     private sealed class SerializePayloadVisitor<TOutput>(
         TOutput output,
         Dictionary<string, IReadOnlyList<string>> contentHeaders,
-        IFunctionalRestBodyFormat bodyFormat
-    ) : IFunctionalMemberVisitor<TOutput>
+        IRestBodyFormat bodyFormat
+    ) : IMemberVisitor<TOutput>
     {
         private byte[] content = [];
 
-        public byte[] Serialize(IFunctionalMemberSchema<TOutput> member)
+        public byte[] Serialize(IMemberSchema<TOutput> member)
         {
             member.Accept(this);
             return content;
         }
 
-        public void Visit<TValue>(IFunctionalMemberSchema<TOutput, TValue> member)
+        public void Visit<TValue>(IMemberSchema<TOutput, TValue> member)
         {
             var value = member.GetValue(output);
             if (value is null)
@@ -614,7 +607,7 @@ public static class RestProtocol
 
     private static string BuildRequestUri<TInput>(
         string uriTemplate,
-        IReadOnlyList<IFunctionalMemberSchema> labelMembers,
+        IReadOnlyList<IMemberSchema> labelMembers,
         TInput input
     )
     {
@@ -646,7 +639,7 @@ public static class RestProtocol
     private static void AddHeader<TInput>(
         Dictionary<string, IReadOnlyList<string>> headers,
         string name,
-        IFunctionalMemberSchema member,
+        IMemberSchema member,
         TInput input
     )
     {
@@ -662,7 +655,7 @@ public static class RestProtocol
     private static void AddRequestHeader<TInput>(
         SmithyHttpRequest request,
         string name,
-        IFunctionalMemberSchema member,
+        IMemberSchema member,
         TInput input
     )
     {
@@ -691,7 +684,7 @@ public static class RestProtocol
     private static void AddPrefixedHeaders<TInput>(
         IDictionary<string, IReadOnlyList<string>> headers,
         string prefix,
-        IFunctionalMemberSchema member,
+        IMemberSchema member,
         TInput input
     )
     {
@@ -718,7 +711,7 @@ public static class RestProtocol
     }
 
     private static object ReadPrefixedHeaders(
-        IFunctionalMemberSchema member,
+        IMemberSchema member,
         IEnumerable<KeyValuePair<string, IReadOnlyList<string>>> headers,
         string prefix
     )
@@ -746,7 +739,7 @@ public static class RestProtocol
     }
 
     private static object ReadQueryParams(
-        IFunctionalMemberSchema member,
+        IMemberSchema member,
         Dictionary<string, IReadOnlyList<string>> query,
         HashSet<string> excludedNames
     )
@@ -773,7 +766,7 @@ public static class RestProtocol
     private static string AppendQuery<TInput>(
         string requestUri,
         string name,
-        IFunctionalMemberSchema member,
+        IMemberSchema member,
         TInput input
     )
     {
@@ -790,7 +783,7 @@ public static class RestProtocol
 
     private static string AppendQueryParams<TInput>(
         string requestUri,
-        IFunctionalMemberSchema member,
+        IMemberSchema member,
         TInput input,
         HashSet<string> excludedNames
     )
@@ -816,8 +809,8 @@ public static class RestProtocol
         return builder.ToString();
     }
 
-    private static IFunctionalMapSchema RequireMap(IFunctionalMemberSchema member) =>
-        member.Target.Resolved is IFunctionalMapSchema mapSchema
+    private static IMapSchema RequireMap(IMemberSchema member) =>
+        member.Target.Resolved is IMapSchema mapSchema
             ? mapSchema
             : throw new InvalidOperationException(
                 $"HTTP binding member '{member.Name}' must target a map schema."
@@ -826,19 +819,19 @@ public static class RestProtocol
     private static void AppendQueryValue(
         StringBuilder builder,
         string name,
-        FunctionalSchema schema,
+        Schema schema,
         object value
     ) => AppendQueryValue(builder, name, schema, traits: null, value);
 
     private static void AppendQueryValue(
         StringBuilder builder,
         string name,
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         object value
     )
     {
-        if (schema.Resolved is IFunctionalListSchema listSchema)
+        if (schema.Resolved is IListSchema listSchema)
         {
             foreach (var element in listSchema.GetElementsObject(value))
             {
@@ -857,7 +850,7 @@ public static class RestProtocol
     private static void AppendPrimitiveQueryValue(
         StringBuilder builder,
         string name,
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         object value
     )
@@ -868,9 +861,9 @@ public static class RestProtocol
         builder.Append(Uri.EscapeDataString(FormatHttpValue(schema, traits, value)));
     }
 
-    private static string FormatHttpHeaderValue(IFunctionalMemberSchema member, object value)
+    private static string FormatHttpHeaderValue(IMemberSchema member, object value)
     {
-        if (member.Target.Resolved is IFunctionalListSchema listSchema)
+        if (member.Target.Resolved is IListSchema listSchema)
         {
             return string.Join(
                 ", ",
@@ -886,13 +879,13 @@ public static class RestProtocol
         return FormatHttpValue(member.Target, member.Traits, value);
     }
 
-    private static string FormatHttpValue(FunctionalSchema schema, object value)
+    private static string FormatHttpValue(Schema schema, object value)
     {
         return FormatHttpValue(schema, traits: null, value);
     }
 
     private static string FormatHttpValue(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         object value
     )
@@ -909,11 +902,11 @@ public static class RestProtocol
             ShapeKind.Double => FormatDouble((double)value),
             ShapeKind.BigInteger => ((BigInteger)value).ToString(CultureInfo.InvariantCulture),
             ShapeKind.BigDecimal => ((decimal)value).ToString(CultureInfo.InvariantCulture),
-            ShapeKind.String => HasTrait(schema, traits, FunctionalRestTraits.MediaType)
+            ShapeKind.String => HasTrait(schema, traits, RestTraits.MediaType)
                 ? Convert.ToBase64String(Encoding.UTF8.GetBytes((string)value))
                 : (string)value,
-            ShapeKind.Enum => ((IFunctionalStringEnumValue)value).Value ?? string.Empty,
-            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)schema)
+            ShapeKind.Enum => ((IStringEnumValue)value).Value ?? string.Empty,
+            ShapeKind.IntEnum => ((IIntEnumSchema)schema)
                 .GetIntegerValueObject(value)
                 .ToString(CultureInfo.InvariantCulture),
             ShapeKind.Blob => Convert.ToBase64String((byte[])value),
@@ -925,7 +918,7 @@ public static class RestProtocol
     }
 
     private static string FormatHttpHeaderListValue(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         object value
     )
@@ -940,18 +933,18 @@ public static class RestProtocol
         return NeedsQuotedHeaderValue(formatted) ? QuoteHeaderValue(formatted) : formatted;
     }
 
-    private static object? ParseHttpBindingValue(FunctionalSchema schema, string value)
+    private static object? ParseHttpBindingValue(Schema schema, string value)
     {
         return ParseHttpBindingValue(schema, traits: null, value);
     }
 
     private static object? ParseHttpBindingValue(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         string value
     )
     {
-        if (schema.Resolved is IFunctionalListSchema listSchema)
+        if (schema.Resolved is IListSchema listSchema)
         {
             var element = UnwrapNullable(listSchema.Element);
             return ParseHttpBindingValues(
@@ -964,18 +957,16 @@ public static class RestProtocol
         return ParseHttpValue(schema, traits, value);
     }
 
-    private static object? ParseHttpBindingValues(
-        FunctionalSchema schema,
-        IReadOnlyList<string> values
-    ) => ParseHttpBindingValues(schema, traits: null, values);
+    private static object? ParseHttpBindingValues(Schema schema, IReadOnlyList<string> values) =>
+        ParseHttpBindingValues(schema, traits: null, values);
 
     private static object? ParseHttpBindingValues(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         IReadOnlyList<string> values
     )
     {
-        if (schema.Resolved is not IFunctionalListSchema listSchema)
+        if (schema.Resolved is not IListSchema listSchema)
         {
             return values.Count > 0 ? ParseHttpValue(schema, traits, values[0]) : null;
         }
@@ -992,13 +983,13 @@ public static class RestProtocol
         return listSchema.BuildObject(builder);
     }
 
-    private static object? ParseHttpValue(FunctionalSchema schema, string value)
+    private static object? ParseHttpValue(Schema schema, string value)
     {
         return ParseHttpValue(schema, traits: null, value);
     }
 
     private static object? ParseHttpValue(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         string value
     )
@@ -1015,11 +1006,11 @@ public static class RestProtocol
             ShapeKind.Double => ParseDouble(value),
             ShapeKind.BigInteger => BigInteger.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.BigDecimal => decimal.Parse(value, CultureInfo.InvariantCulture),
-            ShapeKind.String => HasTrait(schema, traits, FunctionalRestTraits.MediaType)
+            ShapeKind.String => HasTrait(schema, traits, RestTraits.MediaType)
                 ? Encoding.UTF8.GetString(Convert.FromBase64String(value))
                 : value,
-            ShapeKind.Enum => ((IFunctionalStringEnumSchema)schema).CreateObject(value),
-            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)schema).CreateObject(
+            ShapeKind.Enum => ((IStringEnumSchema)schema).CreateObject(value),
+            ShapeKind.IntEnum => ((IIntEnumSchema)schema).CreateObject(
                 int.Parse(value, CultureInfo.InvariantCulture)
             ),
             ShapeKind.Blob => Convert.FromBase64String(value),
@@ -1030,20 +1021,20 @@ public static class RestProtocol
         };
     }
 
-    private static FunctionalSchema UnwrapNullable(FunctionalSchema schema)
+    private static Schema UnwrapNullable(Schema schema)
     {
         var resolved = schema.Resolved;
-        return resolved is IFunctionalNullableSchema nullable ? nullable.Target.Resolved : resolved;
+        return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;
     }
 
     private static bool TryCreateEmptyStructureValue(
-        FunctionalSchema schema,
-        out FunctionalSchema structureSchema,
+        Schema schema,
+        out Schema structureSchema,
         out object value
     )
     {
         structureSchema = UnwrapNullable(schema);
-        if (structureSchema.Resolved is IFunctionalStructSchema structSchema)
+        if (structureSchema.Resolved is IStructSchema structSchema)
         {
             value = structSchema.BuildObject(structSchema.CreateBuilder());
             return true;
@@ -1054,7 +1045,7 @@ public static class RestProtocol
     }
 
     private static bool IsDefaultValue(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait> traits,
         object value
     )
@@ -1070,7 +1061,7 @@ public static class RestProtocol
     }
 
     private static bool UseBodyCodecForPayload(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait> traits
     )
     {
@@ -1079,7 +1070,7 @@ public static class RestProtocol
     }
 
     private static bool TryCreateDefaultValue(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait> traits,
         out object? value
     )
@@ -1094,7 +1085,7 @@ public static class RestProtocol
         return true;
     }
 
-    private static object? CreateDefaultValue(FunctionalSchema schema, Document value)
+    private static object? CreateDefaultValue(Schema schema, Document value)
     {
         return schema.Kind switch
         {
@@ -1108,17 +1099,15 @@ public static class RestProtocol
             ShapeKind.BigInteger => new BigInteger(value.AsNumber()),
             ShapeKind.BigDecimal => value.AsNumber(),
             ShapeKind.String => value.AsString(),
-            ShapeKind.Enum => ((IFunctionalStringEnumSchema)schema).CreateObject(value.AsString()),
-            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)schema).CreateObject(
-                (int)value.AsNumber()
-            ),
+            ShapeKind.Enum => ((IStringEnumSchema)schema).CreateObject(value.AsString()),
+            ShapeKind.IntEnum => ((IIntEnumSchema)schema).CreateObject((int)value.AsNumber()),
             ShapeKind.Blob => Convert.FromBase64String(value.AsString()),
             _ => null,
         };
     }
 
     private static string EscapeGreedyLabel(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         object value
     )
@@ -1196,7 +1185,7 @@ public static class RestProtocol
     }
 
     private static string FormatTimestamp(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         DateTimeOffset value
     )
@@ -1215,7 +1204,7 @@ public static class RestProtocol
     }
 
     private static DateTimeOffset ParseTimestamp(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         string value
     )
@@ -1236,16 +1225,16 @@ public static class RestProtocol
     }
 
     private static string GetTimestampFormat(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits
     )
     {
-        if (TryGetTrait(schema, traits, FunctionalRestTraits.TimestampFormat, out var trait))
+        if (TryGetTrait(schema, traits, RestTraits.TimestampFormat, out var trait))
         {
             return trait.Value.AsString();
         }
 
-        if (HasTrait(schema, traits, FunctionalRestTraits.HttpHeader))
+        if (HasTrait(schema, traits, RestTraits.HttpHeader))
         {
             return "http-date";
         }
@@ -1253,12 +1242,9 @@ public static class RestProtocol
         return "date-time";
     }
 
-    private static string? GetMediaType(
-        FunctionalSchema schema,
-        IReadOnlyDictionary<ShapeId, Trait> traits
-    )
+    private static string? GetMediaType(Schema schema, IReadOnlyDictionary<ShapeId, Trait> traits)
     {
-        return TryGetTrait(schema, traits, FunctionalRestTraits.MediaType, out var trait)
+        return TryGetTrait(schema, traits, RestTraits.MediaType, out var trait)
             ? trait.Value.AsString()
             : null;
     }
@@ -1290,13 +1276,13 @@ public static class RestProtocol
     }
 
     private static bool HasTrait(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         ShapeId id
     ) => TryGetTrait(schema, traits, id, out _);
 
     private static bool TryGetTrait(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits,
         ShapeId id,
         out Trait trait

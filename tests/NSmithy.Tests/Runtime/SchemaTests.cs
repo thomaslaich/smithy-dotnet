@@ -5,7 +5,7 @@ using NSmithy.Protocols.Rest;
 
 namespace NSmithy.Tests.Runtime;
 
-public sealed class FunctionalSchemaTests
+public sealed class SchemaTests
 {
     public sealed record Person(string Name, int Age, Address Address);
 
@@ -26,34 +26,34 @@ public sealed class FunctionalSchemaTests
     }
 
     [Fact]
-    public void FunctionalJsonCodecRoundTripsNestedStructure()
+    public void JsonCodecRoundTripsNestedStructure()
     {
         var input = new Person("Ada", 36, new Address("London"));
         var expectedJson = "{\"name\":\"Ada\",\"age\":36,\"address\":{\"city\":\"London\"}}";
 
-        var addressSchema = FunctionalSchemas
+        var addressSchema = Schemas
             .Structure<Address, AddressBuilder>(new ShapeId("example", "Address"))
             .Required(
                 "city",
                 static address => address.City,
                 static (builder, value) => builder.City = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Build(static () => new AddressBuilder(), static builder => new Address(builder.City!));
 
-        var personSchema = FunctionalSchemas
+        var personSchema = Schemas
             .Structure<Person, PersonBuilder>(new ShapeId("example", "Person"))
             .Required(
                 "name",
                 static person => person.Name,
                 static (builder, value) => builder.Name = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Required(
                 "age",
                 static person => person.Age,
                 static (builder, value) => builder.Age = value,
-                FunctionalSchemas.Integer
+                Schemas.Integer
             )
             .Required(
                 "address",
@@ -66,7 +66,7 @@ public sealed class FunctionalSchemaTests
                 static builder => new Person(builder.Name!, builder.Age, builder.Address!)
             );
 
-        var personCodec = FunctionalJsonCodec.FromSchema(personSchema);
+        var personCodec = JsonCodec.FromSchema(personSchema);
 
         var json = personCodec.SerializeText(input);
         var decoded = personCodec.DeserializeText(json);
@@ -87,22 +87,22 @@ public sealed class FunctionalSchemaTests
     }
 
     [Fact]
-    public void FunctionalStructSchemaVisitsMembersWithTypedAccessors()
+    public void StructSchemaVisitsMembersWithTypedAccessors()
     {
         var input = new VisitorInput("Ada", 36);
-        var schema = FunctionalSchemas
+        var schema = Schemas
             .Structure<VisitorInput, VisitorInputBuilder>(new ShapeId("example", "VisitorInput"))
             .Required(
                 "name",
                 static value => value.Name,
                 static (builder, value) => builder.Name = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Required(
                 "age",
                 static value => value.Age,
                 static (builder, value) => builder.Age = value,
-                FunctionalSchemas.Integer
+                Schemas.Integer
             )
             .Build(
                 static () => new VisitorInputBuilder(),
@@ -116,11 +116,11 @@ public sealed class FunctionalSchemaTests
     }
 
     private sealed class VisitorInputMemberVisitor(VisitorInput input)
-        : IFunctionalMemberVisitor<VisitorInput>
+        : IMemberVisitor<VisitorInput>
     {
         public List<string> Visited { get; } = [];
 
-        public void Visit<TValue>(IFunctionalMemberSchema<VisitorInput, TValue> member)
+        public void Visit<TValue>(IMemberSchema<VisitorInput, TValue> member)
         {
             Visited.Add($"{member.Name}:{typeof(TValue).Name}:{member.GetValue(input)}");
         }
@@ -136,23 +136,23 @@ public sealed class FunctionalSchemaTests
     }
 
     [Fact]
-    public void FunctionalJsonCodecRoundTripsRecursiveSchemaWithLazyReference()
+    public void JsonCodecRoundTripsRecursiveSchemaWithLazyReference()
     {
         var input = new TreeNode("root", [new TreeNode("leaf")]);
         var expectedJson = "{\"value\":\"root\",\"children\":[{\"value\":\"leaf\"}]}";
 
-        FunctionalStructSchema<TreeNode, TreeNodeBuilder>? treeSchema = null;
-        var childrenSchema = FunctionalSchemas.List(
+        StructSchema<TreeNode, TreeNodeBuilder>? treeSchema = null;
+        var childrenSchema = Schemas.List(
             new ShapeId("example", "TreeNodeList"),
-            FunctionalSchemas.Lazy(() => treeSchema!)
+            Schemas.Lazy(() => treeSchema!)
         );
-        treeSchema = FunctionalSchemas
+        treeSchema = Schemas
             .Structure<TreeNode, TreeNodeBuilder>(new ShapeId("example", "TreeNode"))
             .Required(
                 "value",
                 static value => value.Value,
                 static (builder, value) => builder.Value = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Optional(
                 "children",
@@ -164,7 +164,7 @@ public sealed class FunctionalSchemaTests
                 static () => new TreeNodeBuilder(),
                 static builder => new TreeNode(builder.Value!, builder.Children)
             );
-        var codec = FunctionalJsonCodec.FromSchema(treeSchema);
+        var codec = JsonCodec.FromSchema(treeSchema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -198,7 +198,7 @@ public sealed class FunctionalSchemaTests
     }
 
     [Fact]
-    public void FunctionalJsonCodecRoundTripsCollectionsAndOptionalMembers()
+    public void JsonCodecRoundTripsCollectionsAndOptionalMembers()
     {
         var input = new CollectionInput(
             "Ada",
@@ -214,19 +214,10 @@ public sealed class FunctionalSchemaTests
         var expectedJson =
             "{\"name\":\"Ada\",\"tags\":[\"mathematician\",\"programmer\"],\"aliases\":[\"analyst\",\"programmer\"],\"scores\":{\"logic\":10,\"math\":9}}";
 
-        var tagListSchema = FunctionalSchemas.List(
-            new ShapeId("example", "TagList"),
-            FunctionalSchemas.String
-        );
-        var aliasSetSchema = FunctionalSchemas.Set(
-            new ShapeId("example", "AliasSet"),
-            FunctionalSchemas.String
-        );
-        var scoresSchema = FunctionalSchemas.Map(
-            new ShapeId("example", "Scores"),
-            FunctionalSchemas.Integer
-        );
-        var inputSchema = FunctionalSchemas
+        var tagListSchema = Schemas.List(new ShapeId("example", "TagList"), Schemas.String);
+        var aliasSetSchema = Schemas.Set(new ShapeId("example", "AliasSet"), Schemas.String);
+        var scoresSchema = Schemas.Map(new ShapeId("example", "Scores"), Schemas.Integer);
+        var inputSchema = Schemas
             .Structure<CollectionInput, CollectionInputBuilder>(
                 new ShapeId("example", "CollectionInput")
             )
@@ -234,7 +225,7 @@ public sealed class FunctionalSchemaTests
                 "name",
                 static value => value.Name,
                 static (builder, value) => builder.Name = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Required(
                 "tags",
@@ -258,7 +249,7 @@ public sealed class FunctionalSchemaTests
                 "nickname",
                 static value => value.Nickname!,
                 static (builder, value) => builder.Nickname = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Build(
                 static () => new CollectionInputBuilder(),
@@ -270,7 +261,7 @@ public sealed class FunctionalSchemaTests
                     builder.Nickname
                 )
             );
-        var codec = FunctionalJsonCodec.FromSchema(inputSchema);
+        var codec = JsonCodec.FromSchema(inputSchema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -284,9 +275,9 @@ public sealed class FunctionalSchemaTests
     }
 
     [Fact]
-    public void FunctionalJsonCodecRoundTripsPrimitiveRootValue()
+    public void JsonCodecRoundTripsPrimitiveRootValue()
     {
-        var codec = FunctionalJsonCodec.FromSchema(FunctionalSchemas.Integer);
+        var codec = JsonCodec.FromSchema(Schemas.Integer);
 
         var json = codec.SerializeText(36);
         var decoded = codec.DeserializeText(json);
@@ -295,7 +286,7 @@ public sealed class FunctionalSchemaTests
         Assert.Equal(36, decoded);
     }
 
-    public readonly record struct Status(string Value) : IFunctionalStringEnumValue<Status>
+    public readonly record struct Status(string Value) : IStringEnumValue<Status>
     {
         public static readonly Status Active = new("ACTIVE");
 
@@ -314,21 +305,21 @@ public sealed class FunctionalSchemaTests
     }
 
     [Fact]
-    public void FunctionalStringEnumSchemaModelsEnumWireValue()
+    public void StringEnumSchemaModelsEnumWireValue()
     {
-        var statusSchema = FunctionalSchemas.StringEnum<Status>(new ShapeId("example", "Status"));
+        var statusSchema = Schemas.StringEnum<Status>(new ShapeId("example", "Status"));
 
         Assert.Equal(new ShapeId("example", "Status"), statusSchema.Id);
         Assert.Equal(ShapeKind.Enum, statusSchema.Kind);
-        Assert.Equal("ACTIVE", ((IFunctionalStringEnumValue)Status.Active).Value);
+        Assert.Equal("ACTIVE", ((IStringEnumValue)Status.Active).Value);
         Assert.Equal(Status.Inactive, statusSchema.Create("INACTIVE"));
     }
 
     [Fact]
-    public void FunctionalJsonCodecRoundTripsStringEnumSchema()
+    public void JsonCodecRoundTripsStringEnumSchema()
     {
-        var statusSchema = FunctionalSchemas.StringEnum<Status>(new ShapeId("example", "Status"));
-        var codec = FunctionalJsonCodec.FromSchema(statusSchema);
+        var statusSchema = Schemas.StringEnum<Status>(new ShapeId("example", "Status"));
+        var codec = JsonCodec.FromSchema(statusSchema);
 
         var json = codec.SerializeText(Status.Active);
         var decoded = codec.DeserializeText(json);
@@ -338,19 +329,19 @@ public sealed class FunctionalSchemaTests
     }
 
     [Fact]
-    public void FunctionalJsonCodecRoundTripsStructureWithStringEnumMember()
+    public void JsonCodecRoundTripsStructureWithStringEnumMember()
     {
         var input = new Job("deploy", Status.Active);
         var expectedJson = "{\"name\":\"deploy\",\"status\":\"ACTIVE\"}";
 
-        var statusSchema = FunctionalSchemas.StringEnum<Status>(new ShapeId("example", "Status"));
-        var jobSchema = FunctionalSchemas
+        var statusSchema = Schemas.StringEnum<Status>(new ShapeId("example", "Status"));
+        var jobSchema = Schemas
             .Structure<Job, JobBuilder>(new ShapeId("example", "Job"))
             .Required(
                 "name",
                 static job => job.Name,
                 static (builder, value) => builder.Name = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Required(
                 "status",
@@ -362,7 +353,7 @@ public sealed class FunctionalSchemaTests
                 static () => new JobBuilder(),
                 static builder => new Job(builder.Name!, builder.Status)
             );
-        var codec = FunctionalJsonCodec.FromSchema(jobSchema);
+        var codec = JsonCodec.FromSchema(jobSchema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -379,28 +370,28 @@ public sealed class FunctionalSchemaTests
     }
 
     [Fact]
-    public void FunctionalJsonCodecRoundTripsUnion()
+    public void JsonCodecRoundTripsUnion()
     {
         Choice input = new Choice.StringChoice("hello");
         var expectedJson = "{\"stringValue\":\"hello\"}";
-        var choiceSchema = FunctionalSchemas
+        var choiceSchema = Schemas
             .Union<Choice>(new ShapeId("example", "Choice"))
             .Case(
                 "stringValue",
                 static choice => choice is Choice.StringChoice,
                 static choice => ((Choice.StringChoice)choice).Value,
                 static value => new Choice.StringChoice(value),
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Case(
                 "integerValue",
                 static choice => choice is Choice.IntegerChoice,
                 static choice => ((Choice.IntegerChoice)choice).Value,
                 static value => new Choice.IntegerChoice(value),
-                FunctionalSchemas.Integer
+                Schemas.Integer
             )
             .Build();
-        var codec = FunctionalJsonCodec.FromSchema(choiceSchema);
+        var codec = JsonCodec.FromSchema(choiceSchema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -412,19 +403,19 @@ public sealed class FunctionalSchemaTests
     }
 
     [Fact]
-    public void FunctionalJsonCodecRejectsUnknownUnionMember()
+    public void JsonCodecRejectsUnknownUnionMember()
     {
-        var choiceSchema = FunctionalSchemas
+        var choiceSchema = Schemas
             .Union<Choice>(new ShapeId("example", "Choice"))
             .Case(
                 "stringValue",
                 static choice => choice is Choice.StringChoice,
                 static choice => ((Choice.StringChoice)choice).Value,
                 static value => new Choice.StringChoice(value),
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Build();
-        var codec = FunctionalJsonCodec.FromSchema(choiceSchema);
+        var codec = JsonCodec.FromSchema(choiceSchema);
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
             codec.DeserializeText("{\"missing\":\"hello\"}")
@@ -441,9 +432,9 @@ public sealed class FunctionalSchemaTests
     }
 
     [Fact]
-    public void FunctionalJsonCodecRejectsMissingRequiredMember()
+    public void JsonCodecRejectsMissingRequiredMember()
     {
-        var schema = FunctionalSchemas
+        var schema = Schemas
             .Structure<RequiredPerson, RequiredPersonBuilder>(
                 new ShapeId("example", "RequiredPerson")
             )
@@ -451,13 +442,13 @@ public sealed class FunctionalSchemaTests
                 "name",
                 static person => person.Name,
                 static (builder, value) => builder.Name = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Build(
                 static () => new RequiredPersonBuilder(),
                 static builder => new RequiredPerson(builder.Name!)
             );
-        var codec = FunctionalJsonCodec.FromSchema(schema);
+        var codec = JsonCodec.FromSchema(schema);
 
         var ex = Assert.Throws<InvalidOperationException>(() => codec.DeserializeText("{}"));
 
@@ -465,9 +456,9 @@ public sealed class FunctionalSchemaTests
     }
 
     [Fact]
-    public void FunctionalJsonCodecRejectsNullRequiredMember()
+    public void JsonCodecRejectsNullRequiredMember()
     {
-        var schema = FunctionalSchemas
+        var schema = Schemas
             .Structure<RequiredPerson, RequiredPersonBuilder>(
                 new ShapeId("example", "RequiredPerson")
             )
@@ -475,13 +466,13 @@ public sealed class FunctionalSchemaTests
                 "name",
                 static person => person.Name,
                 static (builder, value) => builder.Name = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Build(
                 static () => new RequiredPersonBuilder(),
                 static builder => new RequiredPerson(builder.Name!)
             );
-        var codec = FunctionalJsonCodec.FromSchema(schema);
+        var codec = JsonCodec.FromSchema(schema);
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
             codec.DeserializeText("{\"name\":null}")
@@ -506,9 +497,9 @@ public sealed class FunctionalSchemaTests
     public sealed class UpdateUserOutputBuilder { }
 
     [Fact]
-    public void FunctionalOperationSchemaCarriesOperationAndMemberTraits()
+    public void OperationSchemaCarriesOperationAndMemberTraits()
     {
-        var inputSchema = FunctionalSchemas
+        var inputSchema = Schemas
             .Structure<UpdateUserInput, UpdateUserInputBuilder>(
                 new ShapeId("example", "UpdateUserInput")
             )
@@ -516,21 +507,21 @@ public sealed class FunctionalSchemaTests
                 "userId",
                 static input => input.UserId,
                 static (builder, value) => builder.UserId = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpLabelTrait]
+                Schemas.String,
+                traits: [RestTraits.HttpLabelTrait]
             )
             .Optional(
                 "requestToken",
                 static input => input.RequestToken!,
                 static (builder, value) => builder.RequestToken = value,
-                FunctionalSchemas.String,
-                traits: [FunctionalRestTraits.HttpHeaderTrait("X-Request-Token")]
+                Schemas.String,
+                traits: [RestTraits.HttpHeaderTrait("X-Request-Token")]
             )
             .Required(
                 "displayName",
                 static input => input.DisplayName,
                 static (builder, value) => builder.DisplayName = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Build(
                 static () => new UpdateUserInputBuilder(),
@@ -540,16 +531,16 @@ public sealed class FunctionalSchemaTests
                     builder.DisplayName!
                 )
             );
-        var outputSchema = FunctionalSchemas
+        var outputSchema = Schemas
             .Structure<UpdateUserOutput, UpdateUserOutputBuilder>(
                 new ShapeId("example", "UpdateUserOutput")
             )
             .Build(static () => new UpdateUserOutputBuilder(), static _ => new UpdateUserOutput());
-        var operation = FunctionalSchemas.Operation(
+        var operation = Schemas.Operation(
             new ShapeId("example", "UpdateUser"),
             inputSchema,
             outputSchema,
-            traits: [FunctionalRestTraits.HttpTrait("PUT", "/users/{userId}")]
+            traits: [RestTraits.HttpTrait("PUT", "/users/{userId}")]
         );
 
         Assert.Equal(ShapeKind.Operation, operation.Kind);
@@ -557,23 +548,15 @@ public sealed class FunctionalSchemaTests
         Assert.Same(outputSchema, operation.Output);
         Assert.Equal(
             "PUT",
-            operation
-                .GetTrait(FunctionalRestTraits.Http)!
-                .Value.Value.AsObject()["method"]
-                .AsString()
+            operation.GetTrait(RestTraits.Http)!.Value.Value.AsObject()["method"].AsString()
         );
-        Assert.True(
-            inputSchema.GetMember("userId")!.Traits.ContainsKey(FunctionalRestTraits.HttpLabel)
-        );
+        Assert.True(inputSchema.GetMember("userId")!.Traits.ContainsKey(RestTraits.HttpLabel));
         Assert.Equal(
             "X-Request-Token",
-            inputSchema
-                .GetMember("requestToken")!
-                .Traits[FunctionalRestTraits.HttpHeader]
-                .Value.AsString()
+            inputSchema.GetMember("requestToken")!.Traits[RestTraits.HttpHeader].Value.AsString()
         );
         Assert.False(
-            inputSchema.GetMember("displayName")!.Traits.ContainsKey(FunctionalRestTraits.HttpLabel)
+            inputSchema.GetMember("displayName")!.Traits.ContainsKey(RestTraits.HttpLabel)
         );
     }
 }

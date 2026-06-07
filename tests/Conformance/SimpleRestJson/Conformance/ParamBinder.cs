@@ -273,17 +273,17 @@ internal static class ParamBinder
 
     private static ShapeKind? GetSchemaKind(Type targetType)
     {
-        return GetFunctionalSchema(targetType)?.Kind;
+        return GetSchema(targetType)?.Kind;
     }
 
-    private static FunctionalSchema? GetFunctionalSchema(Type targetType)
+    private static Schema? GetSchema(Type targetType)
     {
         var schemaProp =
-            targetType.GetProperty("FunctionalSchema", BindingFlags.Public | BindingFlags.Static)
+            targetType.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static)
             ?? targetType
                 .Assembly.GetType($"{targetType.Namespace}.{targetType.Name}Schema")
-                ?.GetProperty("FunctionalSchema", BindingFlags.Public | BindingFlags.Static);
-        return schemaProp?.GetValue(null) as FunctionalSchema;
+                ?.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static);
+        return schemaProp?.GetValue(null) as Schema;
     }
 
     private static string ToSmithyMemberName(string parameterName)

@@ -5,7 +5,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
@@ -14,7 +13,6 @@ import java.util.List;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.MemberShape;
-import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.UnionShape;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -133,7 +131,6 @@ public final class UnionGenerator implements Runnable {
               });
         });
     writer.write("");
-    SchemaGenerator.writeFunctionalUnionSchema(writer, context, shape, members);
+    SchemaGenerator.writeUnionSchema(writer, context, shape, members);
   }
-
 }

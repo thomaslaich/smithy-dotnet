@@ -275,7 +275,7 @@ internal static class ParamBinder
         var ctor = SelectConstructor(type);
         var parameters = ctor.GetParameters();
         var args = new object?[parameters.Length];
-        var schema = GetFunctionalSchema(type);
+        var schema = GetSchema(type);
         for (var i = 0; i < parameters.Length; i++)
         {
             var p = parameters[i];
@@ -284,7 +284,7 @@ internal static class ParamBinder
             var memberName = char.ToLowerInvariant(p.Name![0]) + p.Name![1..];
             if (obj.TryGetPropertyValue(memberName, out var node) && node is not null)
             {
-                var memberSchema = (schema as IFunctionalStructSchema)?.GetMember(memberName);
+                var memberSchema = (schema as IStructSchema)?.GetMember(memberName);
                 if (
                     p.ParameterType == typeof(byte[])
                     && node is JsonValue scalar
@@ -331,16 +331,16 @@ internal static class ParamBinder
 
     private static ShapeKind? GetSchemaKind(Type targetType)
     {
-        return GetFunctionalSchema(targetType)?.Kind;
+        return GetSchema(targetType)?.Kind;
     }
 
-    private static FunctionalSchema? GetFunctionalSchema(Type targetType)
+    private static Schema? GetSchema(Type targetType)
     {
         var schemaProp =
-            targetType.GetProperty("FunctionalSchema", BindingFlags.Public | BindingFlags.Static)
+            targetType.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static)
             ?? targetType
                 .Assembly.GetType($"{targetType.Namespace}.{targetType.Name}Schema")
-                ?.GetProperty("FunctionalSchema", BindingFlags.Public | BindingFlags.Static);
-        return schemaProp?.GetValue(null) as FunctionalSchema;
+                ?.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static);
+        return schemaProp?.GetValue(null) as Schema;
     }
 }

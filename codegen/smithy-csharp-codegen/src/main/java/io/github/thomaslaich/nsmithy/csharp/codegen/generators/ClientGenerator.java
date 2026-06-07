@@ -178,7 +178,7 @@ public final class ClientGenerator implements Runnable {
     String opName = CSharpNaming.typeName(op.getId().getName());
     String deserName = "Deserialize" + opName + "ErrorAsync";
     String protocol = ProtocolSupport.protocolType(kind);
-    String schema = SchemaGenerator.functionalOperationSchemaAccessor(context, op);
+    String schema = SchemaGenerator.operationSchemaAccessor(context, op);
     String inputArg = hasInput ? "input" : "SmithyUnit.Value";
 
     writer.write("public async $L", operationSignature(sp, op));
@@ -188,7 +188,7 @@ public final class ClientGenerator implements Runnable {
         () -> {
           if (hasInput) {
             writer.write("System.ArgumentNullException.ThrowIfNull(input);");
-            writeFunctionalIdempotencyTokenDefaults(
+            writeIdempotencyTokenDefaults(
                 model.expectShape(op.getInputShape(), StructureShape.class));
           }
 
@@ -234,7 +234,7 @@ public final class ClientGenerator implements Runnable {
     writer.write("");
   }
 
-  private void writeFunctionalIdempotencyTokenDefaults(StructureShape input) {
+  private void writeIdempotencyTokenDefaults(StructureShape input) {
     List<MemberShape> idempotencyMembers =
         ShapeSupport.sortedMembers(input).stream()
             .filter(m -> m.hasTrait(IdempotencyTokenTrait.class))
@@ -329,7 +329,7 @@ public final class ClientGenerator implements Runnable {
                   "if (string.Equals(errorType, $L, System.StringComparison.Ordinal))",
                   CSharpNaming.formatString(errId.getName()));
             }
-            writer.openBlock("{", "}", () -> writeFunctionalErrorReturn(sp, err));
+            writer.openBlock("{", "}", () -> writeErrorReturn(sp, err));
           }
 
           if (!rpc) {
@@ -340,7 +340,7 @@ public final class ClientGenerator implements Runnable {
               if (status == null) continue;
               writer.write("");
               writer.write("if ((int)response.StatusCode == $L)", status);
-              writer.openBlock("{", "}", () -> writeFunctionalErrorReturn(sp, err));
+              writer.openBlock("{", "}", () -> writeErrorReturn(sp, err));
             }
           }
 
@@ -367,7 +367,7 @@ public final class ClientGenerator implements Runnable {
                                   + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);"));
                   writer.write("");
                 }
-                writeFunctionalErrorReturn(sp, err);
+                writeErrorReturn(sp, err);
               });
         });
     writer.write("");
@@ -377,12 +377,12 @@ public final class ClientGenerator implements Runnable {
    * Functional error return: deserialize the error structure from the response (HTTP bindings +
    * body for REST, whole CBOR body for rpcv2Cbor) via the protocol's {@code DeserializeError}.
    */
-  private void writeFunctionalErrorReturn(SymbolProvider sp, StructureShape err) {
+  private void writeErrorReturn(SymbolProvider sp, StructureShape err) {
     writer.write(
         "return System.Threading.Tasks.ValueTask.FromResult<System.Exception?>("
             + "$L.DeserializeError($L, response));",
         ProtocolSupport.protocolType(kind),
-        SchemaGenerator.functionalShapeSchemaAccessor(context, err));
+        SchemaGenerator.shapeSchemaAccessor(context, err));
   }
 
   private static Integer httpErrorCode(StructureShape err) {

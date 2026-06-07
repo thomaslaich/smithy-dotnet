@@ -60,9 +60,7 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
         ValidateRpcV2CborRequest(request);
         var body =
             request.Content?.ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult() ?? [];
-        var input = FunctionalCborCodec
-            .FromSchema(SayHelloInputSchema.FunctionalSchema)
-            .Deserialize(body);
+        var input = CborCodec.FromSchema(SayHelloInputSchema.Schema).Deserialize(body);
 
         if (string.Equals(input.Name, "error", StringComparison.OrdinalIgnoreCase))
         {
@@ -74,7 +72,7 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
             return Task.FromResult(
                 CreateResponse(
                     HttpStatusCode.BadRequest,
-                    FunctionalCborCodec.FromSchema(RpcV2ErrorEnvelope.Schema).Serialize(error)
+                    CborCodec.FromSchema(RpcV2ErrorEnvelope.Schema).Serialize(error)
                 )
             );
         }
@@ -83,7 +81,7 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
         return Task.FromResult(
             CreateResponse(
                 HttpStatusCode.OK,
-                FunctionalCborCodec.FromSchema(SayHelloOutputSchema.FunctionalSchema).Serialize(output)
+                CborCodec.FromSchema(SayHelloOutputSchema.Schema).Serialize(output)
             )
         );
     }
@@ -96,14 +94,12 @@ internal sealed class MockAwsProtocolsHandler : HttpMessageHandler
         ValidateRestXmlRequest(request);
         var body =
             request.Content?.ReadAsByteArrayAsync(cancellationToken).GetAwaiter().GetResult() ?? [];
-        var input = FunctionalXmlCodec
-            .FromSchema(SayHelloXmlInputSchema.FunctionalSchema)
-            .Deserialize(body);
+        var input = XmlCodec.FromSchema(SayHelloXmlInputSchema.Schema).Deserialize(body);
         var output = new SayHelloXmlOutput("mock-restxml", $"Hello, {input.Name}!");
         return Task.FromResult(
             CreateXmlResponse(
                 HttpStatusCode.OK,
-                FunctionalXmlCodec.FromSchema(SayHelloXmlOutputSchema.FunctionalSchema).Serialize(output)
+                XmlCodec.FromSchema(SayHelloXmlOutputSchema.Schema).Serialize(output)
             )
         );
     }
@@ -174,8 +170,8 @@ internal sealed record class RpcV2ErrorEnvelope(string Type, string? Message)
         public string? Message { get; set; }
     }
 
-    public static FunctionalSchema<RpcV2ErrorEnvelope> Schema { get; } =
-        FunctionalSchemas
+    public static Schema<RpcV2ErrorEnvelope> Schema { get; } =
+        Schemas
             .Structure<RpcV2ErrorEnvelope, Builder>(
                 ShapeId.Parse("example.transport#RpcV2ErrorEnvelope")
             )
@@ -183,21 +179,19 @@ internal sealed record class RpcV2ErrorEnvelope(string Type, string? Message)
                 "__type",
                 static value => value.Type,
                 static (builder, value) => builder.Type = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Optional(
                 "message",
                 static value => value.Message,
                 static (builder, value) => builder.Message = value,
-                FunctionalSchemas.String
+                Schemas.String
             )
             .Build(
                 static () => new Builder(),
                 static builder => new RpcV2ErrorEnvelope(
                     builder.Type
-                        ?? throw new InvalidOperationException(
-                            "Missing required member '__type'."
-                        ),
+                        ?? throw new InvalidOperationException("Missing required member '__type'."),
                     builder.Message
                 )
             );

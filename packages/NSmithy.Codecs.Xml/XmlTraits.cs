@@ -10,22 +10,22 @@ internal static class XmlTraits
     private static readonly ShapeId XmlFlattenedId = ShapeId.Parse("smithy.api#xmlFlattened");
     private static readonly ShapeId TimestampFormatId = ShapeId.Parse("smithy.api#timestampFormat");
 
-    public static string? GetXmlName(FunctionalSchema schema) =>
+    public static string? GetXmlName(Schema schema) =>
         schema.GetTrait(XmlNameId) is { HasValue: true } t ? t.Value.AsString() : null;
 
-    public static string? GetXmlName(IFunctionalMemberSchema schema) =>
+    public static string? GetXmlName(IMemberSchema schema) =>
         schema.Traits.TryGetValue(XmlNameId, out var trait) && trait.HasValue
             ? trait.Value.AsString()
             : null;
 
-    public static bool IsXmlAttribute(IFunctionalMemberSchema schema) =>
+    public static bool IsXmlAttribute(IMemberSchema schema) =>
         schema.Traits.ContainsKey(XmlAttributeId);
 
-    public static bool IsXmlFlattened(IFunctionalMemberSchema schema) =>
+    public static bool IsXmlFlattened(IMemberSchema schema) =>
         schema.Traits.ContainsKey(XmlFlattenedId);
 
     public static string? GetTimestampFormat(
-        FunctionalSchema schema,
+        Schema schema,
         IReadOnlyDictionary<ShapeId, Trait>? traits
     )
     {

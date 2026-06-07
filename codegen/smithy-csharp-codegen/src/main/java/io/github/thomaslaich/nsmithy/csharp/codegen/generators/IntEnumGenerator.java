@@ -54,8 +54,7 @@ public final class IntEnumGenerator implements Runnable {
         "}",
         () ->
             writer.write(
-                "public static FunctionalSchema<$L> FunctionalSchema { get; } ="
-                    + " FunctionalSchemas.IntEnum<$L>($L, $L);",
+                "public static Schema<$L> Schema { get; } =" + " Schemas.IntEnum<$L>($L, $L);",
                 typeName,
                 typeName,
                 SchemaGenerator.shapeIdExpr(shape.getId()),
