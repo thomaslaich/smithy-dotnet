@@ -42,7 +42,7 @@ public final class SchemaGenerator {
 
   public static void addFunctionalImports(CSharpWriter writer) {
     writer.addImport(RuntimeTypes.NSMITHY_CORE);
-    writer.addImport(RuntimeTypes.NSMITHY_CORE_FUNCTIONAL);
+    writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
   }
 
   public static String shapeSchemaAccessor(GenerationContext context, Shape shape) {

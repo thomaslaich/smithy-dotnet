@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Xml.Linq;
 using NSmithy.Core;
-using NSmithy.Core.Functional;
+using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Xml;
 

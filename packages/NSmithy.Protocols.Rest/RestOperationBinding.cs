@@ -1,6 +1,6 @@
 using System.Net.Http;
 using NSmithy.Core;
-using NSmithy.Core.Functional;
+using NSmithy.Core.Serde;
 
 namespace NSmithy.Protocols.Rest;
 

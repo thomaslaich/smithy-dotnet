@@ -73,7 +73,7 @@ public final class ServerGenerator implements Runnable {
     writer.addImport(RuntimeTypes.NSMITHY_CORE);
     writer.addImport(RuntimeTypes.MS_EXT_DI);
     if (emitsAspNet) {
-      writer.addImport(RuntimeTypes.NSMITHY_CORE_FUNCTIONAL);
+      writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
       writer.addImport(RuntimeTypes.NSMITHY_HTTP);
       writer.addImport(RuntimeTypes.NSMITHY_PROTOCOLS_RESTJSON);
       writer.addImport(RuntimeTypes.NSMITHY_SERVER_ASPNETCORE);

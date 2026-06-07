@@ -1,6 +1,6 @@
 using NSmithy.Codecs.Xml;
 using NSmithy.Core;
-using NSmithy.Core.Functional;
+using NSmithy.Core.Serde;
 
 namespace NSmithy.Tests.Runtime;
 

@@ -1,6 +1,6 @@
 using NSmithy.Codecs.Json;
 using NSmithy.Core;
-using NSmithy.Core.Functional;
+using NSmithy.Core.Serde;
 using NSmithy.Protocols.Rest;
 
 namespace NSmithy.Tests.Runtime;

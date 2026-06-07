@@ -2,7 +2,7 @@ using System.Collections;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using NSmithy.Core;
-using NSmithy.Core.Functional;
+using NSmithy.Core.Serde;
 
 namespace SimpleRestJson.Conformance;
 

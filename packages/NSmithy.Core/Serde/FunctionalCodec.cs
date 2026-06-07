@@ -1,4 +1,4 @@
-namespace NSmithy.Core.Functional;
+namespace NSmithy.Core.Serde;
 
 // Codecs serialize Smithy shapes to and from the wire. The wire is always bytes;
 // text formats (JSON, XML) encode to UTF-8 internally. A string view, when useful

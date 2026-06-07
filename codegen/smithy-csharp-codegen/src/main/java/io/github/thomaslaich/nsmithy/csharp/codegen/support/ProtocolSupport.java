@@ -57,15 +57,6 @@ public final class ProtocolSupport {
     return Kind.REST_JSON;
   }
 
-  /** C# class name of the protocol runtime helper. */
-  public static String runtimeProtocolType(Kind kind) {
-    return switch (kind) {
-      case REST_JSON -> "RestJsonProtocol";
-      case REST_XML -> "RestXmlProtocol";
-      case RPC_V2_CBOR -> "RpcV2CborProtocol";
-    };
-  }
-
   /** Functional protocol helper class for the given protocol. */
   public static String functionalProtocolType(Kind kind) {
     return switch (kind) {
@@ -78,20 +69,6 @@ public final class ProtocolSupport {
   /** True for REST protocols whose HTTP bindings are handled by FunctionalRestProtocol. */
   public static boolean usesFunctionalRestProtocol(Kind kind) {
     return kind == Kind.REST_JSON || kind == Kind.REST_XML;
-  }
-
-  /** Static expression yielding the document codec singleton. */
-  public static String codecExpression(Kind kind) {
-    return switch (kind) {
-      case REST_JSON -> "SmithyJsonCodec.Default";
-      case REST_XML -> "FunctionalXmlCodec";
-      case RPC_V2_CBOR -> "FunctionalCborCodec";
-    };
-  }
-
-  /** Codec interface type used by generated clients for the given protocol. */
-  public static String codecType(Kind kind) {
-    return "ISmithyCodec";
   }
 
   public static String mediaType(Kind kind) {
@@ -120,12 +97,4 @@ public final class ProtocolSupport {
     };
   }
 
-  /**
-   * True when the entire request/response body is treated as a single document (no @httpLabel /
-   *
-   * @httpHeader / etc. binding splitting). RestXml and RpcV2Cbor follow this style.
-   */
-  public static boolean useDocumentBindings(Kind kind) {
-    return kind != Kind.REST_JSON;
-  }
 }

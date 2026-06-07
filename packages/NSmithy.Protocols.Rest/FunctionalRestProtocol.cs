@@ -3,7 +3,7 @@ using System.Net;
 using System.Numerics;
 using System.Text;
 using NSmithy.Core;
-using NSmithy.Core.Functional;
+using NSmithy.Core.Serde;
 using NSmithy.Http;
 
 namespace NSmithy.Protocols.Rest;

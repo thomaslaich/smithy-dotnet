@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text;
 using NSmithy.Core;
-using NSmithy.Core.Functional;
+using NSmithy.Core.Serde;
 using NSmithy.Http;
 using NSmithy.Protocols.Rest;
 using NSmithy.Protocols.RestJson;

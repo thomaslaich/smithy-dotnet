@@ -29,7 +29,7 @@ public final class StringEnumGenerator implements Runnable {
 
   @Override
   public void run() {
-    writer.addImport(RuntimeTypes.NSMITHY_CORE_FUNCTIONAL);
+    writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     writer.write(
         "public readonly partial record struct $L(string Value) : IFunctionalStringEnumValue<$L>",

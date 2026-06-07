@@ -2,7 +2,7 @@ using System.Formats.Cbor;
 using System.Globalization;
 using System.Numerics;
 using NSmithy.Core;
-using NSmithy.Core.Functional;
+using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Cbor;
 

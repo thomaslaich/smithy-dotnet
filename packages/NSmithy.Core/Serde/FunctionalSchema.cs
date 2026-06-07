@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Numerics;
 
-namespace NSmithy.Core.Functional;
+namespace NSmithy.Core.Serde;
 
 public abstract class FunctionalSchema
 {

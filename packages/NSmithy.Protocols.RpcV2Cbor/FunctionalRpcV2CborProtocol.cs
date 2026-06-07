@@ -1,6 +1,6 @@
 using NSmithy.Codecs.Cbor;
 using NSmithy.Core;
-using NSmithy.Core.Functional;
+using NSmithy.Core.Serde;
 using NSmithy.Http;
 
 namespace NSmithy.Protocols.RpcV2Cbor;

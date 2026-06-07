@@ -1,5 +1,5 @@
 using System.Text;
-using NSmithy.Core.Functional;
+using NSmithy.Core.Serde;
 
 namespace NSmithy.Tests;
 
