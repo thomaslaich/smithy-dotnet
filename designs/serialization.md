@@ -123,8 +123,11 @@ the visible member set:
 
 ```csharp
 var bodyProjection = Schemas.Project(inputSchema, bodyMembers);
-JsonCodec.FromProjection(bodyProjection).Serialize(input);
 ```
+
+The projection itself is just schema metadata: it says which members of the
+container are visible for a particular protocol body. The actual codec compiled
+from that projection is introduced in the codec layer below.
 
 ## Codec Model
 
@@ -137,22 +140,44 @@ compiled reader/writer tree.
 public interface ICodec<TValue>
 {
     byte[] Serialize(TValue value);
-    TValue Deserialize(ReadOnlySpan<byte> payload);
+    TValue Deserialize(byte[] payload);
 }
 
 public interface IProjectionCodec<TValue>
 {
     byte[] Serialize(TValue value);
-    void ReadInto(ReadOnlySpan<byte> payload, object builder);
+    void ReadInto(byte[] payload, object builder);
 }
 ```
 
-JSON codec usage:
+Codec usage:
 
 ```csharp
 var personCodec = JsonCodec.FromSchema(PersonSchema.Schema);
 var json = personCodec.Serialize(person);
 var roundTrip = personCodec.Deserialize(json);
+
+var xmlCodec = XmlCodec.FromSchema(PersonSchema.Schema);
+var xml = xmlCodec.Serialize(person);
+
+var cborCodec = CborCodec.FromSchema(PersonSchema.Schema);
+var cbor = cborCodec.Serialize(person);
+```
+
+Projection codecs are used when a protocol wants to serialize only a subset of
+the members of a structure while keeping the same container type:
+
+```csharp
+var bodyProjection = Schemas.Project(inputSchema, bodyMembers);
+var bodyCodec = JsonCodec.FromProjection(bodyProjection);
+var body = bodyCodec.Serialize(input);
+```
+
+The same pattern exists for other body formats that support projections:
+
+```csharp
+var xmlBodyCodec = XmlCodec.FromProjection(bodyProjection);
+var xmlBody = xmlBodyCodec.Serialize(input);
 ```
 
 Codecs serialize Smithy data shapes into a wire payload for a particular body
@@ -199,8 +224,8 @@ The entire body deserialization path for value types is boxing-free.
 ### Codec Caching
 
 `JsonCodec.FromSchema` is stateless and can be cached. Protocol bindings cache
-body projections, projection codecs, and protocol-level precomputations. For
-generated clients, the binding is computed once at first use and stored in a
+body projections and protocol-level precomputations. For generated clients, the
+binding is computed once at first use and stored in a
 `ConditionalWeakTable` keyed on the operation schema.
 
 ## Protocol Model
@@ -216,7 +241,6 @@ determined from the operation schema before any request arrives:
 - URI template string.
 - Label, header, query, queryParams, and payload member lists.
 - Body projection for input/output structures.
-- Projection codec for each body projection.
 - Bound query parameter names for `@httpQueryParams` exclusion.
 
 `RestOperationBinding.From(operation)` computes and caches the binding keyed on
@@ -224,28 +248,51 @@ the operation schema instance. On every subsequent request, `SerializeRequest`
 and `DeserializeRequest` iterate precomputed lists directly; no trait lookup,
 LINQ, or schema-analysis allocation is needed for the protocol partitioning.
 
-Request serialization follows this shape:
+Request serialization follows this flow:
 
-```csharp
-RestJsonProtocol.SerializeRequest(operation, input)
-  -> RestOperationBinding.From(operation)
-  -> RestProtocol.SerializeRequest(binding, input)
-      BuildRequestUri(binding.UriTemplate, binding.LabelMembers, input)
-      AppendQuery / AppendQueryParams
-      new SmithyHttpRequest(binding.HttpMethod, uri)
-      AddHeader / AddPrefixedHeaders
-      binding.InputBodyCodec.Serialize(input)
+```text
+OperationSchema<TInput, TOutput>
+            |
+            |  RestJsonProtocol.SerializeRequest(operation, input)
+            v
+  RestOperationBinding.From(operation)
+            |
+            |  precomputed HTTP partitioning
+            |  - method + URI template
+            |  - label/query/header members
+            |  - payload member or body projection
+            v
+  RestProtocol.SerializeRequest(binding, input, BodyFormat)
+            |
+            |-- BuildRequestUri(...)
+            |-- AppendQuery / AppendQueryParams
+            |-- new SmithyHttpRequest(...)
+            |-- AddRequestHeader / AddPrefixedHeaders
+            |
+            |-- if there is an @httpPayload member:
+            |      WritePayload(...)
+            |
+            `-- else if there is a body projection:
+                   WriteProjectionBody(...)
 ```
 
-The REST protocol does not need a separate body-format abstraction for the
-common case. The protocol binding already knows which body projection belongs
-to the operation and can cache the matching projection codec directly:
+The important separation is:
+
+- `RestJsonProtocol` chooses the body format.
+- `RestOperationBinding` caches the HTTP-level partitioning of the operation.
+- `RestProtocol` performs the shared request construction using that binding.
+
+The REST binding caches the HTTP partitioning and the body projection, while
+the protocol-specific entry point supplies the body format. `RestJsonProtocol`,
+`RestXmlProtocol`, and `RpcV2CborProtocol` all reuse the same HTTP binding
+logic in `RestProtocol`, but each provides a different body codec via the small
+`IRestBodyFormat` abstraction.
 
 ```csharp
 public sealed class RestOperationBinding<TInput, TOutput>
 {
     public StructProjection<TInput> InputBodyProjection { get; }
-    public IProjectionCodec<TInput> InputBodyCodec { get; }
+    public StructProjection<TOutput> OutputBodyProjection { get; }
 }
 ```
 
