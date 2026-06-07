@@ -798,6 +798,9 @@ public final class ClientGenerator implements Runnable {
   private String errorConstruction(SymbolProvider sp, StructureShape err, String bodyVar) {
     if (ProtocolSupport.useDocumentBindings(kind)) {
       // Whole error body is a single document.
+      if (usesFunctionalDocumentCodec()) {
+        return runtime + ".DeserializeRequiredBody(" + codecFromSchema(err) + ", response.Content)";
+      }
       String t = CSharpSymbolProvider.qualified(sp.toSymbol(err));
       return runtime + ".DeserializeRequiredBody<" + t + ">(DocumentCodec, response.Content)";
     }

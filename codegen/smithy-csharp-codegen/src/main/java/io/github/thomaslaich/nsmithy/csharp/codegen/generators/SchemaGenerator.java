@@ -124,7 +124,23 @@ public final class SchemaGenerator {
       return preludeSchema;
     }
 
-    return functionalSchemaClassName(context, shape) + ".FunctionalSchema";
+    String accessor = functionalSchemaClassName(context, shape) + ".FunctionalSchema";
+
+    // Aggregate shapes can participate in recursive graphs (a shape referencing itself
+    // directly or through a cycle). A direct static reference would observe null while the
+    // referenced schema's static initializer is still running, so defer it lazily. The
+    // null-forgiving '!' suppresses the nullable-flow warning for self-references where the
+    // property is not yet definitely assigned at the point the lambda is created.
+    return isCycleCapable(shape.getType())
+        ? "FunctionalSchemas.Lazy(() => " + accessor + "!)"
+        : accessor;
+  }
+
+  private static boolean isCycleCapable(ShapeType type) {
+    return switch (type) {
+      case STRUCTURE, UNION, LIST, SET, MAP -> true;
+      default -> false;
+    };
   }
 
   public static String functionalSchemaClassName(GenerationContext context, Shape shape) {
@@ -285,9 +301,13 @@ public final class SchemaGenerator {
     SymbolProvider sp = context.symbolProvider();
     Shape memberTarget = context.model().expectShape(shape.getMember().getTarget());
     String typeName = CSharpSymbolProvider.qualified(sp.toSymbol(shape));
-    String memberType = CSharpSymbolProvider.qualified(sp.toSymbol(memberTarget));
+    boolean sparse = ShapeSupport.isSparse(shape);
+    String memberType =
+        CSharpSymbolProvider.qualified(sp.toSymbol(memberTarget)) + (sparse ? "?" : "");
     String builderType = "System.Collections.Generic.List<" + memberType + ">";
     String factory = shape.getType() == ShapeType.SET ? "Set" : "List";
+    String elementSchema =
+        functionalElementSchemaExpr(context, shape.getMember(), memberTarget, sparse);
 
     writer.write("public static partial class $L", localSchemaClassName(shape));
     writer.openBlock(
@@ -303,7 +323,7 @@ public final class SchemaGenerator {
               memberType,
               builderType,
               shapeIdExpr(shape.getId()),
-              functionalShapeSchemaAccessor(context, memberTarget));
+              elementSchema);
           writer.indent();
           writer.write("static value => value.Values,");
           writer.write("static () => new $L(),", builderType);
@@ -346,8 +366,12 @@ public final class SchemaGenerator {
     SymbolProvider sp = context.symbolProvider();
     Shape valueTarget = context.model().expectShape(shape.getValue().getTarget());
     String typeName = CSharpSymbolProvider.qualified(sp.toSymbol(shape));
-    String valueType = CSharpSymbolProvider.qualified(sp.toSymbol(valueTarget));
+    boolean sparse = ShapeSupport.isSparse(shape);
+    String valueType =
+        CSharpSymbolProvider.qualified(sp.toSymbol(valueTarget)) + (sparse ? "?" : "");
     String builderType = "System.Collections.Generic.Dictionary<string, " + valueType + ">";
+    String valueSchema =
+        functionalElementSchemaExpr(context, shape.getValue(), valueTarget, sparse);
 
     writer.write("public static partial class $L", localSchemaClassName(shape));
     writer.openBlock(
@@ -362,7 +386,7 @@ public final class SchemaGenerator {
               valueType,
               builderType,
               shapeIdExpr(shape.getId()),
-              functionalShapeSchemaAccessor(context, valueTarget));
+              valueSchema);
           writer.indent();
           writer.write("static value => value.Values,");
           writer.write("static () => new $L(System.StringComparer.Ordinal),", builderType);
@@ -491,6 +515,22 @@ public final class SchemaGenerator {
       GenerationContext context, MemberShape member) {
     Shape target = context.model().expectShape(member.getTarget());
     return functionalShapeSchemaAccessor(context, target);
+  }
+
+  /**
+   * Element/value schema accessor for a list or map member, wrapped in a nullable schema when the
+   * enclosing collection is {@code @sparse}. Sparse collections carry nullable elements/values in
+   * the generated model type, so the schema's element type must match.
+   */
+  private static String functionalElementSchemaExpr(
+      GenerationContext context, MemberShape member, Shape target, boolean sparse) {
+    String targetExpr = functionalShapeSchemaAccessor(context, target);
+    if (!sparse) {
+      return targetExpr;
+    }
+    return ShapeSupport.isReferenceType(context.model(), member)
+        ? "FunctionalSchemas.NullableReference(" + targetExpr + ")"
+        : "FunctionalSchemas.Nullable(" + targetExpr + ")";
   }
 
   private static String functionalConstructorArguments(
