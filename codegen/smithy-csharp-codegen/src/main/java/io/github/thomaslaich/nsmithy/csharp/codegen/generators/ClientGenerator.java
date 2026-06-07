@@ -379,6 +379,8 @@ public final class ClientGenerator implements Runnable {
         () -> {
           if (hasInput) {
             writer.write("System.ArgumentNullException.ThrowIfNull(input);");
+            writeFunctionalIdempotencyTokenDefaults(
+                model.expectShape(op.getInputShape(), StructureShape.class));
           }
 
           writer.write(
@@ -416,6 +418,28 @@ public final class ClientGenerator implements Runnable {
           }
         });
     writer.write("");
+  }
+
+  private void writeFunctionalIdempotencyTokenDefaults(StructureShape input) {
+    List<MemberShape> idempotencyMembers =
+        ShapeSupport.sortedMembers(input).stream()
+            .filter(m -> m.hasTrait(IdempotencyTokenTrait.class))
+            .filter(ShapeSupport::isNullable)
+            .collect(Collectors.toList());
+    if (idempotencyMembers.isEmpty()) {
+      return;
+    }
+
+    writer.write("input = input with");
+    writer.openBlock(
+        "{",
+        "};",
+        () -> {
+          for (MemberShape member : idempotencyMembers) {
+            String prop = CSharpNaming.propertyName(member.getMemberName());
+            writer.write("$L = input.$L ?? options.IdempotencyTokenProvider(),", prop, prop);
+          }
+        });
   }
 
   private boolean usesLegacyDocumentCodec() {

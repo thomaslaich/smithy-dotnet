@@ -17,11 +17,15 @@ public static class FunctionalJsonCodec
     }
 
     public static IFunctionalProjectionCodec<T> FromProjection<T>(
-        FunctionalStructProjection<T> projection
+        FunctionalStructProjection<T> projection,
+        bool materializeTopLevelDefaults = true
     )
     {
         ArgumentNullException.ThrowIfNull(projection);
-        return new CompiledFunctionalJsonProjectionCodec<T>(projection);
+        return new CompiledFunctionalJsonProjectionCodec<T>(
+            projection,
+            materializeTopLevelDefaults
+        );
     }
 
     private sealed class CompiledFunctionalJsonCodec<T>(FunctionalSchema<T> schema)
@@ -59,6 +63,8 @@ public static class FunctionalJsonCodec
         string Name { get; }
 
         bool IsRequired { get; }
+
+        void ReadMissing(TBuilder builder);
 
         void ReadInto(TBuilder builder, JsonElement value);
     }
@@ -176,8 +182,13 @@ public static class FunctionalJsonCodec
         >(IFunctionalMapSchema<TDictionary, TValue, TBuilder> schema) =>
             new(schema, CompileValue(schema.ValueSchema));
 
-        private UnionJsonValueReader<T> CompileUnion<T>(IFunctionalUnionSchema<T> schema)
+        private IJsonValueReader<T> CompileUnion<T>(IFunctionalUnionSchema<T> schema)
         {
+            if (IsOpenUnion(schema))
+            {
+                return new DelegatingJsonValueReader<T>(value => (T)ReadUnion(schema, value));
+            }
+
             var visitor = new JsonUnionCaseReaderCompiler<T>(this);
             schema.VisitCases(visitor);
             return new UnionJsonValueReader<T>(visitor.Readers);
@@ -207,6 +218,12 @@ public static class FunctionalJsonCodec
         }
     }
 
+    private sealed class DelegatingJsonValueReader<T>(Func<JsonElement, T> read)
+        : IJsonValueReader<T>
+    {
+        public T Read(JsonElement value) => read(value);
+    }
+
     private sealed class JsonMemberReaderCompiler<TContainer, TBuilder>(JsonReaderCompiler compiler)
         : IFunctionalMemberVisitor<TContainer, TBuilder>
     {
@@ -233,6 +250,14 @@ public static class FunctionalJsonCodec
         public string Name => WireName(member.Traits, member.Name);
 
         public bool IsRequired => member.IsRequired;
+
+        public void ReadMissing(TBuilder builder)
+        {
+            if (TryCreateDefaultValue(member.TargetSchema, member.Traits, out var defaultValue))
+            {
+                member.SetValue(builder, (TValue)defaultValue!);
+            }
+        }
 
         public void ReadInto(TBuilder builder, JsonElement value)
         {
@@ -267,6 +292,7 @@ public static class FunctionalJsonCodec
                         );
                     }
 
+                    memberReader.ReadMissing(builder);
                     continue;
                 }
 
@@ -496,11 +522,13 @@ public static class FunctionalJsonCodec
     }
 
     private sealed class CompiledFunctionalJsonProjectionCodec<T>(
-        FunctionalStructProjection<T> projection
+        FunctionalStructProjection<T> projection,
+        bool materializeTopLevelDefaults
     ) : IFunctionalProjectionCodec<T>
     {
         private readonly StructureJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(
-            projection
+            projection,
+            materializeTopLevelDefaults
         );
 
         public byte[] Serialize(T value)
@@ -552,12 +580,13 @@ public static class FunctionalJsonCodec
         }
 
         public static StructureJsonValueWriter<T> Compile<T>(
-            FunctionalStructProjection<T> projection
+            FunctionalStructProjection<T> projection,
+            bool materializeTopLevelDefaults = true
         )
         {
             ArgumentNullException.ThrowIfNull(projection);
             var compiler = new JsonWriterCompiler();
-            return compiler.CompileProjection(projection);
+            return compiler.CompileProjection(projection, materializeTopLevelDefaults);
         }
 
         public IJsonValueWriter<T> CompileValue<T>(FunctionalSchema<T> schema)
@@ -631,16 +660,20 @@ public static class FunctionalJsonCodec
 
         private StructureJsonValueWriter<T> CompileStructure<T>(IFunctionalStructSchema<T> schema)
         {
-            var visitor = new JsonMemberWriterCompiler<T>(this);
+            var visitor = new JsonMemberWriterCompiler<T>(this, materializeDefaults: true);
             schema.VisitMembers(visitor);
             return new StructureJsonValueWriter<T>(visitor.Writers);
         }
 
         private StructureJsonValueWriter<T> CompileProjection<T>(
-            FunctionalStructProjection<T> projection
+            FunctionalStructProjection<T> projection,
+            bool materializeTopLevelDefaults
         )
         {
-            var visitor = new JsonMemberWriterCompiler<T>(this);
+            var visitor = new JsonMemberWriterCompiler<T>(
+                this,
+                materializeTopLevelDefaults
+            );
             projection.VisitMembers(visitor);
             return new StructureJsonValueWriter<T>(visitor.Writers);
         }
@@ -657,8 +690,15 @@ public static class FunctionalJsonCodec
             IFunctionalMapSchema<TDictionary, TValue> schema
         ) => new MapJsonValueWriter<TDictionary, TValue>(schema, CompileValue(schema.ValueSchema));
 
-        private UnionJsonValueWriter<T> CompileUnion<T>(IFunctionalUnionSchema<T> schema)
+        private IJsonValueWriter<T> CompileUnion<T>(IFunctionalUnionSchema<T> schema)
         {
+            if (IsOpenUnion(schema))
+            {
+                return new DelegatingJsonValueWriter<T>((writer, value) =>
+                    WriteUnion(writer, schema, value!)
+                );
+            }
+
             var visitor = new JsonUnionCaseWriterCompiler<T>(this);
             schema.VisitCases(visitor);
             return new UnionJsonValueWriter<T>(visitor.Writers);
@@ -688,7 +728,16 @@ public static class FunctionalJsonCodec
         }
     }
 
-    private sealed class JsonMemberWriterCompiler<TContainer>(JsonWriterCompiler compiler)
+    private sealed class DelegatingJsonValueWriter<T>(Action<Utf8JsonWriter, T> write)
+        : IJsonValueWriter<T>
+    {
+        public void Write(Utf8JsonWriter writer, T value) => write(writer, value);
+    }
+
+    private sealed class JsonMemberWriterCompiler<TContainer>(
+        JsonWriterCompiler compiler,
+        bool materializeDefaults
+    )
         : IFunctionalMemberVisitor<TContainer>
     {
         private readonly List<IJsonMemberWriter<TContainer>> writers = [];
@@ -700,7 +749,8 @@ public static class FunctionalJsonCodec
             writers.Add(
                 new JsonMemberWriter<TContainer, TValue>(
                     member,
-                    compiler.CompileValue(member.TargetSchema)
+                    compiler.CompileValue(member.TargetSchema),
+                    materializeDefaults
                 )
             );
         }
@@ -708,7 +758,8 @@ public static class FunctionalJsonCodec
 
     private sealed class JsonMemberWriter<TContainer, TValue>(
         IFunctionalMemberSchema<TContainer, TValue> member,
-        IJsonValueWriter<TValue> valueWriter
+        IJsonValueWriter<TValue> valueWriter,
+        bool materializeDefault
     ) : IJsonMemberWriter<TContainer>
     {
         public void Write(Utf8JsonWriter writer, TContainer container)
@@ -716,7 +767,19 @@ public static class FunctionalJsonCodec
             var value = member.GetValue(container);
             if (value is null && !member.IsRequired)
             {
-                return;
+                if (
+                    !materializeDefault
+                    || !TryCreateDefaultValue(
+                        member.TargetSchema,
+                        member.Traits,
+                        out var defaultValue
+                    )
+                )
+                {
+                    return;
+                }
+
+                value = (TValue)defaultValue!;
             }
 
             writer.WritePropertyName(WireName(member.Traits, member.Name));
@@ -1189,7 +1252,18 @@ public static class FunctionalJsonCodec
             var memberValue = member.GetValue(container);
             if (memberValue is null && !member.IsRequired)
             {
-                return;
+                if (
+                    !TryCreateDefaultValue(
+                        member.TargetSchema,
+                        member.Traits,
+                        out var defaultValue
+                    )
+                )
+                {
+                    return;
+                }
+
+                memberValue = (TValue)defaultValue!;
             }
 
             writer.WritePropertyName(WireName(member.Traits, member.Name));
@@ -1209,7 +1283,10 @@ public static class FunctionalJsonCodec
             var memberValue = member.GetObject(value);
             if (memberValue is null && !member.IsRequired)
             {
-                continue;
+                if (!TryCreateDefaultValue(member.Target, member.Traits, out memberValue))
+                {
+                    continue;
+                }
             }
 
             writer.WritePropertyName(WireName(member.Traits, member.Name));
@@ -1225,10 +1302,67 @@ public static class FunctionalJsonCodec
         object value
     )
     {
+        if (TryGetDiscriminatorName(schema, out var discriminatorName))
+        {
+            WriteDiscriminatedUnion(writer, schema, discriminatorName, value);
+            return;
+        }
+
         var @case = schema.GetCaseObject(value);
+        if (IsJsonUnknownCase(@case))
+        {
+            WriteValue(writer, @case.Target, @case.GetObject(value));
+            return;
+        }
+
         writer.WriteStartObject();
         writer.WritePropertyName(WireName(@case.Traits, @case.Name));
         WriteValue(writer, @case.Target, @case.GetObject(value));
+        writer.WriteEndObject();
+    }
+
+    private static void WriteDiscriminatedUnion(
+        Utf8JsonWriter writer,
+        IFunctionalUnionSchema schema,
+        string discriminatorName,
+        object value
+    )
+    {
+        var @case = schema.GetCaseObject(value);
+        var caseValue = @case.GetObject(value);
+        if (IsJsonUnknownCase(@case))
+        {
+            WriteValue(writer, @case.Target, caseValue);
+            return;
+        }
+
+        writer.WriteStartObject();
+        writer.WriteString(discriminatorName, WireName(@case.Traits, @case.Name));
+        using var buffer = new MemoryStream();
+        using (var bufferedWriter = new Utf8JsonWriter(buffer))
+        {
+            WriteValue(bufferedWriter, @case.Target, caseValue);
+        }
+
+        using var document = JsonDocument.Parse(buffer.ToArray());
+        if (document.RootElement.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in document.RootElement.EnumerateObject())
+            {
+                if (property.NameEquals(discriminatorName))
+                {
+                    continue;
+                }
+
+                property.WriteTo(writer);
+            }
+        }
+        else
+        {
+            writer.WritePropertyName("value");
+            document.RootElement.WriteTo(writer);
+        }
+
         writer.WriteEndObject();
     }
 
@@ -1302,11 +1436,117 @@ public static class FunctionalJsonCodec
         return resolved is IFunctionalNullableSchema nullable ? nullable.Target.Resolved : resolved;
     }
 
+    private static readonly ShapeId ClientOptionalTrait = new("smithy.api", "clientOptional");
+    private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
     private static readonly ShapeId JsonNameTrait = new("smithy.api", "jsonName");
+    private static readonly ShapeId AlloyDiscriminatedTrait = new("alloy", "discriminated");
+    private static readonly ShapeId AlloyJsonUnknownTrait = new("alloy", "jsonUnknown");
 
     // The JSON property name for a member or union case: @jsonName if present, else the name.
     private static string WireName(IReadOnlyDictionary<ShapeId, Trait> traits, string fallback) =>
         traits.TryGetValue(JsonNameTrait, out var trait) ? trait.Value.AsString() : fallback;
+
+    private static bool IsOpenUnion(IFunctionalUnionSchema schema) =>
+        ((FunctionalSchema)schema).Traits.ContainsKey(AlloyDiscriminatedTrait)
+        || GetJsonUnknownCase(schema) is not null;
+
+    private static bool TryCreateDefaultValue(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        out object? value
+    )
+    {
+        if (
+            traits.ContainsKey(ClientOptionalTrait)
+            || !traits.TryGetValue(DefaultTrait, out var trait)
+            || trait.Value.Kind == DocumentKind.Null
+        )
+        {
+            value = null;
+            return false;
+        }
+
+        value = CreateDefaultValue(UnwrapNullable(schema), trait.Value);
+        return value is not null;
+    }
+
+    private static object? CreateDefaultValue(FunctionalSchema schema, Document value)
+    {
+        return schema.Kind switch
+        {
+            ShapeKind.Boolean => value.AsBoolean(),
+            ShapeKind.Byte => (sbyte)value.AsNumber(),
+            ShapeKind.Short => (short)value.AsNumber(),
+            ShapeKind.Integer => (int)value.AsNumber(),
+            ShapeKind.Long => (long)value.AsNumber(),
+            ShapeKind.Float => (float)value.AsNumber(),
+            ShapeKind.Double => (double)value.AsNumber(),
+            ShapeKind.BigInteger => new BigInteger(value.AsNumber()),
+            ShapeKind.BigDecimal => value.AsNumber(),
+            ShapeKind.String => value.AsString(),
+            ShapeKind.Enum => ((IFunctionalStringEnumSchema)schema).CreateObject(value.AsString()),
+            ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)schema).CreateObject(
+                (int)value.AsNumber()
+            ),
+            ShapeKind.Blob => Convert.FromBase64String(value.AsString()),
+            ShapeKind.Timestamp => DateTimeOffset.FromUnixTimeSeconds((long)value.AsNumber()),
+            ShapeKind.Document => value,
+            ShapeKind.List or ShapeKind.Set when schema.Resolved is IFunctionalListSchema list =>
+                CreateDefaultList(list, value),
+            ShapeKind.Map when schema.Resolved is IFunctionalMapSchema map => CreateDefaultMap(
+                map,
+                value
+            ),
+            _ => null,
+        };
+    }
+
+    private static object CreateDefaultList(IFunctionalListSchema schema, Document value)
+    {
+        var builder = schema.CreateBuilder();
+        foreach (var item in value.AsArray())
+        {
+            schema.AddObject(builder, CreateDefaultValue(UnwrapNullable(schema.Element), item));
+        }
+
+        return schema.BuildObject(builder);
+    }
+
+    private static object CreateDefaultMap(IFunctionalMapSchema schema, Document value)
+    {
+        var builder = schema.CreateBuilder();
+        foreach (var entry in value.AsObject())
+        {
+            schema.AddObject(
+                builder,
+                entry.Key,
+                CreateDefaultValue(UnwrapNullable(schema.Value), entry.Value)
+            );
+        }
+
+        return schema.BuildObject(builder);
+    }
+
+    private static bool TryGetDiscriminatorName(
+        IFunctionalUnionSchema schema,
+        out string discriminatorName
+    )
+    {
+        if (((FunctionalSchema)schema).Traits.TryGetValue(AlloyDiscriminatedTrait, out var trait))
+        {
+            discriminatorName = trait.Value.AsString();
+            return true;
+        }
+
+        discriminatorName = string.Empty;
+        return false;
+    }
+
+    private static IFunctionalUnionCaseSchema? GetJsonUnknownCase(IFunctionalUnionSchema schema) =>
+        schema.Cases.FirstOrDefault(IsJsonUnknownCase);
+
+    private static bool IsJsonUnknownCase(IFunctionalUnionCaseSchema @case) =>
+        @case.Traits.ContainsKey(AlloyJsonUnknownTrait);
 
     private static object ReadStructure(IFunctionalStructSchema schema, JsonElement value)
     {
@@ -1329,6 +1569,11 @@ public static class FunctionalJsonCodec
                     );
                 }
 
+                if (TryCreateDefaultValue(member.Target, member.Traits, out var defaultValue))
+                {
+                    member.SetObject(builder, defaultValue);
+                }
+
                 continue;
             }
 
@@ -1339,6 +1584,11 @@ public static class FunctionalJsonCodec
                     throw new InvalidOperationException(
                         $"Required member '{member.Name}' cannot be null."
                     );
+                }
+
+                if (TryCreateDefaultValue(member.Target, member.Traits, out var defaultValue))
+                {
+                    member.SetObject(builder, defaultValue);
                 }
 
                 continue;
@@ -1402,7 +1652,15 @@ public static class FunctionalJsonCodec
             );
         }
 
-        var properties = value.EnumerateObject().ToArray();
+        if (TryGetDiscriminatorName(schema, out var discriminatorName))
+        {
+            return ReadDiscriminatedUnion(schema, discriminatorName, value);
+        }
+
+        var properties = value
+            .EnumerateObject()
+            .Where(property => !property.NameEquals("__type"))
+            .ToArray();
         if (properties.Length != 1)
         {
             throw new InvalidOperationException(
@@ -1411,10 +1669,58 @@ public static class FunctionalJsonCodec
         }
 
         var property = properties[0];
-        var @case =
-            schema.Cases.FirstOrDefault(c => WireName(c.Traits, c.Name) == property.Name)
-            ?? throw new InvalidOperationException($"Unknown union member '{property.Name}'.");
+        var @case = schema.Cases.FirstOrDefault(c => WireName(c.Traits, c.Name) == property.Name);
+        if (@case is null)
+        {
+            var unknownCase =
+                GetJsonUnknownCase(schema)
+                ?? throw new InvalidOperationException($"Unknown union member '{property.Name}'.");
+            return unknownCase.CreateObject(Document.FromJsonElement(value));
+        }
+
         return @case.CreateObject(ReadValue(@case.Target, property.Value));
+    }
+
+    private static object ReadDiscriminatedUnion(
+        IFunctionalUnionSchema schema,
+        string discriminatorName,
+        JsonElement value
+    )
+    {
+        if (
+            value.TryGetProperty(discriminatorName, out var discriminator)
+            && discriminator.ValueKind == JsonValueKind.String
+        )
+        {
+            var tag = discriminator.GetString()!;
+            var @case = schema.Cases.FirstOrDefault(c => WireName(c.Traits, c.Name) == tag);
+            if (@case is not null && !IsJsonUnknownCase(@case))
+            {
+                using var buffer = new MemoryStream();
+                using (var writer = new Utf8JsonWriter(buffer))
+                {
+                    writer.WriteStartObject();
+                    foreach (var property in value.EnumerateObject())
+                    {
+                        if (!property.NameEquals(discriminatorName))
+                        {
+                            property.WriteTo(writer);
+                        }
+                    }
+                    writer.WriteEndObject();
+                }
+
+                using var document = JsonDocument.Parse(buffer.ToArray());
+                return @case.CreateObject(ReadValue(@case.Target, document.RootElement));
+            }
+        }
+
+        var unknownCase =
+            GetJsonUnknownCase(schema)
+            ?? throw new InvalidOperationException(
+                $"Discriminated union '{((FunctionalSchema)schema).Id}' is missing an unknown JSON case."
+            );
+        return unknownCase.CreateObject(Document.FromJsonElement(value));
     }
 
     private static object ReadList(IFunctionalListSchema schema, JsonElement value)

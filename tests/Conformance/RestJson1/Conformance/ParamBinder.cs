@@ -2,6 +2,7 @@ using System.Collections;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using NSmithy.Core;
+using NSmithy.Core.Functional;
 
 namespace RestJson1.Conformance;
 
@@ -87,6 +88,8 @@ internal static class ParamBinder
             return (decimal)value!;
         if (targetType == typeof(Document))
             return BindDocument(value);
+        if (targetType == typeof(SmithyUnit))
+            return SmithyUnit.Value;
 
         if (targetType == typeof(DateTimeOffset))
             return BindDateTimeOffset(value);
@@ -272,7 +275,7 @@ internal static class ParamBinder
         var ctor = SelectConstructor(type);
         var parameters = ctor.GetParameters();
         var args = new object?[parameters.Length];
-        var schema = GetSchema(type);
+        var schema = GetFunctionalSchema(type);
         for (var i = 0; i < parameters.Length; i++)
         {
             var p = parameters[i];
@@ -281,12 +284,12 @@ internal static class ParamBinder
             var memberName = char.ToLowerInvariant(p.Name![0]) + p.Name![1..];
             if (obj.TryGetPropertyValue(memberName, out var node) && node is not null)
             {
-                var memberSchema = schema?.GetMember(memberName);
+                var memberSchema = (schema as IFunctionalStructSchema)?.GetMember(memberName);
                 if (
                     p.ParameterType == typeof(byte[])
                     && node is JsonValue scalar
                     && scalar.TryGetValue<string>(out var text)
-                    && memberSchema?.HasTrait(HttpPayloadTraitId) == true
+                    && memberSchema?.Traits.ContainsKey(HttpPayloadTraitId) == true
                 )
                 {
                     args[i] = System.Text.Encoding.UTF8.GetBytes(text);
@@ -328,15 +331,16 @@ internal static class ParamBinder
 
     private static ShapeKind? GetSchemaKind(Type targetType)
     {
-        return GetSchema(targetType)?.Kind;
+        return GetFunctionalSchema(targetType)?.Kind;
     }
 
-    private static Schema? GetSchema(Type targetType)
+    private static FunctionalSchema? GetFunctionalSchema(Type targetType)
     {
-        var schemaProp = targetType.GetProperty(
-            "Schema",
-            BindingFlags.Public | BindingFlags.Static
-        );
-        return schemaProp?.GetValue(null) as Schema;
+        var schemaProp =
+            targetType.GetProperty("FunctionalSchema", BindingFlags.Public | BindingFlags.Static)
+            ?? targetType
+                .Assembly.GetType($"{targetType.Namespace}.{targetType.Name}Schema")
+                ?.GetProperty("FunctionalSchema", BindingFlags.Public | BindingFlags.Static);
+        return schemaProp?.GetValue(null) as FunctionalSchema;
     }
 }

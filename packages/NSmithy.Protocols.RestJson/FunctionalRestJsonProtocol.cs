@@ -73,16 +73,25 @@ public static class FunctionalRestJsonProtocol
         public byte[] Serialize<T>(FunctionalSchema<T> schema, T value) =>
             FunctionalJsonCodec.FromSchema(schema).Serialize(value);
 
+        public byte[] Serialize(FunctionalSchema schema, object value) =>
+            SerializeObject((dynamic)schema, value);
+
         public T Deserialize<T>(FunctionalSchema<T> schema, byte[] content) =>
             FunctionalJsonCodec.FromSchema(schema).Deserialize(content);
 
-        public byte[] Serialize<T>(FunctionalStructProjection<T> projection, T value) =>
-            FunctionalJsonCodec.FromProjection(projection).Serialize(value);
+        public byte[] Serialize<T>(
+            FunctionalStructProjection<T> projection,
+            T value,
+            bool materializeTopLevelDefaults = true
+        ) => FunctionalJsonCodec.FromProjection(projection, materializeTopLevelDefaults).Serialize(value);
 
         public void ReadInto<T>(
             FunctionalStructProjection<T> projection,
             byte[] content,
             object builder
         ) => FunctionalJsonCodec.FromProjection(projection).ReadInto(content, builder);
+
+        private static byte[] SerializeObject<T>(FunctionalSchema<T> schema, object value) =>
+            FunctionalJsonCodec.FromSchema(schema).Serialize((T)value);
     }
 }

@@ -16,9 +16,15 @@ public interface IFunctionalRestBodyFormat
 
     byte[] Serialize<T>(FunctionalSchema<T> schema, T value);
 
+    byte[] Serialize(FunctionalSchema schema, object value);
+
     T Deserialize<T>(FunctionalSchema<T> schema, byte[] content);
 
-    byte[] Serialize<T>(FunctionalStructProjection<T> projection, T value);
+    byte[] Serialize<T>(
+        FunctionalStructProjection<T> projection,
+        T value,
+        bool materializeTopLevelDefaults = true
+    );
 
     void ReadInto<T>(FunctionalStructProjection<T> projection, byte[] content, object builder);
 }
@@ -41,12 +47,13 @@ public static class FunctionalRestProtocol
         foreach (var (member, queryName) in binding.QueryMembers)
             requestUri = AppendQuery(requestUri, queryName, member, input!);
         if (binding.QueryParamsMember is { } qpMember)
-            requestUri = AppendQueryParams(requestUri, qpMember, input!);
+            requestUri = AppendQueryParams(requestUri, qpMember, input!, binding.BoundQueryNames);
 
         var request = new SmithyHttpRequest(binding.HttpMethod, requestUri);
+        request.Headers["Accept"] = [GetAcceptType(binding, bodyFormat)];
 
         foreach (var (member, headerName) in binding.RequestHeaderMembers)
-            AddHeader(request.Headers, headerName, member, input!);
+            AddRequestHeader(request, headerName, member, input!);
         if (binding.RequestPrefixHeadersMember is { } phMember)
             AddPrefixedHeaders(request.Headers, phMember.Prefix, phMember.Member, input!);
 
@@ -393,7 +400,18 @@ public static class FunctionalRestProtocol
     )
     {
         request.Content = bodyFormat.Serialize(schema, value);
-        request.ContentType = bodyFormat.ContentType;
+        SetContentTypeIfMissing(request, bodyFormat.ContentType);
+    }
+
+    private static void WriteBodyObject(
+        SmithyHttpRequest request,
+        FunctionalSchema schema,
+        object value,
+        IFunctionalRestBodyFormat bodyFormat
+    )
+    {
+        request.Content = bodyFormat.Serialize(schema, value);
+        SetContentTypeIfMissing(request, bodyFormat.ContentType);
     }
 
     private static void WriteProjectionBody<T>(
@@ -403,8 +421,50 @@ public static class FunctionalRestProtocol
         IFunctionalRestBodyFormat bodyFormat
     )
     {
-        request.Content = bodyFormat.Serialize(projection, value);
-        request.ContentType = bodyFormat.ContentType;
+        request.Content = bodyFormat.Serialize(
+            projection,
+            value,
+            materializeTopLevelDefaults: false
+        );
+        SetContentTypeIfMissing(request, bodyFormat.ContentType);
+    }
+
+    private static void SetContentTypeIfMissing(SmithyHttpRequest request, string contentType)
+    {
+        if (request.ContentType is null)
+        {
+            request.ContentType = contentType;
+        }
+    }
+
+    private static string GetAcceptType<TInput, TOutput>(
+        RestOperationBinding<TInput, TOutput> binding,
+        IFunctionalRestBodyFormat bodyFormat
+    )
+    {
+        return binding.OutputPayloadMember is { } payloadMember
+            ? GetPayloadContentType(payloadMember.Target, payloadMember.Traits, bodyFormat)
+            : bodyFormat.ContentType;
+    }
+
+    private static string GetPayloadContentType(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        IFunctionalRestBodyFormat bodyFormat
+    )
+    {
+        if (GetMediaType(schema, traits) is { } mediaType)
+        {
+            return mediaType;
+        }
+
+        return UnwrapNullable(schema).Kind switch
+        {
+            ShapeKind.Blob => bodyFormat.BlobContentType,
+            ShapeKind.String or ShapeKind.Enum when !UseBodyCodecForPayload(schema, traits) =>
+                "text/plain",
+            _ => bodyFormat.ContentType,
+        };
     }
 
     private sealed class WritePayloadVisitor<TInput>(
@@ -418,6 +478,11 @@ public static class FunctionalRestProtocol
             var value = member.GetValue(input);
             if (value is null)
             {
+                if (TryCreateEmptyStructureValue(member.TargetSchema, out var schema, out var empty))
+                {
+                    WriteBodyObject(request, schema, empty, bodyFormat);
+                }
+
                 return;
             }
 
@@ -426,22 +491,48 @@ public static class FunctionalRestProtocol
                 return;
             }
 
-            var mediaType = GetMediaType(member.Traits);
+            var mediaType = GetMediaType(member.TargetSchema, member.Traits);
             switch (member.TargetSchema.Resolved.Kind)
             {
                 case ShapeKind.Blob:
                     request.Content = (byte[])(object)value;
-                    request.ContentType = mediaType ?? bodyFormat.BlobContentType;
+                    SetContentTypeIfMissing(request, mediaType ?? bodyFormat.BlobContentType);
                     break;
                 case ShapeKind.String:
-                    request.Content = Encoding.UTF8.GetBytes((string)(object)value);
-                    request.ContentType = mediaType ?? "text/plain";
+                    if (mediaType is not null)
+                    {
+                        request.Content = Encoding.UTF8.GetBytes((string)(object)value);
+                        SetContentTypeIfMissing(request, mediaType);
+                    }
+                    else if (UseBodyCodecForPayload(member.TargetSchema, member.Traits))
+                    {
+                        WriteBody(request, member.TargetSchema, value, bodyFormat);
+                    }
+                    else
+                    {
+                        request.Content = Encoding.UTF8.GetBytes((string)(object)value);
+                        SetContentTypeIfMissing(request, "text/plain");
+                    }
                     break;
                 case ShapeKind.Enum:
-                    request.Content = Encoding.UTF8.GetBytes(
-                        ((IFunctionalStringEnumValue)(object)value).Value
-                    );
-                    request.ContentType = mediaType ?? "text/plain";
+                    if (mediaType is not null)
+                    {
+                        request.Content = Encoding.UTF8.GetBytes(
+                            ((IFunctionalStringEnumValue)(object)value).Value
+                        );
+                        SetContentTypeIfMissing(request, mediaType);
+                    }
+                    else if (UseBodyCodecForPayload(member.TargetSchema, member.Traits))
+                    {
+                        WriteBody(request, member.TargetSchema, value, bodyFormat);
+                    }
+                    else
+                    {
+                        request.Content = Encoding.UTF8.GetBytes(
+                            ((IFunctionalStringEnumValue)(object)value).Value
+                        );
+                        SetContentTypeIfMissing(request, "text/plain");
+                    }
                     break;
                 default:
                     WriteBody(request, member.TargetSchema, value, bodyFormat);
@@ -461,6 +552,19 @@ public static class FunctionalRestProtocol
             if (member.TargetSchema.Kind == ShapeKind.Blob)
             {
                 member.SetObject(builder, content);
+                return;
+            }
+
+            var target = UnwrapNullable(member.TargetSchema);
+            if (!UseBodyCodecForPayload(member.TargetSchema, member.Traits))
+            {
+                var text = Encoding.UTF8.GetString(content);
+                member.SetObject(
+                    builder,
+                    target.Kind == ShapeKind.Enum
+                        ? ((IFunctionalStringEnumSchema)target).CreateObject(text)
+                        : text
+                );
                 return;
             }
 
@@ -492,7 +596,10 @@ public static class FunctionalRestProtocol
 
             if (member.TargetSchema.Kind == ShapeKind.Blob)
             {
-                contentHeaders["Content-Type"] = [bodyFormat.BlobContentType];
+                contentHeaders["Content-Type"] =
+                [
+                    GetMediaType(member.TargetSchema, member.Traits) ?? bodyFormat.BlobContentType,
+                ];
                 content = (byte[])(object)value;
                 return;
             }
@@ -533,7 +640,7 @@ public static class FunctionalRestProtocol
     }
 
     private static void AddHeader<TInput>(
-        IDictionary<string, IReadOnlyList<string>> headers,
+        Dictionary<string, IReadOnlyList<string>> headers,
         string name,
         IFunctionalMemberSchema member,
         TInput input
@@ -546,6 +653,35 @@ public static class FunctionalRestProtocol
         }
 
         headers[name] = [FormatHttpHeaderValue(member, value)];
+    }
+
+    private static void AddRequestHeader<TInput>(
+        SmithyHttpRequest request,
+        string name,
+        IFunctionalMemberSchema member,
+        TInput input
+    )
+    {
+        var value = member.GetObject(input!);
+        if (value is null)
+        {
+            return;
+        }
+
+        var formatted = FormatHttpHeaderValue(member, value);
+        if (string.Equals(name, "Content-Type", StringComparison.OrdinalIgnoreCase))
+        {
+            request.ContentType = formatted;
+            return;
+        }
+
+        if (string.Equals(name, "Content-Encoding", StringComparison.OrdinalIgnoreCase))
+        {
+            request.ContentHeaders[name] = [formatted];
+            return;
+        }
+
+        request.Headers[name] = [formatted];
     }
 
     private static void AddPrefixedHeaders<TInput>(
@@ -569,7 +705,11 @@ public static class FunctionalRestProtocol
                 continue;
             }
 
-            headers[$"{prefix}{entry.Key}"] = [FormatHttpValue(mapSchema.Value, entry.Value)];
+            var headerName = $"{prefix}{entry.Key}";
+            if (!headers.ContainsKey(headerName))
+            {
+                headers[headerName] = [FormatHttpValue(mapSchema.Value, entry.Value)];
+            }
         }
     }
 
@@ -619,7 +759,7 @@ public static class FunctionalRestProtocol
             mapSchema.AddObject(
                 builder,
                 entry.Key,
-                ParseHttpValue(mapSchema.Value, entry.Value[0])
+                ParseHttpBindingValues(mapSchema.Value, entry.Value)
             );
         }
 
@@ -647,7 +787,8 @@ public static class FunctionalRestProtocol
     private static string AppendQueryParams<TInput>(
         string requestUri,
         IFunctionalMemberSchema member,
-        TInput input
+        TInput input,
+        HashSet<string> excludedNames
     )
     {
         var value = member.GetObject(input!);
@@ -660,7 +801,7 @@ public static class FunctionalRestProtocol
         var mapSchema = RequireMap(member);
         foreach (var entry in mapSchema.GetEntriesObject(value))
         {
-            if (entry.Value is null)
+            if (entry.Value is null || excludedNames.Contains(entry.Key))
             {
                 continue;
             }
@@ -767,7 +908,7 @@ public static class FunctionalRestProtocol
             ShapeKind.String => HasTrait(schema, traits, FunctionalRestTraits.MediaType)
                 ? Convert.ToBase64String(Encoding.UTF8.GetBytes((string)value))
                 : (string)value,
-            ShapeKind.Enum => ((IFunctionalStringEnumValue)value).Value,
+            ShapeKind.Enum => ((IFunctionalStringEnumValue)value).Value ?? string.Empty,
             ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)schema)
                 .GetIntegerValueObject(value)
                 .ToString(CultureInfo.InvariantCulture),
@@ -891,6 +1032,23 @@ public static class FunctionalRestProtocol
         return resolved is IFunctionalNullableSchema nullable ? nullable.Target.Resolved : resolved;
     }
 
+    private static bool TryCreateEmptyStructureValue(
+        FunctionalSchema schema,
+        out FunctionalSchema structureSchema,
+        out object value
+    )
+    {
+        structureSchema = UnwrapNullable(schema);
+        if (structureSchema.Resolved is IFunctionalStructSchema structSchema)
+        {
+            value = structSchema.BuildObject(structSchema.CreateBuilder());
+            return true;
+        }
+
+        value = null!;
+        return false;
+    }
+
     private static bool IsDefaultValue(
         FunctionalSchema schema,
         IReadOnlyDictionary<ShapeId, Trait> traits,
@@ -905,6 +1063,15 @@ public static class FunctionalRestProtocol
         return value is byte[] bytes && defaultValue is byte[] defaultBytes
             ? bytes.SequenceEqual(defaultBytes)
             : EqualityComparer<object>.Default.Equals(value, defaultValue);
+    }
+
+    private static bool UseBodyCodecForPayload(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait> traits
+    )
+    {
+        var kind = UnwrapNullable(schema).Kind;
+        return kind is not (ShapeKind.String or ShapeKind.Enum) || traits.ContainsKey(DefaultTrait);
     }
 
     private static bool TryCreateDefaultValue(
@@ -1080,6 +1247,16 @@ public static class FunctionalRestProtocol
         }
 
         return "date-time";
+    }
+
+    private static string? GetMediaType(
+        FunctionalSchema schema,
+        IReadOnlyDictionary<ShapeId, Trait> traits
+    )
+    {
+        return TryGetTrait(schema, traits, FunctionalRestTraits.MediaType, out var trait)
+            ? trait.Value.AsString()
+            : null;
     }
 
     private static DateTimeOffset ParseEpochSeconds(string value)

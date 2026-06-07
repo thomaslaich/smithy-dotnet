@@ -68,10 +68,17 @@ public static class FunctionalRestXmlProtocol
         public byte[] Serialize<T>(FunctionalSchema<T> schema, T value) =>
             FunctionalXmlCodec.FromSchema(schema).Serialize(value);
 
+        public byte[] Serialize(FunctionalSchema schema, object value) =>
+            SerializeObject((dynamic)schema, value);
+
         public T Deserialize<T>(FunctionalSchema<T> schema, byte[] content) =>
             FunctionalXmlCodec.FromSchema(schema).Deserialize(content);
 
-        public byte[] Serialize<T>(FunctionalStructProjection<T> projection, T value) =>
+        public byte[] Serialize<T>(
+            FunctionalStructProjection<T> projection,
+            T value,
+            bool materializeTopLevelDefaults = true
+        ) =>
             FunctionalXmlCodec.FromProjection(projection).Serialize(value);
 
         public void ReadInto<T>(
@@ -79,5 +86,8 @@ public static class FunctionalRestXmlProtocol
             byte[] content,
             object builder
         ) => FunctionalXmlCodec.FromProjection(projection).ReadInto(content, builder);
+
+        private static byte[] SerializeObject<T>(FunctionalSchema<T> schema, object value) =>
+            FunctionalXmlCodec.FromSchema(schema).Serialize((T)value);
     }
 }
