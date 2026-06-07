@@ -53,6 +53,11 @@ public static class FunctionalRestJsonProtocol
     public static string? DeserializeErrorType(SmithyHttpResponse response) =>
         RestJsonProtocol.DeserializeErrorType(response);
 
+    public static TError DeserializeError<TError>(
+        FunctionalSchema<TError> errorSchema,
+        SmithyHttpResponse response
+    ) => FunctionalRestProtocol.DeserializeError(errorSchema, response, BodyFormat);
+
     public static void ApplyRequestCompression(SmithyHttpRequest request, string encoding) =>
         RestJsonProtocol.ApplyRequestCompression(request, encoding);
 

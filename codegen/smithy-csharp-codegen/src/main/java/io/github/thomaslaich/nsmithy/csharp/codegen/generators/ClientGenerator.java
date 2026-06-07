@@ -708,7 +708,7 @@ public final class ClientGenerator implements Runnable {
         "{",
         "}",
         () -> {
-          if (errorIds.isEmpty() || kind == Kind.REST_JSON) {
+          if (errorIds.isEmpty()) {
             writer.write("");
             writer.write(
                 "return System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);");
@@ -749,14 +749,16 @@ public final class ClientGenerator implements Runnable {
               }
             }
             case REST_JSON -> {
-              writer.write("var errorType = $L.DeserializeErrorType(response);", runtime);
+              String functionalProtocol = ProtocolSupport.functionalProtocolType(kind);
+              writer.write(
+                  "var errorType = $L.DeserializeErrorType(response);", functionalProtocol);
               for (ShapeId errId : errorIds) {
                 StructureShape err = model.expectShape(errId, StructureShape.class);
                 writer.write("");
                 writer.write(
                     "if (string.Equals(errorType, $L, System.StringComparison.Ordinal))",
                     CSharpNaming.formatString(errId.getName()));
-                writer.openBlock("{", "}", () -> writeErrorReturn(sp, err));
+                writer.openBlock("{", "}", () -> writeFunctionalErrorReturn(sp, err));
               }
               for (ShapeId errId : errorIds) {
                 StructureShape err = model.expectShape(errId, StructureShape.class);
@@ -764,7 +766,7 @@ public final class ClientGenerator implements Runnable {
                 if (status == null) continue;
                 writer.write("");
                 writer.write("if ((int)response.StatusCode == $L)", status);
-                writer.openBlock("{", "}", () -> writeErrorReturn(sp, err));
+                writer.openBlock("{", "}", () -> writeFunctionalErrorReturn(sp, err));
               }
             }
           }
@@ -793,10 +795,26 @@ public final class ClientGenerator implements Runnable {
                                   + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);"));
                   writer.write("");
                 }
-                writeErrorReturn(sp, err);
+                if (kind == Kind.REST_JSON) {
+                  writeFunctionalErrorReturn(sp, err);
+                } else {
+                  writeErrorReturn(sp, err);
+                }
               });
         });
     writer.write("");
+  }
+
+  /**
+   * Functional error return for REST protocols: deserialize the error structure from the response
+   * (HTTP bindings + body) via the functional protocol's {@code DeserializeError}.
+   */
+  private void writeFunctionalErrorReturn(SymbolProvider sp, StructureShape err) {
+    writer.write(
+        "return System.Threading.Tasks.ValueTask.FromResult<System.Exception?>("
+            + "$L.DeserializeError($L, response));",
+        ProtocolSupport.functionalProtocolType(kind),
+        SchemaGenerator.functionalShapeSchemaAccessor(context, err));
   }
 
   private String errorConstruction(SymbolProvider sp, StructureShape err, String bodyVar) {

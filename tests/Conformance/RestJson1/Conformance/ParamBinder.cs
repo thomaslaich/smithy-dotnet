@@ -276,9 +276,12 @@ internal static class ParamBinder
         for (var i = 0; i < parameters.Length; i++)
         {
             var p = parameters[i];
-            if (obj.TryGetPropertyValue(p.Name!, out var node) && node is not null)
+            // Generated records use PascalCase ctor params; smithy test params and schema
+            // members are camelCase. Map back to the smithy member name for lookup.
+            var memberName = char.ToLowerInvariant(p.Name![0]) + p.Name![1..];
+            if (obj.TryGetPropertyValue(memberName, out var node) && node is not null)
             {
-                var memberSchema = schema?.GetMember(p.Name!);
+                var memberSchema = schema?.GetMember(memberName);
                 if (
                     p.ParameterType == typeof(byte[])
                     && node is JsonValue scalar

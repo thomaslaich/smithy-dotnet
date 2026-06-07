@@ -248,6 +248,87 @@ public static class FunctionalRestProtocol
         return DeserializeResponse(RestOperationBinding.From(operation), response, bodyFormat);
     }
 
+    /// <summary>
+    /// Deserializes an error structure (the same HTTP binding rules as an output) from a
+    /// response. Error members are partitioned per call; errors are off the hot path.
+    /// </summary>
+    public static TError DeserializeError<TError>(
+        FunctionalSchema<TError> errorSchema,
+        SmithyHttpResponse response,
+        IFunctionalRestBodyFormat bodyFormat
+    )
+    {
+        ArgumentNullException.ThrowIfNull(errorSchema);
+        ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(bodyFormat);
+
+        if (errorSchema.Resolved is not IFunctionalStructSchema<TError> schema)
+        {
+            throw new InvalidOperationException(
+                $"Error schema '{errorSchema.Id}' must be a structure schema."
+            );
+        }
+
+        var builder = schema.CreateBuilder();
+        var bodyMembers = new List<IFunctionalMemberSchema<TError>>();
+
+        foreach (var member in schema.TypedMembers)
+        {
+            if (member.Traits.ContainsKey(FunctionalRestTraits.HttpResponseCode))
+            {
+                member.SetObject(
+                    builder,
+                    ParseHttpValue(
+                        member.Target,
+                        ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture)
+                    )
+                );
+            }
+            else if (member.Traits.TryGetValue(FunctionalRestTraits.HttpHeader, out var headerTrait))
+            {
+                var name = headerTrait.Value.AsString();
+                if (
+                    TryGetFirstHeader(response.Headers, name, out var header)
+                    || TryGetFirstHeader(response.ContentHeaders, name, out header)
+                )
+                {
+                    member.SetObject(
+                        builder,
+                        ParseHttpBindingValue(member.Target, member.Traits, header)
+                    );
+                }
+            }
+            else if (
+                member.Traits.TryGetValue(
+                    FunctionalRestTraits.HttpPrefixHeaders,
+                    out var prefixTrait
+                )
+            )
+            {
+                member.SetObject(
+                    builder,
+                    ReadPrefixedHeaders(member, response.Headers, prefixTrait.Value.AsString())
+                );
+            }
+            else if (member.Traits.ContainsKey(FunctionalRestTraits.HttpPayload))
+            {
+                ReadPayload(builder, member, response.Content, bodyFormat);
+            }
+            else
+            {
+                bodyMembers.Add(member);
+            }
+        }
+
+        if (bodyMembers.Count > 0 && response.Content.Length > 0)
+        {
+            var projection = FunctionalSchemas.Project(schema, bodyMembers);
+            bodyFormat.ReadInto(projection, response.Content, builder);
+        }
+
+        return (TError)schema.BuildObject(builder);
+    }
+
     private static void WritePayload<TInput>(
         SmithyHttpRequest request,
         IFunctionalMemberSchema<TInput> member,
@@ -712,7 +793,7 @@ public static class FunctionalRestProtocol
         string value
     )
     {
-        if (schema is IFunctionalListSchema listSchema)
+        if (schema.Resolved is IFunctionalListSchema listSchema)
         {
             var element = UnwrapNullable(listSchema.Element);
             return ParseHttpBindingValues(
@@ -736,7 +817,7 @@ public static class FunctionalRestProtocol
         IReadOnlyList<string> values
     )
     {
-        if (schema is not IFunctionalListSchema listSchema)
+        if (schema.Resolved is not IFunctionalListSchema listSchema)
         {
             return values.Count > 0 ? ParseHttpValue(schema, traits, values[0]) : null;
         }
