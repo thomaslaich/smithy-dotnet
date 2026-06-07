@@ -1,7 +1,3 @@
-using System.Globalization;
-using System.Numerics;
-using System.Text.Json;
-using NSmithy.Core;
 using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Json;
