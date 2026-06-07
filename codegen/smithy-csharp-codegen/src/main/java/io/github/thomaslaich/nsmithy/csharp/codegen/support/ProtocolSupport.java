@@ -57,17 +57,17 @@ public final class ProtocolSupport {
     return Kind.REST_JSON;
   }
 
-  /** Functional protocol helper class for the given protocol. */
-  public static String functionalProtocolType(Kind kind) {
+  /** Protocol helper class for the given protocol. */
+  public static String protocolType(Kind kind) {
     return switch (kind) {
-      case REST_JSON -> "FunctionalRestJsonProtocol";
-      case REST_XML -> "FunctionalRestXmlProtocol";
-      case RPC_V2_CBOR -> "FunctionalRpcV2CborProtocol";
+      case REST_JSON -> "RestJsonProtocol";
+      case REST_XML -> "RestXmlProtocol";
+      case RPC_V2_CBOR -> "RpcV2CborProtocol";
     };
   }
 
-  /** True for REST protocols whose HTTP bindings are handled by FunctionalRestProtocol. */
-  public static boolean usesFunctionalRestProtocol(Kind kind) {
+  /** True for REST protocols whose HTTP bindings are handled by RestProtocol. */
+  public static boolean usesRestBindings(Kind kind) {
     return kind == Kind.REST_JSON || kind == Kind.REST_XML;
   }
 
@@ -96,5 +96,4 @@ public final class ProtocolSupport {
       case RPC_V2_CBOR -> RuntimeTypes.NSMITHY_CODECS_CBOR;
     };
   }
-
 }

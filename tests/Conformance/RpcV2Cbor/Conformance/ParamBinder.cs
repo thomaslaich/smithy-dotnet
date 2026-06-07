@@ -2,6 +2,7 @@ using System.Collections;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using NSmithy.Core;
+using NSmithy.Core.Serde;
 
 namespace RpcV2Cbor.Conformance;
 
@@ -242,10 +243,12 @@ internal static class ParamBinder
 
     private static ShapeKind? GetSchemaKind(Type targetType)
     {
-        var schemaProp = targetType.GetProperty(
-            "Schema",
+        // The functional schema lives on the generated companion `{Type}Schema` class.
+        var schemaType = targetType.Assembly.GetType(targetType.FullName + "Schema");
+        var schemaProp = schemaType?.GetProperty(
+            "FunctionalSchema",
             BindingFlags.Public | BindingFlags.Static
         );
-        return (schemaProp?.GetValue(null) as Schema)?.Kind;
+        return (schemaProp?.GetValue(null) as FunctionalSchema)?.Kind;
     }
 }

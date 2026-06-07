@@ -670,10 +670,7 @@ public static class FunctionalJsonCodec
             bool materializeTopLevelDefaults
         )
         {
-            var visitor = new JsonMemberWriterCompiler<T>(
-                this,
-                materializeTopLevelDefaults
-            );
+            var visitor = new JsonMemberWriterCompiler<T>(this, materializeTopLevelDefaults);
             projection.VisitMembers(visitor);
             return new StructureJsonValueWriter<T>(visitor.Writers);
         }
@@ -694,8 +691,8 @@ public static class FunctionalJsonCodec
         {
             if (IsOpenUnion(schema))
             {
-                return new DelegatingJsonValueWriter<T>((writer, value) =>
-                    WriteUnion(writer, schema, value!)
+                return new DelegatingJsonValueWriter<T>(
+                    (writer, value) => WriteUnion(writer, schema, value!)
                 );
             }
 
@@ -737,8 +734,7 @@ public static class FunctionalJsonCodec
     private sealed class JsonMemberWriterCompiler<TContainer>(
         JsonWriterCompiler compiler,
         bool materializeDefaults
-    )
-        : IFunctionalMemberVisitor<TContainer>
+    ) : IFunctionalMemberVisitor<TContainer>
     {
         private readonly List<IJsonMemberWriter<TContainer>> writers = [];
 
@@ -1253,11 +1249,7 @@ public static class FunctionalJsonCodec
             if (memberValue is null && !member.IsRequired)
             {
                 if (
-                    !TryCreateDefaultValue(
-                        member.TargetSchema,
-                        member.Traits,
-                        out var defaultValue
-                    )
+                    !TryCreateDefaultValue(member.TargetSchema, member.Traits, out var defaultValue)
                 )
                 {
                     return;
@@ -1418,7 +1410,10 @@ public static class FunctionalJsonCodec
             ),
             ShapeKind.IntEnum => ((IFunctionalIntEnumSchema)schema).CreateObject(value.GetInt32()),
             ShapeKind.Blob => value.GetBytesFromBase64(),
-            ShapeKind.Timestamp => TimestampFormat.Read(value, TimestampFormat.Resolve(null, schema)),
+            ShapeKind.Timestamp => TimestampFormat.Read(
+                value,
+                TimestampFormat.Resolve(null, schema)
+            ),
             ShapeKind.Document => Document.FromJsonElement(value),
             ShapeKind.Structure => ReadStructure((IFunctionalStructSchema)schema, value),
             ShapeKind.Union => ReadUnion((IFunctionalUnionSchema)schema, value),

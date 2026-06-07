@@ -1,15 +1,15 @@
-using NSmithy.Codecs.Xml;
-using NSmithy.Core.Serde;
-using NSmithy.Http;
-using NSmithy.Protocols.Rest;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
+using NSmithy.Codecs.Xml;
+using NSmithy.Core.Serde;
+using NSmithy.Http;
+using NSmithy.Protocols.Rest;
 
 namespace NSmithy.Protocols.RestXml;
 
-public static class FunctionalRestXmlProtocol
+public static class RestXmlProtocol
 {
     private static readonly IFunctionalRestBodyFormat BodyFormat =
         new FunctionalRestXmlBodyFormat();
@@ -18,7 +18,7 @@ public static class FunctionalRestXmlProtocol
         FunctionalOperationSchema<TInput, TOutput> operation,
         TInput input
     ) =>
-        FunctionalRestProtocol.SerializeRequest(
+        RestProtocol.SerializeRequest(
             RestOperationBinding.From(operation),
             input,
             BodyFormat
@@ -28,7 +28,7 @@ public static class FunctionalRestXmlProtocol
         FunctionalOperationSchema<TInput, TOutput> operation,
         SmithyHttpRequest request
     ) =>
-        FunctionalRestProtocol.DeserializeRequest(
+        RestProtocol.DeserializeRequest(
             RestOperationBinding.From(operation),
             request,
             BodyFormat
@@ -38,7 +38,7 @@ public static class FunctionalRestXmlProtocol
         FunctionalOperationSchema<TInput, TOutput> operation,
         TOutput output
     ) =>
-        FunctionalRestProtocol.SerializeResponse(
+        RestProtocol.SerializeResponse(
             RestOperationBinding.From(operation),
             output,
             BodyFormat
@@ -48,7 +48,7 @@ public static class FunctionalRestXmlProtocol
         FunctionalOperationSchema<TInput, TOutput> operation,
         SmithyHttpResponse response
     ) =>
-        FunctionalRestProtocol.DeserializeResponse(
+        RestProtocol.DeserializeResponse(
             RestOperationBinding.From(operation),
             response,
             BodyFormat
@@ -68,14 +68,23 @@ public static class FunctionalRestXmlProtocol
             ?? throw new InvalidOperationException(
                 "Response body was missing an XML root element."
             );
-        var errorRoot =
-            string.Equals(root.Name.LocalName, "ErrorResponse", StringComparison.Ordinal)
-                ? root.Elements().FirstOrDefault(element => element.Name.LocalName == "Error")
-                    ?? root
-                : root;
-        return errorRoot.Elements().FirstOrDefault(element => element.Name.LocalName == "Code")
+        var errorRoot = string.Equals(
+            root.Name.LocalName,
+            "ErrorResponse",
+            StringComparison.Ordinal
+        )
+            ? root.Elements().FirstOrDefault(element => element.Name.LocalName == "Error") ?? root
+            : root;
+        return errorRoot
+            .Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "Code")
             ?.Value;
     }
+
+    public static TError DeserializeError<TError>(
+        FunctionalSchema<TError> errorSchema,
+        SmithyHttpResponse response
+    ) => RestProtocol.DeserializeError(errorSchema, response, BodyFormat);
 
     public static void ApplyRequestCompression(SmithyHttpRequest request, string encoding)
     {
@@ -146,8 +155,7 @@ public static class FunctionalRestXmlProtocol
             FunctionalStructProjection<T> projection,
             T value,
             bool materializeTopLevelDefaults = true
-        ) =>
-            FunctionalXmlCodec.FromProjection(projection).Serialize(value);
+        ) => FunctionalXmlCodec.FromProjection(projection).Serialize(value);
 
         public void ReadInto<T>(
             FunctionalStructProjection<T> projection,

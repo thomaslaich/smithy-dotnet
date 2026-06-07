@@ -36,58 +36,9 @@ public final class SchemaGenerator {
 
   private SchemaGenerator() {}
 
-  public static void addImports(CSharpWriter writer) {
-    writer.addImport(RuntimeTypes.NSMITHY_CORE);
-  }
-
   public static void addFunctionalImports(CSharpWriter writer) {
     writer.addImport(RuntimeTypes.NSMITHY_CORE);
     writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
-  }
-
-  public static String shapeSchemaAccessor(GenerationContext context, Shape shape) {
-    if ("smithy.api".equals(shape.getId().getNamespace())) {
-      return switch (shape.getId().getName()) {
-        case "Boolean" -> "PreludeSchemas.Boolean";
-        case "Byte" -> "PreludeSchemas.Byte";
-        case "Short" -> "PreludeSchemas.Short";
-        case "Integer" -> "PreludeSchemas.Integer";
-        case "Long" -> "PreludeSchemas.Long";
-        case "Float" -> "PreludeSchemas.Float";
-        case "Double" -> "PreludeSchemas.Double";
-        case "BigInteger" -> "PreludeSchemas.BigInteger";
-        case "BigDecimal" -> "PreludeSchemas.BigDecimal";
-        case "String" -> "PreludeSchemas.String";
-        case "Blob" -> "PreludeSchemas.Blob";
-        case "Timestamp" -> "PreludeSchemas.Timestamp";
-        case "Document" -> "PreludeSchemas.Document";
-        case "Unit" -> "PreludeSchemas.Unit";
-        default ->
-            throw new IllegalArgumentException("Unsupported prelude shape: " + shape.getId());
-      };
-    }
-
-    // IntEnum generates a plain C# enum with no Schema property; its wire type is Integer.
-    if (shape.getType() == ShapeType.INT_ENUM) {
-      return "PreludeSchemas.Integer";
-    }
-
-    // Timestamp shapes outside smithy.api (e.g. with @timestampFormat applied) still map
-    // to System.DateTimeOffset in C# which has no Schema property.
-    if (shape.getType() == ShapeType.TIMESTAMP) {
-      return "PreludeSchemas.Timestamp";
-    }
-
-    // Primitive shapes outside smithy.api (e.g. custom boolean/integer aliases) still map
-    // to the corresponding C# primitives which have no Schema property.
-    String preludeSchema = primitiveTypeToPreludeSchema(shape.getType());
-    if (preludeSchema != null) {
-      return preludeSchema;
-    }
-
-    SymbolProvider symbolProvider = context.symbolProvider();
-    Symbol symbol = symbolProvider.toSymbol(shape);
-    return CSharpSymbolProvider.qualified(symbol) + ".Schema!";
   }
 
   public static String functionalShapeSchemaAccessor(GenerationContext context, Shape shape) {
@@ -202,29 +153,6 @@ public final class SchemaGenerator {
         + "]";
   }
 
-  public static void writeStructureSchema(
-      CSharpWriter writer, GenerationContext context, Shape shape, List<MemberShape> members) {
-    addImports(writer);
-    for (MemberShape member : members) {
-      writer.write(
-          "private static readonly Schema $L = Schema.CreateMember($L, () => $L, $L);",
-          memberSchemaFieldName(member),
-          shapeIdExpr(member.getId()),
-          memberTargetExpr(context, member),
-          memberTraitsExpr(context, member));
-    }
-    writer.write("");
-    writer.write(
-        "public static Schema Schema { get; } = Schema.Create$L($L, [$L], $L);",
-        shapeKindName(shape.getType()),
-        shapeIdExpr(shape.getId()),
-        members.stream()
-            .map(SchemaGenerator::memberSchemaFieldName)
-            .collect(Collectors.joining(", ")),
-        traitsExpr(shape.getAllTraits().values()));
-    writer.write("");
-  }
-
   public static void writeFunctionalStructureSchema(
       CSharpWriter writer, GenerationContext context, Shape shape, List<MemberShape> members) {
     addFunctionalImports(writer);
@@ -285,24 +213,6 @@ public final class SchemaGenerator {
         });
   }
 
-  public static void writeListSchema(
-      CSharpWriter writer, GenerationContext context, ListShape shape) {
-    addImports(writer);
-    Model model = context.model();
-    Shape memberTarget = model.expectShape(shape.getMember().getTarget());
-    writer.write(
-        "private static readonly Schema MemberSchema = Schema.CreateMember($L, () => $L, $L);",
-        shapeIdExpr(shape.getMember().getId()),
-        shapeSchemaAccessor(context, memberTarget),
-        memberTraitsExpr(context, shape.getMember()));
-    writer.write("");
-    writer.write(
-        "public static Schema Schema { get; } = Schema.CreateList($L, MemberSchema, $L);",
-        shapeIdExpr(shape.getId()),
-        traitsExpr(shape.getAllTraits().values()));
-    writer.write("");
-  }
-
   public static void writeFunctionalListSchema(
       CSharpWriter writer, GenerationContext context, ListShape shape) {
     addFunctionalImports(writer);
@@ -344,30 +254,6 @@ public final class SchemaGenerator {
         });
   }
 
-  public static void writeMapSchema(
-      CSharpWriter writer, GenerationContext context, MapShape shape) {
-    addImports(writer);
-    Model model = context.model();
-    Shape keyTarget = model.expectShape(shape.getKey().getTarget());
-    Shape valueTarget = model.expectShape(shape.getValue().getTarget());
-    writer.write(
-        "private static readonly Schema KeySchema = Schema.CreateMember($L, () => $L, $L);",
-        shapeIdExpr(shape.getKey().getId()),
-        shapeSchemaAccessor(context, keyTarget),
-        memberTraitsExpr(context, shape.getKey()));
-    writer.write(
-        "private static readonly Schema ValueSchema = Schema.CreateMember($L, () => $L, $L);",
-        shapeIdExpr(shape.getValue().getId()),
-        shapeSchemaAccessor(context, valueTarget),
-        memberTraitsExpr(context, shape.getValue()));
-    writer.write("");
-    writer.write(
-        "public static Schema Schema { get; } = Schema.CreateMap($L, KeySchema, ValueSchema, $L);",
-        shapeIdExpr(shape.getId()),
-        traitsExpr(shape.getAllTraits().values()));
-    writer.write("");
-  }
-
   public static void writeFunctionalMapSchema(
       CSharpWriter writer, GenerationContext context, MapShape shape) {
     addFunctionalImports(writer);
@@ -405,16 +291,6 @@ public final class SchemaGenerator {
           writer.dedent();
           writer.write("");
         });
-  }
-
-  public static void writeSimpleSchema(CSharpWriter writer, Shape shape) {
-    addImports(writer);
-    writer.write(
-        "public static Schema Schema { get; } = Schema.CreateSimple($L, ShapeKind.$L, $L);",
-        shapeIdExpr(shape.getId()),
-        shapeKindName(shape.getType()),
-        traitsExpr(shape.getAllTraits().values()));
-    writer.write("");
   }
 
   public static void writeFunctionalSimpleSchema(CSharpWriter writer, Shape shape) {
@@ -484,25 +360,6 @@ public final class SchemaGenerator {
           writer.dedent();
           writer.write("");
         });
-  }
-
-  public static String memberSchemaExpr(GenerationContext context, MemberShape member) {
-    return "Schema.CreateMember("
-        + shapeIdExpr(member.getId())
-        + ", () => "
-        + memberTargetExpr(context, member)
-        + ", "
-        + memberTraitsExpr(context, member)
-        + ")";
-  }
-
-  public static String memberSchemaFieldName(MemberShape member) {
-    return CSharpNaming.propertyName(member.getMemberName()) + "Schema";
-  }
-
-  private static String memberTargetExpr(GenerationContext context, MemberShape member) {
-    Shape target = context.model().expectShape(member.getTarget());
-    return shapeSchemaAccessor(context, target);
   }
 
   private static String functionalMemberTargetExpr(GenerationContext context, MemberShape member) {
@@ -685,28 +542,6 @@ public final class SchemaGenerator {
         + "}";
   }
 
-  /**
-   * Returns the PreludeSchemas accessor for built-in primitive ShapeTypes that map to C# primitives
-   * (which have no .Schema property), or null if the type is a user-defined shape.
-   */
-  private static String primitiveTypeToPreludeSchema(ShapeType t) {
-    return switch (t) {
-      case BOOLEAN -> "PreludeSchemas.Boolean";
-      case BYTE -> "PreludeSchemas.Byte";
-      case SHORT -> "PreludeSchemas.Short";
-      case INTEGER -> "PreludeSchemas.Integer";
-      case LONG -> "PreludeSchemas.Long";
-      case FLOAT -> "PreludeSchemas.Float";
-      case DOUBLE -> "PreludeSchemas.Double";
-      case BIG_INTEGER -> "PreludeSchemas.BigInteger";
-      case BIG_DECIMAL -> "PreludeSchemas.BigDecimal";
-      case STRING -> "PreludeSchemas.String";
-      case BLOB -> "PreludeSchemas.Blob";
-      case TIMESTAMP -> "PreludeSchemas.Timestamp";
-      case DOCUMENT -> "PreludeSchemas.Document";
-      default -> null;
-    };
-  }
 
   private static String primitiveTypeToFunctionalPreludeSchema(ShapeType t) {
     return switch (t) {
@@ -727,13 +562,4 @@ public final class SchemaGenerator {
     };
   }
 
-  private static String shapeKindName(ShapeType t) {
-    return switch (t) {
-      case INT_ENUM -> "IntEnum";
-      default -> {
-        String name = t.name().toLowerCase();
-        yield Character.toUpperCase(name.charAt(0)) + name.substring(1);
-      }
-    };
-  }
 }

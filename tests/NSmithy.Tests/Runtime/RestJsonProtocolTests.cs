@@ -8,7 +8,7 @@ using NSmithy.Protocols.RestJson;
 
 namespace NSmithy.Tests.Runtime;
 
-public sealed class FunctionalRestJsonProtocolTests
+public sealed class RestJsonProtocolTests
 {
     public sealed record UpdateUserInput(string UserId, string? RequestToken, string DisplayName);
 
@@ -26,7 +26,7 @@ public sealed class FunctionalRestJsonProtocolTests
     public sealed class UpdateUserOutputBuilder { }
 
     [Fact]
-    public void FunctionalRestJsonProtocolSerializesLabelsHeadersAndBodySeparately()
+    public void RestJsonProtocolSerializesLabelsHeadersAndBodySeparately()
     {
         var inputSchema = FunctionalSchemas
             .Structure<UpdateUserInput, UpdateUserInputBuilder>(
@@ -73,7 +73,7 @@ public sealed class FunctionalRestJsonProtocolTests
         );
         var input = new UpdateUserInput("ada lovelace", "token-123", "Ada");
 
-        var request = FunctionalRestJsonProtocol.SerializeRequest(operation, input);
+        var request = RestJsonProtocol.SerializeRequest(operation, input);
 
         Assert.Equal(HttpMethod.Put, request.Method);
         Assert.Equal("/users/ada%20lovelace", request.RequestUri);
@@ -83,7 +83,7 @@ public sealed class FunctionalRestJsonProtocolTests
     }
 
     [Fact]
-    public void FunctionalRestJsonProtocolDeserializesLabelsHeadersAndBodySeparately()
+    public void RestJsonProtocolDeserializesLabelsHeadersAndBodySeparately()
     {
         var inputSchema = FunctionalSchemas
             .Structure<UpdateUserInput, UpdateUserInputBuilder>(
@@ -135,7 +135,7 @@ public sealed class FunctionalRestJsonProtocolTests
         };
         request.Headers["X-Request-Token"] = ["token-123"];
 
-        var input = FunctionalRestJsonProtocol.DeserializeRequest(operation, request);
+        var input = RestJsonProtocol.DeserializeRequest(operation, request);
 
         Assert.Equal(new UpdateUserInput("ada lovelace", "token-123", "Ada"), input);
     }
@@ -166,7 +166,7 @@ public sealed class FunctionalRestJsonProtocolTests
     public sealed class GetUserOutputBuilder { }
 
     [Fact]
-    public void FunctionalRestJsonProtocolSerializesAllRequestHttpBindings()
+    public void RestJsonProtocolSerializesAllRequestHttpBindings()
     {
         var tagListSchema = FunctionalSchemas.List(
             new ShapeId("example", "TagList"),
@@ -240,7 +240,7 @@ public sealed class FunctionalRestJsonProtocolTests
             new Dictionary<string, string>(StringComparer.Ordinal) { ["Trace"] = "abc" }
         );
 
-        var request = FunctionalRestJsonProtocol.SerializeRequest(operation, input);
+        var request = RestJsonProtocol.SerializeRequest(operation, input);
 
         Assert.Equal(HttpMethod.Get, request.Method);
         Assert.Equal(
@@ -253,7 +253,7 @@ public sealed class FunctionalRestJsonProtocolTests
     }
 
     [Fact]
-    public void FunctionalRestJsonProtocolDeserializesAllRequestHttpBindings()
+    public void RestJsonProtocolDeserializesAllRequestHttpBindings()
     {
         var tagListSchema = FunctionalSchemas.List(
             new ShapeId("example", "TagList"),
@@ -325,7 +325,7 @@ public sealed class FunctionalRestJsonProtocolTests
         );
         request.Headers["X-Extra-Trace"] = ["abc"];
 
-        var input = FunctionalRestJsonProtocol.DeserializeRequest(operation, request);
+        var input = RestJsonProtocol.DeserializeRequest(operation, request);
 
         Assert.Equal("ada lovelace", input.UserId);
         Assert.True(input.IncludeDetails);
@@ -389,7 +389,7 @@ public sealed class FunctionalRestJsonProtocolTests
     public sealed class EnumHeaderListOutputBuilder { }
 
     [Fact]
-    public void FunctionalRestJsonProtocolRoundTripsStringEnumHeaderListWithQuotedComma()
+    public void RestJsonProtocolRoundTripsStringEnumHeaderListWithQuotedComma()
     {
         var statusSchema = FunctionalSchemas.StringEnum<HeaderStatus>(
             new ShapeId("example", "HeaderStatus")
@@ -429,15 +429,15 @@ public sealed class FunctionalRestJsonProtocolTests
         );
         var input = new EnumHeaderListInput([HeaderStatus.ActiveBlue, HeaderStatus.Pending]);
 
-        var request = FunctionalRestJsonProtocol.SerializeRequest(operation, input);
-        var decoded = FunctionalRestJsonProtocol.DeserializeRequest(operation, request);
+        var request = RestJsonProtocol.SerializeRequest(operation, input);
+        var decoded = RestJsonProtocol.DeserializeRequest(operation, request);
 
         Assert.Equal("\"ACTIVE,BLUE\", PENDING", request.Headers["X-Status"].Single());
         Assert.Equal(input.Statuses, decoded.Statuses);
     }
 
     [Fact]
-    public void FunctionalRestJsonProtocolSerializesRequestHttpValueParity()
+    public void RestJsonProtocolSerializesRequestHttpValueParity()
     {
         var tagListSchema = FunctionalSchemas.List(
             new ShapeId("example", "ParityTagList"),
@@ -542,7 +542,7 @@ public sealed class FunctionalRestJsonProtocolTests
             created
         );
 
-        var request = FunctionalRestJsonProtocol.SerializeRequest(operation, input);
+        var request = RestJsonProtocol.SerializeRequest(operation, input);
 
         Assert.Equal(
             "/objects/folder/photo%201.jpg?media=aGVsbG8gd29ybGQ%3D&ratio=NaN&score=Infinity&created=1577836800.25",
@@ -553,7 +553,7 @@ public sealed class FunctionalRestJsonProtocolTests
     }
 
     [Fact]
-    public void FunctionalRestJsonProtocolDeserializesRequestHttpValueParity()
+    public void RestJsonProtocolDeserializesRequestHttpValueParity()
     {
         var tagListSchema = FunctionalSchemas.List(
             new ShapeId("example", "ParityTagList"),
@@ -653,7 +653,7 @@ public sealed class FunctionalRestJsonProtocolTests
         request.Headers["Last-Modified"] = ["Wed, 01 Jan 2020 00:00:00 GMT"];
         request.Headers["X-Tags"] = ["\"a,b\", plain"];
 
-        var input = FunctionalRestJsonProtocol.DeserializeRequest(operation, request);
+        var input = RestJsonProtocol.DeserializeRequest(operation, request);
 
         Assert.Equal("folder/photo 1.jpg", input.Key);
         Assert.Equal(new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), input.Modified);
@@ -683,7 +683,7 @@ public sealed class FunctionalRestJsonProtocolTests
     public sealed class UploadUserAvatarOutputBuilder { }
 
     [Fact]
-    public void FunctionalRestJsonProtocolSerializesHttpPayload()
+    public void RestJsonProtocolSerializesHttpPayload()
     {
         var inputSchema = FunctionalSchemas
             .Structure<UploadUserAvatarInput, UploadUserAvatarInputBuilder>(
@@ -735,7 +735,7 @@ public sealed class FunctionalRestJsonProtocolTests
         var payload = "avatar bytes"u8.ToArray();
         var input = new UploadUserAvatarInput("ada", "abc123", payload);
 
-        var request = FunctionalRestJsonProtocol.SerializeRequest(operation, input);
+        var request = RestJsonProtocol.SerializeRequest(operation, input);
 
         Assert.Equal(HttpMethod.Put, request.Method);
         Assert.Equal("/users/ada/avatar", request.RequestUri);
@@ -763,7 +763,7 @@ public sealed class FunctionalRestJsonProtocolTests
     }
 
     [Fact]
-    public void FunctionalRestJsonProtocolSerializesResponseBindingsAndBody()
+    public void RestJsonProtocolSerializesResponseBindingsAndBody()
     {
         var inputSchema = FunctionalSchemas
             .Structure<GetUserOutput, GetUserOutputBuilder>(new ShapeId("example", "GetUserInput"))
@@ -825,7 +825,7 @@ public sealed class FunctionalRestJsonProtocolTests
             "Ada"
         );
 
-        var response = FunctionalRestJsonProtocol.SerializeResponse(operation, output);
+        var response = RestJsonProtocol.SerializeResponse(operation, output);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Equal("etag-1", response.Headers["ETag"].Single());
@@ -835,7 +835,7 @@ public sealed class FunctionalRestJsonProtocolTests
     }
 
     [Fact]
-    public void FunctionalRestJsonProtocolDeserializesResponseBindingsAndBody()
+    public void RestJsonProtocolDeserializesResponseBindingsAndBody()
     {
         var inputSchema = FunctionalSchemas
             .Structure<GetUserOutput, GetUserOutputBuilder>(new ShapeId("example", "GetUserInput"))
@@ -905,7 +905,7 @@ public sealed class FunctionalRestJsonProtocolTests
             }
         );
 
-        var output = FunctionalRestJsonProtocol.DeserializeResponse(operation, response);
+        var output = RestJsonProtocol.DeserializeResponse(operation, response);
 
         Assert.Equal(new GetUserProfileOutput(201, "etag-1", output.ExtraHeaders, "Ada"), output);
         Assert.Equal("abc", output.ExtraHeaders["Trace"]);
@@ -966,7 +966,7 @@ public sealed class FunctionalRestJsonProtocolTests
         );
 
         // Client serializes request with non-null nextToken
-        var request = FunctionalRestJsonProtocol.SerializeRequest(
+        var request = RestJsonProtocol.SerializeRequest(
             operation,
             new ListInput(NextToken: "page2-token", PageSize: 10)
         );
@@ -975,7 +975,7 @@ public sealed class FunctionalRestJsonProtocolTests
         Assert.Contains("pageSize=10", request.RequestUri);
 
         // Server deserializes the same request
-        var deserializedInput = FunctionalRestJsonProtocol.DeserializeRequest(operation, request);
+        var deserializedInput = RestJsonProtocol.DeserializeRequest(operation, request);
 
         Assert.Equal("page2-token", deserializedInput.NextToken);
         Assert.Equal(10, deserializedInput.PageSize);
@@ -1005,14 +1005,14 @@ public sealed class FunctionalRestJsonProtocolTests
         );
 
         // First page: no nextToken
-        var request = FunctionalRestJsonProtocol.SerializeRequest(
+        var request = RestJsonProtocol.SerializeRequest(
             operation,
             new ListInput(NextToken: null)
         );
 
         Assert.DoesNotContain("nextToken", request.RequestUri);
 
-        var input = FunctionalRestJsonProtocol.DeserializeRequest(operation, request);
+        var input = RestJsonProtocol.DeserializeRequest(operation, request);
         Assert.Null(input.NextToken);
     }
 
@@ -1053,7 +1053,7 @@ public sealed class FunctionalRestJsonProtocolTests
         // a relative path + query string, query params in the order the client sent them.
         var request = new SmithyHttpRequest(HttpMethod.Get, "/cities?pageSize=3&nextToken=LAX");
 
-        var input = FunctionalRestJsonProtocol.DeserializeRequest(operation, request);
+        var input = RestJsonProtocol.DeserializeRequest(operation, request);
 
         Assert.Equal("LAX", input.NextToken);
         Assert.Equal(3, input.PageSize);

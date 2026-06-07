@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Text.Json.Nodes;
 using NSmithy.Client;
 using NSmithy.Core;
+using NSmithy.Core.Serde;
 
 namespace RpcV2Cbor.Conformance;
 
@@ -223,8 +224,13 @@ internal static class HttpResponseRunner
 
     private static ShapeKind? GetSchemaKind(Type type)
     {
-        var schemaProp = type.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static);
-        return (schemaProp?.GetValue(null) as Schema)?.Kind;
+        // The functional schema lives on the generated companion `{Type}Schema` class.
+        var schemaType = type.Assembly.GetType(type.FullName + "Schema");
+        var schemaProp = schemaType?.GetProperty(
+            "FunctionalSchema",
+            BindingFlags.Public | BindingFlags.Static
+        );
+        return (schemaProp?.GetValue(null) as FunctionalSchema)?.Kind;
     }
 }
 
@@ -277,8 +283,13 @@ internal static class ResponseAssertions
 {
     private static ShapeKind? GetSchemaKind(Type type)
     {
-        var schemaProp = type.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static);
-        return (schemaProp?.GetValue(null) as Schema)?.Kind;
+        // The functional schema lives on the generated companion `{Type}Schema` class.
+        var schemaType = type.Assembly.GetType(type.FullName + "Schema");
+        var schemaProp = schemaType?.GetProperty(
+            "FunctionalSchema",
+            BindingFlags.Public | BindingFlags.Static
+        );
+        return (schemaProp?.GetValue(null) as FunctionalSchema)?.Kind;
     }
 
     public static void AssertEquivalent(JsonNode? expected, object actual, string ownerLabel)

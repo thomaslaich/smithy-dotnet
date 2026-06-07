@@ -29,7 +29,7 @@ public interface IFunctionalRestBodyFormat
     void ReadInto<T>(FunctionalStructProjection<T> projection, byte[] content, object builder);
 }
 
-public static class FunctionalRestProtocol
+public static class RestProtocol
 {
     private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
 
@@ -291,7 +291,9 @@ public static class FunctionalRestProtocol
                     )
                 );
             }
-            else if (member.Traits.TryGetValue(FunctionalRestTraits.HttpHeader, out var headerTrait))
+            else if (
+                member.Traits.TryGetValue(FunctionalRestTraits.HttpHeader, out var headerTrait)
+            )
             {
                 var name = headerTrait.Value.AsString();
                 if (
@@ -478,7 +480,9 @@ public static class FunctionalRestProtocol
             var value = member.GetValue(input);
             if (value is null)
             {
-                if (TryCreateEmptyStructureValue(member.TargetSchema, out var schema, out var empty))
+                if (
+                    TryCreateEmptyStructureValue(member.TargetSchema, out var schema, out var empty)
+                )
                 {
                     WriteBodyObject(request, schema, empty, bodyFormat);
                 }

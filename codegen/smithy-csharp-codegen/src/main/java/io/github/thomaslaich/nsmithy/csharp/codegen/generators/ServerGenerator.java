@@ -18,10 +18,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
@@ -31,10 +28,6 @@ import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
-import software.amazon.smithy.model.shapes.StructureShape;
-import software.amazon.smithy.model.traits.HttpHeaderTrait;
-import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait;
-import software.amazon.smithy.model.traits.HttpQueryTrait;
 import software.amazon.smithy.model.traits.HttpTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -54,7 +47,9 @@ public final class ServerGenerator implements Runnable {
     this.rawRestJsonStringPayloads =
         s.findTrait(io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds.REST_JSON_1).isPresent();
     this.kind =
-        ProtocolSupport.emitsHttpClient(s) ? ProtocolSupport.kindOf(s) : ProtocolSupport.Kind.REST_JSON;
+        ProtocolSupport.emitsHttpClient(s)
+            ? ProtocolSupport.kindOf(s)
+            : ProtocolSupport.Kind.REST_JSON;
   }
 
   @Override
@@ -331,7 +326,7 @@ public final class ServerGenerator implements Runnable {
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String methodName = CSharpNaming.typeName(op.getId().getName()) + "Async";
-    String protocol = ProtocolSupport.functionalProtocolType(kind);
+    String protocol = ProtocolSupport.protocolType(kind);
     String opSchema = SchemaGenerator.functionalOperationSchemaAccessor(context, op);
 
     // Call the handler interface method directly — the operation schema carries the
