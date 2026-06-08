@@ -16,7 +16,7 @@ are bundled with the Smithy CLI.
 ## NuGet Package
 
 ```xml
-<PackageReference Include="NSmithy.Codecs.Cbor" Version="0.1.0-preview.15" />
+<PackageReference Include="NSmithy.Codecs.Cbor" Version="0.1.0" />
 ```
 
 ## Modeling

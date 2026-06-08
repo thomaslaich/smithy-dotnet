@@ -14,9 +14,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.15" />
+    <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0" />
     <!--#if (WithDocs)-->
-    <PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="0.1.0-preview.15" />
+    <PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="0.1.0" />
     <!--#endif-->
     <!--#if (IsGrpc)-->
     <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
