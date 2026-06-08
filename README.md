@@ -23,7 +23,7 @@
    </a>
 </p>
 
-> **Work in Progress:** NSmithy is a proof of concept. Protocol implementations are not yet on par with the [Smithy reference implementations](https://github.com/smithy-lang/smithy).
+> **Preview:** NSmithy is in preview — expect some API changes before 1.0. Protocol implementations are not yet on par with the [Smithy reference implementations](https://github.com/smithy-lang/smithy).
 
 # NSmithy
 

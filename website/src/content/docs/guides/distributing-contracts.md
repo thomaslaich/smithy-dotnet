@@ -128,7 +128,7 @@ dependencies automatically — no `ProjectReference` needed:
 </PropertyGroup>
 
 <ItemGroup>
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-preview.15" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0" />
   <PackageReference Include="MyService.Contracts" Version="1.0.0" />
 </ItemGroup>
 ```
