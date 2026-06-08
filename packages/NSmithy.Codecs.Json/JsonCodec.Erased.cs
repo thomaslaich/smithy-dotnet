@@ -116,17 +116,6 @@ public static partial class JsonCodec
         writer.WriteEndObject();
     }
 
-    private static void WriteProjection<T>(
-        Utf8JsonWriter writer,
-        StructProjection<T> projection,
-        T value
-    )
-    {
-        writer.WriteStartObject();
-        projection.VisitMembers(new JsonWriteMemberVisitor<T>(writer, value));
-        writer.WriteEndObject();
-    }
-
     private sealed class JsonWriteMemberVisitor<TContainer>(
         Utf8JsonWriter writer,
         TContainer container
