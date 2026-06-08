@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using NSmithy.Core;
+using NSmithy.Core.Serde;
 
 namespace RestJson1.Conformance;
 
@@ -212,7 +213,12 @@ internal static class ConformanceObjectFactory
 
     private static ShapeKind? GetSchemaKind(Type type)
     {
-        var schemaProp = type.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static);
+        // The functional schema lives on the generated companion `{Type}Schema` class.
+        var schemaType = type.Assembly.GetType(type.FullName + "Schema");
+        var schemaProp = schemaType?.GetProperty(
+            "Schema",
+            BindingFlags.Public | BindingFlags.Static
+        );
         return (schemaProp?.GetValue(null) as Schema)?.Kind;
     }
 }

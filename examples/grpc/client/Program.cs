@@ -21,17 +21,17 @@ static Book NewBook(
 )
 {
     return new Book(
-        id: id,
-        title: title,
-        author: author,
-        pageCount: pageCount,
-        checksum: checksum,
-        format: format,
-        category: category,
-        tags: new TagList(tags),
-        metadata: new StringMap(metadata),
-        nullableAttributes: new NullableAttributeMap(nullableAttributes),
-        publishedAt: publishedAt
+        Id: id,
+        Title: title,
+        Author: author,
+        PageCount: pageCount,
+        Checksum: checksum,
+        Format: format,
+        Category: category,
+        Tags: new TagList(tags),
+        Metadata: new StringMap(metadata),
+        NullableAttributes: new NullableAttributeMap(nullableAttributes),
+        PublishedAt: publishedAt
     );
 }
 
@@ -74,7 +74,7 @@ Console.WriteLine();
 
 Console.WriteLine("=== ListBooks (@protoInlinedOneOf filter — by category) ===");
 var listResult = await client.ListBooksAsync(
-    new ListBooksInput(filter: BookFilter.FromByCategory(BookCategory.SCIENCE), pageSize: 10)
+    new ListBooksInput(Filter: BookFilter.FromByCategory(BookCategory.SCIENCE), PageSize: 10)
 );
 foreach (var book in listResult.Books.Values)
     Console.WriteLine($"  {book.Title} by {book.Author}");
@@ -82,7 +82,7 @@ Console.WriteLine();
 
 Console.WriteLine("=== SearchBooks ===");
 var searchResult = await client.SearchBooksAsync(
-    new SearchBooksInput(query: "data", maxResults: 5)
+    new SearchBooksInput(Query: "data", MaxResults: 5)
 );
 foreach (var book in searchResult.Books.Values)
     Console.WriteLine($"  Match: {book.Title} by {book.Author}");

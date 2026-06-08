@@ -17,7 +17,6 @@
     <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="all" />
     <PackageReference Include="NSmithy.Core" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.MSBuild" Version="0.1.0-SNAPSHOT" PrivateAssets="all" />
-    <PackageReference Include="NSmithy.Server" Version="0.1.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-SNAPSHOT" />
   </ItemGroup>
 </Project>

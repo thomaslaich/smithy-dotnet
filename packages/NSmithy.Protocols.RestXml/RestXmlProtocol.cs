@@ -1,120 +1,161 @@
-using System.Diagnostics.CodeAnalysis;
+using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
+using NSmithy.Codecs.Xml;
 using NSmithy.Core.Serde;
 using NSmithy.Http;
-using NSmithy.Protocols.RestJson;
+using NSmithy.Protocols.Rest;
 
 namespace NSmithy.Protocols.RestXml;
 
 public static class RestXmlProtocol
 {
-    public static void AddHeader(
-        IDictionary<string, IReadOnlyList<string>> headers,
-        string name,
-        object? value
-    )
+    private static readonly IRestBodyFormat BodyFormat = new RestXmlBodyFormat();
+
+    public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation,
+        TInput input
+    ) => RestProtocol.SerializeRequest(RestOperationBinding.From(operation), input, BodyFormat);
+
+    public static TInput DeserializeRequest<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation,
+        SmithyHttpRequest request
+    ) => RestProtocol.DeserializeRequest(RestOperationBinding.From(operation), request, BodyFormat);
+
+    public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation,
+        TOutput output
+    ) => RestProtocol.SerializeResponse(RestOperationBinding.From(operation), output, BodyFormat);
+
+    public static TOutput DeserializeResponse<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation,
+        SmithyHttpResponse response
+    ) =>
+        RestProtocol.DeserializeResponse(
+            RestOperationBinding.From(operation),
+            response,
+            BodyFormat
+        );
+
+    public static string? DeserializeErrorType(SmithyHttpResponse response)
     {
-        RestJsonProtocol.AddHeader(headers, name, value);
-    }
+        ArgumentNullException.ThrowIfNull(response);
+        if (response.Content.Length == 0)
+        {
+            return null;
+        }
 
-    public static void AddPrefixedHeaders(
-        IDictionary<string, IReadOnlyList<string>> headers,
-        string prefix,
-        object? value
-    )
-    {
-        RestJsonProtocol.AddPrefixedHeaders(headers, prefix, value);
-    }
-
-    public static void AppendQuery(StringBuilder builder, string name, object? value)
-    {
-        RestJsonProtocol.AppendQuery(builder, name, value);
-    }
-
-    public static void AppendQueryMap(StringBuilder builder, object? value)
-    {
-        RestJsonProtocol.AppendQueryMap(builder, value);
-    }
-
-    public static string EscapeGreedyLabel(object value)
-    {
-        return RestJsonProtocol.EscapeGreedyLabel(value);
-    }
-
-    public static string FormatHttpValue(object value)
-    {
-        return RestJsonProtocol.FormatHttpValue(value);
-    }
-
-    public static T DeserializeBody<T>(ISmithyCodec codec, byte[] content)
-        where T : IDeserializableShape<T>
-    {
-        return RestJsonProtocol.DeserializeBody<T>(codec, content);
-    }
-
-    public static T DeserializeRequiredBody<T>(ISmithyCodec codec, byte[] content)
-        where T : IDeserializableShape<T>
-    {
-        return RestJsonProtocol.DeserializeRequiredBody<T>(codec, content);
-    }
-
-    public static string? DeserializeErrorCode(byte[] content)
-    {
-        var root = GetErrorRoot(content);
-        return root.Elements().FirstOrDefault(element => element.Name.LocalName == "Code")?.Value;
-    }
-
-    [return: MaybeNull]
-    public static T GetHeader<T>(
-        IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
-        string name
-    )
-    {
-        return RestJsonProtocol.GetHeader<T>(headers, name);
-    }
-
-    public static T GetRequiredHeader<T>(
-        IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
-        string name
-    )
-    {
-        return RestJsonProtocol.GetRequiredHeader<T>(headers, name);
-    }
-
-    [return: MaybeNull]
-    public static T GetPrefixedHeaders<T>(
-        IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
-        string prefix
-    )
-    {
-        return RestJsonProtocol.GetPrefixedHeaders<T>(headers, prefix);
-    }
-
-    public static T GetRequiredPrefixedHeaders<T>(
-        IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
-        string prefix
-    )
-    {
-        return RestJsonProtocol.GetRequiredPrefixedHeaders<T>(headers, prefix);
-    }
-
-    public static void ApplyRequestCompression(SmithyHttpRequest request, string encoding) =>
-        RestJsonProtocol.ApplyRequestCompression(request, encoding);
-
-    public static void ApplyContentMd5(SmithyHttpRequest request) =>
-        RestJsonProtocol.ApplyContentMd5(request);
-
-    private static XElement GetErrorRoot(byte[] content)
-    {
-        var document = XDocument.Parse(Encoding.UTF8.GetString(content));
+        var document = XDocument.Parse(Encoding.UTF8.GetString(response.Content));
         var root =
             document.Root
             ?? throw new InvalidOperationException(
                 "Response body was missing an XML root element."
             );
-        return string.Equals(root.Name.LocalName, "ErrorResponse", StringComparison.Ordinal)
+        var errorRoot = string.Equals(
+            root.Name.LocalName,
+            "ErrorResponse",
+            StringComparison.Ordinal
+        )
             ? root.Elements().FirstOrDefault(element => element.Name.LocalName == "Error") ?? root
             : root;
+        return errorRoot
+            .Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "Code")
+            ?.Value;
+    }
+
+    public static TError DeserializeError<TError>(
+        Schema<TError> errorSchema,
+        SmithyHttpResponse response
+    ) => RestProtocol.DeserializeError(errorSchema, response, BodyFormat);
+
+    public static void ApplyRequestCompression(SmithyHttpRequest request, string encoding)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(encoding);
+
+        if (request.Content is null)
+        {
+            return;
+        }
+
+        request.Content = encoding switch
+        {
+            "gzip" => CompressGzip(request.Content),
+            _ => throw new NotSupportedException(
+                $"Request compression encoding '{encoding}' is not supported."
+            ),
+        };
+
+        if (
+            request.ContentHeaders.TryGetValue("Content-Encoding", out var values)
+            && values.Count > 0
+        )
+        {
+            request.ContentHeaders["Content-Encoding"] =
+            [
+                $"{string.Join(", ", values)}, {encoding}",
+            ];
+            return;
+        }
+
+        request.ContentHeaders["Content-Encoding"] = [encoding];
+    }
+
+#pragma warning disable CA5351
+    public static void ApplyContentMd5(SmithyHttpRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.Content is null)
+        {
+            return;
+        }
+
+        request.ContentHeaders["Content-MD5"] =
+        [
+            Convert.ToBase64String(MD5.HashData(request.Content)),
+        ];
+    }
+#pragma warning restore CA5351
+
+    private sealed class RestXmlBodyFormat : IRestBodyFormat
+    {
+        public string ContentType => "application/xml";
+
+        public string BlobContentType => "application/octet-stream";
+
+        public byte[] Serialize<T>(Schema<T> schema, T value) =>
+            XmlCodec.FromSchema(schema).Serialize(value);
+
+        public byte[] Serialize(Schema schema, object value) =>
+            SerializeObject((dynamic)schema, value);
+
+        public T Deserialize<T>(Schema<T> schema, byte[] content) =>
+            XmlCodec.FromSchema(schema).Deserialize(content);
+
+        public byte[] Serialize<T>(
+            StructProjection<T> projection,
+            T value,
+            bool materializeTopLevelDefaults = true
+        ) => XmlCodec.FromProjection(projection).Serialize(value);
+
+        public void ReadInto<T>(StructProjection<T> projection, byte[] content, object builder) =>
+            XmlCodec.FromProjection(projection).ReadInto(content, builder);
+
+        private static byte[] SerializeObject<T>(Schema<T> schema, object value) =>
+            XmlCodec.FromSchema(schema).Serialize((T)value);
+    }
+
+    private static byte[] CompressGzip(byte[] content)
+    {
+        using var stream = new MemoryStream();
+        using (var gzip = new GZipStream(stream, CompressionLevel.Fastest, leaveOpen: true))
+        {
+            gzip.Write(content, 0, content.Length);
+        }
+
+        return stream.ToArray();
     }
 }

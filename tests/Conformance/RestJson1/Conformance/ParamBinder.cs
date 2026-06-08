@@ -2,6 +2,7 @@ using System.Collections;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using NSmithy.Core;
+using NSmithy.Core.Serde;
 
 namespace RestJson1.Conformance;
 
@@ -87,6 +88,8 @@ internal static class ParamBinder
             return (decimal)value!;
         if (targetType == typeof(Document))
             return BindDocument(value);
+        if (targetType == typeof(SmithyUnit))
+            return SmithyUnit.Value;
 
         if (targetType == typeof(DateTimeOffset))
             return BindDateTimeOffset(value);
@@ -276,14 +279,17 @@ internal static class ParamBinder
         for (var i = 0; i < parameters.Length; i++)
         {
             var p = parameters[i];
-            if (obj.TryGetPropertyValue(p.Name!, out var node) && node is not null)
+            // Generated records use PascalCase ctor params; smithy test params and schema
+            // members are camelCase. Map back to the smithy member name for lookup.
+            var memberName = char.ToLowerInvariant(p.Name![0]) + p.Name![1..];
+            if (obj.TryGetPropertyValue(memberName, out var node) && node is not null)
             {
-                var memberSchema = schema?.GetMember(p.Name!);
+                var memberSchema = (schema as IStructSchema)?.GetMember(memberName);
                 if (
                     p.ParameterType == typeof(byte[])
                     && node is JsonValue scalar
                     && scalar.TryGetValue<string>(out var text)
-                    && memberSchema?.HasTrait(HttpPayloadTraitId) == true
+                    && memberSchema?.Traits.ContainsKey(HttpPayloadTraitId) == true
                 )
                 {
                     args[i] = System.Text.Encoding.UTF8.GetBytes(text);
@@ -330,10 +336,11 @@ internal static class ParamBinder
 
     private static Schema? GetSchema(Type targetType)
     {
-        var schemaProp = targetType.GetProperty(
-            "Schema",
-            BindingFlags.Public | BindingFlags.Static
-        );
+        var schemaProp =
+            targetType.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static)
+            ?? targetType
+                .Assembly.GetType($"{targetType.Namespace}.{targetType.Name}Schema")
+                ?.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static);
         return schemaProp?.GetValue(null) as Schema;
     }
 }

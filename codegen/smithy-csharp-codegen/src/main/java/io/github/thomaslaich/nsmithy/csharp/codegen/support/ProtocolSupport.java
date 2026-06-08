@@ -57,8 +57,8 @@ public final class ProtocolSupport {
     return Kind.REST_JSON;
   }
 
-  /** C# class name of the protocol runtime helper. */
-  public static String runtimeProtocolType(Kind kind) {
+  /** Protocol helper class for the given protocol. */
+  public static String protocolType(Kind kind) {
     return switch (kind) {
       case REST_JSON -> "RestJsonProtocol";
       case REST_XML -> "RestXmlProtocol";
@@ -66,18 +66,17 @@ public final class ProtocolSupport {
     };
   }
 
-  /** Static expression yielding the document codec singleton. */
-  public static String codecExpression(Kind kind) {
-    return switch (kind) {
-      case REST_JSON -> "SmithyJsonCodec.Default";
-      case REST_XML -> "SmithyXmlCodec.Default";
-      case RPC_V2_CBOR -> "SmithyCborCodec.Default";
-    };
+  /** True for REST protocols whose HTTP bindings are handled by RestProtocol. */
+  public static boolean usesRestBindings(Kind kind) {
+    return kind == Kind.REST_JSON || kind == Kind.REST_XML;
   }
 
-  /** Codec interface type used by generated clients for the given protocol. */
-  public static String codecType(Kind kind) {
-    return "ISmithyCodec";
+  public static String mediaType(Kind kind) {
+    return switch (kind) {
+      case REST_JSON -> "application/json";
+      case REST_XML -> "application/xml";
+      case RPC_V2_CBOR -> "application/cbor";
+    };
   }
 
   /** Runtime namespace housing the protocol class. */
@@ -96,14 +95,5 @@ public final class ProtocolSupport {
       case REST_XML -> RuntimeTypes.NSMITHY_CODECS_XML;
       case RPC_V2_CBOR -> RuntimeTypes.NSMITHY_CODECS_CBOR;
     };
-  }
-
-  /**
-   * True when the entire request/response body is treated as a single document (no @httpLabel /
-   *
-   * @httpHeader / etc. binding splitting). RestXml and RpcV2Cbor follow this style.
-   */
-  public static boolean useDocumentBindings(Kind kind) {
-    return kind != Kind.REST_JSON;
   }
 }

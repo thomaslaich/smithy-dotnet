@@ -25,6 +25,25 @@
   -->
 
   <!-- ================================================================
+       Codegen property defaults.
+       These mirror the defaults in build/NSmithy.MSBuild.props, but must also be
+       set here: server/client projects pull NSmithy.MSBuild *transitively* (via a
+       contracts ProjectReference), so they import this buildTransitive targets file
+       but NOT the build/ props. The synthesis + codegen path below runs for exactly
+       those projects, so the versions it depends on have to be defaulted here too.
+       Conditioned on '' so an explicit value (from props or the consuming project)
+       always wins.
+       ================================================================ -->
+  <PropertyGroup>
+    <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.68.0</SmithyVersion>
+    <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''"
+      >0.1.0-SNAPSHOT</SmithyCSharpCodegenVersion
+    >
+    <SmithyGenerateDocs Condition="'$(SmithyGenerateDocs)' == ''">false</SmithyGenerateDocs>
+    <SmithyOpenApiProtocol Condition="'$(SmithyOpenApiProtocol)' == ''"></SmithyOpenApiProtocol>
+  </PropertyGroup>
+
+  <!-- ================================================================
        MSBuild tasks
        $(MSBuildThisFileDirectory) → buildTransitive/ in the NuGet cache;
        the DLL lives in tasks/net10.0/ one level up.
@@ -403,11 +422,11 @@
     <ItemGroup>
       <Compile Remove="$(SmithyAllProjectionsGlob)" />
       <_SmithyExcludedGeneratedCompile
-        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*Client.g.cs"
+        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.Client.g.cs"
         Condition="'$(SmithyGenerateClient)' != 'true'"
       />
       <_SmithyExcludedGeneratedCompile
-        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*Server.g.cs"
+        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.Server.g.cs"
         Condition="'$(SmithyGenerateServer)' != 'true'"
       />
       <Compile

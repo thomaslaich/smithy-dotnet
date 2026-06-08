@@ -1,11 +1,6 @@
 {
   "version": "1.0",
-  "sources": [
-    "model/alloy.smithy",
-    "model/alloy-proto.smithy",
-    "../java/smithy/model/java-hello.smithy",
-    "../scala/model/scala-hello.smithy"
-  ],
+  "sources": ["../java/smithy/model/java-hello.smithy"],
   "maven": {
     "repositories": [
       { "url": "file://~/.m2/repository" },
@@ -24,17 +19,6 @@
       "plugins": {
         "csharp-codegen": {
           "service": "example.java.hello#HelloService",
-          "baseNamespace": ""
-        }
-      }
-    },
-    "scala": {
-      "transforms": [
-        { "name": "includeServices", "args": { "services": ["example.scala.hello#HelloService"] } }
-      ],
-      "plugins": {
-        "csharp-codegen": {
-          "service": "example.scala.hello#HelloService",
           "baseNamespace": ""
         }
       }

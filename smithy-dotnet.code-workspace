@@ -25,10 +25,6 @@
       "path": "examples/grpc"
     },
     {
-      "name": "Example: gRPC streaming",
-      "path": "examples/streaming"
-    },
-    {
       "name": "Example: AWS clients",
       "path": "examples/aws"
     }

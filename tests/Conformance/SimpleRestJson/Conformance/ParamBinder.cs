@@ -2,6 +2,7 @@ using System.Collections;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using NSmithy.Core;
+using NSmithy.Core.Serde;
 
 namespace SimpleRestJson.Conformance;
 
@@ -101,7 +102,7 @@ internal static class ParamBinder
             return BindMap(targetType, value);
         }
 
-        // Structure: single ctor, camelCase params match member names.
+        // Structure: generated records use PascalCase ctor params; smithy test params are camelCase.
         return BindStructure(targetType, value);
     }
 
@@ -235,7 +236,8 @@ internal static class ParamBinder
         for (var i = 0; i < parameters.Length; i++)
         {
             var p = parameters[i];
-            if (obj.TryGetPropertyValue(p.Name!, out var node) && node is not null)
+            var memberName = ToSmithyMemberName(p.Name!);
+            if (obj.TryGetPropertyValue(memberName, out var node) && node is not null)
             {
                 args[i] = Bind(p.ParameterType, node);
             }
@@ -271,10 +273,21 @@ internal static class ParamBinder
 
     private static ShapeKind? GetSchemaKind(Type targetType)
     {
-        var schemaProp = targetType.GetProperty(
-            "Schema",
-            BindingFlags.Public | BindingFlags.Static
-        );
-        return (schemaProp?.GetValue(null) as Schema)?.Kind;
+        return GetSchema(targetType)?.Kind;
+    }
+
+    private static Schema? GetSchema(Type targetType)
+    {
+        var schemaProp =
+            targetType.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static)
+            ?? targetType
+                .Assembly.GetType($"{targetType.Namespace}.{targetType.Name}Schema")
+                ?.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static);
+        return schemaProp?.GetValue(null) as Schema;
+    }
+
+    private static string ToSmithyMemberName(string parameterName)
+    {
+        return char.ToLowerInvariant(parameterName[0]) + parameterName[1..];
     }
 }

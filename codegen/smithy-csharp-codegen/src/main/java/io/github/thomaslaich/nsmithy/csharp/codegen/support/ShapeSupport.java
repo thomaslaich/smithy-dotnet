@@ -242,6 +242,10 @@ public final class ShapeSupport {
    */
   public static boolean isReferenceType(Model model, MemberShape member) {
     Shape target = model.expectShape(member.getTarget());
+    // smithy.api#Unit maps to the SmithyUnit value type, not a generated reference type.
+    if (isUnit(target.getId())) {
+      return false;
+    }
     return switch (target.getType()) {
       case BLOB, STRING, STRUCTURE, UNION, LIST, SET, MAP -> true;
       default -> false;
