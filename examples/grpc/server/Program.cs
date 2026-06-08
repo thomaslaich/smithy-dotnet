@@ -25,33 +25,33 @@ internal sealed class LibraryHandler : ILibraryServiceHandler
     private static readonly Dictionary<string, Book> _books = new()
     {
         ["1"] = new Book(
-            id: "1",
-            title: "Functional Programming in Scala",
-            author: "Michael Pilquist, Rúnar Bjarnason & Paul Chiusano",
-            pageCount: 534,
-            checksum: unchecked((long)0xF05CA1A5CA1A5CA1UL),
-            format: BookFormat.PAPERBACK,
-            category: BookCategory.SCIENCE,
-            tags: new TagList(["functional programming", "scala", "fp"]),
-            metadata: new StringMap(
+            Id: "1",
+            Title: "Functional Programming in Scala",
+            Author: "Michael Pilquist, Rúnar Bjarnason & Paul Chiusano",
+            PageCount: 534,
+            Checksum: unchecked((long)0xF05CA1A5CA1A5CA1UL),
+            Format: BookFormat.PAPERBACK,
+            Category: BookCategory.SCIENCE,
+            Tags: new TagList(["functional programming", "scala", "fp"]),
+            Metadata: new StringMap(
                 new Dictionary<string, string> { ["edition"] = "2nd", ["publisher"] = "Manning" }
             ),
-            nullableAttributes: new NullableAttributeMap(
+            NullableAttributes: new NullableAttributeMap(
                 new Dictionary<string, string?> { ["subtitle"] = null, ["series"] = "Manning" }
             ),
-            publishedAt: new DateTimeOffset(2023, 8, 29, 0, 0, 0, TimeSpan.Zero)
+            PublishedAt: new DateTimeOffset(2023, 8, 29, 0, 0, 0, TimeSpan.Zero)
         ),
         ["2"] = new Book(
-            id: "2",
-            title: "Designing Data-Intensive Applications",
-            author: "Martin Kleppmann",
-            pageCount: 611,
-            checksum: unchecked((long)0xDA7A1A7E51BEDA7AUL),
-            format: BookFormat.PAPERBACK,
-            category: BookCategory.SCIENCE,
-            tags: new TagList(["distributed systems", "databases", "data engineering"]),
-            metadata: new StringMap(new Dictionary<string, string> { ["publisher"] = "O'Reilly" }),
-            nullableAttributes: new NullableAttributeMap(
+            Id: "2",
+            Title: "Designing Data-Intensive Applications",
+            Author: "Martin Kleppmann",
+            PageCount: 611,
+            Checksum: unchecked((long)0xDA7A1A7E51BEDA7AUL),
+            Format: BookFormat.PAPERBACK,
+            Category: BookCategory.SCIENCE,
+            Tags: new TagList(["distributed systems", "databases", "data engineering"]),
+            Metadata: new StringMap(new Dictionary<string, string> { ["publisher"] = "O'Reilly" }),
+            NullableAttributes: new NullableAttributeMap(
                 new Dictionary<string, string?>
                 {
                     ["subtitle"] =
@@ -59,69 +59,69 @@ internal sealed class LibraryHandler : ILibraryServiceHandler
                     ["series"] = null,
                 }
             ),
-            publishedAt: new DateTimeOffset(2017, 3, 16, 0, 0, 0, TimeSpan.Zero)
+            PublishedAt: new DateTimeOffset(2017, 3, 16, 0, 0, 0, TimeSpan.Zero)
         ),
         ["3"] = new Book(
-            id: "3",
-            title: "Design Patterns",
-            author: "Erich Gamma, Richard Helm, Ralph Johnson & John Vlissides",
-            pageCount: 395,
-            checksum: unchecked((long)0x9A09F04C0DE51B0FUL),
-            format: BookFormat.HARDCOVER,
-            category: BookCategory.SCIENCE,
-            tags: new TagList(["design patterns", "object-oriented", "gang of four"]),
-            metadata: new StringMap(
+            Id: "3",
+            Title: "Design Patterns",
+            Author: "Erich Gamma, Richard Helm, Ralph Johnson & John Vlissides",
+            PageCount: 395,
+            Checksum: unchecked((long)0x9A09F04C0DE51B0FUL),
+            Format: BookFormat.HARDCOVER,
+            Category: BookCategory.SCIENCE,
+            Tags: new TagList(["design patterns", "object-oriented", "gang of four"]),
+            Metadata: new StringMap(
                 new Dictionary<string, string>
                 {
                     ["publisher"] = "Addison-Wesley",
                     ["series"] = "Addison-Wesley Professional Computing",
                 }
             ),
-            nullableAttributes: new NullableAttributeMap(
+            NullableAttributes: new NullableAttributeMap(
                 new Dictionary<string, string?>
                 {
                     ["subtitle"] = "Elements of Reusable Object-Oriented Software",
                 }
             ),
-            publishedAt: new DateTimeOffset(1994, 10, 31, 0, 0, 0, TimeSpan.Zero)
+            PublishedAt: new DateTimeOffset(1994, 10, 31, 0, 0, 0, TimeSpan.Zero)
         ),
         ["4"] = new Book(
-            id: "4",
-            title: "C# 13 and .NET 9",
-            author: "Mark J. Price",
-            pageCount: 837,
-            checksum: unchecked((long)0xC51300D07E9D07E9UL),
-            format: BookFormat.EBOOK,
-            category: BookCategory.SCIENCE,
-            tags: new TagList(["csharp", "dotnet", "microsoft"]),
-            metadata: new StringMap(
+            Id: "4",
+            Title: "C# 13 and .NET 9",
+            Author: "Mark J. Price",
+            PageCount: 837,
+            Checksum: unchecked((long)0xC51300D07E9D07E9UL),
+            Format: BookFormat.EBOOK,
+            Category: BookCategory.SCIENCE,
+            Tags: new TagList(["csharp", "dotnet", "microsoft"]),
+            Metadata: new StringMap(
                 new Dictionary<string, string> { ["publisher"] = "Packt", ["edition"] = "9th" }
             ),
-            nullableAttributes: new NullableAttributeMap(
+            NullableAttributes: new NullableAttributeMap(
                 new Dictionary<string, string?>
                 {
                     ["subtitle"] = "Modern Cross-Platform Development Fundamentals",
                     ["series"] = null,
                 }
             ),
-            publishedAt: new DateTimeOffset(2024, 11, 12, 0, 0, 0, TimeSpan.Zero)
+            PublishedAt: new DateTimeOffset(2024, 11, 12, 0, 0, 0, TimeSpan.Zero)
         ),
     };
 
     private static Book WithId(Book book, string id)
     {
         return new Book(
-            author: book.Author,
-            id: id,
-            title: book.Title,
-            category: book.Category,
-            checksum: book.Checksum,
-            format: book.Format,
-            metadata: book.Metadata,
-            nullableAttributes: book.NullableAttributes,
-            pageCount: book.PageCount,
-            publishedAt: book.PublishedAt,
-            tags: book.Tags
+            Author: book.Author,
+            Id: id,
+            Title: book.Title,
+            Category: book.Category,
+            Checksum: book.Checksum,
+            Format: book.Format,
+            Metadata: book.Metadata,
+            NullableAttributes: book.NullableAttributes,
+            PageCount: book.PageCount,
+            PublishedAt: book.PublishedAt,
+            Tags: book.Tags
         );
     }
 

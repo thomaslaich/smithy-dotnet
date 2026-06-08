@@ -2,5 +2,6 @@
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <ProjectReference Include="../NSmithy.Http/NSmithy.Http.csproj" />
+    <ProjectReference Include="../NSmithy.Protocols.Rest/NSmithy.Protocols.Rest.csproj" />
   </ItemGroup>
 </Project>

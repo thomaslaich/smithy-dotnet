@@ -61,7 +61,8 @@ construction time. `SmithyClientOptions` carries:
 
 The protocol implementation composes the transport with the codec and the
 protocol binding to produce a complete request pipeline. The generated client
-does not call `HttpClient` directly.
+passes operation schemas and typed values into the protocol adapter; it does
+not call `HttpClient` directly.
 
 ## Why Not `HttpClient` Directly
 
@@ -88,7 +89,7 @@ can wrap it in a custom `IHttpTransport` implementation.
 
 ## URI Construction
 
-Protocol implementations build the request URI by combining:
+REST protocol implementations build the request URI by combining:
 
 1. `SmithyClientOptions.Endpoint` (the base URI).
 2. The operation's URI template (from `@http`), with `@httpLabel` members
@@ -100,16 +101,31 @@ URI template expansion follows the rules in
 [RFC 6570](https://www.rfc-editor.org/rfc/rfc6570) for the subset used by
 Smithy HTTP traits.
 
+## Protocol Layering
+
+`NSmithy.Http` only models raw HTTP transport. It does not know about Smithy
+traits or operation schemas.
+
+REST-specific Smithy bindings live in `NSmithy.Protocols.Rest`. That package
+projects operation input and output schemas into HTTP method, URI labels, query
+parameters, headers, payload members, response status, and body members.
+Protocols such as REST JSON and REST XML reuse that projection and provide only
+their body codec factory, for example `JsonCodec` or `XmlCodec`.
+
+This split lets other protocols share the HTTP transport when appropriate
+without inheriting REST binding semantics. A protocol that serializes the whole
+operation input into one body can ignore REST traits even if the schema graph
+carries them.
+
 ## gRPC Transport
 
-gRPC operations use a separate generated client that depends on the
-`Grpc.Net.Client` package rather than `NSmithy.Http`. The generated `.proto`
-file is compiled by Grpc.Tools into a gRPC stub; the NSmithy gRPC client wraps
-that stub.
+gRPC operations use a generated client that depends on the `Grpc.Net.Client`
+package. The generated `.proto` file is compiled by Grpc.Tools into a gRPC
+stub; the NSmithy gRPC client wraps that stub.
 
-`IHttpTransport` is not used for gRPC operations. The two transports (HTTP and
-gRPC) are selected at compile time by which generated client the consumer
-instantiates.
+The gRPC client does not use the REST protocol projection. Even though gRPC is
+transported over HTTP/2, its Smithy operation payload is modeled as a gRPC
+message body rather than REST labels, query parameters, and headers.
 
 ## Related Docs
 

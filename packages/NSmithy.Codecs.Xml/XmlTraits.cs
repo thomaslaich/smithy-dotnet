@@ -1,4 +1,5 @@
 using NSmithy.Core;
+using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Xml;
 
@@ -12,15 +13,33 @@ internal static class XmlTraits
     public static string? GetXmlName(Schema schema) =>
         schema.GetTrait(XmlNameId) is { HasValue: true } t ? t.Value.AsString() : null;
 
-    public static bool IsXmlAttribute(Schema schema) => schema.HasTrait(XmlAttributeId);
+    public static string? GetXmlName(IMemberSchema schema) =>
+        schema.Traits.TryGetValue(XmlNameId, out var trait) && trait.HasValue
+            ? trait.Value.AsString()
+            : null;
 
-    public static bool IsXmlFlattened(Schema schema) => schema.HasTrait(XmlFlattenedId);
+    public static bool IsXmlAttribute(IMemberSchema schema) =>
+        schema.Traits.ContainsKey(XmlAttributeId);
 
-    public static string? GetTimestampFormat(Schema schema) =>
-        schema.GetTrait(TimestampFormatId) is { HasValue: true } t ? t.Value.AsString() : null;
+    public static bool IsXmlFlattened(IMemberSchema schema) =>
+        schema.Traits.ContainsKey(XmlFlattenedId);
 
-    public static string ElementName(Schema memberSchema) =>
-        GetXmlName(memberSchema) ?? memberSchema.MemberName!;
+    public static string? GetTimestampFormat(
+        Schema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits
+    )
+    {
+        if (
+            traits is not null
+            && traits.TryGetValue(TimestampFormatId, out var memberTrait)
+            && memberTrait.HasValue
+        )
+        {
+            return memberTrait.Value.AsString();
+        }
 
-    public static string RootElementName(Schema schema) => GetXmlName(schema) ?? schema.Id.Name;
+        return schema.GetTrait(TimestampFormatId) is { HasValue: true } trait
+            ? trait.Value.AsString()
+            : null;
+    }
 }

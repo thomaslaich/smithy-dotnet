@@ -1,0 +1,562 @@
+using NSmithy.Codecs.Json;
+using NSmithy.Core;
+using NSmithy.Core.Serde;
+using NSmithy.Protocols.Rest;
+
+namespace NSmithy.Tests.Runtime;
+
+public sealed class SchemaTests
+{
+    public sealed record Person(string Name, int Age, Address Address);
+
+    public sealed record Address(string City);
+
+    public sealed class PersonBuilder
+    {
+        public string? Name { get; set; }
+
+        public int Age { get; set; }
+
+        public Address? Address { get; set; }
+    }
+
+    public sealed class AddressBuilder
+    {
+        public string? City { get; set; }
+    }
+
+    [Fact]
+    public void JsonCodecRoundTripsNestedStructure()
+    {
+        var input = new Person("Ada", 36, new Address("London"));
+        var expectedJson = "{\"name\":\"Ada\",\"age\":36,\"address\":{\"city\":\"London\"}}";
+
+        var addressSchema = Schemas
+            .Structure<Address, AddressBuilder>(new ShapeId("example", "Address"))
+            .Required(
+                "city",
+                static address => address.City,
+                static (builder, value) => builder.City = value,
+                Schemas.String
+            )
+            .Build(static () => new AddressBuilder(), static builder => new Address(builder.City!));
+
+        var personSchema = Schemas
+            .Structure<Person, PersonBuilder>(new ShapeId("example", "Person"))
+            .Required(
+                "name",
+                static person => person.Name,
+                static (builder, value) => builder.Name = value,
+                Schemas.String
+            )
+            .Required(
+                "age",
+                static person => person.Age,
+                static (builder, value) => builder.Age = value,
+                Schemas.Integer
+            )
+            .Required(
+                "address",
+                static person => person.Address,
+                static (builder, value) => builder.Address = value,
+                addressSchema
+            )
+            .Build(
+                static () => new PersonBuilder(),
+                static builder => new Person(builder.Name!, builder.Age, builder.Address!)
+            );
+
+        var personCodec = JsonCodec.FromSchema(personSchema);
+
+        var json = personCodec.SerializeText(input);
+        var decoded = personCodec.DeserializeText(json);
+
+        Assert.Equal(expectedJson, json);
+        Assert.Equal(input, decoded);
+        Assert.Equal(ShapeKind.Structure, personSchema.Kind);
+        Assert.Equal("address", personSchema.GetMember("address")?.Name);
+    }
+
+    public sealed record VisitorInput(string Name, int Age);
+
+    public sealed class VisitorInputBuilder
+    {
+        public string? Name { get; set; }
+
+        public int Age { get; set; }
+    }
+
+    [Fact]
+    public void StructSchemaVisitsMembersWithTypedAccessors()
+    {
+        var input = new VisitorInput("Ada", 36);
+        var schema = Schemas
+            .Structure<VisitorInput, VisitorInputBuilder>(new ShapeId("example", "VisitorInput"))
+            .Required(
+                "name",
+                static value => value.Name,
+                static (builder, value) => builder.Name = value,
+                Schemas.String
+            )
+            .Required(
+                "age",
+                static value => value.Age,
+                static (builder, value) => builder.Age = value,
+                Schemas.Integer
+            )
+            .Build(
+                static () => new VisitorInputBuilder(),
+                static builder => new VisitorInput(builder.Name!, builder.Age)
+            );
+        var visitor = new VisitorInputMemberVisitor(input);
+
+        schema.VisitMembers(visitor);
+
+        Assert.Equal(["name:String:Ada", "age:Int32:36"], visitor.Visited);
+    }
+
+    private sealed class VisitorInputMemberVisitor(VisitorInput input)
+        : IMemberVisitor<VisitorInput>
+    {
+        public List<string> Visited { get; } = [];
+
+        public void Visit<TValue>(IMemberSchema<VisitorInput, TValue> member)
+        {
+            Visited.Add($"{member.Name}:{typeof(TValue).Name}:{member.GetValue(input)}");
+        }
+    }
+
+    public sealed record TreeNode(string Value, IReadOnlyList<TreeNode>? Children = null);
+
+    public sealed class TreeNodeBuilder
+    {
+        public string? Value { get; set; }
+
+        public IReadOnlyList<TreeNode>? Children { get; set; }
+    }
+
+    [Fact]
+    public void JsonCodecRoundTripsRecursiveSchemaWithLazyReference()
+    {
+        var input = new TreeNode("root", [new TreeNode("leaf")]);
+        var expectedJson = "{\"value\":\"root\",\"children\":[{\"value\":\"leaf\"}]}";
+
+        StructSchema<TreeNode, TreeNodeBuilder>? treeSchema = null;
+        var childrenSchema = Schemas.List(
+            new ShapeId("example", "TreeNodeList"),
+            Schemas.Lazy(() => treeSchema!)
+        );
+        treeSchema = Schemas
+            .Structure<TreeNode, TreeNodeBuilder>(new ShapeId("example", "TreeNode"))
+            .Required(
+                "value",
+                static value => value.Value,
+                static (builder, value) => builder.Value = value,
+                Schemas.String
+            )
+            .Optional(
+                "children",
+                static value => value.Children!,
+                static (builder, value) => builder.Children = value,
+                childrenSchema
+            )
+            .Build(
+                static () => new TreeNodeBuilder(),
+                static builder => new TreeNode(builder.Value!, builder.Children)
+            );
+        var codec = JsonCodec.FromSchema(treeSchema);
+
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
+
+        Assert.Equal(expectedJson, json);
+        Assert.Equal(input.Value, decoded.Value);
+        Assert.Equal(input.Children!.Single().Value, decoded.Children!.Single().Value);
+        Assert.Null(decoded.Children!.Single().Children);
+        Assert.Equal(new ShapeId("example", "TreeNode"), childrenSchema.Element.Id);
+    }
+
+    public sealed record CollectionInput(
+        string Name,
+        IReadOnlyList<string> Tags,
+        IReadOnlySet<string> Aliases,
+        IReadOnlyDictionary<string, int> Scores,
+        string? Nickname
+    );
+
+    public sealed class CollectionInputBuilder
+    {
+        public string? Name { get; set; }
+
+        public IReadOnlyList<string>? Tags { get; set; }
+
+        public IReadOnlySet<string>? Aliases { get; set; }
+
+        public IReadOnlyDictionary<string, int>? Scores { get; set; }
+
+        public string? Nickname { get; set; }
+    }
+
+    [Fact]
+    public void JsonCodecRoundTripsCollectionsAndOptionalMembers()
+    {
+        var input = new CollectionInput(
+            "Ada",
+            ["mathematician", "programmer"],
+            new SortedSet<string>(["analyst", "programmer"], StringComparer.Ordinal),
+            new SortedDictionary<string, int>(StringComparer.Ordinal)
+            {
+                ["logic"] = 10,
+                ["math"] = 9,
+            },
+            Nickname: null
+        );
+        var expectedJson =
+            "{\"name\":\"Ada\",\"tags\":[\"mathematician\",\"programmer\"],\"aliases\":[\"analyst\",\"programmer\"],\"scores\":{\"logic\":10,\"math\":9}}";
+
+        var tagListSchema = Schemas.List(new ShapeId("example", "TagList"), Schemas.String);
+        var aliasSetSchema = Schemas.Set(new ShapeId("example", "AliasSet"), Schemas.String);
+        var scoresSchema = Schemas.Map(new ShapeId("example", "Scores"), Schemas.Integer);
+        var inputSchema = Schemas
+            .Structure<CollectionInput, CollectionInputBuilder>(
+                new ShapeId("example", "CollectionInput")
+            )
+            .Required(
+                "name",
+                static value => value.Name,
+                static (builder, value) => builder.Name = value,
+                Schemas.String
+            )
+            .Required(
+                "tags",
+                static value => value.Tags,
+                static (builder, value) => builder.Tags = value,
+                tagListSchema
+            )
+            .Required(
+                "aliases",
+                static value => value.Aliases,
+                static (builder, value) => builder.Aliases = value,
+                aliasSetSchema
+            )
+            .Required(
+                "scores",
+                static value => value.Scores,
+                static (builder, value) => builder.Scores = value,
+                scoresSchema
+            )
+            .Optional(
+                "nickname",
+                static value => value.Nickname!,
+                static (builder, value) => builder.Nickname = value,
+                Schemas.String
+            )
+            .Build(
+                static () => new CollectionInputBuilder(),
+                static builder => new CollectionInput(
+                    builder.Name!,
+                    builder.Tags!,
+                    builder.Aliases!,
+                    builder.Scores!,
+                    builder.Nickname
+                )
+            );
+        var codec = JsonCodec.FromSchema(inputSchema);
+
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
+
+        Assert.Equal(expectedJson, json);
+        Assert.Equal(input.Name, decoded.Name);
+        Assert.Equal(input.Tags, decoded.Tags);
+        Assert.True(input.Aliases.SetEquals(decoded.Aliases));
+        Assert.Equal(input.Scores, decoded.Scores);
+        Assert.Null(decoded.Nickname);
+    }
+
+    [Fact]
+    public void JsonCodecRoundTripsPrimitiveRootValue()
+    {
+        var codec = JsonCodec.FromSchema(Schemas.Integer);
+
+        var json = codec.SerializeText(36);
+        var decoded = codec.DeserializeText(json);
+
+        Assert.Equal("36", json);
+        Assert.Equal(36, decoded);
+    }
+
+    public readonly record struct Status(string Value) : IStringEnumValue<Status>
+    {
+        public static readonly Status Active = new("ACTIVE");
+
+        public static readonly Status Inactive = new("INACTIVE");
+
+        public static Status FromValue(string value) => new(value);
+    }
+
+    public sealed record Job(string Name, Status Status);
+
+    public sealed class JobBuilder
+    {
+        public string? Name { get; set; }
+
+        public Status Status { get; set; }
+    }
+
+    [Fact]
+    public void StringEnumSchemaModelsEnumWireValue()
+    {
+        var statusSchema = Schemas.StringEnum<Status>(new ShapeId("example", "Status"));
+
+        Assert.Equal(new ShapeId("example", "Status"), statusSchema.Id);
+        Assert.Equal(ShapeKind.Enum, statusSchema.Kind);
+        Assert.Equal("ACTIVE", ((IStringEnumValue)Status.Active).Value);
+        Assert.Equal(Status.Inactive, statusSchema.Create("INACTIVE"));
+    }
+
+    [Fact]
+    public void JsonCodecRoundTripsStringEnumSchema()
+    {
+        var statusSchema = Schemas.StringEnum<Status>(new ShapeId("example", "Status"));
+        var codec = JsonCodec.FromSchema(statusSchema);
+
+        var json = codec.SerializeText(Status.Active);
+        var decoded = codec.DeserializeText(json);
+
+        Assert.Equal("\"ACTIVE\"", json);
+        Assert.Equal(Status.Active, decoded);
+    }
+
+    [Fact]
+    public void JsonCodecRoundTripsStructureWithStringEnumMember()
+    {
+        var input = new Job("deploy", Status.Active);
+        var expectedJson = "{\"name\":\"deploy\",\"status\":\"ACTIVE\"}";
+
+        var statusSchema = Schemas.StringEnum<Status>(new ShapeId("example", "Status"));
+        var jobSchema = Schemas
+            .Structure<Job, JobBuilder>(new ShapeId("example", "Job"))
+            .Required(
+                "name",
+                static job => job.Name,
+                static (builder, value) => builder.Name = value,
+                Schemas.String
+            )
+            .Required(
+                "status",
+                static job => job.Status,
+                static (builder, value) => builder.Status = value,
+                statusSchema
+            )
+            .Build(
+                static () => new JobBuilder(),
+                static builder => new Job(builder.Name!, builder.Status)
+            );
+        var codec = JsonCodec.FromSchema(jobSchema);
+
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
+
+        Assert.Equal(expectedJson, json);
+        Assert.Equal(input, decoded);
+    }
+
+    public abstract record Choice
+    {
+        public sealed record StringChoice(string Value) : Choice;
+
+        public sealed record IntegerChoice(int Value) : Choice;
+    }
+
+    [Fact]
+    public void JsonCodecRoundTripsUnion()
+    {
+        Choice input = new Choice.StringChoice("hello");
+        var expectedJson = "{\"stringValue\":\"hello\"}";
+        var choiceSchema = Schemas
+            .Union<Choice>(new ShapeId("example", "Choice"))
+            .Case(
+                "stringValue",
+                static choice => choice is Choice.StringChoice,
+                static choice => ((Choice.StringChoice)choice).Value,
+                static value => new Choice.StringChoice(value),
+                Schemas.String
+            )
+            .Case(
+                "integerValue",
+                static choice => choice is Choice.IntegerChoice,
+                static choice => ((Choice.IntegerChoice)choice).Value,
+                static value => new Choice.IntegerChoice(value),
+                Schemas.Integer
+            )
+            .Build();
+        var codec = JsonCodec.FromSchema(choiceSchema);
+
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
+
+        Assert.Equal(expectedJson, json);
+        Assert.Equal(input, decoded);
+        Assert.Equal(ShapeKind.Union, choiceSchema.Kind);
+        Assert.Equal("stringValue", choiceSchema.GetCase("stringValue")?.Name);
+    }
+
+    [Fact]
+    public void JsonCodecRejectsUnknownUnionMember()
+    {
+        var choiceSchema = Schemas
+            .Union<Choice>(new ShapeId("example", "Choice"))
+            .Case(
+                "stringValue",
+                static choice => choice is Choice.StringChoice,
+                static choice => ((Choice.StringChoice)choice).Value,
+                static value => new Choice.StringChoice(value),
+                Schemas.String
+            )
+            .Build();
+        var codec = JsonCodec.FromSchema(choiceSchema);
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            codec.DeserializeText("{\"missing\":\"hello\"}")
+        );
+
+        Assert.Equal("Unknown union member 'missing'.", ex.Message);
+    }
+
+    public sealed record RequiredPerson(string Name);
+
+    public sealed class RequiredPersonBuilder
+    {
+        public string? Name { get; set; }
+    }
+
+    [Fact]
+    public void JsonCodecRejectsMissingRequiredMember()
+    {
+        var schema = Schemas
+            .Structure<RequiredPerson, RequiredPersonBuilder>(
+                new ShapeId("example", "RequiredPerson")
+            )
+            .Required(
+                "name",
+                static person => person.Name,
+                static (builder, value) => builder.Name = value,
+                Schemas.String
+            )
+            .Build(
+                static () => new RequiredPersonBuilder(),
+                static builder => new RequiredPerson(builder.Name!)
+            );
+        var codec = JsonCodec.FromSchema(schema);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => codec.DeserializeText("{}"));
+
+        Assert.Equal("Missing required member 'name'.", ex.Message);
+    }
+
+    [Fact]
+    public void JsonCodecRejectsNullRequiredMember()
+    {
+        var schema = Schemas
+            .Structure<RequiredPerson, RequiredPersonBuilder>(
+                new ShapeId("example", "RequiredPerson")
+            )
+            .Required(
+                "name",
+                static person => person.Name,
+                static (builder, value) => builder.Name = value,
+                Schemas.String
+            )
+            .Build(
+                static () => new RequiredPersonBuilder(),
+                static builder => new RequiredPerson(builder.Name!)
+            );
+        var codec = JsonCodec.FromSchema(schema);
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            codec.DeserializeText("{\"name\":null}")
+        );
+
+        Assert.Equal("Required member 'name' cannot be null.", ex.Message);
+    }
+
+    public sealed record UpdateUserInput(string UserId, string? RequestToken, string DisplayName);
+
+    public sealed class UpdateUserInputBuilder
+    {
+        public string? UserId { get; set; }
+
+        public string? RequestToken { get; set; }
+
+        public string? DisplayName { get; set; }
+    }
+
+    public sealed record UpdateUserOutput;
+
+    public sealed class UpdateUserOutputBuilder { }
+
+    [Fact]
+    public void OperationSchemaCarriesOperationAndMemberTraits()
+    {
+        var inputSchema = Schemas
+            .Structure<UpdateUserInput, UpdateUserInputBuilder>(
+                new ShapeId("example", "UpdateUserInput")
+            )
+            .Required(
+                "userId",
+                static input => input.UserId,
+                static (builder, value) => builder.UserId = value,
+                Schemas.String,
+                traits: [RestTraits.HttpLabelTrait]
+            )
+            .Optional(
+                "requestToken",
+                static input => input.RequestToken!,
+                static (builder, value) => builder.RequestToken = value,
+                Schemas.String,
+                traits: [RestTraits.HttpHeaderTrait("X-Request-Token")]
+            )
+            .Required(
+                "displayName",
+                static input => input.DisplayName,
+                static (builder, value) => builder.DisplayName = value,
+                Schemas.String
+            )
+            .Build(
+                static () => new UpdateUserInputBuilder(),
+                static builder => new UpdateUserInput(
+                    builder.UserId!,
+                    builder.RequestToken,
+                    builder.DisplayName!
+                )
+            );
+        var outputSchema = Schemas
+            .Structure<UpdateUserOutput, UpdateUserOutputBuilder>(
+                new ShapeId("example", "UpdateUserOutput")
+            )
+            .Build(static () => new UpdateUserOutputBuilder(), static _ => new UpdateUserOutput());
+        var operation = Schemas.Operation(
+            new ShapeId("example", "UpdateUser"),
+            inputSchema,
+            outputSchema,
+            traits: [RestTraits.HttpTrait("PUT", "/users/{userId}")]
+        );
+
+        Assert.Equal(ShapeKind.Operation, operation.Kind);
+        Assert.Same(inputSchema, operation.Input);
+        Assert.Same(outputSchema, operation.Output);
+        Assert.Equal(
+            "PUT",
+            operation.GetTrait(RestTraits.Http)!.Value.Value.AsObject()["method"].AsString()
+        );
+        Assert.True(inputSchema.GetMember("userId")!.Traits.ContainsKey(RestTraits.HttpLabel));
+        Assert.Equal(
+            "X-Request-Token",
+            inputSchema.GetMember("requestToken")!.Traits[RestTraits.HttpHeader].Value.AsString()
+        );
+        Assert.False(
+            inputSchema.GetMember("displayName")!.Traits.ContainsKey(RestTraits.HttpLabel)
+        );
+    }
+}

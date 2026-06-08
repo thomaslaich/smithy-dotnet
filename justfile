@@ -39,14 +39,6 @@ pack:
     dotnet pack NSmithy.slnx --configuration Release --no-build --output artifacts/packages ${VERSION:+-p:Version=$VERSION}
 
 refresh-examples:
-    dotnet clean examples/simple-rest-json/server/NSmithy.Examples.SimpleRestJson.Server.csproj --verbosity minimal
-    dotnet clean examples/simple-rest-json/client/NSmithy.Examples.SimpleRestJson.Client.csproj --verbosity minimal
-    dotnet clean examples/rest-json1/server/NSmithy.Examples.RestJson1.Server.csproj --verbosity minimal
-    dotnet clean examples/rest-json1/client/NSmithy.Examples.RestJson1.Client.csproj --verbosity minimal
-    dotnet clean examples/aws/client/NSmithy.Examples.Aws.Client.csproj --verbosity minimal
-    dotnet clean examples/grpc/server/NSmithy.Examples.Grpc.Server.csproj --verbosity minimal
-    dotnet clean examples/grpc/client/NSmithy.Examples.Grpc.Client.csproj --verbosity minimal
-    dotnet clean examples/polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj --verbosity minimal
     rm -rf examples/simple-rest-json/contracts/obj
     rm -rf examples/simple-rest-json/server/obj
     rm -rf examples/simple-rest-json/client/obj
@@ -58,6 +50,14 @@ refresh-examples:
     rm -rf examples/grpc/server/obj
     rm -rf examples/grpc/client/obj
     rm -rf examples/polyglot/dotnet/obj
+    dotnet clean examples/simple-rest-json/server/NSmithy.Examples.SimpleRestJson.Server.csproj --verbosity minimal
+    dotnet clean examples/simple-rest-json/client/NSmithy.Examples.SimpleRestJson.Client.csproj --verbosity minimal
+    dotnet clean examples/rest-json1/server/NSmithy.Examples.RestJson1.Server.csproj --verbosity minimal
+    dotnet clean examples/rest-json1/client/NSmithy.Examples.RestJson1.Client.csproj --verbosity minimal
+    dotnet clean examples/aws/client/NSmithy.Examples.Aws.Client.csproj --verbosity minimal
+    dotnet clean examples/grpc/server/NSmithy.Examples.Grpc.Server.csproj --verbosity minimal
+    dotnet clean examples/grpc/client/NSmithy.Examples.Grpc.Client.csproj --verbosity minimal
+    dotnet clean examples/polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj --verbosity minimal
     dotnet restore examples/simple-rest-json/contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj --no-cache --force
     dotnet restore examples/simple-rest-json/server/NSmithy.Examples.SimpleRestJson.Server.csproj --no-cache --force
     dotnet restore examples/simple-rest-json/client/NSmithy.Examples.SimpleRestJson.Client.csproj --no-cache --force

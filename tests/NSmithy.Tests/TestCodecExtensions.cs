@@ -1,0 +1,17 @@
+using System.Text;
+using NSmithy.Core.Serde;
+
+namespace NSmithy.Tests;
+
+/// <summary>
+/// Test conveniences for the byte-oriented functional codecs. The wire is always bytes;
+/// these UTF-8 helpers give a readable string view for assertions on text formats (JSON, XML).
+/// </summary>
+internal static class TestCodecExtensions
+{
+    public static string SerializeText<T>(this ICodec<T> codec, T value) =>
+        Encoding.UTF8.GetString(codec.Serialize(value));
+
+    public static T DeserializeText<T>(this ICodec<T> codec, string payload) =>
+        codec.Deserialize(Encoding.UTF8.GetBytes(payload));
+}

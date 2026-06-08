@@ -32,34 +32,15 @@ public final class StringEnumGenerator implements Runnable {
     writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     writer.write(
-        "public readonly partial record struct $L(string Value) : ISerializableShape,"
-            + " IDeserializableShape<$L>",
+        "public readonly partial record struct $L(string Value) : IStringEnumValue<$L>",
         typeName,
         typeName);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          SchemaGenerator.writeSimpleSchema(writer, shape);
-          writer.write("Schema ISerializableShape.Schema => Schema;");
-          writer.write("");
-          writer.write("public void Serialize(IShapeSerializer serializer)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(serializer);");
-                writer.write("serializer.WriteString(Schema, Value);");
-              });
-          writer.write("");
-          writer.write("public static $L Deserialize(IShapeDeserializer deserializer)", typeName);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(deserializer);");
-                writer.write("return new $L(deserializer.ReadString(Schema));", typeName);
-              });
+          writer.write("public static $L FromValue(string value)", typeName);
+          writer.openBlock("{", "}", () -> writer.write("return new $L(value);", typeName));
           writer.write("");
           for (MemberShape m : ShapeSupport.sortedMembers(shape)) {
             String prop = CSharpNaming.propertyName(m.getMemberName());
@@ -77,5 +58,7 @@ public final class StringEnumGenerator implements Runnable {
           writer.write("public override string ToString()");
           writer.openBlock("{", "}", () -> writer.write("return Value;"));
         });
+    writer.write("");
+    SchemaGenerator.writeSimpleSchema(writer, shape);
   }
 }

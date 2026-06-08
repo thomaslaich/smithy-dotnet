@@ -1,12 +1,4 @@
 services:
-  scala-service:
-    build:
-      context: .
-      dockerfile: scala/Dockerfile
-    environment:
-      SERVICE_NAME: scala-service
-    ports:
-      - "8081:8080"
   java-service:
     build:
       context: .

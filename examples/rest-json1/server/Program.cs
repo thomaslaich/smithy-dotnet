@@ -47,8 +47,8 @@ internal sealed class WeatherHandler : IWeatherServiceHandler
 
         return Task.FromResult(
             new GetCityOutput(
-                coordinates: new CityCoordinates(city.Latitude, city.Longitude),
-                name: city.Name
+                Coordinates: new CityCoordinates(city.Latitude, city.Longitude),
+                Name: city.Name
             )
         );
     }
@@ -72,10 +72,8 @@ internal sealed class WeatherHandler : IWeatherServiceHandler
 
         return Task.FromResult(
             new ListCitiesOutput(
-                items: new CitySummaries(
-                    page.Select(c => new CitySummary(c.CityId, c.Name)).ToList()
-                ),
-                nextToken: nextToken
+                Items: new CitySummaries([.. page.Select(c => new CitySummary(c.CityId, c.Name))]),
+                NextToken: nextToken
             )
         );
     }
@@ -83,5 +81,5 @@ internal sealed class WeatherHandler : IWeatherServiceHandler
     public Task<GetForecastOutput> GetForecastAsync(
         GetForecastInput input,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(new GetForecastOutput(chanceOfRain: 0.4f));
+    ) => Task.FromResult(new GetForecastOutput(ChanceOfRain: 0.4f));
 }

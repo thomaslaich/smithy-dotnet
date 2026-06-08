@@ -34,7 +34,6 @@
     <ProjectReference Include="../../../packages/NSmithy.Http/NSmithy.Http.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
-    <ProjectReference Include="../../../packages/NSmithy.Server/NSmithy.Server.csproj" />
   </ItemGroup>
 
   <Import Project="../../../packages/NSmithy.MSBuild/Targets/NSmithy.MSBuild.targets" />

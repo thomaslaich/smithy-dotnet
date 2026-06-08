@@ -66,14 +66,7 @@ export default defineConfig({
 					items: [
 						{ label: 'MSBuild', slug: 'reference/msbuild' },
 						{ label: 'Known Limitations', slug: 'reference/known-limitations' },
-					],
-				},
-				{
-					label: 'Design',
-					items: [
-						{ label: 'Shape Mapping', slug: 'design/shapes' },
-						{ label: 'Serialization', slug: 'design/serialization' },
-						{ label: 'HTTP Interfaces', slug: 'design/http-interfaces' },
+						{ label: 'Design Docs', slug: 'reference/design' },
 					],
 				},
 				{
