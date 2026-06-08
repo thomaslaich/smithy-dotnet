@@ -33,8 +33,9 @@ NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io)
 
 ## Features
 
+- **Contract-first, protocol-agnostic**: Define your service once in Smithy — operations, shapes, and errors — independent of any wire protocol. The same model can target a different protocol without rewriting your contract.
 - **MSBuild integration**: Generate C# models, typed clients, and ASP.NET Core minimal API server stubs from a Smithy IDL as part of `dotnet build` — no separate codegen step, no Java or JRE installation required.
-- **Protocol support**: Implements `alloy#simpleRestJson`, `aws.protocols#restJson1`, `aws.protocols#restXml`, `smithy.protocols#rpcv2Cbor`, and `alloy.proto#grpc`.
+- **Protocol support**: REST JSON, REST XML, RPC v2 CBOR, and gRPC.
 - **Conformance-tested**: Validated against official Smithy, AWS, and alloy conformance suites.
 
 ## Development
