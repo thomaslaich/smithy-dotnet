@@ -40,7 +40,7 @@ for the full walkthrough.
 | `smithy.protocols#rpcv2Cbor` | client only | Early preview |
 | `alloy.proto#grpc` | `.proto` emission + gRPC client + ASP.NET Core gRPC server | Experimental |
 
-Start with `alloy#simpleRestJson` for the smoothest end-to-end path. `restXml`
+We recommend `aws.protocols#restJson1` for new projects. `restXml`
 and `rpcv2Cbor` are client-only for now. Full breakdown on the
 [Protocol Status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/) page.
 
