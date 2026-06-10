@@ -3,5 +3,17 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <ProjectReference Include="../NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
+
+    <!-- Props file sets SmithyGenerateServer=true / SmithyGenerateClient=false by default -->
+    <None
+      Include="Targets/NSmithy.Server.AspNetCore.props"
+      Pack="true"
+      PackagePath="build/NSmithy.Server.AspNetCore.props"
+    />
+    <None
+      Include="Targets/NSmithy.Server.AspNetCore.props"
+      Pack="true"
+      PackagePath="buildTransitive/NSmithy.Server.AspNetCore.props"
+    />
   </ItemGroup>
 </Project>
