@@ -303,18 +303,15 @@ public final class ServerGenerator implements Runnable {
     switch (kind) {
       case RPC_V2_CBOR -> writeRpcV2CborOperationMap(sp, op, opInterface);
       case REST_JSON, REST_XML -> writeRestOperationMap(sp, op, opInterface);
-      default -> throw new IllegalStateException("Unsupported protocol for server codegen: " + kind);
+      default ->
+          throw new IllegalStateException("Unsupported protocol for server codegen: " + kind);
     }
   }
 
   private void writeRpcV2CborOperationMap(
       SymbolProvider sp, OperationShape op, String opInterface) {
     // rpcv2Cbor uses a synthetic URI; operations have no @http trait.
-    String uri =
-        "/service/"
-            + service.getId().getName()
-            + "/operation/"
-            + op.getId().getName();
+    String uri = "/service/" + service.getId().getName() + "/operation/" + op.getId().getName();
     writer.openBlock(
         "endpoints.MapPost($L, async (HttpContext httpContext, $L handler,"
             + " System.Threading.CancellationToken cancellationToken) => {",
@@ -329,8 +326,7 @@ public final class ServerGenerator implements Runnable {
         });
   }
 
-  private void writeRestOperationMap(
-      SymbolProvider sp, OperationShape op, String opInterface) {
+  private void writeRestOperationMap(SymbolProvider sp, OperationShape op, String opInterface) {
     HttpTrait http = op.expectTrait(HttpTrait.class);
     writer.openBlock(
         "endpoints.MapMethods($L, [$L], async (HttpContext httpContext, $L handler,"
