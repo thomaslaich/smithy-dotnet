@@ -1,4 +1,3 @@
-using System.Linq;
 using Microsoft.AspNetCore.Http;
 using NSmithy.Http;
 
@@ -15,16 +14,11 @@ public static class SmithyAspNetCoreProtocol
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
-        // Build the URI with explicit string concatenation. Using the PathString '+'
-        // operators would treat the query string as a path segment and percent-encode
-        // its leading '?', which then hides the query from the protocol's parser.
-        var requestUri =
+        var request = new SmithyHttpRequest(
+            new HttpMethod(httpContext.Request.Method),
             httpContext.Request.PathBase.ToString()
             + httpContext.Request.Path.ToString()
-            + httpContext.Request.QueryString.ToString();
-        var request = new SmithyHttpRequest(
-            new System.Net.Http.HttpMethod(httpContext.Request.Method),
-            requestUri
+            + httpContext.Request.QueryString.ToString()
         );
         foreach (var header in httpContext.Request.Headers)
         {

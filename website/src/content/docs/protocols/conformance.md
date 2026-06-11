@@ -35,12 +35,12 @@ The numbers below are point-in-time snapshots from the pinned protocol-test
 models in this repository. They count official Smithy/Alloy
 `httpRequestTests` plus `httpResponseTests`.
 
-Current snapshot:
+Current snapshot (client-side request/response cases):
 
 - `alloy#simpleRestJson` — `43/43` official cases (`100%`).
-- `aws.protocols#restJson1` — `268/272` official cases (`98.53%`).
-- `smithy.protocols#rpcv2Cbor` — early preview; conformance test integration
-  is in progress.
+- `aws.protocols#restJson1` — `268/272` official cases (`98.5%`).
+- `smithy.protocols#rpcv2Cbor` — `47/84` official cases (`56%`). Server-side
+  conformance tests are also available but cover a narrower slice.
 - `alloy.proto#grpc` — not covered by Smithy's conformance suite; tested
   via end-to-end examples instead.
 

@@ -160,19 +160,16 @@ internal static class RequestAssertions
 
     private static void AssertBody(HttpRequestTestCase expected, RecordedRequest actual)
     {
-        var expectedBody = expected.Body ?? "";
-        var actualBody = Encoding.UTF8.GetString(actual.Body);
-        // Always prefer structural JSON comparison when both sides parse as JSON; fall back to
-        // exact string equality (covers raw text payloads).
-        if (TryParseJson(expectedBody, out var ej) && TryParseJson(actualBody, out var aj))
-        {
-            Xunit.Assert.True(
-                JsonEquals(ej, aj),
-                $"JSON body mismatch.\nExpected: {expectedBody}\nActual:   {actualBody}"
-            );
+        // rpcv2Cbor bodies are base64-encoded binary in the test fixture.
+        var expectedBytes = string.IsNullOrEmpty(expected.Body)
+            ? []
+            : Convert.FromBase64String(expected.Body);
+
+        if (expectedBytes.Length == 0 && actual.Body.Length == 0)
             return;
-        }
-        Xunit.Assert.Equal(expectedBody, actualBody);
+
+        // Use structural CBOR comparison so definite/indefinite length differences don't fail.
+        CborAssert.AreStructurallyEqual(expectedBytes, actual.Body);
     }
 
     private static bool TryParseJson(string s, out JsonNode? node)

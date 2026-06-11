@@ -17,9 +17,15 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
         var totalResponses = Model.EnumerateHttpResponseTests(RpcV2CborAllowlist.Protocol).Count();
         var execRequests = RpcV2CborAllowlist.ExecutableRequestCases.Count;
         var execResponses = RpcV2CborAllowlist.ExecutableResponseCases.Count;
+        var execServerRequests = RpcV2CborAllowlist.ExecutableServerRequestCases.Count;
+        var execServerResponses = RpcV2CborAllowlist.ExecutableServerResponseCases.Count;
 
         output.WriteLine(
-            $"[{RpcV2CborAllowlist.Protocol}] requests: {execRequests}/{totalRequests} ({Pct(execRequests, totalRequests)}), responses: {execResponses}/{totalResponses} ({Pct(execResponses, totalResponses)})"
+            $"[{RpcV2CborAllowlist.Protocol}] "
+                + $"client-requests: {execRequests}/{totalRequests} ({Pct(execRequests, totalRequests)}), "
+                + $"client-responses: {execResponses}/{totalResponses} ({Pct(execResponses, totalResponses)}), "
+                + $"server-requests: {execServerRequests}/{totalRequests} ({Pct(execServerRequests, totalRequests)}), "
+                + $"server-responses: {execServerResponses}/{totalResponses} ({Pct(execServerResponses, totalResponses)})"
         );
     }
 

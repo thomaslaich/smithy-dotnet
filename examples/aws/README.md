@@ -1,14 +1,7 @@
 # NSmithy AWS Protocol Example
 
-This example now groups the current AWS-focused client paths in one place.
-
-It is intentionally client-only and currently demonstrates:
-
-- `smithy.protocols#rpcv2Cbor` through a generated typed client and a mock peer
-- `aws.protocols#restXml` through a generated typed client and the same mock peer
-
-Both `smithy.protocols#rpcv2Cbor` and `aws.protocols#restXml` now come from the
-normal Smithy trait dependencies configured for the example.
+A minimal example demonstrating `aws.protocols#restXml` through a generated typed client
+with a mock peer.
 
 ## Run
 
@@ -20,23 +13,23 @@ just pack
 just refresh-examples
 ```
 
-Then run the example client:
+Then run the example:
 
 ```bash
 cd examples/aws/client
 dotnet run -- world
 ```
 
-That runs both the `rpcv2Cbor` and `restXml` clients against the in-process
-mock transport.
+You should see:
 
-To exercise the generated `rpcv2Cbor` error path:
-
-```bash
-cd examples/aws/client
-dotnet run -- error
+```
+SayHelloXml => Hello, world! from mock-restxml
 ```
 
-Preview note: this is still a narrow example. It demonstrates generated client
-code, CBOR request/response bodies with `__type`-based error decoding, and a
-basic generated `restXml` client path.
+## Structure
+
+The model is defined directly in `model/hello.smithy`. The client project references
+the shared `smithy-build.json` and generates a typed client for `HelloXmlService`.
+
+For an `rpcv2Cbor` example with a real ASP.NET Core server, see
+[`examples/rpcv2cbor`](../rpcv2cbor/).

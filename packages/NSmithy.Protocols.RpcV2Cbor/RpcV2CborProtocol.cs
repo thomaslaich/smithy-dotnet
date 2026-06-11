@@ -11,6 +11,17 @@ public static class RpcV2CborProtocol
 {
     private const string ContentType = "application/cbor";
 
+    // Smithy 2.0 wraps `input: Unit` / `output: Unit` in synthetic structures that carry
+    // this trait pointing back to the original `smithy.api#Unit` shape id.
+    private static readonly ShapeId SyntheticOriginalShapeId = new("smithy.synthetic", "originalShapeId");
+    private static readonly string UnitShapeIdString = "smithy.api#Unit";
+
+    /// <summary>Returns true for synthetic unit-derived schemas that carry no members.</summary>
+    private static bool IsUnitSchema(Schema schema) =>
+        schema.HasTrait(SyntheticOriginalShapeId)
+        && schema.GetTrait(SyntheticOriginalShapeId)?.Value.Kind == DocumentKind.String
+        && schema.GetTrait(SyntheticOriginalShapeId)?.Value.AsString() == UnitShapeIdString;
+
     public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation,
         TInput input,
@@ -24,7 +35,7 @@ public static class RpcV2CborProtocol
         request.Headers["Smithy-Protocol"] = ["rpc-v2-cbor"];
         request.Headers["Accept"] = [ContentType];
 
-        if (typeof(TInput) != typeof(SmithyUnit))
+        if (typeof(TInput) != typeof(SmithyUnit) && !IsUnitSchema(operation.Input))
         {
             request.Content = CborCodec.FromSchema(operation.Input).Serialize(input);
             request.ContentType = ContentType;
@@ -47,7 +58,7 @@ public static class RpcV2CborProtocol
             return (TOutput)(object)SmithyUnit.Value;
         }
 
-        return DeserializeRequiredBody(CborCodec.FromSchema(operation.Output), response.Content);
+        return DeserializeBody(CborCodec.FromSchema(operation.Output), response.Content);
     }
 
     public static TError DeserializeError<TError>(
@@ -76,6 +87,65 @@ public static class RpcV2CborProtocol
         }
 
         return codec.Deserialize(content);
+    }
+
+    public static TInput DeserializeRequest<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation,
+        SmithyHttpRequest request
+    )
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (typeof(TInput) == typeof(SmithyUnit) || IsUnitSchema(operation.Input))
+            return default!;
+
+        return DeserializeBody(CborCodec.FromSchema(operation.Input), request.Content ?? []);
+    }
+
+    public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation,
+        TOutput output
+    )
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        var responseHeaders = new Dictionary<string, IReadOnlyList<string>>(
+            StringComparer.OrdinalIgnoreCase
+        )
+        {
+            ["Smithy-Protocol"] = ["rpc-v2-cbor"],
+        };
+        var emptyContentHeaders = new Dictionary<string, IReadOnlyList<string>>(
+            StringComparer.OrdinalIgnoreCase
+        );
+
+        if (typeof(TOutput) == typeof(SmithyUnit) || IsUnitSchema(operation.Output))
+        {
+            return new SmithyHttpResponse(
+                System.Net.HttpStatusCode.OK,
+                null,
+                [],
+                responseHeaders,
+                emptyContentHeaders
+            );
+        }
+
+        var body = CborCodec.FromSchema(operation.Output).Serialize(output);
+        var contentHeaders = new Dictionary<string, IReadOnlyList<string>>(
+            StringComparer.OrdinalIgnoreCase
+        )
+        {
+            ["Content-Type"] = [ContentType],
+        };
+
+        return new SmithyHttpResponse(
+            System.Net.HttpStatusCode.OK,
+            null,
+            body,
+            responseHeaders,
+            contentHeaders
+        );
     }
 
     public static bool HasResponse(SmithyHttpResponse response)
