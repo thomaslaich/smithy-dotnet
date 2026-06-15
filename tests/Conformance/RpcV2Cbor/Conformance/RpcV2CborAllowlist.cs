@@ -129,33 +129,34 @@ internal static class RpcV2CborAllowlist
         "optional_input",
     };
 
-    public static readonly IReadOnlySet<string> ExecutableServerResponseCases =
-        new HashSet<string>(StringComparer.Ordinal)
-        {
-            "RpcV2CborComplexError",
-            "RpcV2CborDeserializesDenseSetMap",
-            "RpcV2CborDeserializesNullMapValues",
-            "RpcV2CborDeserializesSparseSetMap",
-            "RpcV2CborDeserializesSparseSetMapAndRetainsNull",
-            "RpcV2CborDeserializesZeroValuesInMaps",
-            "RpcV2CborDeserializesZeroValuesInSparseMaps",
-            "RpcV2CborEmptyComplexError",
-            "RpcV2CborInvalidGreetingError",
-            "RpcV2CborLists",
-            "RpcV2CborListsEmpty",
-            "RpcV2CborMaps",
-            "RpcV2CborRecursiveShapes",
-            "RpcV2CborServerDoesntSerializeNullStructureValues",
-            "RpcV2CborServerPopulatesDefaultsInResponseWhenMissingInParams",
-            "RpcV2CborSimpleScalarProperties",
-            "RpcV2CborSparseJsonMaps",
-            "RpcV2CborSparseListsDeserializeNull",
-            "RpcV2CborSparseMapsDeserializeNullValues",
-            "RpcV2CborSupportsInfinityFloatOutputs",
-            "RpcV2CborSupportsNaNFloatOutputs",
-            "RpcV2CborSupportsNegativeInfinityFloatOutputs",
-            "empty_output",
-            "no_output",
-            "optional_output",
-        };
+    public static readonly IReadOnlySet<string> ExecutableServerResponseCases = new HashSet<string>(
+        StringComparer.Ordinal
+    )
+    {
+        "RpcV2CborComplexError",
+        "RpcV2CborDeserializesDenseSetMap",
+        "RpcV2CborDeserializesNullMapValues",
+        "RpcV2CborDeserializesSparseSetMap",
+        "RpcV2CborDeserializesSparseSetMapAndRetainsNull",
+        "RpcV2CborDeserializesZeroValuesInMaps",
+        "RpcV2CborDeserializesZeroValuesInSparseMaps",
+        "RpcV2CborEmptyComplexError",
+        "RpcV2CborInvalidGreetingError",
+        "RpcV2CborLists",
+        "RpcV2CborListsEmpty",
+        "RpcV2CborMaps",
+        "RpcV2CborRecursiveShapes",
+        "RpcV2CborServerDoesntSerializeNullStructureValues",
+        "RpcV2CborServerPopulatesDefaultsInResponseWhenMissingInParams",
+        "RpcV2CborSimpleScalarProperties",
+        "RpcV2CborSparseJsonMaps",
+        "RpcV2CborSparseListsDeserializeNull",
+        "RpcV2CborSparseMapsDeserializeNullValues",
+        "RpcV2CborSupportsInfinityFloatOutputs",
+        "RpcV2CborSupportsNaNFloatOutputs",
+        "RpcV2CborSupportsNegativeInfinityFloatOutputs",
+        "empty_output",
+        "no_output",
+        "optional_output",
+    };
 }

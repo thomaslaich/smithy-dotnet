@@ -76,10 +76,12 @@ internal abstract class CborValue
             return tag switch
             {
                 CborTag.UnixTimeSeconds => inner, // timestamp tag – treat inner as-is
-                CborTag.UnsignedBigNum when inner is CborBytes b =>
-                    new CborInt(new BigInteger(b.Value, isUnsigned: true, isBigEndian: true)),
-                CborTag.NegativeBigNum when inner is CborBytes b =>
-                    new CborInt(-1 - new BigInteger(b.Value, isUnsigned: true, isBigEndian: true)),
+                CborTag.UnsignedBigNum when inner is CborBytes b => new CborInt(
+                    new BigInteger(b.Value, isUnsigned: true, isBigEndian: true)
+                ),
+                CborTag.NegativeBigNum when inner is CborBytes b => new CborInt(
+                    -1 - new BigInteger(b.Value, isUnsigned: true, isBigEndian: true)
+                ),
                 _ => inner,
             };
         }
@@ -141,13 +143,16 @@ internal abstract class CborValue
 internal sealed class CborNull : CborValue
 {
     public override bool Equivalent(CborValue other) => other is CborNull;
+
     public override string ToString() => "null";
 }
 
 internal sealed class CborBool(bool value) : CborValue
 {
     public bool Value { get; } = value;
+
     public override bool Equivalent(CborValue other) => other is CborBool b && Value == b.Value;
+
     public override string ToString() => Value ? "true" : "false";
 }
 
@@ -165,7 +170,8 @@ internal sealed class CborInt(BigInteger value) : CborValue
         return false;
     }
 
-    public override string ToString() => Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    public override string ToString() =>
+        Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }
 
 internal sealed class CborFloat(double value) : CborValue
@@ -183,13 +189,16 @@ internal sealed class CborFloat(double value) : CborValue
         return false;
     }
 
-    public override string ToString() => Value.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
+    public override string ToString() =>
+        Value.ToString("G17", System.Globalization.CultureInfo.InvariantCulture);
 }
 
 internal sealed class CborText(string value) : CborValue
 {
     public string Value { get; } = value;
+
     public override bool Equivalent(CborValue other) => other is CborText t && Value == t.Value;
+
     public override string ToString() => $"\"{Value}\"";
 }
 

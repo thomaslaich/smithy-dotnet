@@ -283,7 +283,9 @@ public static class CborCodec
             {
                 // CBOR negative bignum stores (-1 - N)
                 writer.WriteTag(CborTag.NegativeBigNum);
-                writer.WriteByteString((-1 - value).ToByteArray(isUnsigned: true, isBigEndian: true));
+                writer.WriteByteString(
+                    (-1 - value).ToByteArray(isUnsigned: true, isBigEndian: true)
+                );
             }
         }
     }
@@ -300,8 +302,7 @@ public static class CborCodec
         var isNegative = (flags & unchecked((int)0x80000000)) != 0;
         var scale = (byte)((flags >> 16) & 0xFF);
 
-        var significand =
-            (BigInteger)lo | ((BigInteger)mid << 32) | ((BigInteger)hi << 64);
+        var significand = (BigInteger)lo | ((BigInteger)mid << 32) | ((BigInteger)hi << 64);
         if (isNegative)
             significand = -significand;
 
@@ -440,11 +441,11 @@ public static class CborCodec
             DateTimeOffset timestamp => timestamp,
             long longValue => DateTimeOffset.FromUnixTimeSeconds(longValue),
             double doubleValue =>
-                // Use ticks for sub-second precision
-                new DateTimeOffset(
-                    DateTime.UnixEpoch.AddTicks((long)(doubleValue * TimeSpan.TicksPerSecond)),
-                    TimeSpan.Zero
-                ),
+            // Use ticks for sub-second precision
+            new DateTimeOffset(
+                DateTime.UnixEpoch.AddTicks((long)(doubleValue * TimeSpan.TicksPerSecond)),
+                TimeSpan.Zero
+            ),
             string text => DateTimeOffset.Parse(
                 text,
                 CultureInfo.InvariantCulture,
@@ -466,12 +467,16 @@ public static class CborCodec
             return tag switch
             {
                 CborTag.UnixTimeSeconds => MaterializeTimestamp(inner!),
-                CborTag.UnsignedBigNum when inner is byte[] positiveBytes =>
-                    new BigInteger(positiveBytes, isUnsigned: true, isBigEndian: true),
-                CborTag.NegativeBigNum when inner is byte[] negativeBytes =>
-                    -1 - new BigInteger(negativeBytes, isUnsigned: true, isBigEndian: true),
-                CborTag.DecimalFraction when inner is IReadOnlyList<object?> parts
-                    && parts.Count == 2 => MaterializeDecimalFraction(parts[0], parts[1]),
+                CborTag.UnsignedBigNum when inner is byte[] positiveBytes => new BigInteger(
+                    positiveBytes,
+                    isUnsigned: true,
+                    isBigEndian: true
+                ),
+                CborTag.NegativeBigNum when inner is byte[] negativeBytes => -1
+                    - new BigInteger(negativeBytes, isUnsigned: true, isBigEndian: true),
+                CborTag.DecimalFraction
+                    when inner is IReadOnlyList<object?> parts && parts.Count == 2 =>
+                    MaterializeDecimalFraction(parts[0], parts[1]),
                 _ => inner,
             };
         }

@@ -50,8 +50,7 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
     public SmithyHttpResponse SerializeResponse(TOutput output) =>
         RestProtocol.SerializeResponse(binding, output, bodyFormat);
 
-    public bool IsErrorResponse(SmithyHttpResponse response) =>
-        (int)response.StatusCode >= 400;
+    public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
 
     public string? GetErrorDiscriminator(SmithyHttpResponse response) =>
         errorDiscriminator(response);

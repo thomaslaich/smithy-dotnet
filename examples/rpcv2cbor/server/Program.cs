@@ -19,8 +19,6 @@ internal sealed class HelloHandler : IHelloServiceHandler
             throw new InvalidName("name must not be 'error'");
         }
 
-        return Task.FromResult(
-            new SayHelloOutput("rpcv2cbor-server", $"Hello, {input.Name}!")
-        );
+        return Task.FromResult(new SayHelloOutput("rpcv2cbor-server", $"Hello, {input.Name}!"));
     }
 }

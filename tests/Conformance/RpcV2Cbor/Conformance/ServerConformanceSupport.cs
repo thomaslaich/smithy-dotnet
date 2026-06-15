@@ -214,7 +214,6 @@ internal static class ServerCborRequestFactory
         builder.Query = query;
         return builder.Uri;
     }
-
 }
 
 internal static class ServerCborResponseAssertions
@@ -231,7 +230,10 @@ internal static class ServerCborResponseAssertions
 
         foreach (var (name, value) in expected.Headers)
         {
-            Assert.True(headers.TryGetValue(name, out var actualValue), $"Missing header '{name}'.");
+            Assert.True(
+                headers.TryGetValue(name, out var actualValue),
+                $"Missing header '{name}'."
+            );
             Assert.Equal(value, actualValue);
         }
 
@@ -248,5 +250,4 @@ internal static class ServerCborResponseAssertions
         var expectedBytes = Convert.FromBase64String(expected.Body);
         CborAssert.AreStructurallyEqual(expectedBytes, actualBodyBytes);
     }
-
 }

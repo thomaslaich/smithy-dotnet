@@ -98,7 +98,9 @@ internal static class ServerHttpRequestRunner
             return null;
 
         var args = ctor.GetParameters()
-            .Select(p => p.HasDefaultValue ? p.DefaultValue : BuildDefault(p.ParameterType, depth + 1))
+            .Select(p =>
+                p.HasDefaultValue ? p.DefaultValue : BuildDefault(p.ParameterType, depth + 1)
+            )
             .ToArray();
         return ctor.Invoke(args);
     }

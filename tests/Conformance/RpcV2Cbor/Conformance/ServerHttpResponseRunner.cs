@@ -8,7 +8,11 @@ internal static class ServerHttpResponseRunner
 {
     public static async Task RunAsync(HttpResponseTestCase testCase, JsonObject modelShapes)
     {
-        var owningOperation = ResolveOwningOperation(testCase.ShapeId, modelShapes, out var isError);
+        var owningOperation = ResolveOwningOperation(
+            testCase.ShapeId,
+            modelShapes,
+            out var isError
+        );
         var localOpName = owningOperation.Split('#')[^1];
         var (clientType, clientMethod) = ConformanceClients.ResolveOperation(localOpName + "Async");
         var inputType = clientMethod.GetParameters()[0].ParameterType;
@@ -21,7 +25,8 @@ internal static class ServerHttpResponseRunner
         if (isError)
         {
             var errorType = ResolveErrorType(testCase.ShapeId);
-            errorToThrow = (Exception)ParamBinder.Bind(errorType, testCase.Params ?? new JsonObject())!;
+            errorToThrow = (Exception)
+                ParamBinder.Bind(errorType, testCase.Params ?? new JsonObject())!;
         }
         else
         {
@@ -58,9 +63,7 @@ internal static class ServerHttpResponseRunner
         var localName = shapeId.Split('#')[^1];
         return typeof(ServerHttpResponseRunner)
                 .Assembly.GetTypes()
-                .FirstOrDefault(t =>
-                    t.Name == localName && typeof(Exception).IsAssignableFrom(t)
-                )
+                .FirstOrDefault(t => t.Name == localName && typeof(Exception).IsAssignableFrom(t))
             ?? throw new InvalidOperationException(
                 $"Could not resolve generated error type for {shapeId}."
             );
@@ -141,7 +144,11 @@ internal static class ServerHttpResponseRunner
             .Invoke(null, [output])!;
     }
 
-    private static string ResolveOwningOperation(string shapeId, JsonObject shapes, out bool isError)
+    private static string ResolveOwningOperation(
+        string shapeId,
+        JsonObject shapes,
+        out bool isError
+    )
     {
         var node =
             shapes[shapeId] as JsonObject
@@ -218,7 +225,9 @@ internal static class ServerHttpResponseRunner
             return null;
 
         var args = ctor.GetParameters()
-            .Select(p => p.HasDefaultValue ? p.DefaultValue : BuildDefault(p.ParameterType, depth + 1))
+            .Select(p =>
+                p.HasDefaultValue ? p.DefaultValue : BuildDefault(p.ParameterType, depth + 1)
+            )
             .ToArray();
         return ctor.Invoke(args);
     }

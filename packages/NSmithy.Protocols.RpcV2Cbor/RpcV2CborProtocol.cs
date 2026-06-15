@@ -13,7 +13,10 @@ public static class RpcV2CborProtocol
 
     // Smithy 2.0 wraps `input: Unit` / `output: Unit` in synthetic structures that carry
     // this trait pointing back to the original `smithy.api#Unit` shape id.
-    private static readonly ShapeId SyntheticOriginalShapeId = new("smithy.synthetic", "originalShapeId");
+    private static readonly ShapeId SyntheticOriginalShapeId = new(
+        "smithy.synthetic",
+        "originalShapeId"
+    );
     private static readonly string UnitShapeIdString = "smithy.api#Unit";
 
     /// <summary>Returns true for synthetic unit-derived schemas that carry no members.</summary>
@@ -61,8 +64,14 @@ public static class RpcV2CborProtocol
             outputIsUnit = outputIsSmithyUnit || IsUnitSchema(operation.Output);
 
             // Built once per operation; the right materialize policy baked in per direction.
-            requestCodec = CborCodec.FromSchema(operation.Input, materializeTopLevelDefaults: false);
-            responseCodec = CborCodec.FromSchema(operation.Output, materializeTopLevelDefaults: true);
+            requestCodec = CborCodec.FromSchema(
+                operation.Input,
+                materializeTopLevelDefaults: false
+            );
+            responseCodec = CborCodec.FromSchema(
+                operation.Output,
+                materializeTopLevelDefaults: true
+            );
         }
 
         public SmithyHttpRequest SerializeRequest(TInput input)
@@ -141,8 +150,7 @@ public static class RpcV2CborProtocol
             );
         }
 
-        public bool IsErrorResponse(SmithyHttpResponse response) =>
-            (int)response.StatusCode >= 400;
+        public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
 
         public string? GetErrorDiscriminator(SmithyHttpResponse response) =>
             HasResponse(response) ? DeserializeErrorType(response) : null;

@@ -17,8 +17,8 @@ public static class SmithyAspNetCoreProtocol
         var request = new SmithyHttpRequest(
             new HttpMethod(httpContext.Request.Method),
             httpContext.Request.PathBase.ToString()
-            + httpContext.Request.Path.ToString()
-            + httpContext.Request.QueryString.ToString()
+                + httpContext.Request.Path.ToString()
+                + httpContext.Request.QueryString.ToString()
         );
         foreach (var header in httpContext.Request.Headers)
         {

@@ -144,8 +144,8 @@ internal static class ParamBinder
             // Decompose to avoid precision loss when epoch > 2^53/1e7 (~28 years).
             var intSec = (long)epoch;
             var fracSec = epoch - intSec;
-            var ticks = intSec * TimeSpan.TicksPerSecond
-                + (long)(fracSec * TimeSpan.TicksPerSecond);
+            var ticks =
+                intSec * TimeSpan.TicksPerSecond + (long)(fracSec * TimeSpan.TicksPerSecond);
             return new DateTimeOffset(DateTime.UnixEpoch.AddTicks(ticks), TimeSpan.Zero);
         }
         return DateTimeOffset.Parse(

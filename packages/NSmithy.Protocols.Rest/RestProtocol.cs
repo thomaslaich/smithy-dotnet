@@ -68,7 +68,6 @@ public static class RestProtocol
         return request;
     }
 
-
     public static TInput DeserializeRequest<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
         SmithyHttpRequest request,
