@@ -15,11 +15,23 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
     [Fact]
     public void ReportConformanceRate()
     {
-        var totalRequests = Model.EnumerateHttpRequestTests(Protocol).Count();
-        var totalResponses = Model.EnumerateHttpResponseTests(Protocol).Count();
+        var requests = Model.EnumerateHttpRequestTests(Protocol).ToList();
+        var responses = Model.EnumerateHttpResponseTests(Protocol).ToList();
+
+        // This project drives every applicable case through the generated CLIENT (there is no
+        // server conformance project for simpleRestJson yet). Report client and server separately
+        // so the absent server coverage is visible rather than folded into a flat "100%".
+        var clientReqTotal = requests.Count(c => c.AppliesToClient);
+        var clientRespTotal = responses.Count(c => c.AppliesToClient);
+        var serverReqTotal = requests.Count(c => c.AppliesToServer);
+        var serverRespTotal = responses.Count(c => c.AppliesToServer);
 
         output.WriteLine(
-            $"[{Protocol}] requests: {totalRequests}/{totalRequests} ({Pct(totalRequests, totalRequests)}), responses: {totalResponses}/{totalResponses} ({Pct(totalResponses, totalResponses)})"
+            $"[{Protocol}] "
+                + $"client-requests: {clientReqTotal}/{clientReqTotal} ({Pct(clientReqTotal, clientReqTotal)}), "
+                + $"client-responses: {clientRespTotal}/{clientRespTotal} ({Pct(clientRespTotal, clientRespTotal)}), "
+                + $"server-requests: 0/{serverReqTotal} ({Pct(0, serverReqTotal)}), "
+                + $"server-responses: 0/{serverRespTotal} ({Pct(0, serverRespTotal)})"
         );
     }
 

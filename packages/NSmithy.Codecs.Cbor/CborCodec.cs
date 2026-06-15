@@ -10,18 +10,64 @@ public interface ICborCodec<T> : ICodec<T> { }
 
 public static class CborCodec
 {
-    public static ICborCodec<T> FromSchema<T>(Schema<T> schema)
+    /// <summary>
+    /// Creates a codec for <paramref name="schema"/>. <paramref name="materializeTopLevelDefaults"/>
+    /// controls whether the top-level structure writes members that carry a <c>@default</c> trait
+    /// when they are null; nested structures always materialize their defaults. Client requests
+    /// pass <c>false</c> (top-level defaults are skipped on the wire); server responses pass
+    /// <c>true</c>.
+    /// </summary>
+    public static ICborCodec<T> FromSchema<T>(
+        Schema<T> schema,
+        bool materializeTopLevelDefaults = true
+    )
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new CborCodecImpl<T>(schema);
+        return new CborCodecImpl<T>(schema, materializeTopLevelDefaults);
     }
 
-    private sealed class CborCodecImpl<T>(Schema<T> schema) : ICborCodec<T>
+    /// <summary>
+    /// Serializes an error structure as a CBOR map, prefixing a <c>__type</c> discriminator
+    /// entry that carries the absolute shape id. This is how rpcv2Cbor encodes error responses.
+    /// </summary>
+    public static byte[] SerializeError<T>(Schema<T> schema, T value, string typeDiscriminator)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        ArgumentNullException.ThrowIfNull(typeDiscriminator);
+        if (schema.Resolved is not IStructSchema structSchema)
+        {
+            throw new InvalidOperationException(
+                "rpcv2Cbor errors must be backed by a structure schema."
+            );
+        }
+
+        var writer = new CborWriter(CborConformanceMode.Lax);
+        writer.WriteStartMap(null);
+        writer.WriteTextString("__type");
+        writer.WriteTextString(typeDiscriminator);
+        foreach (var member in structSchema.Members)
+        {
+            var memberValue = member.GetObject(value!);
+            if (memberValue is null && !member.IsRequired)
+            {
+                continue;
+            }
+
+            writer.WriteTextString(member.Name);
+            WriteValue(writer, member.Target, memberValue);
+        }
+
+        writer.WriteEndMap();
+        return writer.Encode();
+    }
+
+    private sealed class CborCodecImpl<T>(Schema<T> schema, bool materializeTopLevelDefaults)
+        : ICborCodec<T>
     {
         public byte[] Serialize(T value)
         {
             var writer = new CborWriter(CborConformanceMode.Lax);
-            WriteValue(writer, schema, value);
+            WriteValue(writer, schema, value, materializeTopLevelDefaults);
             return writer.Encode();
         }
 
@@ -39,7 +85,12 @@ public static class CborCodec
         }
     }
 
-    private static void WriteValue(CborWriter writer, Schema schema, object? value)
+    private static void WriteValue(
+        CborWriter writer,
+        Schema schema,
+        object? value,
+        bool materializeDefaults = true
+    )
     {
         var resolved = schema.Resolved;
         if (value is null)
@@ -50,7 +101,7 @@ public static class CborCodec
 
         if (resolved is INullableSchema nullable)
         {
-            WriteValue(writer, nullable.Target, value);
+            WriteValue(writer, nullable.Target, value, materializeDefaults);
             return;
         }
 
@@ -103,7 +154,7 @@ public static class CborCodec
                     "Smithy Document values are not supported by rpcv2Cbor."
                 );
             case ShapeKind.Structure:
-                WriteStructure(writer, (IStructSchema)resolved, value);
+                WriteStructure(writer, (IStructSchema)resolved, value, materializeDefaults);
                 break;
             case ShapeKind.Union:
                 WriteUnion(writer, (IUnionSchema)resolved, value);
@@ -122,7 +173,12 @@ public static class CborCodec
         }
     }
 
-    private static void WriteStructure(CborWriter writer, IStructSchema schema, object value)
+    private static void WriteStructure(
+        CborWriter writer,
+        IStructSchema schema,
+        object value,
+        bool materializeDefaults
+    )
     {
         writer.WriteStartMap(null);
         foreach (var member in schema.Members)
@@ -130,11 +186,20 @@ public static class CborCodec
             var memberValue = member.GetObject(value);
             if (memberValue is null && !member.IsRequired)
             {
-                continue;
+                // Populate a member that carries a @default when materialization is enabled for
+                // this struct level; otherwise omit it.
+                if (
+                    !materializeDefaults
+                    || !TryCreateDefaultValue(member.Target, member.Traits, out memberValue)
+                )
+                {
+                    continue;
+                }
             }
 
             writer.WriteTextString(member.Name);
-            WriteValue(writer, member.Target, memberValue);
+            // Nested structures always materialize their defaults.
+            WriteValue(writer, member.Target, memberValue, materializeDefaults: true);
         }
 
         writer.WriteEndMap();
@@ -420,8 +485,10 @@ public static class CborCodec
             CborReaderState.SinglePrecisionFloat => reader.ReadSingle(),
             CborReaderState.DoublePrecisionFloat => reader.ReadDouble(),
             CborReaderState.HalfPrecisionFloat => (double)reader.ReadHalf(),
-            CborReaderState.TextString => reader.ReadTextString(),
-            CborReaderState.ByteString => reader.ReadByteString(),
+            CborReaderState.TextString or CborReaderState.StartIndefiniteLengthTextString =>
+                reader.ReadTextString(),
+            CborReaderState.ByteString or CborReaderState.StartIndefiniteLengthByteString =>
+                reader.ReadByteString(),
             CborReaderState.StartArray => ReadArray(ref reader),
             CborReaderState.StartMap => ReadMap(ref reader),
             _ => SkipAndReturn(ref reader),

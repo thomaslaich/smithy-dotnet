@@ -17,6 +17,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -28,6 +29,9 @@ import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
+import software.amazon.smithy.model.shapes.StructureShape;
+import software.amazon.smithy.model.traits.ErrorTrait;
+import software.amazon.smithy.model.traits.HttpErrorTrait;
 import software.amazon.smithy.model.traits.HttpTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -280,6 +284,25 @@ public final class ServerGenerator implements Runnable {
         "{",
         "}",
         () -> {
+          // rpcv2Cbor builds operation-bound protocols once from the (service, operation) schemas,
+          // exactly like the generated client; the endpoint bodies then call them uniformly.
+          if (kind == ProtocolSupport.Kind.RPC_V2_CBOR) {
+            writer.write(
+                "private static readonly IServiceProtocol ServiceProtocol ="
+                    + " RpcV2CborProtocol.ForService($L);",
+                SchemaGenerator.serviceSchemaAccessor(context, service));
+            for (OperationShape op : ops) {
+              writer.write(
+                  "private static readonly IOperationProtocol<$L, $L> $LProtocol ="
+                      + " ServiceProtocol.ForOperation($L);",
+                  SchemaGenerator.operationShapeType(context, op.getInputShape()),
+                  SchemaGenerator.operationShapeType(context, op.getOutputShape()),
+                  CSharpNaming.typeName(op.getId().getName()),
+                  SchemaGenerator.operationSchemaAccessor(context, op));
+            }
+            writer.write("");
+          }
+
           writer.write(
               "public static IEndpointRouteBuilder Map$LHttp(this IEndpointRouteBuilder endpoints)",
               contract);
@@ -347,9 +370,11 @@ public final class ServerGenerator implements Runnable {
   private void writeOperationBody(SymbolProvider sp, OperationShape op) {
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
+    boolean rpc = kind == ProtocolSupport.Kind.RPC_V2_CBOR;
     String methodName = CSharpNaming.typeName(op.getId().getName()) + "Async";
     String protocol = ProtocolSupport.protocolType(kind);
     String opSchema = SchemaGenerator.operationSchemaAccessor(context, op);
+    String opProtocol = CSharpNaming.typeName(op.getId().getName()) + "Protocol";
 
     // Call the handler interface method directly — the operation schema carries the
     // serialization metadata, so a separate per-operation descriptor is unnecessary.
@@ -358,23 +383,82 @@ public final class ServerGenerator implements Runnable {
       writer.write(
           "var smithyRequest = await SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync("
               + "httpContext, cancellationToken).ConfigureAwait(false);");
-      writer.write("var input = $L.DeserializeRequest($L, smithyRequest);", protocol, opSchema);
+      if (rpc) {
+        writer.write("var input = $L.DeserializeRequest(smithyRequest);", opProtocol);
+      } else {
+        writer.write("var input = $L.DeserializeRequest($L, smithyRequest);", protocol, opSchema);
+      }
       handlerCall = "handler." + methodName + "(input, cancellationToken)";
     } else {
       handlerCall = "handler." + methodName + "(cancellationToken)";
     }
 
+    String serializeResponse =
+        rpc
+            ? opProtocol + ".SerializeResponse(output)"
+            : protocol + ".SerializeResponse(" + opSchema + ", output)";
+
+    // rpcv2Cbor: catch modeled errors and serialize them as CBOR error responses.
+    List<ShapeId> errorIds = new ArrayList<>(op.getErrors(service));
+    errorIds.sort(Comparator.comparing(ShapeId::toString));
+    boolean catchErrors = rpc && !errorIds.isEmpty();
+
+    if (catchErrors) {
+      writer.write("NSmithy.Http.SmithyHttpResponse smithyResponse;");
+      writer.write("try");
+      writer.openBlock(
+          "{",
+          "}",
+          () -> {
+            writeHandlerInvocation(handlerCall, hasOutput);
+            writer.write("smithyResponse = $L;", serializeResponse);
+          });
+      for (ShapeId errId : errorIds) {
+        writeErrorCatch(errId, opProtocol);
+      }
+    } else {
+      writeHandlerInvocation(handlerCall, hasOutput);
+      writer.write("var smithyResponse = $L;", serializeResponse);
+    }
+
+    writer.write(
+        "await SmithyAspNetCoreProtocol.WriteSmithyHttpResponseAsync(httpContext, smithyResponse,"
+            + " cancellationToken).ConfigureAwait(false);");
+  }
+
+  private void writeHandlerInvocation(String handlerCall, boolean hasOutput) {
     if (hasOutput) {
       writer.write("var output = await $L.ConfigureAwait(false);", handlerCall);
     } else {
       writer.write("await $L.ConfigureAwait(false);", handlerCall);
       writer.write("var output = SmithyUnit.Value;");
     }
+  }
 
-    writer.write("var smithyResponse = $L.SerializeResponse($L, output);", protocol, opSchema);
-    writer.write(
-        "await SmithyAspNetCoreProtocol.WriteSmithyHttpResponseAsync(httpContext, smithyResponse,"
-            + " cancellationToken).ConfigureAwait(false);");
+  private void writeErrorCatch(ShapeId errId, String opProtocol) {
+    StructureShape err = context.model().expectShape(errId, StructureShape.class);
+    String errType = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(err));
+    String errSchema = SchemaGenerator.shapeSchemaAccessor(context, err);
+    int statusCode = httpErrorCode(err);
+    writer.write("catch ($L error)", errType);
+    writer.openBlock(
+        "{",
+        "}",
+        () ->
+            writer.write(
+                "smithyResponse = $L.SerializeError($L, error, $L, $L);",
+                opProtocol,
+                errSchema,
+                CSharpNaming.formatString(errId.toString()),
+                statusCode));
+  }
+
+  private static int httpErrorCode(StructureShape err) {
+    return err.getTrait(HttpErrorTrait.class)
+        .map(HttpErrorTrait::getCode)
+        .orElseGet(
+            () ->
+                err.getTrait(ErrorTrait.class).map(t -> t.isClientError() ? 400 : 500).orElse(500));
   }
 
   private String routePattern(HttpTrait http) {

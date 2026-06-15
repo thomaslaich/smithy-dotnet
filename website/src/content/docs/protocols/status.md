@@ -9,27 +9,36 @@ complete or fully conformant across the Smithy surface.
 
 ## Current Status
 
-| Protocol | Generated Surfaces | Stage | Notes |
-| --- | --- | --- | --- |
-| `alloy#simpleRestJson` | .NET client, ASP.NET Core server | Preview, most complete | Best-covered transport today. Official pinned-suite coverage is currently `43/43` (`100%`). |
-| `aws.protocols#restJson1` | .NET client, ASP.NET Core server | Preview | Client and server generation work. Official pinned-suite coverage is currently `268/272` (`98.53%`), with the remaining gap concentrated in Glacier-specific fixtures. |
-| `aws.protocols#restXml` | .NET client | Early preview | Client generation available; used to validate the XML codec and transport abstractions. |
-| `smithy.protocols#rpcv2Cbor` | .NET client, ASP.NET Core server | Preview | Client and server generation. Official pinned-suite client coverage: `47/84` (`56%`). |
-| `alloy.proto#grpc` | `.proto` emission, gRPC client adapter, ASP.NET Core gRPC server adapter | Experimental | Works for the current generated path, but still has the least maturity, the smallest test surface, and more explicit model requirements such as `alloy.proto#protoIndex`. |
+Conformance is reported separately for the generated **client** and **server**,
+each counted against the official cases that actually apply to that direction
+(`appliesTo`) in the pinned protocol-test models. A case that only applies to a
+server is never counted toward client coverage and vice versa.
 
-## Current Conformance Snapshot
+| Protocol | Surfaces | Stage | Client | Server |
+| --- | --- | --- | --- | --- |
+| `alloy#simpleRestJson` | both | Preview (most complete) | 43/43 (100%) | not yet exercised |
+| `aws.protocols#restJson1` | both | Preview | 243/247 (98.4%) | 19/227 (8.4%) |
+| `aws.protocols#restXml` | client | Early preview | codec-only, no cases yet | — |
+| `smithy.protocols#rpcv2Cbor` | both | Preview | 68/68 (100%) | 60/60 (100%) |
+| `alloy.proto#grpc` | both | Experimental | tested via examples¹ | tested via examples¹ |
 
-All numbers are client-side request/response test cases from the official Smithy
-protocol test models pinned in this repository. They are broader than the
-executable allowlists used by individual test projects, but narrower than every
-test that exists upstream.
+¹ `alloy.proto#grpc` is not covered by Smithy's HTTP conformance suite; it is
+validated through end-to-end examples instead, and has the least maturity, the
+smallest test surface, and more explicit model requirements such as
+`alloy.proto#protoIndex`.
 
-| Protocol | Cases | Pass | Rate |
-| --- | --- | --- | --- |
-| `alloy#simpleRestJson` | 43 | 43 | 100% |
-| `aws.protocols#restJson1` | 272 | 268 | 98.5% |
-| `smithy.protocols#rpcv2Cbor` | 84 | 47 | 56% |
-| combined | 399 | 358 | 89.7% |
+Notes:
+
+- `alloy#simpleRestJson`'s protocol tests all declare `appliesTo: both`, so they
+  apply to servers too; there is simply no server conformance project driving
+  them yet, hence "not yet exercised" rather than a percentage.
+- `aws.protocols#restJson1`'s client surface is mature; its server surface is
+  still early (request/response serialization and error responses are only
+  partially exercised).
+- `aws.protocols#restXml` currently validates the XML codec and transport
+  abstractions; no official conformance cases are executed yet.
+- `smithy.protocols#rpcv2Cbor` is the only protocol with both client and server
+  fully exercised against every applicable case.
 
 ## Recommended Use
 

@@ -242,9 +242,13 @@ internal static class ParamBinder
         for (var i = 0; i < parameters.Length; i++)
         {
             var p = parameters[i];
-            // Generated ctor params are PascalCase; Smithy test fixture params are camelCase.
-            var memberName = char.ToLowerInvariant(p.Name![0]) + p.Name![1..];
-            if (obj.TryGetPropertyValue(memberName, out var node) && node is not null)
+            // The wire member name's casing can't be recovered from the C# ctor param alone
+            // (PascalCase normalization is lossy), so try the ctor param name as-is, its
+            // camelCase form, and its PascalCase form.
+            var camel = char.ToLowerInvariant(p.Name![0]) + p.Name![1..];
+            var pascal = char.ToUpperInvariant(p.Name![0]) + p.Name![1..];
+            var node = LookupMember(obj, p.Name!, camel, pascal);
+            if (node is not null)
             {
                 args[i] = Bind(p.ParameterType, node);
             }
@@ -262,6 +266,16 @@ internal static class ParamBinder
             }
         }
         return ctor.Invoke(args);
+    }
+
+    private static JsonNode? LookupMember(JsonObject obj, params string[] candidates)
+    {
+        foreach (var name in candidates)
+        {
+            if (obj.TryGetPropertyValue(name, out var node) && node is not null)
+                return node;
+        }
+        return null;
     }
 
     private static ConstructorInfo SelectConstructor(Type type)

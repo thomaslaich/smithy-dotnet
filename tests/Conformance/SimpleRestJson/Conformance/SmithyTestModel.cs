@@ -90,11 +90,16 @@ internal sealed record HttpRequestTestCase(
     string? BodyMediaType,
     string? Host,
     string? ResolvedHost,
-    JsonNode? Params
+    JsonNode? Params,
+    string AppliesTo
 )
 {
     /// <summary>Operation local name (e.g. "Health" for "alloy.test#Health").</summary>
     public string OperationName => ShapeId.Split('#')[^1];
+
+    public bool AppliesToClient => AppliesTo is "client" or "both";
+
+    public bool AppliesToServer => AppliesTo is "server" or "both";
 
     public static HttpRequestTestCase From(string shapeId, JsonObject c) =>
         new(
@@ -112,7 +117,8 @@ internal sealed record HttpRequestTestCase(
             (string?)c["bodyMediaType"],
             (string?)c["host"],
             (string?)c["resolvedHost"],
-            c["params"]
+            c["params"],
+            (string?)c["appliesTo"] ?? "both"
         );
 
     private static IReadOnlyList<string> ReadStringList(JsonObject c, string key) =>
@@ -129,10 +135,15 @@ internal sealed record HttpResponseTestCase(
     IReadOnlyDictionary<string, string> Headers,
     string? Body,
     string? BodyMediaType,
-    JsonNode? Params
+    JsonNode? Params,
+    string AppliesTo
 )
 {
     public string OperationOrErrorName => ShapeId.Split('#')[^1];
+
+    public bool AppliesToClient => AppliesTo is "client" or "both";
+
+    public bool AppliesToServer => AppliesTo is "server" or "both";
 
     public static HttpResponseTestCase From(string shapeId, JsonObject c)
     {
@@ -146,7 +157,8 @@ internal sealed record HttpResponseTestCase(
             headers,
             (string?)c["body"],
             (string?)c["bodyMediaType"],
-            c["params"]
+            c["params"],
+            (string?)c["appliesTo"] ?? "both"
         );
     }
 }

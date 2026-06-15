@@ -164,6 +164,26 @@ public final class ClientGenerator implements Runnable {
               });
           writer.write("");
 
+          // rpcv2Cbor builds operation-bound protocols once from the (service, operation) schemas.
+          // The service schema supplies the service-derived request path; the operation schema
+          // supplies the codecs. Generated method bodies then call the instance uniformly.
+          if (kind == Kind.RPC_V2_CBOR) {
+            writer.write(
+                "private static readonly IServiceProtocol ServiceProtocol ="
+                    + " RpcV2CborProtocol.ForService($L);",
+                SchemaGenerator.serviceSchemaAccessor(context, service));
+            for (OperationShape op : operations) {
+              writer.write(
+                  "private static readonly IOperationProtocol<$L, $L> $LProtocol ="
+                      + " ServiceProtocol.ForOperation($L);",
+                  SchemaGenerator.operationShapeType(context, op.getInputShape()),
+                  SchemaGenerator.operationShapeType(context, op.getOutputShape()),
+                  CSharpNaming.typeName(op.getId().getName()),
+                  SchemaGenerator.operationSchemaAccessor(context, op));
+            }
+            writer.write("");
+          }
+
           for (OperationShape op : operations) writeOperationMethod(sp, model, op);
           for (OperationShape op : operations) writeErrorDeserializer(sp, model, op);
         });
@@ -193,15 +213,9 @@ public final class ClientGenerator implements Runnable {
           }
 
           if (rpc) {
-            // rpcv2Cbor uses a synthetic URI; there are no @http bindings to derive it from.
-            String uri =
-                "/service/" + service.getId().getName() + "/operation/" + op.getId().getName();
+            // The operation-bound protocol owns the (service-derived) request path.
             writer.write(
-                "var request = $L.SerializeRequest($L, $L, $L);",
-                protocol,
-                schema,
-                inputArg,
-                CSharpNaming.formatString(uri));
+                "var request = $LProtocol.SerializeRequest($L);", opName, inputArg);
           } else {
             writer.write("var request = $L.SerializeRequest($L, $L);", protocol, schema, inputArg);
           }
@@ -226,7 +240,11 @@ public final class ClientGenerator implements Runnable {
 
           if (hasOutput) {
             writer.write("");
-            writer.write("return $L.DeserializeResponse($L, response);", protocol, schema);
+            if (rpc) {
+              writer.write("return $LProtocol.DeserializeResponse(response);", opName);
+            } else {
+              writer.write("return $L.DeserializeResponse($L, response);", protocol, schema);
+            }
           } else {
             writer.write("return;");
           }
@@ -300,9 +318,14 @@ public final class ClientGenerator implements Runnable {
             return;
           }
 
+          // For rpc the per-operation protocol instance owns error discrimination; for REST the
+          // static protocol class is used. Both share the DeserializeError(schema, response) shape,
+          // so the per-error returns just differ by receiver.
+          String errorReceiver = rpc ? opName + "Protocol" : protocol;
+
           if (rpc) {
-            // Without the rpcv2Cbor protocol header there is no error envelope to read.
-            writer.write("if (!$L.HasResponse(response))", protocol);
+            writer.write("var errorType = $L.GetErrorDiscriminator(response);", errorReceiver);
+            writer.write("if (errorType is null)");
             writer.openBlock(
                 "{",
                 "}",
@@ -310,10 +333,10 @@ public final class ClientGenerator implements Runnable {
                     writer.write(
                         "return"
                             + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);"));
-            writer.write("");
+          } else {
+            writer.write("var errorType = $L.DeserializeErrorType(response);", protocol);
           }
 
-          writer.write("var errorType = $L.DeserializeErrorType(response);", protocol);
           for (ShapeId errId : errorIds) {
             StructureShape err = model.expectShape(errId, StructureShape.class);
             writer.write("");
@@ -329,7 +352,7 @@ public final class ClientGenerator implements Runnable {
                   "if (string.Equals(errorType, $L, System.StringComparison.Ordinal))",
                   CSharpNaming.formatString(errId.getName()));
             }
-            writer.openBlock("{", "}", () -> writeErrorReturn(sp, err));
+            writer.openBlock("{", "}", () -> writeErrorReturn(sp, err, errorReceiver));
           }
 
           if (!rpc) {
@@ -340,7 +363,7 @@ public final class ClientGenerator implements Runnable {
               if (status == null) continue;
               writer.write("");
               writer.write("if ((int)response.StatusCode == $L)", status);
-              writer.openBlock("{", "}", () -> writeErrorReturn(sp, err));
+              writer.openBlock("{", "}", () -> writeErrorReturn(sp, err, errorReceiver));
             }
           }
 
@@ -367,7 +390,7 @@ public final class ClientGenerator implements Runnable {
                                   + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);"));
                   writer.write("");
                 }
-                writeErrorReturn(sp, err);
+                writeErrorReturn(sp, err, errorReceiver);
               });
         });
     writer.write("");
@@ -375,13 +398,15 @@ public final class ClientGenerator implements Runnable {
 
   /**
    * Functional error return: deserialize the error structure from the response (HTTP bindings +
-   * body for REST, whole CBOR body for rpcv2Cbor) via the protocol's {@code DeserializeError}.
+   * body for REST, whole CBOR body for rpcv2Cbor) via {@code receiver.DeserializeError(...)}. The
+   * receiver is the static protocol class for REST or the operation-bound protocol field for rpc;
+   * both expose the same {@code DeserializeError(schema, response)} shape.
    */
-  private void writeErrorReturn(SymbolProvider sp, StructureShape err) {
+  private void writeErrorReturn(SymbolProvider sp, StructureShape err, String receiver) {
     writer.write(
         "return System.Threading.Tasks.ValueTask.FromResult<System.Exception?>("
             + "$L.DeserializeError($L, response));",
-        ProtocolSupport.protocolType(kind),
+        receiver,
         SchemaGenerator.shapeSchemaAccessor(context, err));
   }
 

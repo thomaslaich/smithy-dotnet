@@ -7,6 +7,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ListGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.MapGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.OperationSchemaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ServerGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ServiceSchemaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StringEnumGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StructureGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.UnionGenerator;
@@ -61,6 +62,14 @@ final class DirectedCSharpCodegen
     String csNamespace = ctx.settings().csharpNamespace(directive.shape().getId().getNamespace());
     String typeName = CSharpNaming.typeName(directive.shape().getId().getName());
     String dir = csNamespace.replace('.', '/');
+
+    // The service schema is consumed by both client and server, so it has no ".Client"/".Server"
+    // suffix and is always compiled.
+    ctx.writerDelegator()
+        .useFileWriter(
+            dir + "/" + typeName + ".Schema.g.cs",
+            csNamespace,
+            writer -> new ServiceSchemaGenerator(ctx, writer, directive.shape()).run());
 
     // Service-level files use a dotted ".Client"/".Server" suffix so the MSBuild
     // include/exclude globs (*.Client.g.cs / *.Server.g.cs) can distinguish them from

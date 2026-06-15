@@ -8,12 +8,26 @@ internal static class ServerHttpResponseRunner
 {
     public static async Task RunAsync(HttpResponseTestCase testCase, JsonObject modelShapes)
     {
-        var owningOperation = ResolveOwningOperation(testCase.ShapeId, modelShapes);
+        var owningOperation = ResolveOwningOperation(testCase.ShapeId, modelShapes, out var isError);
         var localOpName = owningOperation.Split('#')[^1];
         var (clientType, clientMethod) = ConformanceClients.ResolveOperation(localOpName + "Async");
         var inputType = clientMethod.GetParameters()[0].ParameterType;
         var outputType = clientMethod.ReturnType.GetGenericArguments()[0];
-        var output = ParamBinder.Bind(outputType, testCase.Params ?? new JsonObject())!;
+
+        // For error response tests the handler must THROW the modeled error built from params;
+        // for success tests it returns the output built from params.
+        Exception? errorToThrow = null;
+        object? output = null;
+        if (isError)
+        {
+            var errorType = ResolveErrorType(testCase.ShapeId);
+            errorToThrow = (Exception)ParamBinder.Bind(errorType, testCase.Params ?? new JsonObject())!;
+        }
+        else
+        {
+            output = ParamBinder.Bind(outputType, testCase.Params ?? new JsonObject())!;
+        }
+
         var generatedRequest = await CaptureGeneratedRequestAsync(
                 clientType,
                 clientMethod,
@@ -27,7 +41,9 @@ internal static class ServerHttpResponseRunner
                 (method, args) =>
                 {
                     Assert.Equal(localOpName + "Async", method.Name);
-                    return CreateResult(method, output);
+                    if (errorToThrow is not null)
+                        throw errorToThrow;
+                    return CreateResult(method, output!);
                 }
             )
             .ConfigureAwait(false);
@@ -35,6 +51,19 @@ internal static class ServerHttpResponseRunner
         using var request = CreateReplayRequest(generatedRequest);
         using var response = await host.Client.SendAsync(request).ConfigureAwait(false);
         await ServerCborResponseAssertions.AssertAsync(testCase, response).ConfigureAwait(false);
+    }
+
+    private static Type ResolveErrorType(string shapeId)
+    {
+        var localName = shapeId.Split('#')[^1];
+        return typeof(ServerHttpResponseRunner)
+                .Assembly.GetTypes()
+                .FirstOrDefault(t =>
+                    t.Name == localName && typeof(Exception).IsAssignableFrom(t)
+                )
+            ?? throw new InvalidOperationException(
+                $"Could not resolve generated error type for {shapeId}."
+            );
     }
 
     private static async Task<RecordedRequest> CaptureGeneratedRequestAsync(
@@ -112,27 +141,36 @@ internal static class ServerHttpResponseRunner
             .Invoke(null, [output])!;
     }
 
-    private static string ResolveOwningOperation(string shapeId, JsonObject shapes)
+    private static string ResolveOwningOperation(string shapeId, JsonObject shapes, out bool isError)
     {
         var node =
             shapes[shapeId] as JsonObject
             ?? throw new InvalidOperationException($"Shape {shapeId} not found in model.");
         if ((string?)node["type"] == "operation")
+        {
+            isError = false;
             return shapeId;
+        }
 
         foreach (var (id, shape) in shapes)
         {
             if (shape is not JsonObject obj || (string?)obj["type"] != "operation")
                 continue;
             if ((string?)(obj["output"] as JsonObject)?["target"] == shapeId)
+            {
+                isError = false;
                 return id;
+            }
             var errors = obj["errors"] as JsonArray;
             if (errors is null)
                 continue;
             foreach (var error in errors)
             {
                 if ((string?)(error as JsonObject)?["target"] == shapeId)
+                {
+                    isError = true;
                     return id;
+                }
             }
         }
 
