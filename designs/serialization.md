@@ -223,78 +223,148 @@ The entire body deserialization path for value types is boxing-free.
 
 ### Codec Caching
 
-`JsonCodec.FromSchema` is stateless and can be cached. Protocol bindings cache
-body projections and protocol-level precomputations. For generated clients, the
-binding is computed once at first use and stored in a
-`ConditionalWeakTable` keyed on the operation schema.
+`JsonCodec.FromSchema` and `CborCodec.FromSchema` build a codec from a schema.
+Rather than memoizing inside the factory, caching happens one level up: a
+generated client (or server) builds each operation's protocol exactly once — a
+`static readonly` field — and that operation-bound protocol holds whatever was
+precomputed from the schema: the `RestOperationBinding` for REST, or the
+configured codec instances for rpcv2Cbor. Because the field is initialized once,
+the per-operation precomputation is paid once and reused for every call. See
+[Client Generation](#client-generation).
 
 ## Protocol Model
 
-Protocols bind operation schemas to transports. For HTTP REST-style protocols,
-`NSmithy.Protocols.Rest` provides a shared binding layer that REST JSON and
-REST XML can reuse.
-
-A `RestOperationBinding<TInput, TOutput>` precomputes everything that can be
-determined from the operation schema before any request arrives:
-
-- HTTP method.
-- URI template string.
-- Label, header, query, queryParams, and payload member lists.
-- Body projection for input/output structures.
-- Bound query parameter names for `@httpQueryParams` exclusion.
-
-`RestOperationBinding.From(operation)` computes and caches the binding keyed on
-the operation schema instance. On every subsequent request, `SerializeRequest`
-and `DeserializeRequest` iterate precomputed lists directly; no trait lookup,
-LINQ, or schema-analysis allocation is needed for the protocol partitioning.
-
-Request serialization follows this flow:
-
-```text
-OperationSchema<TInput, TOutput>
-            |
-            |  RestJsonProtocol.SerializeRequest(operation, input)
-            v
-  RestOperationBinding.From(operation)
-            |
-            |  precomputed HTTP partitioning
-            |  - method + URI template
-            |  - label/query/header members
-            |  - payload member or body projection
-            v
-  RestProtocol.SerializeRequest(binding, input, BodyFormat)
-            |
-            |-- BuildRequestUri(...)
-            |-- AppendQuery / AppendQueryParams
-            |-- new SmithyHttpRequest(...)
-            |-- AddRequestHeader / AddPrefixedHeaders
-            |
-            |-- if there is an @httpPayload member:
-            |      WritePayload(...)
-            |
-            `-- else if there is a body projection:
-                   WriteProjectionBody(...)
-```
-
-The important separation is:
-
-- `RestJsonProtocol` chooses the body format.
-- `RestOperationBinding` caches the HTTP-level partitioning of the operation.
-- `RestProtocol` performs the shared request construction using that binding.
-
-The REST binding caches the HTTP partitioning and the body projection, while
-the protocol-specific entry point supplies the body format. `RestJsonProtocol`,
-`RestXmlProtocol`, and `RpcV2CborProtocol` all reuse the same HTTP binding
-logic in `RestProtocol`, but each provides a different body codec via the small
-`IRestBodyFormat` abstraction.
+Protocols bind operation schemas to transports. The abstraction is two
+interfaces in `NSmithy.Http`:
 
 ```csharp
-public sealed class RestOperationBinding<TInput, TOutput>
+public interface IServiceProtocol
 {
-    public StructProjection<TInput> InputBodyProjection { get; }
-    public StructProjection<TOutput> OutputBodyProjection { get; }
+    IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation);
+}
+
+public interface IOperationProtocol<TInput, TOutput>
+{
+    SmithyHttpRequest  SerializeRequest(TInput input);          // client
+    TOutput            DeserializeResponse(SmithyHttpResponse response);
+    TInput             DeserializeRequest(SmithyHttpRequest request);   // server
+    SmithyHttpResponse SerializeResponse(TOutput output);
+
+    bool    IsErrorResponse(SmithyHttpResponse response);
+    string? GetErrorDiscriminator(SmithyHttpResponse response);
+    TError  DeserializeError<TError>(Schema<TError> errorSchema, SmithyHttpResponse response);
+    SmithyHttpResponse SerializeError<TError>(
+        Schema<TError> errorSchema, TError value, string errorShapeId, int statusCode);
 }
 ```
+
+Each protocol provides a `ForService(ServiceSchema)` factory that returns an
+`IServiceProtocol`, which in turn hands out an `IOperationProtocol` per
+operation. The interface is the *unary* shape; a streaming sibling would be a
+separate interface.
+
+Every protocol-specific wire decision lives behind the implementation — codegen
+no longer knows any of it:
+
+- **Request path.** rpcv2Cbor's path is service-derived
+  (`/service/{Service}/operation/{Operation}`), so its operation protocol
+  computes it from the service and operation shape names. REST reads the
+  `@http` trait off the operation schema and substitutes labels from the input
+  per call.
+- **Body codec.** rpcv2Cbor uses CBOR; restJson1 uses JSON; restXml uses XML.
+- **Error discrimination.** REST reads `X-Amzn-Errortype` / `__type` / `code`;
+  rpcv2Cbor reads `__type` from the CBOR body; `IsErrorResponse` decides whether
+  a response is an error at all (HTTP status today, the `grpc-status` trailer for
+  gRPC).
+
+### REST binding layer
+
+`NSmithy.Protocols.Rest` factors the REST wire format into two pieces along the
+generic/non-generic seam:
+
+- `RestOperationProtocol<TInput, TOutput>` — the per-operation `IOperationProtocol`
+  implementation. It holds a `RestOperationBinding` and the `IRestBodyFormat`,
+  and delegates to the stateless engine.
+- `RestProtocol` — the non-generic, stateless wire engine (URI templating,
+  label/query/header binding, payload, error parsing). restJson1 and restXml
+  share it and differ only by `IRestBodyFormat` (JSON vs XML).
+
+A `RestOperationBinding<TInput, TOutput>` precomputes everything determinable
+from the operation schema before any request arrives — HTTP method, URI
+template, the label/header/query/queryParams/payload member lists, and the
+input/output body projections. `SerializeRequest`/`DeserializeRequest` then
+iterate those precomputed lists directly; no trait lookup, LINQ, or
+schema-analysis allocation is needed per request.
+
+rpcv2Cbor is **not** built on `RestProtocol`. Its `IOperationProtocol`
+implementation holds the request URI plus the request/response CBOR codecs
+(with the per-direction default-materialization policy baked in) and writes the
+CBOR envelope directly.
+
+## Client Generation
+
+A generated client builds the protocol objects **once**, as `static readonly`
+fields, and threads inputs and outputs through them. The service protocol is
+created from the service schema; each operation protocol is created from its
+operation schema via `ForOperation`:
+
+```csharp
+private static readonly IServiceProtocol ServiceProtocol =
+    RpcV2CborProtocol.ForService(RpcV2ProtocolSchema.Schema);
+
+private static readonly IOperationProtocol<GreetingWithErrorsInput, GreetingWithErrorsOutput>
+    GreetingWithErrorsProtocol = ServiceProtocol.ForOperation(GreetingWithErrorsSchema.Schema);
+```
+
+The per-operation method body is then protocol-agnostic — the same shape for
+restJson1, restXml, simpleRestJson, and rpcv2Cbor:
+
+```csharp
+public async Task<GreetingWithErrorsOutput> GreetingWithErrorsAsync(
+    GreetingWithErrorsInput input,
+    CancellationToken cancellationToken = default)
+{
+    ArgumentNullException.ThrowIfNull(input);
+    var request = GreetingWithErrorsProtocol.SerializeRequest(input);
+
+    var response = await invoker
+        .InvokeAsync(
+            "RpcV2Protocol",
+            "GreetingWithErrors",
+            request,
+            DeserializeGreetingWithErrorsErrorAsync,
+            GreetingWithErrorsProtocol.IsErrorResponse,
+            cancellationToken)
+        .ConfigureAwait(false);
+
+    return GreetingWithErrorsProtocol.DeserializeResponse(response);
+}
+```
+
+### Memoization by construction
+
+There is no codec or binding cache keyed on the schema. Memoization falls out of
+calling `ForOperation` **once**: because `GreetingWithErrorsProtocol` is a
+`static readonly` field, the operation protocol — and everything it precomputed
+from the schema (the `RestOperationBinding` for REST, the compiled codecs for
+rpcv2Cbor) — is built a single time per process and reused for every request.
+The hot path does no schema analysis. This is also why
+`RestOperationBinding.From` no longer maintains its own cache: the single
+construction at the `ForOperation` call site already guarantees the binding is
+built once.
+
+### The invoker
+
+`SmithyOperationInvoker` owns the parts that are *not* protocol-specific: the
+middleware pipeline (retry, logging, auth, …) and the transport send. It is
+deliberately ignorant of wire formats. The one protocol decision it needs —
+"is this response an error?" — is injected as `IOperationProtocol.IsErrorResponse`
+rather than assumed to be "HTTP 4xx", so a transport that signals failure
+differently (gRPC's `grpc-status` trailer over an HTTP 200) fits without
+changing the invoker. Error *dispatch* (which modeled error a response maps to)
+stays in the generated `Deserialize{Operation}ErrorAsync` delegate, since the set
+of an operation's errors is model data.
 
 ## HTTP Binding Values
 
