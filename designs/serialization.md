@@ -41,8 +41,11 @@ For each shape, the generator emits:
    finalizer, shape traits, and member traits.
 
 For each operation, the generator emits an `OperationSchema<TInput, TOutput>`
-that references the input and output schemas plus operation traits. Generated
-clients pass operation schemas to protocol adapters such as `RestJsonProtocol`.
+that references the input and output schemas plus operation traits; for each
+service it emits a `ServiceSchema` carrying the service shape id and
+service-level traits. A generated client binds these into per-operation
+protocols once and threads inputs and outputs through them (see
+[Client Generation](#client-generation)).
 
 Model types do not implement serialization interfaces and do not contain
 serializer callbacks. All wire-format behavior lives in the schema, codec, and
