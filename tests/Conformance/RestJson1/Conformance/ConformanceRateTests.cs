@@ -13,17 +13,39 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
     [Fact]
     public void ReportConformanceRate()
     {
-        var totalRequests = Model.EnumerateHttpRequestTests(RestJson1Allowlist.Protocol).Count();
-        var totalResponses = Model.EnumerateHttpResponseTests(RestJson1Allowlist.Protocol).Count();
-        var execRequests =
-            RestJson1Allowlist.ExecutableRequestCases.Count
-            + RestJson1Allowlist.ExecutableServerRequestCases.Count;
-        var execResponses =
-            RestJson1Allowlist.ExecutableResponseCases.Count
-            + RestJson1Allowlist.ExecutableServerResponseCases.Count;
+        var requests = Model.EnumerateHttpRequestTests(RestJson1Allowlist.Protocol).ToList();
+        var responses = Model.EnumerateHttpResponseTests(RestJson1Allowlist.Protocol).ToList();
+
+        // Each side's denominator is the number of cases that actually apply to that side
+        // (a server-only case never applies to the client and vice versa). Client and server
+        // are reported separately so neither direction masks the other.
+        var clientReqTotal = requests.Count(c => c.AppliesToClient);
+        var clientRespTotal = responses.Count(c => c.AppliesToClient);
+        var serverReqTotal = requests.Count(c => c.AppliesToServer);
+        var serverRespTotal = responses.Count(c => c.AppliesToServer);
+
+        // Count executable cases that actually apply to the side in question. Intersecting with
+        // the applicable set keeps the rate honest even if an allowlist accidentally lists a
+        // case from the other direction (which would otherwise push the rate over 100%).
+        var execClientReq = requests.Count(c =>
+            c.AppliesToClient && RestJson1Allowlist.ExecutableRequestCases.Contains(c.Id)
+        );
+        var execClientResp = responses.Count(c =>
+            c.AppliesToClient && RestJson1Allowlist.ExecutableResponseCases.Contains(c.Id)
+        );
+        var execServerReq = requests.Count(c =>
+            c.AppliesToServer && RestJson1Allowlist.ExecutableServerRequestCases.Contains(c.Id)
+        );
+        var execServerResp = responses.Count(c =>
+            c.AppliesToServer && RestJson1Allowlist.ExecutableServerResponseCases.Contains(c.Id)
+        );
 
         output.WriteLine(
-            $"[{RestJson1Allowlist.Protocol}] requests: {execRequests}/{totalRequests} ({Pct(execRequests, totalRequests)}), responses: {execResponses}/{totalResponses} ({Pct(execResponses, totalResponses)})"
+            $"[{RestJson1Allowlist.Protocol}] "
+                + $"client-requests: {execClientReq}/{clientReqTotal} ({Pct(execClientReq, clientReqTotal)}), "
+                + $"client-responses: {execClientResp}/{clientRespTotal} ({Pct(execClientResp, clientRespTotal)}), "
+                + $"server-requests: {execServerReq}/{serverReqTotal} ({Pct(execServerReq, serverReqTotal)}), "
+                + $"server-responses: {execServerResp}/{serverRespTotal} ({Pct(execServerResp, serverRespTotal)})"
         );
     }
 

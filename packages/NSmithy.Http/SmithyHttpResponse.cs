@@ -11,7 +11,5 @@ public sealed record SmithyHttpResponse(
     IReadOnlyDictionary<string, IReadOnlyList<string>> ContentHeaders
 )
 {
-    public bool IsSuccessStatusCode => (int)StatusCode is >= 200 and <= 299;
-
     public string ContentText => Encoding.UTF8.GetString(Content);
 }

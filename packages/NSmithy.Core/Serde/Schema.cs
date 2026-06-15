@@ -1036,6 +1036,29 @@ public sealed class OperationSchema<TInput, TOutput>
     public bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
 }
 
+/// <summary>
+/// Runtime schema for a service shape. Unlike <see cref="OperationSchema{TInput, TOutput}"/> this
+/// is deliberately service-scoped: it carries the service's shape id (so protocols can derive
+/// service-named wire artifacts such as the rpcv2Cbor request path) and its service-level traits.
+/// Operations remain service-agnostic and never reference a service.
+/// </summary>
+public sealed class ServiceSchema
+{
+    internal ServiceSchema(ShapeId id, IEnumerable<Trait>? traits = null)
+    {
+        Id = id;
+        Traits = Schema.BuildTraits(traits);
+    }
+
+    public ShapeId Id { get; }
+
+    public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
+
+    public Trait? GetTrait(ShapeId id) => Traits.TryGetValue(id, out var trait) ? trait : null;
+
+    public bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
+}
+
 public static class Schemas
 {
     private const string PreludeNamespace = "smithy.api";
@@ -1192,6 +1215,9 @@ public static class Schemas
         Schema<TOutput> output,
         IEnumerable<Trait>? traits = null
     ) => new(id, input, output, traits);
+
+    public static ServiceSchema Service(ShapeId id, IEnumerable<Trait>? traits = null) =>
+        new(id, traits);
 
     public static StructProjection<T> Project<T>(
         IStructSchema<T> source,

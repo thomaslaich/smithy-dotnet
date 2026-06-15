@@ -48,7 +48,7 @@ public final class ProtocolSupport {
   }
 
   public static boolean emitsAspNetCoreServer(ServiceShape s) {
-    return isRestJsonService(s);
+    return isRestJsonService(s) || isRpcV2CborService(s);
   }
 
   public static Kind kindOf(ServiceShape s) {

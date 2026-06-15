@@ -35,26 +35,25 @@ The numbers below are point-in-time snapshots from the pinned protocol-test
 models in this repository. They count official Smithy/Alloy
 `httpRequestTests` plus `httpResponseTests`.
 
-Current snapshot:
+Coverage is counted per direction, against the official cases that apply to that
+direction (`appliesTo`):
 
-- `alloy#simpleRestJson` — `43/43` official cases (`100%`).
-- `aws.protocols#restJson1` — `268/272` official cases (`98.53%`).
-- `smithy.protocols#rpcv2Cbor` — early preview; conformance test integration
-  is in progress.
-- `alloy.proto#grpc` — not covered by Smithy's conformance suite; tested
-  via end-to-end examples instead.
+| Protocol | Client | Server |
+| --- | --- | --- |
+| `alloy#simpleRestJson` | `43/43` (`100%`) | not yet exercised |
+| `aws.protocols#restJson1` | `243/247` (`98.4%`) | `19/227` (`8.4%`) |
+| `smithy.protocols#rpcv2Cbor` | `68/68` (`100%`) | `60/60` (`100%`) |
+| `alloy.proto#grpc` | not covered by Smithy's suite (tested via examples) | — |
 
-Two different numbers are useful when reading the test projects:
+A few things worth knowing when reading the numbers:
 
-- executable allowlist coverage: the cases the local conformance project is
-  expected to run and pass
-- full official corpus coverage: the total number of official request/response
-  cases present in the pinned models
-
-For `simpleRestJson`, those numbers now line up because the full official corpus
-is executable. For `restJson1`, nearly all official cases are now executable as
-well; the remaining gap is the Glacier-specific fixture slice that is not yet
-projected into the conformance project.
+- The denominator for each cell is the number of official cases that apply to
+  that direction, so a server-only case is never counted toward client coverage.
+- `alloy#simpleRestJson` tests are all `appliesTo: both`; there is no server
+  conformance project driving them yet, so server is "not yet exercised" rather
+  than `0%`.
+- `restJson1`'s remaining client gap is the Glacier-specific fixture slice; its
+  server surface is still early.
 
 ## Skip Reasons
 

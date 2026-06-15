@@ -106,6 +106,13 @@ public final class SchemaGenerator {
         + "Schema.Schema";
   }
 
+  public static String serviceSchemaAccessor(
+      GenerationContext context, software.amazon.smithy.model.shapes.ServiceShape service) {
+    String ns = context.settings().csharpNamespace(service.getId().getNamespace());
+    String typeName = CSharpNaming.typeName(service.getId().getName());
+    return (ns.isEmpty() ? "" : ns + ".") + typeName + "Schema.Schema";
+  }
+
   public static String operationShapeType(GenerationContext context, ShapeId id) {
     if (ShapeSupport.isUnit(id)) return "SmithyUnit";
     return CSharpSymbolProvider.qualified(

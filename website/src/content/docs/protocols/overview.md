@@ -17,7 +17,7 @@ NSmithy reads the protocol trait and generates the matching client and server su
 | `alloy#simpleRestJson` | `@simpleRestJson` | .NET client, ASP.NET Core server | Preview |
 | `aws.protocols#restJson1` | `@restJson1` | .NET client, ASP.NET Core server | Preview |
 | `aws.protocols#restXml` | `@restXml` | .NET client | Early preview |
-| `smithy.protocols#rpcv2Cbor` | `@rpcv2Cbor` | .NET client | Early preview |
+| `smithy.protocols#rpcv2Cbor` | `@rpcv2Cbor` | .NET client, ASP.NET Core server | Preview |
 | `alloy.proto#grpc` | `@grpc` | gRPC client, ASP.NET Core gRPC server | Experimental |
 
 See [Protocol Status](/smithy-dotnet/protocols/status/) for conformance numbers and maturity details.

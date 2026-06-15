@@ -33,6 +33,8 @@ internal static class ParamBinder
             return (string)value!;
         if (targetType == typeof(bool))
             return (bool)value!;
+        if (targetType == typeof(sbyte))
+            return (sbyte)(int)value!;
         if (targetType == typeof(int))
             return (int)value!;
         if (targetType == typeof(long))
@@ -40,13 +42,26 @@ internal static class ParamBinder
         if (targetType == typeof(short))
             return (short)value!;
         if (targetType == typeof(byte))
-            return (byte)value!;
+            return (byte)(int)value!;
         if (targetType == typeof(float))
-            return (float)value!;
+            return BindFloat(value);
         if (targetType == typeof(double))
-            return (double)value!;
+            return BindDouble(value);
         if (targetType == typeof(decimal))
             return (decimal)value!;
+        if (targetType == typeof(byte[]))
+        {
+            var text = (string)value!;
+            try
+            {
+                return Convert.FromBase64String(text);
+            }
+            catch (FormatException)
+            {
+                // Raw payload/blob test inputs use literal text rather than base64.
+                return System.Text.Encoding.UTF8.GetBytes(text);
+            }
+        }
 
         if (targetType == typeof(DateTimeOffset))
             return BindDateTimeOffset(value);
@@ -104,13 +119,33 @@ internal static class ParamBinder
         return BindStructure(targetType, value);
     }
 
+    private static float BindFloat(JsonNode? value)
+    {
+        var v = value!.AsValue();
+        if (v.TryGetValue<string>(out var s))
+            return float.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+        return (float)v;
+    }
+
+    private static double BindDouble(JsonNode? value)
+    {
+        var v = value!.AsValue();
+        if (v.TryGetValue<string>(out var s))
+            return double.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
+        return (double)v;
+    }
+
     private static DateTimeOffset BindDateTimeOffset(JsonNode value)
     {
         var v = value.AsValue();
         if (v.TryGetValue<double>(out var epoch))
         {
             // Smithy AST encodes timestamps as epoch seconds (possibly fractional).
-            var ticks = (long)(epoch * TimeSpan.TicksPerSecond);
+            // Decompose to avoid precision loss when epoch > 2^53/1e7 (~28 years).
+            var intSec = (long)epoch;
+            var fracSec = epoch - intSec;
+            var ticks =
+                intSec * TimeSpan.TicksPerSecond + (long)(fracSec * TimeSpan.TicksPerSecond);
             return new DateTimeOffset(DateTime.UnixEpoch.AddTicks(ticks), TimeSpan.Zero);
         }
         return DateTimeOffset.Parse(
@@ -207,7 +242,13 @@ internal static class ParamBinder
         for (var i = 0; i < parameters.Length; i++)
         {
             var p = parameters[i];
-            if (obj.TryGetPropertyValue(p.Name!, out var node) && node is not null)
+            // The wire member name's casing can't be recovered from the C# ctor param alone
+            // (PascalCase normalization is lossy), so try the ctor param name as-is, its
+            // camelCase form, and its PascalCase form.
+            var camel = char.ToLowerInvariant(p.Name![0]) + p.Name![1..];
+            var pascal = char.ToUpperInvariant(p.Name![0]) + p.Name![1..];
+            var node = LookupMember(obj, p.Name!, camel, pascal);
+            if (node is not null)
             {
                 args[i] = Bind(p.ParameterType, node);
             }
@@ -225,6 +266,16 @@ internal static class ParamBinder
             }
         }
         return ctor.Invoke(args);
+    }
+
+    private static JsonNode? LookupMember(JsonObject obj, params string[] candidates)
+    {
+        foreach (var name in candidates)
+        {
+            if (obj.TryGetPropertyValue(name, out var node) && node is not null)
+                return node;
+        }
+        return null;
     }
 
     private static ConstructorInfo SelectConstructor(Type type)

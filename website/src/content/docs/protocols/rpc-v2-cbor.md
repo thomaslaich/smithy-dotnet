@@ -1,12 +1,11 @@
 ---
 title: RPC v2 CBOR
-description: smithy.protocols#rpcv2Cbor — binary CBOR encoding over HTTP/2. Client-only, early preview.
+description: smithy.protocols#rpcv2Cbor — binary CBOR encoding over HTTP. Client and server support.
 ---
 
 `smithy.protocols#rpcv2Cbor` is Smithy's binary protocol. Messages are encoded
-as [CBOR](https://cbor.io/) and carried over HTTP/2 POST requests on a fixed
-path derived from the service and operation names. Status: **Early preview,
-client-only**.
+as [CBOR](https://cbor.io/) and carried over HTTP POST requests on a fixed
+path derived from the service and operation names. Status: **Preview**.
 
 ## Maven Dependency
 
@@ -56,6 +55,46 @@ structure InvalidName {
 }
 ```
 
+## NuGet Packages
+
+### Server
+
+```xml
+<PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0" />
+```
+
+### Client
+
+```xml
+<PackageReference Include="NSmithy.Client" Version="0.1.0" />
+<PackageReference Include="NSmithy.Codecs.Cbor" Version="0.1.0" />
+<PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="0.1.0" />
+```
+
+## Server
+
+Add the generated server handler to your ASP.NET Core app. The protocol path
+(`POST /service/{Service}/operation/{Operation}`) is mapped automatically:
+
+```csharp
+using Example.Hello;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddHelloServiceHandler<MyHelloHandler>();
+
+var app = builder.Build();
+app.MapHelloServiceHttp();
+app.Run();
+
+internal sealed class MyHelloHandler : IHelloServiceHandler
+{
+    public Task<SayHelloOutput> SayHelloAsync(
+        SayHelloInput input,
+        CancellationToken cancellationToken = default
+    ) => Task.FromResult(new SayHelloOutput("my-server", $"Hello, {input.Name}!"));
+}
+```
+
 ## Client
 
 The CBOR codec is wired up automatically by the generated client — no manual
@@ -75,8 +114,13 @@ try
     var response = await client.SayHelloAsync(new SayHelloInput("world"));
     Console.WriteLine(response.Message);
 }
-catch (InvalidNameException ex)
+catch (InvalidName ex)
 {
     Console.WriteLine($"Error: {ex.Message}");
 }
 ```
+
+## Example
+
+A complete working server+client example is available in
+[`examples/rpcv2cbor`](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/rpcv2cbor).

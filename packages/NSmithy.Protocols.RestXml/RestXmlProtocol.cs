@@ -13,30 +13,13 @@ public static class RestXmlProtocol
 {
     private static readonly IRestBodyFormat BodyFormat = new RestXmlBodyFormat();
 
-    public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        TInput input
-    ) => RestProtocol.SerializeRequest(RestOperationBinding.From(operation), input, BodyFormat);
-
-    public static TInput DeserializeRequest<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        SmithyHttpRequest request
-    ) => RestProtocol.DeserializeRequest(RestOperationBinding.From(operation), request, BodyFormat);
-
-    public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        TOutput output
-    ) => RestProtocol.SerializeResponse(RestOperationBinding.From(operation), output, BodyFormat);
-
-    public static TOutput DeserializeResponse<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        SmithyHttpResponse response
-    ) =>
-        RestProtocol.DeserializeResponse(
-            RestOperationBinding.From(operation),
-            response,
-            BodyFormat
-        );
+    /// <summary>
+    /// Binds the protocol to a service, yielding per-operation protocols. REST derives each
+    /// operation's binding from its <c>@http</c> trait, so the service schema is accepted for a
+    /// uniform factory signature but not otherwise consulted.
+    /// </summary>
+    public static IServiceProtocol ForService(ServiceSchema service) =>
+        new RestServiceProtocol(BodyFormat, DeserializeErrorType);
 
     public static string? DeserializeErrorType(SmithyHttpResponse response)
     {
@@ -64,11 +47,6 @@ public static class RestXmlProtocol
             .FirstOrDefault(element => element.Name.LocalName == "Code")
             ?.Value;
     }
-
-    public static TError DeserializeError<TError>(
-        Schema<TError> errorSchema,
-        SmithyHttpResponse response
-    ) => RestProtocol.DeserializeError(errorSchema, response, BodyFormat);
 
     public static void ApplyRequestCompression(SmithyHttpRequest request, string encoding)
     {
