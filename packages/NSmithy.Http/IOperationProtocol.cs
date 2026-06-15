@@ -32,7 +32,15 @@ public interface IOperationProtocol<TInput, TOutput>
 
     // ---- errors ----
     // The *set* of an operation's errors is model data, so dispatch stays generated; the
-    // protocol-specific mechanism (header vs __type, status fallback) is hidden here.
+    // protocol-specific mechanism (when a response is an error, header vs __type, status fallback)
+    // is hidden here.
+
+    /// <summary>
+    /// Decides whether a response represents an error, by the protocol's own rules — HTTP status
+    /// for REST/rpcv2Cbor, the <c>grpc-status</c> trailer for gRPC. The client runtime uses this
+    /// instead of assuming "4xx means error" so the transport stays protocol-agnostic.
+    /// </summary>
+    bool IsErrorResponse(SmithyHttpResponse response);
 
     /// <summary>Returns the error type discriminator, or null when the response is not an error.</summary>
     string? GetErrorDiscriminator(SmithyHttpResponse response);

@@ -10,6 +10,16 @@ namespace NSmithy.Tests.Runtime;
 
 public sealed class RestJsonProtocolTests
 {
+    // REST ignores the service schema (its bindings come from @http on each operation), so a
+    // placeholder service is fine. The per-operation protocol is what these tests exercise.
+    private static readonly IServiceProtocol RestService = RestJsonProtocol.ForService(
+        Schemas.Service(ShapeId.Parse("test#Service"))
+    );
+
+    private static IOperationProtocol<TIn, TOut> Protocol<TIn, TOut>(
+        OperationSchema<TIn, TOut> operation
+    ) => RestService.ForOperation(operation);
+
     public sealed record UpdateUserInput(string UserId, string? RequestToken, string DisplayName);
 
     public sealed class UpdateUserInputBuilder
@@ -73,7 +83,7 @@ public sealed class RestJsonProtocolTests
         );
         var input = new UpdateUserInput("ada lovelace", "token-123", "Ada");
 
-        var request = RestJsonProtocol.SerializeRequest(operation, input);
+        var request = Protocol(operation).SerializeRequest(input);
 
         Assert.Equal(HttpMethod.Put, request.Method);
         Assert.Equal("/users/ada%20lovelace", request.RequestUri);
@@ -135,7 +145,7 @@ public sealed class RestJsonProtocolTests
         };
         request.Headers["X-Request-Token"] = ["token-123"];
 
-        var input = RestJsonProtocol.DeserializeRequest(operation, request);
+        var input = Protocol(operation).DeserializeRequest(request);
 
         Assert.Equal(new UpdateUserInput("ada lovelace", "token-123", "Ada"), input);
     }
@@ -234,7 +244,7 @@ public sealed class RestJsonProtocolTests
             new Dictionary<string, string>(StringComparer.Ordinal) { ["Trace"] = "abc" }
         );
 
-        var request = RestJsonProtocol.SerializeRequest(operation, input);
+        var request = Protocol(operation).SerializeRequest(input);
 
         Assert.Equal(HttpMethod.Get, request.Method);
         Assert.Equal(
@@ -313,7 +323,7 @@ public sealed class RestJsonProtocolTests
         );
         request.Headers["X-Extra-Trace"] = ["abc"];
 
-        var input = RestJsonProtocol.DeserializeRequest(operation, request);
+        var input = Protocol(operation).DeserializeRequest(request);
 
         Assert.Equal("ada lovelace", input.UserId);
         Assert.True(input.IncludeDetails);
@@ -414,8 +424,8 @@ public sealed class RestJsonProtocolTests
         );
         var input = new EnumHeaderListInput([HeaderStatus.ActiveBlue, HeaderStatus.Pending]);
 
-        var request = RestJsonProtocol.SerializeRequest(operation, input);
-        var decoded = RestJsonProtocol.DeserializeRequest(operation, request);
+        var request = Protocol(operation).SerializeRequest(input);
+        var decoded = Protocol(operation).DeserializeRequest(request);
 
         Assert.Equal("\"ACTIVE,BLUE\", PENDING", request.Headers["X-Status"].Single());
         Assert.Equal(input.Statuses, decoded.Statuses);
@@ -524,7 +534,7 @@ public sealed class RestJsonProtocolTests
             created
         );
 
-        var request = RestJsonProtocol.SerializeRequest(operation, input);
+        var request = Protocol(operation).SerializeRequest(input);
 
         Assert.Equal(
             "/objects/folder/photo%201.jpg?media=aGVsbG8gd29ybGQ%3D&ratio=NaN&score=Infinity&created=1577836800.25",
@@ -632,7 +642,7 @@ public sealed class RestJsonProtocolTests
         request.Headers["Last-Modified"] = ["Wed, 01 Jan 2020 00:00:00 GMT"];
         request.Headers["X-Tags"] = ["\"a,b\", plain"];
 
-        var input = RestJsonProtocol.DeserializeRequest(operation, request);
+        var input = Protocol(operation).DeserializeRequest(request);
 
         Assert.Equal("folder/photo 1.jpg", input.Key);
         Assert.Equal(new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero), input.Modified);
@@ -714,7 +724,7 @@ public sealed class RestJsonProtocolTests
         var payload = "avatar bytes"u8.ToArray();
         var input = new UploadUserAvatarInput("ada", "abc123", payload);
 
-        var request = RestJsonProtocol.SerializeRequest(operation, input);
+        var request = Protocol(operation).SerializeRequest(input);
 
         Assert.Equal(HttpMethod.Put, request.Method);
         Assert.Equal("/users/ada/avatar", request.RequestUri);
@@ -801,7 +811,7 @@ public sealed class RestJsonProtocolTests
             "Ada"
         );
 
-        var response = RestJsonProtocol.SerializeResponse(operation, output);
+        var response = Protocol(operation).SerializeResponse(output);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Equal("etag-1", response.Headers["ETag"].Single());
@@ -878,7 +888,7 @@ public sealed class RestJsonProtocolTests
             }
         );
 
-        var output = RestJsonProtocol.DeserializeResponse(operation, response);
+        var output = Protocol(operation).DeserializeResponse(response);
 
         Assert.Equal(new GetUserProfileOutput(201, "etag-1", output.ExtraHeaders, "Ada"), output);
         Assert.Equal("abc", output.ExtraHeaders["Trace"]);
@@ -939,16 +949,14 @@ public sealed class RestJsonProtocolTests
         );
 
         // Client serializes request with non-null nextToken
-        var request = RestJsonProtocol.SerializeRequest(
-            operation,
-            new ListInput(NextToken: "page2-token", PageSize: 10)
-        );
+        var request = Protocol(operation)
+            .SerializeRequest(new ListInput(NextToken: "page2-token", PageSize: 10));
 
         Assert.Contains("nextToken=page2-token", request.RequestUri);
         Assert.Contains("pageSize=10", request.RequestUri);
 
         // Server deserializes the same request
-        var deserializedInput = RestJsonProtocol.DeserializeRequest(operation, request);
+        var deserializedInput = Protocol(operation).DeserializeRequest(request);
 
         Assert.Equal("page2-token", deserializedInput.NextToken);
         Assert.Equal(10, deserializedInput.PageSize);
@@ -978,11 +986,11 @@ public sealed class RestJsonProtocolTests
         );
 
         // First page: no nextToken
-        var request = RestJsonProtocol.SerializeRequest(operation, new ListInput(NextToken: null));
+        var request = Protocol(operation).SerializeRequest(new ListInput(NextToken: null));
 
         Assert.DoesNotContain("nextToken", request.RequestUri);
 
-        var input = RestJsonProtocol.DeserializeRequest(operation, request);
+        var input = Protocol(operation).DeserializeRequest(request);
         Assert.Null(input.NextToken);
     }
 
@@ -1023,7 +1031,7 @@ public sealed class RestJsonProtocolTests
         // a relative path + query string, query params in the order the client sent them.
         var request = new SmithyHttpRequest(HttpMethod.Get, "/cities?pageSize=3&nextToken=LAX");
 
-        var input = RestJsonProtocol.DeserializeRequest(operation, request);
+        var input = Protocol(operation).DeserializeRequest(request);
 
         Assert.Equal("LAX", input.NextToken);
         Assert.Equal(3, input.PageSize);

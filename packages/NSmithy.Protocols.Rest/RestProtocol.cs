@@ -68,15 +68,6 @@ public static class RestProtocol
         return request;
     }
 
-    public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        TInput input,
-        IRestBodyFormat bodyFormat
-    )
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        return SerializeRequest(RestOperationBinding.From(operation), input, bodyFormat);
-    }
 
     public static TInput DeserializeRequest<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
@@ -131,16 +122,6 @@ public static class RestProtocol
         return (TInput)binding.InputSchema.BuildObject(builder);
     }
 
-    public static TInput DeserializeRequest<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        SmithyHttpRequest request,
-        IRestBodyFormat bodyFormat
-    )
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        return DeserializeRequest(RestOperationBinding.From(operation), request, bodyFormat);
-    }
-
     public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
         TOutput output,
@@ -189,16 +170,6 @@ public static class RestProtocol
         return new SmithyHttpResponse(statusCode, null, content, headers, contentHeaders);
     }
 
-    public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        TOutput output,
-        IRestBodyFormat bodyFormat
-    )
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        return SerializeResponse(RestOperationBinding.From(operation), output, bodyFormat);
-    }
-
     public static TOutput DeserializeResponse<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
         SmithyHttpResponse response,
@@ -243,16 +214,6 @@ public static class RestProtocol
             bodyFormat.ReadInto(projection, response.Content, builder);
 
         return (TOutput)binding.OutputSchema.BuildObject(builder);
-    }
-
-    public static TOutput DeserializeResponse<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        SmithyHttpResponse response,
-        IRestBodyFormat bodyFormat
-    )
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        return DeserializeResponse(RestOperationBinding.From(operation), response, bodyFormat);
     }
 
     /// <summary>

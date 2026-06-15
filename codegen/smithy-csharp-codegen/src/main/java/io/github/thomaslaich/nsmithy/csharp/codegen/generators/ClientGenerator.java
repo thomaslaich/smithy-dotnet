@@ -164,25 +164,22 @@ public final class ClientGenerator implements Runnable {
               });
           writer.write("");
 
-          // rpcv2Cbor builds operation-bound protocols once from the (service, operation) schemas.
-          // The service schema supplies the service-derived request path; the operation schema
-          // supplies the codecs. Generated method bodies then call the instance uniformly.
-          if (kind == Kind.RPC_V2_CBOR) {
+          // Build operation-bound protocols once from the (service, operation) schemas. Generated
+          // method bodies then call the instance uniformly, regardless of protocol.
+          writer.write(
+              "private static readonly IServiceProtocol ServiceProtocol = $L.ForService($L);",
+              ProtocolSupport.protocolType(kind),
+              SchemaGenerator.serviceSchemaAccessor(context, service));
+          for (OperationShape op : operations) {
             writer.write(
-                "private static readonly IServiceProtocol ServiceProtocol ="
-                    + " RpcV2CborProtocol.ForService($L);",
-                SchemaGenerator.serviceSchemaAccessor(context, service));
-            for (OperationShape op : operations) {
-              writer.write(
-                  "private static readonly IOperationProtocol<$L, $L> $LProtocol ="
-                      + " ServiceProtocol.ForOperation($L);",
-                  SchemaGenerator.operationShapeType(context, op.getInputShape()),
-                  SchemaGenerator.operationShapeType(context, op.getOutputShape()),
-                  CSharpNaming.typeName(op.getId().getName()),
-                  SchemaGenerator.operationSchemaAccessor(context, op));
-            }
-            writer.write("");
+                "private static readonly IOperationProtocol<$L, $L> $LProtocol ="
+                    + " ServiceProtocol.ForOperation($L);",
+                SchemaGenerator.operationShapeType(context, op.getInputShape()),
+                SchemaGenerator.operationShapeType(context, op.getOutputShape()),
+                CSharpNaming.typeName(op.getId().getName()),
+                SchemaGenerator.operationSchemaAccessor(context, op));
           }
+          writer.write("");
 
           for (OperationShape op : operations) writeOperationMethod(sp, model, op);
           for (OperationShape op : operations) writeErrorDeserializer(sp, model, op);
@@ -194,11 +191,9 @@ public final class ClientGenerator implements Runnable {
   private void writeOperationMethod(SymbolProvider sp, Model model, OperationShape op) {
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
-    boolean rpc = kind == Kind.RPC_V2_CBOR;
     String opName = CSharpNaming.typeName(op.getId().getName());
     String deserName = "Deserialize" + opName + "ErrorAsync";
     String protocol = ProtocolSupport.protocolType(kind);
-    String schema = SchemaGenerator.operationSchemaAccessor(context, op);
     String inputArg = hasInput ? "input" : "SmithyUnit.Value";
 
     writer.write("public async $L", operationSignature(sp, op));
@@ -212,13 +207,8 @@ public final class ClientGenerator implements Runnable {
                 model.expectShape(op.getInputShape(), StructureShape.class));
           }
 
-          if (rpc) {
-            // The operation-bound protocol owns the (service-derived) request path.
-            writer.write(
-                "var request = $LProtocol.SerializeRequest($L);", opName, inputArg);
-          } else {
-            writer.write("var request = $L.SerializeRequest($L, $L);", protocol, schema, inputArg);
-          }
+          // The operation-bound protocol owns request serialization (and, for rpc, the path).
+          writer.write("var request = $LProtocol.SerializeRequest($L);", opName, inputArg);
 
           if (op.findTrait(TraitIds.REQUEST_COMPRESSION).isPresent()) {
             writer.write(
@@ -233,18 +223,15 @@ public final class ClientGenerator implements Runnable {
           writer.write("");
           writer.write(
               "var response = await invoker.InvokeAsync($L, $L, request, $L,"
-                  + " cancellationToken).ConfigureAwait(false);",
+                  + " $LProtocol.IsErrorResponse, cancellationToken).ConfigureAwait(false);",
               CSharpNaming.formatString(service.getId().getName()),
               CSharpNaming.formatString(op.getId().getName()),
-              deserName);
+              deserName,
+              opName);
 
           if (hasOutput) {
             writer.write("");
-            if (rpc) {
-              writer.write("return $LProtocol.DeserializeResponse(response);", opName);
-            } else {
-              writer.write("return $L.DeserializeResponse($L, response);", protocol, schema);
-            }
+            writer.write("return $LProtocol.DeserializeResponse(response);", opName);
           } else {
             writer.write("return;");
           }
@@ -318,13 +305,12 @@ public final class ClientGenerator implements Runnable {
             return;
           }
 
-          // For rpc the per-operation protocol instance owns error discrimination; for REST the
-          // static protocol class is used. Both share the DeserializeError(schema, response) shape,
-          // so the per-error returns just differ by receiver.
-          String errorReceiver = rpc ? opName + "Protocol" : protocol;
+          // The operation-bound protocol owns error discrimination and per-error deserialization.
+          String errorReceiver = opName + "Protocol";
 
+          writer.write("var errorType = $L.GetErrorDiscriminator(response);", errorReceiver);
           if (rpc) {
-            writer.write("var errorType = $L.GetErrorDiscriminator(response);", errorReceiver);
+            // rpcv2Cbor returns null when the response carries no error envelope at all.
             writer.write("if (errorType is null)");
             writer.openBlock(
                 "{",
@@ -333,8 +319,6 @@ public final class ClientGenerator implements Runnable {
                     writer.write(
                         "return"
                             + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);"));
-          } else {
-            writer.write("var errorType = $L.DeserializeErrorType(response);", protocol);
           }
 
           for (ShapeId errId : errorIds) {

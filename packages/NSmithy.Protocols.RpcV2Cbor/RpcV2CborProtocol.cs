@@ -141,6 +141,9 @@ public static class RpcV2CborProtocol
             );
         }
 
+        public bool IsErrorResponse(SmithyHttpResponse response) =>
+            (int)response.StatusCode >= 400;
+
         public string? GetErrorDiscriminator(SmithyHttpResponse response) =>
             HasResponse(response) ? DeserializeErrorType(response) : null;
 
@@ -155,48 +158,6 @@ public static class RpcV2CborProtocol
             string errorShapeId,
             int statusCode
         ) => RpcV2CborProtocol.SerializeError(errorSchema, error, errorShapeId, statusCode);
-    }
-
-    public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        TInput input,
-        string requestUri
-    )
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        ArgumentNullException.ThrowIfNull(requestUri);
-
-        var request = new SmithyHttpRequest(HttpMethod.Post, requestUri);
-        request.Headers["Smithy-Protocol"] = ["rpc-v2-cbor"];
-        request.Headers["Accept"] = [ContentType];
-
-        if (typeof(TInput) != typeof(SmithyUnit) && !IsUnitSchema(operation.Input))
-        {
-            // Client requests skip top-level @default members (nested defaults still materialize).
-            request.Content = CborCodec
-                .FromSchema(operation.Input, materializeTopLevelDefaults: false)
-                .Serialize(input);
-            request.ContentType = ContentType;
-        }
-
-        return request;
-    }
-
-    public static TOutput DeserializeResponse<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        SmithyHttpResponse response
-    )
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        ArgumentNullException.ThrowIfNull(response);
-
-        if (typeof(TOutput) == typeof(SmithyUnit))
-        {
-            EnsureResponse(response);
-            return (TOutput)(object)SmithyUnit.Value;
-        }
-
-        return DeserializeBody(CborCodec.FromSchema(operation.Output), response.Content);
     }
 
     public static TError DeserializeError<TError>(
@@ -248,13 +209,7 @@ public static class RpcV2CborProtocol
         );
     }
 
-    public static T DeserializeBody<T>(ICodec<T> codec, byte[] content)
-    {
-        ArgumentNullException.ThrowIfNull(codec);
-        return content.Length == 0 ? default! : codec.Deserialize(content);
-    }
-
-    public static T DeserializeRequiredBody<T>(ICodec<T> codec, byte[] content)
+    private static T DeserializeRequiredBody<T>(ICodec<T> codec, byte[] content)
     {
         ArgumentNullException.ThrowIfNull(codec);
         if (content.Length == 0)
@@ -263,65 +218,6 @@ public static class RpcV2CborProtocol
         }
 
         return codec.Deserialize(content);
-    }
-
-    public static TInput DeserializeRequest<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        SmithyHttpRequest request
-    )
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        ArgumentNullException.ThrowIfNull(request);
-
-        if (typeof(TInput) == typeof(SmithyUnit) || IsUnitSchema(operation.Input))
-            return default!;
-
-        return DeserializeBody(CborCodec.FromSchema(operation.Input), request.Content ?? []);
-    }
-
-    public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        TOutput output
-    )
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-
-        var responseHeaders = new Dictionary<string, IReadOnlyList<string>>(
-            StringComparer.OrdinalIgnoreCase
-        )
-        {
-            ["Smithy-Protocol"] = ["rpc-v2-cbor"],
-        };
-        var emptyContentHeaders = new Dictionary<string, IReadOnlyList<string>>(
-            StringComparer.OrdinalIgnoreCase
-        );
-
-        if (typeof(TOutput) == typeof(SmithyUnit) || IsUnitSchema(operation.Output))
-        {
-            return new SmithyHttpResponse(
-                System.Net.HttpStatusCode.OK,
-                null,
-                [],
-                responseHeaders,
-                emptyContentHeaders
-            );
-        }
-
-        var body = CborCodec.FromSchema(operation.Output).Serialize(output);
-        var contentHeaders = new Dictionary<string, IReadOnlyList<string>>(
-            StringComparer.OrdinalIgnoreCase
-        )
-        {
-            ["Content-Type"] = [ContentType],
-        };
-
-        return new SmithyHttpResponse(
-            System.Net.HttpStatusCode.OK,
-            null,
-            body,
-            responseHeaders,
-            contentHeaders
-        );
     }
 
     public static bool HasResponse(SmithyHttpResponse response)

@@ -229,19 +229,12 @@ public sealed class RestOperationBinding<TInput, TOutput>
 
 public static class RestOperationBinding
 {
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<
-        object,
-        object
-    > Cache = new();
-
+    /// <summary>
+    /// Builds the binding for an operation. Callers are expected to build this once per operation
+    /// (the generated protocols hold one per operation in a static field), so this no longer
+    /// memoizes — the caching now lives in the operation-bound protocol instance.
+    /// </summary>
     public static RestOperationBinding<TInput, TOutput> From<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation
-    )
-    {
-        if (Cache.TryGetValue(operation, out var cached))
-            return (RestOperationBinding<TInput, TOutput>)cached;
-        var binding = RestOperationBinding<TInput, TOutput>.CreateFrom(operation);
-        Cache.AddOrUpdate(operation, binding);
-        return binding;
-    }
+    ) => RestOperationBinding<TInput, TOutput>.CreateFrom(operation);
 }

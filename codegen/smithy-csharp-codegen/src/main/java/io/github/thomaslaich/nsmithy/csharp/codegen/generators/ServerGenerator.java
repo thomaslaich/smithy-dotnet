@@ -284,24 +284,22 @@ public final class ServerGenerator implements Runnable {
         "{",
         "}",
         () -> {
-          // rpcv2Cbor builds operation-bound protocols once from the (service, operation) schemas,
-          // exactly like the generated client; the endpoint bodies then call them uniformly.
-          if (kind == ProtocolSupport.Kind.RPC_V2_CBOR) {
+          // Build operation-bound protocols once from the (service, operation) schemas, exactly
+          // like the generated client; the endpoint bodies then call them uniformly.
+          writer.write(
+              "private static readonly IServiceProtocol ServiceProtocol = $L.ForService($L);",
+              ProtocolSupport.protocolType(kind),
+              SchemaGenerator.serviceSchemaAccessor(context, service));
+          for (OperationShape op : ops) {
             writer.write(
-                "private static readonly IServiceProtocol ServiceProtocol ="
-                    + " RpcV2CborProtocol.ForService($L);",
-                SchemaGenerator.serviceSchemaAccessor(context, service));
-            for (OperationShape op : ops) {
-              writer.write(
-                  "private static readonly IOperationProtocol<$L, $L> $LProtocol ="
-                      + " ServiceProtocol.ForOperation($L);",
-                  SchemaGenerator.operationShapeType(context, op.getInputShape()),
-                  SchemaGenerator.operationShapeType(context, op.getOutputShape()),
-                  CSharpNaming.typeName(op.getId().getName()),
-                  SchemaGenerator.operationSchemaAccessor(context, op));
-            }
-            writer.write("");
+                "private static readonly IOperationProtocol<$L, $L> $LProtocol ="
+                    + " ServiceProtocol.ForOperation($L);",
+                SchemaGenerator.operationShapeType(context, op.getInputShape()),
+                SchemaGenerator.operationShapeType(context, op.getOutputShape()),
+                CSharpNaming.typeName(op.getId().getName()),
+                SchemaGenerator.operationSchemaAccessor(context, op));
           }
+          writer.write("");
 
           writer.write(
               "public static IEndpointRouteBuilder Map$LHttp(this IEndpointRouteBuilder endpoints)",
@@ -372,33 +370,25 @@ public final class ServerGenerator implements Runnable {
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     boolean rpc = kind == ProtocolSupport.Kind.RPC_V2_CBOR;
     String methodName = CSharpNaming.typeName(op.getId().getName()) + "Async";
-    String protocol = ProtocolSupport.protocolType(kind);
-    String opSchema = SchemaGenerator.operationSchemaAccessor(context, op);
     String opProtocol = CSharpNaming.typeName(op.getId().getName()) + "Protocol";
 
-    // Call the handler interface method directly — the operation schema carries the
+    // Call the handler interface method directly — the operation-bound protocol carries the
     // serialization metadata, so a separate per-operation descriptor is unnecessary.
     String handlerCall;
     if (hasInput) {
       writer.write(
           "var smithyRequest = await SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync("
               + "httpContext, cancellationToken).ConfigureAwait(false);");
-      if (rpc) {
-        writer.write("var input = $L.DeserializeRequest(smithyRequest);", opProtocol);
-      } else {
-        writer.write("var input = $L.DeserializeRequest($L, smithyRequest);", protocol, opSchema);
-      }
+      writer.write("var input = $L.DeserializeRequest(smithyRequest);", opProtocol);
       handlerCall = "handler." + methodName + "(input, cancellationToken)";
     } else {
       handlerCall = "handler." + methodName + "(cancellationToken)";
     }
 
-    String serializeResponse =
-        rpc
-            ? opProtocol + ".SerializeResponse(output)"
-            : protocol + ".SerializeResponse(" + opSchema + ", output)";
+    String serializeResponse = opProtocol + ".SerializeResponse(output)";
 
-    // rpcv2Cbor: catch modeled errors and serialize them as CBOR error responses.
+    // rpcv2Cbor: catch modeled errors and serialize them as CBOR error responses. (REST server-side
+    // error serialization is not yet implemented.)
     List<ShapeId> errorIds = new ArrayList<>(op.getErrors(service));
     errorIds.sort(Comparator.comparing(ShapeId::toString));
     boolean catchErrors = rpc && !errorIds.isEmpty();
