@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <SmithyService>example.hello#HelloService</SmithyService>
+    <SmithyGeneratedNamespaces>example.hello</SmithyGeneratedNamespaces>
+    <SmithyGenerateClient>false</SmithyGenerateClient>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSmithy.Codecs.Cbor" Version="0.1.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="0.1.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0-SNAPSHOT" />
+    <ProjectReference Include="../contracts/NSmithy.Examples.RpcV2Cbor.Contracts.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "sources": ["model"],
+  "maven": {
+    "dependencies": [
+      "software.amazon.smithy:smithy-protocol-traits:1.68.0"
+    ]
+  }
+}

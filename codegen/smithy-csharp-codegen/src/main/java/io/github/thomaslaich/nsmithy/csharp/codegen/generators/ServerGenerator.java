@@ -17,6 +17,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -28,6 +29,9 @@ import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
+import software.amazon.smithy.model.shapes.StructureShape;
+import software.amazon.smithy.model.traits.ErrorTrait;
+import software.amazon.smithy.model.traits.HttpErrorTrait;
 import software.amazon.smithy.model.traits.HttpTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -37,19 +41,13 @@ public final class ServerGenerator implements Runnable {
   private final GenerationContext context;
   private final CSharpWriter writer;
   private final ServiceShape service;
-  private final boolean rawRestJsonStringPayloads;
   private final ProtocolSupport.Kind kind;
 
   public ServerGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
     this.writer = w;
     this.service = s;
-    this.rawRestJsonStringPayloads =
-        s.findTrait(io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds.REST_JSON_1).isPresent();
-    this.kind =
-        ProtocolSupport.emitsHttpClient(s)
-            ? ProtocolSupport.kindOf(s)
-            : ProtocolSupport.Kind.REST_JSON;
+    this.kind = ProtocolSupport.kindOf(s);
   }
 
   @Override
@@ -70,12 +68,13 @@ public final class ServerGenerator implements Runnable {
     if (emitsAspNet) {
       writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
       writer.addImport(RuntimeTypes.NSMITHY_HTTP);
-      writer.addImport(RuntimeTypes.NSMITHY_PROTOCOLS_RESTJSON);
+      writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kind));
       writer.addImport(RuntimeTypes.NSMITHY_SERVER_ASPNETCORE);
       writer.addImport(RuntimeTypes.MS_ASPNETCORE_BUILDER);
       writer.addImport(RuntimeTypes.MS_ASPNETCORE_HTTP);
       writer.addImport(RuntimeTypes.MS_ASPNETCORE_ROUTING);
     }
+    // todo: we will migrate this path to native server emission
     if (emitsGrpc) {
       writer.addImport(RuntimeTypes.GRPC_CORE);
       writer.addImport(RuntimeTypes.MS_ASPNETCORE_BUILDER);
@@ -285,6 +284,23 @@ public final class ServerGenerator implements Runnable {
         "{",
         "}",
         () -> {
+          // Build operation-bound protocols once from the (service, operation) schemas, exactly
+          // like the generated client; the endpoint bodies then call them uniformly.
+          writer.write(
+              "private static readonly IServiceProtocol ServiceProtocol = $L.ForService($L);",
+              ProtocolSupport.protocolType(kind),
+              SchemaGenerator.serviceSchemaAccessor(context, service));
+          for (OperationShape op : ops) {
+            writer.write(
+                "private static readonly IOperationProtocol<$L, $L> $LProtocol ="
+                    + " ServiceProtocol.ForOperation($L);",
+                SchemaGenerator.operationShapeType(context, op.getInputShape()),
+                SchemaGenerator.operationShapeType(context, op.getOutputShape()),
+                CSharpNaming.typeName(op.getId().getName()),
+                SchemaGenerator.operationSchemaAccessor(context, op));
+          }
+          writer.write("");
+
           writer.write(
               "public static IEndpointRouteBuilder Map$LHttp(this IEndpointRouteBuilder endpoints)",
               contract);
@@ -304,8 +320,35 @@ public final class ServerGenerator implements Runnable {
   }
 
   private void writeOperationMap(SymbolProvider sp, OperationShape op, String contract) {
-    HttpTrait http = op.expectTrait(HttpTrait.class);
     String opInterface = opHandlerName(op);
+    switch (kind) {
+      case RPC_V2_CBOR -> writeRpcV2CborOperationMap(sp, op, opInterface);
+      case REST_JSON, REST_XML -> writeRestOperationMap(sp, op, opInterface);
+      default ->
+          throw new IllegalStateException("Unsupported protocol for server codegen: " + kind);
+    }
+  }
+
+  private void writeRpcV2CborOperationMap(
+      SymbolProvider sp, OperationShape op, String opInterface) {
+    // rpcv2Cbor uses a synthetic URI; operations have no @http trait.
+    String uri = "/service/" + service.getId().getName() + "/operation/" + op.getId().getName();
+    writer.openBlock(
+        "endpoints.MapPost($L, async (HttpContext httpContext, $L handler,"
+            + " System.Threading.CancellationToken cancellationToken) => {",
+        "});",
+        CSharpNaming.formatString(uri),
+        opInterface,
+        () -> {
+          writer.write("System.ArgumentNullException.ThrowIfNull(httpContext);");
+          writer.write("System.ArgumentNullException.ThrowIfNull(handler);");
+          writer.write("");
+          writeOperationBody(sp, op);
+        });
+  }
+
+  private void writeRestOperationMap(SymbolProvider sp, OperationShape op, String opInterface) {
+    HttpTrait http = op.expectTrait(HttpTrait.class);
     writer.openBlock(
         "endpoints.MapMethods($L, [$L], async (HttpContext httpContext, $L handler,"
             + " System.Threading.CancellationToken cancellationToken) => {",
@@ -325,34 +368,87 @@ public final class ServerGenerator implements Runnable {
   private void writeOperationBody(SymbolProvider sp, OperationShape op) {
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
+    boolean rpc = kind == ProtocolSupport.Kind.RPC_V2_CBOR;
     String methodName = CSharpNaming.typeName(op.getId().getName()) + "Async";
-    String protocol = ProtocolSupport.protocolType(kind);
-    String opSchema = SchemaGenerator.operationSchemaAccessor(context, op);
+    String opProtocol = CSharpNaming.typeName(op.getId().getName()) + "Protocol";
 
-    // Call the handler interface method directly — the operation schema carries the
+    // Call the handler interface method directly — the operation-bound protocol carries the
     // serialization metadata, so a separate per-operation descriptor is unnecessary.
     String handlerCall;
     if (hasInput) {
       writer.write(
           "var smithyRequest = await SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync("
               + "httpContext, cancellationToken).ConfigureAwait(false);");
-      writer.write("var input = $L.DeserializeRequest($L, smithyRequest);", protocol, opSchema);
+      writer.write("var input = $L.DeserializeRequest(smithyRequest);", opProtocol);
       handlerCall = "handler." + methodName + "(input, cancellationToken)";
     } else {
       handlerCall = "handler." + methodName + "(cancellationToken)";
     }
 
+    String serializeResponse = opProtocol + ".SerializeResponse(output)";
+
+    // rpcv2Cbor: catch modeled errors and serialize them as CBOR error responses. (REST server-side
+    // error serialization is not yet implemented.)
+    List<ShapeId> errorIds = new ArrayList<>(op.getErrors(service));
+    errorIds.sort(Comparator.comparing(ShapeId::toString));
+    boolean catchErrors = rpc && !errorIds.isEmpty();
+
+    if (catchErrors) {
+      writer.write("NSmithy.Http.SmithyHttpResponse smithyResponse;");
+      writer.write("try");
+      writer.openBlock(
+          "{",
+          "}",
+          () -> {
+            writeHandlerInvocation(handlerCall, hasOutput);
+            writer.write("smithyResponse = $L;", serializeResponse);
+          });
+      for (ShapeId errId : errorIds) {
+        writeErrorCatch(errId, opProtocol);
+      }
+    } else {
+      writeHandlerInvocation(handlerCall, hasOutput);
+      writer.write("var smithyResponse = $L;", serializeResponse);
+    }
+
+    writer.write(
+        "await SmithyAspNetCoreProtocol.WriteSmithyHttpResponseAsync(httpContext, smithyResponse,"
+            + " cancellationToken).ConfigureAwait(false);");
+  }
+
+  private void writeHandlerInvocation(String handlerCall, boolean hasOutput) {
     if (hasOutput) {
       writer.write("var output = await $L.ConfigureAwait(false);", handlerCall);
     } else {
       writer.write("await $L.ConfigureAwait(false);", handlerCall);
       writer.write("var output = SmithyUnit.Value;");
     }
+  }
 
-    writer.write("var smithyResponse = $L.SerializeResponse($L, output);", protocol, opSchema);
-    writer.write(
-        "await SmithyAspNetCoreProtocol.WriteSmithyHttpResponseAsync(httpContext, smithyResponse,"
-            + " cancellationToken).ConfigureAwait(false);");
+  private void writeErrorCatch(ShapeId errId, String opProtocol) {
+    StructureShape err = context.model().expectShape(errId, StructureShape.class);
+    String errType = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(err));
+    String errSchema = SchemaGenerator.shapeSchemaAccessor(context, err);
+    int statusCode = httpErrorCode(err);
+    writer.write("catch ($L error)", errType);
+    writer.openBlock(
+        "{",
+        "}",
+        () ->
+            writer.write(
+                "smithyResponse = $L.SerializeError($L, error, $L, $L);",
+                opProtocol,
+                errSchema,
+                CSharpNaming.formatString(errId.toString()),
+                statusCode));
+  }
+
+  private static int httpErrorCode(StructureShape err) {
+    return err.getTrait(HttpErrorTrait.class)
+        .map(HttpErrorTrait::getCode)
+        .orElseGet(
+            () ->
+                err.getTrait(ErrorTrait.class).map(t -> t.isClientError() ? 400 : 500).orElse(500));
   }
 
   private String routePattern(HttpTrait http) {

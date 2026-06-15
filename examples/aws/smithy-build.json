@@ -12,17 +12,6 @@
     ]
   },
   "projections": {
-    "rpcv2cbor": {
-      "transforms": [
-        { "name": "includeServices", "args": { "services": ["example.hello#HelloService"] } }
-      ],
-      "plugins": {
-        "csharp-codegen": {
-          "service": "example.hello#HelloService",
-          "baseNamespace": ""
-        }
-      }
-    },
     "restxml": {
       "transforms": [
         { "name": "includeServices", "args": { "services": ["example.hello#HelloXmlService"] } }

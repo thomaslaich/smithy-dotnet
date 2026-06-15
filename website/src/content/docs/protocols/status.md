@@ -9,30 +9,43 @@ complete or fully conformant across the Smithy surface.
 
 ## Current Status
 
-| Protocol | Generated Surfaces | Stage | Notes |
-| --- | --- | --- | --- |
-| `alloy#simpleRestJson` | .NET client, ASP.NET Core server | Preview, most complete | Best-covered transport today. Official pinned-suite coverage is currently `43/43` (`100%`). |
-| `aws.protocols#restJson1` | .NET client, ASP.NET Core server | Preview | Client and server generation work. Official pinned-suite coverage is currently `268/272` (`98.53%`), with the remaining gap concentrated in Glacier-specific fixtures. |
-| `aws.protocols#restXml` | .NET client | Early preview | Client generation available; used to validate the XML codec and transport abstractions. |
-| `smithy.protocols#rpcv2Cbor` | .NET client | Early preview | Client-only slice that exercises the binary document codec seam directly. |
-| `alloy.proto#grpc` | `.proto` emission, gRPC client adapter, ASP.NET Core gRPC server adapter | Experimental | Works for the current generated path, but still has the least maturity, the smallest test surface, and more explicit model requirements such as `alloy.proto#protoIndex`. |
+Conformance is reported separately for the generated **client** and **server**,
+each counted against the official cases that actually apply to that direction
+(`appliesTo`) in the pinned protocol-test models. A case that only applies to a
+server is never counted toward client coverage and vice versa.
 
-## Current Conformance Snapshot
+| Protocol | Surfaces | Stage | Client | Server |
+| --- | --- | --- | --- | --- |
+| `alloy#simpleRestJson` | both | Preview (most complete) | 43/43 (100%) | not yet exercised |
+| `aws.protocols#restJson1` | both | Preview | 243/247 (98.4%) | 19/227 (8.4%) |
+| `aws.protocols#restXml` | client | Early preview | codec-only, no cases yet | — |
+| `smithy.protocols#rpcv2Cbor` | both | Preview | 68/68 (100%) | 60/60 (100%) |
+| `alloy.proto#grpc` | both | Experimental | tested via examples¹ | tested via examples¹ |
 
-- `alloy#simpleRestJson`: `43/43` official request/response cases in the pinned model (`100%`)
-- `aws.protocols#restJson1`: `268/272` official request/response cases in the pinned model (`98.53%`)
-- combined JSON/REST surface: `311/315` official cases (`98.73%`)
+¹ `alloy.proto#grpc` is not covered by Smithy's HTTP conformance suite; it is
+validated through end-to-end examples instead, and has the least maturity, the
+smallest test surface, and more explicit model requirements such as
+`alloy.proto#protoIndex`.
 
-These numbers refer to the official request/response cases present in the
-protocol test models pinned in this repository. They are broader than the
-executable allowlists used by individual test projects, but narrower than
-"every protocol test that exists upstream."
+Notes:
+
+- `alloy#simpleRestJson`'s protocol tests all declare `appliesTo: both`, so they
+  apply to servers too; there is simply no server conformance project driving
+  them yet, hence "not yet exercised" rather than a percentage.
+- `aws.protocols#restJson1`'s client surface is mature; its server surface is
+  still early (request/response serialization and error responses are only
+  partially exercised).
+- `aws.protocols#restXml` currently validates the XML codec and transport
+  abstractions; no official conformance cases are executed yet.
+- `smithy.protocols#rpcv2Cbor` is the only protocol with both client and server
+  fully exercised against every applicable case.
 
 ## Recommended Use
 
 - Prefer `alloy#simpleRestJson` if you want the smoothest end-to-end preview path.
 - Use `aws.protocols#restJson1` when you need generated AWS-style REST/JSON clients or ASP.NET Core server surfaces.
-- Use `aws.protocols#restXml` or `smithy.protocols#rpcv2Cbor` when you want to evaluate the XML or binary codec paths and are comfortable with a smaller preview slice.
+- Use `smithy.protocols#rpcv2Cbor` for binary CBOR-encoded services — client and server generation are both available.
+- Use `aws.protocols#restXml` when you want to evaluate the XML codec path and are comfortable with a smaller preview slice.
 - Treat `alloy.proto#grpc` as an early adopter path for teams comfortable working close to generated code and current limitations.
 
 ## What "Early Stage" Means Here

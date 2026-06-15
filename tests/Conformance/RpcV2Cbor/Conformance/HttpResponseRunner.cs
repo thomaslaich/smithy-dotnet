@@ -65,20 +65,24 @@ internal static class HttpResponseRunner
         }
 
         Assert.Null(thrown);
-        Assert.NotNull(output);
-        ResponseAssertions.AssertEquivalent(
-            testCase.Params,
-            output!,
-            testCase.OperationOrErrorName
-        );
+        if (testCase.Params is not null)
+        {
+            Assert.NotNull(output);
+            ResponseAssertions.AssertEquivalent(
+                testCase.Params,
+                output!,
+                testCase.OperationOrErrorName
+            );
+        }
     }
 
     private static HttpResponseMessage BuildResponse(HttpResponseTestCase testCase)
     {
         var msg = new HttpResponseMessage((HttpStatusCode)testCase.Code);
+        // rpcv2Cbor bodies are base64-encoded binary in the test fixture.
         var bodyBytes = string.IsNullOrEmpty(testCase.Body)
             ? []
-            : System.Text.Encoding.UTF8.GetBytes(testCase.Body);
+            : Convert.FromBase64String(testCase.Body);
         var content = new ByteArrayContent(bodyBytes);
         if (!string.IsNullOrEmpty(testCase.BodyMediaType))
         {

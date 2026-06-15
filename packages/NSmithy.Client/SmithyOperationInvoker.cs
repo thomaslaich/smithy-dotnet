@@ -16,6 +16,7 @@ public sealed class SmithyOperationInvoker(
         string operationName,
         SmithyHttpRequest request,
         SmithyErrorDeserializer? errorDeserializer = null,
+        Func<SmithyHttpResponse, bool>? isErrorResponse = null,
         CancellationToken cancellationToken = default
     )
     {
@@ -27,26 +28,27 @@ public sealed class SmithyOperationInvoker(
         var operationResponse = await BuildPipeline(0)
             .Invoke(operationRequest, cancellationToken)
             .ConfigureAwait(false);
+        var response = operationResponse.Response;
 
-        if ((int)operationResponse.Response.StatusCode < 400)
+        // Whether a response is an error is a protocol decision (HTTP status for REST/rpcv2Cbor,
+        // the grpc-status trailer for gRPC), supplied by the caller. The default preserves the
+        // HTTP convention for callers that don't provide one.
+        var isError = isErrorResponse?.Invoke(response) ?? (int)response.StatusCode >= 400;
+        if (!isError)
         {
-            return operationResponse.Response;
+            return response;
         }
 
         if (errorDeserializer is not null)
         {
-            var error = await errorDeserializer(operationResponse.Response, cancellationToken)
-                .ConfigureAwait(false);
+            var error = await errorDeserializer(response, cancellationToken).ConfigureAwait(false);
             if (error is not null)
             {
                 throw error;
             }
         }
 
-        throw new SmithyClientException(
-            operationResponse.Response.StatusCode,
-            operationResponse.Response.ReasonPhrase
-        );
+        throw new SmithyClientException(response.StatusCode, response.ReasonPhrase);
     }
 
     private SmithyOperationNext BuildPipeline(int index)
