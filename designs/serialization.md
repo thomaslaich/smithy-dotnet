@@ -1,62 +1,229 @@
 # Serialization
 
-How NSmithy serializes and deserializes Smithy shapes at runtime.
+Serialization design sits between generated code, runtime libraries, and wire
+protocols. Different designs optimize for different things:
 
-Serialization has four layers:
+- Runtime performance
+- Codegen simplicity
+- Runtime maintainability
+- Extensibility for new protocols and body formats
+- Startup time and memory use
+
+NSmithy deliberately keeps generated serialization code small. Codegen is harder
+to inspect, test, and evolve than ordinary C# runtime libraries, so the
+generator emits plain model types plus schemas, not serializers. It does not
+generate protocol-specific serialization branches, and it does not generate
+per-shape JSON/XML/CBOR serializer methods.
+
+Schemas are the generated contract between models and the runtime. Codecs
+compile format-specific readers and writers from those schemas; protocols
+precompute operation bindings from service and operation schemas and compose
+them with the appropriate codecs. This shifts some work to startup, but keeps
+the hot path typed and precomputed.
+
+That split gives NSmithy's serialization model four layers:
 
 1. **Model types** are plain C# values.
 2. **Schemas** describe Smithy metadata, typed member access, and construction.
 3. **Codecs** compile schemas into body readers and writers.
 4. **Protocols** project operation schemas into transport requests and responses.
 
-## Goals
+Only the first two layers are generated. Codecs and protocols are runtime
+libraries that are configured from the generated schemas.
 
-- Generated model types are plain C# data types. They do not know about JSON,
-  XML, CBOR, HTTP bindings, or serializer visitors.
-- Schemas are the runtime source of truth for Smithy shape metadata, member
-  access, builders, and traits.
-- Codecs are compiled once from a schema and produce boxing-free typed readers
-  and writers on the hot path.
-- Protocol implementations compose schemas and codecs instead of generating
-  protocol-specific serialization code into every shape.
+## End-To-End Sketch
 
-## Runtime Model
+A Smithy service defines a protocol, operations, input/output structures, and
+traits:
 
-The generator emits plain model types and separate schema definitions:
+```smithy
+$version: "2"
 
-```csharp
-public sealed record GetWidgetInput(string Id, string? Filter);
+namespace example.weather
 
-public static class GetWidgetInputSchema
-{
-    public static Schema<GetWidgetInput> Schema { get; } = ...;
+use aws.protocols#restJson1
+
+@restJson1
+service WeatherService {
+    operations: [GetForecast]
+}
+
+@http(method: "GET", uri: "/forecast/{city}", code: 200)
+operation GetForecast {
+    input: GetForecastInput
+    output: GetForecastOutput
+}
+
+structure GetForecastInput {
+    @required
+    @httpLabel
+    city: String
+
+    @httpQuery("units")
+    units: String
+}
+
+structure GetForecastOutput {
+    @required
+    summary: String
+
+    temperature: Integer
 }
 ```
 
-For each shape, the generator emits:
+The generator emits model types that do not know how they are serialized:
 
-1. The plain C# type (record, class, enum, list alias, map alias, etc.).
-2. A generated builder type when deserialization needs staged construction.
-3. A static `Schema<T>` with typed member accessors, builder factory, builder
-   finalizer, shape traits, and member traits.
+```csharp
+public sealed record GetForecastInput(string City, string? Units);
 
-For each operation, the generator emits an `OperationSchema<TInput, TOutput>`
-that references the input and output schemas plus operation traits; for each
-service it emits a `ServiceSchema` carrying the service shape id and
-service-level traits. A generated client binds these into per-operation
-protocols once and threads inputs and outputs through them (see
-[Client Generation](#client-generation)).
+public sealed record GetForecastOutput(string Summary, int? Temperature);
+```
 
-Model types do not implement serialization interfaces and do not contain
-serializer callbacks. All wire-format behavior lives in the schema, codec, and
-protocol layers.
+Next to those model types, the generator emits schemas. A structure schema knows
+the Smithy shape id, member traits, how to read members from a value, and how to
+build the value during deserialization:
+
+```csharp
+public static partial class GetForecastInputSchema
+{
+    public static Schema<GetForecastInput> Schema { get; } =
+        Schemas.Struct<GetForecastInput, GetForecastInputBuilder>(
+            ShapeId.Parse("example.weather#GetForecastInput"),
+            members: [
+                Schemas.Member(
+                    "city",
+                    StringSchema.Schema,
+                    get: input => input.City,
+                    set: (builder, value) => builder.City = value,
+                    traits: [new RequiredTrait(), new HttpLabelTrait()]),
+
+                Schemas.Member(
+                    "units",
+                    StringSchema.Schema,
+                    get: input => input.Units,
+                    set: (builder, value) => builder.Units = value,
+                    traits: [new HttpQueryTrait("units")])
+            ],
+            createBuilder: () => new GetForecastInputBuilder(),
+            build: builder => new GetForecastInput(builder.City, builder.Units));
+}
+```
+
+Operations and services have schemas too. They are the entry point for
+protocols:
+
+```csharp
+public static partial class GetForecastSchema
+{
+    public static OperationSchema<GetForecastInput, GetForecastOutput> Schema { get; } =
+        Schemas.Operation(
+            ShapeId.Parse("example.weather#GetForecast"),
+            GetForecastInputSchema.Schema,
+            GetForecastOutputSchema.Schema,
+            traits: [new HttpTrait("GET", "/forecast/{city}", 200)]);
+}
+
+public static partial class WeatherServiceSchema
+{
+    public static ServiceSchema Schema { get; } =
+        Schemas.Service(
+            ShapeId.Parse("example.weather#WeatherService"),
+            traits: [new RestJson1Trait()]);
+}
+```
+
+A body codec compiles a schema into a reader/writer for JSON, XML, or CBOR. It
+does not know about HTTP paths, headers, status codes, or operation routing:
+
+```csharp
+var outputCodec = JsonCodec.FromSchema(GetForecastOutputSchema.Schema);
+
+var body = outputCodec.Serialize(new GetForecastOutput("Cloudy", 18));
+var output = outputCodec.Deserialize(body);
+```
+
+A service protocol interprets service and operation schemas for a concrete
+transport. `restJson1` reads the `@http`, `@httpLabel`, and `@httpQuery` traits,
+builds the request path, and uses JSON for the body:
+
+```csharp
+IServiceProtocol serviceProtocol =
+    RestJsonProtocol.ForService(WeatherServiceSchema.Schema);
+
+IOperationProtocol<GetForecastInput, GetForecastOutput> getForecastProtocol =
+    serviceProtocol.ForOperation(GetForecastSchema.Schema);
+
+var request = getForecastProtocol.SerializeRequest(
+    new GetForecastInput("Berlin", "metric"));
+
+// GET /forecast/Berlin?units=metric
+```
+
+Generated clients bind protocols once in static fields. Operation methods stay
+protocol-agnostic: they ask the operation protocol to write the request, send it
+through the invoker, then ask the operation protocol to read the response:
+
+```csharp
+public sealed class WeatherServiceClient
+{
+    private readonly SmithyOperationInvoker invoker;
+
+    private static readonly IServiceProtocol ServiceProtocol =
+        RestJsonProtocol.ForService(WeatherServiceSchema.Schema);
+
+    private static readonly IOperationProtocol<GetForecastInput, GetForecastOutput>
+        GetForecastProtocol = ServiceProtocol.ForOperation(GetForecastSchema.Schema);
+
+    public async Task<GetForecastOutput> GetForecastAsync(
+        GetForecastInput input,
+        CancellationToken cancellationToken = default)
+    {
+        var request = GetForecastProtocol.SerializeRequest(input);
+
+        var response = await invoker
+            .InvokeAsync(
+                "WeatherService",
+                "GetForecast",
+                request,
+                DeserializeGetForecastErrorAsync,
+                GetForecastProtocol.IsErrorResponse,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        return GetForecastProtocol.DeserializeResponse(response);
+    }
+}
+```
+
+For a different protocol, the model types and schemas stay the same. Only the
+service protocol factory changes, for example to
+`RpcV2CborProtocol.ForService(...)` or `RestXmlProtocol.ForService(...)`.
+
+## Generated Model Types
+
+Generated model types are plain C# values:
+
+```csharp
+public sealed record GetWidgetInput(string Id, string? Filter);
+```
+
+They do not implement serialization interfaces or contain serializer callbacks.
+Wire-format behavior lives in the schema, codec, and protocol layers. When
+deserialization needs staged construction, the generator emits a separate
+builder type instead of adding mutable hooks to the model.
 
 ## Schema Model
 
-`Schema<T>` (in `NSmithy.Core`) is a runtime description of a Smithy shape. The
-typed form is used when the C# type is statically known. The erased `Schema`
-base is used only at boundaries that genuinely need shape-generic dispatch,
-such as protocol analysis over an operation graph.
+Schemas sit next to the model types. A `Schema<T>` (in `NSmithy.Core`) describes
+a Smithy shape at runtime. The typed form is used when the C# type is known; the
+erased `Schema` base is reserved for shape-generic boundaries, such as protocol
+analysis over an operation graph.
+
+For each shape, the generated schema contains typed member accessors, builder
+factory, builder finalizer, shape traits, and member traits. For each operation,
+the generator emits an `OperationSchema<TInput, TOutput>` that references the
+input and output schemas plus operation traits. For each service, it emits a
+`ServiceSchema` with the service shape id and service-level traits.
 
 A schema carries:
 
@@ -159,12 +326,6 @@ Codec usage:
 var personCodec = JsonCodec.FromSchema(PersonSchema.Schema);
 var json = personCodec.Serialize(person);
 var roundTrip = personCodec.Deserialize(json);
-
-var xmlCodec = XmlCodec.FromSchema(PersonSchema.Schema);
-var xml = xmlCodec.Serialize(person);
-
-var cborCodec = CborCodec.FromSchema(PersonSchema.Schema);
-var cbor = cborCodec.Serialize(person);
 ```
 
 Projection codecs are used when a protocol wants to serialize only a subset of
@@ -174,13 +335,6 @@ the members of a structure while keeping the same container type:
 var bodyProjection = Schemas.Project(inputSchema, bodyMembers);
 var bodyCodec = JsonCodec.FromProjection(bodyProjection);
 var body = bodyCodec.Serialize(input);
-```
-
-The same pattern exists for other body formats that support projections:
-
-```csharp
-var xmlBodyCodec = XmlCodec.FromProjection(bodyProjection);
-var xmlBody = xmlBodyCodec.Serialize(input);
 ```
 
 Codecs serialize Smithy data shapes into a wire payload for a particular body
@@ -224,20 +378,9 @@ ListJsonValueReader<IReadOnlyList<string>, string, List<string>>
 
 The entire body deserialization path for value types is boxing-free.
 
-### Codec Caching
-
-`JsonCodec.FromSchema` and `CborCodec.FromSchema` build a codec from a schema.
-Rather than memoizing inside the factory, caching happens one level up: a
-generated client (or server) builds each operation's protocol exactly once — a
-`static readonly` field — and that operation-bound protocol holds whatever was
-precomputed from the schema: the `RestOperationBinding` for REST, or the
-configured codec instances for rpcv2Cbor. Because the field is initialized once,
-the per-operation precomputation is paid once and reused for every call. See
-[Client Generation](#client-generation).
-
 ## Protocol Model
 
-Protocols bind operation schemas to transports. The abstraction is two
+Protocols bind operation schemas to transports. The abstraction has two
 interfaces in `NSmithy.Http`:
 
 ```csharp
@@ -267,8 +410,8 @@ Each protocol provides a `ForService(ServiceSchema)` factory that returns an
 operation. The interface is the *unary* shape; a streaming sibling would be a
 separate interface.
 
-Every protocol-specific wire decision lives behind the implementation — codegen
-no longer knows any of it:
+Every protocol-specific wire decision lives behind the implementation, so
+generated clients do not need protocol-specific serialization branches:
 
 - **Request path.** rpcv2Cbor's path is service-derived
   (`/service/{Service}/operation/{Operation}`), so its operation protocol
@@ -283,15 +426,14 @@ no longer knows any of it:
 
 ### REST binding layer
 
-`NSmithy.Protocols.Rest` factors the REST wire format into two pieces along the
-generic/non-generic seam:
+`NSmithy.Protocols.Rest` factors the REST wire format into two pieces:
 
 - `RestOperationProtocol<TInput, TOutput>` — the per-operation `IOperationProtocol`
   implementation. It holds a `RestOperationBinding` and the `IRestBodyFormat`,
   and delegates to the stateless engine.
-- `RestProtocol` — the non-generic, stateless wire engine (URI templating,
-  label/query/header binding, payload, error parsing). restJson1 and restXml
-  share it and differ only by `IRestBodyFormat` (JSON vs XML).
+- `RestProtocol` — the shared stateless wire engine for URI templating,
+  label/query/header binding, payload handling, and error parsing. restJson1 and
+  restXml share it and differ only by `IRestBodyFormat` (JSON vs XML).
 
 A `RestOperationBinding<TInput, TOutput>` precomputes everything determinable
 from the operation schema before any request arrives — HTTP method, URI
@@ -307,10 +449,9 @@ CBOR envelope directly.
 
 ## Client Generation
 
-A generated client builds the protocol objects **once**, as `static readonly`
-fields, and threads inputs and outputs through them. The service protocol is
-created from the service schema; each operation protocol is created from its
-operation schema via `ForOperation`:
+A generated client stores protocol objects in `static readonly` fields. The
+service protocol is created from the service schema; each operation protocol is
+created from its operation schema via `ForOperation`:
 
 ```csharp
 private static readonly IServiceProtocol ServiceProtocol =
@@ -320,8 +461,8 @@ private static readonly IOperationProtocol<GreetingWithErrorsInput, GreetingWith
     GreetingWithErrorsProtocol = ServiceProtocol.ForOperation(GreetingWithErrorsSchema.Schema);
 ```
 
-The per-operation method body is then protocol-agnostic — the same shape for
-restJson1, restXml, simpleRestJson, and rpcv2Cbor:
+Operation methods are protocol-agnostic. They have the same shape for restJson1,
+restXml, simpleRestJson, and rpcv2Cbor:
 
 ```csharp
 public async Task<GreetingWithErrorsOutput> GreetingWithErrorsAsync(
@@ -345,17 +486,11 @@ public async Task<GreetingWithErrorsOutput> GreetingWithErrorsAsync(
 }
 ```
 
-### Memoization by construction
-
-There is no codec or binding cache keyed on the schema. Memoization falls out of
-calling `ForOperation` **once**: because `GreetingWithErrorsProtocol` is a
-`static readonly` field, the operation protocol — and everything it precomputed
-from the schema (the `RestOperationBinding` for REST, the compiled codecs for
-rpcv2Cbor) — is built a single time per process and reused for every request.
-The hot path does no schema analysis. This is also why
-`RestOperationBinding.From` no longer maintains its own cache: the single
-construction at the `ForOperation` call site already guarantees the binding is
-built once.
+The `static readonly` fields also define the caching boundary. Work derived from
+the operation schema — such as a `RestOperationBinding` for REST or compiled
+request/response codecs for rpcv2Cbor — is computed when the field is
+initialized and reused for every request. The hot path serializes through those
+precomputed objects instead of reanalyzing schema metadata.
 
 ### The invoker
 
@@ -365,9 +500,9 @@ deliberately ignorant of wire formats. The one protocol decision it needs —
 "is this response an error?" — is injected as `IOperationProtocol.IsErrorResponse`
 rather than assumed to be "HTTP 4xx", so a transport that signals failure
 differently (gRPC's `grpc-status` trailer over an HTTP 200) fits without
-changing the invoker. Error *dispatch* (which modeled error a response maps to)
-stays in the generated `Deserialize{Operation}ErrorAsync` delegate, since the set
-of an operation's errors is model data.
+changing the invoker. Error *dispatch* stays in the generated
+`Deserialize{Operation}ErrorAsync` delegate, since the set of modeled errors is
+operation-specific model data.
 
 ## HTTP Binding Values
 

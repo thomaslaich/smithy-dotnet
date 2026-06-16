@@ -1,19 +1,19 @@
 ---
 title: Codegen Architecture
-description: How the NSmithy Java plugin generates C# and .proto files from Smithy models.
+description: How the NSmithy Java plugin generates C# files from Smithy models.
 ---
 
 ## Overview
 
-NSmithy generates C# and `.proto` files from Smithy models using a Java Smithy
-plugin (`smithy-csharp-codegen`). The plugin runs inside `smithy build` via the
-Smithy CLI, which means it has direct access to Smithy's fully assembled and
-validated semantic model. MSBuild invokes `smithy build` before C# compilation
-and registers the generated files with the .NET toolchain.
+NSmithy generates C# files from Smithy models using a Java Smithy plugin
+(`smithy-csharp-codegen`). The plugin runs inside `smithy build` via the Smithy
+CLI, which means it has direct access to Smithy's fully assembled and validated
+semantic model. MSBuild invokes `smithy build` before C# compilation and
+registers the generated files with the .NET toolchain.
 
 The two sides of the architecture are:
 
-- **Java (codegen)**: model assembly, validation, trait resolution, and C#/`.proto`
+- **Java (codegen)**: model assembly, validation, trait resolution, and C#
   emission all happen inside the Java plugin during `smithy build`.
 - **.NET (runtime + build integration)**: `NSmithy.MSBuild` invokes `smithy build`,
   picks up the generated files, and adds them to the `dotnet build` compilation.
@@ -41,24 +41,23 @@ smithy build (Smithy CLI)
       │   loads smithy-csharp-codegen Java plugin
       │   assembles + validates model
       │   runs CodegenDirector
-      │     ├── StructureGenerator    → <Shape>.g.cs
-      │     ├── UnionGenerator        → <Shape>.g.cs
-      │     ├── ErrorGenerator        → <Shape>.g.cs
-      │     ├── List/MapGenerator     → <Shape>.g.cs
-      │     ├── Enum/IntEnumGenerator → <Shape>.g.cs
-      │     ├── ClientGenerator       → <Service>Client.g.cs
-      │     ├── ServerGenerator       → <Service>Server.g.cs
-      │     └── ProtoGenerator        → <Service>.proto  (gRPC only)
+      │     ├── StructureGenerator       → <Shape>.g.cs
+      │     ├── UnionGenerator           → <Shape>.g.cs
+      │     ├── ErrorGenerator           → <Shape>.g.cs
+      │     ├── List/MapGenerator        → <Shape>.g.cs
+      │     ├── Enum/IntEnumGenerator    → <Shape>.g.cs
+      │     ├── OperationSchemaGenerator → <Operation>.g.cs
+      │     ├── ServiceSchemaGenerator   → <Service>.Schema.g.cs
+      │     ├── ClientGenerator          → <Service>.Client.g.cs
+      │     └── ServerGenerator          → <Service>.Server.g.cs
       │
       ▼
   obj/Smithy/<projection>/csharp-codegen/**/*.g.cs
-  obj/Smithy/<projection>/csharp-codegen/**/*.proto
 ```
 
-MSBuild then picks up the generated files via two targets in `NSmithy.MSBuild`:
+MSBuild then picks up the generated files via `NSmithy.MSBuild`:
 
 - `_AddSmithyGeneratedCompileItems` – adds `.g.cs` files to `<Compile>`.
-- `_AddSmithyGeneratedProtoItems` – registers `.proto` files with Grpc.Tools.
 
 ## Plugin Design
 
@@ -86,8 +85,9 @@ in the service closure:
 | `generateMap` | `MapGenerator` | `<Shape>.g.cs` |
 | `generateEnumShape` | `StringEnumGenerator` | `<Shape>.g.cs` |
 | `generateIntEnumShape` | `IntEnumGenerator` | `<Shape>.g.cs` |
-| `generateService` | `ClientGenerator` + `ServerGenerator` | `<Service>Client.g.cs`, `<Service>Server.g.cs` |
-| `generateService` (gRPC) | `ProtoGenerator` | `<Service>.proto` |
+| `generateOperation` | `OperationSchemaGenerator` | `<Operation>.g.cs` |
+| `generateService` | `ServiceSchemaGenerator` | `<Service>.Schema.g.cs` |
+| `generateService` | `ClientGenerator` + `ServerGenerator` | `<Service>.Client.g.cs`, `<Service>.Server.g.cs` |
 
 All files are written under the Smithy projection's output directory:
 `<SmithyBuildOutputPath>/<projection>/csharp-codegen/`.
@@ -106,7 +106,8 @@ creation and routes each shape's output to the correct `.g.cs` file.
 
 ## MSBuild Integration
 
-`NSmithy.MSBuild` is a NuGet package that provides three MSBuild targets:
+`NSmithy.MSBuild` is a NuGet package that provides the MSBuild targets used to
+generate code and register it with compilation:
 
 ### `GenerateSmithyCode`
 
@@ -125,12 +126,6 @@ Depends on `GenerateSmithyCode`. Adds all `.g.cs` files matching
 `<SmithyBuildOutputPath>*/csharp-codegen/**/*.g.cs` to `<Compile>`.
 Respects `SmithyGenerateClient` / `SmithyGenerateServer` properties to
 optionally exclude client or server files.
-
-### `_AddSmithyGeneratedProtoItems`
-
-Depends on `GenerateSmithyCode`. Adds all `.proto` files to `<Protobuf>` with
-`GrpcServices=$(SmithyGrpcServices)`. This is a no-op when `Grpc.Tools` is not
-referenced.
 
 ## Configuration
 
@@ -169,7 +164,8 @@ Generated code depends on .NET packages published to NuGet:
 - `NSmithy.Server` / `NSmithy.Server.AspNetCore` — server framework
 - `NSmithy.Codecs.Json/Xml/Cbor` — schema-bound body codec implementations
 - `NSmithy.Protocols.Rest` — shared REST HTTP binding projection
-- `NSmithy.Protocols.RestJson/RestXml/RpcV2Cbor` — protocol adapters
+- `NSmithy.Protocols.*` — protocol adapters such as restJson1, restXml,
+  rpcv2Cbor, and gRPC
 
 These packages are independent of the Java plugin. A consumer project references
 them in its `.csproj`; the generated `.g.cs` files import the matching types.
@@ -184,18 +180,25 @@ Each generated shape file contains:
    member schemas, typed accessors, and builder hooks at runtime (see
    [Serialization](/smithy-dotnet/design/serialization/)).
 
-Service files additionally contain:
+Operation files contain:
 
-- `<Service>Client` — typed async methods for each operation; binds protocol
-  and transport at construction time.
-- `I<Service>Handler` / `<Service>Server` — server-side handler interface and
+- `<Operation>Schema` — an `OperationSchema<TInput, TOutput>` that references
+  the input and output schemas plus operation traits.
+
+Service files contain:
+
+- `<Service>.Schema.g.cs` — a `ServiceSchema` with the service shape id and
+  service-level traits.
+- `<Service>.Client.g.cs` — typed async methods for each operation; binds
+  protocol and transport at construction time.
+- `<Service>.Server.g.cs` — server-side handler interface and
   ASP.NET Core adapter.
 
-Operation metadata is emitted as operation schemas. A generated client method
-passes the operation schema, typed input value, selected protocol adapter, and
-transport options into the runtime protocol pipeline. The protocol adapter
-projects the operation into transport fields and delegates body payloads to a
-schema-bound codec such as `JsonCodec`.
+Generated client and server methods bind the service schema, operation schemas,
+typed input/output values, selected protocol adapter, and transport options into
+the runtime protocol pipeline. The protocol adapter projects each operation into
+transport fields and delegates body payloads to a schema-bound codec such as
+`JsonCodec`.
 
 ## Tradeoffs
 
