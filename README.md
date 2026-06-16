@@ -29,12 +29,13 @@
 
 **[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
 
-NSmithy is a preview-stage .NET toolkit that turns a [Smithy](https://smithy.io) model into idiomatic C# at build time. From a single contract you get typed clients, server scaffolding, and shared model types — fully integrated into your MSBuild workflow.
+NSmithy is a .NET toolkit that turns a [Smithy](https://smithy.io) model into idiomatic C# at build time. From a single contract you get typed clients, server scaffolding, and shared model types — fully integrated into your MSBuild workflow.
 
 ## Features
 
-- **Contract-first, protocol-agnostic**: Define your service once in Smithy — operations, shapes, and errors — independent of any wire protocol. The same model can target a different protocol without rewriting your contract.
+- **Contract-first, protocol-agnostic**: Define your service once in Smithy independent of any wire protocol. The same model can target a different protocol without rewriting your contract.
 - **MSBuild integration**: Generate C# models, typed clients, and ASP.NET Core minimal API server stubs from a Smithy IDL as part of `dotnet build` — no separate codegen step, no Java or JRE installation required.
+- **Smithy-native codegen architecture**: Follows Smithy's official [code generator guidance](https://smithy.io/2.0/guides/building-codegen/index.html) for reusable shape generation, protocol integration, and separation between generated code and runtime libraries.
 - **Protocol support**: REST JSON, REST XML, RPC v2 CBOR, and gRPC.
 - **Conformance-tested**: Validated against official Smithy, AWS, and alloy conformance suites.
 
