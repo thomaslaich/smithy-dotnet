@@ -15,9 +15,7 @@ public sealed class ServerHttpResponseConformanceTests
     [MemberData(nameof(ExecutableCases))]
     public async Task ExecutableHttpResponseCasePassesGeneratedServerConformance(string caseId)
     {
-        var testCase = Model
-            .EnumerateHttpResponseTests(Protocol)
-            .Single(tc => tc.Id == caseId);
+        var testCase = Model.EnumerateHttpResponseTests(Protocol).Single(tc => tc.Id == caseId);
         await ServerHttpResponseRunner.RunAsync(testCase, Model.RawShapes);
     }
 }

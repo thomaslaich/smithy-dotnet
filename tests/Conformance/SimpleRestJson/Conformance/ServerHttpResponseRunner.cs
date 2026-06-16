@@ -8,7 +8,11 @@ internal static class ServerHttpResponseRunner
 {
     public static async Task RunAsync(HttpResponseTestCase testCase, JsonObject modelShapes)
     {
-        var owningOperation = ResolveOwningOperation(testCase.ShapeId, modelShapes, out var isError);
+        var owningOperation = ResolveOwningOperation(
+            testCase.ShapeId,
+            modelShapes,
+            out var isError
+        );
         var localOpName = owningOperation.Split('#')[^1];
         var (clientType, clientMethod) = ConformanceClients.ResolveOperation(localOpName + "Async");
         var inputType = clientMethod.GetParameters()[0].ParameterType;

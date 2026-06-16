@@ -6,9 +6,9 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
@@ -451,9 +451,10 @@ internal static class ServerResponseAssertions
         {
             headers[header.Key] = string.Join(",", header.Value);
         }
-        foreach (var header in actual.Content?.Headers ?? Enumerable.Empty<
-            KeyValuePair<string, IEnumerable<string>>
-        >())
+        foreach (
+            var header in actual.Content?.Headers
+                ?? Enumerable.Empty<KeyValuePair<string, IEnumerable<string>>>()
+        )
         {
             headers[header.Key] = string.Join(",", header.Value);
         }

@@ -238,7 +238,11 @@ public sealed class RestOperationBinding<TInput, TOutput>
                 ),
             InputPayloadReader = inputPayloadMember is null
                 ? null
-                : RestProtocol.BuildPayloadReader(inputPayloadMember, codecFactory, rawStringPayloads),
+                : RestProtocol.BuildPayloadReader(
+                    inputPayloadMember,
+                    codecFactory,
+                    rawStringPayloads
+                ),
             OutputSchema = outputSchema,
             ResponseCodeMember = responseCodeMember,
             ResponseHeaderMembers = responseHeaderMembers,
@@ -287,5 +291,10 @@ public static class RestOperationBinding
         OperationSchema<TInput, TOutput> operation,
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads
-    ) => RestOperationBinding<TInput, TOutput>.CreateFrom(operation, codecFactory, rawStringPayloads);
+    ) =>
+        RestOperationBinding<TInput, TOutput>.CreateFrom(
+            operation,
+            codecFactory,
+            rawStringPayloads
+        );
 }

@@ -125,10 +125,7 @@ public static class RestProtocol
             qpMember.SetObject(builder, ReadQueryParams(qpMember, query, binding.BoundQueryNames));
         if (binding.InputPayloadReader is { } readPayload)
             readPayload(request.Content, builder);
-        else if (
-            binding.InputBodyCodec is { } codec
-            && request.Content is { Length: > 0 } content
-        )
+        else if (binding.InputBodyCodec is { } codec && request.Content is { Length: > 0 } content)
             codec.ReadInto(content, builder);
 
         return (TInput)binding.InputSchema.BuildObject(builder);
@@ -330,7 +327,9 @@ public static class RestProtocol
             );
         }
 
-        var headers = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        var headers = new Dictionary<string, IReadOnlyList<string>>(
+            StringComparer.OrdinalIgnoreCase
+        )
         {
             [errorTypeHeader] = [LocalName(errorShapeId)],
         };
@@ -428,8 +427,9 @@ public static class RestProtocol
         return UnwrapNullable(target).Kind switch
         {
             ShapeKind.Blob => codecFactory.BlobContentType,
-            ShapeKind.String or ShapeKind.Enum
-                when !UseBodyCodecForPayload(target, traits, rawStringPayloads) => "text/plain",
+            ShapeKind.String
+            or ShapeKind.Enum when !UseBodyCodecForPayload(target, traits, rawStringPayloads) =>
+                "text/plain",
             _ => codecFactory.ContentType,
         };
     }
@@ -531,7 +531,8 @@ public static class RestProtocol
                 var value = member.GetValue(container);
                 if (value is null)
                 {
-                    return writeEmptyStructOnNull
+                    return
+                        writeEmptyStructOnNull
                         && TryCreateEmptyStructureValue(target, out _, out var emptyObj)
                         ? new RestBody(codec.Serialize((TValue)emptyObj!), jsonContentType)
                         : RestBody.None;
@@ -1417,7 +1418,9 @@ public static class RestProtocol
         // The URI template may carry a constant query string (e.g. `/Foo/{id}?bar=baz`); only the
         // path portion contains label placeholders.
         var patternPath = pattern.Split('?', 2)[0];
-        var patternSegments = patternPath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var patternSegments = patternPath
+            .Trim('/')
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
         var pathSegments = path.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
 
         for (var i = 0; i < patternSegments.Length && i < pathSegments.Length; i++)
