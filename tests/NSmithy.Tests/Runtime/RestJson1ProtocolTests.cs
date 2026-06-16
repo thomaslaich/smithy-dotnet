@@ -8,11 +8,11 @@ using NSmithy.Protocols.RestJson;
 
 namespace NSmithy.Tests.Runtime;
 
-public sealed class RestJsonProtocolTests
+public sealed class RestJson1ProtocolTests
 {
     // REST ignores the service schema (its bindings come from @http on each operation), so a
     // placeholder service is fine. The per-operation protocol is what these tests exercise.
-    private static readonly IServiceProtocol RestService = RestJsonProtocol.ForService(
+    private static readonly IServiceProtocol RestService = RestJson1Protocol.ForService(
         Schemas.Service(ShapeId.Parse("test#Service"))
     );
 
@@ -36,7 +36,7 @@ public sealed class RestJsonProtocolTests
     public sealed class UpdateUserOutputBuilder { }
 
     [Fact]
-    public void RestJsonProtocolSerializesLabelsHeadersAndBodySeparately()
+    public void RestJson1ProtocolSerializesLabelsHeadersAndBodySeparately()
     {
         var inputSchema = Schemas
             .Structure<UpdateUserInput, UpdateUserInputBuilder>(
@@ -93,7 +93,7 @@ public sealed class RestJsonProtocolTests
     }
 
     [Fact]
-    public void RestJsonProtocolDeserializesLabelsHeadersAndBodySeparately()
+    public void RestJson1ProtocolDeserializesLabelsHeadersAndBodySeparately()
     {
         var inputSchema = Schemas
             .Structure<UpdateUserInput, UpdateUserInputBuilder>(
@@ -176,7 +176,7 @@ public sealed class RestJsonProtocolTests
     public sealed class GetUserOutputBuilder { }
 
     [Fact]
-    public void RestJsonProtocolSerializesAllRequestHttpBindings()
+    public void RestJson1ProtocolSerializesAllRequestHttpBindings()
     {
         var tagListSchema = Schemas.List(new ShapeId("example", "TagList"), Schemas.String);
         var stringMapSchema = Schemas.Map(new ShapeId("example", "StringMap"), Schemas.String);
@@ -257,7 +257,7 @@ public sealed class RestJsonProtocolTests
     }
 
     [Fact]
-    public void RestJsonProtocolDeserializesAllRequestHttpBindings()
+    public void RestJson1ProtocolDeserializesAllRequestHttpBindings()
     {
         var tagListSchema = Schemas.List(new ShapeId("example", "TagList"), Schemas.String);
         var stringMapSchema = Schemas.Map(new ShapeId("example", "StringMap"), Schemas.String);
@@ -386,7 +386,7 @@ public sealed class RestJsonProtocolTests
     public sealed class EnumHeaderListOutputBuilder { }
 
     [Fact]
-    public void RestJsonProtocolRoundTripsStringEnumHeaderListWithQuotedComma()
+    public void RestJson1ProtocolRoundTripsStringEnumHeaderListWithQuotedComma()
     {
         var statusSchema = Schemas.StringEnum<HeaderStatus>(new ShapeId("example", "HeaderStatus"));
         var statusListSchema = Schemas.List(
@@ -432,7 +432,7 @@ public sealed class RestJsonProtocolTests
     }
 
     [Fact]
-    public void RestJsonProtocolSerializesRequestHttpValueParity()
+    public void RestJson1ProtocolSerializesRequestHttpValueParity()
     {
         var tagListSchema = Schemas.List(new ShapeId("example", "ParityTagList"), Schemas.String);
         var inputSchema = Schemas
@@ -545,7 +545,7 @@ public sealed class RestJsonProtocolTests
     }
 
     [Fact]
-    public void RestJsonProtocolDeserializesRequestHttpValueParity()
+    public void RestJson1ProtocolDeserializesRequestHttpValueParity()
     {
         var tagListSchema = Schemas.List(new ShapeId("example", "ParityTagList"), Schemas.String);
         var inputSchema = Schemas
@@ -672,7 +672,7 @@ public sealed class RestJsonProtocolTests
     public sealed class UploadUserAvatarOutputBuilder { }
 
     [Fact]
-    public void RestJsonProtocolSerializesHttpPayload()
+    public void RestJson1ProtocolSerializesHttpPayload()
     {
         var inputSchema = Schemas
             .Structure<UploadUserAvatarInput, UploadUserAvatarInputBuilder>(
@@ -752,7 +752,7 @@ public sealed class RestJsonProtocolTests
     }
 
     [Fact]
-    public void RestJsonProtocolSerializesResponseBindingsAndBody()
+    public void RestJson1ProtocolSerializesResponseBindingsAndBody()
     {
         var inputSchema = Schemas
             .Structure<GetUserOutput, GetUserOutputBuilder>(new ShapeId("example", "GetUserInput"))
@@ -821,7 +821,7 @@ public sealed class RestJsonProtocolTests
     }
 
     [Fact]
-    public void RestJsonProtocolDeserializesResponseBindingsAndBody()
+    public void RestJson1ProtocolDeserializesResponseBindingsAndBody()
     {
         var inputSchema = Schemas
             .Structure<GetUserOutput, GetUserOutputBuilder>(new ShapeId("example", "GetUserInput"))

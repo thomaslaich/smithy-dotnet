@@ -24,9 +24,9 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
         var serverReqTotal = requests.Count(c => c.AppliesToServer);
         var serverRespTotal = responses.Count(c => c.AppliesToServer);
 
-        // Count executable cases that actually apply to the side in question. Intersecting with
-        // the applicable set keeps the rate honest even if an allowlist accidentally lists a
-        // case from the other direction (which would otherwise push the rate over 100%).
+        // Client still runs a curated allowlist; the server runs every applicable case whose
+        // operation is part of the generated service (auxiliary services like Glacier ship
+        // fixtures but no generated handler, so they are out of scope rather than failing).
         var execClientReq = requests.Count(c =>
             c.AppliesToClient && RestJson1Allowlist.ExecutableRequestCases.Contains(c.Id)
         );
@@ -34,11 +34,9 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
             c.AppliesToClient && RestJson1Allowlist.ExecutableResponseCases.Contains(c.Id)
         );
         var execServerReq = requests.Count(c =>
-            c.AppliesToServer && RestJson1Allowlist.ExecutableServerRequestCases.Contains(c.Id)
+            c.AppliesToServer && GeneratedService.HasHandler(c.OperationName)
         );
-        var execServerResp = responses.Count(c =>
-            c.AppliesToServer && RestJson1Allowlist.ExecutableServerResponseCases.Contains(c.Id)
-        );
+        var execServerResp = responses.Count(c => c.AppliesToServer);
 
         output.WriteLine(
             $"[{RestJson1Allowlist.Protocol}] "

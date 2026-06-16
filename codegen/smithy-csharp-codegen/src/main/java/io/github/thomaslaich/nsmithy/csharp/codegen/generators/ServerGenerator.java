@@ -323,7 +323,7 @@ public final class ServerGenerator implements Runnable {
     String opInterface = opHandlerName(op);
     switch (kind) {
       case RPC_V2_CBOR -> writeRpcV2CborOperationMap(sp, op, opInterface);
-      case REST_JSON, REST_XML -> writeRestOperationMap(sp, op, opInterface);
+      case SIMPLE_REST_JSON, REST_JSON_1, REST_XML -> writeRestOperationMap(sp, op, opInterface);
       default ->
           throw new IllegalStateException("Unsupported protocol for server codegen: " + kind);
     }
@@ -387,11 +387,15 @@ public final class ServerGenerator implements Runnable {
 
     String serializeResponse = opProtocol + ".SerializeResponse(output)";
 
-    // rpcv2Cbor: catch modeled errors and serialize them as CBOR error responses. (REST server-side
-    // error serialization is not yet implemented.)
+    // Catch modeled errors and serialize them as protocol error responses. Supported for the
+    // rpcv2Cbor and restJson1 protocols (restXml server error serialization is not yet wired up).
     List<ShapeId> errorIds = new ArrayList<>(op.getErrors(service));
     errorIds.sort(Comparator.comparing(ShapeId::toString));
-    boolean catchErrors = rpc && !errorIds.isEmpty();
+    boolean catchErrors =
+        !errorIds.isEmpty()
+            && (rpc
+                || kind == ProtocolSupport.Kind.SIMPLE_REST_JSON
+                || kind == ProtocolSupport.Kind.REST_JSON_1);
 
     if (catchErrors) {
       writer.write("NSmithy.Http.SmithyHttpResponse smithyResponse;");
@@ -454,7 +458,9 @@ public final class ServerGenerator implements Runnable {
   private String routePattern(HttpTrait http) {
     String uri = http.getUri().toString();
     int queryIndex = uri.indexOf('?');
-    return queryIndex >= 0 ? uri.substring(0, queryIndex) : uri;
+    String path = queryIndex >= 0 ? uri.substring(0, queryIndex) : uri;
+    // Smithy greedy labels `{foo+}` map to ASP.NET Core catch-all route params `{**foo}`.
+    return path.replaceAll("\\{(\\w+)\\+\\}", "{**$1}");
   }
 
   private void writeStaticQueryValidation(HttpTrait http) {

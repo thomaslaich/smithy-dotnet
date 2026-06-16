@@ -11,15 +11,22 @@ namespace NSmithy.Protocols.RestXml;
 
 public static class RestXmlProtocol
 {
-    private static readonly IRestBodyFormat BodyFormat = new RestXmlBodyFormat();
+    private static readonly IRestBodyCodecFactory BodyCodecFactory = new XmlRestBodyCodecFactory();
 
     /// <summary>
     /// Binds the protocol to a service, yielding per-operation protocols. REST derives each
     /// operation's binding from its <c>@http</c> trait, so the service schema is accepted for a
-    /// uniform factory signature but not otherwise consulted.
+    /// uniform factory signature but not otherwise consulted. restXml uses raw string payloads and
+    /// encodes errors in the XML body (no error-type header); server-side error serialization isn't
+    /// wired up yet, so no error-type header is supplied.
     /// </summary>
     public static IServiceProtocol ForService(ServiceSchema service) =>
-        new RestServiceProtocol(BodyFormat, DeserializeErrorType);
+        new RestServiceProtocol(
+            BodyCodecFactory,
+            DeserializeErrorType,
+            rawStringPayloads: true,
+            errorTypeHeader: null
+        );
 
     public static string? DeserializeErrorType(SmithyHttpResponse response)
     {
@@ -98,32 +105,19 @@ public static class RestXmlProtocol
     }
 #pragma warning restore CA5351
 
-    private sealed class RestXmlBodyFormat : IRestBodyFormat
+    private sealed class XmlRestBodyCodecFactory : IRestBodyCodecFactory
     {
         public string ContentType => "application/xml";
 
         public string BlobContentType => "application/octet-stream";
 
-        public byte[] Serialize<T>(Schema<T> schema, T value) =>
-            XmlCodec.FromSchema(schema).Serialize(value);
+        public ICodec<T> CodecFor<T>(Schema<T> schema) => XmlCodec.FromSchema(schema);
 
-        public byte[] Serialize(Schema schema, object value) =>
-            SerializeObject((dynamic)schema, value);
-
-        public T Deserialize<T>(Schema<T> schema, byte[] content) =>
-            XmlCodec.FromSchema(schema).Deserialize(content);
-
-        public byte[] Serialize<T>(
+        // XML serialization doesn't distinguish top-level default materialization.
+        public IProjectionCodec<T> CodecFor<T>(
             StructProjection<T> projection,
-            T value,
-            bool materializeTopLevelDefaults = true
-        ) => XmlCodec.FromProjection(projection).Serialize(value);
-
-        public void ReadInto<T>(StructProjection<T> projection, byte[] content, object builder) =>
-            XmlCodec.FromProjection(projection).ReadInto(content, builder);
-
-        private static byte[] SerializeObject<T>(Schema<T> schema, object value) =>
-            XmlCodec.FromSchema(schema).Serialize((T)value);
+            bool materializeTopLevelDefaults
+        ) => XmlCodec.FromProjection(projection);
     }
 
     private static byte[] CompressGzip(byte[] content)

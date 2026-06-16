@@ -271,35 +271,4 @@ internal static class RestJson1Allowlist
         "RestJsonHttpPayloadTraitsWithMediaTypeWithBlob",
         "RestJsonStreamingTraitsWithMediaTypeWithBlob",
     };
-
-    public static readonly IReadOnlySet<string> ExecutableServerRequestCases = new HashSet<string>(
-        StringComparer.Ordinal
-    )
-    {
-        "AcceptHeaderStarRequestTest",
-        "AcceptHeaderStarStarRequestTest",
-        "RestJsonMustSupportParametersInContentType",
-        "RestJsonHttpEmptyPrefixHeadersRequestServer",
-        "RestJsonHttpPayloadTraitsWithBlobAcceptsAllContentTypes",
-        "RestJsonHttpPayloadTraitsWithBlobAcceptsNoContentType",
-        "RestJsonHttpPayloadTraitsWithBlobAcceptsAllAccepts",
-        "RestJsonNoInputAllowsAccept",
-        "RestJsonNoInputAndOutputAllowsAccept",
-        "RestJsonServersAcceptStaticQueryParamAsEmptyString",
-        "RestJsonServersDontSerializeNullStructureValues",
-        "RestJsonServerPopulatesDefaultsWhenMissingInRequestBody",
-        "RestJsonServerPopulatesNestedDefaultsWhenMissingInRequestBody",
-        "RestJsonServersQueryParamsStringListMap",
-        "RestJsonServersPutAllQueryParamsInMap",
-        "RestJsonUnitInputAllowsAccept",
-    };
-
-    public static readonly IReadOnlySet<string> ExecutableServerResponseCases = new HashSet<string>(
-        StringComparer.Ordinal
-    )
-    {
-        "RestJsonHttpEmptyPrefixHeadersResponseServer",
-        "RestJsonServerPopulatesDefaultsInResponseWhenMissingInParams",
-        "RestJsonServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams",
-    };
 }

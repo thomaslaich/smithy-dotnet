@@ -16,7 +16,7 @@
     -->
     <SmithyBuildOutputPath>$(BaseIntermediateOutputPath)Smithy/</SmithyBuildOutputPath>
     <SmithyGeneratedNamespaces>alloy.test</SmithyGeneratedNamespaces>
-    <SmithyGenerateServer>false</SmithyGenerateServer>
+    <SmithyGenerateServer>true</SmithyGenerateServer>
     <!-- Many alloy protocol-test fixtures emit warnings (unused traits etc.) -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <!--
@@ -41,12 +41,17 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="../../../packages/NSmithy.Client/NSmithy.Client.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Core/NSmithy.Core.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Http/NSmithy.Http.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
   </ItemGroup>
 
   <!-- ProjectReference doesn't auto-import the .targets file; do so explicitly. -->
