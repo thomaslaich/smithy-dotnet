@@ -279,9 +279,12 @@ internal static class ParamBinder
         for (var i = 0; i < parameters.Length; i++)
         {
             var p = parameters[i];
-            // Generated records use PascalCase ctor params; smithy test params and schema
-            // members are camelCase. Map back to the smithy member name for lookup.
-            var memberName = char.ToLowerInvariant(p.Name![0]) + p.Name![1..];
+            // Generated ctor params are camelCase, but the smithy member name (which is the params
+            // key) may be camelCase (`greeting`, `responseCode`) or PascalCase (`Message`, `Status`,
+            // `TopLevel`). The matching key is the smithy member name, so try both casings.
+            var camelName = char.ToLowerInvariant(p.Name![0]) + p.Name![1..];
+            var pascalName = char.ToUpperInvariant(p.Name![0]) + p.Name![1..];
+            var memberName = obj.ContainsKey(camelName) ? camelName : pascalName;
             if (obj.TryGetPropertyValue(memberName, out var node) && node is not null)
             {
                 var memberSchema = (schema as IStructSchema)?.GetMember(memberName);

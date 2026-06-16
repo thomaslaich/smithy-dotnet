@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Text.Json.Nodes;
 using NSmithy.Client;
 
-namespace RestJson1.Conformance;
+namespace SimpleRestJson.Conformance;
 
 internal static class ServerHttpResponseRunner
 {

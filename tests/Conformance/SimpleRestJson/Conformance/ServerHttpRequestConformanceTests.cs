@@ -1,12 +1,13 @@
-namespace RestJson1.Conformance;
+namespace SimpleRestJson.Conformance;
 
 public sealed class ServerHttpRequestConformanceTests
 {
+    private const string Protocol = "alloy#simpleRestJson";
     private static readonly SmithyTestModel Model = SmithyTestModel.Load();
 
     public static IEnumerable<object[]> ExecutableCases() =>
         Model
-            .EnumerateHttpRequestTests(RestJson1Allowlist.Protocol)
+            .EnumerateHttpRequestTests(Protocol)
             .Where(tc => tc.AppliesToServer && GeneratedService.HasHandler(tc.OperationName))
             .Select(tc => new object[] { tc.Id });
 
@@ -15,7 +16,7 @@ public sealed class ServerHttpRequestConformanceTests
     public async Task ExecutableHttpRequestCasePassesGeneratedServerConformance(string caseId)
     {
         var testCase = Model
-            .EnumerateHttpRequestTests(RestJson1Allowlist.Protocol)
+            .EnumerateHttpRequestTests(Protocol)
             .Single(tc => tc.Id == caseId);
         await ServerHttpRequestRunner.RunAsync(testCase);
     }

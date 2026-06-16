@@ -1,24 +1,27 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
-using NSmithy.Codecs.Json;
 using NSmithy.Core.Serde;
 using NSmithy.Http;
 using NSmithy.Protocols.Rest;
 
 namespace NSmithy.Protocols.RestJson;
 
-public static class RestJsonProtocol
+public static class RestJson1Protocol
 {
-    private static readonly IRestBodyFormat BodyFormat = new RestJsonBodyFormat();
-
     /// <summary>
     /// Binds the protocol to a service, yielding per-operation protocols. REST derives each
     /// operation's binding from its <c>@http</c> trait, so the service schema is accepted for a
-    /// uniform factory signature but not otherwise consulted.
+    /// uniform factory signature but not otherwise consulted. restJson1 writes string/enum payloads
+    /// as raw text and signals modeled errors via <c>X-Amzn-Errortype</c>.
     /// </summary>
     public static IServiceProtocol ForService(ServiceSchema service) =>
-        new RestServiceProtocol(BodyFormat, DeserializeErrorType);
+        new RestServiceProtocol(
+            JsonRestBodyCodecFactory.Instance,
+            DeserializeErrorType,
+            rawStringPayloads: true,
+            errorTypeHeader: "X-Amzn-Errortype"
+        );
 
     public static string? DeserializeErrorType(SmithyHttpResponse response)
     {
@@ -118,34 +121,6 @@ public static class RestJsonProtocol
         ];
     }
 #pragma warning restore CA5351
-
-    private sealed class RestJsonBodyFormat : IRestBodyFormat
-    {
-        public string ContentType => "application/json";
-
-        public string BlobContentType => "application/octet-stream";
-
-        public byte[] Serialize<T>(Schema<T> schema, T value) =>
-            JsonCodec.FromSchema(schema).Serialize(value);
-
-        public byte[] Serialize(Schema schema, object value) =>
-            SerializeObject((dynamic)schema, value);
-
-        public T Deserialize<T>(Schema<T> schema, byte[] content) =>
-            JsonCodec.FromSchema(schema).Deserialize(content);
-
-        public byte[] Serialize<T>(
-            StructProjection<T> projection,
-            T value,
-            bool materializeTopLevelDefaults = true
-        ) => JsonCodec.FromProjection(projection, materializeTopLevelDefaults).Serialize(value);
-
-        public void ReadInto<T>(StructProjection<T> projection, byte[] content, object builder) =>
-            JsonCodec.FromProjection(projection).ReadInto(content, builder);
-
-        private static byte[] SerializeObject<T>(Schema<T> schema, object value) =>
-            JsonCodec.FromSchema(schema).Serialize((T)value);
-    }
 
     private static byte[] CompressGzip(byte[] content)
     {

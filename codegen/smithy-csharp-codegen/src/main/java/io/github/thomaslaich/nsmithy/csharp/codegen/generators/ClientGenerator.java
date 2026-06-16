@@ -5,8 +5,8 @@
  * (alloy#simpleRestJson, aws.protocols#restJson1, aws.protocols#restXml,
  * smithy.protocols#rpcv2Cbor) emits an `I{Service}Client` interface and a
  * concrete `{Service}Client` class using SmithyOperationInvoker + the matching
- * protocol runtime helper class (RestJsonProtocol / RestXmlProtocol /
- * RpcV2CborProtocol).
+ * protocol runtime helper class (RestJson1Protocol / SimpleRestJsonProtocol /
+ * RestXmlProtocol / RpcV2CborProtocol).
  *
  * All HTTP request/response/error wiring is delegated to the protocol helper
  * class at runtime via the operation's functional schema; the generated client
@@ -62,7 +62,7 @@ public final class ClientGenerator implements Runnable {
     this.service = s;
     this.emitsHttp = ProtocolSupport.emitsHttpClient(s);
     this.emitsGrpc = ProtocolSupport.isGrpcService(s);
-    this.kind = emitsHttp ? ProtocolSupport.kindOf(s) : Kind.REST_JSON;
+    this.kind = ProtocolSupport.kindOf(s);
   }
 
   @Override

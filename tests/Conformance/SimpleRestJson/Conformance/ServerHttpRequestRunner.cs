@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Text.Json.Nodes;
 
-namespace RestJson1.Conformance;
+namespace SimpleRestJson.Conformance;
 
 internal static class ServerHttpRequestRunner
 {

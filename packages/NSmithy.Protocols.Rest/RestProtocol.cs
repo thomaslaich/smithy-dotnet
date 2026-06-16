@@ -8,25 +8,33 @@ using NSmithy.Http;
 
 namespace NSmithy.Protocols.Rest;
 
-public interface IRestBodyFormat
+/// <summary>
+/// Supplies the body wire format for a REST protocol: the content types it emits and a factory for
+/// building body codecs (JSON for restJson1 / simpleRestJson, XML for restXml). Codecs are compiled
+/// once per operation when the <see cref="RestOperationBinding{TInput, TOutput}"/> is built, never
+/// per call.
+/// </summary>
+public interface IRestBodyCodecFactory
 {
     string ContentType { get; }
 
     string BlobContentType { get; }
 
-    byte[] Serialize<T>(Schema<T> schema, T value);
+    ICodec<T> CodecFor<T>(Schema<T> schema);
 
-    byte[] Serialize(Schema schema, object value);
-
-    T Deserialize<T>(Schema<T> schema, byte[] content);
-
-    byte[] Serialize<T>(
+    IProjectionCodec<T> CodecFor<T>(
         StructProjection<T> projection,
-        T value,
-        bool materializeTopLevelDefaults = true
+        bool materializeTopLevelDefaults
     );
+}
 
-    void ReadInto<T>(StructProjection<T> projection, byte[] content, object builder);
+/// <summary>A serialized REST body: the encoded bytes plus the Content-Type to advertise.</summary>
+public readonly record struct RestBody(byte[] Content, string? ContentType)
+{
+    /// <summary>No body — the member was null/absent, so neither content nor Content-Type is written.</summary>
+    public static RestBody None { get; } = new([], null);
+
+    public bool HasContent => Content.Length > 0 || ContentType is not null;
 }
 
 public static class RestProtocol
@@ -35,12 +43,10 @@ public static class RestProtocol
 
     public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
-        TInput input,
-        IRestBodyFormat bodyFormat
+        TInput input
     )
     {
         ArgumentNullException.ThrowIfNull(binding);
-        ArgumentNullException.ThrowIfNull(bodyFormat);
 
         var requestUri = BuildRequestUri(binding.UriTemplate, binding.LabelMembers, input!);
 
@@ -50,33 +56,40 @@ public static class RestProtocol
             requestUri = AppendQueryParams(requestUri, qpMember, input!, binding.BoundQueryNames);
 
         var request = new SmithyHttpRequest(binding.HttpMethod, requestUri);
-        request.Headers["Accept"] = [GetAcceptType(binding, bodyFormat)];
+        request.Headers["Accept"] = [binding.AcceptType];
 
         foreach (var (member, headerName) in binding.RequestHeaderMembers)
             AddRequestHeader(request, headerName, member, input!);
         if (binding.RequestPrefixHeadersMember is { } phMember)
             AddPrefixedHeaders(request.Headers, phMember.Prefix, phMember.Member, input!);
 
-        if (binding.InputPayloadMember is not null)
+        if (binding.InputPayloadWriter is { } writePayload)
         {
-            WritePayload(request, binding.InputPayloadMember, input!, bodyFormat);
+            var body = writePayload(input!);
+            if (body.HasContent)
+            {
+                request.Content = body.Content;
+                if (body.ContentType is not null)
+                    SetContentTypeIfMissing(request, body.ContentType);
+            }
             return request;
         }
-        if (binding.InputBodyProjection is not null)
-            WriteProjectionBody(request, binding.InputBodyProjection, input!, bodyFormat);
+        if (binding.InputBodyCodec is { } codec)
+        {
+            request.Content = codec.Serialize(input!);
+            SetContentTypeIfMissing(request, binding.BodyContentType);
+        }
 
         return request;
     }
 
     public static TInput DeserializeRequest<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
-        SmithyHttpRequest request,
-        IRestBodyFormat bodyFormat
+        SmithyHttpRequest request
     )
     {
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(bodyFormat);
 
         var builder = binding.InputSchema.CreateBuilder();
         var labels = ExtractLabels(binding.UriTemplate, request.RequestUri);
@@ -110,25 +123,23 @@ public static class RestProtocol
         }
         if (binding.QueryParamsMember is { } qpMember)
             qpMember.SetObject(builder, ReadQueryParams(qpMember, query, binding.BoundQueryNames));
-        if (binding.InputPayloadMember is { } payloadMember)
-            ReadPayload(builder, payloadMember, request.Content, bodyFormat);
+        if (binding.InputPayloadReader is { } readPayload)
+            readPayload(request.Content, builder);
         else if (
-            binding.InputBodyProjection is { } projection
+            binding.InputBodyCodec is { } codec
             && request.Content is { Length: > 0 } content
         )
-            bodyFormat.ReadInto(projection, content, builder);
+            codec.ReadInto(content, builder);
 
         return (TInput)binding.InputSchema.BuildObject(builder);
     }
 
     public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
-        TOutput output,
-        IRestBodyFormat bodyFormat
+        TOutput output
     )
     {
         ArgumentNullException.ThrowIfNull(binding);
-        ArgumentNullException.ThrowIfNull(bodyFormat);
 
         var headers = new Dictionary<string, IReadOnlyList<string>>(
             StringComparer.OrdinalIgnoreCase
@@ -136,7 +147,7 @@ public static class RestProtocol
         var contentHeaders = new Dictionary<string, IReadOnlyList<string>>(
             StringComparer.OrdinalIgnoreCase
         );
-        var statusCode = HttpStatusCode.OK;
+        var statusCode = (HttpStatusCode)binding.SuccessStatusCode;
 
         if (binding.ResponseCodeMember is { } codeMember)
         {
@@ -151,33 +162,29 @@ public static class RestProtocol
             AddPrefixedHeaders(headers, respPhMember.Prefix, respPhMember.Member, output!);
 
         byte[] content = [];
-        if (binding.OutputPayloadMember is not null)
-            content = SerializePayload(
-                binding.OutputPayloadMember,
-                output!,
-                contentHeaders,
-                bodyFormat
-            );
-        else if (binding.OutputBodyProjection is not null)
-            content = SerializeProjectionBody(
-                binding.OutputBodyProjection,
-                output!,
-                contentHeaders,
-                bodyFormat
-            );
+        if (binding.OutputPayloadWriter is { } writePayload)
+        {
+            var body = writePayload(output!);
+            content = body.Content;
+            if (body.ContentType is not null)
+                contentHeaders["Content-Type"] = [body.ContentType];
+        }
+        else if (binding.OutputBodyCodec is { } codec)
+        {
+            content = codec.Serialize(output!);
+            contentHeaders["Content-Type"] = [binding.BodyContentType];
+        }
 
         return new SmithyHttpResponse(statusCode, null, content, headers, contentHeaders);
     }
 
     public static TOutput DeserializeResponse<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
-        SmithyHttpResponse response,
-        IRestBodyFormat bodyFormat
+        SmithyHttpResponse response
     )
     {
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(response);
-        ArgumentNullException.ThrowIfNull(bodyFormat);
 
         var builder = binding.OutputSchema.CreateBuilder();
 
@@ -207,10 +214,10 @@ public static class RestProtocol
                 builder,
                 ReadPrefixedHeaders(respPhMember.Member, response.Headers, respPhMember.Prefix)
             );
-        if (binding.OutputPayloadMember is { } payloadMember)
-            ReadPayload(builder, payloadMember, response.Content, bodyFormat);
-        else if (binding.OutputBodyProjection is { } projection && response.Content.Length > 0)
-            bodyFormat.ReadInto(projection, response.Content, builder);
+        if (binding.OutputPayloadReader is { } readPayload)
+            readPayload(response.Content, builder);
+        else if (binding.OutputBodyCodec is { } codec && response.Content.Length > 0)
+            codec.ReadInto(response.Content, builder);
 
         return (TOutput)binding.OutputSchema.BuildObject(builder);
     }
@@ -222,12 +229,13 @@ public static class RestProtocol
     public static TError DeserializeError<TError>(
         Schema<TError> errorSchema,
         SmithyHttpResponse response,
-        IRestBodyFormat bodyFormat
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads
     )
     {
         ArgumentNullException.ThrowIfNull(errorSchema);
         ArgumentNullException.ThrowIfNull(response);
-        ArgumentNullException.ThrowIfNull(bodyFormat);
+        ArgumentNullException.ThrowIfNull(codecFactory);
 
         if (errorSchema.Resolved is not IStructSchema<TError> schema)
         {
@@ -274,7 +282,10 @@ public static class RestProtocol
             }
             else if (member.Traits.ContainsKey(RestTraits.HttpPayload))
             {
-                ReadPayload(builder, member, response.Content, bodyFormat);
+                BuildPayloadReader(member, codecFactory, rawStringPayloads)(
+                    response.Content,
+                    builder
+                );
             }
             else
             {
@@ -285,103 +296,109 @@ public static class RestProtocol
         if (bodyMembers.Count > 0 && response.Content.Length > 0)
         {
             var projection = Schemas.Project(schema, bodyMembers);
-            bodyFormat.ReadInto(projection, response.Content, builder);
+            codecFactory
+                .CodecFor(projection, materializeTopLevelDefaults: true)
+                .ReadInto(response.Content, builder);
         }
 
         return (TError)schema.BuildObject(builder);
     }
 
-    private static void WritePayload<TInput>(
-        SmithyHttpRequest request,
-        IMemberSchema<TInput> member,
-        TInput input,
-        IRestBodyFormat bodyFormat
-    ) => member.Accept(new WritePayloadVisitor<TInput>(request, input, bodyFormat));
-
-    private static void ReadPayload<TContainer>(
-        object builder,
-        IMemberSchema<TContainer> member,
-        byte[]? content,
-        IRestBodyFormat bodyFormat
+    /// <summary>
+    /// Serializes a modeled error into a REST error response: the supplied HTTP status code, an
+    /// <c>X-Amzn-Errortype</c> discriminator carrying the error's shape name, the error's HTTP
+    /// header/payload bindings, and a body holding the remaining members (at minimum <c>{}</c>).
+    /// </summary>
+    public static SmithyHttpResponse SerializeError<TError>(
+        Schema<TError> errorSchema,
+        TError value,
+        string errorShapeId,
+        int statusCode,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads,
+        string errorTypeHeader
     )
     {
-        if (content is null or { Length: 0 })
-        {
-            if (TryCreateDefaultValue(member.Target, member.Traits, out var defaultValue))
-            {
-                member.SetObject(builder, defaultValue);
-            }
+        ArgumentNullException.ThrowIfNull(errorSchema);
+        ArgumentNullException.ThrowIfNull(errorShapeId);
+        ArgumentNullException.ThrowIfNull(codecFactory);
 
-            return;
+        if (errorSchema.Resolved is not IStructSchema<TError> schema)
+        {
+            throw new InvalidOperationException(
+                $"Error schema '{errorSchema.Id}' must be a structure schema."
+            );
         }
 
-        member.Accept(new ReadPayloadVisitor<TContainer>(builder, content, bodyFormat));
-    }
-
-    private static byte[] SerializePayload<TOutput>(
-        IMemberSchema<TOutput> member,
-        TOutput output,
-        Dictionary<string, IReadOnlyList<string>> contentHeaders,
-        IRestBodyFormat bodyFormat
-    ) => new SerializePayloadVisitor<TOutput>(output, contentHeaders, bodyFormat).Serialize(member);
-
-    private static byte[] SerializeBody<T>(
-        Schema<T> schema,
-        T value,
-        Dictionary<string, IReadOnlyList<string>> contentHeaders,
-        IRestBodyFormat bodyFormat
-    )
-    {
-        contentHeaders["Content-Type"] = [bodyFormat.ContentType];
-        return bodyFormat.Serialize(schema, value);
-    }
-
-    private static byte[] SerializeProjectionBody<T>(
-        StructProjection<T> projection,
-        T value,
-        Dictionary<string, IReadOnlyList<string>> contentHeaders,
-        IRestBodyFormat bodyFormat
-    )
-    {
-        contentHeaders["Content-Type"] = [bodyFormat.ContentType];
-        return bodyFormat.Serialize(projection, value);
-    }
-
-    private static void WriteBody<T>(
-        SmithyHttpRequest request,
-        Schema<T> schema,
-        T value,
-        IRestBodyFormat bodyFormat
-    )
-    {
-        request.Content = bodyFormat.Serialize(schema, value);
-        SetContentTypeIfMissing(request, bodyFormat.ContentType);
-    }
-
-    private static void WriteBodyObject(
-        SmithyHttpRequest request,
-        Schema schema,
-        object value,
-        IRestBodyFormat bodyFormat
-    )
-    {
-        request.Content = bodyFormat.Serialize(schema, value);
-        SetContentTypeIfMissing(request, bodyFormat.ContentType);
-    }
-
-    private static void WriteProjectionBody<T>(
-        SmithyHttpRequest request,
-        StructProjection<T> projection,
-        T value,
-        IRestBodyFormat bodyFormat
-    )
-    {
-        request.Content = bodyFormat.Serialize(
-            projection,
-            value,
-            materializeTopLevelDefaults: false
+        var headers = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            [errorTypeHeader] = [LocalName(errorShapeId)],
+        };
+        var contentHeaders = new Dictionary<string, IReadOnlyList<string>>(
+            StringComparer.OrdinalIgnoreCase
         );
-        SetContentTypeIfMissing(request, bodyFormat.ContentType);
+
+        IMemberSchema<TError>? payloadMember = null;
+        var bodyMembers = new List<IMemberSchema<TError>>();
+        foreach (var member in schema.TypedMembers)
+        {
+            if (member.Traits.ContainsKey(RestTraits.HttpResponseCode))
+            {
+                continue;
+            }
+
+            if (member.Traits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
+            {
+                AddHeader(headers, headerTrait.Value.AsString(), member, value);
+            }
+            else if (member.Traits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait))
+            {
+                AddPrefixedHeaders(headers, prefixTrait.Value.AsString(), member, value);
+            }
+            else if (member.Traits.ContainsKey(RestTraits.HttpPayload))
+            {
+                payloadMember = member;
+            }
+            else
+            {
+                bodyMembers.Add(member);
+            }
+        }
+
+        byte[] content;
+        if (payloadMember is not null)
+        {
+            var body = BuildPayloadWriter(
+                payloadMember,
+                codecFactory,
+                rawStringPayloads,
+                emptyStructOnNull: false
+            )(value);
+            content = body.Content;
+            if (body.ContentType is not null)
+                contentHeaders["Content-Type"] = [body.ContentType];
+        }
+        else
+        {
+            content = codecFactory
+                .CodecFor(Schemas.Project(schema, bodyMembers), materializeTopLevelDefaults: true)
+                .Serialize(value);
+            contentHeaders["Content-Type"] = [codecFactory.ContentType];
+        }
+
+        return new SmithyHttpResponse(
+            (HttpStatusCode)statusCode,
+            null,
+            content,
+            headers,
+            contentHeaders
+        );
+    }
+
+    private static string LocalName(string shapeId)
+    {
+        var hash = shapeId.LastIndexOf('#');
+        return hash >= 0 ? shapeId[(hash + 1)..] : shapeId;
     }
 
     private static void SetContentTypeIfMissing(SmithyHttpRequest request, string contentType)
@@ -392,176 +409,204 @@ public static class RestProtocol
         }
     }
 
-    private static string GetAcceptType<TInput, TOutput>(
-        RestOperationBinding<TInput, TOutput> binding,
-        IRestBodyFormat bodyFormat
-    )
-    {
-        return binding.OutputPayloadMember is { } payloadMember
-            ? GetPayloadContentType(payloadMember.Target, payloadMember.Traits, bodyFormat)
-            : bodyFormat.ContentType;
-    }
-
-    private static string GetPayloadContentType(
-        Schema schema,
+    /// <summary>
+    /// Content-Type advertised for an <c>@httpPayload</c> output; used to precompute the request
+    /// Accept header. Schema-kind based, so no value is needed.
+    /// </summary>
+    internal static string PayloadContentType(
+        Schema target,
         IReadOnlyDictionary<ShapeId, Trait> traits,
-        IRestBodyFormat bodyFormat
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads
     )
     {
-        if (GetMediaType(schema, traits) is { } mediaType)
+        if (GetMediaType(target, traits) is { } mediaType)
         {
             return mediaType;
         }
 
-        return UnwrapNullable(schema).Kind switch
+        return UnwrapNullable(target).Kind switch
         {
-            ShapeKind.Blob => bodyFormat.BlobContentType,
-            ShapeKind.String or ShapeKind.Enum when !UseBodyCodecForPayload(schema, traits) =>
-                "text/plain",
-            _ => bodyFormat.ContentType,
+            ShapeKind.Blob => codecFactory.BlobContentType,
+            ShapeKind.String or ShapeKind.Enum
+                when !UseBodyCodecForPayload(target, traits, rawStringPayloads) => "text/plain",
+            _ => codecFactory.ContentType,
         };
     }
 
-    private sealed class WritePayloadVisitor<TInput>(
-        SmithyHttpRequest request,
-        TInput input,
-        IRestBodyFormat bodyFormat
-    ) : IMemberVisitor<TInput>
+    /// <summary>
+    /// Builds — once, at binding construction — a delegate that serializes an <c>@httpPayload</c>
+    /// member to its wire body. The blob/text/codec decision and the compiled body codec are baked
+    /// in, so nothing is recompiled per request. <paramref name="emptyStructOnNull"/> separates the
+    /// request side (a null struct payload still emits <c>{}</c>) from the response side (emits
+    /// nothing).
+    /// </summary>
+    internal static Func<TContainer, RestBody> BuildPayloadWriter<TContainer>(
+        IMemberSchema<TContainer> member,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads,
+        bool emptyStructOnNull
+    )
     {
-        public void Visit<TValue>(IMemberSchema<TInput, TValue> member)
-        {
-            var value = member.GetValue(input);
-            if (value is null)
-            {
-                if (
-                    TryCreateEmptyStructureValue(member.TargetSchema, out var schema, out var empty)
-                )
-                {
-                    WriteBodyObject(request, schema, empty, bodyFormat);
-                }
-
-                return;
-            }
-
-            if (IsDefaultValue(member.TargetSchema, member.Traits, value))
-            {
-                return;
-            }
-
-            var mediaType = GetMediaType(member.TargetSchema, member.Traits);
-            switch (member.TargetSchema.Resolved.Kind)
-            {
-                case ShapeKind.Blob:
-                    request.Content = (byte[])(object)value;
-                    SetContentTypeIfMissing(request, mediaType ?? bodyFormat.BlobContentType);
-                    break;
-                case ShapeKind.String:
-                    if (mediaType is not null)
-                    {
-                        request.Content = Encoding.UTF8.GetBytes((string)(object)value);
-                        SetContentTypeIfMissing(request, mediaType);
-                    }
-                    else if (UseBodyCodecForPayload(member.TargetSchema, member.Traits))
-                    {
-                        WriteBody(request, member.TargetSchema, value, bodyFormat);
-                    }
-                    else
-                    {
-                        request.Content = Encoding.UTF8.GetBytes((string)(object)value);
-                        SetContentTypeIfMissing(request, "text/plain");
-                    }
-                    break;
-                case ShapeKind.Enum:
-                    if (mediaType is not null)
-                    {
-                        request.Content = Encoding.UTF8.GetBytes(
-                            ((IStringEnumValue)(object)value).Value
-                        );
-                        SetContentTypeIfMissing(request, mediaType);
-                    }
-                    else if (UseBodyCodecForPayload(member.TargetSchema, member.Traits))
-                    {
-                        WriteBody(request, member.TargetSchema, value, bodyFormat);
-                    }
-                    else
-                    {
-                        request.Content = Encoding.UTF8.GetBytes(
-                            ((IStringEnumValue)(object)value).Value
-                        );
-                        SetContentTypeIfMissing(request, "text/plain");
-                    }
-                    break;
-                default:
-                    WriteBody(request, member.TargetSchema, value, bodyFormat);
-                    break;
-            }
-        }
+        var builder = new PayloadWriterBuilder<TContainer>(
+            codecFactory,
+            rawStringPayloads,
+            emptyStructOnNull
+        );
+        member.Accept(builder);
+        return builder.Result!;
     }
 
-    private sealed class ReadPayloadVisitor<TContainer>(
-        object builder,
-        byte[] content,
-        IRestBodyFormat bodyFormat
+    /// <summary>Builds — once — a delegate that reads an <c>@httpPayload</c> member from the body.</summary>
+    internal static Action<byte[]?, object> BuildPayloadReader<TContainer>(
+        IMemberSchema<TContainer> member,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads
+    )
+    {
+        var builder = new PayloadReaderBuilder<TContainer>(codecFactory, rawStringPayloads);
+        member.Accept(builder);
+        return builder.Result!;
+    }
+
+    private sealed class PayloadWriterBuilder<TContainer>(
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads,
+        bool emptyStructOnNull
     ) : IMemberVisitor<TContainer>
     {
+        public Func<TContainer, RestBody>? Result { get; private set; }
+
         public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
         {
-            if (member.TargetSchema.Kind == ShapeKind.Blob)
+            var target = member.TargetSchema;
+            var traits = member.Traits;
+            var mediaType = GetMediaType(target, traits);
+            var kind = UnwrapNullable(target).Kind;
+
+            if (kind == ShapeKind.Blob)
             {
-                member.SetObject(builder, content);
+                var contentType = mediaType ?? codecFactory.BlobContentType;
+                Result = container =>
+                    member.GetValue(container) is { } value
+                        ? new RestBody((byte[])(object)value, contentType)
+                        : RestBody.None;
                 return;
             }
 
-            var target = UnwrapNullable(member.TargetSchema);
-            if (!UseBodyCodecForPayload(member.TargetSchema, member.Traits))
+            if (
+                (kind == ShapeKind.String || kind == ShapeKind.Enum)
+                && (
+                    mediaType is not null
+                    || !UseBodyCodecForPayload(target, traits, rawStringPayloads)
+                )
+            )
             {
-                var text = Encoding.UTF8.GetString(content);
-                member.SetObject(
-                    builder,
-                    target.Kind == ShapeKind.Enum
-                        ? ((IStringEnumSchema)target).CreateObject(text)
-                        : text
-                );
+                var contentType = mediaType ?? "text/plain";
+                Result = container =>
+                {
+                    var value = member.GetValue(container);
+                    if (value is null)
+                        return RestBody.None;
+                    var text =
+                        kind == ShapeKind.Enum
+                            ? ((IStringEnumValue)(object)value).Value
+                            : (string)(object)value;
+                    return new RestBody(Encoding.UTF8.GetBytes(text), contentType);
+                };
                 return;
             }
 
-            member.SetObject(builder, bodyFormat.Deserialize(member.TargetSchema, content));
+            // Codec path: structures, unions, documents, and string/enum that go through the body
+            // codec (alloy simpleRestJson, or members carrying an explicit @default). The codec is
+            // compiled once here; the empty-struct value for a null request payload is built lazily
+            // (only if a null actually arrives) so binding construction never materializes a struct
+            // with required members.
+            var codec = codecFactory.CodecFor(target);
+            var jsonContentType = codecFactory.ContentType;
+            var writeEmptyStructOnNull = emptyStructOnNull;
+
+            Result = container =>
+            {
+                var value = member.GetValue(container);
+                if (value is null)
+                {
+                    return writeEmptyStructOnNull
+                        && TryCreateEmptyStructureValue(target, out _, out var emptyObj)
+                        ? new RestBody(codec.Serialize((TValue)emptyObj!), jsonContentType)
+                        : RestBody.None;
+                }
+                if (IsDefaultValue(target, traits, value))
+                    return RestBody.None;
+                return new RestBody(codec.Serialize(value), jsonContentType);
+            };
         }
     }
 
-    private sealed class SerializePayloadVisitor<TOutput>(
-        TOutput output,
-        Dictionary<string, IReadOnlyList<string>> contentHeaders,
-        IRestBodyFormat bodyFormat
-    ) : IMemberVisitor<TOutput>
+    private sealed class PayloadReaderBuilder<TContainer>(
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads
+    ) : IMemberVisitor<TContainer>
     {
-        private byte[] content = [];
+        public Action<byte[]?, object>? Result { get; private set; }
 
-        public byte[] Serialize(IMemberSchema<TOutput> member)
+        public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
         {
-            member.Accept(this);
-            return content;
+            var target = member.TargetSchema;
+            var traits = member.Traits;
+            var unwrapped = UnwrapNullable(target);
+
+            if (unwrapped.Kind == ShapeKind.Blob)
+            {
+                Result = (content, builder) =>
+                {
+                    if (content is null or { Length: 0 })
+                        ApplyDefault(member, target, traits, builder);
+                    else
+                        member.SetObject(builder, content);
+                };
+                return;
+            }
+
+            if (!UseBodyCodecForPayload(target, traits, rawStringPayloads))
+            {
+                Result = (content, builder) =>
+                {
+                    if (content is null or { Length: 0 })
+                    {
+                        ApplyDefault(member, target, traits, builder);
+                        return;
+                    }
+                    var text = Encoding.UTF8.GetString(content);
+                    member.SetObject(
+                        builder,
+                        unwrapped.Kind == ShapeKind.Enum
+                            ? ((IStringEnumSchema)unwrapped).CreateObject(text)
+                            : text
+                    );
+                };
+                return;
+            }
+
+            var codec = codecFactory.CodecFor(target);
+            Result = (content, builder) =>
+            {
+                if (content is null or { Length: 0 })
+                    ApplyDefault(member, target, traits, builder);
+                else
+                    member.SetObject(builder, codec.Deserialize(content));
+            };
         }
 
-        public void Visit<TValue>(IMemberSchema<TOutput, TValue> member)
+        private static void ApplyDefault(
+            IMemberSchema member,
+            Schema target,
+            IReadOnlyDictionary<ShapeId, Trait> traits,
+            object builder
+        )
         {
-            var value = member.GetValue(output);
-            if (value is null)
-            {
-                return;
-            }
-
-            if (member.TargetSchema.Kind == ShapeKind.Blob)
-            {
-                contentHeaders["Content-Type"] =
-                [
-                    GetMediaType(member.TargetSchema, member.Traits) ?? bodyFormat.BlobContentType,
-                ];
-                content = (byte[])(object)value;
-                return;
-            }
-
-            content = SerializeBody(member.TargetSchema, value, contentHeaders, bodyFormat);
+            if (TryCreateDefaultValue(target, traits, out var defaultValue))
+                member.SetObject(builder, defaultValue);
         }
     }
 
@@ -1022,11 +1067,20 @@ public static class RestProtocol
 
     private static bool UseBodyCodecForPayload(
         Schema schema,
-        IReadOnlyDictionary<ShapeId, Trait> traits
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        bool rawStringPayloads
     )
     {
         var kind = UnwrapNullable(schema).Kind;
-        return kind is not (ShapeKind.String or ShapeKind.Enum) || traits.ContainsKey(DefaultTrait);
+        if (kind is not (ShapeKind.String or ShapeKind.Enum))
+        {
+            return true;
+        }
+
+        // String/enum payloads are raw text under restJson1/restXml; protocols that don't use raw
+        // string payloads (alloy simpleRestJson) route them through the body codec, as do members
+        // carrying an explicit @default.
+        return traits.ContainsKey(DefaultTrait) || !rawStringPayloads;
     }
 
     private static bool TryCreateDefaultValue(
@@ -1360,7 +1414,10 @@ public static class RestProtocol
     {
         var labels = new Dictionary<string, string>(StringComparer.Ordinal);
         var path = requestUri.Split('?', 2)[0];
-        var patternSegments = pattern.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        // The URI template may carry a constant query string (e.g. `/Foo/{id}?bar=baz`); only the
+        // path portion contains label placeholders.
+        var patternPath = pattern.Split('?', 2)[0];
+        var patternSegments = patternPath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
         var pathSegments = path.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
 
         for (var i = 0; i < patternSegments.Length && i < pathSegments.Length; i++)
