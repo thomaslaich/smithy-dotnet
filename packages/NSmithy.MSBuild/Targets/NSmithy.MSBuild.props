@@ -13,7 +13,7 @@
       artifacts in your contracts smithy-build.json should use this version.
     -->
     <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.68.0</SmithyVersion>
-    <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''">0.1.0-SNAPSHOT</SmithyCSharpCodegenVersion>
+    <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''">0.2.0-SNAPSHOT</SmithyCSharpCodegenVersion>
     <!--
       Set to 'true' to inject the smithy-docgen plugin into the synthesized smithy-build.json
       and copy the generated HTML docs to wwwroot/docs/.
