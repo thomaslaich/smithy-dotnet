@@ -16,8 +16,8 @@ server is never counted toward client coverage and vice versa.
 
 | Protocol | Surfaces | Stage | Client | Server |
 | --- | --- | --- | --- | --- |
-| `alloy#simpleRestJson` | both | Preview (most complete) | 43/43 (100%) | not yet exercised |
-| `aws.protocols#restJson1` | both | Preview | 243/247 (98.4%) | 19/227 (8.4%) |
+| `alloy#simpleRestJson` | both | Preview (most complete) | 43/43 (100%) | 43/43 (100%) |
+| `aws.protocols#restJson1` | both | Preview | 243/247 (98.4%) | 224/227 (98.7%) |
 | `aws.protocols#restXml` | client | Early preview | codec-only, no cases yet | — |
 | `smithy.protocols#rpcv2Cbor` | both | Preview | 68/68 (100%) | 60/60 (100%) |
 | `alloy.proto#grpc` | both | Experimental | tested via examples¹ | tested via examples¹ |
@@ -29,16 +29,18 @@ smallest test surface, and more explicit model requirements such as
 
 Notes:
 
-- `alloy#simpleRestJson`'s protocol tests all declare `appliesTo: both`, so they
-  apply to servers too; there is simply no server conformance project driving
-  them yet, hence "not yet exercised" rather than a percentage.
-- `aws.protocols#restJson1`'s client surface is mature; its server surface is
-  still early (request/response serialization and error responses are only
-  partially exercised).
+- `alloy#simpleRestJson`'s protocol tests all declare `appliesTo: both`; both the
+  client and the generated ASP.NET Core server now run every applicable case.
+- `aws.protocols#restJson1` exercises both surfaces against nearly every
+  applicable case. The handful of unmet cases are curated out of the client
+  allowlist; on the server, cases whose operation has no generated handler
+  (auxiliary services like Glacier that ship fixtures but aren't part of the
+  `RestJson` service) are out of scope rather than counted as failures.
 - `aws.protocols#restXml` currently validates the XML codec and transport
   abstractions; no official conformance cases are executed yet.
-- `smithy.protocols#rpcv2Cbor` is the only protocol with both client and server
-  fully exercised against every applicable case.
+- `smithy.protocols#rpcv2Cbor`, `alloy#simpleRestJson`, and `aws.protocols#restJson1`
+  all exercise both the client and the generated server against their applicable
+  cases.
 
 ## Recommended Use
 

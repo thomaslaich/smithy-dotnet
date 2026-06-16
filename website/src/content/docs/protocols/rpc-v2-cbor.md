@@ -15,7 +15,7 @@ are bundled with the Smithy CLI.
 ## NuGet Package
 
 ```xml
-<PackageReference Include="NSmithy.Codecs.Cbor" Version="0.1.0" />
+<PackageReference Include="NSmithy.Codecs.Cbor" Version="0.2.0" />
 ```
 
 ## Modeling
@@ -60,15 +60,15 @@ structure InvalidName {
 ### Server
 
 ```xml
-<PackageReference Include="NSmithy.Server.AspNetCore" Version="0.1.0" />
+<PackageReference Include="NSmithy.Server.AspNetCore" Version="0.2.0" />
 ```
 
 ### Client
 
 ```xml
-<PackageReference Include="NSmithy.Client" Version="0.1.0" />
-<PackageReference Include="NSmithy.Codecs.Cbor" Version="0.1.0" />
-<PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="0.1.0" />
+<PackageReference Include="NSmithy.Client" Version="0.2.0" />
+<PackageReference Include="NSmithy.Codecs.Cbor" Version="0.2.0" />
+<PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="0.2.0" />
 ```
 
 ## Server
