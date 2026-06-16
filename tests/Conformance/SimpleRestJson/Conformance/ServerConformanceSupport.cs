@@ -4,7 +4,6 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Aws.Protocoltests.Restjson;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -14,7 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 
-namespace RestJson1.Conformance;
+namespace SimpleRestJson.Conformance;
 
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1852:Seal internal types")]
 internal class RestJsonServerDispatchProxy : DispatchProxy
@@ -189,7 +188,9 @@ internal static class ConformanceObjectFactory
         if (depth > 6)
             return null;
         if (type == typeof(string))
-            return string.Empty;
+            // Non-empty so values bound to required @httpLabel produce a routable path segment
+            // (an empty label collapses `/a/{x}/b` to `/a//b`, which matches no route).
+            return "x";
         if (type.IsValueType)
         {
             var schemaKind = GetSchemaKind(type);
@@ -231,10 +232,26 @@ internal static class ConformanceObjectFactory
         }
         if (type.IsAbstract)
         {
-            var concrete = type
+            // Smithy unions are abstract bases with one concrete record per case (plus an open
+            // `Unknown` fallback). Pick a case that round-trips through JSON: prefer a single
+            // string/primitive payload, avoid the `Unknown` case and `Document` payloads (which
+            // serialize to `null` and fail to re-read on the server).
+            var concretes = type
                 .Assembly.GetTypes()
-                .FirstOrDefault(t => !t.IsAbstract && type.IsAssignableFrom(t));
-            return concrete is null ? null : BuildDefault(concrete, depth + 1);
+                .Where(t =>
+                    !t.IsAbstract
+                    && type.IsAssignableFrom(t)
+                    && !t.Name.Contains("Unknown", StringComparison.Ordinal)
+                )
+                .OrderBy(CasePreference)
+                .ToList();
+            foreach (var concrete in concretes)
+            {
+                var built = BuildDefault(concrete, depth + 1);
+                if (built is not null)
+                    return built;
+            }
+            return null;
         }
 
         var ctor = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
@@ -249,6 +266,23 @@ internal static class ConformanceObjectFactory
             )
             .ToArray();
         return ctor.Invoke(args);
+    }
+
+    private static int CasePreference(Type caseType)
+    {
+        var ctor = caseType
+            .GetConstructors(BindingFlags.Public | BindingFlags.Instance)
+            .OrderByDescending(c => c.GetParameters().Length)
+            .FirstOrDefault();
+        var ps = ctor?.GetParameters() ?? [];
+        if (ps.Length != 1)
+            return 4;
+        var t = ps[0].ParameterType;
+        if (t == typeof(string) || (t.IsValueType && t != typeof(Document)))
+            return 0;
+        if (t == typeof(Document))
+            return 3;
+        return 1;
     }
 
     private static ShapeKind? GetSchemaKind(Type type)
@@ -404,14 +438,23 @@ internal static class ServerResponseAssertions
 {
     public static async Task AssertAsync(HttpResponseTestCase expected, HttpResponseMessage actual)
     {
-        Assert.Equal(expected.Code, (int)actual.StatusCode);
+        var actualBody = actual.Content is null
+            ? ""
+            : await actual.Content.ReadAsStringAsync().ConfigureAwait(false);
+        Assert.True(
+            expected.Code == (int)actual.StatusCode,
+            $"Expected status {expected.Code} but got {(int)actual.StatusCode}.\n{actualBody}"
+        );
 
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var header in actual.Headers)
         {
             headers[header.Key] = string.Join(",", header.Value);
         }
-        foreach (var header in actual.Content.Headers)
+        foreach (
+            var header in actual.Content?.Headers
+                ?? Enumerable.Empty<KeyValuePair<string, IEnumerable<string>>>()
+        )
         {
             headers[header.Key] = string.Join(",", header.Value);
         }
@@ -427,9 +470,6 @@ internal static class ServerResponseAssertions
 
         // `bodyMediaType` describes how to compare the body, not a required Content-Type header.
         // Content-Type is asserted only when the case lists it in `headers` (handled above).
-        var actualBody = actual.Content is null
-            ? ""
-            : await actual.Content.ReadAsStringAsync().ConfigureAwait(false);
         AssertBody(expected.Body ?? "", actualBody);
     }
 

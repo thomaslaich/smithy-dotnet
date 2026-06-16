@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using NSmithy.Http;
 
 namespace NSmithy.Server.AspNetCore;
@@ -14,11 +15,18 @@ public static class SmithyAspNetCoreProtocol
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
-        var request = new SmithyHttpRequest(
-            new HttpMethod(httpContext.Request.Method),
-            httpContext.Request.PathBase.ToString()
+        // Prefer the raw (still percent-encoded) request target so HTTP-label binding sees the wire
+        // form — e.g. a greedy `{label+}` carrying an escaped `%2F` must not be pre-decoded into
+        // extra path segments. Fall back to the (decoded) PathBase/Path when RawTarget is absent.
+        var rawTarget = httpContext.Features.Get<IHttpRequestFeature>()?.RawTarget;
+        var requestTarget = string.IsNullOrEmpty(rawTarget)
+            ? httpContext.Request.PathBase.ToString()
                 + httpContext.Request.Path.ToString()
                 + httpContext.Request.QueryString.ToString()
+            : rawTarget;
+        var request = new SmithyHttpRequest(
+            new HttpMethod(httpContext.Request.Method),
+            requestTarget
         );
         foreach (var header in httpContext.Request.Headers)
         {
