@@ -1,6 +1,7 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import starlightLlmsTxt from 'starlight-llms-txt';
 import mermaid from 'astro-mermaid';
 import { readFileSync } from 'node:fs';
 
@@ -17,6 +18,15 @@ export default defineConfig({
 		starlight({
 			title: 'NSmithy',
 			description: 'Generate C# models, typed HTTP clients, and ASP.NET Core servers from Smithy models.',
+			plugins: [
+				// Emit /llms.txt (curated index) and /llms-full.txt (full docs) for LLM consumption.
+				// https://llmstxt.org · https://github.com/HiDeoo/starlight-llms-txt
+				starlightLlmsTxt({
+					projectName: 'NSmithy',
+					description:
+						'NSmithy generates C# models, typed HTTP clients, and ASP.NET Core minimal-API servers from Smithy models at build time — no separate codegen step and no JRE required by consumers.',
+				}),
+			],
 			logo: {
 				src: './src/assets/brand/nsmithy_logo_1.png',
 				alt: 'NSmithy logo',
