@@ -171,11 +171,15 @@
     <SmithyExtraArgs Condition="'$(SmithyExtraArgs)' == ''"></SmithyExtraArgs>
     <SmithyGenerateClient Condition="'$(SmithyGenerateClient)' == ''">true</SmithyGenerateClient>
     <!--
-      Opt-in: compile the generated IHttpClientFactory registration extension
+      Opt-in: generate the IHttpClientFactory registration extension
       ({Service}.DependencyInjection.g.cs). Off by default because it requires
       Microsoft.Extensions.Http, which plain (non-DI) clients must not be forced to depend on.
-      When enabling, also reference Microsoft.Extensions.Http (or the Microsoft.AspNetCore.App
-      shared framework, which already provides it).
+      This flows into the synthesized smithy-build.json as the csharp-codegen
+      generateDependencyInjection setting, so the file is only *generated* when enabled — not
+      generated-then-excluded. When enabling, also reference Microsoft.Extensions.Http (or the
+      Microsoft.AspNetCore.App shared framework, which already provides it). Projects with an
+      explicit smithy-build.json set "generateDependencyInjection": true on the csharp-codegen
+      plugin instead.
     -->
     <SmithyGenerateDependencyInjection Condition="'$(SmithyGenerateDependencyInjection)' == ''"
       >false</SmithyGenerateDependencyInjection
@@ -378,6 +382,7 @@
       CSharpCodegenVersion="$(SmithyCSharpCodegenVersion)"
       SmithyVersion="$(SmithyVersion)"
       GenerateDocs="$(SmithyGenerateDocs)"
+      GenerateDependencyInjection="$(SmithyGenerateDependencyInjection)"
       OpenApiProtocol="$(SmithyOpenApiProtocol)"
       Grpc="$(SmithyGrpc)"
       ProtoPlugin="$(SmithyProtoPlugin)"
@@ -438,10 +443,6 @@
       <_SmithyExcludedGeneratedCompile
         Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.Server.g.cs"
         Condition="'$(SmithyGenerateServer)' != 'true'"
-      />
-      <_SmithyExcludedGeneratedCompile
-        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.DependencyInjection.g.cs"
-        Condition="'$(SmithyGenerateDependencyInjection)' != 'true'"
       />
       <Compile
         Include="$(SmithyAllProjectionsGlob)"

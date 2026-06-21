@@ -4,9 +4,10 @@
  * Emits a `{Service}ClientServiceCollectionExtensions` class with `Add{Service}Client(...)`
  * methods that register the generated `{Service}Client` as a typed HttpClient. Because this code
  * depends on Microsoft.Extensions.Http / DependencyInjection — a dependency NSmithy deliberately
- * does not force on plain clients — it is generated into its own `{Service}.DependencyInjection.g.cs`
- * file and only compiled when the consumer opts in via `SmithyGenerateDependencyInjection`
- * (mirroring how `SmithyGenerateClient` / `SmithyGenerateServer` gate the client/server files).
+ * does not force on plain clients — it lives in its own `{Service}.DependencyInjection.g.cs` file
+ * that is only produced when the `generateDependencyInjection` plugin setting is enabled (driven by
+ * the `SmithyGenerateDependencyInjection` MSBuild property). Gating generation rather than
+ * compilation means the dependency-carrying file simply does not exist unless asked for.
  *
  * The extension is the one place in the DI path where protocol knowledge is available, so it
  * configures the HttpClient for HTTP/2 when the bound protocol requires it (native gRPC) — the raw

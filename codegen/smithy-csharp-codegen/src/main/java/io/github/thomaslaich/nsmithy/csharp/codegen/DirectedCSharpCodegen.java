@@ -87,14 +87,18 @@ final class DirectedCSharpCodegen
             csNamespace,
             writer -> new ServerGenerator(ctx, writer, directive.shape()).run());
 
-    // Opt-in IHttpClientFactory registration. Always generated, but compiled only when the
-    // consumer sets SmithyGenerateDependencyInjection=true (the file pulls in
-    // Microsoft.Extensions.Http, which plain clients must not be forced to depend on).
-    ctx.writerDelegator()
-        .useFileWriter(
-            dir + "/" + typeName + ".DependencyInjection.g.cs",
-            csNamespace,
-            writer -> new ClientDependencyInjectionGenerator(ctx, writer, directive.shape()).run());
+    // Opt-in IHttpClientFactory registration. Generated only when requested
+    // (generateDependencyInjection), because the file pulls in Microsoft.Extensions.Http — a
+    // dependency plain clients must not be forced to carry. Gating generation (rather than
+    // compilation) means the file simply does not exist unless asked for.
+    if (ctx.settings().generateDependencyInjection()) {
+      ctx.writerDelegator()
+          .useFileWriter(
+              dir + "/" + typeName + ".DependencyInjection.g.cs",
+              csNamespace,
+              writer ->
+                  new ClientDependencyInjectionGenerator(ctx, writer, directive.shape()).run());
+    }
   }
 
   @Override

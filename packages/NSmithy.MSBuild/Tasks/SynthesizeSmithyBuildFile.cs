@@ -43,6 +43,12 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
     public bool GenerateDocs { get; set; }
 
     /// <summary>
+    /// When true, sets generateDependencyInjection on the csharp-codegen plugin so the
+    /// IHttpClientFactory registration extension is generated.
+    /// </summary>
+    public bool GenerateDependencyInjection { get; set; }
+
+    /// <summary>
     /// When non-empty, injects the smithy-openapi Maven dep and openapi plugin entry
     /// using this value as the protocol (e.g. aws.protocols#restJson1).
     /// </summary>
@@ -205,6 +211,8 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
         writer.WriteString("service", Service);
         if (!string.IsNullOrEmpty(BaseNamespace))
             writer.WriteString("baseNamespace", BaseNamespace);
+        if (GenerateDependencyInjection)
+            writer.WriteBoolean("generateDependencyInjection", true);
         writer.WriteEndObject();
 
         if (GenerateDocs)

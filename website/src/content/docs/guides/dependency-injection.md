@@ -18,9 +18,18 @@ Enable the helper in the client project:
 </PropertyGroup>
 ```
 
+This flows into the generated `smithy-build.json` so the extension is **only
+generated when enabled** (it isn't emitted otherwise). If your project uses an
+explicit `smithy-build.json` instead of one synthesized from a contracts
+reference, set it on the plugin directly:
+
+```json
+{ "plugins": { "csharp-codegen": { "service": "...", "generateDependencyInjection": true } } }
+```
+
 It's opt-in because the generated code depends on `Microsoft.Extensions.Http`.
 Reference that package (or the `Microsoft.AspNetCore.App` shared framework, which
-already provides it) when you enable the flag.
+already provides it) when you enable it.
 
 ## Registering the client
 
