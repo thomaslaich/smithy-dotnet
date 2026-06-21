@@ -97,7 +97,7 @@ All files are written under the Smithy projection's output directory:
 
 `CSharpSymbolProvider` maps each Smithy shape to a C# `Symbol` carrying the
 namespace, type name, and import list. The mapping follows the rules in
-[Shape Mapping](/smithy-dotnet/design/shapes/).
+[shapes.md](shapes.md).
 
 ### Writers
 
@@ -175,11 +175,11 @@ them in its `.csproj`; the generated `.g.cs` files import the matching types.
 
 Each generated shape file contains:
 
-1. A C# record or class for the shape (see [Shape Mapping](/smithy-dotnet/design/shapes/)).
+1. A C# record or class for the shape (see [shapes.md](shapes.md)).
 2. A generated builder type when deserialization needs staged construction.
 3. A separate static schema description containing the shape kind, traits,
    member schemas, typed accessors, and builder hooks at runtime (see
-   [Serialization](/smithy-dotnet/design/serialization/)).
+   [serialization.md](serialization.md)).
 
 Operation files contain:
 
@@ -254,6 +254,6 @@ used by `smithy-python` and other Smithy generators.
 
 ## Related Docs
 
-- [Shape Mapping](/smithy-dotnet/design/shapes/)
-- [Serialization](/smithy-dotnet/design/serialization/)
-- [MSBuild Reference](/smithy-dotnet/msbuild/)
+- [shapes.md](shapes.md) — Smithy shape → C# type mapping
+- [serialization.md](serialization.md) — codec and protocol binding
+- [MSBuild Reference](/smithy-dotnet/reference/msbuild/)
