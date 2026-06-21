@@ -127,6 +127,74 @@ public sealed class ProtoCodecTests
         Assert.Equal(expectedNums, codec.Deserialize(bytes).Nums);
     }
 
+    [Fact]
+    public void DecodesPackedScalarsWithProtoNumType()
+    {
+        var schema = Schemas
+            .Structure<Repeated, RepeatedBuilder>(ShapeId.Parse("test#RepeatedSigned"))
+            .Required(
+                "nums",
+                x => x.Nums,
+                (b, v) => b.Nums = v,
+                Schemas.List(ShapeId.Parse("test#SignedIntList"), Schemas.Integer),
+                Field(1, "SIGNED")
+            )
+            .Build(() => new RepeatedBuilder(), b => new Repeated(b.Nums!));
+        var codec = ProtoCodec.FromSchema(schema);
+
+        // field 1, LEN, packed sint32 values: zigzag(-1)=1, zigzag(75)=150.
+        byte[] bytes = [0x0A, 0x03, 0x01, 0x96, 0x01];
+        int[] expectedNums = [-1, 75];
+
+        Assert.Equal(expectedNums, codec.Deserialize(bytes).Nums);
+        Assert.Equal(bytes, codec.Serialize(new Repeated(expectedNums)));
+    }
+
+    public sealed record EmptyCollections(
+        IReadOnlyList<int> Nums,
+        IReadOnlyDictionary<string, string> Metadata
+    );
+
+    public sealed class EmptyCollectionsBuilder
+    {
+        public IReadOnlyList<int>? Nums { get; set; }
+        public IReadOnlyDictionary<string, string>? Metadata { get; set; }
+    }
+
+    [Fact]
+    public void DecodesAbsentRepeatedAndMapFieldsAsEmptyCollections()
+    {
+        var schema = Schemas
+            .Structure<EmptyCollections, EmptyCollectionsBuilder>(
+                ShapeId.Parse("test#EmptyCollections")
+            )
+            .Required(
+                "nums",
+                x => x.Nums,
+                (b, v) => b.Nums = v,
+                Schemas.List(ShapeId.Parse("test#RequiredIntList"), Schemas.Integer),
+                Field(1)
+            )
+            .Required(
+                "metadata",
+                x => x.Metadata,
+                (b, v) => b.Metadata = v,
+                Schemas.Map(ShapeId.Parse("test#RequiredStringMap"), Schemas.String),
+                Field(2)
+            )
+            .Build(
+                () => new EmptyCollectionsBuilder(),
+                b => new EmptyCollections(b.Nums!, b.Metadata!)
+            );
+        var codec = ProtoCodec.FromSchema(schema);
+
+        var result = codec.Deserialize([]);
+
+        Assert.Empty(result.Nums);
+        Assert.Empty(result.Metadata);
+        Assert.Empty(codec.Serialize(result));
+    }
+
     // ---- a rich message exercising nested/map/enum/timestamp/optional presence ----
 
     public enum Category

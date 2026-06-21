@@ -388,8 +388,8 @@ public static class ProtoCodec
                                 ReadValueBody(
                                     ref packed,
                                     list.Element,
-                                    NoTraits,
-                                    WireTypeOf(element.Kind, NoTraits)
+                                    member.Traits,
+                                    WireTypeOf(element.Kind, member.Traits)
                                 )
                             );
                         }
@@ -438,7 +438,49 @@ public static class ProtoCodec
             acc.Member.SetObject(builder, map.BuildObject(acc.Builder));
         }
 
+        SetMissingCollectionsToEmpty(schema, builder, lists, maps);
+
         return schema.BuildObject(builder);
+    }
+
+    private static void SetMissingCollectionsToEmpty(
+        IStructSchema schema,
+        object builder,
+        Dictionary<int, (IMemberSchema Member, object Builder)> lists,
+        Dictionary<int, (IMemberSchema Member, object Builder)> maps
+    )
+    {
+        foreach (var member in schema.Members)
+        {
+            var target = Unwrap(member.Target);
+            switch (target.Kind)
+            {
+                case ShapeKind.List or ShapeKind.Set:
+                {
+                    var field = ProtoIndex(member.Traits);
+                    if (lists.ContainsKey(field))
+                    {
+                        break;
+                    }
+
+                    var list = (IListSchema)target;
+                    member.SetObject(builder, list.BuildObject(list.CreateBuilder()));
+                    break;
+                }
+                case ShapeKind.Map:
+                {
+                    var field = ProtoIndex(member.Traits);
+                    if (maps.ContainsKey(field))
+                    {
+                        break;
+                    }
+
+                    var map = (IMapSchema)target;
+                    member.SetObject(builder, map.BuildObject(map.CreateBuilder()));
+                    break;
+                }
+            }
+        }
     }
 
     private static void ReadMapEntry(
