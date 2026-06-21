@@ -3,7 +3,7 @@
   "maven": {
     "dependencies": [
       "io.github.YOUR_ORG:your-service-contracts:1.0.0",
-      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.2.0"
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.3.0"
     ]
   },
   "plugins": {

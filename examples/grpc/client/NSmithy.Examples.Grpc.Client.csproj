@@ -19,9 +19,9 @@
   -->
   <ItemGroup>
     <ProjectReference Include="../contracts/Library.Contracts.csproj" />
-    <PackageReference Include="NSmithy.Client" Version="0.2.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Core" Version="0.2.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.MSBuild" Version="0.2.0-SNAPSHOT" PrivateAssets="all" />
-    <PackageReference Include="NSmithy.Protocols.Grpc" Version="0.2.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Client" Version="0.3.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Core" Version="0.3.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.3.0-SNAPSHOT" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Protocols.Grpc" Version="0.3.0-SNAPSHOT" />
   </ItemGroup>
 </Project>
