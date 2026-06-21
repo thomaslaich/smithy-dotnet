@@ -1,12 +1,8 @@
 using Example.Weather;
-using NSmithy.Client;
 
 var endpoint = args.Length > 0 ? args[0] : "http://localhost:5000";
 
-var client = new WeatherClient(
-    new HttpClient(),
-    new SmithyClientOptions { Endpoint = new Uri(endpoint) }
-);
+var client = new WeatherClient(new Uri(endpoint));
 
 var time = await client.GetCurrentTimeAsync(new GetCurrentTimeInput());
 Console.WriteLine($"Current time: {time.Time:u}");

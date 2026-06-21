@@ -1,12 +1,8 @@
 using Alloy.Test;
-using NSmithy.Client;
 
 var endpoint = args.Length > 0 ? args[0] : "http://localhost:5000";
 
-var client = new PizzaAdminServiceClient(
-    new HttpClient(),
-    new SmithyClientOptions { Endpoint = new Uri(endpoint) }
-);
+var client = new PizzaAdminServiceClient(new Uri(endpoint));
 
 var health = await client.HealthAsync(new HealthInput());
 Console.WriteLine($"Health: {health.Status}");

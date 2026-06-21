@@ -1,0 +1,125 @@
+/*
+ * Renders an opt-in IHttpClientFactory registration extension for a service client.
+ *
+ * Emits a `{Service}ClientServiceCollectionExtensions` class with `Add{Service}Client(...)`
+ * methods that register the generated `{Service}Client` as a typed HttpClient. Because this code
+ * depends on Microsoft.Extensions.Http / DependencyInjection — a dependency NSmithy deliberately
+ * does not force on plain clients — it is generated into its own `{Service}.DependencyInjection.g.cs`
+ * file and only compiled when the consumer opts in via `SmithyGenerateDependencyInjection`
+ * (mirroring how `SmithyGenerateClient` / `SmithyGenerateServer` gate the client/server files).
+ *
+ * The extension is the one place in the DI path where protocol knowledge is available, so it
+ * configures the HttpClient for HTTP/2 when the bound protocol requires it (native gRPC) — the raw
+ * `AddHttpClient<I,T>` path cannot, because the factory owns the HttpClient.
+ */
+package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
+
+import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
+import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport.Kind;
+import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
+import java.util.List;
+import software.amazon.smithy.model.shapes.ServiceShape;
+import software.amazon.smithy.utils.SmithyInternalApi;
+
+@SmithyInternalApi
+public final class ClientDependencyInjectionGenerator implements Runnable {
+
+  private static final String MS_EXT_DI = "Microsoft.Extensions.DependencyInjection";
+
+  private final GenerationContext context;
+  private final CSharpWriter writer;
+  private final ServiceShape service;
+
+  public ClientDependencyInjectionGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
+    this.context = c;
+    this.writer = w;
+    this.service = s;
+  }
+
+  @Override
+  public void run() {
+    // No client is generated for a service with no supported protocol, so there is nothing to
+    // register. Leave an (otherwise empty) file so the output set is stable.
+    List<Kind> kinds = ProtocolSupport.declaredKinds(service);
+    if (kinds.isEmpty()) {
+      return;
+    }
+
+    String typeName = CSharpNaming.typeName(service.getId().getName());
+    String clientName = typeName + "Client";
+    String interfaceName = "I" + clientName;
+    String primaryProtocol = ProtocolSupport.protocolType(kinds.get(0));
+    // Fully-qualified named-client key, unique per service.
+    String namespace = context.settings().csharpNamespace(service.getId().getNamespace());
+    String clientKey = (namespace.isEmpty() ? "" : namespace + ".") + clientName;
+
+    writer.addImport(MS_EXT_DI);
+    writer.addImport(RuntimeTypes.NSMITHY_HTTP);
+    writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kinds.get(0)));
+
+    writer.write("public static class $LServiceCollectionExtensions", clientName);
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          // Overload 1: endpoint (turnkey).
+          writer.write(
+              "/// <summary>Registers <see cref=\"$L\"/> as a typed HttpClient"
+                  + " (IHttpClientFactory) for the given endpoint, using the service's default"
+                  + " protocol (or <paramref name=\"protocol\"/> when supplied).</summary>",
+              interfaceName);
+          writer.write("public static IHttpClientBuilder Add$L(", clientName);
+          writer.write("    this IServiceCollection services,");
+          writer.write("    System.Uri endpoint,");
+          writer.write("    IProtocol? protocol = null) =>");
+          writer.write(
+              "    services.Add$L(client => client.BaseAddress = endpoint, protocol);", clientName);
+          writer.write("");
+
+          // Overload 2: configure callback (Refit-style; BaseAddress set by the caller).
+          writer.write(
+              "/// <summary>Registers <see cref=\"$L\"/> as a typed HttpClient"
+                  + " (IHttpClientFactory). Configure the HttpClient (at minimum its BaseAddress)"
+                  + " via <paramref name=\"configureClient\"/>; pass <paramref name=\"protocol\"/>"
+                  + " to override the service's default protocol.</summary>",
+              interfaceName);
+          writer.write("public static IHttpClientBuilder Add$L(", clientName);
+          writer.write("    this IServiceCollection services,");
+          writer.write("    System.Action<System.Net.Http.HttpClient>? configureClient = null,");
+          writer.write("    IProtocol? protocol = null)");
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                writer.write("System.ArgumentNullException.ThrowIfNull(services);");
+                writer.write("var resolvedProtocol = protocol ?? new $L();", primaryProtocol);
+                writer.write("return services");
+                writer.write("    .AddHttpClient(");
+                writer.write("        $L,", CSharpNaming.formatString(clientKey));
+                writer.write("        client =>");
+                writer.write("        {");
+                // The HttpClient is created by the factory and handed to the client as-is, so the
+                // protocol's HTTP/2 requirement must be configured here.
+                writer.write("            if (resolvedProtocol.RequiresHttp2)");
+                writer.write("            {");
+                writer.write(
+                    "                client.DefaultRequestVersion ="
+                        + " System.Net.HttpVersion.Version20;");
+                writer.write(
+                    "                client.DefaultVersionPolicy ="
+                        + " System.Net.Http.HttpVersionPolicy.RequestVersionExact;");
+                writer.write("            }");
+                writer.write("            configureClient?.Invoke(client);");
+                writer.write("        })");
+                writer.write(
+                    "    .AddTypedClient<$L>((httpClient, _) => new $L(httpClient,"
+                        + " resolvedProtocol));",
+                    interfaceName,
+                    clientName);
+              });
+        });
+  }
+}

@@ -12,6 +12,8 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.support;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
+import java.util.ArrayList;
+import java.util.List;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -22,7 +24,8 @@ public final class ProtocolSupport {
     SIMPLE_REST_JSON,
     REST_JSON_1,
     REST_XML,
-    RPC_V2_CBOR
+    RPC_V2_CBOR,
+    GRPC
   }
 
   private ProtocolSupport() {}
@@ -65,6 +68,32 @@ public final class ProtocolSupport {
     return Kind.REST_JSON_1;
   }
 
+  /**
+   * Every protocol the service declares, in the documented precedence order {@code rpcv2Cbor >
+   * restXml > simpleRestJson > restJson1 > grpc}. The unified client builder generates a {@code
+   * With{Kind}()} method per declared kind and uses the first as the default protocol. Returns an
+   * empty list for a service with no supported protocol trait.
+   */
+  public static List<Kind> declaredKinds(ServiceShape s) {
+    List<Kind> kinds = new ArrayList<>();
+    if (isRpcV2CborService(s)) kinds.add(Kind.RPC_V2_CBOR);
+    if (isRestXmlService(s)) kinds.add(Kind.REST_XML);
+    if (isSimpleRestJsonService(s)) kinds.add(Kind.SIMPLE_REST_JSON);
+    if (isRestJson1Service(s)) kinds.add(Kind.REST_JSON_1);
+    if (isGrpcService(s)) kinds.add(Kind.GRPC);
+    return kinds;
+  }
+
+  /** The default protocol for the client: the first declared kind by precedence. */
+  public static Kind primaryKind(ServiceShape s) {
+    List<Kind> kinds = declaredKinds(s);
+    if (kinds.isEmpty()) {
+      throw new IllegalStateException(
+          "Service " + s.getId() + " declares no supported protocol trait");
+    }
+    return kinds.get(0);
+  }
+
   /** Protocol helper class for the given protocol. */
   public static String protocolType(Kind kind) {
     return switch (kind) {
@@ -72,6 +101,7 @@ public final class ProtocolSupport {
       case REST_JSON_1 -> "RestJson1Protocol";
       case REST_XML -> "RestXmlProtocol";
       case RPC_V2_CBOR -> "RpcV2CborProtocol";
+      case GRPC -> "GrpcProtocol";
     };
   }
 
@@ -80,6 +110,7 @@ public final class ProtocolSupport {
       case SIMPLE_REST_JSON, REST_JSON_1 -> "application/json";
       case REST_XML -> "application/xml";
       case RPC_V2_CBOR -> "application/cbor";
+      case GRPC -> "application/grpc+proto";
     };
   }
 
@@ -89,6 +120,7 @@ public final class ProtocolSupport {
       case SIMPLE_REST_JSON, REST_JSON_1 -> RuntimeTypes.NSMITHY_PROTOCOLS_RESTJSON;
       case REST_XML -> RuntimeTypes.NSMITHY_PROTOCOLS_RESTXML;
       case RPC_V2_CBOR -> RuntimeTypes.NSMITHY_PROTOCOLS_RPCV2CBOR;
+      case GRPC -> RuntimeTypes.NSMITHY_PROTOCOLS_GRPC;
     };
   }
 
@@ -98,6 +130,7 @@ public final class ProtocolSupport {
       case SIMPLE_REST_JSON, REST_JSON_1 -> RuntimeTypes.NSMITHY_CODECS_JSON;
       case REST_XML -> RuntimeTypes.NSMITHY_CODECS_XML;
       case RPC_V2_CBOR -> RuntimeTypes.NSMITHY_CODECS_CBOR;
+      case GRPC -> RuntimeTypes.NSMITHY_CODECS_PROTO;
     };
   }
 }

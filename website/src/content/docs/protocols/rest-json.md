@@ -246,12 +246,8 @@ serialize it with the correct HTTP status code and JSON body.
 
 ```csharp
 using Example.Weather;
-using NSmithy.Client;
 
-var client = new WeatherClient(
-    new HttpClient(),
-    new SmithyClientOptions { Endpoint = new Uri("http://localhost:5000") }
-);
+var client = new WeatherClient(new Uri("http://localhost:5000"));
 
 var time = await client.GetCurrentTimeAsync(new GetCurrentTimeInput());
 Console.WriteLine(time.Time);

@@ -1,5 +1,3 @@
-using System.IO.Compression;
-using System.Security.Cryptography;
 using NSmithy.Codecs.Cbor;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
@@ -7,7 +5,7 @@ using NSmithy.Http;
 
 namespace NSmithy.Protocols.RpcV2Cbor;
 
-public static class RpcV2CborProtocol
+public sealed class RpcV2CborProtocol : IProtocol
 {
     private const string ContentType = "application/cbor";
 
@@ -29,7 +27,7 @@ public static class RpcV2CborProtocol
     /// Binds the protocol to a service, yielding per-operation protocols. The service schema
     /// supplies the service shape name used to derive each operation's request path.
     /// </summary>
-    public static IServiceProtocol ForService(ServiceSchema service)
+    public IServiceProtocol ForService(ServiceSchema service)
     {
         ArgumentNullException.ThrowIfNull(service);
         return new ServiceProtocol(service);
@@ -155,6 +153,10 @@ public static class RpcV2CborProtocol
         public string? GetErrorDiscriminator(SmithyHttpResponse response) =>
             HasResponse(response) ? DeserializeErrorType(response) : null;
 
+        public bool RequiresErrorDiscriminator => true;
+
+        public bool SupportsHttpStatusErrorFallback => false;
+
         public TError DeserializeError<TError>(
             Schema<TError> errorSchema,
             SmithyHttpResponse response
@@ -277,66 +279,5 @@ public static class RpcV2CborProtocol
         {
             return null;
         }
-    }
-
-    public static void ApplyRequestCompression(SmithyHttpRequest request, string encoding)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentException.ThrowIfNullOrWhiteSpace(encoding);
-
-        if (request.Content is null)
-        {
-            return;
-        }
-
-        request.Content = encoding switch
-        {
-            "gzip" => CompressGzip(request.Content),
-            _ => throw new NotSupportedException(
-                $"Request compression encoding '{encoding}' is not supported."
-            ),
-        };
-
-        if (
-            request.ContentHeaders.TryGetValue("Content-Encoding", out var values)
-            && values.Count > 0
-        )
-        {
-            request.ContentHeaders["Content-Encoding"] =
-            [
-                $"{string.Join(", ", values)}, {encoding}",
-            ];
-            return;
-        }
-
-        request.ContentHeaders["Content-Encoding"] = [encoding];
-    }
-
-#pragma warning disable CA5351
-    public static void ApplyContentMd5(SmithyHttpRequest request)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-
-        if (request.Content is null)
-        {
-            return;
-        }
-
-        request.ContentHeaders["Content-MD5"] =
-        [
-            Convert.ToBase64String(MD5.HashData(request.Content)),
-        ];
-    }
-#pragma warning restore CA5351
-
-    private static byte[] CompressGzip(byte[] content)
-    {
-        using var stream = new MemoryStream();
-        using (var gzip = new GZipStream(stream, CompressionLevel.Fastest, leaveOpen: true))
-        {
-            gzip.Write(content, 0, content.Length);
-        }
-
-        return stream.ToArray();
     }
 }

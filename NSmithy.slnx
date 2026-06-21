@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/packages/">
     <Project Path="packages/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
+    <Project Path="packages/NSmithy.Codecs.Proto/NSmithy.Codecs.Proto.csproj" />
     <Project Path="packages/NSmithy.Client/NSmithy.Client.csproj" />
     <Project Path="packages/NSmithy.Core/NSmithy.Core.csproj" />
     <Project Path="packages/NSmithy.Http/NSmithy.Http.csproj" />
@@ -9,6 +10,7 @@
     <Project Path="packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
     <Project Path="packages/NSmithy.Protocols.RestXml/NSmithy.Protocols.RestXml.csproj" />
     <Project Path="packages/NSmithy.Protocols.RpcV2Cbor/NSmithy.Protocols.RpcV2Cbor.csproj" />
+    <Project Path="packages/NSmithy.Protocols.Grpc/NSmithy.Protocols.Grpc.csproj" />
     <Project Path="packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
     <Project Path="packages/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
     <Project Path="packages/NSmithy.Server.AspNetCore.Docs/NSmithy.Server.AspNetCore.Docs.csproj" />

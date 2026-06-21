@@ -50,6 +50,7 @@ export default defineConfig({
 						{ label: 'Introduction', slug: 'getting-started/introduction' },
 						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
 						{ label: 'Endpoint Documentation', slug: 'guides/endpoint-documentation' },
+						{ label: 'Dependency Injection', slug: 'guides/dependency-injection' },
 						{ label: 'Distributing Contracts', slug: 'guides/distributing-contracts' },
 					],
 				},
@@ -58,16 +59,15 @@ export default defineConfig({
 					items: [
 						{ label: 'Overview', slug: 'protocols/overview' },
 						{ label: 'REST JSON', slug: 'protocols/rest-json' },
+						{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor' },
 						{ label: 'gRPC', slug: 'protocols/grpc' },
 						{
 							label: 'AWS Protocols',
 							items: [
 								{ label: 'Overview', slug: 'protocols/aws-overview' },
 								{ label: 'REST XML', slug: 'protocols/rest-xml' },
-								{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor' },
 							],
 						},
-						{ label: 'Conformance Tests', slug: 'protocols/conformance' },
 						{ label: 'Protocol Status', slug: 'protocols/status' },
 					],
 				},

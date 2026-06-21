@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../packages/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Codecs.Proto/NSmithy.Codecs.Proto.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Protocols.Grpc/NSmithy.Protocols.Grpc.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Client/NSmithy.Client.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Core/NSmithy.Core.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Http/NSmithy.Http.csproj" />

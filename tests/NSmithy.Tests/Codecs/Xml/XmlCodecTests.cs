@@ -1,10 +1,10 @@
-using NSmithy.Codecs.Cbor;
+using NSmithy.Codecs.Xml;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 
-namespace NSmithy.Tests.Runtime;
+namespace NSmithy.Tests.Codecs.Xml;
 
-public sealed class CborCodecTests
+public sealed class XmlCodecTests
 {
     public sealed record Address(string City);
 
@@ -25,9 +25,11 @@ public sealed class CborCodecTests
     }
 
     [Fact]
-    public void CborCodecRoundTripsNestedStructure()
+    public void XmlCodecRoundTripsNestedStructure()
     {
         var input = new Person("Ada", 36, new Address("London"));
+        var expectedXml =
+            "<Person><name>Ada</name><age>36</age><address><city>London</city></address></Person>";
 
         var addressSchema = Schemas
             .Structure<Address, AddressBuilder>(new ShapeId("example", "Address"))
@@ -62,11 +64,12 @@ public sealed class CborCodecTests
                 static () => new PersonBuilder(),
                 static builder => new Person(builder.Name!, builder.Age, builder.Address!)
             );
-        var codec = CborCodec.FromSchema(personSchema);
+        var codec = XmlCodec.FromSchema(personSchema);
 
-        var bytes = codec.Serialize(input);
-        var decoded = codec.Deserialize(bytes);
+        var xml = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(xml);
 
+        Assert.Equal(expectedXml, xml);
         Assert.Equal(input, decoded);
     }
 }

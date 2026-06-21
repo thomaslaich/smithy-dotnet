@@ -1,7 +1,6 @@
----
-title: Codegen Architecture
-description: How the NSmithy Java plugin generates C# files from Smithy models.
----
+# Codegen Architecture
+
+How the NSmithy Java plugin generates C# files from Smithy models.
 
 ## Overview
 
@@ -24,6 +23,8 @@ The two sides of the architecture are:
 ## Goals
 
 - Give consumers a `dotnet build`-first experience: no separate codegen step.
+- Bundle required tooling: consumers should not need to install a Java runtime or
+  `smithy-cli` separately.
 - Reuse Smithy's model front end for IDL parsing, assembly, validation, and
   trait resolution — do not reimplement these in .NET.
 - Keep the generated code idiomatic C#: it should look like it was written by
@@ -63,16 +64,16 @@ MSBuild then picks up the generated files via `NSmithy.MSBuild`:
 
 ### Entry point
 
-`CSharpClientCodegenPlugin` implements `SmithyBuildPlugin`. It is discovered on
+`CSharpCodegenPlugin` implements `SmithyBuildPlugin`. It is discovered on
 the classpath via the standard Java `ServiceLoader` mechanism using
 `META-INF/services/software.amazon.smithy.build.SmithyBuildPlugin`.
 
 When `smithy build` runs and finds a `plugins` block referencing `csharp-codegen`
-in `smithy-build.json`, Smithy invokes `CSharpClientCodegenPlugin.execute()`.
+in `smithy-build.json`, Smithy invokes `CSharpCodegenPlugin.execute()`.
 
 ### Orchestration
 
-The plugin delegates to `DirectedCSharpClientCodegen`, which implements
+The plugin delegates to `DirectedCSharpCodegen`, which implements
 `DirectedCodegen`. Smithy's `CodegenDirector` calls a method for each shape kind
 in the service closure:
 
@@ -160,7 +161,7 @@ Generated code depends on .NET packages published to NuGet:
 
 - `NSmithy.Core` — `Schema`, `ShapeId`, `Trait`, codec interfaces
 - `NSmithy.Http` — `IHttpTransport`, `SmithyHttpRequest`, `SmithyHttpResponse`
-- `NSmithy.Client` — `ISmithyClient`, `SmithyClientOptions`
+- `NSmithy.Client` — `SmithyOperationInvoker`, `ISmithyClientMiddleware`
 - `NSmithy.Server` / `NSmithy.Server.AspNetCore` — server framework
 - `NSmithy.Codecs.Json/Xml/Cbor` — schema-bound body codec implementations
 - `NSmithy.Protocols.Rest` — shared REST HTTP binding projection

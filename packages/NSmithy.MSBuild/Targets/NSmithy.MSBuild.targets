@@ -170,6 +170,16 @@
     <SmithyGrpcServices Condition="'$(SmithyGrpcServices)' == ''">Both</SmithyGrpcServices>
     <SmithyExtraArgs Condition="'$(SmithyExtraArgs)' == ''"></SmithyExtraArgs>
     <SmithyGenerateClient Condition="'$(SmithyGenerateClient)' == ''">true</SmithyGenerateClient>
+    <!--
+      Opt-in: compile the generated IHttpClientFactory registration extension
+      ({Service}.DependencyInjection.g.cs). Off by default because it requires
+      Microsoft.Extensions.Http, which plain (non-DI) clients must not be forced to depend on.
+      When enabling, also reference Microsoft.Extensions.Http (or the Microsoft.AspNetCore.App
+      shared framework, which already provides it).
+    -->
+    <SmithyGenerateDependencyInjection Condition="'$(SmithyGenerateDependencyInjection)' == ''"
+      >false</SmithyGenerateDependencyInjection
+    >
   </PropertyGroup>
 
   <!--
@@ -428,6 +438,10 @@
       <_SmithyExcludedGeneratedCompile
         Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.Server.g.cs"
         Condition="'$(SmithyGenerateServer)' != 'true'"
+      />
+      <_SmithyExcludedGeneratedCompile
+        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.DependencyInjection.g.cs"
+        Condition="'$(SmithyGenerateDependencyInjection)' != 'true'"
       />
       <Compile
         Include="$(SmithyAllProjectionsGlob)"

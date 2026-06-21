@@ -9,6 +9,9 @@
     <SmithyProjection>restjson1</SmithyProjection>
     <SmithyBuildOutputPath>$(BaseIntermediateOutputPath)Smithy/</SmithyBuildOutputPath>
     <SmithyGenerateServer>true</SmithyGenerateServer>
+    <!-- Exercise the generated IHttpClientFactory extension (Microsoft.Extensions.Http is provided
+         by the Microsoft.AspNetCore.App framework reference below). -->
+    <SmithyGenerateDependencyInjection>true</SmithyGenerateDependencyInjection>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 

@@ -77,11 +77,7 @@ internal static class ServerHttpResponseRunner
     {
         var handler = new RecordingHttpMessageHandler(_ => RecordingHttpMessageHandler.EmptyOk());
         using var httpClient = new HttpClient(handler);
-        var client = Activator.CreateInstance(
-            clientType,
-            httpClient,
-            new SmithyClientOptions { Endpoint = new Uri("http://localhost") }
-        )!;
+        var client = ConformanceClients.Build(clientType, httpClient, new Uri("http://localhost"));
 
         try
         {
