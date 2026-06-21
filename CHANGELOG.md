@@ -11,6 +11,74 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.3.0]
+
+Native gRPC arrives, and client construction is reworked so a single generated
+`{Service}Client` can speak any protocol the service declares. gRPC now runs on
+NSmithy's own proto3 codec and gRPC protocol over the shared HTTP transport — no
+`protoc`, `Grpc.Tools`, or `Grpc.Net.Client` dependency.
+
+### Added
+
+- **Native gRPC.** Two new packages — `NSmithy.Codecs.Proto` (a schema-driven
+  proto3 wire codec) and `NSmithy.Protocols.Grpc` (`GrpcProtocol`: 5-byte
+  message framing, `application/grpc+proto`, the `grpc-status` trailer error
+  model, and HTTP/2) — implement gRPC over the same `HttpClientTransport` as the
+  REST and rpcv2Cbor protocols, with no `protoc` / `Grpc.Tools` / `Grpc.Net`
+  dependency. Servers gain a native `Map{Service}Grpc` that coexists with the
+  REST map for dual-protocol services. (#58)
+- **Protocol-agnostic client construction.** Codegen now emits a single
+  `{Service}Client` with `(endpoint, …)`, `(httpClient, …)`, and `(invoker, …)`
+  constructors, each taking an optional `protocol` that defaults to the service's
+  primary declared protocol. The same client speaks whichever `IProtocol` it is
+  given, so a service may declare any combination of protocols. (#58)
+- **Opt-in generated dependency injection.** Setting
+  `SmithyGenerateDependencyInjection=true` generates an `Add{Service}Client(...)`
+  extension (flowing through `smithy-build.json` as the `generateDependencyInjection`
+  codegen setting). It is generation-gated, so the `Microsoft.Extensions.Http`
+  dependency is only pulled in when enabled, and it configures HTTP/2 from the
+  selected protocol. See the new
+  [Dependency Injection](https://thomaslaich.github.io/smithy-dotnet/guides/dependency-injection/)
+  guide. (#58)
+
+### Changed
+
+- **Protocols are instantiable.** `IProtocol` exposes `RequiresHttp2`, and
+  protocols are now constructed (`new GrpcProtocol()`) rather than reached through
+  static `.Instance` singletons. (#58)
+- **`SmithyClientOptions` removed.** `middleware` and `idempotencyTokenProvider`
+  are now first-class constructor parameters on the generated client. (#58)
+- **Protocol-agnostic request mutations.** Compression and content-MD5 handling
+  moved into `NSmithy.Http/SmithyRequestModifiers`, and error dispatch is unified
+  through `IOperationProtocol.RequiresErrorDiscriminator` /
+  `SupportsHttpStatusErrorFallback`. (#58)
+
+### Protocol support
+
+| Protocol | Generated surfaces | Stage |
+| --- | --- | --- |
+| `alloy#simpleRestJson` | client + ASP.NET Core server | Preview — most complete |
+| `aws.protocols#restJson1` | client + ASP.NET Core server | Preview |
+| `smithy.protocols#rpcv2Cbor` | client + ASP.NET Core server | Preview |
+| `aws.protocols#restXml` | client only | Early preview |
+| `alloy.proto#grpc` | `.proto` emission + native gRPC client + ASP.NET Core gRPC server | Experimental |
+
+gRPC now runs on NSmithy's own proto codec and gRPC protocol; see the
+[Protocol Status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/)
+page for current conformance numbers.
+
+### Packages
+
+All published to NuGet at `0.3.0`:
+
+- **Runtime / codegen:** `NSmithy.Core`, `NSmithy.Http`, `NSmithy.MSBuild`
+- **Client / server:** `NSmithy.Client`, `NSmithy.Server.AspNetCore`, `NSmithy.Server.AspNetCore.Docs`
+- **Codecs:** `NSmithy.Codecs.Json`, `NSmithy.Codecs.Cbor`, `NSmithy.Codecs.Xml`, `NSmithy.Codecs.Proto`
+- **Protocols:** `NSmithy.Protocols.Rest`, `NSmithy.Protocols.RestJson`, `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`, `NSmithy.Protocols.Grpc`
+- **Tooling:** `NSmithy.Templates` (project templates), `dotnet-nsmithy` (CLI tool)
+
+`NSmithy.Codecs.Proto` and `NSmithy.Protocols.Grpc` are new in this release.
+
 ## [0.2.0]
 
 Server-side protocol support takes a big step forward. `smithy.protocols#rpcv2Cbor`
@@ -110,6 +178,7 @@ All published to NuGet at `0.1.0`:
 - **Protocols:** `NSmithy.Protocols.Rest`, `NSmithy.Protocols.RestJson`, `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`
 - **Tooling:** `NSmithy.Templates` (project templates), `dotnet-nsmithy` (CLI tool)
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/thomaslaich/smithy-dotnet/releases/tag/v0.1.0

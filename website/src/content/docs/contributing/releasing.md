@@ -18,13 +18,13 @@ GitHub release tags should match the package version with a `v` prefix.
 
 Example:
 
-- release tag: `v0.2.0`
-- package version: `0.2.0`
+- release tag: `v0.3.0`
+- package version: `0.3.0`
 
 ## GitHub Release Flow
 
 1. In GitHub, create a new release.
-2. Create a new tag using the `v<package-version>` format (e.g. `v0.2.0`).
+2. Create a new tag using the `v<package-version>` format (e.g. `v0.3.0`).
 3. Publish the release.
 
 Publishing the GitHub release triggers the workflow in `.github/workflows/release.yml`,
