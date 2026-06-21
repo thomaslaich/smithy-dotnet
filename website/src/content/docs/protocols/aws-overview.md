@@ -6,13 +6,16 @@ description: Important context before using NSmithy's AWS protocol support.
 NSmithy's AWS protocol support exists primarily as a **proof of concept** — a vehicle
 for validating the generator's protocol abstraction, codec layer, and conformance
 test infrastructure against real AWS protocol definitions. This is especially true for
-`aws.protocols#restXml` and `smithy.protocols#rpcv2Cbor`.
+`aws.protocols#restXml`.
 
 `aws.protocols#restJson1` is the exception — see below.
 
+(`smithy.protocols#rpcv2Cbor` is a Smithy-standard binary protocol, not AWS-specific;
+it is documented as a top-level protocol rather than under this AWS section.)
+
 ## Use the Official AWS SDK for .NET Instead
 
-If your goal is to call AWS services in production with `restXml` or `rpcv2Cbor`, you
+If your goal is to call AWS services in production with `restXml`, you
 should use the **[AWS SDK for .NET](https://github.com/aws/aws-sdk-net)** instead. It is:
 
 - **Officially supported** by AWS, with long-term maintenance guarantees.

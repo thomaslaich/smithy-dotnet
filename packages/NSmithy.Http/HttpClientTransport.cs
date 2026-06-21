@@ -33,7 +33,14 @@ public sealed class HttpClientTransport : IHttpTransport
         using var message = new HttpRequestMessage(
             request.Method,
             ResolveRequestUri(request.RequestUri)
-        );
+        )
+        {
+            // Honor the HttpClient's configured HTTP version/policy. A new HttpRequestMessage
+            // defaults to HTTP/1.1, which would silently downgrade gRPC (HTTP/2) requests even when
+            // the caller configured the client for HTTP/2.
+            Version = httpClient.DefaultRequestVersion,
+            VersionPolicy = httpClient.DefaultVersionPolicy,
+        };
         foreach (var header in request.Headers)
         {
             message.Headers.TryAddWithoutValidation(header.Key, header.Value);
@@ -60,11 +67,17 @@ public sealed class HttpClientTransport : IHttpTransport
         var content = response.Content is null
             ? []
             : await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+
+        // gRPC carries grpc-status / grpc-message in HTTP/2 trailers, which only become available
+        // after the body has been read. Fold them into the header dictionary so protocols that look
+        // for trailers (GrpcProtocol) see them uniformly with regular headers.
+        var headers = ToHeaderDictionary(response.Headers);
+        MergeTrailingHeaders(headers, response);
         return new SmithyHttpResponse(
             response.StatusCode,
             response.ReasonPhrase,
             content,
-            ToHeaderDictionary(response.Headers),
+            headers,
             response.Content is null
                 ? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
                 : ToHeaderDictionary(response.Content.Headers)
@@ -88,6 +101,17 @@ public sealed class HttpClientTransport : IHttpTransport
         return Uri.TryCreate(requestUri, UriKind.Absolute, out var uri)
             && uri.IsAbsoluteUri
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    }
+
+    private static void MergeTrailingHeaders(
+        Dictionary<string, IReadOnlyList<string>> headers,
+        HttpResponseMessage response
+    )
+    {
+        foreach (var trailer in response.TrailingHeaders)
+        {
+            headers[trailer.Key] = trailer.Value.ToArray();
+        }
     }
 
     private static Dictionary<string, IReadOnlyList<string>> ToHeaderDictionary(

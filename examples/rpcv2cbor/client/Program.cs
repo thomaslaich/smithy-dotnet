@@ -1,11 +1,9 @@
 using Example.Hello;
-using NSmithy.Client;
 
 var endpoint = args.Length > 0 ? new Uri(args[0]) : new Uri("http://localhost:5001");
 var name = args.Length > 1 ? args[1] : "world";
 
-using var httpClient = new HttpClient();
-var client = new HelloServiceClient(httpClient, new SmithyClientOptions { Endpoint = endpoint });
+var client = new HelloServiceClient(endpoint);
 
 try
 {

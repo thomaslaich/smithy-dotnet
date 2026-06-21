@@ -66,20 +66,22 @@ This work includes:
 - Keeping the generated codec path explicit enough that performance work does
   not make diagnostics and debuggability worse.
 
-### 5. Implement native proto codecs and first-class gRPC generators
+### 5. Add streaming operations, including bidirectional streaming
 
-The temporary template-based path is enough to keep examples moving, but it is
-not the long-term shape of NSmithy's gRPC support. The next step is to make
-proto and gRPC first-class runtime and generator concerns rather than a thin
-layer around generated templates.
+NSmithy's current generated clients and servers are unary request/response
+surfaces. The next larger protocol shape is streaming: client streaming, server
+streaming, and bidirectional streaming. This is especially important for gRPC,
+but the runtime and generator model should not bake in gRPC-only assumptions.
 
 This work includes:
 
-- Implementing native proto codecs in the runtime and generated code path.
-- Generating first-class gRPC clients and servers from Smithy models.
-- Tightening the contract between Smithy models, emitted `.proto`, and the
-  generated .NET surface so the gRPC path can be tested and versioned as a real
-  product surface.
+- Modeling streaming operation inputs and outputs in the generated C# surface.
+- Defining transport/runtime abstractions for client, server, and bidirectional
+  streams.
+- Supporting gRPC streaming over HTTP/2 while keeping the design usable for
+  future streaming protocols.
+- Adding end-to-end tests that cover backpressure, cancellation, errors, and
+  stream completion behavior.
 
 ### 6. Expand to async protocols
 
@@ -110,6 +112,25 @@ This work includes:
   modeled contract maps cleanly to MCP tools, resources, and prompts.
 - Defining the runtime and generation boundaries needed so AI-trait-aware
   models remain inspectable, testable, and versionable.
+
+### 8. Honor protocol HTTP-version traits
+
+Protocol traits can declare the HTTP versions a service supports via their `http`
+and `eventStreamHttp` members — a list of ALPN protocol IDs in preference order
+(for example `@rpcv2Cbor(http: ["h2", "http/1.1"])`). These are currently
+ignored: generated clients use the `HttpClient`'s default version (HTTP/1.1
+unless configured), with HTTP/2 forced only for native gRPC.
+
+This work includes:
+
+- Reading the `http` / `eventStreamHttp` members at codegen.
+- Replacing the runtime's coarse `IProtocol.RequiresHttp2` bool with a
+  preferred-version + downgrade-policy model that maps the preference list onto
+  ALPN negotiation (request the first supported version, allow downgrade).
+- Applying the selected version when the client creates its own `HttpClient` (the
+  endpoint constructor and the generated DI helper); documenting that the
+  bring-your-own-`HttpClient` and IHttpClientFactory paths configure it
+  themselves, since there the caller owns the `HttpClient`.
 
 ## Later Work
 

@@ -14,3 +14,4 @@ its goals, the chosen design, alternatives considered, and tradeoffs.
 | [shapes.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shapes.md) | Smithy shape → C# type mapping |
 | [serialization.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/serialization.md) | Schema-aware codec and serialization design |
 | [http-interfaces.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/http-interfaces.md) | HTTP transport abstractions |
+| [native-grpc.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/native-grpc.md) | Native gRPC: own proto codec + gRPC protocol (no protoc/Grpc.Net) |

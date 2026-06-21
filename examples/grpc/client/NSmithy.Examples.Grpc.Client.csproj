@@ -8,19 +8,20 @@
     <SmithyService>example.library#LibraryService</SmithyService>
     <SmithyGeneratedNamespaces>example.library</SmithyGeneratedNamespaces>
     <SmithyGenerateServer>false</SmithyGenerateServer>
-    <SmithyGrpc>true</SmithyGrpc>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
   </PropertyGroup>
 
+  <!--
+    Native gRPC client: no Grpc.Net.Client / Google.Protobuf / protoc. The generated
+    LibraryServiceClient, constructed with `protocol: new GrpcProtocol()`, runs over an
+    HTTP/2 HttpClient via NSmithy.Protocols.Grpc.
+  -->
   <ItemGroup>
     <ProjectReference Include="../contracts/Library.Contracts.csproj" />
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Google.Protobuf" Version="3.30.2" />
-    <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
-    <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="all" />
     <PackageReference Include="NSmithy.Client" Version="0.2.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Core" Version="0.2.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.MSBuild" Version="0.2.0-SNAPSHOT" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Protocols.Grpc" Version="0.2.0-SNAPSHOT" />
   </ItemGroup>
 </Project>

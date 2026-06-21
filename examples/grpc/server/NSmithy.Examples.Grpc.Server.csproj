@@ -6,17 +6,20 @@
     <RootNamespace></RootNamespace>
     <SmithyService>example.library#LibraryService</SmithyService>
     <SmithyGeneratedNamespaces>example.library</SmithyGeneratedNamespaces>
-    <SmithyGrpc>true</SmithyGrpc>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
   </PropertyGroup>
 
+  <!--
+    Native gRPC: no Grpc.AspNetCore / Grpc.Tools / protoc. The generated server speaks the gRPC
+    wire format itself via NSmithy.Protocols.Grpc. (Drop SmithyGrpc too — the .proto emission is
+    only needed when generating an external Grpc.Net peer.)
+  -->
   <ItemGroup>
     <ProjectReference Include="../contracts/Library.Contracts.csproj" />
-    <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
-    <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="all" />
     <PackageReference Include="NSmithy.Core" Version="0.2.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.MSBuild" Version="0.2.0-SNAPSHOT" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Protocols.Grpc" Version="0.2.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.2.0-SNAPSHOT" />
   </ItemGroup>
 </Project>

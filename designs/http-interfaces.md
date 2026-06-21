@@ -1,7 +1,4 @@
----
-title: HTTP Interfaces
-description: How NSmithy abstracts the HTTP transport layer.
----
+# HTTP Interfaces
 
 How NSmithy abstracts the HTTP transport layer.
 
@@ -37,32 +34,46 @@ public interface IHttpTransport
 `SmithyHttpRequest` carries:
 
 - `HttpMethod Method`
-- `Uri Uri`
-- `IReadOnlyDictionary<string, string> Headers`
-- `Stream? Body`
+- `string RequestUri` — resolved against the client endpoint by the transport
+- `IDictionary<string, IReadOnlyList<string>> Headers` (multi-value)
+- `byte[]? Content`, `string? ContentType`, and a separate `ContentHeaders`
 
 `SmithyHttpResponse` carries:
 
-- `int StatusCode`
-- `IReadOnlyDictionary<string, string> Headers`
-- `Stream Body`
+- `HttpStatusCode StatusCode` and `string? ReasonPhrase`
+- `byte[] Content` (with a `ContentText` convenience accessor)
+- `IReadOnlyDictionary<string, IReadOnlyList<string>> Headers` and `ContentHeaders`
 
-These types are deliberately flat. They do not model trailers, HTTP/2 push
-promises, or other advanced HTTP features. Protocol bindings that need
-additional information (e.g. `@httpResponseCode`) read `StatusCode` directly.
+These types are deliberately flat. HTTP/2 trailers (e.g. gRPC's `grpc-status`) are
+folded into `Headers` by `HttpClientTransport` rather than modeled separately, so
+protocols read them uniformly alongside regular headers. Bindings that need the
+status (e.g. `@httpResponseCode`) read `StatusCode` directly.
 
 ## Client Construction
 
-Generated clients receive an `IHttpTransport` and a `SmithyClientOptions` at
-construction time. `SmithyClientOptions` carries:
+Generated clients expose constructors rather than a builder (idiomatic C#; optional
+and named parameters cover what a builder would). The protocol is chosen by an
+optional `IProtocol` parameter, defaulting to the service's primary declared
+protocol:
 
-- `Uri Endpoint` — base endpoint for all operations.
-- Auth configuration (future; currently unsigned).
+```csharp
+new WeatherClient(endpoint);                                  // default (primary) protocol
+new LibraryServiceClient(endpoint, protocol: new GrpcProtocol());
+new WeatherClient(httpClient);                                // endpoint from httpClient.BaseAddress
+new WeatherClient(invoker, new RestJson1Protocol());          // custom transport/middleware/DI
+```
+
+Cross-cutting configuration is passed as first-class parameters, not a single
+options object — `middleware` (an `ISmithyClientMiddleware` pipeline) and, for
+operations with `@idempotencyToken`, an `idempotencyTokenProvider`. When the caller
+supplies no `HttpClient`, the client creates one, configured for HTTP/2 when the
+protocol requires it (`IProtocol.RequiresHttp2`, true for native gRPC).
 
 The protocol implementation composes the transport with the codec and the
 protocol binding to produce a complete request pipeline. The generated client
-passes operation schemas and typed values into the protocol adapter; it does
-not call `HttpClient` directly.
+passes operation schemas and typed values into the protocol adapter; for the
+endpoint/HttpClient constructors it wraps the `HttpClient` in an
+`IHttpTransport` (`HttpClientTransport`) internally.
 
 ## Why Not `HttpClient` Directly
 
@@ -78,20 +89,31 @@ has several drawbacks for Smithy:
 - **Flexibility**: `IHttpTransport` lets consumers wrap the transport with retry
   logic, logging, or a circuit breaker without patching the generated client.
 
-## Why Not `IHttpClientFactory`
+## Relationship to `IHttpClientFactory`
 
-`IHttpClientFactory` (ASP.NET Core DI) manages `HttpClient` lifetimes but still
-returns `HttpClient` instances. It does not provide a send-level abstraction.
+`IHttpClientFactory` (ASP.NET Core DI) manages `HttpClient` lifetimes but returns
+`HttpClient` instances; it does not provide a send-level abstraction. NSmithy's
+`IHttpTransport` sits one level below: it models a single `send` call rather than a
+named client.
 
-NSmithy's `IHttpTransport` sits one level below the factory: it models a single
-`send` call rather than a named client. Consumers who want `IHttpClientFactory`
-can wrap it in a custom `IHttpTransport` implementation.
+Both are supported. The `HttpClient`-first constructor lets a client be registered
+as a typed client so the factory owns the `HttpClient` (pooled handlers, Polly,
+DNS refresh):
+
+```csharp
+services.AddHttpClient<IWeatherClient, WeatherClient>(c =>
+    c.BaseAddress = new Uri("https://api.example.com"));
+```
+
+Consumers who need a fully custom transport instead implement `IHttpTransport` and
+pass a `SmithyOperationInvoker` to the invoker constructor.
 
 ## URI Construction
 
 REST protocol implementations build the request URI by combining:
 
-1. `SmithyClientOptions.Endpoint` (the base URI).
+1. The client's endpoint (the base URI passed at construction, or the
+   `HttpClient.BaseAddress`).
 2. The operation's URI template (from `@http`), with `@httpLabel` members
    substituted.
 3. `@httpQuery` and `@httpQueryParams` members appended as query string
@@ -117,18 +139,16 @@ without inheriting REST binding semantics. A protocol that serializes the whole
 operation input into one body can ignore REST traits even if the schema graph
 carries them.
 
-## gRPC Transport
+## gRPC
 
-gRPC operations use a generated client that depends on the `Grpc.Net.Client`
-package. The generated `.proto` file is compiled by Grpc.Tools into a gRPC
-stub; the NSmithy gRPC client wraps that stub.
-
-The gRPC client does not use the REST protocol projection. Even though gRPC is
-transported over HTTP/2, its Smithy operation payload is modeled as a gRPC
-message body rather than REST labels, query parameters, and headers.
+gRPC is just another `IProtocol` (`GrpcProtocol`) over this same transport: it needs
+HTTP/2 (`IProtocol.RequiresHttp2`) but otherwise uses `HttpClientTransport` like the
+REST and rpcv2Cbor protocols, with trailers folded into `Headers` as described above.
+The wire format, framing, proto codec, and error model are covered in
+[native-grpc.md](native-grpc.md).
 
 ## Related Docs
 
+- [native-grpc.md](native-grpc.md) — native gRPC protocol and proto codec
 - [serialization.md](serialization.md) — codec and protocol binding
 - [codegen-architecture.md](codegen-architecture.md) — codegen pipeline
-- [Multi-Protocol Guide](/smithy-dotnet/multi-protocol/)

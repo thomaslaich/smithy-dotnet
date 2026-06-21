@@ -1,15 +1,14 @@
 using System.Net;
 using Example.Hello;
-using NSmithy.Client;
 using NSmithy.Codecs.Xml;
 
 var name = args.Length > 0 ? args[0] : "world";
-var httpClient = new HttpClient(new MockRestXmlHandler());
+var httpClient = new HttpClient(new MockRestXmlHandler())
+{
+    BaseAddress = new Uri("https://example.test"),
+};
 
-var xmlClient = new HelloXmlServiceClient(
-    httpClient,
-    new SmithyClientOptions { Endpoint = new Uri("https://example.test") }
-);
+var xmlClient = new HelloXmlServiceClient(httpClient);
 
 var xmlHello = await xmlClient.SayHelloXmlAsync(new SayHelloXmlInput(name));
 Console.WriteLine($"SayHelloXml => {xmlHello.Message} from {xmlHello.From}");

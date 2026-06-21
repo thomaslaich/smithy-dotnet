@@ -6,13 +6,13 @@ using NSmithy.Http;
 using NSmithy.Protocols.Rest;
 using NSmithy.Protocols.RestJson;
 
-namespace NSmithy.Tests.Runtime;
+namespace NSmithy.Tests.Protocols.RestJson;
 
 public sealed class RestJson1ProtocolTests
 {
     // REST ignores the service schema (its bindings come from @http on each operation), so a
     // placeholder service is fine. The per-operation protocol is what these tests exercise.
-    private static readonly IServiceProtocol RestService = RestJson1Protocol.ForService(
+    private static readonly IServiceProtocol RestService = new RestJson1Protocol().ForService(
         Schemas.Service(ShapeId.Parse("test#Service"))
     );
 

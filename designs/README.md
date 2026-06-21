@@ -12,6 +12,7 @@ tradeoffs.
 | [shapes.md](shapes.md) | Smithy shape → C# type mapping |
 | [serialization.md](serialization.md) | Schema-aware codec and serialization design |
 | [http-interfaces.md](http-interfaces.md) | HTTP transport abstractions |
+| [native-grpc.md](native-grpc.md) | Native proto codec + gRPC protocol (no protoc/Grpc.Tools) |
 
 ## Background
 

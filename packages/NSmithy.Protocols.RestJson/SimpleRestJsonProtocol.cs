@@ -11,11 +11,11 @@ namespace NSmithy.Protocols.RestJson;
 /// (not raw <c>text/plain</c>), and the modeled-error discriminator travels in the <c>X-Error-Type</c>
 /// header rather than <c>X-Amzn-Errortype</c>.
 /// </summary>
-public static class SimpleRestJsonProtocol
+public sealed class SimpleRestJsonProtocol : IProtocol
 {
     private const string ErrorTypeHeader = "X-Error-Type";
 
-    public static IServiceProtocol ForService(ServiceSchema service) =>
+    public IServiceProtocol ForService(ServiceSchema service) =>
         new RestServiceProtocol(
             JsonRestBodyCodecFactory.Instance,
             DeserializeErrorType,

@@ -1,10 +1,11 @@
 using Example.Library;
-using Grpc.Net.Client;
+using NSmithy.Protocols.Grpc;
 
 var endpoint = args.Length > 0 ? args[0] : "http://localhost:5001";
 
-using var channel = GrpcChannel.ForAddress(endpoint);
-var client = new LibraryServiceGrpcClient(channel);
+// Native gRPC client — no GrpcChannel / Grpc.Net.Client. Passing GrpcProtocol selects gRPC and
+// the client configures the HTTP/2 HttpClient that gRPC requires.
+var client = new LibraryServiceClient(new Uri(endpoint), protocol: new GrpcProtocol());
 
 static Book NewBook(
     string id,

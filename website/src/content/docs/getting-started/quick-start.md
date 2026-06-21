@@ -30,9 +30,6 @@ and client.
 ```shell
 mkdir HelloWorld && cd HelloWorld
 dotnet new sln -n HelloWorld
-# optional: install CSharpier for formatted generated code
-dotnet new tool-manifest
-dotnet tool install csharpier
 dotnet new nsmithy-contracts -n HelloWorld.Contracts
 dotnet sln add HelloWorld.Contracts
 ```
@@ -191,10 +188,7 @@ the build breaks until you handle it.
 `HelloWorld.Client/Program.cs` uses the generated typed client:
 
 ```csharp
-var client = new HelloServiceClient(
-    new HttpClient(),
-    new SmithyClientOptions { Endpoint = new Uri(endpoint) }
-);
+var client = new HelloServiceClient(new Uri(endpoint));
 
 var response = await client.SayHelloAsync(new SayHelloInput("world"));
 Console.WriteLine(response.Message);

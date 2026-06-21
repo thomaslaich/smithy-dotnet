@@ -33,7 +33,8 @@
       "plugins": {
         "csharp-codegen": {
           "service": "aws.protocoltests.restjson#RestJson",
-          "baseNamespace": ""
+          "baseNamespace": "",
+          "generateDependencyInjection": true
         }
       }
     },

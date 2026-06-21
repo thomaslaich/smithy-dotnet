@@ -74,10 +74,15 @@ public final class ServerGenerator implements Runnable {
       writer.addImport(RuntimeTypes.MS_ASPNETCORE_HTTP);
       writer.addImport(RuntimeTypes.MS_ASPNETCORE_ROUTING);
     }
-    // todo: we will migrate this path to native server emission
+    // Native gRPC server: no protoc/Grpc.AspNetCore — the generated map reads/writes the gRPC wire
+    // format itself via GrpcProtocol + the ASP.NET helpers, exactly like the rpcv2Cbor server.
     if (emitsGrpc) {
-      writer.addImport(RuntimeTypes.GRPC_CORE);
+      writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
+      writer.addImport(RuntimeTypes.NSMITHY_HTTP);
+      writer.addImport(RuntimeTypes.NSMITHY_PROTOCOLS_GRPC);
+      writer.addImport(RuntimeTypes.NSMITHY_SERVER_ASPNETCORE);
       writer.addImport(RuntimeTypes.MS_ASPNETCORE_BUILDER);
+      writer.addImport(RuntimeTypes.MS_ASPNETCORE_HTTP);
       writer.addImport(RuntimeTypes.MS_ASPNETCORE_ROUTING);
     }
 
@@ -110,131 +115,122 @@ public final class ServerGenerator implements Runnable {
       writer.write("");
     }
 
-    // gRPC adapter (binds the protoc-generated base to the IServiceHandler)
+    // Native gRPC endpoint extensions (MapXxxGrpc) — coexists with the REST map for dual-protocol
+    // services. Uses GrpcProtocol over HTTP/2; no protoc-generated adapter.
     if (emitsGrpc) {
-      writeGrpcAdapter(sp, ops, contract, aggInterface);
-      writer.write("");
-      writeGrpcMapExtensions(contract, serviceTypeName);
+      writeGrpcAspNetCoreExtensions(sp, ops, contract);
     }
   }
 
-  // ---------------- gRPC adapter ----------------
+  // ---------------- native gRPC endpoint extensions ----------------
 
-  private void writeGrpcAdapter(
-      SymbolProvider sp, List<OperationShape> ops, String contract, String aggInterface) {
-    String svcName = CSharpNaming.typeName(service.getId().getName());
-    String grpcNs = grpcNamespace();
-    String baseType = "global::" + grpcNs + "." + svcName + "." + svcName + "Base";
-    String adapterName = svcName + "GrpcAdapter";
-    writer.write("public sealed class $L : $L", adapterName, baseType);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("private readonly $L handler;", aggInterface);
-          writer.write("");
-          writer.write("public $L($L handler)", adapterName, aggInterface);
-          writer.openBlock(
-              "{",
-              "}",
-              () ->
-                  writer.write(
-                      "this.handler = handler ?? throw new"
-                          + " System.ArgumentNullException(nameof(handler));"));
-          writer.write("");
-          for (OperationShape op : ops) {
-            writeGrpcAdapterMethod(sp, op);
-            writer.write("");
-          }
-        });
-  }
-
-  private void writeGrpcAdapterMethod(SymbolProvider sp, OperationShape op) {
-    writeGrpcAdapterUnaryMethod(sp, op);
-  }
-
-  private void writeGrpcAdapterUnaryMethod(SymbolProvider sp, OperationShape op) {
-    String operationName = CSharpNaming.typeName(op.getId().getName());
-    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
-    String grpcInputType = grpcMessageType(op.getInputShape());
-    String grpcOutputType = grpcMessageType(op.getOutputShape());
-    writer.write(
-        "public override async System.Threading.Tasks.Task<$L> $L($L request,"
-            + " ServerCallContext context)",
-        grpcOutputType,
-        operationName,
-        grpcInputType);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(request);");
-          writer.write("System.ArgumentNullException.ThrowIfNull(context);");
-          writer.write("");
-          if (hasInput) {
-            writer.write(
-                "var smithyInput = $L;",
-                GrpcConversions.grpcToSmithy(
-                    sp,
-                    context.model(),
-                    context.model().expectShape(op.getInputShape()),
-                    "request",
-                    grpcNamespace()));
-          }
-          String invokeArgs = (hasInput ? "smithyInput, " : "") + "context.CancellationToken";
-          if (hasOutput) {
-            writer.write(
-                "var smithyOutput = await handler.$LAsync($L).ConfigureAwait(false);",
-                operationName,
-                invokeArgs);
-            writer.write(
-                "return $L;",
-                GrpcConversions.smithyToGrpc(
-                    sp,
-                    context.model(),
-                    context.model().expectShape(op.getOutputShape()),
-                    "smithyOutput",
-                    grpcNamespace()));
-          } else {
-            writer.write(
-                "await handler.$LAsync($L).ConfigureAwait(false);", operationName, invokeArgs);
-            writer.write("return new Google.Protobuf.WellKnownTypes.Empty();");
-          }
-        });
-  }
-
-  private void writeGrpcMapExtensions(String contract, String serviceTypeName) {
-    String adapterName = serviceTypeName + "GrpcAdapter";
+  private void writeGrpcAspNetCoreExtensions(
+      SymbolProvider sp, List<OperationShape> ops, String contract) {
     writer.write("public static class $LGrpcExtensions", contract);
     writer.openBlock(
         "{",
         "}",
         () -> {
           writer.write(
-              "public static IEndpointRouteBuilder Map$LGrpc(this IEndpointRouteBuilder"
-                  + " endpoints)",
+              "private static readonly IServiceProtocol GrpcServiceProtocol ="
+                  + " new GrpcProtocol().ForService($L);",
+              SchemaGenerator.serviceSchemaAccessor(context, service));
+          for (OperationShape op : ops) {
+            writer.write(
+                "private static readonly IOperationProtocol<$L, $L> $LGrpcProtocol ="
+                    + " GrpcServiceProtocol.ForOperation($L);",
+                SchemaGenerator.operationShapeType(context, op.getInputShape()),
+                SchemaGenerator.operationShapeType(context, op.getOutputShape()),
+                CSharpNaming.typeName(op.getId().getName()),
+                SchemaGenerator.operationSchemaAccessor(context, op));
+          }
+          writer.write("");
+
+          writer.write(
+              "public static IEndpointRouteBuilder Map$LGrpc(this IEndpointRouteBuilder endpoints)",
               contract);
           writer.openBlock(
               "{",
               "}",
               () -> {
                 writer.write("System.ArgumentNullException.ThrowIfNull(endpoints);");
-                writer.write("endpoints.MapGrpcService<$L>();", adapterName);
+                writer.write("");
+                for (OperationShape op : ops) {
+                  writeGrpcOperationMap(sp, op);
+                  writer.write("");
+                }
                 writer.write("return endpoints;");
               });
         });
   }
 
-  private String grpcMessageType(ShapeId id) {
-    if (ShapeSupport.isUnit(id)) {
-      return "Google.Protobuf.WellKnownTypes.Empty";
-    }
-    return "global::" + grpcNamespace() + "." + CSharpNaming.typeName(id.getName());
+  private void writeGrpcOperationMap(SymbolProvider sp, OperationShape op) {
+    String opInterface = opHandlerName(op);
+    // gRPC full method path: "/{namespace}.{Service}/{Operation}" — must match GrpcProtocol, which
+    // derives it from the schema's raw shape ids.
+    String uri =
+        "/"
+            + service.getId().getNamespace()
+            + "."
+            + service.getId().getName()
+            + "/"
+            + op.getId().getName();
+    writer.openBlock(
+        "endpoints.MapPost($L, async (HttpContext httpContext, $L handler,"
+            + " System.Threading.CancellationToken cancellationToken) => {",
+        "});",
+        CSharpNaming.formatString(uri),
+        opInterface,
+        () -> {
+          writer.write("System.ArgumentNullException.ThrowIfNull(httpContext);");
+          writer.write("System.ArgumentNullException.ThrowIfNull(handler);");
+          writer.write("");
+          writeGrpcOperationBody(sp, op);
+        });
   }
 
-  private String grpcNamespace() {
-    return context.settings().csharpNamespace(service.getId().getNamespace()) + ".Grpc";
+  private void writeGrpcOperationBody(SymbolProvider sp, OperationShape op) {
+    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
+    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
+    String methodName = CSharpNaming.typeName(op.getId().getName()) + "Async";
+    String opProtocol = CSharpNaming.typeName(op.getId().getName()) + "GrpcProtocol";
+
+    String handlerCall;
+    if (hasInput) {
+      writer.write(
+          "var smithyRequest = await SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync("
+              + "httpContext, cancellationToken).ConfigureAwait(false);");
+      writer.write("var input = $L.DeserializeRequest(smithyRequest);", opProtocol);
+      handlerCall = "handler." + methodName + "(input, cancellationToken)";
+    } else {
+      handlerCall = "handler." + methodName + "(cancellationToken)";
+    }
+
+    String serializeResponse = opProtocol + ".SerializeResponse(output)";
+
+    List<ShapeId> errorIds = new ArrayList<>(op.getErrors(service));
+    errorIds.sort(Comparator.comparing(ShapeId::toString));
+    if (!errorIds.isEmpty()) {
+      writer.write("NSmithy.Http.SmithyHttpResponse smithyResponse;");
+      writer.write("try");
+      writer.openBlock(
+          "{",
+          "}",
+          () -> {
+            writeHandlerInvocation(handlerCall, hasOutput);
+            writer.write("smithyResponse = $L;", serializeResponse);
+          });
+      for (ShapeId errId : errorIds) {
+        writeErrorCatch(errId, opProtocol);
+      }
+    } else {
+      writeHandlerInvocation(handlerCall, hasOutput);
+      writer.write("var smithyResponse = $L;", serializeResponse);
+    }
+
+    writer.write(
+        "await SmithyAspNetCoreProtocol.WriteSmithyGrpcResponseAsync(httpContext, smithyResponse,"
+            + " cancellationToken).ConfigureAwait(false);");
   }
 
   // ---------------- descriptor ----------------
@@ -287,7 +283,7 @@ public final class ServerGenerator implements Runnable {
           // Build operation-bound protocols once from the (service, operation) schemas, exactly
           // like the generated client; the endpoint bodies then call them uniformly.
           writer.write(
-              "private static readonly IServiceProtocol ServiceProtocol = $L.ForService($L);",
+              "private static readonly IServiceProtocol ServiceProtocol = new $L().ForService($L);",
               ProtocolSupport.protocolType(kind),
               SchemaGenerator.serviceSchemaAccessor(context, service));
           for (OperationShape op : ops) {

@@ -18,6 +18,7 @@ with the .NET toolchain.
 | `SmithyBaseNamespace` | — | Restricts generated C# types to shapes whose Smithy namespace starts with this value. Leave empty to emit all shapes. |
 | `SmithyGenerateServer` | `true` | Emit server stub types. Set to `false` in client-only projects. |
 | `SmithyGenerateClient` | `true` | Emit client types. Set to `false` in server-only projects. |
+| `SmithyGenerateDependencyInjection` | `false` | Generate the `Add{Service}Client` IHttpClientFactory extension (flows into `smithy-build.json` as the `csharp-codegen` `generateDependencyInjection` setting). Requires referencing `Microsoft.Extensions.Http` (or the `Microsoft.AspNetCore.App` shared framework). See [Dependency Injection](/smithy-dotnet/guides/dependency-injection/). |
 | `SmithyBuildFile` | `$(MSBuildProjectDirectory)/smithy-build.json` | Path to the Smithy build configuration file. When absent and `SmithySource` items are present, NSmithy synthesizes one under `obj/`. |
 | `SmithyProjection` | `source` | Smithy build projection to use. |
 | `SmithyPlugin` | `csharp-codegen` | Smithy build plugin name. |

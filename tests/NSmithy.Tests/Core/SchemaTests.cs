@@ -3,7 +3,7 @@ using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Protocols.Rest;
 
-namespace NSmithy.Tests.Runtime;
+namespace NSmithy.Tests.Core;
 
 public sealed class SchemaTests
 {
