@@ -34,19 +34,20 @@ public interface IHttpTransport
 `SmithyHttpRequest` carries:
 
 - `HttpMethod Method`
-- `Uri Uri`
-- `IReadOnlyDictionary<string, string> Headers`
-- `Stream? Body`
+- `string RequestUri` — resolved against the client endpoint by the transport
+- `IDictionary<string, IReadOnlyList<string>> Headers` (multi-value)
+- `byte[]? Content`, `string? ContentType`, and a separate `ContentHeaders`
 
 `SmithyHttpResponse` carries:
 
-- `int StatusCode`
-- `IReadOnlyDictionary<string, string> Headers`
-- `Stream Body`
+- `HttpStatusCode StatusCode` and `string? ReasonPhrase`
+- `byte[] Content` (with a `ContentText` convenience accessor)
+- `IReadOnlyDictionary<string, IReadOnlyList<string>> Headers` and `ContentHeaders`
 
-These types are deliberately flat. They do not model trailers, HTTP/2 push
-promises, or other advanced HTTP features. Protocol bindings that need
-additional information (e.g. `@httpResponseCode`) read `StatusCode` directly.
+These types are deliberately flat. HTTP/2 trailers (e.g. gRPC's `grpc-status`) are
+folded into `Headers` by `HttpClientTransport` rather than modeled separately, so
+protocols read them uniformly alongside regular headers. Bindings that need the
+status (e.g. `@httpResponseCode`) read `StatusCode` directly.
 
 ## Client Construction
 
@@ -138,25 +139,16 @@ without inheriting REST binding semantics. A protocol that serializes the whole
 operation input into one body can ignore REST traits even if the schema graph
 carries them.
 
-## gRPC Transport
+## gRPC
 
-gRPC is a native NSmithy protocol (`GrpcProtocol` in `NSmithy.Protocols.Grpc`), not a
-wrapper around `Grpc.Net.Client` / `Grpc.Tools`. It is an `IProtocol` like any other:
-it reads and writes the gRPC wire format itself (5-byte length-prefixed framing,
-`application/grpc+proto` body via the proto codec, `grpc-status` trailer error model)
-over the same `HttpClientTransport` as the REST and rpcv2Cbor protocols — the only
-difference is that it requires HTTP/2 (`IProtocol.RequiresHttp2`), which the generated
-client configures on the `HttpClient` it creates. There is no `GrpcChannel`, no
-generated `.proto` stub, and no protoc dependency on the client.
-
-Because gRPC is a normal `IProtocol`, the same generated `{Service}Client` speaks it —
-`new LibraryServiceClient(endpoint, protocol: new GrpcProtocol())` — with no separate
-gRPC client type. Like rpcv2Cbor, it does not use the REST binding projection: the
-operation payload is a single protobuf message body rather than REST labels, query
-parameters, and headers.
+gRPC is just another `IProtocol` (`GrpcProtocol`) over this same transport: it needs
+HTTP/2 (`IProtocol.RequiresHttp2`) but otherwise uses `HttpClientTransport` like the
+REST and rpcv2Cbor protocols, with trailers folded into `Headers` as described above.
+The wire format, framing, proto codec, and error model are covered in
+[native-grpc.md](native-grpc.md).
 
 ## Related Docs
 
+- [native-grpc.md](native-grpc.md) — native gRPC protocol and proto codec
 - [serialization.md](serialization.md) — codec and protocol binding
 - [codegen-architecture.md](codegen-architecture.md) — codegen pipeline
-- [Multi-Protocol Guide](/smithy-dotnet/multi-protocol/)
