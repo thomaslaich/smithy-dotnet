@@ -31,10 +31,8 @@ internal static class HttpRequestRunner
                 && t.Name.EndsWith("Client", StringComparison.Ordinal)
                 && t.GetConstructors()
                     .Any(c =>
-                    {
-                        var ps = c.GetParameters();
-                        return ps.Length == 2 && ps[0].ParameterType == typeof(HttpClient);
-                    })
+                        c.GetParameters() is [{ ParameterType: var pt }, ..] && pt == typeof(Uri)
+                    )
             ),
     ];
 
@@ -66,15 +64,12 @@ internal static class HttpRequestRunner
         var handler = new RecordingHttpMessageHandler(_ => RecordingHttpMessageHandler.EmptyOk());
         using var httpClient = new HttpClient(handler);
         var endpoint = ResolveEndpoint(testCase);
-        var client = Activator.CreateInstance(
+        var client = ConformanceClients.Build(
             clientType,
             httpClient,
-            new SmithyClientOptions
-            {
-                Endpoint = endpoint,
-                IdempotencyTokenProvider = static () => DefaultIdempotencyToken,
-            }
-        )!;
+            endpoint,
+            static () => DefaultIdempotencyToken
+        );
 
         try
         {

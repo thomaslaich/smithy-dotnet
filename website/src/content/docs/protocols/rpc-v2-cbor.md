@@ -102,12 +102,8 @@ configuration is required:
 
 ```csharp
 using Example.Hello;
-using NSmithy.Client;
 
-var client = new HelloServiceClient(
-    new HttpClient(),
-    new SmithyClientOptions { Endpoint = new Uri("https://api.example.com") }
-);
+var client = new HelloServiceClient(new Uri("https://api.example.com"));
 
 try
 {

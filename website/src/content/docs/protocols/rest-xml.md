@@ -64,12 +64,8 @@ The XML codec is wired up automatically by the generated client:
 
 ```csharp
 using Example.Hello;
-using NSmithy.Client;
 
-var client = new HelloServiceClient(
-    new HttpClient(),
-    new SmithyClientOptions { Endpoint = new Uri("https://api.example.com") }
-);
+var client = new HelloServiceClient(new Uri("https://api.example.com"));
 
 var response = await client.SayHelloAsync(new SayHelloInput("world"));
 Console.WriteLine(response.Message);

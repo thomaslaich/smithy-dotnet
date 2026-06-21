@@ -64,6 +64,10 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
     public string? GetErrorDiscriminator(SmithyHttpResponse response) =>
         errorDiscriminator(response);
 
+    public bool RequiresErrorDiscriminator => false;
+
+    public bool SupportsHttpStatusErrorFallback => true;
+
     public TError DeserializeError<TError>(
         Schema<TError> errorSchema,
         SmithyHttpResponse response

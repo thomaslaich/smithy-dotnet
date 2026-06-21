@@ -15,10 +15,12 @@ public final class RuntimeTypes {
   public static final String NSMITHY_PROTOCOLS_RESTJSON = "NSmithy.Protocols.RestJson";
   public static final String NSMITHY_PROTOCOLS_RESTXML = "NSmithy.Protocols.RestXml";
   public static final String NSMITHY_PROTOCOLS_RPCV2CBOR = "NSmithy.Protocols.RpcV2Cbor";
+  public static final String NSMITHY_PROTOCOLS_GRPC = "NSmithy.Protocols.Grpc";
   public static final String NSMITHY_HTTP = "NSmithy.Http";
   public static final String NSMITHY_CODECS_JSON = "NSmithy.Codecs.Json";
   public static final String NSMITHY_CODECS_XML = "NSmithy.Codecs.Xml";
   public static final String NSMITHY_CODECS_CBOR = "NSmithy.Codecs.Cbor";
+  public static final String NSMITHY_CODECS_PROTO = "NSmithy.Codecs.Proto";
   public static final String NSMITHY_SERVER_ASPNETCORE = "NSmithy.Server.AspNetCore";
 
   public static final String MS_EXT_DI = "Microsoft.Extensions.DependencyInjection";

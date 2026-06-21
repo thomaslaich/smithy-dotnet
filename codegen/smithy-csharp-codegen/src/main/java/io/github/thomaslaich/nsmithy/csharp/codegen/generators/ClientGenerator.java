@@ -1,23 +1,28 @@
 /*
- * Renders the C# client(s) for a service.
+ * Renders the C# client for a service.
  *
- * For services with one of the supported HTTP protocols
- * (alloy#simpleRestJson, aws.protocols#restJson1, aws.protocols#restXml,
- * smithy.protocols#rpcv2Cbor) emits an `I{Service}Client` interface and a
- * concrete `{Service}Client` class using SmithyOperationInvoker + the matching
- * protocol runtime helper class (RestJson1Protocol / SimpleRestJsonProtocol /
- * RestXmlProtocol / RpcV2CborProtocol).
+ * Emits a single `I{Service}Client` interface plus a concrete `{Service}Client`. The wire protocol
+ * is chosen at construction via an optional `IProtocol` constructor parameter — defaulting to the
+ * service's primary declared protocol — over the same invoker/protocol machinery
+ * (SmithyOperationInvoker + IServiceProtocol/IOperationProtocol) for every protocol:
  *
- * All HTTP request/response/error wiring is delegated to the protocol helper
- * class at runtime via the operation's functional schema; the generated client
- * only threads inputs/outputs through SerializeRequest / DeserializeResponse /
- * DeserializeError. Per-protocol differences (codec, runtime helper namespace,
- * error discrimination, URI scheme) are owned by the runtime, not codegen.
+ *   new WeatherClient(endpoint);                                  // default (primary) protocol
+ *   new LibraryServiceClient(endpoint, protocol: new GrpcProtocol());
  *
- * For @grpc services additionally emits a `{Service}GrpcClient` that wraps the
- * protoc-generated client (expected at
- * `{namespace}.Grpc.{Service}.{Service}Client`) and converts shapes via
- * {@link GrpcConversions}.
+ * A service may declare any combination of protocols (alloy#simpleRestJson, aws.protocols#restJson1,
+ * aws.protocols#restXml, smithy.protocols#rpcv2Cbor, and/or @grpc); the same client speaks whichever
+ * `IProtocol` it is given. Three constructors give a clean ownership split:
+ *   - (endpoint, ...)   — the client creates and owns its HttpClient (HTTP/2 when the protocol
+ *                         requires it via `IProtocol.RequiresHttp2`).
+ *   - (httpClient, ...) — the caller owns the HttpClient; the endpoint comes from its BaseAddress.
+ *                         This is the only HttpClient-taking constructor, so IHttpClientFactory's
+ *                         AddHttpClient<I,T> resolves the client unambiguously.
+ *   - (invoker, ...)    — the caller owns the whole transport/middleware pipeline (DI, testing).
+ *
+ * All request/response/error wiring is delegated to the bound protocol at runtime via each
+ * operation's functional schema; the generated client only threads inputs/outputs through
+ * SerializeRequest / DeserializeResponse / DeserializeError, and applies protocol-agnostic request
+ * mutations (compression, content-MD5) via SmithyRequestModifiers.
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
@@ -52,17 +57,11 @@ public final class ClientGenerator implements Runnable {
   private final GenerationContext context;
   private final CSharpWriter writer;
   private final ServiceShape service;
-  private final boolean emitsHttp;
-  private final boolean emitsGrpc;
-  private final Kind kind;
 
   public ClientGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
     this.writer = w;
     this.service = s;
-    this.emitsHttp = ProtocolSupport.emitsHttpClient(s);
-    this.emitsGrpc = ProtocolSupport.isGrpcService(s);
-    this.kind = ProtocolSupport.kindOf(s);
   }
 
   @Override
@@ -93,64 +92,125 @@ public final class ClientGenerator implements Runnable {
         });
     writer.write("");
 
-    if (emitsHttp) {
-      writer.addImport(RuntimeTypes.NSMITHY_CLIENT);
-      writer.addImport(RuntimeTypes.NSMITHY_HTTP);
-      writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
-      writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kind));
-      writeHttpClient(sp, model, operations, typeName, interfaceName);
-      writer.write("");
+    // Services with no supported protocol get the interface only; there is nothing to wire.
+    List<Kind> kinds = ProtocolSupport.declaredKinds(service);
+    if (kinds.isEmpty()) {
+      return;
     }
 
-    if (emitsGrpc) {
-      writer.addImport(RuntimeTypes.GRPC_CORE);
-      writeGrpcClient(sp, model, operations, interfaceName);
-    }
+    writer.addImport(RuntimeTypes.NSMITHY_CLIENT);
+    writer.addImport(RuntimeTypes.NSMITHY_HTTP);
+    writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
+    // The generated client only names the primary protocol (the default constructor argument);
+    // callers selecting another declared protocol reference its namespace from their own code.
+    writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kinds.get(0)));
+
+    writeClient(sp, model, operations, typeName, interfaceName, kinds);
   }
 
   // =====================================================================
-  // HTTP client
+  // client
   // =====================================================================
 
-  private void writeHttpClient(
+  private void writeClient(
       SymbolProvider sp,
       Model model,
       List<OperationShape> operations,
       String typeName,
-      String interfaceName) {
+      String interfaceName,
+      List<Kind> kinds) {
+    String primaryProtocol = ProtocolSupport.protocolType(kinds.get(0));
+    String serviceSchema = SchemaGenerator.serviceSchemaAccessor(context, service);
+    // The idempotency-token provider is only stored/used when an operation has a nullable
+    // @idempotencyToken member; emitting the field unconditionally would be an unused private
+    // field.
+    boolean needsIdempotency =
+        operations.stream().anyMatch(op -> operationNeedsIdempotencyToken(model, op));
     writer.write("public sealed class $L : $L", typeName, interfaceName);
     writer.openBlock(
         "{",
         "}",
         () -> {
           writer.write("private readonly SmithyOperationInvoker invoker;");
-          writer.write("private readonly SmithyClientOptions options;");
+          if (needsIdempotency) {
+            writer.write("private readonly System.Func<string> idempotencyTokenProvider;");
+          }
+          // The protocol is bound at construction; per-operation protocols are built once from it.
+          for (OperationShape op : operations) {
+            writer.write(
+                "private readonly IOperationProtocol<$L, $L> $LProtocol;",
+                SchemaGenerator.operationShapeType(context, op.getInputShape()),
+                SchemaGenerator.operationShapeType(context, op.getOutputShape()),
+                CSharpNaming.typeName(op.getId().getName()));
+          }
           writer.write("");
-          writer.write("public $L(System.Uri endpoint)", typeName);
+
+          // Constructor: endpoint — the client creates and owns its HttpClient, configured for
+          // HTTP/2 when the protocol requires it (native gRPC). The protocol defaults to the
+          // service's primary declared protocol. To supply your own HttpClient (e.g. from
+          // IHttpClientFactory), use the HttpClient constructor instead — keeping HttpClient off
+          // this constructor leaves exactly one HttpClient-taking constructor, which is what
+          // AddHttpClient<I,T> requires to resolve the client unambiguously.
+          writer.write("public $L(", typeName);
+          writer.write("    System.Uri endpoint,");
+          writer.write("    IProtocol? protocol = null,");
           writer.write(
-              "    : this(new System.Net.Http.HttpClient(), new SmithyClientOptions { Endpoint ="
-                  + " endpoint })");
-          writer.write("{ }");
+              "    System.Collections.Generic.IEnumerable<ISmithyClientMiddleware>? middleware ="
+                  + " null,");
+          writer.write("    System.Func<string>? idempotencyTokenProvider = null)");
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                writer.write("System.ArgumentNullException.ThrowIfNull(endpoint);");
+                writer.write("var resolvedProtocol = protocol ?? new $L();", primaryProtocol);
+                writer.write(
+                    "this.invoker = new SmithyOperationInvoker(new"
+                        + " HttpClientTransport(CreateDefaultHttpClient(resolvedProtocol),"
+                        + " endpoint), middleware);");
+                writeIdempotencyAssignment(needsIdempotency);
+                writer.write(
+                    "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
+                writeOperationBindings(operations);
+              });
           writer.write("");
-          writer.write("public $L(System.Net.Http.HttpClient httpClient)", typeName);
-          writer.write("    : this(httpClient, SmithyClientOptions.Default)");
-          writer.write("{ }");
-          writer.write("");
+
+          // Constructor: bring your own HttpClient (e.g. from IHttpClientFactory /
+          // AddHttpClient<I,T>). The endpoint comes from the HttpClient's BaseAddress.
+          writer.write("public $L(", typeName);
+          writer.write("    System.Net.Http.HttpClient httpClient,");
+          writer.write("    IProtocol? protocol = null,");
           writer.write(
-              "public $L(System.Net.Http.HttpClient httpClient, SmithyClientOptions options)",
-              typeName);
-          writer.write(
-              "    : this(new SmithyOperationInvoker(new HttpClientTransport(httpClient, (options"
-                  + " ?? throw new System.ArgumentNullException(nameof(options))).Endpoint),"
-                  + " options.Middleware), options)");
-          writer.write("{ }");
+              "    System.Collections.Generic.IEnumerable<ISmithyClientMiddleware>? middleware ="
+                  + " null,");
+          writer.write("    System.Func<string>? idempotencyTokenProvider = null)");
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                writer.write("System.ArgumentNullException.ThrowIfNull(httpClient);");
+                writer.write(
+                    "var endpoint = httpClient.BaseAddress ?? throw new System.ArgumentException(");
+                writer.write(
+                    "    \"httpClient.BaseAddress must be set; otherwise use the constructor that"
+                        + " takes an endpoint.\", nameof(httpClient));");
+                writer.write("var resolvedProtocol = protocol ?? new $L();", primaryProtocol);
+                writer.write(
+                    "this.invoker = new SmithyOperationInvoker(new"
+                        + " HttpClientTransport(httpClient, endpoint), middleware);");
+                writeIdempotencyAssignment(needsIdempotency);
+                writer.write(
+                    "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
+                writeOperationBindings(operations);
+              });
           writer.write("");
-          writer.write("public $L(SmithyOperationInvoker invoker)", typeName);
-          writer.write("    : this(invoker, SmithyClientOptions.Default)");
-          writer.write("{ }");
-          writer.write("");
-          writer.write(
-              "public $L(SmithyOperationInvoker invoker, SmithyClientOptions options)", typeName);
+
+          // Constructor: bring your own invoker (custom transport/middleware, DI, testing). The
+          // protocol defaults to the service's primary declared protocol, like the other ctors.
+          writer.write("public $L(", typeName);
+          writer.write("    SmithyOperationInvoker invoker,");
+          writer.write("    IProtocol? protocol = null,");
+          writer.write("    System.Func<string>? idempotencyTokenProvider = null)");
           writer.openBlock(
               "{",
               "}",
@@ -158,32 +218,70 @@ public final class ClientGenerator implements Runnable {
                 writer.write(
                     "this.invoker = invoker ?? throw new"
                         + " System.ArgumentNullException(nameof(invoker));");
+                writer.write("var resolvedProtocol = protocol ?? new $L();", primaryProtocol);
+                writeIdempotencyAssignment(needsIdempotency);
                 writer.write(
-                    "this.options = options ?? throw new"
-                        + " System.ArgumentNullException(nameof(options));");
+                    "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
+                writeOperationBindings(operations);
               });
           writer.write("");
 
-          // Build operation-bound protocols once from the (service, operation) schemas. Generated
-          // method bodies then call the instance uniformly, regardless of protocol.
           writer.write(
-              "private static readonly IServiceProtocol ServiceProtocol = $L.ForService($L);",
-              ProtocolSupport.protocolType(kind),
-              SchemaGenerator.serviceSchemaAccessor(context, service));
-          for (OperationShape op : operations) {
+              "private static System.Net.Http.HttpClient CreateDefaultHttpClient(IProtocol"
+                  + " protocol) =>");
+          writer.write("    protocol.RequiresHttp2");
+          writer.write("        ? new System.Net.Http.HttpClient");
+          writer.write("        {");
+          writer.write("            DefaultRequestVersion = System.Net.HttpVersion.Version20,");
+          writer.write(
+              "            DefaultVersionPolicy ="
+                  + " System.Net.Http.HttpVersionPolicy.RequestVersionExact,");
+          writer.write("        }");
+          writer.write("        : new System.Net.Http.HttpClient();");
+          if (needsIdempotency) {
+            writer.write("");
             writer.write(
-                "private static readonly IOperationProtocol<$L, $L> $LProtocol ="
-                    + " ServiceProtocol.ForOperation($L);",
-                SchemaGenerator.operationShapeType(context, op.getInputShape()),
-                SchemaGenerator.operationShapeType(context, op.getOutputShape()),
-                CSharpNaming.typeName(op.getId().getName()),
-                SchemaGenerator.operationSchemaAccessor(context, op));
+                "private static string DefaultIdempotencyToken() =>"
+                    + " System.Guid.NewGuid().ToString();");
           }
           writer.write("");
 
           for (OperationShape op : operations) writeOperationMethod(sp, model, op);
           for (OperationShape op : operations) writeErrorDeserializer(sp, model, op);
         });
+  }
+
+  /**
+   * In a constructor body, binds the idempotency-token provider field when the service needs it.
+   */
+  private void writeIdempotencyAssignment(boolean needsIdempotency) {
+    if (needsIdempotency) {
+      writer.write(
+          "this.idempotencyTokenProvider = idempotencyTokenProvider ?? DefaultIdempotencyToken;");
+    }
+  }
+
+  private boolean operationNeedsIdempotencyToken(Model model, OperationShape op) {
+    if (ShapeSupport.isUnit(op.getInputShape())) {
+      return false;
+    }
+    StructureShape input = model.expectShape(op.getInputShape(), StructureShape.class);
+    return ShapeSupport.sortedMembers(input).stream()
+        .anyMatch(m -> m.hasTrait(IdempotencyTokenTrait.class) && ShapeSupport.isNullable(m));
+  }
+
+  // ---------------- operation bindings ----------------
+
+  /**
+   * Binds each operation's protocol from the local {@code serviceProtocol} in a constructor body.
+   */
+  private void writeOperationBindings(List<OperationShape> operations) {
+    for (OperationShape op : operations) {
+      writer.write(
+          "this.$LProtocol = serviceProtocol.ForOperation($L);",
+          CSharpNaming.typeName(op.getId().getName()),
+          SchemaGenerator.operationSchemaAccessor(context, op));
+    }
   }
 
   // ---------------- per-operation method ----------------
@@ -193,7 +291,6 @@ public final class ClientGenerator implements Runnable {
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String opName = CSharpNaming.typeName(op.getId().getName());
     String deserName = "Deserialize" + opName + "ErrorAsync";
-    String protocol = ProtocolSupport.protocolType(kind);
     String inputArg = hasInput ? "input" : "SmithyUnit.Value";
 
     writer.write("public async $L", operationSignature(sp, op));
@@ -212,12 +309,11 @@ public final class ClientGenerator implements Runnable {
 
           if (op.findTrait(TraitIds.REQUEST_COMPRESSION).isPresent()) {
             writer.write(
-                "$L.ApplyRequestCompression(request, $L);",
-                protocol,
+                "SmithyRequestModifiers.ApplyRequestCompression(request, $L);",
                 requestCompressionEncoding(op));
           }
           if (op.findTrait(TraitIds.HTTP_CHECKSUM_REQUIRED).isPresent()) {
-            writer.write("$L.ApplyContentMd5(request);", protocol);
+            writer.write("SmithyRequestModifiers.ApplyContentMd5(request);");
           }
 
           writer.write("");
@@ -256,7 +352,7 @@ public final class ClientGenerator implements Runnable {
         () -> {
           for (MemberShape member : idempotencyMembers) {
             String prop = CSharpNaming.propertyName(member.getMemberName());
-            writer.write("$L = input.$L ?? options.IdempotencyTokenProvider(),", prop, prop);
+            writer.write("$L = input.$L ?? this.idempotencyTokenProvider(),", prop, prop);
           }
         });
   }
@@ -285,13 +381,12 @@ public final class ClientGenerator implements Runnable {
   private void writeErrorDeserializer(SymbolProvider sp, Model model, OperationShape op) {
     String opName = CSharpNaming.typeName(op.getId().getName());
     String methodName = "Deserialize" + opName + "ErrorAsync";
-    String protocol = ProtocolSupport.protocolType(kind);
-    boolean rpc = kind == Kind.RPC_V2_CBOR;
+    String receiver = opName + "Protocol";
     List<ShapeId> errorIds = new ArrayList<>(op.getErrors(service));
     errorIds.sort(Comparator.comparing(ShapeId::toString));
 
     writer.write(
-        "private static System.Threading.Tasks.ValueTask<System.Exception?> $L(SmithyHttpResponse"
+        "private System.Threading.Tasks.ValueTask<System.Exception?> $L(SmithyHttpResponse"
             + " response, System.Threading.CancellationToken cancellationToken)",
         methodName);
     writer.openBlock(
@@ -305,13 +400,68 @@ public final class ClientGenerator implements Runnable {
             return;
           }
 
-          // The operation-bound protocol owns error discrimination and per-error deserialization.
-          String errorReceiver = opName + "Protocol";
+          // The bound protocol owns error discrimination; its RequiresErrorDiscriminator /
+          // SupportsHttpStatusErrorFallback flags adapt this uniform dispatch to REST vs rpc/gRPC.
+          writer.write("var errorType = $L.GetErrorDiscriminator(response);", receiver);
+          writer.write("if (errorType is null && $L.RequiresErrorDiscriminator)", receiver);
+          writer.openBlock(
+              "{",
+              "}",
+              () ->
+                  writer.write(
+                      "return"
+                          + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);"));
 
-          writer.write("var errorType = $L.GetErrorDiscriminator(response);", errorReceiver);
-          if (rpc) {
-            // rpcv2Cbor returns null when the response carries no error envelope at all.
-            writer.write("if (errorType is null)");
+          writer.write("");
+          writer.write("if (errorType is not null)");
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                for (ShapeId errId : errorIds) {
+                  StructureShape err = model.expectShape(errId, StructureShape.class);
+                  // The discriminator may be a bare shape name (REST, rpcv2Cbor) or an absolute
+                  // shape id (rpcv2Cbor); accept either.
+                  writer.write(
+                      "if (string.Equals(errorType, $L, System.StringComparison.Ordinal)"
+                          + " || string.Equals(errorType, $L, System.StringComparison.Ordinal))",
+                      CSharpNaming.formatString(errId.getName()),
+                      CSharpNaming.formatString(errId.toString()));
+                  writer.openBlock("{", "}", () -> writeErrorReturn(sp, err, receiver));
+                }
+              });
+
+          // REST-only fallback to the HTTP status code, gated at runtime by the bound protocol.
+          List<ShapeId> statusErrors =
+              errorIds.stream()
+                  .filter(id -> httpErrorCode(model.expectShape(id, StructureShape.class)) != null)
+                  .collect(Collectors.toList());
+          if (!statusErrors.isEmpty()) {
+            writer.write("");
+            writer.write("if ($L.SupportsHttpStatusErrorFallback)", receiver);
+            writer.openBlock(
+                "{",
+                "}",
+                () -> {
+                  for (ShapeId errId : statusErrors) {
+                    StructureShape err = model.expectShape(errId, StructureShape.class);
+                    writer.write("if ((int)response.StatusCode == $L)", httpErrorCode(err));
+                    writer.openBlock("{", "}", () -> writeErrorReturn(sp, err, receiver));
+                  }
+                });
+          }
+
+          // Fallback: first error. For REST errors that carry body members, an empty body means we
+          // recognised nothing — return null so InvokeAsync throws a generic SmithyClientException.
+          // rpc/gRPC never guard on body emptiness (gated by SupportsHttpStatusErrorFallback).
+          ShapeId fallback = errorIds.get(0);
+          StructureShape err = model.expectShape(fallback, StructureShape.class);
+          boolean fallbackHasBody = !responseBodyMembers(err).isEmpty();
+          writer.write("");
+          if (fallbackHasBody) {
+            writer.write(
+                "if ($L.SupportsHttpStatusErrorFallback && response.Content.Length == 0)",
+                receiver);
             writer.openBlock(
                 "{",
                 "}",
@@ -319,72 +469,17 @@ public final class ClientGenerator implements Runnable {
                     writer.write(
                         "return"
                             + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);"));
-          }
-
-          for (ShapeId errId : errorIds) {
-            StructureShape err = model.expectShape(errId, StructureShape.class);
             writer.write("");
-            if (rpc) {
-              // rpcv2Cbor's __type may be a bare shape name or an absolute shape id.
-              writer.write(
-                  "if (string.Equals(errorType, $L, System.StringComparison.Ordinal)"
-                      + " || string.Equals(errorType, $L, System.StringComparison.Ordinal))",
-                  CSharpNaming.formatString(errId.getName()),
-                  CSharpNaming.formatString(errId.toString()));
-            } else {
-              writer.write(
-                  "if (string.Equals(errorType, $L, System.StringComparison.Ordinal))",
-                  CSharpNaming.formatString(errId.getName()));
-            }
-            writer.openBlock("{", "}", () -> writeErrorReturn(sp, err, errorReceiver));
           }
-
-          if (!rpc) {
-            // Fall back to HTTP status code when the error type is not discriminable from the body.
-            for (ShapeId errId : errorIds) {
-              StructureShape err = model.expectShape(errId, StructureShape.class);
-              Integer status = httpErrorCode(err);
-              if (status == null) continue;
-              writer.write("");
-              writer.write("if ((int)response.StatusCode == $L)", status);
-              writer.openBlock("{", "}", () -> writeErrorReturn(sp, err, errorReceiver));
-            }
-          }
-
-          // fallback: first error. Wrap in an explicit block so the inner deserialization doesn't
-          // collide with the per-status branches above (CS0136). Guard against empty bodies for
-          // REST errors that carry body members: with nothing to deserialize we cannot recognise
-          // any error, so return null and let InvokeAsync throw a generic SmithyClientException.
-          ShapeId fallback = errorIds.get(0);
-          StructureShape err = model.expectShape(fallback, StructureShape.class);
-          boolean fallbackHasBody = !rpc && !responseBodyMembers(err).isEmpty();
-          writer.write("");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                if (fallbackHasBody) {
-                  writer.write("if (response.Content.Length == 0)");
-                  writer.openBlock(
-                      "{",
-                      "}",
-                      () ->
-                          writer.write(
-                              "return"
-                                  + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);"));
-                  writer.write("");
-                }
-                writeErrorReturn(sp, err, errorReceiver);
-              });
+          writeErrorReturn(sp, err, receiver);
         });
     writer.write("");
   }
 
   /**
    * Functional error return: deserialize the error structure from the response (HTTP bindings +
-   * body for REST, whole CBOR body for rpcv2Cbor) via {@code receiver.DeserializeError(...)}. The
-   * receiver is the static protocol class for REST or the operation-bound protocol field for rpc;
-   * both expose the same {@code DeserializeError(schema, response)} shape.
+   * body for REST, whole CBOR/proto body for rpc/gRPC) via {@code receiver.DeserializeError(...)},
+   * where the receiver is the operation-bound protocol field.
    */
   private void writeErrorReturn(SymbolProvider sp, StructureShape err, String receiver) {
     writer.write(
@@ -404,108 +499,6 @@ public final class ClientGenerator implements Runnable {
     return err.getTrait(software.amazon.smithy.model.traits.ErrorTrait.class)
         .map(t -> t.isClientError() ? 400 : 500)
         .orElse(null);
-  }
-
-  // =====================================================================
-  // gRPC client
-  // =====================================================================
-
-  private void writeGrpcClient(
-      SymbolProvider sp, Model model, List<OperationShape> operations, String interfaceName) {
-    String svcName = CSharpNaming.typeName(service.getId().getName());
-    String grpcNs = grpcNamespace();
-    String rawClientType = "global::" + grpcNs + "." + svcName + "." + svcName + "Client";
-    String clientTypeName = svcName + "GrpcClient";
-
-    writer.write("public sealed class $L : $L", clientTypeName, interfaceName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("private readonly $L client;", rawClientType);
-          writer.write("");
-          writer.write("public $L(ChannelBase channel)", clientTypeName);
-          writer.write(
-              "    : this(new $L(channel ?? throw new"
-                  + " System.ArgumentNullException(nameof(channel)))) { }",
-              rawClientType);
-          writer.write("");
-          writer.write("public $L(CallInvoker callInvoker)", clientTypeName);
-          writer.write(
-              "    : this(new $L(callInvoker ?? throw new"
-                  + " System.ArgumentNullException(nameof(callInvoker)))) { }",
-              rawClientType);
-          writer.write("");
-          writer.write("public $L($L client)", clientTypeName, rawClientType);
-          writer.openBlock(
-              "{",
-              "}",
-              () ->
-                  writer.write(
-                      "this.client = client ?? throw new"
-                          + " System.ArgumentNullException(nameof(client));"));
-          writer.write("");
-          for (OperationShape op : operations) {
-            writeGrpcOperationMethod(sp, model, op);
-            writer.write("");
-          }
-        });
-  }
-
-  private void writeGrpcOperationMethod(SymbolProvider sp, Model model, OperationShape op) {
-    writeGrpcClientUnaryMethod(sp, model, op);
-  }
-
-  private void writeGrpcClientUnaryMethod(SymbolProvider sp, Model model, OperationShape op) {
-    String operationName = CSharpNaming.typeName(op.getId().getName());
-    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
-    String grpcInputType = grpcMessageType(op.getInputShape());
-    String grpcInputExpr =
-        hasInput
-            ? GrpcConversions.smithyToGrpc(
-                sp, model, model.expectShape(op.getInputShape()), "input", grpcNamespace())
-            : "new Google.Protobuf.WellKnownTypes.Empty()";
-
-    writer.write("public async $L", operationSignature(sp, op));
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          if (hasInput) {
-            writer.write("System.ArgumentNullException.ThrowIfNull(input);");
-            writer.write("");
-          }
-          writer.write("$L request = $L;", grpcInputType, grpcInputExpr);
-          if (hasOutput) {
-            writer.write(
-                "var response = await client.$LAsync(request,"
-                    + " cancellationToken: cancellationToken).ResponseAsync.ConfigureAwait(false);",
-                operationName);
-            writer.write(
-                "return $L;",
-                GrpcConversions.grpcToSmithy(
-                    sp,
-                    model,
-                    model.expectShape(op.getOutputShape()),
-                    "response",
-                    grpcNamespace()));
-          } else {
-            writer.write(
-                "await client.$LAsync(request,"
-                    + " cancellationToken: cancellationToken).ResponseAsync.ConfigureAwait(false);",
-                operationName);
-          }
-        });
-  }
-
-  private String grpcMessageType(ShapeId id) {
-    if (ShapeSupport.isUnit(id)) return "Google.Protobuf.WellKnownTypes.Empty";
-    return "global::" + grpcNamespace() + "." + CSharpNaming.typeName(id.getName());
-  }
-
-  private String grpcNamespace() {
-    return context.settings().csharpNamespace(service.getId().getNamespace()) + ".Grpc";
   }
 
   // =====================================================================

@@ -67,6 +67,74 @@ public static class SmithyAspNetCoreProtocol
         }
     }
 
+    // gRPC always returns HTTP 200 and conveys status in trailers. These header names produced by
+    // GrpcProtocol must be emitted as HTTP/2 trailers (after the body), not as leading headers.
+    private static readonly string[] GrpcTrailerNames =
+    [
+        "grpc-status",
+        "grpc-message",
+        "x-smithy-grpc-error",
+    ];
+
+    /// <summary>
+    /// Writes a gRPC response: the framed body as a leading <c>application/grpc</c> message followed
+    /// by <c>grpc-status</c>/<c>grpc-message</c> as HTTP/2 trailers. Falls back to leading headers
+    /// when the connection does not support trailers (e.g. HTTP/1.1 in tests), which keeps
+    /// NSmithy↔NSmithy interop working off the same header dictionary.
+    /// </summary>
+    public static async Task WriteSmithyGrpcResponseAsync(
+        HttpContext httpContext,
+        SmithyHttpResponse response,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(response);
+
+        httpContext.Response.StatusCode = (int)response.StatusCode;
+        foreach (var header in response.ContentHeaders)
+        {
+            httpContext.Response.Headers[header.Key] = header.Value.ToArray();
+        }
+
+        var supportsTrailers = httpContext.Response.SupportsTrailers();
+        var trailers = new List<KeyValuePair<string, IReadOnlyList<string>>>();
+        foreach (var header in response.Headers)
+        {
+            if (
+                supportsTrailers
+                && GrpcTrailerNames.Contains(header.Key, StringComparer.OrdinalIgnoreCase)
+            )
+            {
+                trailers.Add(header);
+            }
+            else
+            {
+                httpContext.Response.Headers[header.Key] = header.Value.ToArray();
+            }
+        }
+
+        if (trailers.Count > 0)
+        {
+            httpContext.Response.DeclareTrailer(string.Join(", ", trailers.Select(t => t.Key)));
+        }
+
+        if (response.Content.Length > 0)
+        {
+            await httpContext
+                .Response.Body.WriteAsync(response.Content, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        foreach (var trailer in trailers)
+        {
+            foreach (var value in trailer.Value)
+            {
+                httpContext.Response.AppendTrailer(trailer.Key, value);
+            }
+        }
+    }
+
     public static bool HasExpectedQueryLiteral(
         HttpContext httpContext,
         string name,

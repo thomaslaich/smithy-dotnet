@@ -31,11 +31,7 @@ internal static class HttpResponseRunner
 
         var handler = new RecordingHttpMessageHandler(_ => BuildResponse(testCase));
         using var httpClient = new HttpClient(handler);
-        var client = Activator.CreateInstance(
-            clientType,
-            httpClient,
-            new SmithyClientOptions { Endpoint = Endpoint }
-        )!;
+        var client = ConformanceClients.Build(clientType, httpClient, Endpoint);
 
         Exception? thrown = null;
         object? output = null;
@@ -247,12 +243,7 @@ internal static class ConformanceClients
                 .Where(t =>
                     t is { IsClass: true, IsAbstract: false }
                     && t.Name.EndsWith("Client", StringComparison.Ordinal)
-                    && t.GetConstructors()
-                        .Any(c =>
-                        {
-                            var ps = c.GetParameters();
-                            return ps.Length == 2 && ps[0].ParameterType == typeof(HttpClient);
-                        })
+                    && HasUriConstructor(t)
                 ),
         ]
     );
@@ -271,6 +262,32 @@ internal static class ConformanceClients
                 + ")."
         );
     }
+
+    /// <summary>
+    /// Constructs a generated client via its <c>(Uri endpoint, IProtocol? protocol,
+    /// HttpClient? httpClient, IEnumerable&lt;ISmithyClientMiddleware&gt;? middleware,
+    /// Func&lt;string&gt;? idempotencyTokenProvider)</c> constructor, using the default protocol.
+    /// </summary>
+    public static object Build(
+        Type clientType,
+        HttpClient httpClient,
+        Uri endpoint,
+        Func<string>? idempotencyTokenProvider = null
+    )
+    {
+        // Use the HttpClient constructor (endpoint comes from BaseAddress) so the recording handler
+        // is honoured; this is also the constructor IHttpClientFactory uses.
+        httpClient.BaseAddress = endpoint;
+        return Activator.CreateInstance(
+            clientType,
+            [httpClient, null, null, idempotencyTokenProvider]
+        )!;
+    }
+
+    private static bool HasUriConstructor(Type clientType) =>
+        clientType
+            .GetConstructors()
+            .Any(c => c.GetParameters() is [{ ParameterType: var p }, ..] && p == typeof(Uri));
 }
 
 /// <summary>

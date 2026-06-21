@@ -1,7 +1,6 @@
----
-title: Codegen Architecture
-description: How the NSmithy Java plugin generates C# files from Smithy models.
----
+# Codegen Architecture
+
+How the NSmithy Java plugin generates C# files from Smithy models.
 
 ## Overview
 
@@ -24,6 +23,8 @@ The two sides of the architecture are:
 ## Goals
 
 - Give consumers a `dotnet build`-first experience: no separate codegen step.
+- Bundle required tooling: consumers should not need to install a Java runtime or
+  `smithy-cli` separately.
 - Reuse Smithy's model front end for IDL parsing, assembly, validation, and
   trait resolution — do not reimplement these in .NET.
 - Keep the generated code idiomatic C#: it should look like it was written by
@@ -63,16 +64,16 @@ MSBuild then picks up the generated files via `NSmithy.MSBuild`:
 
 ### Entry point
 
-`CSharpClientCodegenPlugin` implements `SmithyBuildPlugin`. It is discovered on
+`CSharpCodegenPlugin` implements `SmithyBuildPlugin`. It is discovered on
 the classpath via the standard Java `ServiceLoader` mechanism using
 `META-INF/services/software.amazon.smithy.build.SmithyBuildPlugin`.
 
 When `smithy build` runs and finds a `plugins` block referencing `csharp-codegen`
-in `smithy-build.json`, Smithy invokes `CSharpClientCodegenPlugin.execute()`.
+in `smithy-build.json`, Smithy invokes `CSharpCodegenPlugin.execute()`.
 
 ### Orchestration
 
-The plugin delegates to `DirectedCSharpClientCodegen`, which implements
+The plugin delegates to `DirectedCSharpCodegen`, which implements
 `DirectedCodegen`. Smithy's `CodegenDirector` calls a method for each shape kind
 in the service closure:
 
@@ -96,7 +97,7 @@ All files are written under the Smithy projection's output directory:
 
 `CSharpSymbolProvider` maps each Smithy shape to a C# `Symbol` carrying the
 namespace, type name, and import list. The mapping follows the rules in
-[Shape Mapping](/smithy-dotnet/design/shapes/).
+[shapes.md](shapes.md).
 
 ### Writers
 
@@ -160,7 +161,7 @@ Generated code depends on .NET packages published to NuGet:
 
 - `NSmithy.Core` — `Schema`, `ShapeId`, `Trait`, codec interfaces
 - `NSmithy.Http` — `IHttpTransport`, `SmithyHttpRequest`, `SmithyHttpResponse`
-- `NSmithy.Client` — `ISmithyClient`, `SmithyClientOptions`
+- `NSmithy.Client` — `SmithyOperationInvoker`, `ISmithyClientMiddleware`
 - `NSmithy.Server` / `NSmithy.Server.AspNetCore` — server framework
 - `NSmithy.Codecs.Json/Xml/Cbor` — schema-bound body codec implementations
 - `NSmithy.Protocols.Rest` — shared REST HTTP binding projection
@@ -174,11 +175,11 @@ them in its `.csproj`; the generated `.g.cs` files import the matching types.
 
 Each generated shape file contains:
 
-1. A C# record or class for the shape (see [Shape Mapping](/smithy-dotnet/design/shapes/)).
+1. A C# record or class for the shape (see [shapes.md](shapes.md)).
 2. A generated builder type when deserialization needs staged construction.
 3. A separate static schema description containing the shape kind, traits,
    member schemas, typed accessors, and builder hooks at runtime (see
-   [Serialization](/smithy-dotnet/design/serialization/)).
+   [serialization.md](serialization.md)).
 
 Operation files contain:
 
@@ -253,6 +254,6 @@ used by `smithy-python` and other Smithy generators.
 
 ## Related Docs
 
-- [Shape Mapping](/smithy-dotnet/design/shapes/)
-- [Serialization](/smithy-dotnet/design/serialization/)
-- [MSBuild Reference](/smithy-dotnet/msbuild/)
+- [shapes.md](shapes.md) — Smithy shape → C# type mapping
+- [serialization.md](serialization.md) — codec and protocol binding
+- [MSBuild Reference](/smithy-dotnet/reference/msbuild/)

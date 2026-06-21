@@ -1,24 +1,18 @@
 using Example.Hello;
 //#if (IsGrpc)
-using Grpc.Net.Client;
-//#else
-using NSmithy.Client;
-
+using NSmithy.Protocols.Grpc;
 //#endif
 
 //#if (IsGrpc)
 var endpoint = args.Length > 0 ? args[0] : "http://localhost:5001";
 
-using var channel = GrpcChannel.ForAddress(endpoint);
-var client = new HelloServiceGrpcClient(channel);
+// Native gRPC: passing GrpcProtocol selects gRPC and configures the HTTP/2 HttpClient it requires.
+var client = new HelloServiceClient(new Uri(endpoint), protocol: new GrpcProtocol());
 
 //#else
 var endpoint = args.Length > 0 ? args[0] : "http://localhost:5000";
 
-var client = new HelloServiceClient(
-    new HttpClient(),
-    new SmithyClientOptions { Endpoint = new Uri(endpoint) }
-);
+var client = new HelloServiceClient(new Uri(endpoint));
 
 //#endif
 

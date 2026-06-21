@@ -12,7 +12,6 @@ builder.WebHost.ConfigureKestrel(options =>
         }
     );
 });
-builder.Services.AddGrpc();
 builder.Services.AddLibraryServiceHandler<LibraryHandler>();
 
 var app = builder.Build();

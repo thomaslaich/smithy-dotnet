@@ -5,7 +5,8 @@
  *   "csharp-codegen": {
  *     "service": "example.hello#HelloService",
  *     "baseNamespace": "MyOrg",         // optional; prepended to PascalCase(smithyNamespace)
- *     "packageVersion": "0.1.0"           // optional
+ *     "packageVersion": "0.1.0",          // optional
+ *     "generateDependencyInjection": true // optional; emit the IHttpClientFactory extension
  *   }
  *
  * If baseNamespace is omitted, the C# namespace is just PascalCase of the
@@ -23,23 +24,33 @@ public final class CSharpSettings {
   private static final String SERVICE = "service";
   private static final String BASE_NAMESPACE = "baseNamespace";
   private static final String PACKAGE_VERSION = "packageVersion";
+  private static final String GENERATE_DEPENDENCY_INJECTION = "generateDependencyInjection";
 
   private final ShapeId service;
   private final String baseNamespace;
   private final String packageVersion;
+  private final boolean generateDependencyInjection;
 
-  private CSharpSettings(ShapeId service, String baseNamespace, String packageVersion) {
+  private CSharpSettings(
+      ShapeId service,
+      String baseNamespace,
+      String packageVersion,
+      boolean generateDependencyInjection) {
     this.service = service;
     this.baseNamespace = baseNamespace;
     this.packageVersion = packageVersion;
+    this.generateDependencyInjection = generateDependencyInjection;
   }
 
   public static CSharpSettings fromNode(ObjectNode config) {
-    config.warnIfAdditionalProperties(java.util.List.of(SERVICE, BASE_NAMESPACE, PACKAGE_VERSION));
+    config.warnIfAdditionalProperties(
+        java.util.List.of(SERVICE, BASE_NAMESPACE, PACKAGE_VERSION, GENERATE_DEPENDENCY_INJECTION));
     ShapeId service = config.expectStringMember(SERVICE).expectShapeId();
     String baseNamespace = config.getStringMemberOrDefault(BASE_NAMESPACE, "");
     String packageVersion = config.getStringMemberOrDefault(PACKAGE_VERSION, "0.0.1");
-    return new CSharpSettings(service, baseNamespace, packageVersion);
+    boolean generateDependencyInjection =
+        config.getBooleanMemberOrDefault(GENERATE_DEPENDENCY_INJECTION, false);
+    return new CSharpSettings(service, baseNamespace, packageVersion, generateDependencyInjection);
   }
 
   public ShapeId service() {
@@ -53,6 +64,11 @@ public final class CSharpSettings {
 
   public String packageVersion() {
     return packageVersion;
+  }
+
+  /** Whether to emit the opt-in IHttpClientFactory registration extension. */
+  public boolean generateDependencyInjection() {
+    return generateDependencyInjection;
   }
 
   /** Convenience: C# namespace for a given Smithy namespace. */

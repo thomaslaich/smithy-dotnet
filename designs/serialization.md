@@ -1,5 +1,8 @@
 # Serialization
 
+How NSmithy serializes model types to and from wire formats, and why codegen
+emits schemas rather than serializers.
+
 Serialization design sits between generated code, runtime libraries, and wire
 protocols. Different designs optimize for different things:
 
