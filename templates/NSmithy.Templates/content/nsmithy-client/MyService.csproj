@@ -10,19 +10,19 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSmithy.Client" Version="0.2.0" />
-    <PackageReference Include="NSmithy.Core" Version="0.2.0" />
-    <PackageReference Include="NSmithy.Http" Version="0.2.0" />
-    <PackageReference Include="NSmithy.MSBuild" Version="0.2.0" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Client" Version="0.3.0" />
+    <PackageReference Include="NSmithy.Core" Version="0.3.0" />
+    <PackageReference Include="NSmithy.Http" Version="0.3.0" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.3.0" PrivateAssets="all" />
     <!--
       The HelloService model declares both @simpleRestJson and @grpc, so the generated client
       supports both protocols (pick one via the constructor's `protocol:` parameter, e.g.
       new GrpcProtocol()) and references both protocol packages. Native gRPC needs no
       Grpc.Net.Client / Google.Protobuf / protoc.
     -->
-    <PackageReference Include="NSmithy.Codecs.Json" Version="0.2.0" />
-    <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.2.0" />
-    <PackageReference Include="NSmithy.Protocols.Grpc" Version="0.2.0" />
+    <PackageReference Include="NSmithy.Codecs.Json" Version="0.3.0" />
+    <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.3.0" />
+    <PackageReference Include="NSmithy.Protocols.Grpc" Version="0.3.0" />
     <!--#if (IsNuget)-->
     <!-- Replace with your actual contracts package name and version -->
     <PackageReference Include="MyService.Contracts" Version="1.0.0" />
