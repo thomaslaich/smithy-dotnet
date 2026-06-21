@@ -335,6 +335,52 @@ public sealed class ProtoCodecTests
     }
 
     [Fact]
+    public void EncodesPreUnixFractionalTimestampCanonically()
+    {
+        var codec = ProtoCodec.FromSchema(BookSchema);
+        var book = new Book(
+            Id: "pre",
+            PageCount: null,
+            Checksum: null,
+            Tags: [],
+            Metadata: new Dictionary<string, string>(),
+            Detail: null,
+            Cat: Category.Unspecified,
+            PublishedAt: new DateTimeOffset(1969, 12, 31, 23, 59, 59, 500, TimeSpan.Zero)
+        );
+
+        var bytes = codec.Serialize(book);
+
+        // field 11 (timestamp), LEN 17:
+        //   seconds = -1 as int64 varint (10 bytes)
+        //   nanos = 500000000
+        byte[] timestampField =
+        [
+            0x5A,
+            0x11,
+            0x08,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0xFF,
+            0x01,
+            0x10,
+            0x80,
+            0xCA,
+            0xB5,
+            0xEE,
+            0x01,
+        ];
+        Assert.True(bytes.AsSpan().IndexOf(timestampField) >= 0);
+        Assert.Equal(book.PublishedAt, codec.Deserialize(bytes).PublishedAt);
+    }
+
+    [Fact]
     public void OmitsAbsentOptionalFields()
     {
         var codec = ProtoCodec.FromSchema(BookSchema);

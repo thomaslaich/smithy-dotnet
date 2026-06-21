@@ -318,8 +318,14 @@ public static class ProtoCodec
     private static byte[] EncodeTimestamp(DateTimeOffset value)
     {
         var ticks = value.UtcTicks - DateTimeOffset.UnixEpoch.UtcTicks;
-        var seconds = ticks / TimeSpan.TicksPerSecond;
-        var nanos = (int)(ticks % TimeSpan.TicksPerSecond) * 100;
+        var seconds = Math.DivRem(ticks, TimeSpan.TicksPerSecond, out var remainderTicks);
+        if (remainderTicks < 0)
+        {
+            seconds--;
+            remainderTicks += TimeSpan.TicksPerSecond;
+        }
+
+        var nanos = (int)remainderTicks * 100;
         var writer = new ProtoWriter();
         if (seconds != 0)
         {
