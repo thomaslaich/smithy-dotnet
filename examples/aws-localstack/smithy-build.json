@@ -1,0 +1,49 @@
+{
+  "version": "1.0",
+  "sources": ["model"],
+  "maven": {
+    "repositories": [
+      { "url": "file://~/.m2/repository" },
+      { "url": "https://repo.maven.apache.org/maven2/" }
+    ],
+    "dependencies": [
+      "software.amazon.smithy:smithy-aws-traits:1.68.0",
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.3.0-SNAPSHOT"
+    ]
+  },
+  "projections": {
+    "awsjson": {
+      "transforms": [
+        { "name": "includeServices", "args": { "services": ["localstack.aws#DynamoDB_20120810"] } }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "localstack.aws#DynamoDB_20120810",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "restxml": {
+      "transforms": [
+        { "name": "includeServices", "args": { "services": ["localstack.aws#S3"] } }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "localstack.aws#S3",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "restjson1": {
+      "transforms": [
+        { "name": "includeServices", "args": { "services": ["localstack.aws#Lambda"] } }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "localstack.aws#Lambda",
+          "baseNamespace": ""
+        }
+      }
+    }
+  }
+}

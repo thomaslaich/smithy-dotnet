@@ -48,7 +48,7 @@ refresh-examples:
     rm -rf examples/rpcv2cbor/contracts/obj
     rm -rf examples/rpcv2cbor/server/obj
     rm -rf examples/rpcv2cbor/client/obj
-    rm -rf examples/aws/client/obj
+    rm -rf examples/aws-localstack/client/obj
     rm -rf examples/grpc/contracts/obj
     rm -rf examples/grpc/server/obj
     rm -rf examples/grpc/client/obj
@@ -59,7 +59,7 @@ refresh-examples:
     dotnet clean examples/rest-json1/client/NSmithy.Examples.RestJson1.Client.csproj --verbosity minimal
     dotnet clean examples/rpcv2cbor/server/NSmithy.Examples.RpcV2Cbor.Server.csproj --verbosity minimal
     dotnet clean examples/rpcv2cbor/client/NSmithy.Examples.RpcV2Cbor.Client.csproj --verbosity minimal
-    dotnet clean examples/aws/client/NSmithy.Examples.Aws.Client.csproj --verbosity minimal
+    dotnet clean examples/aws-localstack/client/NSmithy.Examples.AwsLocalStack.Client.csproj --verbosity minimal
     dotnet clean examples/grpc/server/NSmithy.Examples.Grpc.Server.csproj --verbosity minimal
     dotnet clean examples/grpc/client/NSmithy.Examples.Grpc.Client.csproj --verbosity minimal
     dotnet clean examples/polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj --verbosity minimal
@@ -72,7 +72,7 @@ refresh-examples:
     dotnet restore examples/rpcv2cbor/contracts/NSmithy.Examples.RpcV2Cbor.Contracts.csproj --no-cache --force
     dotnet restore examples/rpcv2cbor/server/NSmithy.Examples.RpcV2Cbor.Server.csproj --no-cache --force
     dotnet restore examples/rpcv2cbor/client/NSmithy.Examples.RpcV2Cbor.Client.csproj --no-cache --force
-    dotnet restore examples/aws/client/NSmithy.Examples.Aws.Client.csproj --no-cache --force
+    dotnet restore examples/aws-localstack/client/NSmithy.Examples.AwsLocalStack.Client.csproj --no-cache --force
     dotnet restore examples/grpc/contracts/Library.Contracts.csproj --no-cache --force
     dotnet restore examples/grpc/server/NSmithy.Examples.Grpc.Server.csproj --no-cache --force
     dotnet restore examples/grpc/client/NSmithy.Examples.Grpc.Client.csproj --no-cache --force

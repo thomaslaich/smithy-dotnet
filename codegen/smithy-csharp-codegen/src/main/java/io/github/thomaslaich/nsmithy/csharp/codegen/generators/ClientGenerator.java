@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
+import software.amazon.smithy.model.knowledge.ServiceIndex;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.shapes.MemberShape;
@@ -157,6 +158,8 @@ public final class ClientGenerator implements Runnable {
           writer.write(
               "    System.Collections.Generic.IEnumerable<ISmithyClientMiddleware>? middleware ="
                   + " null,");
+          writer.write(
+              "    System.Collections.Generic.IEnumerable<ISmithyAuthScheme>? authSchemes = null,");
           writer.write("    System.Func<string>? idempotencyTokenProvider = null)");
           writer.openBlock(
               "{",
@@ -167,7 +170,9 @@ public final class ClientGenerator implements Runnable {
                 writer.write(
                     "this.invoker = new SmithyOperationInvoker(new"
                         + " HttpClientTransport(CreateDefaultHttpClient(resolvedProtocol),"
-                        + " endpoint), middleware);");
+                        + " endpoint), SmithyAuthSchemeResolver.Resolve(endpoint, $L,"
+                        + " ModeledAuthSchemes, authSchemes, middleware));",
+                    serviceSchema);
                 writeIdempotencyAssignment(needsIdempotency);
                 writer.write(
                     "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
@@ -183,6 +188,8 @@ public final class ClientGenerator implements Runnable {
           writer.write(
               "    System.Collections.Generic.IEnumerable<ISmithyClientMiddleware>? middleware ="
                   + " null,");
+          writer.write(
+              "    System.Collections.Generic.IEnumerable<ISmithyAuthScheme>? authSchemes = null,");
           writer.write("    System.Func<string>? idempotencyTokenProvider = null)");
           writer.openBlock(
               "{",
@@ -197,7 +204,10 @@ public final class ClientGenerator implements Runnable {
                 writer.write("var resolvedProtocol = protocol ?? new $L();", primaryProtocol);
                 writer.write(
                     "this.invoker = new SmithyOperationInvoker(new"
-                        + " HttpClientTransport(httpClient, endpoint), middleware);");
+                        + " HttpClientTransport(httpClient, endpoint),"
+                        + " SmithyAuthSchemeResolver.Resolve(endpoint, $L, ModeledAuthSchemes,"
+                        + " authSchemes, middleware));",
+                    serviceSchema);
                 writeIdempotencyAssignment(needsIdempotency);
                 writer.write(
                     "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
@@ -226,6 +236,15 @@ public final class ClientGenerator implements Runnable {
               });
           writer.write("");
 
+          // The auth schemes the service models, in Smithy's effective priority order (the @auth
+          // trait, or all of the service's auth traits in alphabetical order by shape id). The
+          // resolver installs the first of these for which the caller configured a matching scheme.
+          writer.write(
+              "private static readonly System.Collections.Generic.IReadOnlyList<string>"
+                  + " ModeledAuthSchemes = $L;",
+              modeledAuthSchemesLiteral());
+          writer.write("");
+
           writer.write(
               "private static System.Net.Http.HttpClient CreateDefaultHttpClient(IProtocol"
                   + " protocol) =>");
@@ -249,6 +268,25 @@ public final class ClientGenerator implements Runnable {
           for (OperationShape op : operations) writeOperationMethod(sp, model, op);
           for (OperationShape op : operations) writeErrorDeserializer(sp, model, op);
         });
+  }
+
+  /**
+   * Renders the service's effective auth schemes as a C# array literal of shape-id strings, in
+   * Smithy priority order. {@link ServiceIndex#getEffectiveAuthSchemes} applies the spec rules: the
+   * {@code @auth} trait when present, otherwise every auth trait on the service ordered
+   * alphabetically by absolute shape id. An empty result renders as an empty array.
+   */
+  private String modeledAuthSchemesLiteral() {
+    List<String> ids =
+        ServiceIndex.of(context.model()).getEffectiveAuthSchemes(service).keySet().stream()
+            .map(ShapeId::toString)
+            .collect(Collectors.toList());
+    if (ids.isEmpty()) {
+      return "System.Array.Empty<string>()";
+    }
+    return "new string[] { "
+        + ids.stream().map(CSharpNaming::formatString).collect(Collectors.joining(", "))
+        + " }";
   }
 
   /**

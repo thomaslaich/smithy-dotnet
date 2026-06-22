@@ -104,6 +104,49 @@ public sealed class NullableSchema<T> : Schema<T?>, INullableSchema
     public Schema Target => TargetSchema;
 }
 
+/// <summary>
+/// Wraps a target schema, overlaying additional traits (the wrapped member's traits) while
+/// delegating shape and value behavior to the target via <see cref="Schema.Resolved"/>.
+///
+/// List and map elements are modeled as plain target schemas, so a member-level trait such as
+/// <c>@xmlName</c> (which names each item element in non-flattened restXml lists) or
+/// <c>@timestampFormat</c> would otherwise be lost. Codecs read these traits off the element
+/// schema (e.g. the XML codec's item-element name); the overlay makes them visible there without
+/// mutating the shared target schema, which is reused wherever the shape is referenced.
+/// </summary>
+public sealed class TraitOverlaySchema<T> : Schema<T>
+{
+    internal TraitOverlaySchema(Schema<T> target, IEnumerable<Trait> overlay)
+        : base(target.Id, target.Kind, MergeTraits(target.Traits.Values, overlay))
+    {
+        TargetSchema = target;
+    }
+
+    public Schema<T> TargetSchema { get; }
+
+    public override Schema Resolved => TargetSchema.Resolved;
+
+    private static Dictionary<ShapeId, Trait>.ValueCollection MergeTraits(
+        IEnumerable<Trait> baseTraits,
+        IEnumerable<Trait> overlay
+    )
+    {
+        var merged = new Dictionary<ShapeId, Trait>();
+        foreach (var trait in baseTraits)
+        {
+            merged[trait.Id] = trait;
+        }
+
+        // The member's traits take precedence over the target shape's own traits.
+        foreach (var trait in overlay)
+        {
+            merged[trait.Id] = trait;
+        }
+
+        return merged.Values;
+    }
+}
+
 public interface IStringEnumSchema
 {
     object CreateObject(string value);
@@ -1128,6 +1171,23 @@ public static class Schemas
     public static Schema<SmithyUnit> Unit { get; } = new UnitSchema();
 
     public static Schema<T> Lazy<T>(Func<Schema<T>> resolve) => new LazySchema<T>(resolve);
+
+    /// <summary>
+    /// Overlays member-level traits onto an element/value schema (see
+    /// <see cref="TraitOverlaySchema{T}"/>). Returns <paramref name="target"/> unchanged when there
+    /// are no traits to add, so the common trait-free element keeps using the shared schema.
+    /// </summary>
+    public static Schema<T> WithTraits<T>(Schema<T> target, IEnumerable<Trait>? traits)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (traits is null)
+        {
+            return target;
+        }
+
+        var overlay = traits as IReadOnlyCollection<Trait> ?? traits.ToArray();
+        return overlay.Count == 0 ? target : new TraitOverlaySchema<T>(target, overlay);
+    }
 
     public static Schema<T?> Nullable<T>(Schema<T> target)
         where T : struct => new NullableSchema<T>(target);

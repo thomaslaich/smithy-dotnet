@@ -1,0 +1,16 @@
+services:
+  localstack:
+    # Pinned to the last community release that runs without a LOCALSTACK_AUTH_TOKEN.
+    # Newer tags (incl. `stable`/`latest`) now require a license and exit with code 55.
+    image: localstack/localstack:3.8
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=dynamodb,s3,lambda
+      - DEBUG=0
+    volumes:
+      # Required so the Lambda service can spawn function containers.
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      # Seed a little data once the gateway is ready (DynamoDB tables, S3
+      # buckets, a Lambda function) so the example's List* calls return data.
+      - "./init/ready.d:/etc/localstack/init/ready.d"

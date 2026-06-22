@@ -266,7 +266,7 @@ internal static class ConformanceClients
     /// <summary>
     /// Constructs a generated client via its <c>(Uri endpoint, IProtocol? protocol,
     /// HttpClient? httpClient, IEnumerable&lt;ISmithyClientMiddleware&gt;? middleware,
-    /// Func&lt;string&gt;? idempotencyTokenProvider)</c> constructor, using the default protocol.
+    /// IEnumerable&lt;ISmithyAuthScheme&gt;? authSchemes, Func&lt;string&gt;? idempotencyTokenProvider)</c> constructor, using the default protocol.
     /// </summary>
     public static object Build(
         Type clientType,
@@ -280,7 +280,7 @@ internal static class ConformanceClients
         httpClient.BaseAddress = endpoint;
         return Activator.CreateInstance(
             clientType,
-            [httpClient, null, null, idempotencyTokenProvider]
+            [httpClient, null, null, null, idempotencyTokenProvider]
         )!;
     }
 
