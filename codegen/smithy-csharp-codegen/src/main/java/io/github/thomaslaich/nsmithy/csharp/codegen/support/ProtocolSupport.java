@@ -21,6 +21,8 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 public final class ProtocolSupport {
 
   public enum Kind {
+    AWS_JSON_1_0,
+    AWS_JSON_1_1,
     SIMPLE_REST_JSON,
     REST_JSON_1,
     REST_XML,
@@ -32,6 +34,14 @@ public final class ProtocolSupport {
 
   public static boolean isRestJson1Service(ServiceShape s) {
     return s.findTrait(TraitIds.REST_JSON_1).isPresent();
+  }
+
+  public static boolean isAwsJson10Service(ServiceShape s) {
+    return s.findTrait(TraitIds.AWS_JSON_1_0).isPresent();
+  }
+
+  public static boolean isAwsJson11Service(ServiceShape s) {
+    return s.findTrait(TraitIds.AWS_JSON_1_1).isPresent();
   }
 
   public static boolean isSimpleRestJsonService(ServiceShape s) {
@@ -51,7 +61,9 @@ public final class ProtocolSupport {
   }
 
   public static boolean emitsHttpClient(ServiceShape s) {
-    return isSimpleRestJsonService(s)
+    return isAwsJson10Service(s)
+        || isAwsJson11Service(s)
+        || isSimpleRestJsonService(s)
         || isRestJson1Service(s)
         || isRestXmlService(s)
         || isRpcV2CborService(s);
@@ -64,20 +76,24 @@ public final class ProtocolSupport {
   public static Kind kindOf(ServiceShape s) {
     if (isRpcV2CborService(s)) return Kind.RPC_V2_CBOR;
     if (isRestXmlService(s)) return Kind.REST_XML;
+    if (isAwsJson11Service(s)) return Kind.AWS_JSON_1_1;
+    if (isAwsJson10Service(s)) return Kind.AWS_JSON_1_0;
     if (isSimpleRestJsonService(s)) return Kind.SIMPLE_REST_JSON;
     return Kind.REST_JSON_1;
   }
 
   /**
    * Every protocol the service declares, in the documented precedence order {@code rpcv2Cbor >
-   * restXml > simpleRestJson > restJson1 > grpc}. The unified client builder generates a {@code
-   * With{Kind}()} method per declared kind and uses the first as the default protocol. Returns an
-   * empty list for a service with no supported protocol trait.
+   * restXml > awsJson1_1 > awsJson1_0 > simpleRestJson > restJson1 > grpc}. The unified client
+   * builder generates a {@code With{Kind}()} method per declared kind and uses the first as the
+   * default protocol. Returns an empty list for a service with no supported protocol trait.
    */
   public static List<Kind> declaredKinds(ServiceShape s) {
     List<Kind> kinds = new ArrayList<>();
     if (isRpcV2CborService(s)) kinds.add(Kind.RPC_V2_CBOR);
     if (isRestXmlService(s)) kinds.add(Kind.REST_XML);
+    if (isAwsJson11Service(s)) kinds.add(Kind.AWS_JSON_1_1);
+    if (isAwsJson10Service(s)) kinds.add(Kind.AWS_JSON_1_0);
     if (isSimpleRestJsonService(s)) kinds.add(Kind.SIMPLE_REST_JSON);
     if (isRestJson1Service(s)) kinds.add(Kind.REST_JSON_1);
     if (isGrpcService(s)) kinds.add(Kind.GRPC);
@@ -97,6 +113,8 @@ public final class ProtocolSupport {
   /** Protocol helper class for the given protocol. */
   public static String protocolType(Kind kind) {
     return switch (kind) {
+      case AWS_JSON_1_0 -> "AwsJson10Protocol";
+      case AWS_JSON_1_1 -> "AwsJson11Protocol";
       case SIMPLE_REST_JSON -> "SimpleRestJsonProtocol";
       case REST_JSON_1 -> "RestJson1Protocol";
       case REST_XML -> "RestXmlProtocol";
@@ -107,6 +125,8 @@ public final class ProtocolSupport {
 
   public static String mediaType(Kind kind) {
     return switch (kind) {
+      case AWS_JSON_1_0 -> "application/x-amz-json-1.0";
+      case AWS_JSON_1_1 -> "application/x-amz-json-1.1";
       case SIMPLE_REST_JSON, REST_JSON_1 -> "application/json";
       case REST_XML -> "application/xml";
       case RPC_V2_CBOR -> "application/cbor";
@@ -117,6 +137,7 @@ public final class ProtocolSupport {
   /** Runtime namespace housing the protocol class. */
   public static String runtimeProtocolNamespace(Kind kind) {
     return switch (kind) {
+      case AWS_JSON_1_0, AWS_JSON_1_1 -> RuntimeTypes.NSMITHY_PROTOCOLS_AWSJSON;
       case SIMPLE_REST_JSON, REST_JSON_1 -> RuntimeTypes.NSMITHY_PROTOCOLS_RESTJSON;
       case REST_XML -> RuntimeTypes.NSMITHY_PROTOCOLS_RESTXML;
       case RPC_V2_CBOR -> RuntimeTypes.NSMITHY_PROTOCOLS_RPCV2CBOR;
@@ -127,6 +148,7 @@ public final class ProtocolSupport {
   /** Runtime namespace housing the codec singleton. */
   public static String codecNamespace(Kind kind) {
     return switch (kind) {
+      case AWS_JSON_1_0, AWS_JSON_1_1 -> RuntimeTypes.NSMITHY_CODECS_JSON;
       case SIMPLE_REST_JSON, REST_JSON_1 -> RuntimeTypes.NSMITHY_CODECS_JSON;
       case REST_XML -> RuntimeTypes.NSMITHY_CODECS_XML;
       case RPC_V2_CBOR -> RuntimeTypes.NSMITHY_CODECS_CBOR;

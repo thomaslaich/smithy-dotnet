@@ -9,7 +9,7 @@ Smithy model and wire them up alongside your server with a single call each:
 - **Scalar** — an interactive OpenAPI explorer at `/openapi`, backed by a
   `openapi.json` generated from the model by
   [smithy-openapi](https://smithy.io/2.0/guides/converting-to-openapi.html).
-  Available for REST JSON services.
+  Available for AWS restJson1 services.
 - **Sphinx HTML** — auto-generated reference documentation at `/docs`, produced
   by [smithy-docgen](https://github.com/smithy-lang/smithy-docgen) and compiled
   to HTML automatically at build time. Available for all services.
@@ -47,7 +47,7 @@ Set the relevant MSBuild properties in your server `.csproj`:
   <!-- Generate Sphinx HTML documentation (all services) -->
   <SmithyGenerateDocs>true</SmithyGenerateDocs>
 
-  <!-- Generate openapi.json for REST JSON services (restJson1 only) -->
+  <!-- Generate openapi.json for AWS restJson1 services -->
   <SmithyOpenApiProtocol>aws.protocols#restJson1</SmithyOpenApiProtocol>
 </PropertyGroup>
 ```

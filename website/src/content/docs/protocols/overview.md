@@ -16,6 +16,8 @@ NSmithy reads the protocol trait and generates the matching client and server su
 | --- | --- | --- | --- |
 | `alloy#simpleRestJson` | `@simpleRestJson` | .NET client, ASP.NET Core server | Preview |
 | `aws.protocols#restJson1` | `@restJson1` | .NET client, ASP.NET Core server | Preview |
+| `aws.protocols#awsJson1_1` | `@awsJson1_1` | .NET client | Early preview |
+| `aws.protocols#awsJson1_0` | `@awsJson1_0` | .NET client | Early preview |
 | `aws.protocols#restXml` | `@restXml` | .NET client | Early preview |
 | `smithy.protocols#rpcv2Cbor` | `@rpcv2Cbor` | .NET client, ASP.NET Core server | Preview |
 | `alloy.proto#grpc` | `@grpc` | gRPC client, ASP.NET Core gRPC server | Experimental |
@@ -24,8 +26,15 @@ See [Protocol Status](/smithy-dotnet/protocols/status/) for conformance numbers 
 
 ## Which Protocol Should I Use?
 
-**`aws.protocols#restJson1`** is the recommended choice for new services. It has broad cross-ecosystem compatibility — most official Smithy code generators (Java, TypeScript, Python, Swift, Rust, Go) target `restJson1` — and NSmithy generates OpenAPI from it, giving you Scalar UI and standard tooling out of the box.
+**[AWS restJson1](/smithy-dotnet/protocols/aws-rest-json1/)** is the
+recommended choice for new cross-ecosystem HTTP services. It has broad
+compatibility — most official Smithy code generators (Java, TypeScript, Python,
+Swift, Rust, Go) target `restJson1` — and NSmithy generates OpenAPI from it,
+giving you Scalar UI and standard tooling out of the box.
 
-**`alloy#simpleRestJson`** is a simpler alternative if your consumers are exclusively .NET or Scala (via [Smithy4s](https://disneystreaming.github.io/smithy4s/)). It has 100% conformance coverage but is narrower in ecosystem reach.
+**[simpleRestJson](/smithy-dotnet/protocols/simple-rest-json/)** is a simpler
+alternative if your consumers are exclusively .NET or Scala (via
+[Smithy4s](https://disneystreaming.github.io/smithy4s/)). It has 100%
+conformance coverage but is narrower in ecosystem reach.
 
 **`alloy.proto#grpc`** is available for teams that need gRPC transport, but treat it as an early adopter path — it has the least maturity and more explicit modeling requirements.
