@@ -58,14 +58,16 @@ export default defineConfig({
 					label: 'Protocols',
 					items: [
 						{ label: 'Overview', slug: 'protocols/overview' },
-						{ label: 'REST JSON', slug: 'protocols/rest-json' },
+						{ label: 'simpleRestJson', slug: 'protocols/simple-rest-json' },
 						{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor' },
 						{ label: 'gRPC', slug: 'protocols/grpc' },
 						{
 							label: 'AWS Protocols',
 							items: [
 								{ label: 'Overview', slug: 'protocols/aws-overview' },
-								{ label: 'REST XML', slug: 'protocols/rest-xml' },
+								{ label: 'AWS restJson1', slug: 'protocols/aws-rest-json1' },
+								{ label: 'AWS JSON', slug: 'protocols/aws-json' },
+								{ label: 'AWS restXml', slug: 'protocols/rest-xml' },
 							],
 						},
 						{ label: 'Protocol Status', slug: 'protocols/status' },
