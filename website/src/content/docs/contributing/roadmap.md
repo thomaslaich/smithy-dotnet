@@ -22,8 +22,8 @@ expanding that baseline rather than revisiting it.
 
 ### 1. Expand AWS protocol coverage and AWS readiness
 
-- Add support for additional AWS protocol families, especially AWS JSON,
-  AWS Query, and EC2 Query.
+- Expand AWS protocol coverage beyond the initial AWS JSON client support,
+  especially AWS Query and EC2 Query.
 - Continue hardening `aws.protocols#restJson1`, `aws.protocols#restXml`, and
   `smithy.protocols#rpcv2Cbor` as real preview surfaces.
 - Implement AWS authentication support, especially SigV4 signing driven by

@@ -22,6 +22,8 @@ NSmithy brings Smithy code generation into .NET projects. It integrates with MSB
 
 **No Gradle required for consumers.** Many Smithy projects use Gradle to run code generation. NSmithy packages the code generator with the MSBuild integration, so application projects can stay in the .NET build system.
 
-NSmithy currently supports `alloy#simpleRestJson`, `aws.protocols#restJson1`, `aws.protocols#restXml`, `smithy.protocols#rpcv2Cbor`, and `alloy#grpc`.
+NSmithy currently supports `alloy#simpleRestJson`, `aws.protocols#restJson1`,
+`aws.protocols#awsJson1_1`, `aws.protocols#awsJson1_0`,
+`aws.protocols#restXml`, `smithy.protocols#rpcv2Cbor`, and `alloy#grpc`.
 
 See the [Quick Start](/smithy-dotnet/getting-started/quick-start/) to build your first service.

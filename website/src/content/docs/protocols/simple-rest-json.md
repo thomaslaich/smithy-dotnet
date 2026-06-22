@@ -1,51 +1,27 @@
 ---
-title: REST JSON
-description: JSON over HTTP with REST bindings — alloy#simpleRestJson and aws.protocols#restJson1.
+title: simpleRestJson
+description: alloy#simpleRestJson — JSON over HTTP with REST bindings.
 ---
 
-Two Smithy protocols share the same JSON-over-HTTP wire format with REST
-bindings:
-
-| Protocol | Trait | Status |
-| --- | --- | --- |
-| `alloy#simpleRestJson` | `@simpleRestJson` | Preview — client + server |
-| `aws.protocols#restJson1` | `@restJson1` | Preview — client + server |
+`alloy#simpleRestJson` is a JSON-over-HTTP protocol with Smithy HTTP bindings.
+NSmithy generates both a typed .NET client and an ASP.NET Core minimal API
+server adapter. Status: **Preview**.
 
 Current conformance snapshot from the pinned protocol-test models:
 
-- `alloy#simpleRestJson`: `43/43` official request/response cases (`100%`)
-- `aws.protocols#restJson1`: `268/272` official request/response cases (`98.53%`)
+- client: `43/43` official cases (`100%`)
+- server: `43/43` official cases (`100%`)
 
-The modeling syntax, core HTTP binding traits, and generated C# shapes are
-nearly identical between the two protocols for common cases. The differences
-are in protocol-specific behavior: `restJson1` adds AWS-specific features such
-as raw string/blob payloads, `@requestCompression`, `@httpChecksumRequired`,
-and a different error deserialization convention.
+Use `simpleRestJson` when your consumers are primarily .NET or Scala
+(via [Smithy4s](https://disneystreaming.github.io/smithy4s/)) and you want the
+smoothest current NSmithy end-to-end path. Use
+[`aws.protocols#restJson1`](/smithy-dotnet/protocols/aws-rest-json1/) when you
+need broader Smithy ecosystem compatibility or OpenAPI generation.
 
-## Which Protocol Should I Use?
-
-**Use `aws.protocols#restJson1`** for new services. It has broad cross-ecosystem
-compatibility — most official Smithy code generators (Java, TypeScript, Python,
-Swift, Rust, Go) target `restJson1` — and NSmithy generates OpenAPI from it,
-giving you Scalar UI and standard tooling out of the box.
-
-**Use `alloy#simpleRestJson`** if your consumers are exclusively .NET or Scala
-(via [Smithy4s](https://disneystreaming.github.io/smithy4s/)) and you don't need
-OpenAPI or cross-language reach. It has 100% conformance coverage but is narrower
-in ecosystem compatibility.
-
-## Maven Dependencies
-
-`alloy#simpleRestJson` requires `alloy-core`:
+## Maven Dependency
 
 ```json
 "com.disneystreaming.alloy:alloy-core:0.3.38"
-```
-
-`aws.protocols#restJson1` requires `smithy-aws-traits` instead:
-
-```json
-"software.amazon.smithy:smithy-aws-traits:1.56.0"
 ```
 
 ## NuGet Packages
@@ -258,7 +234,4 @@ foreach (var c in cities.Items.Values)
 
 var seattle = await client.GetCityAsync(new GetCityInput("SEA"));
 Console.WriteLine($"{seattle.Name} ({seattle.Coordinates.Latitude}, {seattle.Coordinates.Longitude})");
-
-var forecast = await client.GetForecastAsync(new GetForecastInput("SEA"));
-Console.WriteLine($"Chance of rain: {forecast.ChanceOfRain:P0}");
 ```

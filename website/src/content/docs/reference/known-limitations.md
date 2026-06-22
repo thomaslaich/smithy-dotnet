@@ -12,21 +12,22 @@ Support is intentionally selective, and protocols are at different maturity
 levels. Each implemented protocol has a conformance suite run against the
 official Smithy / AWS protocol tests (`tests/Conformance`):
 
-- **`alloy#simpleRestJson`** — the most complete path: client and ASP.NET Core
+- **simpleRestJson (`alloy#simpleRestJson`)** — the most complete path: client and ASP.NET Core
   server, the best end-to-end coverage.
-- **`aws.protocols#restJson1`** — client and ASP.NET Core server. The main
+- **AWS restJson1 (`aws.protocols#restJson1`)** — client and ASP.NET Core server. The main
   remaining corpus gap is the Glacier-specific fixture set, which needs broader
   projection support.
 - **`smithy.protocols#rpcv2Cbor`** — client and ASP.NET Core server, with
   conformance coverage.
-- **`aws.protocols#restXml`** — client only by design (see the server note
+- **`aws.protocols#awsJson1_1` / `aws.protocols#awsJson1_0`** — client only by
+  design; early conformance coverage for `awsJson1_1`.
+- **AWS restXml (`aws.protocols#restXml`)** — client only by design (see the server note
   below); narrower coverage than the JSON paths.
 - **`alloy.proto#grpc`** — native client and server (see below); the least
   mature path.
 
 Not yet implemented (planned as **clients** — servers are not, see below):
 
-- AWS JSON protocols
 - EC2 Query and AWS Query
 
 ## Streaming Is Not Supported
@@ -63,13 +64,15 @@ implement a service in: `alloy#simpleRestJson`, `aws.protocols#restJson1`,
 `smithy.protocols#rpcv2Cbor`, and native gRPC.
 
 The AWS-facing protocols — `aws.protocols#restXml`, AWS JSON, and AWS / EC2
-Query — are **client-only by design**. NSmithy generates clients to call
-AWS-compatible services; servers for those protocols are not planned.
+Query — are **client-only by design**. NSmithy generates clients for the
+implemented protocols to call AWS-compatible services; servers for those
+protocols are not planned.
 
 Other constraints:
 
 - No general non-ASP.NET server story.
-- Response binding and error behavior still need broader conformance coverage.
+- Response binding and error behavior still need broader conformance coverage,
+  especially for AWS JSON and AWS restXml.
 
 ## HTTP Version Negotiation Traits Are Ignored
 
