@@ -31,7 +31,8 @@ internal static class HttpRequestRunner
                 && t.Name.EndsWith("Client", StringComparison.Ordinal)
                 && t.GetConstructors()
                     .Any(c =>
-                        c.GetParameters() is [{ ParameterType: var pt }, ..] && pt == typeof(Uri)
+                        c.GetParameters() is [{ ParameterType: var pt }, ..]
+                        && pt == typeof(HttpClient)
                     )
             ),
     ];

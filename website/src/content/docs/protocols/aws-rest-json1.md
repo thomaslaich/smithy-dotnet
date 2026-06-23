@@ -7,14 +7,12 @@ description: aws.protocols#restJson1 — AWS REST/JSON with Smithy HTTP bindings
 typed .NET client and an ASP.NET Core minimal API server adapter. Status:
 **Preview**.
 
-Current conformance snapshot from the pinned AWS protocol-test models:
-
-- client: `243/247` official cases (`98.4%`)
-- server: `224/227` official cases (`98.7%`)
-
 Although the trait lives under `aws.protocols`, `restJson1` is useful for
 non-AWS services too. It has broad Smithy ecosystem support and is the protocol
 to choose when you want OpenAPI generation through `smithy-openapi`.
+
+See [Protocol Status](/smithy-dotnet/protocols/status/) for current conformance
+numbers.
 
 ## Maven Dependency
 

@@ -34,11 +34,14 @@ devenv shell
 dotnet run --project client
 ```
 
-The generated clients expose auth as a specific constructor parameter:
+The generated clients take the endpoint directly and a config object for auth schemes:
 
 ```csharp
-var client = new DynamoDB20120810Client(
+using var client = new DynamoDB20120810Client(
     new Uri("http://localhost:4566"),
-    authSchemes: [new AwsSigV4AuthScheme("dynamodb", "us-east-1", credentials)]
+    new()
+    {
+        AuthSchemes = { new AwsSigV4AuthScheme("dynamodb", "us-east-1", credentials) },
+    }
 );
 ```

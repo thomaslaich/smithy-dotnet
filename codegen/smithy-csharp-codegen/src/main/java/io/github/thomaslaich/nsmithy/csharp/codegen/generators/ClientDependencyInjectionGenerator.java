@@ -17,7 +17,6 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
-import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport.Kind;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
@@ -58,7 +57,6 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
     String clientKey = (namespace.isEmpty() ? "" : namespace + ".") + clientName;
 
     writer.addImport(MS_EXT_DI);
-    writer.addImport(RuntimeTypes.NSMITHY_HTTP);
     writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kinds.get(0)));
 
     writer.write("public static class $LServiceCollectionExtensions", clientName);
@@ -69,34 +67,39 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
           // Overload 1: endpoint (turnkey).
           writer.write(
               "/// <summary>Registers <see cref=\"$L\"/> as a typed HttpClient"
-                  + " (IHttpClientFactory) for the given endpoint, using the service's default"
-                  + " protocol (or <paramref name=\"protocol\"/> when supplied).</summary>",
+                  + " (IHttpClientFactory) for the given endpoint. Set the protocol, auth schemes,"
+                  + " and middleware via <paramref name=\"configure\"/>.</summary>",
               interfaceName);
           writer.write("public static IHttpClientBuilder Add$L(", clientName);
           writer.write("    this IServiceCollection services,");
           writer.write("    System.Uri endpoint,");
-          writer.write("    IProtocol? protocol = null) =>");
+          writer.write("    System.Action<$LConfig>? configure = null) =>", clientName);
           writer.write(
-              "    services.Add$L(client => client.BaseAddress = endpoint, protocol);", clientName);
+              "    services.Add$L(client => client.BaseAddress = endpoint, configure);",
+              clientName);
           writer.write("");
 
-          // Overload 2: configure callback (Refit-style; BaseAddress set by the caller).
+          // Overload 2: configure callbacks (Refit-style HttpClient setup + client config).
           writer.write(
               "/// <summary>Registers <see cref=\"$L\"/> as a typed HttpClient"
                   + " (IHttpClientFactory). Configure the HttpClient (at minimum its BaseAddress)"
-                  + " via <paramref name=\"configureClient\"/>; pass <paramref name=\"protocol\"/>"
-                  + " to override the service's default protocol.</summary>",
+                  + " via <paramref name=\"configureClient\"/>; set the protocol, auth schemes, and"
+                  + " middleware via <paramref name=\"configure\"/>.</summary>",
               interfaceName);
           writer.write("public static IHttpClientBuilder Add$L(", clientName);
           writer.write("    this IServiceCollection services,");
           writer.write("    System.Action<System.Net.Http.HttpClient>? configureClient = null,");
-          writer.write("    IProtocol? protocol = null)");
+          writer.write("    System.Action<$LConfig>? configure = null)", clientName);
           writer.openBlock(
               "{",
               "}",
               () -> {
                 writer.write("System.ArgumentNullException.ThrowIfNull(services);");
-                writer.write("var resolvedProtocol = protocol ?? new $L();", primaryProtocol);
+                writer.write("var config = new $LConfig();", clientName);
+                writer.write("configure?.Invoke(config);");
+                writer.write(
+                    "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
+                writer.write("config.Protocol = resolvedProtocol;");
                 writer.write("return services");
                 writer.write("    .AddHttpClient(");
                 writer.write("        $L,", CSharpNaming.formatString(clientKey));
@@ -116,8 +119,7 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
                 writer.write("            configureClient?.Invoke(client);");
                 writer.write("        })");
                 writer.write(
-                    "    .AddTypedClient<$L>((httpClient, _) => new $L(httpClient,"
-                        + " resolvedProtocol));",
+                    "    .AddTypedClient<$L>((httpClient, _) => new $L(httpClient, config));",
                     interfaceName,
                     clientName);
               });

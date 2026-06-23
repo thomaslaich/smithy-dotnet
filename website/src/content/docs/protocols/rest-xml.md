@@ -7,14 +7,12 @@ description: aws.protocols#restXml — XML over HTTP. Client-only, early preview
 as S3 and Route 53. NSmithy generates a typed client that encodes request bodies
 as XML and decodes XML responses. Status: **Early preview, client-only**.
 
-Current conformance snapshot from the pinned AWS protocol-test models:
-
-- requests: `4/109` official client cases (`3.7%`)
-- responses: `42/84` official client cases (`50.0%`)
-
 The passing slice is weighted toward response deserialization. Request binding
 coverage is still narrow and is expected to grow behind the conformance
 allowlist.
+
+See [Protocol Status](/smithy-dotnet/protocols/status/) for current conformance
+numbers.
 
 ## Maven Dependency
 

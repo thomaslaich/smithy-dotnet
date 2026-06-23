@@ -3,20 +3,21 @@ title: Distributing Contracts
 description: Share your Smithy model across projects and ecosystems via a NuGet contracts package or a Maven-compatible JAR.
 ---
 
-Distributing your Smithy model lets other projects consume it without copying
-files. There are two distribution paths:
+Distributing your Smithy model lets other projects consume the contract without
+copying model files. NSmithy supports two packaging paths:
 
-- **Maven JAR** — any Smithy-based toolchain (Java, TypeScript, Python, and .NET)
-  can consume it from a Maven registry, making it the more universal option.
+- **Maven JAR** — any Smithy-based toolchain (Java, TypeScript, Python, .NET,
+  and others) can consume it from a Maven registry. This is the more portable
+  option.
 - **NuGet package** — .NET consumers reference it like any other package; NSmithy
   picks up the model files and synthesizes a `smithy-build.json` automatically.
 
 ## Maven JAR Distribution
 
 :::tip[Recommended]
-Maven JAR distribution is generally preferred — it works with any Smithy-based
-toolchain, not just .NET, so your model remains accessible to Java, TypeScript,
-Python, and other consumers without any extra steps.
+Maven JAR distribution is generally preferred. It works with Smithy tooling
+outside .NET, so Java, TypeScript, Python, and other consumers can use the same
+model package.
 :::
 
 ### Configure
@@ -40,7 +41,7 @@ dotnet pack MyService.Contracts --configuration Release
 ```
 
 When `SmithyMavenGroupId` is set, the `_CreateSmithyJar` MSBuild target runs
-after `Pack` and writes the JAR alongside the `.nupkg`:
+after `Pack` and writes Maven artifacts alongside the `.nupkg`:
 
 ```
 bin/Release/
@@ -63,7 +64,7 @@ META-INF/smithy/
 
 ### Install Locally
 
-To make the JAR available to a local Smithy CLI invocation during development:
+To make the JAR available to local Smithy CLI builds during development:
 
 ```shell
 mvn install:install-file \
@@ -74,8 +75,8 @@ mvn install:install-file \
 
 ### Publish to a Remote Registry
 
-Use the `dotnet-nsmithy push` tool to upload to any Maven registry that accepts
-HTTP PUT (GitHub Packages, Artifactory, Nexus, etc.):
+Use the `dotnet-nsmithy push` tool to upload to a Maven registry that accepts
+HTTP PUT, such as GitHub Packages, Artifactory, or Nexus:
 
 ```shell
 dotnet tool install -g dotnet-nsmithy
@@ -93,11 +94,10 @@ variables.
 :::note
 Maven JAR distribution does not require a dedicated contracts project. You can
 add `SmithyMavenGroupId`, `SmithyMavenArtifactId`, and `SmithyPublish=true`
-directly to a server project that already owns its model files and `dotnet pack`
-will produce the JAR from there. That said, we still recommend splitting the
-model out into a separate contracts project — it keeps the model decoupled from
-any one implementation and makes it easier to share across server and client
-projects.
+directly to a server project that owns model files, and `dotnet pack` will
+produce the JAR. A separate contracts project is still recommended because it
+keeps the model decoupled from any one implementation and easier to share across
+server and client projects.
 :::
 
 ## NuGet Distribution
@@ -120,7 +120,7 @@ dotnet pack MyService.Contracts --configuration Release
 ### Consume
 
 A project that references the published package picks up the model and Maven
-dependencies automatically — no `ProjectReference` needed:
+dependencies automatically:
 
 ```xml
 <PropertyGroup>
@@ -134,5 +134,5 @@ dependencies automatically — no `ProjectReference` needed:
 ```
 
 NSmithy synthesizes a `smithy-build.json` under `obj/`, invokes `smithy build`,
-and adds the generated `.g.cs` files to compilation — identical behaviour to a
+and adds the generated `.g.cs` files to compilation — identical behavior to a
 `ProjectReference`.

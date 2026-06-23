@@ -80,8 +80,8 @@ public final class ClientGenerator implements Runnable {
     String typeName = CSharpNaming.typeName(service.getId().getName()) + "Client";
     String interfaceName = "I" + typeName;
 
-    // Interface
-    writer.write("public interface $L", interfaceName);
+    // Interface — IDisposable so a client that owns its HttpClient is released via `using` or DI.
+    writer.write("public interface $L : System.IDisposable", interfaceName);
     writer.openBlock(
         "{",
         "}",
@@ -133,6 +133,10 @@ public final class ClientGenerator implements Runnable {
         "}",
         () -> {
           writer.write("private readonly SmithyOperationInvoker invoker;");
+          // Only set when the client created the HttpClient itself (the endpoint ctor); null when
+          // the caller supplied an HttpClient or invoker, so Dispose never touches what it doesn't
+          // own.
+          writer.write("private readonly System.Net.Http.HttpClient? ownedHttpClient;");
           if (needsIdempotency) {
             writer.write("private readonly System.Func<string> idempotencyTokenProvider;");
           }
@@ -146,32 +150,40 @@ public final class ClientGenerator implements Runnable {
           }
           writer.write("");
 
-          // Constructor: endpoint — the client creates and owns its HttpClient, configured for
-          // HTTP/2 when the protocol requires it (native gRPC). The protocol defaults to the
-          // service's primary declared protocol. To supply your own HttpClient (e.g. from
-          // IHttpClientFactory), use the HttpClient constructor instead — keeping HttpClient off
-          // this constructor leaves exactly one HttpClient-taking constructor, which is what
-          // AddHttpClient<I,T> requires to resolve the client unambiguously.
-          writer.write("public $L(", typeName);
-          writer.write("    System.Uri endpoint,");
-          writer.write("    IProtocol? protocol = null,");
+          // Constructor: endpoint convenience overload. The endpoint argument wins over any
+          // Endpoint already present on config; construction then flows through the config
+          // constructor so there is only one implementation path.
           writer.write(
-              "    System.Collections.Generic.IEnumerable<ISmithyClientMiddleware>? middleware ="
-                  + " null,");
-          writer.write(
-              "    System.Collections.Generic.IEnumerable<ISmithyAuthScheme>? authSchemes = null,");
-          writer.write("    System.Func<string>? idempotencyTokenProvider = null)");
+              "public $L(System.Uri endpoint, $LConfig? config = null) :"
+                  + " this(WithEndpoint(endpoint, config))",
+              typeName,
+              typeName);
+          writer.openBlock("{", "}", () -> {});
+          writer.write("");
+
+          // Canonical config implementation for the endpoint constructor. This stays private so
+          // the public surface has one direct-construction path (`endpoint, config?`) while config
+          // remains the internal model.
+          writer.write("private $L($LConfig config)", typeName, typeName);
           writer.openBlock(
               "{",
               "}",
               () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(endpoint);");
-                writer.write("var resolvedProtocol = protocol ?? new $L();", primaryProtocol);
+                writer.write("System.ArgumentNullException.ThrowIfNull(config);");
+                writer.write(
+                    "var endpoint = config.Endpoint ?? throw new System.ArgumentException(");
+                writer.write(
+                    "    \"Config.Endpoint must be set; otherwise use the constructor that takes an"
+                        + " HttpClient.\", nameof(config));");
+                writer.write(
+                    "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
+                writer.write("var httpClient = CreateDefaultHttpClient(resolvedProtocol);");
+                writer.write("this.ownedHttpClient = httpClient;");
                 writer.write(
                     "this.invoker = new SmithyOperationInvoker(new"
-                        + " HttpClientTransport(CreateDefaultHttpClient(resolvedProtocol),"
-                        + " endpoint), SmithyAuthSchemeResolver.Resolve(endpoint, $L,"
-                        + " ModeledAuthSchemes, authSchemes, middleware));",
+                        + " HttpClientTransport(httpClient, endpoint),"
+                        + " SmithyAuthSchemeResolver.Resolve(endpoint, $L, ModeledAuthSchemes,"
+                        + " config.AuthSchemes, config.Middleware));",
                     serviceSchema);
                 writeIdempotencyAssignment(needsIdempotency);
                 writer.write(
@@ -181,32 +193,30 @@ public final class ClientGenerator implements Runnable {
           writer.write("");
 
           // Constructor: bring your own HttpClient (e.g. from IHttpClientFactory /
-          // AddHttpClient<I,T>). The endpoint comes from the HttpClient's BaseAddress.
-          writer.write("public $L(", typeName);
-          writer.write("    System.Net.Http.HttpClient httpClient,");
-          writer.write("    IProtocol? protocol = null,");
+          // AddHttpClient<I,T>). The endpoint comes from Config.Endpoint, falling back to the
+          // HttpClient's BaseAddress.
           writer.write(
-              "    System.Collections.Generic.IEnumerable<ISmithyClientMiddleware>? middleware ="
-                  + " null,");
-          writer.write(
-              "    System.Collections.Generic.IEnumerable<ISmithyAuthScheme>? authSchemes = null,");
-          writer.write("    System.Func<string>? idempotencyTokenProvider = null)");
+              "public $L(System.Net.Http.HttpClient httpClient, $LConfig? config = null)",
+              typeName,
+              typeName);
           writer.openBlock(
               "{",
               "}",
               () -> {
                 writer.write("System.ArgumentNullException.ThrowIfNull(httpClient);");
+                writer.write("config ??= new $LConfig();", typeName);
                 writer.write(
-                    "var endpoint = httpClient.BaseAddress ?? throw new System.ArgumentException(");
+                    "var endpoint = config.Endpoint ?? httpClient.BaseAddress ?? throw new"
+                        + " System.ArgumentException(");
                 writer.write(
-                    "    \"httpClient.BaseAddress must be set; otherwise use the constructor that"
-                        + " takes an endpoint.\", nameof(httpClient));");
-                writer.write("var resolvedProtocol = protocol ?? new $L();", primaryProtocol);
+                    "    \"Set Config.Endpoint or httpClient.BaseAddress.\", nameof(httpClient));");
+                writer.write(
+                    "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
                 writer.write(
                     "this.invoker = new SmithyOperationInvoker(new"
                         + " HttpClientTransport(httpClient, endpoint),"
                         + " SmithyAuthSchemeResolver.Resolve(endpoint, $L, ModeledAuthSchemes,"
-                        + " authSchemes, middleware));",
+                        + " config.AuthSchemes, config.Middleware));",
                     serviceSchema);
                 writeIdempotencyAssignment(needsIdempotency);
                 writer.write(
@@ -216,11 +226,12 @@ public final class ClientGenerator implements Runnable {
           writer.write("");
 
           // Constructor: bring your own invoker (custom transport/middleware, DI, testing). The
-          // protocol defaults to the service's primary declared protocol, like the other ctors.
-          writer.write("public $L(", typeName);
-          writer.write("    SmithyOperationInvoker invoker,");
-          writer.write("    IProtocol? protocol = null,");
-          writer.write("    System.Func<string>? idempotencyTokenProvider = null)");
+          // invoker already owns the pipeline, so config.AuthSchemes/Middleware do not apply here;
+          // only Protocol and IdempotencyTokenProvider are read.
+          writer.write(
+              "public $L(SmithyOperationInvoker invoker, $LConfig? config = null)",
+              typeName,
+              typeName);
           writer.openBlock(
               "{",
               "}",
@@ -228,11 +239,28 @@ public final class ClientGenerator implements Runnable {
                 writer.write(
                     "this.invoker = invoker ?? throw new"
                         + " System.ArgumentNullException(nameof(invoker));");
-                writer.write("var resolvedProtocol = protocol ?? new $L();", primaryProtocol);
+                writer.write("config ??= new $LConfig();", typeName);
+                writer.write(
+                    "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
                 writeIdempotencyAssignment(needsIdempotency);
                 writer.write(
                     "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
                 writeOperationBindings(operations);
+              });
+          writer.write("");
+
+          writer.write(
+              "private static $LConfig WithEndpoint(System.Uri endpoint, $LConfig? config)",
+              typeName,
+              typeName);
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                writer.write("System.ArgumentNullException.ThrowIfNull(endpoint);");
+                writer.write("config ??= new $LConfig();", typeName);
+                writer.write("config.Endpoint = endpoint;");
+                writer.write("return config;");
               });
           writer.write("");
 
@@ -265,9 +293,28 @@ public final class ClientGenerator implements Runnable {
           }
           writer.write("");
 
+          // Disposes the HttpClient the client created itself; a no-op when the caller supplied the
+          // HttpClient or invoker (ownedHttpClient is null), so injected transports are never
+          // closed.
+          writer.write("public void Dispose() => ownedHttpClient?.Dispose();");
+          writer.write("");
+
           for (OperationShape op : operations) writeOperationMethod(sp, model, op);
           for (OperationShape op : operations) writeErrorDeserializer(sp, model, op);
         });
+    writer.write("");
+    writeConfigClass(typeName);
+  }
+
+  /**
+   * Renders the per-service client config: a sealed subclass of the runtime's {@code
+   * SmithyClientConfig}. It inherits the common knobs today; service-specific options (e.g.
+   * endpoint client-context params) can be added here later without changing the client's
+   * constructor surface.
+   */
+  private void writeConfigClass(String typeName) {
+    writer.write("public sealed class $LConfig : SmithyClientConfig", typeName);
+    writer.openBlock("{", "}", () -> {});
   }
 
   /**
@@ -295,7 +342,8 @@ public final class ClientGenerator implements Runnable {
   private void writeIdempotencyAssignment(boolean needsIdempotency) {
     if (needsIdempotency) {
       writer.write(
-          "this.idempotencyTokenProvider = idempotencyTokenProvider ?? DefaultIdempotencyToken;");
+          "this.idempotencyTokenProvider = config.IdempotencyTokenProvider ??"
+              + " DefaultIdempotencyToken;");
     }
   }
 

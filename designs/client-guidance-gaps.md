@@ -44,14 +44,14 @@ exists.
 | Request compression / content-MD5 | ✅ | `SmithyRequestModifiers` (`@requestCompression`, `@httpChecksumRequired`) |
 | Auth scheme resolution | 🟡 | Service-level priority resolution (see [auth](#auth-follow-ups)). Missing per-operation override, identity/signer split, endpoint-driven override |
 | Retries | 🟡 | `SmithyRetryMiddleware` retries 429/5xx with a fixed delay only |
-| Endpoint resolution | ❌ | Client takes a fixed `Uri`; no resolver, host-prefix, or per-operation resolution |
+| Endpoint resolution | ❌ | Client config carries a static `Endpoint`; no resolver, host-prefix, or per-operation resolution |
 | Interceptors / typed request context | ❌ | Pipeline threads only `(service, operation, httpRequest)`; middleware sees serialized HTTP only |
 | Request timeout via context | ❌ | Only `HttpClient.Timeout` |
 | Streaming request/response bodies | ❌ | `SmithyHttpRequest.Content` is `byte[]` (fully buffered) — see [Gap 4](#gap-4--streaming-bodies) |
 | Pagination (`@paginated`) | ❌ | No generated paginators — see [Gap 5](#gap-5--pagination) |
 | Observability / telemetry | ❌ | No tracing/metrics; `ActivitySource`/`Meter` available in the BCL — see [Gap 6](#gap-6--telemetry) |
 | Identity caching / refresh | ❌ | `IAwsCredentialsProvider` resolves but has no expiry/caching layer |
-| Client configuration / construction | 🟡 | Three overloaded ctors with positional optional params; no config object — see [Gap 7](#gap-7--client-configuration--construction) |
+| Client configuration / construction | ✅ | Generated `{Service}ClientConfig` (endpoint, protocol, auth, middleware, idempotency); `endpoint` / `httpClient` / `invoker` ctors; `IDisposable` — see [Gap 7](#gap-7--client-configuration--construction) |
 | User-Agent | ❌ | Not set |
 
 The gaps below are ordered by dependency: **Gap 1 (interceptor lifecycle +
@@ -122,8 +122,9 @@ The guidance recommends a per-operation `EndpointResolver` returning an
 taking precedence over a configured resolver, plus `@hostLabel` host-prefix
 support and (eventually) rules-engine rulesets.
 
-Today the endpoint is a fixed `Uri` ctor argument; `@endpoint` /`@hostLabel`
-host prefixes and per-operation endpoints are unsupported.
+Today the endpoint is a static `Uri` on client config, usually supplied through
+the endpoint convenience constructor; `@endpoint` /`@hostLabel` host prefixes and
+per-operation endpoints are unsupported.
 
 **Proposed (incremental):**
 
@@ -191,53 +192,55 @@ low effort. Builds on Gap 1.
 
 ## Gap 7 — Client configuration / construction
 
-Generated clients are built from three overloaded constructors — `(Uri endpoint,
-…)`, `(HttpClient httpClient, …)`, `(SmithyOperationInvoker invoker, …)` — each
-with a tail of positional optional params (`protocol`, `middleware`,
-`authSchemes`, `idempotencyTokenProvider`). There is no config object, and the
-client is not `IDisposable` even though the endpoint ctor creates and owns an
-`HttpClient`.
-
-smithy-kotlin instead builds clients from a **config builder** (a DSL lambda over
-a mutable `Config.Builder` producing an immutable `Config`), plus
-`fromEnvironment { }` and `withConfig { }`. Every knob is named, order-free, and
-non-breaking to add — which matters because the config surface is large (endpoint,
-retry, interceptors, auth, telemetry, region, FIPS/dual-stack, …).
-
-The positional-param approach is fine at today's ~4 knobs but does not scale, and
-already shows the strain:
-
-- **Positional fragility.** Adding `authSchemes` shifted the tail, so the
-  conformance runner's reflection call changed from `[httpClient, null, null,
-  idempotencyToken]` to `[httpClient, null, null, null, idempotencyToken]`.
-- **Overload explosion.** Every new knob (Gaps 1–3/6, region, timeout, …)
-  multiplies across all three `endpoint`/`httpClient`/`invoker` constructors.
-
-**Proposed:** a generated `<Client>Config` options object — the .NET-idiomatic
-analogue of Kotlin's builder, matching AWS SDK for .NET (`AmazonDynamoDBConfig`)
-and Azure SDK (`BlobClientOptions`) conventions:
+**Shipped.** Clients use a per-service
+`{Service}ClientConfig : SmithyClientConfig` — the .NET analogue of smithy-kotlin's
+config builder (a mutable config object with public setters, populated inline by a
+C# object initializer). Normal callers pass the endpoint directly and add config
+only when they need extra knobs:
 
 ```csharp
-// object-initializer: named, order-free, non-breaking to extend
-var client = new DynamoDbClient(new DynamoDbClientConfig
-{
-    Endpoint = new Uri("http://localhost:4566"),
-    AuthSchemes = { new AwsSigV4AuthScheme("dynamodb", "us-east-1", creds) },
-    RetryStrategy = new StandardRetryStrategy(maxAttempts: 5),
-    Interceptors = { new MyInterceptor() },
-});
-
-// Action<Config> overload — closest to Kotlin's DSL lambda; the shape DI wants
-services.AddDynamoDbClient(c => { c.Endpoint = ...; c.AuthSchemes.Add(...); });
+using var client = new DynamoDB20120810Client(
+    new Uri("http://localhost:4566"),
+    new()
+    {
+        AuthSchemes = { new AwsSigV4AuthScheme("dynamodb", "us-east-1", creds) },
+    });
 ```
 
-- Keep the three "source" ctors (`endpoint` / `httpClient` / `invoker`) as thin
-  wrappers that populate a default `Config`, so the BYO-HttpClient and
-  `AddHttpClient<I,T>` DI story is preserved.
-- `Config` becomes the single home for the knobs Gaps 1–3/6 introduce
+- The config holds `Endpoint`, `Protocol`, `AuthSchemes`, `Middleware`, and
+  `IdempotencyTokenProvider`, and is the single home for the knobs Gaps 1–3/6 add
   (interceptors, endpoint resolver, retry strategy, telemetry).
-- Implement `IDisposable`: dispose the owned `HttpClient` when the client created
-  it; skip disposal when one was injected (the analogue of Kotlin's `Closeable`).
+- **Endpoint lives in config internally** (like smithy-kotlin's
+  `endpointProvider`), while the public API keeps an endpoint convenience
+  overload for the common case. The endpoint argument is copied into config and
+  wins over any existing `Config.Endpoint`. When Gap 2 lands, the resolver becomes
+  another config knob and `Config.Endpoint` is the static override that wins over
+  it.
+- Three public constructors select transport ownership: `(endpoint, config?)`
+  (normal direct construction; client owns its `HttpClient`), `(httpClient,
+  config?)` (endpoint = `Config.Endpoint ?? BaseAddress`; the `AddHttpClient<I,T>`
+  / `IHttpClientFactory` path), and `(invoker, config?)` (custom pipeline /
+  testing). The endpoint constructor delegates to a private config constructor so
+  config remains the internal model without adding another public construction
+  style.
+- The `HttpClient` constructor is intentionally retained because .NET typed-client
+  DI and tests with custom `HttpMessageHandler`s need to pass in an externally
+  owned client. The invoker constructor is intentionally retained as the custom
+  transport/pipeline escape hatch; generated-client middleware/auth config does
+  not apply there because the invoker already owns that pipeline.
+- The generated `Add{Service}Client` DI extension takes an
+  `Action<{Service}ClientConfig>` callback, so auth / protocol / middleware are all
+  configurable through DI.
+- Clients implement `IDisposable`: disposing releases the `HttpClient` only when
+  the client created it (a no-op when an `HttpClient` or invoker was supplied — the
+  analogue of Kotlin's `Closeable`).
+
+A config object rather than named constructor parameters because it is a nameable,
+reusable value that the DI options pattern can take, and — decisively for a
+versioned library — adding a property is backward-compatible, whereas adding a
+constructor parameter is a binary-breaking change. The endpoint convenience
+constructor is the exception because endpoint is the minimum viable client input,
+not an advanced knob.
 
 ## Auth follow-ups
 

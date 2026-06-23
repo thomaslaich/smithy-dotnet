@@ -8,16 +8,13 @@ protocols. NSmithy generates typed clients for both through
 `AwsJson11Protocol` and `AwsJson10Protocol`. Status: **Early preview,
 client-only**.
 
-Current `awsJson1_1` conformance snapshot from the pinned AWS protocol-test
-models:
+The currently verified slice covers `X-Amz-Target`, AWS JSON content types,
+empty input/output handling, special floating-point values, and common
+client-side error discriminator formats. `awsJson1_0` has runtime support but no
+separate conformance project yet.
 
-- requests: `6/57` official client cases (`10.5%`)
-- responses: `19/61` official client cases (`31.1%`)
-
-The current verified slice covers `X-Amz-Target`, AWS JSON content types, empty
-input/output handling, special floating-point values, and common client-side
-error discriminator formats. `awsJson1_0` has runtime support but no separate
-conformance project yet.
+See [Protocol Status](/smithy-dotnet/protocols/status/) for current conformance
+numbers.
 
 ## Maven Dependency
 

@@ -5,7 +5,10 @@ var endpoint = args.Length > 0 ? args[0] : "http://localhost:5001";
 
 // Native gRPC client — no GrpcChannel / Grpc.Net.Client. Passing GrpcProtocol selects gRPC and
 // the client configures the HTTP/2 HttpClient that gRPC requires.
-var client = new LibraryServiceClient(new Uri(endpoint), protocol: new GrpcProtocol());
+using var client = new LibraryServiceClient(
+    new Uri(endpoint),
+    new() { Protocol = new GrpcProtocol() }
+);
 
 static Book NewBook(
     string id,
