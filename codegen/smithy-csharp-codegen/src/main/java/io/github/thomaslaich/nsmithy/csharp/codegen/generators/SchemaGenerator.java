@@ -407,12 +407,23 @@ public final class SchemaGenerator {
   private static String elementSchemaExpr(
       GenerationContext context, MemberShape member, Shape target, boolean sparse) {
     String targetExpr = shapeSchemaAccessor(context, target);
+    String base;
     if (!sparse) {
-      return targetExpr;
+      base = targetExpr;
+    } else {
+      base =
+          ShapeSupport.isReferenceType(context.model(), member)
+              ? "Schemas.NullableReference(" + targetExpr + ")"
+              : "Schemas.Nullable(" + targetExpr + ")";
     }
-    return ShapeSupport.isReferenceType(context.model(), member)
-        ? "Schemas.NullableReference(" + targetExpr + ")"
-        : "Schemas.Nullable(" + targetExpr + ")";
+
+    // List/map members carry their own traits (e.g. @xmlName naming each item element in a
+    // non-flattened restXml list, or a member-level @timestampFormat). The element is otherwise the
+    // shared target schema, which doesn't carry them, so overlay the member's traits onto it.
+    String memberTraits = memberTraitsExpr(context, member);
+    return "null".equals(memberTraits)
+        ? base
+        : "Schemas.WithTraits(" + base + ", " + memberTraits + ")";
   }
 
   private static String constructorArguments(

@@ -51,23 +51,28 @@ status (e.g. `@httpResponseCode`) read `StatusCode` directly.
 
 ## Client Construction
 
-Generated clients expose constructors rather than a builder (idiomatic C#; optional
-and named parameters cover what a builder would). The protocol is chosen by an
-optional `IProtocol` parameter, defaulting to the service's primary declared
-protocol:
+Generated clients expose constructors rather than a builder. The common path is
+endpoint-first, with an optional per-service config object for protocol, auth,
+middleware, and future client knobs:
 
 ```csharp
-new WeatherClient(endpoint);                                  // default (primary) protocol
-new LibraryServiceClient(endpoint, protocol: new GrpcProtocol());
-new WeatherClient(httpClient);                                // endpoint from httpClient.BaseAddress
-new WeatherClient(invoker, new RestJson1Protocol());          // custom transport/middleware/DI
+new WeatherClient(endpoint);                                  // default config
+new LibraryServiceClient(endpoint, new() { Protocol = new GrpcProtocol() });
+new WeatherClient(httpClient, config);                        // endpoint from config.Endpoint ?? BaseAddress
+new WeatherClient(invoker, config);                           // custom transport/pipeline/testing
 ```
 
-Cross-cutting configuration is passed as first-class parameters, not a single
-options object — `middleware` (an `ISmithyClientMiddleware` pipeline) and, for
-operations with `@idempotencyToken`, an `idempotencyTokenProvider`. When the caller
-supplies no `HttpClient`, the client creates one, configured for HTTP/2 when the
-protocol requires it (`IProtocol.RequiresHttp2`, true for native gRPC).
+The generated `{Service}ClientConfig : SmithyClientConfig` is the canonical
+configuration model. It currently carries `Endpoint`, `Protocol`, `AuthSchemes`,
+`Middleware`, and `IdempotencyTokenProvider`; service-specific and future runtime
+options can be added as properties without changing constructor signatures. The
+endpoint constructor writes the positional endpoint into config and then delegates
+to a private config constructor. The positional endpoint wins over any
+`config.Endpoint` value.
+
+When the caller supplies no `HttpClient`, the client creates one, configured for
+HTTP/2 when the protocol requires it (`IProtocol.RequiresHttp2`, true for native
+gRPC).
 
 The protocol implementation composes the transport with the codec and the
 protocol binding to produce a complete request pipeline. The generated client
@@ -96,24 +101,27 @@ has several drawbacks for Smithy:
 `IHttpTransport` sits one level below: it models a single `send` call rather than a
 named client.
 
-Both are supported. The `HttpClient`-first constructor lets a client be registered
-as a typed client so the factory owns the `HttpClient` (pooled handlers, Polly,
-DNS refresh):
+Both are supported. The `HttpClient` constructor is kept so a client can be
+registered as a typed client and the factory can own the `HttpClient` (pooled
+handlers, Polly, DNS refresh):
 
 ```csharp
 services.AddHttpClient<IWeatherClient, WeatherClient>(c =>
     c.BaseAddress = new Uri("https://api.example.com"));
 ```
 
-Consumers who need a fully custom transport instead implement `IHttpTransport` and
-pass a `SmithyOperationInvoker` to the invoker constructor.
+Consumers who need a fully custom transport instead implement `IHttpTransport`,
+build a `SmithyOperationInvoker`, and pass it to the invoker constructor. That
+constructor is intentionally lower-level: the invoker already owns the transport
+and middleware pipeline, so generated-client config middleware/auth do not apply
+there.
 
 ## URI Construction
 
 REST protocol implementations build the request URI by combining:
 
-1. The client's endpoint (the base URI passed at construction, or the
-   `HttpClient.BaseAddress`).
+1. The client's endpoint (`config.Endpoint`, the endpoint constructor argument,
+   or `HttpClient.BaseAddress` for bring-your-own-`HttpClient` construction).
 2. The operation's URI template (from `@http`), with `@httpLabel` members
    substituted.
 3. `@httpQuery` and `@httpQueryParams` members appended as query string

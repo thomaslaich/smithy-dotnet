@@ -3,7 +3,8 @@ title: Quick Start
 description: Scaffold a contracts project, a server, and a client with NSmithy templates.
 ---
 
-If you are new to Smithy, the [official Smithy quickstart](https://smithy.io/2.0/quickstart.html) is a good place to familiarize yourself with the IDL before continuing.
+If you are new to Smithy, the [official Smithy quickstart](https://smithy.io/2.0/quickstart.html)
+is a good place to learn the IDL before continuing.
 
 ## Prerequisites
 
@@ -14,7 +15,9 @@ NuGet package, so no separate Java or Smithy CLI installation is required.
 If you enable `SmithyGenerateDocs` (Sphinx HTML docs), Python 3.11+ must also
 be on your PATH.
 
-Optionally install [CSharpier](https://csharpier.com) for formatted generated code — NSmithy runs it automatically after codegen if available, and silently skips it if not.
+Optionally install [CSharpier](https://csharpier.com) for formatted generated
+code. NSmithy runs it automatically after codegen when it is available, and skips
+it otherwise.
 
 Install the NSmithy project templates (one-time):
 
@@ -50,8 +53,8 @@ dotnet new nsmithy-server -n HelloWorld.Server --contracts HelloWorld.Contracts 
 dotnet sln add HelloWorld.Server
 ```
 
-The `--contracts` flag sets the `ProjectReference` to the contracts project
-exactly. `--with-docs` enables the Smithy docs and OpenAPI endpoints. Build and run:
+The `--contracts` flag adds a `ProjectReference` to the contracts project.
+`--with-docs` enables the Smithy docs and OpenAPI endpoints. Build and run:
 
 ```shell
 dotnet run --project HelloWorld.Server
@@ -130,8 +133,8 @@ operation SayHello {
 }
 ```
 
-`@restJson1` is the protocol — it controls serialization and HTTP binding
-behaviour. `@http` binds the operation to a route. `@httpLabel` maps `name` to
+`@restJson1` is the protocol; it controls serialization and HTTP binding
+behavior. `@http` binds the operation to a route. `@httpLabel` maps `name` to
 the `{name}` path segment. This is the source of truth for everything that
 follows — change the model, rebuild, and all generated code updates automatically.
 
@@ -218,5 +221,5 @@ dotnet new nsmithy-client --help
 ## Example Repository
 
 For a more complete example with multiple operations, error types, and a working
-client/server setup you can clone and play around with, see
+client/server setup, see
 [nsmithy-minimal](https://github.com/thomaslaich/nsmithy-minimal).

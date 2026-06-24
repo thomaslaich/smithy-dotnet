@@ -3,7 +3,7 @@ title: Dependency Injection
 description: Register a generated NSmithy client with IHttpClientFactory and the .NET service container.
 ---
 
-NSmithy can generate a turnkey `Add{Service}Client` extension that registers the
+NSmithy can generate an `Add{Service}Client` extension that registers the
 client as a typed [`IHttpClientFactory`](https://learn.microsoft.com/aspnet/core/fundamentals/http-requests)
 client. This is the recommended way to use a client with the .NET service
 container.
@@ -48,28 +48,51 @@ public sealed class ForecastService(IWeatherClient weather)
 ```
 
 `Add{Service}Client` returns the `IHttpClientBuilder`, so you can chain handlers
-(retry, auth, logging) and any other typed-client configuration:
+(logging, resilience, auth handlers) and other typed-client configuration:
 
 ```csharp
 services.AddWeatherClient(new Uri("https://api.example.com"))
     .AddHttpMessageHandler<AuthHandler>();
 ```
 
-To configure the `HttpClient` yourself (Refit-style) instead of passing an
-endpoint, use the callback overload:
+If your application owns `HttpClient` setup, use the callback overload. This is
+where you set `BaseAddress`, timeouts, default headers, HTTP version policy, and
+other `System.Net.Http.HttpClient` settings:
 
 ```csharp
-services.AddWeatherClient(client => client.BaseAddress = new Uri("https://api.example.com"));
+services.AddWeatherClient(client =>
+{
+    client.BaseAddress = new Uri("https://api.example.com");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 ```
 
-## Choosing a protocol
+## Configuring the client
 
-The helper uses the service's default (primary) protocol. For a multi-protocol
-service — for example one declaring both `@simpleRestJson` and `@grpc` — pass the
-protocol you want:
+NSmithy client options are configured separately from `HttpClient` options. The
+config callback uses the same `{Service}ClientConfig` that constructors take (see
+[Client Configuration](/smithy-dotnet/guides/client-configuration/)):
 
 ```csharp
-services.AddWeatherClient(new Uri("https://api.example.com"), protocol: new GrpcProtocol());
+services.AddWeatherClient(
+    new Uri("https://api.example.com"),
+    config => config.Protocol = new GrpcProtocol());
+```
+
+You can combine both callbacks when you need both layers:
+
+```csharp
+services.AddWeatherClient(
+    client =>
+    {
+        client.BaseAddress = new Uri("https://api.example.com");
+        client.Timeout = TimeSpan.FromSeconds(10);
+    },
+    config =>
+    {
+        config.Protocol = new GrpcProtocol();
+        config.AuthSchemes.Add(authScheme);
+    });
 ```
 
 The helper configures the `HttpClient` for HTTP/2 automatically when the chosen
@@ -78,43 +101,23 @@ wrong by hand.
 
 ## Manual registration
 
-You don't need the helper — the generated client is a plain typed client, so the
-standard pattern works:
+The generated helper is preferred. It configures the typed client and applies
+protocol-specific `HttpClient` settings such as HTTP/2 for gRPC.
+
+Generated clients are still plain typed clients, so manual registration works:
 
 ```csharp
 services.AddHttpClient<IWeatherClient, WeatherClient>(client =>
     client.BaseAddress = new Uri("https://api.example.com"));
 ```
 
-This is fine, but **prefer the generated helper**: this form always uses the
-default protocol, and — because `IHttpClientFactory` owns the `HttpClient` — it
-cannot configure HTTP/2 for gRPC for you. If you go manual and need a non-default
-protocol or HTTP/2, you have to drop down to a named client with an explicit
-factory and configure the `HttpClient` version yourself:
-
-```csharp
-services.AddHttpClient(nameof(WeatherClient), client =>
-    {
-        client.BaseAddress = new Uri("https://api.example.com");
-        client.DefaultRequestVersion = HttpVersion.Version20; // gRPC needs HTTP/2
-    })
-    .AddTypedClient<IWeatherClient>(static (http, _) =>
-        new WeatherClient(http, protocol: new GrpcProtocol()));
-```
-
-— which is exactly the boilerplate `AddWeatherClient` generates for you.
+Use this only when you need full control over `IHttpClientFactory` registration.
+For non-default protocols or gRPC, prefer `AddWeatherClient(...)`; otherwise you
+must configure the `HttpClient` version and policy yourself.
 
 ## Constructors
 
-Outside of DI, the generated `{Service}Client` exposes three constructors. Each
-takes an optional `protocol` (defaulting to the service's primary protocol), plus
-optional `middleware` / `idempotencyTokenProvider`:
-
-```csharp
-new WeatherClient(endpoint);            // client owns its HttpClient (HTTP/2 auto for gRPC)
-new WeatherClient(httpClient);          // you own it; endpoint from BaseAddress
-new WeatherClient(invoker);             // you own the whole transport/middleware pipeline
-
-// the protocol is optional on every constructor:
-new WeatherClient(endpoint, protocol: new GrpcProtocol());
-```
+Outside of DI, the generated `{Service}Client` is constructed from a
+direct endpoint argument plus an optional `{Service}ClientConfig`, or from an
+`HttpClient` / invoker plus an optional config. See
+[Client Configuration](/smithy-dotnet/guides/client-configuration/).

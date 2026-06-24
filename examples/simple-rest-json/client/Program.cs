@@ -1,11 +1,19 @@
 using Alloy.Test;
+using NSmithy.Client;
 
 var endpoint = args.Length > 0 ? args[0] : "http://localhost:5000";
+const string ApiKey = "nsmithy-demo-key";
 
-var client = new PizzaAdminServiceClient(new Uri(endpoint));
+var client = new PizzaAdminServiceClient(
+    new Uri(endpoint),
+    new() { AuthSchemes = { new HttpApiKeyAuthScheme("X-Api-Key", ApiKey) } }
+);
 
 var health = await client.HealthAsync(new HealthInput());
 Console.WriteLine($"Health: {health.Status}");
+
+var authenticatedHealth = await client.AuthenticatedHealthAsync(new AuthenticatedHealthInput());
+Console.WriteLine($"Authenticated health: {authenticatedHealth.Status}");
 
 var version = await client.VersionAsync(new VersionInput());
 Console.WriteLine($"Version: {version.Version}");

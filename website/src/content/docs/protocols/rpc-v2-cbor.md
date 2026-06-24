@@ -7,16 +7,20 @@ description: smithy.protocols#rpcv2Cbor — binary CBOR encoding over HTTP. Clie
 as [CBOR](https://cbor.io/) and carried over HTTP POST requests on a fixed
 path derived from the service and operation names. Status: **Preview**.
 
+See [Protocol Status](/smithy-dotnet/protocols/status/) for current conformance
+numbers.
+
 ## Maven Dependency
 
 No extra Maven dependency beyond the codegen plugin — `smithy.protocols` shapes
 are bundled with the Smithy CLI.
 
-## NuGet Package
+## NuGet Packages
 
-```xml
-<PackageReference Include="NSmithy.Codecs.Cbor" Version="0.3.0" />
-```
+| Purpose | Packages |
+| --- | --- |
+| Client | `NSmithy.Client`, `NSmithy.Codecs.Cbor`, `NSmithy.Protocols.RpcV2Cbor` |
+| Server (ASP.NET Core) | `NSmithy.Server.AspNetCore`, `NSmithy.Codecs.Cbor`, `NSmithy.Protocols.RpcV2Cbor` |
 
 ## Modeling
 
@@ -53,22 +57,6 @@ operation SayHello {
 structure InvalidName {
     message: String
 }
-```
-
-## NuGet Packages
-
-### Server
-
-```xml
-<PackageReference Include="NSmithy.Server.AspNetCore" Version="0.3.0" />
-```
-
-### Client
-
-```xml
-<PackageReference Include="NSmithy.Client" Version="0.3.0" />
-<PackageReference Include="NSmithy.Codecs.Cbor" Version="0.3.0" />
-<PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="0.3.0" />
 ```
 
 ## Server

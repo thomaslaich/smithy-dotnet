@@ -7,16 +7,14 @@ description: alloy#simpleRestJson — JSON over HTTP with REST bindings.
 NSmithy generates both a typed .NET client and an ASP.NET Core minimal API
 server adapter. Status: **Preview**.
 
-Current conformance snapshot from the pinned protocol-test models:
-
-- client: `43/43` official cases (`100%`)
-- server: `43/43` official cases (`100%`)
-
 Use `simpleRestJson` when your consumers are primarily .NET or Scala
 (via [Smithy4s](https://disneystreaming.github.io/smithy4s/)) and you want the
 smoothest current NSmithy end-to-end path. Use
 [`aws.protocols#restJson1`](/smithy-dotnet/protocols/aws-rest-json1/) when you
 need broader Smithy ecosystem compatibility or OpenAPI generation.
+
+See [Protocol Status](/smithy-dotnet/protocols/status/) for current conformance
+numbers.
 
 ## Maven Dependency
 

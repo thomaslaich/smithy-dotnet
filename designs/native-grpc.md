@@ -140,13 +140,14 @@ The full unary `alloy.proto#grpc` surface now works, verified end-to-end by the
   protoc-generated `…GrpcAdapter` / `MapGrpcService` path is gone. It coexists with
   the REST map for dual-protocol services.
 - **Native client codegen.** `ClientGenerator` emits a single `{Service}Client`
-  whose protocol is chosen by an optional constructor parameter
-  (`new {Service}Client(endpoint, protocol: new GrpcProtocol())`, defaulting to the
-  primary declared protocol) through the *same* invoker/protocol machinery as the
-  rpc client (gRPC is a `ProtocolSupport.Kind`), bound to `GrpcProtocol` over an
-  HTTP/2 `HttpClient` — no `GrpcChannel`/`Grpc.Net.Client`. The client configures
-  HTTP/2 automatically when `IProtocol.RequiresHttp2`. For a service that declares
-  both an HTTP protocol and `@grpc`, the one client speaks either.
+  whose protocol is chosen through `{Service}ClientConfig`
+  (`new {Service}Client(endpoint, new() { Protocol = new GrpcProtocol() })`,
+  defaulting to the primary declared protocol) through the *same* invoker/protocol
+  machinery as the rpc client (gRPC is a `ProtocolSupport.Kind`), bound to
+  `GrpcProtocol` over an HTTP/2 `HttpClient` — no `GrpcChannel`/`Grpc.Net.Client`.
+  The client configures HTTP/2 automatically when it owns the `HttpClient`. For a
+  service that declares both an HTTP protocol and `@grpc`, the one client speaks
+  either.
 - **Runtime member traits already flow.** `SchemaGenerator.memberTraitsExpr`
   emits *all* member traits (including `@protoIndex` / `@protoNumType`) into the
   generated `Schema<T>`, so `ProtoCodec` reads them at runtime with no further

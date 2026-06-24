@@ -24,6 +24,108 @@ public sealed class XmlCodecTests
         public Address? Address { get; set; }
     }
 
+    public sealed record Catalog(IReadOnlyList<string> Items);
+
+    public sealed class CatalogBuilder
+    {
+        public IReadOnlyList<string>? Items { get; set; }
+    }
+
+    [Fact]
+    public void DeserializesWrappedListUnderDefaultNamespace()
+    {
+        // Real AWS restXml responses (e.g. S3 ListBuckets) put a default xmlns on the
+        // root that every descendant inherits, while the schema's element names are
+        // unqualified. Element lookups must match on local name; namespace-sensitive
+        // matching misses every child and the wrapped list comes back empty.
+        var catalogSchema = Schemas
+            .Structure<Catalog, CatalogBuilder>(new ShapeId("example", "Catalog"))
+            .Optional(
+                "items",
+                static catalog => catalog.Items,
+                static (builder, value) => builder.Items = value,
+                Schemas.List<string>(new ShapeId("example", "ItemList"), Schemas.String)
+            )
+            .Build(
+                static () => new CatalogBuilder(),
+                static builder => new Catalog(builder.Items ?? [])
+            );
+        var codec = XmlCodec.FromSchema(catalogSchema);
+
+        var xml =
+            "<Catalog xmlns=\"urn:example\"><items><member>a</member><member>b</member></items></Catalog>";
+        var decoded = codec.DeserializeText(xml);
+
+        Assert.Equal(["a", "b"], decoded.Items);
+    }
+
+    public sealed record S3Bucket(string Name);
+
+    public sealed class S3BucketBuilder
+    {
+        public string? Name { get; set; }
+    }
+
+    public sealed record BucketList(IReadOnlyList<S3Bucket> Buckets);
+
+    public sealed class BucketListBuilder
+    {
+        public IReadOnlyList<S3Bucket>? Buckets { get; set; }
+    }
+
+    private static Trait XmlName(string name) =>
+        new(ShapeId.Parse("smithy.api#xmlName"), Document.From(name));
+
+    [Fact]
+    public void DeserializesRealS3ListBucketsResponse()
+    {
+        // The exact shape of a real S3 ListBuckets response: a default xmlns on the root, a
+        // non-flattened list whose items are named by the member's @xmlName ("Bucket") rather than
+        // the default "member". Requires both the local-name element matching and the element-schema
+        // trait overlay that carries the member's @xmlName.
+        var bucketSchema = Schemas
+            .Structure<S3Bucket, S3BucketBuilder>(new ShapeId("example", "S3Bucket"))
+            .Optional(
+                "name",
+                static bucket => bucket.Name,
+                static (builder, value) => builder.Name = value,
+                Schemas.String,
+                [XmlName("Name")]
+            )
+            .Build(
+                static () => new S3BucketBuilder(),
+                static builder => new S3Bucket(builder.Name!)
+            );
+        var listSchema = Schemas.List<S3Bucket>(
+            new ShapeId("example", "S3BucketList"),
+            Schemas.WithTraits(bucketSchema, [XmlName("Bucket")])
+        );
+        var outputSchema = Schemas
+            .Structure<BucketList, BucketListBuilder>(
+                new ShapeId("example", "ListAllMyBucketsResult")
+            )
+            .Optional(
+                "buckets",
+                static output => output.Buckets,
+                static (builder, value) => builder.Buckets = value,
+                listSchema,
+                [XmlName("Buckets")]
+            )
+            .Build(
+                static () => new BucketListBuilder(),
+                static builder => new BucketList(builder.Buckets ?? [])
+            );
+        var codec = XmlCodec.FromSchema(outputSchema);
+
+        var xml =
+            "<ListAllMyBucketsResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
+            + "<Buckets><Bucket><Name>assets</Name></Bucket><Bucket><Name>logs</Name></Bucket></Buckets>"
+            + "</ListAllMyBucketsResult>";
+        var decoded = codec.DeserializeText(xml);
+
+        Assert.Equal(["assets", "logs"], decoded.Buckets.Select(bucket => bucket.Name));
+    }
+
     [Fact]
     public void XmlCodecRoundTripsNestedStructure()
     {
