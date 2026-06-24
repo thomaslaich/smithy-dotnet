@@ -67,5 +67,6 @@ var response = await client.GetWidgetAsync(new GetWidgetInput("abc"));
 ```
 
 AWS JSON support is client-only. NSmithy does not generate AWS JSON servers and
-does not yet provide AWS production features such as SigV4 signing or endpoint
-resolution.
+does not yet provide AWS SDK-style endpoint resolution, credential chains,
+retries, or pagination helpers. Explicit SigV4 signing exists in early preview;
+see [Authentication](/smithy-dotnet/guides/authentication/).

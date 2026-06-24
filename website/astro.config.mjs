@@ -51,6 +51,7 @@ export default defineConfig({
 						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
 						{ label: 'Client Configuration', slug: 'guides/client-configuration' },
 						{ label: 'Dependency Injection', slug: 'guides/dependency-injection' },
+						{ label: 'Authentication', slug: 'guides/authentication' },
 						{ label: 'Distributing Contracts', slug: 'guides/distributing-contracts' },
 						{ label: 'Endpoint Documentation', slug: 'guides/endpoint-documentation' },
 					],

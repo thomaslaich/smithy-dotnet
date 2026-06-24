@@ -107,6 +107,8 @@ var city = await client.GetCityAsync(new GetCityInput("SEA"));
 Console.WriteLine(city.Name);
 ```
 
-NSmithy does not yet provide AWS production features such as SigV4 signing or
-endpoint resolution. Use the official AWS SDK for .NET for production calls to
+Explicit SigV4 signing exists in early preview; see
+[Authentication](/smithy-dotnet/guides/authentication/). NSmithy does not yet
+provide AWS SDK-style endpoint resolution, credential chains, retries, or
+pagination helpers. Use the official AWS SDK for .NET for production calls to
 AWS services.

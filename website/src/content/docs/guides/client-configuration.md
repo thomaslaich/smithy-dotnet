@@ -66,8 +66,8 @@ changing the constructor signature.
 
 ### Auth example
 
-AWS clients take their signer through `AuthSchemes` (see the
-[AWS protocols overview](/smithy-dotnet/protocols/aws-overview/)):
+Clients take auth through `AuthSchemes`. For example, early-preview AWS SigV4
+signing is configured like this:
 
 ```csharp
 using NSmithy.Aws;
@@ -81,6 +81,9 @@ var dynamoDb = new DynamoDB20120810Client(
         AuthSchemes = { new AwsSigV4AuthScheme("dynamodb", "us-east-1", credentials) },
     });
 ```
+
+See [Authentication](/smithy-dotnet/guides/authentication/) for the full auth
+configuration guide and current AWS SigV4 limitations.
 
 ## Constructors
 

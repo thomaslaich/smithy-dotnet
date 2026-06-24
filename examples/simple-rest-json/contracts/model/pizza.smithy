@@ -6,16 +6,18 @@ use alloy#simpleRestJson
 use alloy#jsonUnknown
 use alloy#discriminated
 use alloy#preserveKeyOrder
+use smithy.api#httpApiKeyAuth
 
 /// A pizza restaurant administration service.
 ///
 /// Demonstrates the `alloy#simpleRestJson` protocol with unions, enums,
 /// custom HTTP bindings, pagination, and primitive type encodings.
 @simpleRestJson
+@httpApiKeyAuth(name: "X-Api-Key", in: "header")
 service PizzaAdminService {
     version: "1.0.0",
     errors: [GenericServerError, GenericClientError],
-    operations: [AddMenuItem, GetMenu, Version, Health, HeaderEndpoint, RoundTrip, GetEnum, GetIntEnum, CustomCode, HttpPayloadWithDefault, HttpPayloadRequiredWithDefault, OpenUnions, Primitives, PreserveOrder]
+    operations: [AddMenuItem, GetMenu, Version, Health, AuthenticatedHealth, HeaderEndpoint, RoundTrip, GetEnum, GetIntEnum, CustomCode, HttpPayloadWithDefault, HttpPayloadRequiredWithDefault, OpenUnions, Primitives, PreserveOrder]
 }
 
 /// Adds an item to a restaurant's menu.
@@ -262,6 +264,21 @@ operation Health {
     errors: [ UnknownServerError ]
 }
 
+/// Returns health status only when the configured client API key is present.
+@readonly
+@http(method: "GET", uri: "/authenticated-health", code: 200)
+operation AuthenticatedHealth {
+    input := {
+        @httpHeader("X-Api-Key")
+        apiKey: String
+    }
+    output := {
+        @required
+        status: String
+    },
+    errors: [ UnauthorizedError ]
+}
+
 @input
 structure HealthInput {
     /// Optional query string (max 5 characters) for diagnostic use.
@@ -291,6 +308,14 @@ structure UnknownServerError {
 
 enum UnknownServerErrorCode {
     ERROR_CODE = "server.error",
+}
+
+/// Returned when an authenticated example request is missing the expected API key.
+@error("client")
+@httpError(401)
+structure UnauthorizedError {
+    @required
+    message: String
 }
 
 

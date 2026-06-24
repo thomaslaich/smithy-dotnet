@@ -77,3 +77,8 @@ var client = new HelloServiceClient(new Uri("https://api.example.com"));
 var response = await client.SayHelloAsync(new SayHelloInput("world"));
 Console.WriteLine(response.Message);
 ```
+
+Explicit SigV4 signing exists in early preview; see
+[Authentication](/smithy-dotnet/guides/authentication/). For production calls to
+AWS XML services such as S3, prefer the official AWS SDK for .NET until NSmithy's
+AWS auth, endpoint resolution, retries, and pagination support mature.

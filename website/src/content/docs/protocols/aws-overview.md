@@ -3,10 +3,10 @@ title: AWS Protocols Overview
 description: Important context before using NSmithy's AWS protocol support.
 ---
 
-NSmithy's AWS protocol support exists primarily as a **proof of concept** — a vehicle
-for validating the generator's protocol abstraction, codec layer, and conformance
-test infrastructure against real AWS protocol definitions. This is especially true for
-`aws.protocols#restXml` and the AWS JSON protocols.
+NSmithy's AWS protocol support exists primarily as a **proof of concept** — a
+vehicle for validating the generator's protocol abstraction, codec layer, and
+conformance test infrastructure against real AWS protocol definitions. This is
+especially true for `aws.protocols#restXml` and the AWS JSON protocols.
 
 AWS restJson1 is the exception — see below.
 
@@ -15,8 +15,9 @@ it is documented as a top-level protocol rather than under this AWS section.)
 
 ## Use the Official AWS SDK for .NET Instead
 
-If your goal is to call AWS services in production with `restXml` or AWS JSON, you
-should use the **[AWS SDK for .NET](https://github.com/aws/aws-sdk-net)** instead. It is:
+If your goal is to call AWS services in production with `restXml` or AWS JSON,
+you should use the **[AWS SDK for .NET](https://github.com/aws/aws-sdk-net)**
+instead. It is:
 
 - **Officially supported** by AWS, with long-term maintenance guarantees.
 - **Battle-tested** across the full breadth of AWS services and edge cases.
@@ -26,20 +27,31 @@ should use the **[AWS SDK for .NET](https://github.com/aws/aws-sdk-net)** instea
 
 ## AWS restJson1 Is Different
 
-`aws.protocols#restJson1` is not AWS-specific in practice — it is a well-defined
-REST/JSON wire format that is perfectly sensible for any HTTP service, whether or not
-it runs on AWS. Many teams use it to define internal or public APIs that happen to
-follow the same protocol as AWS services.
+`aws.protocols#restJson1` is not AWS-specific in practice — it is a
+well-defined REST/JSON wire format that is perfectly sensible for any HTTP
+service, whether or not it runs on AWS. Many teams use it to define internal or
+public APIs that happen to follow the same protocol as AWS services.
 
 For AWS restJson1, NSmithy has genuine ambition beyond proof-of-concept:
 
-- **Non-AWS services** — generated clients and servers work today and are a reasonable
-  choice for services modelled with `restJson1` outside of AWS.
+- **Non-AWS services** — generated clients and servers work today and are a
+  reasonable choice for services modelled with `restJson1` outside of AWS.
 - **AWS services in production** — the goal is for NSmithy-generated `restJson1`
-  clients to be usable against real AWS services. AWS authentication (SigV4) and
-  endpoint resolution are not yet implemented, but they are on the roadmap.
+  clients to be usable against real AWS services. Explicit SigV4 signing exists
+  in early preview, but AWS SDK-style endpoint resolution, credential chains,
+  retries, and pagination helpers are not there yet.
 
-Until authentication is in place, reach for the official SDK when targeting AWS directly.
+Until those pieces mature, reach for the official SDK when targeting AWS directly.
+
+## AWS SigV4 Is Early Preview
+
+`NSmithy.Aws` includes explicit SigV4 signing through `AwsSigV4AuthScheme`.
+Callers provide the endpoint, signing service name, region, and credentials
+provider. This is enough for LocalStack examples and narrow smoke tests, but it
+is not a production AWS auth stack.
+
+See [Authentication](/smithy-dotnet/guides/authentication/) for configuration
+details and current limitations.
 
 ## AWS JSON Is Client-Only
 
@@ -49,4 +61,5 @@ NSmithy includes early client runtime support for `aws.protocols#awsJson1_1` and
 special floating-point values, and client-side error discrimination.
 
 There is no AWS JSON server generation, and production AWS concerns such as
-SigV4 signing and endpoint resolution are still outside the generated client.
+AWS SDK-style credential resolution, endpoint resolution, retries, and pagination
+helpers are still outside the generated client.
