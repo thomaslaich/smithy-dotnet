@@ -243,7 +243,7 @@ internal static class ConformanceClients
                 .Where(t =>
                     t is { IsClass: true, IsAbstract: false }
                     && t.Name.EndsWith("Client", StringComparison.Ordinal)
-                    && HasUriConstructor(t)
+                    && HasHttpClientConstructor(t)
                 ),
         ]
     );
@@ -266,7 +266,7 @@ internal static class ConformanceClients
     /// <summary>
     /// Constructs a generated client via its <c>(Uri endpoint, IProtocol? protocol,
     /// HttpClient? httpClient, IEnumerable&lt;ISmithyClientMiddleware&gt;? middleware,
-    /// Func&lt;string&gt;? idempotencyTokenProvider)</c> constructor, using the default protocol.
+    /// IEnumerable&lt;ISmithyAuthScheme&gt;? authSchemes, Func&lt;string&gt;? idempotencyTokenProvider)</c> constructor, using the default protocol.
     /// </summary>
     public static object Build(
         Type clientType,
@@ -276,18 +276,31 @@ internal static class ConformanceClients
     )
     {
         // Use the HttpClient constructor (endpoint comes from BaseAddress) so the recording handler
-        // is honoured; this is also the constructor IHttpClientFactory uses.
+        // is honoured; this is also the constructor IHttpClientFactory uses. The optional knobs now
+        // live on the per-client {Service}ClientConfig; build one reflectively only when needed.
         httpClient.BaseAddress = endpoint;
-        return Activator.CreateInstance(
-            clientType,
-            [httpClient, null, null, idempotencyTokenProvider]
-        )!;
+        object? config = null;
+        if (idempotencyTokenProvider is not null)
+        {
+            var configType =
+                clientType.Assembly.GetType(clientType.FullName + "Config")
+                ?? throw new InvalidOperationException(
+                    $"Config type {clientType.FullName}Config not found."
+                );
+            config = Activator.CreateInstance(configType)!;
+            configType
+                .GetProperty("IdempotencyTokenProvider")!
+                .SetValue(config, idempotencyTokenProvider);
+        }
+        return Activator.CreateInstance(clientType, [httpClient, config])!;
     }
 
-    private static bool HasUriConstructor(Type clientType) =>
+    private static bool HasHttpClientConstructor(Type clientType) =>
         clientType
             .GetConstructors()
-            .Any(c => c.GetParameters() is [{ ParameterType: var p }, ..] && p == typeof(Uri));
+            .Any(c =>
+                c.GetParameters() is [{ ParameterType: var p }, ..] && p == typeof(HttpClient)
+            );
 }
 
 /// <summary>

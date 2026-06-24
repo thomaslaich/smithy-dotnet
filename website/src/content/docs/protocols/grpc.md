@@ -15,6 +15,9 @@ peer interoperates with a `Grpc.Net` peer in either direction. A `.proto` file c
 still be emitted (see [Generating a `.proto`](#generating-a-proto-for-external-peers))
 when you need to build a non-NSmithy peer the conventional way.
 
+See [Protocol Status](/smithy-dotnet/protocols/status/) for current maturity
+details.
+
 ## Maven Dependency
 
 ```json
@@ -108,16 +111,19 @@ configures the HTTP/2 `HttpClient` for you:
 using Example.Hello;
 using NSmithy.Protocols.Grpc;
 
-var client = new HelloServiceClient(new Uri("http://localhost:5001"), protocol: new GrpcProtocol());
+var client = new HelloServiceClient(
+    new Uri("http://localhost:5001"),
+    new() { Protocol = new GrpcProtocol() });
 
 var response = await client.SayHelloAsync(new SayHelloInput("world"));
 Console.WriteLine(response.Message); // Hello, world!
 ```
 
 For a service that also declares an HTTP protocol (e.g. `@simpleRestJson` +
-`@grpc`), the same client speaks either — pass `new GrpcProtocol()` for gRPC, or
-omit `protocol:` for the default (primary) protocol. To reuse a pre-configured
-`HttpClient`, pass it as `httpClient:` (it must be HTTP/2 for gRPC).
+`@grpc`), the same client speaks either — set `Protocol = new GrpcProtocol()` for
+gRPC, or leave `Protocol` unset for the default (primary) protocol. To reuse a
+pre-configured `HttpClient`, pass it as the first argument (it must be HTTP/2 for
+gRPC). See [Client Configuration](/smithy-dotnet/guides/client-configuration/).
 
 ## Generating a `.proto` for external peers
 

@@ -330,7 +330,7 @@ public static class XmlCodec
         if (target is IListSchema listSchema)
         {
             var listBuilder = listSchema.CreateBuilder();
-            foreach (var child in parent.Elements(ElementName(member)))
+            foreach (var child in ChildElements(parent, ElementName(member)))
             {
                 listSchema.AddObject(listBuilder, ReadValue(listSchema.Element, child));
             }
@@ -342,9 +342,9 @@ public static class XmlCodec
         if (target is IMapSchema mapSchema)
         {
             var mapBuilder = mapSchema.CreateBuilder();
-            foreach (var child in parent.Elements(ElementName(member)))
+            foreach (var child in ChildElements(parent, ElementName(member)))
             {
-                var key = child.Element("key")?.Value;
+                var key = ChildElement(child, "key")?.Value;
                 if (key is null)
                 {
                     continue;
@@ -353,7 +353,7 @@ public static class XmlCodec
                 mapSchema.AddObject(
                     mapBuilder,
                     key,
-                    ReadValue(mapSchema.Value, child.Element("value"))
+                    ReadValue(mapSchema.Value, ChildElement(child, "value"))
                 );
             }
 
@@ -377,7 +377,7 @@ public static class XmlCodec
     private static object ReadList(IListSchema schema, XElement element)
     {
         var builder = schema.CreateBuilder();
-        foreach (var child in element.Elements(ListItemName(schema)))
+        foreach (var child in ChildElements(element, ListItemName(schema)))
         {
             schema.AddObject(builder, ReadValue(schema.Element, child));
         }
@@ -390,17 +390,29 @@ public static class XmlCodec
         var builder = schema.CreateBuilder();
         foreach (var entry in element.Elements())
         {
-            var key = entry.Element("key")?.Value;
+            var key = ChildElement(entry, "key")?.Value;
             if (key is null)
             {
                 continue;
             }
 
-            schema.AddObject(builder, key, ReadValue(schema.Value, entry.Element("value")));
+            schema.AddObject(builder, key, ReadValue(schema.Value, ChildElement(entry, "value")));
         }
 
         return schema.BuildObject(builder);
     }
+
+    // Element lookups match on local name only: AWS restXml responses carry a default
+    // xmlns on the root (via @xmlNamespace) that all descendants inherit, whereas the
+    // schema's element names are unqualified. Namespace-sensitive XName matching would
+    // miss every namespaced child (e.g. an S3 ListBuckets list coming back empty).
+    private static IEnumerable<XElement> ChildElements(XElement parent, string localName) =>
+        parent
+            .Elements()
+            .Where(e => string.Equals(e.Name.LocalName, localName, StringComparison.Ordinal));
+
+    private static XElement? ChildElement(XElement parent, string localName) =>
+        ChildElements(parent, localName).FirstOrDefault();
 
     private static object? ReadScalar(
         Schema schema,

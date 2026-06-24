@@ -11,6 +11,8 @@ app.Run();
 
 internal sealed class PizzaHandler : IPizzaAdminServiceHandler
 {
+    internal const string ApiKey = "nsmithy-demo-key";
+
     private static readonly Dictionary<string, MenuItem> DefaultMenu = new()
     {
         ["margherita"] = new MenuItem(
@@ -76,6 +78,17 @@ internal sealed class PizzaHandler : IPizzaAdminServiceHandler
         HealthInput input,
         CancellationToken cancellationToken = default
     ) => Task.FromResult(new HealthOutput("ok"));
+
+    public Task<AuthenticatedHealthOutput> AuthenticatedHealthAsync(
+        AuthenticatedHealthInput input,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (!string.Equals(input.ApiKey, ApiKey, StringComparison.Ordinal))
+            throw new UnauthorizedError("Missing or invalid API key.");
+
+        return Task.FromResult(new AuthenticatedHealthOutput("authenticated"));
+    }
 
     public Task<VersionOutput> VersionAsync(
         VersionInput input,

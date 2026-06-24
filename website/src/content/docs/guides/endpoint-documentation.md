@@ -3,8 +3,8 @@ title: Endpoint Documentation
 description: Serve an interactive OpenAPI explorer and generated Sphinx documentation alongside your ASP.NET Core server.
 ---
 
-NSmithy can generate two complementary documentation UIs directly from your
-Smithy model and wire them up alongside your server with a single call each:
+NSmithy can generate two documentation UIs from your Smithy model and serve them
+alongside your ASP.NET Core application:
 
 - **Scalar** — an interactive OpenAPI explorer at `/openapi`, backed by a
   `openapi.json` generated from the model by
@@ -14,8 +14,8 @@ Smithy model and wire them up alongside your server with a single call each:
   by [smithy-docgen](https://github.com/smithy-lang/smithy-docgen) and compiled
   to HTML automatically at build time. Available for all services.
 
-Both are opt-in MSBuild properties and both copy their output into `wwwroot/` so
-ASP.NET Core's built-in static file middleware serves them with zero extra config.
+Both are opt-in MSBuild features. Their output is copied into `wwwroot/`, where
+ASP.NET Core's static file middleware can serve it.
 
 <figure>
   <img src="/smithy-dotnet/screenshots/scalar-ui.png" alt="Scalar interactive API explorer showing the GetForecast endpoint" style="border-radius: 0.5rem; border: 1px solid var(--sl-color-gray-5);" />
@@ -40,7 +40,7 @@ methods.
 
 ## Enable the Generators
 
-Set the relevant MSBuild properties in your server `.csproj`:
+Set the MSBuild properties you need in your server `.csproj`:
 
 ```xml
 <PropertyGroup>
@@ -63,7 +63,7 @@ for alloy-based services and use only `SmithyGenerateDocs`.
 
 ## Register the Endpoints
 
-Call the extension methods in `Program.cs`:
+Map the generated documentation endpoints in `Program.cs`:
 
 ```csharp
 using NSmithy.Server.AspNetCore.Docs;
@@ -75,13 +75,13 @@ app.MapMyServiceHttp();
 app.Run();
 ```
 
-`MapSmithyOpenApi()` enables static file serving and mounts the Scalar UI at
-`/openapi`, pointing it to `/openapi.json` which is generated from the model and
+`MapSmithyOpenApi()` enables static file serving and mounts Scalar at
+`/openapi`. The UI reads `/openapi.json`, which is generated from the model and
 copied to `wwwroot/openapi.json` at build time.
 
 `MapSmithyDocs()` enables static file serving and redirects `/docs` to
-`/docs/index.html`. The Sphinx HTML is built automatically by smithy-docgen
-during `dotnet build` and copied to `wwwroot/docs/`.
+`/docs/index.html`. smithy-docgen builds the Sphinx HTML during `dotnet build`;
+MSBuild then copies it to `wwwroot/docs/`.
 
 ## What Gets Generated
 
@@ -94,9 +94,9 @@ On `dotnet build`, NSmithy:
 3. MSBuild copies the HTML to `wwwroot/docs/` and the OpenAPI spec to
    `wwwroot/openapi.json`.
 
-Python (3.11+) must be available on the host. A system Python installation is
-sufficient. If you use [pixi](https://pixi.sh) or [devenv](https://devenv.sh),
-declare Python as a dependency there.
+Python 3.11 or newer must be available on the host. A system Python installation
+is sufficient. If you use [pixi](https://pixi.sh) or
+[devenv](https://devenv.sh), declare Python as a dependency there.
 
 Add `wwwroot/` to your `.gitignore` since the output is always regenerated at
 build time:

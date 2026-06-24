@@ -59,7 +59,8 @@ public sealed class HttpClientFactoryTests
             )
             .ConfigurePrimaryHttpMessageHandler(() => handler)
             .AddTypedClient<IRestJsonClient>(
-                static (http, _) => new RestJsonClient(http, protocol: new RestJson1Protocol())
+                static (http, _) =>
+                    new RestJsonClient(http, new() { Protocol = new RestJson1Protocol() })
             );
         using var provider = services.BuildServiceProvider();
         var client = provider.GetRequiredService<IRestJsonClient>();
