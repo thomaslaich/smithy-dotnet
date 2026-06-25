@@ -8,4 +8,10 @@
   <Folder Name="/server/">
     <Project Path="server/NSmithy.Examples.GrpcStreaming.Server.csproj" />
   </Folder>
+  <Folder Name="/grpcnet-client/">
+    <Project Path="grpcnet-client/NSmithy.Examples.GrpcStreaming.GrpcNetClient.csproj" />
+  </Folder>
+  <Folder Name="/grpcnet-server/">
+    <Project Path="grpcnet-server/NSmithy.Examples.GrpcStreaming.GrpcNetServer.csproj" />
+  </Folder>
 </Solution>

@@ -1,37 +1,38 @@
-using System.Net.Http;
-using System.Runtime.CompilerServices;
-using Example.Chat;
-using NSmithy.Protocols.Grpc;
+using Example.Chat.Grpc;
+using Grpc.Core;
+using Grpc.Net.Client;
 
 var (user, endpoint) = ParseArgs(args, "http://localhost:5002");
 
-using var client = new ChatServiceClient(
-    new Uri(endpoint),
-    new() { Protocol = new GrpcProtocol() }
-);
+using var channel = GrpcChannel.ForAddress(endpoint);
+var client = new ChatService.ChatServiceClient(channel);
 
-Console.WriteLine($"Connected to {endpoint} as {user}.");
+Console.WriteLine($"Connected to {endpoint} as {user} with Grpc.Net.");
 Console.WriteLine("Type a message and press Enter. Submit an empty line to exit.");
 Console.WriteLine();
 
 using var cts = new CancellationTokenSource();
 var exiting = false;
+
 try
 {
-    await foreach (
-        var item in client.ChatAsync(ReadConsoleEvents(user, () => exiting = true, cts), cts.Token)
-    )
+    using var call = client.Chat(cancellationToken: cts.Token);
+    var writer = WriteConsoleEventsAsync(call.RequestStream, user, () => exiting = true, cts);
+
+    await foreach (var item in call.ResponseStream.ReadAllAsync(cts.Token))
     {
-        if (item is ChatEvent.Message message)
-            Console.WriteLine($"{message.Value.User}: {message.Value.Text}");
+        if (item.ValueCase == ChatEvent.ValueOneofCase.Message)
+            Console.WriteLine($"{item.Message.User}: {item.Message.Text}");
     }
+
+    await writer.ConfigureAwait(false);
 }
 catch (OperationCanceledException) when (exiting || cts.IsCancellationRequested) { }
-catch (HttpProtocolException) when (exiting || cts.IsCancellationRequested) { }
+catch (RpcException) when (exiting || cts.IsCancellationRequested) { }
 catch (IOException) when (exiting || cts.IsCancellationRequested) { }
-catch (HttpProtocolException ex)
+catch (RpcException ex)
 {
-    Console.WriteLine($"Disconnected unexpectedly: {ex.Message}");
+    Console.WriteLine($"Disconnected unexpectedly: {ex.Status.Detail}");
 }
 catch (IOException ex)
 {
@@ -44,24 +45,33 @@ catch (HttpRequestException ex)
 
 Console.WriteLine("Disconnected.");
 
-static async IAsyncEnumerable<ChatEvent> ReadConsoleEvents(
+static async Task WriteConsoleEventsAsync(
+    IClientStreamWriter<ChatEvent> stream,
     string user,
     Action exiting,
-    CancellationTokenSource cancellationTokenSource,
-    [EnumeratorCancellation] CancellationToken cancellationToken = default
+    CancellationTokenSource cancellationTokenSource
 )
 {
-    while (!cancellationToken.IsCancellationRequested)
+    while (!cancellationTokenSource.IsCancellationRequested)
     {
-        var line = await Task.Run(Console.ReadLine, cancellationToken).ConfigureAwait(false);
+        var line = await Task.Run(Console.ReadLine, cancellationTokenSource.Token)
+            .ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(line))
         {
             exiting();
             await cancellationTokenSource.CancelAsync().ConfigureAwait(false);
-            yield break;
+            return;
         }
 
-        yield return ChatEvent.FromMessage(new MessageEvent(User: user, Text: line));
+        await stream
+            .WriteAsync(
+                new ChatEvent
+                {
+                    Message = new MessageEvent { User = user, Text = line },
+                },
+                cancellationTokenSource.Token
+            )
+            .ConfigureAwait(false);
     }
 }
 

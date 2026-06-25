@@ -21,6 +21,7 @@ operation WatchRoom {
         room: String
     }
     output := {
+        @protoIndex(1)
         events: ChatEvent
     }
 }
@@ -28,6 +29,7 @@ operation WatchRoom {
 /// Client-streaming: many events, one summary.
 operation UploadTranscript {
     input := {
+        @protoIndex(1)
         events: ChatEvent
     }
     output := {
@@ -41,9 +43,11 @@ operation UploadTranscript {
 /// Bidirectional streaming: many events in both directions.
 operation Chat {
     input := {
+        @protoIndex(1)
         events: ChatEvent
     }
     output := {
+        @protoIndex(1)
         events: ChatEvent
     }
 }
