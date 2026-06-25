@@ -46,9 +46,7 @@ public sealed class GrpcProtocol : IProtocol
         return new ServiceProtocol(service);
     }
 
-    private sealed class ServiceProtocol(ServiceSchema service)
-        : IServiceProtocol,
-            IEventStreamServiceProtocol
+    private sealed class ServiceProtocol(ServiceSchema service) : IServiceProtocol
     {
         public IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
             OperationSchema<TInput, TOutput> operation

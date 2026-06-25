@@ -208,13 +208,6 @@ public final class ClientGenerator implements Runnable {
                   writer.write("this.ownedHttpClient = httpClient;");
                   writer.write(
                       "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
-                  if (wiresEventStreamOperations) {
-                    writer.write(
-                        "var eventStreamServiceProtocol = serviceProtocol as"
-                            + " IEventStreamServiceProtocol ?? throw new"
-                            + " System.NotSupportedException(\"The configured protocol does not"
-                            + " support streaming operations.\");");
-                  }
                 }
                 if (hasUnaryOperations) {
                   writer.write(
@@ -260,13 +253,6 @@ public final class ClientGenerator implements Runnable {
                       "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
                   writer.write(
                       "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
-                  if (wiresEventStreamOperations) {
-                    writer.write(
-                        "var eventStreamServiceProtocol = serviceProtocol as"
-                            + " IEventStreamServiceProtocol ?? throw new"
-                            + " System.NotSupportedException(\"The configured protocol does not"
-                            + " support streaming operations.\");");
-                  }
                 }
                 if (hasUnaryOperations) {
                   writer.write(
@@ -336,11 +322,6 @@ public final class ClientGenerator implements Runnable {
                   writeIdempotencyAssignment(needsIdempotency);
                   writer.write(
                       "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
-                  writer.write(
-                      "var eventStreamServiceProtocol = serviceProtocol as"
-                          + " IEventStreamServiceProtocol ?? throw new"
-                          + " System.NotSupportedException(\"The configured protocol does not"
-                          + " support streaming operations.\");");
                   writeOperationBindings(operations);
                 });
             writer.write("");
@@ -362,11 +343,6 @@ public final class ClientGenerator implements Runnable {
                       "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
                   writer.write(
                       "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
-                  writer.write(
-                      "var eventStreamServiceProtocol = serviceProtocol as"
-                          + " IEventStreamServiceProtocol ?? throw new"
-                          + " System.NotSupportedException(\"The configured protocol does not"
-                          + " support streaming operations.\");");
                   writeOperationBindings(operations);
                 });
             writer.write("");
@@ -537,7 +513,7 @@ public final class ClientGenerator implements Runnable {
     String operationSchema = SchemaGenerator.operationSchemaAccessor(context, op);
     if (isInputStreaming(model, op) && isOutputStreaming(model, op)) {
       writer.write(
-          "this.$LProtocol = eventStreamServiceProtocol.ForBidirectionalEventStreamOperation($L,"
+          "this.$LProtocol = serviceProtocol.ForBidirectionalEventStreamOperation($L,"
               + " $L, $L);",
           opName,
           operationSchema,
@@ -545,13 +521,13 @@ public final class ClientGenerator implements Runnable {
           streamingEventSchema(model, op.getOutputShape()));
     } else if (isOutputStreaming(model, op)) {
       writer.write(
-          "this.$LProtocol = eventStreamServiceProtocol.ForServerEventStreamOperation($L, $L);",
+          "this.$LProtocol = serviceProtocol.ForServerEventStreamOperation($L, $L);",
           opName,
           operationSchema,
           streamingEventSchema(model, op.getOutputShape()));
     } else {
       writer.write(
-          "this.$LProtocol = eventStreamServiceProtocol.ForClientEventStreamOperation($L, $L);",
+          "this.$LProtocol = serviceProtocol.ForClientEventStreamOperation($L, $L);",
           opName,
           operationSchema,
           streamingEventSchema(model, op.getInputShape()));

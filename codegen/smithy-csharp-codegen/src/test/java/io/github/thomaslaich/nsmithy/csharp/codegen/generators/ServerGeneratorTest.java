@@ -1,5 +1,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
@@ -105,7 +106,7 @@ final class ServerGeneratorTest {
                 + " ChatAsync(System.Collections.Generic.IAsyncEnumerable<Example.Example.Streaming.ChatEvent>"
                 + " input, System.Threading.CancellationToken cancellationToken = default);"),
         generated);
-    assertTrue(generated.contains("IEventStreamServiceProtocol GrpcEventStreamServiceProtocol"));
+    assertFalse(generated.contains("IEventStreamServiceProtocol"));
     assertTrue(generated.contains("CreateSmithyGrpcEventStreamRequest"));
     assertTrue(generated.contains("WriteSmithyGrpcEventStreamResponseAsync"));
   }

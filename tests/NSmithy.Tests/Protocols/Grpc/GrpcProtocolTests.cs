@@ -63,10 +63,8 @@ public sealed class GrpcProtocolTests
         return new GrpcProtocol().ForService(service).ForOperation(operation);
     }
 
-    private static IEventStreamServiceProtocol BuildEventStreamServiceProtocol() =>
-        Assert.IsAssignableFrom<IEventStreamServiceProtocol>(
-            new GrpcProtocol().ForService(Schemas.Service(ShapeId.Parse("example.greeter#Greeter")))
-        );
+    private static IServiceProtocol BuildEventStreamServiceProtocol() =>
+        new GrpcProtocol().ForService(Schemas.Service(ShapeId.Parse("example.greeter#Greeter")));
 
     private static OperationSchema<Echo, Echo> EchoOperation(string name) =>
         Schemas.Operation(

@@ -135,13 +135,6 @@ public final class ServerGenerator implements Runnable {
               "private static readonly IServiceProtocol GrpcServiceProtocol ="
                   + " new GrpcProtocol().ForService($L);",
               SchemaGenerator.serviceSchemaAccessor(context, service));
-          boolean hasStreaming =
-              ops.stream().anyMatch(op -> isEventStreamOperation(context.model(), op));
-          if (hasStreaming) {
-            writer.write(
-                "private static readonly IEventStreamServiceProtocol GrpcEventStreamServiceProtocol"
-                    + " = (IEventStreamServiceProtocol)GrpcServiceProtocol;");
-          }
           for (OperationShape op : ops) {
             if (isEventStreamOperation(context.model(), op)) {
               writeGrpcEventStreamProtocolField(sp, op);
@@ -259,7 +252,7 @@ public final class ServerGenerator implements Runnable {
       writer.write(
           "private static readonly IBidirectionalEventStreamOperationProtocol<$L, $L>"
               + " $LGrpcProtocol ="
-              + " GrpcEventStreamServiceProtocol.ForBidirectionalEventStreamOperation($L, $L, $L);",
+              + " GrpcServiceProtocol.ForBidirectionalEventStreamOperation($L, $L, $L);",
           streamingEventType(sp, model, op.getInputShape()),
           streamingEventType(sp, model, op.getOutputShape()),
           opName,
@@ -269,7 +262,7 @@ public final class ServerGenerator implements Runnable {
     } else if (isOutputStreaming(model, op)) {
       writer.write(
           "private static readonly IServerEventStreamOperationProtocol<$L, $L> $LGrpcProtocol ="
-              + " GrpcEventStreamServiceProtocol.ForServerEventStreamOperation($L, $L);",
+              + " GrpcServiceProtocol.ForServerEventStreamOperation($L, $L);",
           inputType,
           streamingEventType(sp, model, op.getOutputShape()),
           opName,
@@ -278,7 +271,7 @@ public final class ServerGenerator implements Runnable {
     } else {
       writer.write(
           "private static readonly IClientEventStreamOperationProtocol<$L, $L> $LGrpcProtocol ="
-              + " GrpcEventStreamServiceProtocol.ForClientEventStreamOperation($L, $L);",
+              + " GrpcServiceProtocol.ForClientEventStreamOperation($L, $L);",
           streamingEventType(sp, model, op.getInputShape()),
           outputType,
           opName,
