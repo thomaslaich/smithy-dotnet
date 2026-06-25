@@ -34,7 +34,34 @@ expanding that baseline rather than revisiting it.
 - Keep the scope driven by conformance and real runtime behavior rather than by
   marketing-level protocol checklists.
 
-### 2. XML doc comments from Smithy documentation traits
+### 2. Move the client runtime to the target architecture
+
+The desired client architecture is documented in
+[`designs/client-architecture.md`](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/client-architecture.md).
+The roadmap work is to close the runtime and codegen pieces needed for that
+architecture.
+
+This work includes:
+
+- Replacing send-stage middleware as the primary extension point with named
+  client interceptors and a typed per-call execution context.
+- Moving serialization, endpoint resolution, auth resolution, signing, transmit,
+  retry, deserialization, and completion into one orchestrated client lifecycle.
+- Adding per-operation endpoint resolution, including host labels and endpoint
+  auth-scheme overrides.
+- Splitting auth into scheme resolution, identity resolution, and signing;
+  adding per-operation `@auth` overrides and identity caching/refresh.
+- Replacing the simple retry middleware with a standard retry strategy:
+  exponential backoff with full jitter, retry quota, `Retry-After`, modeled
+  retryability, and deterministic `TimeProvider` tests.
+- Adding operation timeout support through execution context rather than only
+  `HttpClient.Timeout`.
+- Adding OpenTelemetry-friendly tracing and metrics with `ActivitySource` and
+  `Meter`.
+- Generating paginators for `@paginated` operations as `IAsyncEnumerable<T>`.
+- Setting a modeled/default User-Agent.
+
+### 3. XML doc comments from Smithy documentation traits
 
 Smithy's `@documentation` trait and `///` doc comments are not yet emitted as
 C# XML doc comments (`/// <summary>…</summary>`) on generated types and members.
@@ -42,14 +69,14 @@ Adding this would improve the IDE experience for consumers of generated code —
 hover documentation, parameter hints, and IntelliSense would reflect the
 model's documentation rather than being empty.
 
-### 3. Improve generator clarity and diagnostics
+### 4. Improve generator clarity and diagnostics
 
 - Keep generated output predictable and easy to inspect.
 - Improve unsupported-shape and unsupported-trait diagnostics.
 - Continue simplifying generator internals where semantics are harder to follow
   than they need to be.
 
-### 4. Improve CBOR and XML codec performance through schema-compiled codecs
+### 5. Improve CBOR and XML codec performance through schema-compiled codecs
 
 JSON already benefits from compiling codec state once from the schema so the
 runtime can cache structural decisions such as dispatch and boxing behavior.
@@ -66,24 +93,22 @@ This work includes:
 - Keeping the generated codec path explicit enough that performance work does
   not make diagnostics and debuggability worse.
 
-### 5. Add streaming operations, including bidirectional streaming
+### 6. Harden streaming operations
 
-NSmithy's current generated clients and servers are unary request/response
-surfaces. The next larger protocol shape is streaming: client streaming, server
-streaming, and bidirectional streaming. This is especially important for gRPC,
-but the runtime and generator model should not bake in gRPC-only assumptions.
+NSmithy has an experimental native gRPC event-streaming surface for client
+streaming, server streaming, and bidirectional streaming. The next step is to
+harden that path and keep the abstractions usable for future non-gRPC streaming
+protocols.
 
 This work includes:
 
-- Modeling streaming operation inputs and outputs in the generated C# surface.
-- Defining transport/runtime abstractions for client, server, and bidirectional
-  streams.
-- Supporting gRPC streaming over HTTP/2 while keeping the design usable for
-  future streaming protocols.
 - Adding end-to-end tests that cover backpressure, cancellation, errors, and
   stream completion behavior.
+- Adding interop tests with `Grpc.Net` peers generated from the emitted `.proto`.
+- Extending streaming support beyond event streams, especially streaming blob
+  payloads.
 
-### 6. Expand to async protocols
+### 7. Expand to async protocols
 
 NSmithy's current protocol work is mostly request/response oriented. A separate
 near-term goal is to validate that the runtime and generator model can also
@@ -98,7 +123,7 @@ This work includes:
 - Using these protocols to pressure-test the existing transport, codec, and
   client/server seams beyond HTTP-centric assumptions.
 
-### 7. Support Smithy AI traits and MCP generation
+### 8. Support Smithy AI traits and MCP generation
 
 Smithy's AI-oriented traits open up another important integration surface for
 NSmithy. Supporting them cleanly should make it possible to generate useful
@@ -113,7 +138,7 @@ This work includes:
 - Defining the runtime and generation boundaries needed so AI-trait-aware
   models remain inspectable, testable, and versionable.
 
-### 8. Honor protocol HTTP-version traits
+### 9. Honor protocol HTTP-version traits
 
 Protocol traits can declare the HTTP versions a service supports via their `http`
 and `eventStreamHttp` members — a list of ALPN protocol IDs in preference order

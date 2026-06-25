@@ -29,6 +29,7 @@ import software.amazon.smithy.model.traits.HttpQueryTrait;
 import software.amazon.smithy.model.traits.HttpResponseCodeTrait;
 import software.amazon.smithy.model.traits.RequiredTrait;
 import software.amazon.smithy.model.traits.SparseTrait;
+import software.amazon.smithy.model.traits.StreamingTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -368,6 +369,40 @@ public final class ShapeSupport {
 
   public static boolean isSparse(Shape shape) {
     return shape.hasTrait(SparseTrait.class);
+  }
+
+  /** True when a shape itself, one of its members, or a member target carries @streaming. */
+  public static boolean isStreamingShape(Model model, ShapeId shapeId) {
+    Shape shape = model.expectShape(shapeId);
+    if (shape.hasTrait(StreamingTrait.class)) {
+      return true;
+    }
+
+    return shape.members().stream()
+        .anyMatch(
+            member ->
+                member.hasTrait(StreamingTrait.class)
+                    || model.expectShape(member.getTarget()).hasTrait(StreamingTrait.class));
+  }
+
+  /**
+   * Returns the event/message shape of a streaming operation input/output. For the Smithy event
+   * stream pattern this is the target of the streaming member; for direct streaming shapes this is
+   * the shape itself.
+   */
+  public static Optional<ShapeId> streamingMemberTarget(Model model, ShapeId shapeId) {
+    Shape shape = model.expectShape(shapeId);
+    if (shape.hasTrait(StreamingTrait.class)) {
+      return Optional.of(shapeId);
+    }
+
+    return shape.members().stream()
+        .filter(
+            member ->
+                member.hasTrait(StreamingTrait.class)
+                    || model.expectShape(member.getTarget()).hasTrait(StreamingTrait.class))
+        .map(MemberShape::getTarget)
+        .findFirst();
   }
 
   /** "Foo" -> "FooAsync". Convenience for generated method names. */

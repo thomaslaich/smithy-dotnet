@@ -1,4 +1,6 @@
 using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
+using NSmithy.Http;
 
 namespace NSmithy.Protocols.Grpc;
 
@@ -55,5 +57,81 @@ public static class GrpcMessageFraming
         }
 
         return body.Slice(HeaderLength, length).ToArray();
+    }
+
+    public static async ValueTask WriteAsync(
+        Stream stream,
+        ReadOnlyMemory<byte> payload,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        var header = new byte[HeaderLength];
+        BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(1, 4), (uint)payload.Length);
+
+        await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
+        if (payload.Length > 0)
+        {
+            await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    public static async IAsyncEnumerable<SmithyEventFrame> ReadAllAsync(
+        Stream stream,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        var header = new byte[HeaderLength];
+        while (await TryReadExactAsync(stream, header, cancellationToken).ConfigureAwait(false))
+        {
+            if (header[0] != 0)
+            {
+                throw new NotSupportedException(
+                    "Compressed gRPC messages are not yet supported by NSmithy."
+                );
+            }
+
+            var length = (int)BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(1, 4));
+            var payload = new byte[length];
+            if (
+                length > 0
+                && !await TryReadExactAsync(stream, payload, cancellationToken)
+                    .ConfigureAwait(false)
+            )
+            {
+                throw new InvalidOperationException("Truncated gRPC frame payload.");
+            }
+
+            yield return new SmithyEventFrame(payload);
+        }
+    }
+
+    private static async ValueTask<bool> TryReadExactAsync(
+        Stream stream,
+        Memory<byte> buffer,
+        CancellationToken cancellationToken
+    )
+    {
+        var read = 0;
+        while (read < buffer.Length)
+        {
+            var count = await stream
+                .ReadAsync(buffer[read..], cancellationToken)
+                .ConfigureAwait(false);
+            if (count == 0)
+            {
+                if (read == 0)
+                {
+                    return false;
+                }
+
+                throw new InvalidOperationException("Truncated gRPC frame header.");
+            }
+
+            read += count;
+        }
+
+        return true;
     }
 }

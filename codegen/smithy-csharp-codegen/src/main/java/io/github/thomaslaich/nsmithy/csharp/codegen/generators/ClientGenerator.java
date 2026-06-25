@@ -105,6 +105,10 @@ public final class ClientGenerator implements Runnable {
     // The generated client only names the primary protocol (the default constructor argument);
     // callers selecting another declared protocol reference its namespace from their own code.
     writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kinds.get(0)));
+    if (operations.stream().anyMatch(op -> isEventStreamOperation(model, op))
+        && supportsEventStreamOperations()) {
+      writer.addImport(RuntimeTypes.NSMITHY_PROTOCOLS_GRPC);
+    }
 
     writeClient(sp, model, operations, typeName, interfaceName, kinds);
   }
@@ -125,23 +129,45 @@ public final class ClientGenerator implements Runnable {
     // The idempotency-token provider is only stored/used when an operation has a nullable
     // @idempotencyToken member; emitting the field unconditionally would be an unused private
     // field.
+    boolean hasUnaryOperations =
+        operations.stream().anyMatch(op -> !isEventStreamOperation(model, op));
+    boolean hasEventStreamOperations =
+        operations.stream().anyMatch(op -> isEventStreamOperation(model, op));
+    boolean wiresEventStreamOperations =
+        hasEventStreamOperations && supportsEventStreamOperations();
+    boolean needsHttpClient = hasUnaryOperations || wiresEventStreamOperations;
     boolean needsIdempotency =
-        operations.stream().anyMatch(op -> operationNeedsIdempotencyToken(model, op));
+        operations.stream()
+            .filter(op -> !isEventStreamOperation(model, op))
+            .anyMatch(op -> operationNeedsIdempotencyToken(model, op));
     writer.write("public sealed class $L : $L", typeName, interfaceName);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          writer.write("private readonly SmithyOperationInvoker invoker;");
+          if (hasUnaryOperations) {
+            writer.write("private readonly SmithyOperationInvoker invoker;");
+          }
+          if (wiresEventStreamOperations) {
+            writer.write("private readonly SmithyEventStreamOperationInvoker eventStreamInvoker;");
+          }
           // Only set when the client created the HttpClient itself (the endpoint ctor); null when
           // the caller supplied an HttpClient or invoker, so Dispose never touches what it doesn't
           // own.
-          writer.write("private readonly System.Net.Http.HttpClient? ownedHttpClient;");
+          if (needsHttpClient) {
+            writer.write("private readonly System.Net.Http.HttpClient? ownedHttpClient;");
+          }
           if (needsIdempotency) {
             writer.write("private readonly System.Func<string> idempotencyTokenProvider;");
           }
           // The protocol is bound at construction; per-operation protocols are built once from it.
           for (OperationShape op : operations) {
+            if (isEventStreamOperation(model, op)) {
+              if (wiresEventStreamOperations) {
+                writeEventStreamProtocolField(sp, model, op);
+              }
+              continue;
+            }
             writer.write(
                 "private readonly IOperationProtocol<$L, $L> $LProtocol;",
                 SchemaGenerator.operationShapeType(context, op.getInputShape()),
@@ -170,25 +196,43 @@ public final class ClientGenerator implements Runnable {
               "}",
               () -> {
                 writer.write("System.ArgumentNullException.ThrowIfNull(config);");
-                writer.write(
-                    "var endpoint = config.Endpoint ?? throw new System.ArgumentException(");
-                writer.write(
-                    "    \"Config.Endpoint must be set; otherwise use the constructor that takes an"
-                        + " HttpClient.\", nameof(config));");
-                writer.write(
-                    "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
-                writer.write("var httpClient = CreateDefaultHttpClient(resolvedProtocol);");
-                writer.write("this.ownedHttpClient = httpClient;");
-                writer.write(
-                    "this.invoker = new SmithyOperationInvoker(new"
-                        + " HttpClientTransport(httpClient, endpoint),"
-                        + " SmithyAuthSchemeResolver.Resolve(endpoint, $L, ModeledAuthSchemes,"
-                        + " config.AuthSchemes, config.Middleware));",
-                    serviceSchema);
+                if (needsHttpClient) {
+                  writer.write(
+                      "var endpoint = config.Endpoint ?? throw new System.ArgumentException(");
+                  writer.write(
+                      "    \"Config.Endpoint must be set; otherwise use the constructor that takes"
+                          + " an HttpClient.\", nameof(config));");
+                  writer.write(
+                      "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
+                  writer.write("var httpClient = CreateDefaultHttpClient(resolvedProtocol);");
+                  writer.write("this.ownedHttpClient = httpClient;");
+                  writer.write(
+                      "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
+                  if (wiresEventStreamOperations) {
+                    writer.write(
+                        "var eventStreamServiceProtocol = serviceProtocol as"
+                            + " IEventStreamServiceProtocol ?? throw new"
+                            + " System.NotSupportedException(\"The configured protocol does not"
+                            + " support streaming operations.\");");
+                  }
+                }
+                if (hasUnaryOperations) {
+                  writer.write(
+                      "this.invoker = new SmithyOperationInvoker(new"
+                          + " HttpClientTransport(httpClient, endpoint),"
+                          + " SmithyAuthSchemeResolver.Resolve(endpoint, $L, ModeledAuthSchemes,"
+                          + " config.AuthSchemes, config.Middleware));",
+                      serviceSchema);
+                }
+                if (wiresEventStreamOperations) {
+                  writer.write(
+                      "this.eventStreamInvoker = new SmithyEventStreamOperationInvoker(new"
+                          + " GrpcEventStreamHttpClientTransport(httpClient, endpoint));");
+                }
                 writeIdempotencyAssignment(needsIdempotency);
-                writer.write(
-                    "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
-                writeOperationBindings(operations);
+                if (needsHttpClient) {
+                  writeOperationBindings(operations);
+                }
               });
           writer.write("");
 
@@ -204,50 +248,129 @@ public final class ClientGenerator implements Runnable {
               "}",
               () -> {
                 writer.write("System.ArgumentNullException.ThrowIfNull(httpClient);");
-                writer.write("config ??= new $LConfig();", typeName);
-                writer.write(
-                    "var endpoint = config.Endpoint ?? httpClient.BaseAddress ?? throw new"
-                        + " System.ArgumentException(");
-                writer.write(
-                    "    \"Set Config.Endpoint or httpClient.BaseAddress.\", nameof(httpClient));");
-                writer.write(
-                    "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
-                writer.write(
-                    "this.invoker = new SmithyOperationInvoker(new"
-                        + " HttpClientTransport(httpClient, endpoint),"
-                        + " SmithyAuthSchemeResolver.Resolve(endpoint, $L, ModeledAuthSchemes,"
-                        + " config.AuthSchemes, config.Middleware));",
-                    serviceSchema);
+                if (needsHttpClient) {
+                  writer.write("config ??= new $LConfig();", typeName);
+                  writer.write(
+                      "var endpoint = config.Endpoint ?? httpClient.BaseAddress ?? throw new"
+                          + " System.ArgumentException(");
+                  writer.write(
+                      "    \"Set Config.Endpoint or httpClient.BaseAddress.\","
+                          + " nameof(httpClient));");
+                  writer.write(
+                      "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
+                  writer.write(
+                      "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
+                  if (wiresEventStreamOperations) {
+                    writer.write(
+                        "var eventStreamServiceProtocol = serviceProtocol as"
+                            + " IEventStreamServiceProtocol ?? throw new"
+                            + " System.NotSupportedException(\"The configured protocol does not"
+                            + " support streaming operations.\");");
+                  }
+                }
+                if (hasUnaryOperations) {
+                  writer.write(
+                      "this.invoker = new SmithyOperationInvoker(new"
+                          + " HttpClientTransport(httpClient, endpoint),"
+                          + " SmithyAuthSchemeResolver.Resolve(endpoint, $L, ModeledAuthSchemes,"
+                          + " config.AuthSchemes, config.Middleware));",
+                      serviceSchema);
+                }
+                if (wiresEventStreamOperations) {
+                  writer.write(
+                      "this.eventStreamInvoker = new SmithyEventStreamOperationInvoker(new"
+                          + " GrpcEventStreamHttpClientTransport(httpClient, endpoint));");
+                }
                 writeIdempotencyAssignment(needsIdempotency);
-                writer.write(
-                    "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
-                writeOperationBindings(operations);
+                if (needsHttpClient) {
+                  writeOperationBindings(operations);
+                }
               });
           writer.write("");
 
-          // Constructor: bring your own invoker (custom transport/middleware, DI, testing). The
-          // invoker already owns the pipeline, so config.AuthSchemes/Middleware do not apply here;
-          // only Protocol and IdempotencyTokenProvider are read.
-          writer.write(
-              "public $L(SmithyOperationInvoker invoker, $LConfig? config = null)",
-              typeName,
-              typeName);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write(
-                    "this.invoker = invoker ?? throw new"
-                        + " System.ArgumentNullException(nameof(invoker));");
-                writer.write("config ??= new $LConfig();", typeName);
-                writer.write(
-                    "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
-                writeIdempotencyAssignment(needsIdempotency);
-                writer.write(
-                    "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
-                writeOperationBindings(operations);
-              });
-          writer.write("");
+          if (!wiresEventStreamOperations) {
+            // Constructor: bring your own invoker (custom transport/middleware, DI, testing). The
+            // invoker already owns the pipeline, so config.AuthSchemes/Middleware do not apply
+            // here; only Protocol and IdempotencyTokenProvider are read.
+            if (hasUnaryOperations) {
+              writer.write(
+                  "public $L(SmithyOperationInvoker invoker, $LConfig? config = null)",
+                  typeName,
+                  typeName);
+              writer.openBlock(
+                  "{",
+                  "}",
+                  () -> {
+                    writer.write(
+                        "this.invoker = invoker ?? throw new"
+                            + " System.ArgumentNullException(nameof(invoker));");
+                    writer.write("config ??= new $LConfig();", typeName);
+                    writer.write(
+                        "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
+                    writeIdempotencyAssignment(needsIdempotency);
+                    writer.write(
+                        "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
+                    writeOperationBindings(operations);
+                  });
+              writer.write("");
+            }
+          } else if (hasUnaryOperations) {
+            writer.write(
+                "public $L(SmithyOperationInvoker invoker, SmithyEventStreamOperationInvoker"
+                    + " eventStreamInvoker, $LConfig? config = null)",
+                typeName,
+                typeName);
+            writer.openBlock(
+                "{",
+                "}",
+                () -> {
+                  writer.write(
+                      "this.invoker = invoker ?? throw new"
+                          + " System.ArgumentNullException(nameof(invoker));");
+                  writer.write(
+                      "this.eventStreamInvoker = eventStreamInvoker ?? throw new"
+                          + " System.ArgumentNullException(nameof(eventStreamInvoker));");
+                  writer.write("config ??= new $LConfig();", typeName);
+                  writer.write(
+                      "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
+                  writeIdempotencyAssignment(needsIdempotency);
+                  writer.write(
+                      "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
+                  writer.write(
+                      "var eventStreamServiceProtocol = serviceProtocol as"
+                          + " IEventStreamServiceProtocol ?? throw new"
+                          + " System.NotSupportedException(\"The configured protocol does not"
+                          + " support streaming operations.\");");
+                  writeOperationBindings(operations);
+                });
+            writer.write("");
+          } else {
+            writer.write(
+                "public $L(SmithyEventStreamOperationInvoker eventStreamInvoker, $LConfig? config ="
+                    + " null)",
+                typeName,
+                typeName);
+            writer.openBlock(
+                "{",
+                "}",
+                () -> {
+                  writer.write(
+                      "this.eventStreamInvoker = eventStreamInvoker ?? throw new"
+                          + " System.ArgumentNullException(nameof(eventStreamInvoker));");
+                  writer.write("config ??= new $LConfig();", typeName);
+                  writer.write(
+                      "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
+                  writer.write(
+                      "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
+                  writer.write(
+                      "var eventStreamServiceProtocol = serviceProtocol as"
+                          + " IEventStreamServiceProtocol ?? throw new"
+                          + " System.NotSupportedException(\"The configured protocol does not"
+                          + " support streaming operations.\");");
+                  writeOperationBindings(operations);
+                });
+            writer.write("");
+          }
 
           writer.write(
               "private static $LConfig WithEndpoint(System.Uri endpoint, $LConfig? config)",
@@ -296,11 +419,19 @@ public final class ClientGenerator implements Runnable {
           // Disposes the HttpClient the client created itself; a no-op when the caller supplied the
           // HttpClient or invoker (ownedHttpClient is null), so injected transports are never
           // closed.
-          writer.write("public void Dispose() => ownedHttpClient?.Dispose();");
+          if (needsHttpClient) {
+            writer.write("public void Dispose() => ownedHttpClient?.Dispose();");
+          } else {
+            writer.write("public void Dispose() { }");
+          }
           writer.write("");
 
           for (OperationShape op : operations) writeOperationMethod(sp, model, op);
-          for (OperationShape op : operations) writeErrorDeserializer(sp, model, op);
+          for (OperationShape op : operations) {
+            if (!isEventStreamOperation(model, op)) {
+              writeErrorDeserializer(sp, model, op);
+            }
+          }
         });
     writer.write("");
     writeConfigClass(typeName);
@@ -363,6 +494,12 @@ public final class ClientGenerator implements Runnable {
    */
   private void writeOperationBindings(List<OperationShape> operations) {
     for (OperationShape op : operations) {
+      if (isEventStreamOperation(context.model(), op)) {
+        if (supportsEventStreamOperations()) {
+          writeEventStreamOperationBinding(context.model(), op);
+        }
+        continue;
+      }
       writer.write(
           "this.$LProtocol = serviceProtocol.ForOperation($L);",
           CSharpNaming.typeName(op.getId().getName()),
@@ -370,9 +507,65 @@ public final class ClientGenerator implements Runnable {
     }
   }
 
+  private void writeEventStreamProtocolField(SymbolProvider sp, Model model, OperationShape op) {
+    String opName = CSharpNaming.typeName(op.getId().getName());
+    String inputType = SchemaGenerator.operationShapeType(context, op.getInputShape());
+    String outputType = SchemaGenerator.operationShapeType(context, op.getOutputShape());
+    if (isInputStreaming(model, op) && isOutputStreaming(model, op)) {
+      writer.write(
+          "private readonly IBidirectionalEventStreamOperationProtocol<$L, $L> $LProtocol;",
+          streamingEventType(sp, model, op.getInputShape()),
+          streamingEventType(sp, model, op.getOutputShape()),
+          opName);
+    } else if (isOutputStreaming(model, op)) {
+      writer.write(
+          "private readonly IServerEventStreamOperationProtocol<$L, $L> $LProtocol;",
+          inputType,
+          streamingEventType(sp, model, op.getOutputShape()),
+          opName);
+    } else {
+      writer.write(
+          "private readonly IClientEventStreamOperationProtocol<$L, $L> $LProtocol;",
+          streamingEventType(sp, model, op.getInputShape()),
+          outputType,
+          opName);
+    }
+  }
+
+  private void writeEventStreamOperationBinding(Model model, OperationShape op) {
+    String opName = CSharpNaming.typeName(op.getId().getName());
+    String operationSchema = SchemaGenerator.operationSchemaAccessor(context, op);
+    if (isInputStreaming(model, op) && isOutputStreaming(model, op)) {
+      writer.write(
+          "this.$LProtocol = eventStreamServiceProtocol.ForBidirectionalEventStreamOperation($L,"
+              + " $L, $L);",
+          opName,
+          operationSchema,
+          streamingEventSchema(model, op.getInputShape()),
+          streamingEventSchema(model, op.getOutputShape()));
+    } else if (isOutputStreaming(model, op)) {
+      writer.write(
+          "this.$LProtocol = eventStreamServiceProtocol.ForServerEventStreamOperation($L, $L);",
+          opName,
+          operationSchema,
+          streamingEventSchema(model, op.getOutputShape()));
+    } else {
+      writer.write(
+          "this.$LProtocol = eventStreamServiceProtocol.ForClientEventStreamOperation($L, $L);",
+          opName,
+          operationSchema,
+          streamingEventSchema(model, op.getInputShape()));
+    }
+  }
+
   // ---------------- per-operation method ----------------
 
   private void writeOperationMethod(SymbolProvider sp, Model model, OperationShape op) {
+    if (isEventStreamOperation(model, op)) {
+      writeEventStreamOperationMethod(sp, model, op);
+      return;
+    }
+
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String opName = CSharpNaming.typeName(op.getId().getName());
@@ -416,6 +609,87 @@ public final class ClientGenerator implements Runnable {
             writer.write("return $LProtocol.DeserializeResponse(response);", opName);
           } else {
             writer.write("return;");
+          }
+        });
+    writer.write("");
+  }
+
+  private void writeEventStreamOperationMethod(SymbolProvider sp, Model model, OperationShape op) {
+    if (!supportsEventStreamOperations()) {
+      writer.write("public $L", operationSignature(sp, op));
+      writer.openBlock(
+          "{",
+          "}",
+          () ->
+              writer.write(
+                  "throw new System.NotSupportedException(\"Streaming operations are only wired"
+                      + " for native gRPC clients today.\");"));
+      writer.write("");
+      return;
+    }
+
+    boolean inputStreaming = isInputStreaming(model, op);
+    boolean outputStreaming = isOutputStreaming(model, op);
+    boolean hasContainerInput = !ShapeSupport.isUnit(op.getInputShape()) && !inputStreaming;
+    boolean hasContainerOutput = !ShapeSupport.isUnit(op.getOutputShape()) && !outputStreaming;
+    String opName = CSharpNaming.typeName(op.getId().getName());
+    String inputArg = hasContainerInput ? "input" : "SmithyUnit.Value";
+
+    writer.write(outputStreaming ? "public $L" : "public async $L", operationSignature(sp, op));
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          if (inputStreaming || hasContainerInput) {
+            writer.write("System.ArgumentNullException.ThrowIfNull(input);");
+          }
+
+          if (outputStreaming) {
+            writer.write("return InvokeAsync();");
+            writer.write("");
+            writer.write(
+                "async System.Collections.Generic.IAsyncEnumerable<$L> InvokeAsync()",
+                streamingEventType(sp, model, op.getOutputShape()));
+            writer.openBlock(
+                "{",
+                "}",
+                () -> {
+                  if (inputStreaming) {
+                    writer.write(
+                        "var request = $LProtocol.SerializeRequest(input, cancellationToken);",
+                        opName);
+                  } else {
+                    writer.write(
+                        "var request = $LProtocol.SerializeRequest($L);", opName, inputArg);
+                  }
+                  writer.write(
+                      "var response = await eventStreamInvoker.InvokeAsync($L, $L, request,"
+                          + " cancellationToken).ConfigureAwait(false);",
+                      CSharpNaming.formatString(service.getId().getName()),
+                      CSharpNaming.formatString(op.getId().getName()));
+                  writer.write(
+                      "await foreach (var item in"
+                          + " $LProtocol.DeserializeResponseEventsAsync(response,"
+                          + " cancellationToken).ConfigureAwait(false))",
+                      opName);
+                  writer.openBlock("{", "}", () -> writer.write("yield return item;"));
+                });
+          } else {
+            writer.write(
+                "var request = $LProtocol.SerializeRequest(input, cancellationToken);", opName);
+            writer.write(
+                "var response = await eventStreamInvoker.InvokeAsync($L, $L, request,"
+                    + " cancellationToken).ConfigureAwait(false);",
+                CSharpNaming.formatString(service.getId().getName()),
+                CSharpNaming.formatString(op.getId().getName()));
+            if (hasContainerOutput) {
+              writer.write(
+                  "return await $LProtocol.DeserializeResponseAsync(response,"
+                      + " cancellationToken).ConfigureAwait(false);",
+                  opName);
+            } else {
+              writer.write("return;");
+            }
           }
         });
     writer.write("");
@@ -603,29 +877,69 @@ public final class ClientGenerator implements Runnable {
   }
 
   private String operationSignature(SymbolProvider sp, OperationShape op) {
-    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
+    Model model = context.model();
+    boolean inputStreaming = isInputStreaming(model, op);
+    boolean outputStreaming = isOutputStreaming(model, op);
+    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape()) && !inputStreaming;
+    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape()) && !outputStreaming;
     String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
     String inputType =
-        hasInput
-            ? CSharpSymbolProvider.qualified(
-                sp.toSymbol(context.model().expectShape(op.getInputShape())))
-            : null;
+        inputStreaming
+            ? "System.Collections.Generic.IAsyncEnumerable<"
+                + streamingEventType(sp, model, op.getInputShape())
+                + ">"
+            : hasInput
+                ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())))
+                : null;
     String outputType =
-        hasOutput
-            ? CSharpSymbolProvider.qualified(
-                sp.toSymbol(context.model().expectShape(op.getOutputShape())))
-            : null;
+        outputStreaming
+            ? streamingEventType(sp, model, op.getOutputShape())
+            : hasOutput
+                ? CSharpSymbolProvider.qualified(
+                    sp.toSymbol(model.expectShape(op.getOutputShape())))
+                : null;
     String returnType =
-        hasOutput
-            ? "System.Threading.Tasks.Task<" + outputType + ">"
-            : "System.Threading.Tasks.Task";
-    String params = hasInput ? inputType + " input, " : "";
+        outputStreaming
+            ? "System.Collections.Generic.IAsyncEnumerable<" + outputType + ">"
+            : hasOutput
+                ? "System.Threading.Tasks.Task<" + outputType + ">"
+                : "System.Threading.Tasks.Task";
+    String params = inputStreaming || hasInput ? inputType + " input, " : "";
     return returnType
         + " "
         + name
         + "("
         + params
         + "System.Threading.CancellationToken cancellationToken = default)";
+  }
+
+  private boolean isEventStreamOperation(Model model, OperationShape op) {
+    return isInputStreaming(model, op) || isOutputStreaming(model, op);
+  }
+
+  private boolean supportsEventStreamOperations() {
+    return ProtocolSupport.declaredKinds(service).contains(Kind.GRPC);
+  }
+
+  private boolean isInputStreaming(Model model, OperationShape op) {
+    return ShapeSupport.isStreamingShape(model, op.getInputShape());
+  }
+
+  private boolean isOutputStreaming(Model model, OperationShape op) {
+    return ShapeSupport.isStreamingShape(model, op.getOutputShape());
+  }
+
+  private String streamingEventType(SymbolProvider sp, Model model, ShapeId shapeId) {
+    ShapeId target =
+        ShapeSupport.streamingMemberTarget(model, shapeId)
+            .orElseThrow(() -> new IllegalStateException("Expected streaming shape: " + shapeId));
+    return CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(target)));
+  }
+
+  private String streamingEventSchema(Model model, ShapeId shapeId) {
+    ShapeId target =
+        ShapeSupport.streamingMemberTarget(model, shapeId)
+            .orElseThrow(() -> new IllegalStateException("Expected streaming shape: " + shapeId));
+    return SchemaGenerator.shapeSchemaAccessor(context, model.expectShape(target));
   }
 }

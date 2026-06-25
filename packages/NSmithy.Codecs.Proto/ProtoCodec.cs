@@ -43,10 +43,11 @@ public static class ProtoCodec
     public static IProtoCodec<T> FromSchema<T>(Schema<T> schema)
     {
         ArgumentNullException.ThrowIfNull(schema);
-        if (Unwrap(schema) is not IStructSchema)
+        var unwrapped = Unwrap(schema);
+        if (unwrapped is not IStructSchema and not IUnionSchema)
         {
             throw new InvalidOperationException(
-                "Protobuf messages must be backed by a structure schema."
+                "Protobuf messages must be backed by a structure or union schema."
             );
         }
 
@@ -63,14 +64,34 @@ public static class ProtoCodec
             }
 
             var writer = new ProtoWriter();
-            WriteMessage(writer, (IStructSchema)Unwrap(schema), value);
+            switch (Unwrap(schema))
+            {
+                case IStructSchema structure:
+                    WriteMessage(writer, structure, value);
+                    break;
+                case IUnionSchema union:
+                    WriteUnion(writer, union, value);
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        "Protobuf messages must be backed by a structure or union schema."
+                    );
+            }
+
             return writer.ToArray();
         }
 
         public T Deserialize(byte[] payload)
         {
             ArgumentNullException.ThrowIfNull(payload);
-            return (T)ReadMessage((IStructSchema)Unwrap(schema), payload)!;
+            return Unwrap(schema) switch
+            {
+                IStructSchema structure => (T)ReadMessage(structure, payload)!,
+                IUnionSchema union => (T)ReadUnion(union, payload),
+                _ => throw new InvalidOperationException(
+                    "Protobuf messages must be backed by a structure or union schema."
+                ),
+            };
         }
     }
 

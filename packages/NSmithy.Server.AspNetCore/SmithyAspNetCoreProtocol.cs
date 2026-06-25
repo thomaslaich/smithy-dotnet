@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using NSmithy.Http;
@@ -135,6 +137,80 @@ public static class SmithyAspNetCoreProtocol
         }
     }
 
+    public static SmithyEventStreamHttpRequest CreateSmithyGrpcEventStreamRequest(
+        HttpContext httpContext,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
+        var request = new SmithyEventStreamHttpRequest(
+            new HttpMethod(httpContext.Request.Method),
+            httpContext.Request.PathBase.ToString() + httpContext.Request.Path.ToString()
+        )
+        {
+            ContentType = httpContext.Request.ContentType,
+            Events = ReadGrpcFramesAsync(httpContext.Request.Body, cancellationToken),
+        };
+        foreach (var header in httpContext.Request.Headers)
+        {
+            request.Headers[header.Key] = [.. header.Value.Select(value => value ?? string.Empty)];
+        }
+
+        return request;
+    }
+
+    public static async Task WriteSmithyGrpcEventStreamResponseAsync(
+        HttpContext httpContext,
+        IAsyncEnumerable<SmithyEventFrame> events,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(events);
+
+        httpContext.Response.StatusCode = StatusCodes.Status200OK;
+        httpContext.Response.Headers.ContentType = "application/grpc+proto";
+
+        var supportsTrailers = httpContext.Response.SupportsTrailers();
+        if (supportsTrailers)
+        {
+            httpContext.Response.DeclareTrailer("grpc-status");
+        }
+
+        await foreach (
+            var frame in events.WithCancellation(cancellationToken).ConfigureAwait(false)
+        )
+        {
+            await WriteGrpcFrameAsync(httpContext.Response.Body, frame.Payload, cancellationToken)
+                .ConfigureAwait(false);
+            await httpContext.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (supportsTrailers)
+        {
+            httpContext.Response.AppendTrailer("grpc-status", "0");
+        }
+        else
+        {
+            httpContext.Response.Headers["grpc-status"] = "0";
+        }
+    }
+
+    public static Task WriteSmithyGrpcEventStreamResponseAsync(
+        HttpContext httpContext,
+        SmithyEventFrame eventFrame,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(eventFrame);
+        return WriteSmithyGrpcEventStreamResponseAsync(
+            httpContext,
+            SingleEvent(eventFrame),
+            cancellationToken
+        );
+    }
+
     public static bool HasExpectedQueryLiteral(
         HttpContext httpContext,
         string name,
@@ -172,5 +248,84 @@ public static class SmithyAspNetCoreProtocol
         var content = stream.ToArray();
         httpContext.Items[JsonRequestBodyItemKey] = content;
         return content;
+    }
+
+    private static async IAsyncEnumerable<SmithyEventFrame> ReadGrpcFramesAsync(
+        Stream stream,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        var header = new byte[5];
+        while (await TryReadExactAsync(stream, header, cancellationToken).ConfigureAwait(false))
+        {
+            if (header[0] != 0)
+            {
+                throw new NotSupportedException(
+                    "Compressed gRPC messages are not yet supported by NSmithy."
+                );
+            }
+
+            var length = (int)BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(1, 4));
+            var payload = new byte[length];
+            if (
+                length > 0
+                && !await TryReadExactAsync(stream, payload, cancellationToken)
+                    .ConfigureAwait(false)
+            )
+            {
+                throw new InvalidOperationException("Truncated gRPC frame payload.");
+            }
+
+            yield return new SmithyEventFrame(payload);
+        }
+    }
+
+    private static async ValueTask WriteGrpcFrameAsync(
+        Stream stream,
+        ReadOnlyMemory<byte> payload,
+        CancellationToken cancellationToken
+    )
+    {
+        var header = new byte[5];
+        BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(1, 4), (uint)payload.Length);
+        await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
+        if (payload.Length > 0)
+        {
+            await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static async ValueTask<bool> TryReadExactAsync(
+        Stream stream,
+        Memory<byte> buffer,
+        CancellationToken cancellationToken
+    )
+    {
+        var read = 0;
+        while (read < buffer.Length)
+        {
+            var count = await stream
+                .ReadAsync(buffer[read..], cancellationToken)
+                .ConfigureAwait(false);
+            if (count == 0)
+            {
+                if (read == 0)
+                {
+                    return false;
+                }
+
+                throw new InvalidOperationException("Truncated gRPC frame header.");
+            }
+
+            read += count;
+        }
+
+        return true;
+    }
+
+    private static async IAsyncEnumerable<SmithyEventFrame> SingleEvent(SmithyEventFrame eventFrame)
+    {
+        await Task.CompletedTask.ConfigureAwait(false);
+        yield return eventFrame;
     }
 }
