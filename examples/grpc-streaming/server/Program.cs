@@ -80,6 +80,7 @@ internal sealed class ChatHandler(ChatRooms rooms) : IChatServiceHandler
         finally
         {
             room.Publish(new MessageEvent(User: "server", Text: $"{fallbackUser} left"));
+            room.Leave();
             await WaitForInboundAsync(inbound).ConfigureAwait(false);
         }
     }
@@ -91,25 +92,19 @@ internal sealed class ChatHandler(ChatRooms rooms) : IChatServiceHandler
         CancellationToken cancellationToken
     )
     {
-        try
+        await foreach (var item in input.WithCancellation(cancellationToken))
         {
-            await foreach (var item in input.WithCancellation(cancellationToken))
+            if (item is ChatEvent.Message message)
             {
-                if (item is ChatEvent.Message message)
+                var text = message.Value.Text.Trim();
+                if (text.Length > 0)
                 {
-                    var text = message.Value.Text.Trim();
-                    if (text.Length > 0)
-                    {
-                        room.Publish(
-                            new MessageEvent(User: message.Value.User ?? fallbackUser, Text: text)
-                        );
-                    }
+                    room.Publish(
+                        new MessageEvent(User: message.Value.User ?? fallbackUser, Text: text),
+                        includeSender: false
+                    );
                 }
             }
-        }
-        finally
-        {
-            room.Leave();
         }
     }
 
@@ -120,6 +115,7 @@ internal sealed class ChatHandler(ChatRooms rooms) : IChatServiceHandler
             await inbound.ConfigureAwait(false);
         }
         catch (OperationCanceledException) { }
+        catch (IOException) { }
     }
 }
 
@@ -146,16 +142,20 @@ internal sealed class ChatRoom
         );
         subscribers[id] = channel;
         return new ChatRoomSubscription(
-            message => Publish(message),
+            message => Publish(id, message, includeSender: true),
+            (message, includeSender) => Publish(id, message, includeSender),
             () => Unsubscribe(id),
             channel.Reader
         );
     }
 
-    public void Publish(MessageEvent message)
+    private void Publish(Guid senderId, MessageEvent message, bool includeSender)
     {
-        foreach (var subscriber in subscribers.Values)
+        foreach (var (id, subscriber) in subscribers)
         {
+            if (!includeSender && id == senderId)
+                continue;
+
             subscriber.Writer.TryWrite(message);
         }
     }
@@ -169,11 +169,15 @@ internal sealed class ChatRoom
 
 internal sealed class ChatRoomSubscription(
     Action<MessageEvent> publish,
+    Action<MessageEvent, bool> publishWithOptions,
     Action leave,
     ChannelReader<MessageEvent> reader
 ) : IAsyncDisposable
 {
     public void Publish(MessageEvent message) => publish(message);
+
+    public void Publish(MessageEvent message, bool includeSender) =>
+        publishWithOptions(message, includeSender);
 
     public void Leave() => leave();
 

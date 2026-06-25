@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Runtime.CompilerServices;
 using Example.Chat;
 using NSmithy.Protocols.Grpc;
@@ -15,14 +16,35 @@ Console.WriteLine("Type a message and press Enter. Submit an empty line to exit.
 Console.WriteLine();
 
 using var cts = new CancellationTokenSource();
-await foreach (var item in client.ChatAsync(ReadConsoleEvents(user, cts.Token), cts.Token))
+var exiting = false;
+try
 {
-    if (item is ChatEvent.Message message)
-        Console.WriteLine($"{message.Value.User}: {message.Value.Text}");
+    await foreach (
+        var item in client.ChatAsync(ReadConsoleEvents(user, () => exiting = true, cts), cts.Token)
+    )
+    {
+        if (item is ChatEvent.Message message)
+            Console.WriteLine($"{message.Value.User}: {message.Value.Text}");
+    }
 }
+catch (OperationCanceledException) when (exiting || cts.IsCancellationRequested) { }
+catch (HttpProtocolException) when (exiting || cts.IsCancellationRequested) { }
+catch (IOException) when (exiting || cts.IsCancellationRequested) { }
+catch (HttpProtocolException ex)
+{
+    Console.WriteLine($"Disconnected unexpectedly: {ex.Message}");
+}
+catch (IOException ex)
+{
+    Console.WriteLine($"Disconnected unexpectedly: {ex.Message}");
+}
+
+Console.WriteLine("Disconnected.");
 
 static async IAsyncEnumerable<ChatEvent> ReadConsoleEvents(
     string user,
+    Action exiting,
+    CancellationTokenSource cancellationTokenSource,
     [EnumeratorCancellation] CancellationToken cancellationToken = default
 )
 {
@@ -30,7 +52,11 @@ static async IAsyncEnumerable<ChatEvent> ReadConsoleEvents(
     {
         var line = await Task.Run(Console.ReadLine, cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(line))
+        {
+            exiting();
+            await cancellationTokenSource.CancelAsync().ConfigureAwait(false);
             yield break;
+        }
 
         yield return ChatEvent.FromMessage(new MessageEvent(User: user, Text: line));
     }

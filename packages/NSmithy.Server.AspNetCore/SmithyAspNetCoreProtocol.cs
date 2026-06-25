@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
 using NSmithy.Http;
 
 namespace NSmithy.Server.AspNetCore;
@@ -144,6 +145,13 @@ public static class SmithyAspNetCoreProtocol
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
+        var minRequestBodyDataRateFeature =
+            httpContext.Features.Get<IHttpMinRequestBodyDataRateFeature>();
+        if (minRequestBodyDataRateFeature is not null)
+        {
+            minRequestBodyDataRateFeature.MinDataRate = null;
+        }
+
         var request = new SmithyEventStreamHttpRequest(
             new HttpMethod(httpContext.Request.Method),
             httpContext.Request.PathBase.ToString() + httpContext.Request.Path.ToString()
@@ -178,13 +186,26 @@ public static class SmithyAspNetCoreProtocol
             httpContext.Response.DeclareTrailer("grpc-status");
         }
 
-        await foreach (
-            var frame in events.WithCancellation(cancellationToken).ConfigureAwait(false)
-        )
+        await httpContext.Response.StartAsync(cancellationToken).ConfigureAwait(false);
+
+        try
         {
-            await WriteGrpcFrameAsync(httpContext.Response.Body, frame.Payload, cancellationToken)
-                .ConfigureAwait(false);
-            await httpContext.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+            await foreach (
+                var frame in events.WithCancellation(cancellationToken).ConfigureAwait(false)
+            )
+            {
+                await WriteGrpcFrameAsync(
+                        httpContext.Response.Body,
+                        frame.Payload,
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
+                await httpContext.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
         }
 
         if (supportsTrailers)
@@ -195,6 +216,8 @@ public static class SmithyAspNetCoreProtocol
         {
             httpContext.Response.Headers["grpc-status"] = "0";
         }
+
+        await httpContext.Response.CompleteAsync().ConfigureAwait(false);
     }
 
     public static Task WriteSmithyGrpcEventStreamResponseAsync(

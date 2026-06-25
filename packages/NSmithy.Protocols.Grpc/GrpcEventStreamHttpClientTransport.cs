@@ -135,6 +135,7 @@ public sealed class GrpcEventStreamHttpClientTransport : IEventStreamHttpTranspo
             await foreach (var frame in events.ConfigureAwait(false))
             {
                 await GrpcMessageFraming.WriteAsync(stream, frame.Payload).ConfigureAwait(false);
+                await stream.FlushAsync().ConfigureAwait(false);
             }
         }
 
@@ -151,6 +152,7 @@ public sealed class GrpcEventStreamHttpClientTransport : IEventStreamHttpTranspo
                 await GrpcMessageFraming
                     .WriteAsync(stream, frame.Payload, cancellationToken)
                     .ConfigureAwait(false);
+                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
         }
 
