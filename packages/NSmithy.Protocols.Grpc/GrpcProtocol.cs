@@ -153,8 +153,10 @@ public sealed class GrpcProtocol : IProtocol
                 return (TOutput)(object)SmithyUnit.Value;
             }
 
+            // An all-default message proto-encodes to zero bytes; deserialize it to an empty instance
+            // rather than null.
             var payload = GrpcMessageFraming.ReadSingle(response.Content);
-            return payload.Length == 0 ? default! : responseCodec!.Deserialize(payload);
+            return responseCodec!.Deserialize(payload);
         }
 
         public TInput DeserializeRequest(SmithyHttpRequest request)
@@ -166,7 +168,7 @@ public sealed class GrpcProtocol : IProtocol
             }
 
             var payload = GrpcMessageFraming.ReadSingle(request.Content ?? []);
-            return payload.Length == 0 ? default! : requestCodec!.Deserialize(payload);
+            return requestCodec!.Deserialize(payload);
         }
 
         public SmithyHttpResponse SerializeResponse(TOutput output)
@@ -218,9 +220,7 @@ public sealed class GrpcProtocol : IProtocol
             ArgumentNullException.ThrowIfNull(errorSchema);
             ArgumentNullException.ThrowIfNull(response);
             var payload = GrpcMessageFraming.ReadSingle(response.Content);
-            return payload.Length == 0
-                ? default!
-                : ProtoCodec.FromSchema(errorSchema).Deserialize(payload);
+            return ProtoCodec.FromSchema(errorSchema).Deserialize(payload);
         }
 
         public SmithyHttpResponse SerializeError<TError>(
@@ -295,7 +295,7 @@ public sealed class GrpcProtocol : IProtocol
             }
 
             var payload = GrpcMessageFraming.ReadSingle(request.Content ?? []);
-            return payload.Length == 0 ? default! : requestCodec!.Deserialize(payload);
+            return requestCodec!.Deserialize(payload);
         }
 
         public IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
@@ -476,10 +476,18 @@ public sealed class GrpcProtocol : IProtocol
     private static void EnsureGrpcResponse(SmithyEventStreamHttpResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
-        if (response.StatusCode != HttpStatusCode.OK || !IsGrpcContentType(response))
+        if (response.StatusCode == HttpStatusCode.OK && IsGrpcContentType(response))
         {
-            throw new InvalidOperationException("Response is not a successful gRPC stream.");
+            return;
         }
+
+        var message =
+            response.Headers.TryGetValue(GrpcMessageHeader, out var values) && values.Count > 0
+                ? values[0]
+                : response.ReasonPhrase;
+        throw new InvalidOperationException(
+            $"Expected a gRPC stream but received HTTP {(int)response.StatusCode}: {message}"
+        );
     }
 
     private static string MethodPath(ServiceSchema service, string operationName) =>
@@ -515,7 +523,15 @@ public sealed class GrpcProtocol : IProtocol
             var frame in events.WithCancellation(cancellationToken).ConfigureAwait(false)
         )
         {
-            yield return frame.Payload.Length == 0 ? default! : codec.Deserialize(frame.Payload);
+            // An all-default message proto-encodes to zero bytes; deserialize it to an empty
+            // instance rather than null. A frame the codec cannot map to a known case (e.g. a newer
+            // peer's unknown union case) deserializes to null — skip it for forward-compatibility
+            // instead of surfacing a null event.
+            var value = codec.Deserialize(frame.Payload);
+            if (value is not null)
+            {
+                yield return value;
+            }
         }
     }
 
@@ -529,7 +545,7 @@ public sealed class GrpcProtocol : IProtocol
             var frame in events.WithCancellation(cancellationToken).ConfigureAwait(false)
         )
         {
-            return frame.Payload.Length == 0 ? default! : codec.Deserialize(frame.Payload);
+            return codec.Deserialize(frame.Payload);
         }
 
         return default!;

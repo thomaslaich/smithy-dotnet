@@ -50,7 +50,7 @@ public static class GrpcMessageFraming
             );
         }
 
-        var length = (int)BinaryPrimitives.ReadUInt32BigEndian(body.Slice(1, 4));
+        var length = ReadFrameLength(body.Slice(1, 4));
         if (body.Length < HeaderLength + length)
         {
             throw new InvalidOperationException("Truncated gRPC frame payload.");
@@ -92,7 +92,7 @@ public static class GrpcMessageFraming
                 );
             }
 
-            var length = (int)BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(1, 4));
+            var length = ReadFrameLength(header.AsSpan(1, 4));
             var payload = new byte[length];
             if (
                 length > 0
@@ -105,6 +105,24 @@ public static class GrpcMessageFraming
 
             yield return new SmithyEventFrame(payload);
         }
+    }
+
+    /// <summary>
+    /// Reads the 4-byte big-endian frame length and guards against the value overflowing
+    /// <see cref="int"/> — a frame header declaring more than <see cref="int.MaxValue"/> bytes
+    /// (e.g. from a buggy or hostile peer) would otherwise wrap negative and crash the allocation.
+    /// </summary>
+    public static int ReadFrameLength(ReadOnlySpan<byte> lengthBytes)
+    {
+        var length = BinaryPrimitives.ReadUInt32BigEndian(lengthBytes);
+        if (length > int.MaxValue)
+        {
+            throw new InvalidOperationException(
+                $"gRPC frame length {length} exceeds the maximum supported size of {int.MaxValue} bytes."
+            );
+        }
+
+        return (int)length;
     }
 
     private static async ValueTask<bool> TryReadExactAsync(

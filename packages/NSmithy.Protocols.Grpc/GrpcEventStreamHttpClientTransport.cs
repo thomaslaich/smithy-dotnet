@@ -46,6 +46,30 @@ public sealed class GrpcEventStreamHttpClientTransport : IEventStreamHttpTranspo
         var response = await httpClient
             .SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
+
+        var headers = ToHeaderDictionary(response.Headers);
+        var contentHeaders = response.Content is null
+            ? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            : ToHeaderDictionary(response.Content.Headers);
+
+        if (!IsSuccessfulGrpcResponse(response))
+        {
+            // Transport-level failure (a 404, a 500 page, an HTTP/1.1 downgrade, …). Dispose eagerly
+            // so the connection is returned to the pool even when the caller inspects only
+            // StatusCode/Headers and never enumerates Events; the informative error is then raised by
+            // the protocol's EnsureGrpcResponse from these captured status/headers.
+            var statusCode = response.StatusCode;
+            var reasonPhrase = response.ReasonPhrase;
+            response.Dispose();
+            return new SmithyEventStreamHttpResponse(
+                statusCode,
+                reasonPhrase,
+                EmptyEvents(),
+                headers,
+                contentHeaders
+            );
+        }
+
         var responseStream = response.Content is null
             ? Stream.Null
             : await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
@@ -54,11 +78,27 @@ public sealed class GrpcEventStreamHttpClientTransport : IEventStreamHttpTranspo
             response.StatusCode,
             response.ReasonPhrase,
             ReadResponseEvents(response, responseStream, cancellationToken),
-            ToHeaderDictionary(response.Headers),
-            response.Content is null
-                ? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
-                : ToHeaderDictionary(response.Content.Headers)
+            headers,
+            contentHeaders
         );
+    }
+
+    private static bool IsSuccessfulGrpcResponse(HttpResponseMessage response)
+    {
+        if (response.StatusCode != HttpStatusCode.OK)
+        {
+            return false;
+        }
+
+        var mediaType = response.Content?.Headers.ContentType?.MediaType;
+        return mediaType is not null
+            && mediaType.StartsWith("application/grpc", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async IAsyncEnumerable<SmithyEventFrame> EmptyEvents()
+    {
+        await Task.CompletedTask.ConfigureAwait(false);
+        yield break;
     }
 
     private string ResolveRequestUri(string requestUri)
@@ -97,7 +137,55 @@ public sealed class GrpcEventStreamHttpClientTransport : IEventStreamHttpTranspo
             {
                 yield return frame;
             }
+
+            // The stream is now fully read, so the gRPC trailers have arrived. A non-zero (or
+            // missing) grpc-status means the server-side call failed: surface it as an exception
+            // instead of letting the caller treat the partial events as a successful result.
+            ThrowIfGrpcError(response);
         }
+    }
+
+    private static void ThrowIfGrpcError(HttpResponseMessage response)
+    {
+        var status = GetTrailerOrHeader(response, "grpc-status");
+        if (status is null)
+        {
+            throw new InvalidOperationException(
+                "gRPC stream ended without a grpc-status trailer; treating it as an incomplete, failed response."
+            );
+        }
+
+        if (string.Equals(status, "0", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var message = GetTrailerOrHeader(response, "grpc-message");
+        var name =
+            int.TryParse(
+                status,
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var code
+            ) && Enum.IsDefined(typeof(GrpcStatus), code)
+                ? ((GrpcStatus)code).ToString()
+                : "Unknown";
+        throw new InvalidOperationException(
+            $"gRPC stream failed with status {status} ({name})"
+                + (string.IsNullOrEmpty(message) ? "." : $": {message}")
+        );
+    }
+
+    private static string? GetTrailerOrHeader(HttpResponseMessage response, string name)
+    {
+        if (response.TrailingHeaders.TryGetValues(name, out var trailers))
+        {
+            return trailers.FirstOrDefault();
+        }
+
+        return response.Headers.TryGetValues(name, out var headers)
+            ? headers.FirstOrDefault()
+            : null;
     }
 
     private static Dictionary<string, IReadOnlyList<string>> ToHeaderDictionary(

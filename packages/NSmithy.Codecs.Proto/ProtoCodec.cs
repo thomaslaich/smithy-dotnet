@@ -87,7 +87,9 @@ public static class ProtoCodec
             return Unwrap(schema) switch
             {
                 IStructSchema structure => (T)ReadMessage(structure, payload)!,
-                IUnionSchema union => (T)ReadUnion(union, payload),
+                // ReadUnion returns null for a message with no recognized case (forward-compat); the
+                // cast preserves that null so callers can skip the unknown message.
+                IUnionSchema union => (T)ReadUnion(union, payload)!,
                 _ => throw new InvalidOperationException(
                     "Protobuf messages must be backed by a structure or union schema."
                 ),
@@ -544,7 +546,7 @@ public static class ProtoCodec
         map.AddObject(builder, key ?? string.Empty, value);
     }
 
-    private static object ReadUnion(IUnionSchema schema, ReadOnlySpan<byte> bytes)
+    private static object? ReadUnion(IUnionSchema schema, ReadOnlySpan<byte> bytes)
     {
         var byNumber = new Dictionary<int, IUnionCaseSchema>();
         foreach (var @case in schema.Cases)
@@ -569,8 +571,10 @@ public static class ProtoCodec
             }
         }
 
-        return result
-            ?? throw new InvalidOperationException("Union message carried no recognized case.");
+        // A message whose only fields are unrecognized case numbers (e.g. a newer peer added a oneof
+        // case this build doesn't know) leaves result null. Return null — "no known case set" — so
+        // callers can skip it for forward-compatibility rather than aborting on an unknown message.
+        return result;
     }
 
     private static object? ReadValueBody(

@@ -232,13 +232,17 @@ public sealed class GrpcProtocolTests
                     var responseBody = GrpcMessageFraming.Frame(
                         EchoSchema("TransportOutput").SerializeForTest(new Echo("response"))
                     );
-                    return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                    var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
                     {
                         Content = new ByteArrayContent(responseBody)
                         {
                             Headers = { ContentType = new("application/grpc+proto") },
                         },
                     };
+                    // A compliant gRPC server closes the stream with a grpc-status trailer; the
+                    // client now requires it to distinguish success from a truncated/failed stream.
+                    response.TrailingHeaders.TryAddWithoutValidation("grpc-status", "0");
+                    return response;
                 }
             )
         )

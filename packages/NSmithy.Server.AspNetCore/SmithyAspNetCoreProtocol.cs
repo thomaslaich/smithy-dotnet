@@ -1,9 +1,9 @@
-using System.Buffers.Binary;
-using System.Runtime.CompilerServices;
+using System.Globalization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
 using NSmithy.Http;
+using NSmithy.Protocols.Grpc;
 
 namespace NSmithy.Server.AspNetCore;
 
@@ -158,7 +158,7 @@ public static class SmithyAspNetCoreProtocol
         )
         {
             ContentType = httpContext.Request.ContentType,
-            Events = ReadGrpcFramesAsync(httpContext.Request.Body, cancellationToken),
+            Events = GrpcMessageFraming.ReadAllAsync(httpContext.Request.Body, cancellationToken),
         };
         foreach (var header in httpContext.Request.Headers)
         {
@@ -184,21 +184,30 @@ public static class SmithyAspNetCoreProtocol
         if (supportsTrailers)
         {
             httpContext.Response.DeclareTrailer("grpc-status");
+            httpContext.Response.DeclareTrailer("grpc-message");
+        }
+        else
+        {
+            // No HTTP/2 trailers (e.g. HTTP/1.1 in tests): grpc-status can only travel as a leading
+            // header, so it must be set before the body is flushed — we cannot know the final status
+            // yet, so we optimistically signal success. A mid-stream failure is instead surfaced by
+            // letting the exception abort the response (below) so the client sees a broken stream
+            // rather than trusting this header. Setting it after StartAsync would throw.
+            httpContext.Response.Headers["grpc-status"] = "0";
         }
 
         await httpContext.Response.StartAsync(cancellationToken).ConfigureAwait(false);
 
+        var status = GrpcStatus.Ok;
+        string? message = null;
         try
         {
             await foreach (
                 var frame in events.WithCancellation(cancellationToken).ConfigureAwait(false)
             )
             {
-                await WriteGrpcFrameAsync(
-                        httpContext.Response.Body,
-                        frame.Payload,
-                        cancellationToken
-                    )
+                await GrpcMessageFraming
+                    .WriteAsync(httpContext.Response.Body, frame.Payload, cancellationToken)
                     .ConfigureAwait(false);
                 await httpContext.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
@@ -207,14 +216,30 @@ public static class SmithyAspNetCoreProtocol
         {
             return;
         }
+        catch (Exception ex)
+        {
+            if (!supportsTrailers)
+            {
+                // The leading grpc-status:0 has already been flushed and cannot be changed. Surface
+                // the failure as an aborted stream so the client does not read it as a clean,
+                // successful completion.
+                throw;
+            }
+
+            status = GrpcStatus.Internal;
+            message = ex.Message;
+        }
 
         if (supportsTrailers)
         {
-            httpContext.Response.AppendTrailer("grpc-status", "0");
-        }
-        else
-        {
-            httpContext.Response.Headers["grpc-status"] = "0";
+            httpContext.Response.AppendTrailer(
+                "grpc-status",
+                ((int)status).ToString(CultureInfo.InvariantCulture)
+            );
+            if (message is not null)
+            {
+                httpContext.Response.AppendTrailer("grpc-message", message);
+            }
         }
 
         await httpContext.Response.CompleteAsync().ConfigureAwait(false);
@@ -271,79 +296,6 @@ public static class SmithyAspNetCoreProtocol
         var content = stream.ToArray();
         httpContext.Items[JsonRequestBodyItemKey] = content;
         return content;
-    }
-
-    private static async IAsyncEnumerable<SmithyEventFrame> ReadGrpcFramesAsync(
-        Stream stream,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default
-    )
-    {
-        var header = new byte[5];
-        while (await TryReadExactAsync(stream, header, cancellationToken).ConfigureAwait(false))
-        {
-            if (header[0] != 0)
-            {
-                throw new NotSupportedException(
-                    "Compressed gRPC messages are not yet supported by NSmithy."
-                );
-            }
-
-            var length = (int)BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(1, 4));
-            var payload = new byte[length];
-            if (
-                length > 0
-                && !await TryReadExactAsync(stream, payload, cancellationToken)
-                    .ConfigureAwait(false)
-            )
-            {
-                throw new InvalidOperationException("Truncated gRPC frame payload.");
-            }
-
-            yield return new SmithyEventFrame(payload);
-        }
-    }
-
-    private static async ValueTask WriteGrpcFrameAsync(
-        Stream stream,
-        ReadOnlyMemory<byte> payload,
-        CancellationToken cancellationToken
-    )
-    {
-        var header = new byte[5];
-        BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(1, 4), (uint)payload.Length);
-        await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
-        if (payload.Length > 0)
-        {
-            await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
-        }
-    }
-
-    private static async ValueTask<bool> TryReadExactAsync(
-        Stream stream,
-        Memory<byte> buffer,
-        CancellationToken cancellationToken
-    )
-    {
-        var read = 0;
-        while (read < buffer.Length)
-        {
-            var count = await stream
-                .ReadAsync(buffer[read..], cancellationToken)
-                .ConfigureAwait(false);
-            if (count == 0)
-            {
-                if (read == 0)
-                {
-                    return false;
-                }
-
-                throw new InvalidOperationException("Truncated gRPC frame header.");
-            }
-
-            read += count;
-        }
-
-        return true;
     }
 
     private static async IAsyncEnumerable<SmithyEventFrame> SingleEvent(SmithyEventFrame eventFrame)
