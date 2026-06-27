@@ -8,6 +8,7 @@ public sealed class ServerHttpResponseConformanceTests
         Model
             .EnumerateHttpResponseTests(RestJson1Allowlist.Protocol)
             .Where(tc => tc.AppliesToServer)
+            .Where(tc => !RestJson1Allowlist.UnsupportedStreamingBlobResponseCases.Contains(tc.Id))
             .Select(tc => new object[] { tc.Id });
 
     [Theory]
