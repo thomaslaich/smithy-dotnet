@@ -128,12 +128,16 @@ public sealed class SmithyClientRuntime(
     {
         foreach (var interceptor in interceptors)
         {
-            request = interceptor.OnBeforeSigning(context, request);
+            request = await interceptor
+                .OnBeforeSigningAsync(context, request, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         foreach (var interceptor in interceptors)
         {
-            request = interceptor.OnBeforeTransmit(context, request);
+            request = await interceptor
+                .OnBeforeTransmitAsync(context, request, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         var operationRequest = new SmithyOperationRequest(serviceName, operationName, request);

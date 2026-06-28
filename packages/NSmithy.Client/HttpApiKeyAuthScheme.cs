@@ -48,6 +48,17 @@ public sealed class HttpApiKeyAuthScheme : ISmithyAuthScheme
     public ISmithyClientMiddleware CreateMiddleware(SmithyAuthSchemeContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+        return CreateAuthHandler();
+    }
+
+    public IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return CreateAuthHandler();
+    }
+
+    private ISmithyAuthHandler CreateAuthHandler()
+    {
         return location switch
         {
             ApiKeyLocation.Header => new HeaderAuthMiddleware(
@@ -55,7 +66,7 @@ public sealed class HttpApiKeyAuthScheme : ISmithyAuthScheme
                 scheme is null ? apiKey : $"{scheme} {apiKey}"
             ),
             ApiKeyLocation.Query => new QueryParameterAuthMiddleware(name, apiKey),
-            _ => throw new ArgumentOutOfRangeException(nameof(context)),
+            _ => throw new ArgumentOutOfRangeException(nameof(location)),
         };
     }
 }

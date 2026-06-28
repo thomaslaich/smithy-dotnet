@@ -13,6 +13,9 @@ public interface ISmithyAuthScheme
     string SchemeId { get; }
 
     ISmithyClientMiddleware CreateMiddleware(SmithyAuthSchemeContext context);
+
+    IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context) =>
+        new MiddlewareClientInterceptor(CreateMiddleware(context));
 }
 
 public sealed record SmithyAuthSchemeContext(Uri Endpoint, ServiceSchema Service);

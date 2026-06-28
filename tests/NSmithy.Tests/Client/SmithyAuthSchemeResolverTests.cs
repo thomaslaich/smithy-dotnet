@@ -26,6 +26,22 @@ public sealed class SmithyAuthSchemeResolverTests
     }
 
     [Fact]
+    public void ResolveInterceptorsWithoutAuthSchemesReturnsInterceptorsOnly()
+    {
+        var existing = new MarkerInterceptor("existing");
+
+        var resolved = SmithyAuthSchemeResolver.ResolveInterceptors(
+            Endpoint,
+            Service,
+            ["aws.auth#sigv4"],
+            authSchemes: null,
+            interceptors: [existing]
+        );
+
+        Assert.Equal([existing], resolved);
+    }
+
+    [Fact]
     public void ResolvePicksFirstModeledSchemeRegardlessOfConfiguredOrder()
     {
         // Configured in B, A order; modeled prefers A — modeled order wins.
@@ -77,6 +93,26 @@ public sealed class SmithyAuthSchemeResolverTests
     }
 
     [Fact]
+    public void ResolveInterceptorsAppendsAuthAfterUserInterceptors()
+    {
+        var existing = new MarkerInterceptor("existing");
+        var auth = new MarkerInterceptor("auth");
+        var scheme = new FakeInterceptorScheme("scheme#a", auth);
+
+        var resolved = SmithyAuthSchemeResolver.ResolveInterceptors(
+            Endpoint,
+            Service,
+            ["scheme#a"],
+            authSchemes: [scheme],
+            interceptors: [existing]
+        );
+
+        Assert.Equal(2, resolved.Count);
+        Assert.Equal("existing", Assert.IsType<MarkerInterceptor>(resolved[0]).Tag);
+        Assert.Equal("auth", Assert.IsType<MarkerInterceptor>(resolved[1]).Tag);
+    }
+
+    [Fact]
     public void ResolveThrowsWhenNoConfiguredSchemeMatchesModeledSchemes()
     {
         var scheme = new FakeScheme("scheme#c", new MarkerMiddleware("c"));
@@ -103,6 +139,17 @@ public sealed class SmithyAuthSchemeResolverTests
             middleware;
     }
 
+    private sealed class FakeInterceptorScheme(string schemeId, IClientInterceptor interceptor)
+        : ISmithyAuthScheme
+    {
+        public string SchemeId => schemeId;
+
+        public ISmithyClientMiddleware CreateMiddleware(SmithyAuthSchemeContext context) =>
+            new MarkerMiddleware("unused");
+
+        public IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context) => interceptor;
+    }
+
     private sealed class MarkerMiddleware(string tag) : ISmithyClientMiddleware
     {
         public string Tag => tag;
@@ -112,5 +159,10 @@ public sealed class SmithyAuthSchemeResolverTests
             SmithyOperationNext nextOperation,
             CancellationToken cancellationToken = default
         ) => nextOperation(request, cancellationToken);
+    }
+
+    private sealed class MarkerInterceptor(string tag) : IClientInterceptor
+    {
+        public string Tag => tag;
     }
 }
