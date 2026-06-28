@@ -5,6 +5,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.logging.Logger;
 import software.amazon.smithy.build.PluginContext;
 import software.amazon.smithy.build.SmithyBuildPlugin;
@@ -42,7 +43,9 @@ public final class CSharpCodegenPlugin implements SmithyBuildPlugin {
   }
 
   private static final String NULL_DEVICE =
-      System.getProperty("os.name", "").toLowerCase().contains("win") ? "NUL" : "/dev/null";
+      System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win")
+          ? "NUL"
+          : "/dev/null";
 
   private static void formatGeneratedCode(Path outputDir) {
     String dir = outputDir.toAbsolutePath().toString();

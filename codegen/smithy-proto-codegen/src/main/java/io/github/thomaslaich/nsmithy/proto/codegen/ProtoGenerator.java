@@ -344,7 +344,7 @@ public final class ProtoGenerator {
       sb.append("  ")
           .append(name)
           .append("_")
-          .append(entry.getKey().toUpperCase())
+          .append(entry.getKey().toUpperCase(Locale.ROOT))
           .append(" = ")
           .append(idx++)
           .append(";\n");
@@ -364,7 +364,7 @@ public final class ProtoGenerator {
       sb.append("  ")
           .append(name)
           .append("_")
-          .append(entry.getKey().toUpperCase())
+          .append(entry.getKey().toUpperCase(Locale.ROOT))
           .append(" = ")
           .append(entry.getValue())
           .append(";\n");
