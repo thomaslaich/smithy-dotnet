@@ -24,10 +24,8 @@ import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
-import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
-import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.model.traits.ErrorTrait;
@@ -590,88 +588,6 @@ public final class ServerGenerator implements Runnable {
     }
 
     writer.write("");
-  }
-
-  private String bodyProjectionConstructorArguments(List<MemberShape> bodyMembers) {
-    List<String> args = new java.util.ArrayList<>();
-    for (MemberShape m : bodyMembers) {
-      String local = CSharpNaming.parameterName(m.getMemberName());
-      if (ShapeSupport.isOptionalParameter(m)) {
-        args.add(local);
-      } else {
-        args.add(
-            local
-                + " ?? throw new System.InvalidOperationException("
-                + CSharpNaming.formatString("Missing required member '" + m.getMemberName() + "'.")
-                + ")");
-      }
-    }
-    return String.join(", ", args);
-  }
-
-  private String writeValueStatement(
-      Shape target, String serializerVar, String schemaVar, String valueExpr) {
-    return switch (target.getType()) {
-      case BOOLEAN -> serializerVar + ".WriteBoolean(" + schemaVar + ", " + valueExpr + ");";
-      case BYTE -> serializerVar + ".WriteByte(" + schemaVar + ", " + valueExpr + ");";
-      case SHORT -> serializerVar + ".WriteShort(" + schemaVar + ", " + valueExpr + ");";
-      case INTEGER -> serializerVar + ".WriteInteger(" + schemaVar + ", " + valueExpr + ");";
-      case LONG -> serializerVar + ".WriteLong(" + schemaVar + ", " + valueExpr + ");";
-      case FLOAT -> serializerVar + ".WriteFloat(" + schemaVar + ", " + valueExpr + ");";
-      case DOUBLE -> serializerVar + ".WriteDouble(" + schemaVar + ", " + valueExpr + ");";
-      case BIG_INTEGER -> serializerVar + ".WriteBigInteger(" + schemaVar + ", " + valueExpr + ");";
-      case BIG_DECIMAL -> serializerVar + ".WriteBigDecimal(" + schemaVar + ", " + valueExpr + ");";
-      case TIMESTAMP -> serializerVar + ".WriteTimestamp(" + schemaVar + ", " + valueExpr + ");";
-      case STRING -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ");";
-      case ENUM -> serializerVar + ".WriteString(" + schemaVar + ", " + valueExpr + ".Value);";
-      case BLOB -> serializerVar + ".WriteBlob(" + schemaVar + ", " + valueExpr + ");";
-      case DOCUMENT -> serializerVar + ".WriteDocument(" + schemaVar + ", " + valueExpr + ");";
-      case INT_ENUM -> serializerVar + ".WriteInteger(" + schemaVar + ", (int)" + valueExpr + ");";
-      case STRUCTURE -> serializerVar + ".WriteStruct(" + schemaVar + ", " + valueExpr + ");";
-      case UNION, LIST, SET, MAP ->
-          valueExpr + ".Serialize(" + serializerVar + ", " + schemaVar + ");";
-      default ->
-          throw new IllegalArgumentException(
-              "Unsupported body projection member shape: " + target.getId());
-    };
-  }
-
-  private static String stripTrailingSemicolon(String statement) {
-    return statement.endsWith(";") ? statement.substring(0, statement.length() - 1) : statement;
-  }
-
-  private String readValueExpression(Shape target, String deserializerVar, String schemaVar) {
-    return switch (target.getType()) {
-      case BOOLEAN -> deserializerVar + ".ReadBoolean(" + schemaVar + ")";
-      case BYTE -> deserializerVar + ".ReadByte(" + schemaVar + ")";
-      case SHORT -> deserializerVar + ".ReadShort(" + schemaVar + ")";
-      case INTEGER -> deserializerVar + ".ReadInteger(" + schemaVar + ")";
-      case LONG -> deserializerVar + ".ReadLong(" + schemaVar + ")";
-      case FLOAT -> deserializerVar + ".ReadFloat(" + schemaVar + ")";
-      case DOUBLE -> deserializerVar + ".ReadDouble(" + schemaVar + ")";
-      case BIG_INTEGER -> deserializerVar + ".ReadBigInteger(" + schemaVar + ")";
-      case BIG_DECIMAL -> deserializerVar + ".ReadBigDecimal(" + schemaVar + ")";
-      case TIMESTAMP -> deserializerVar + ".ReadTimestamp(" + schemaVar + ")";
-      case STRING -> deserializerVar + ".ReadString(" + schemaVar + ")";
-      case BLOB -> deserializerVar + ".ReadBlob(" + schemaVar + ")";
-      case DOCUMENT -> deserializerVar + ".ReadDocument(" + schemaVar + ")";
-      case ENUM, STRUCTURE, UNION, LIST, SET, MAP ->
-          CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target))
-              + ".Deserialize("
-              + deserializerVar
-              + ")";
-      case INT_ENUM ->
-          "("
-              + CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target))
-              + ")"
-              + deserializerVar
-              + ".ReadInteger("
-              + schemaVar
-              + ")";
-      default ->
-          throw new IllegalArgumentException(
-              "Unsupported body projection member shape: " + target.getId());
-    };
   }
 
   // ---------------- helpers ----------------

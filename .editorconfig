@@ -18,11 +18,30 @@ dotnet_style_qualification_for_property = false:warning
 dotnet_style_predefined_type_for_locals_parameters_members = true:warning
 dotnet_style_predefined_type_for_member_access = true:warning
 
+# Globalization rules on top of AnalysisMode=Recommended. This is a wire-protocol
+# and serialization toolkit, so string comparisons and formatting must be
+# culture-independent (Ordinal / InvariantCulture). Require an explicit
+# StringComparison / IFormatProvider; promoted to build errors by
+# TreatWarningsAsErrors. (Scoped off for test code below.)
+dotnet_diagnostic.CA1305.severity = warning
+dotnet_diagnostic.CA1307.severity = warning
+dotnet_diagnostic.CA1310.severity = warning
+dotnet_diagnostic.CA1311.severity = warning
+
 [CSharpShapeGenerator.*.cs]
 max_line_length = 140
 
 [CSharpShapeGenerator.cs]
 max_line_length = 140
+
+# Test and conformance code uses controlled, ASCII inputs where culture-sensitive
+# string behavior is not a real concern, so the globalization rules above would be
+# pure noise here.
+[tests/**/*.cs]
+dotnet_diagnostic.CA1305.severity = none
+dotnet_diagnostic.CA1307.severity = none
+dotnet_diagnostic.CA1310.severity = none
+dotnet_diagnostic.CA1311.severity = none
 
 [*.{csproj,props,targets,slnx,yml,json,md}]
 indent_size = 2
