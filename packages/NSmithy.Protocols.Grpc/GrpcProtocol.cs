@@ -392,23 +392,18 @@ public sealed class GrpcProtocol : IProtocol
         TOutput,
         TInputEvent,
         TOutputEvent
-    > : IBidirectionalEventStreamOperationProtocol<TInputEvent, TOutputEvent>
+    >(
+        ServiceSchema service,
+        OperationSchema<TInput, TOutput> operation,
+        Schema<TInputEvent> inputEvent,
+        Schema<TOutputEvent> outputEvent
+    ) : IBidirectionalEventStreamOperationProtocol<TInputEvent, TOutputEvent>
     {
-        private readonly string methodPath;
-        private readonly IProtoCodec<TInputEvent> requestCodec;
-        private readonly IProtoCodec<TOutputEvent> responseCodec;
-
-        public BidirectionalEventStreamOperationProtocol(
-            ServiceSchema service,
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent,
-            Schema<TOutputEvent> outputEvent
-        )
-        {
-            methodPath = MethodPath(service, operation.Id.Name);
-            requestCodec = ProtoCodec.FromSchema(inputEvent);
-            responseCodec = ProtoCodec.FromSchema(outputEvent);
-        }
+        private readonly string methodPath = MethodPath(service, operation.Id.Name);
+        private readonly IProtoCodec<TInputEvent> requestCodec = ProtoCodec.FromSchema(inputEvent);
+        private readonly IProtoCodec<TOutputEvent> responseCodec = ProtoCodec.FromSchema(
+            outputEvent
+        );
 
         public SmithyEventStreamHttpRequest SerializeRequest(
             IAsyncEnumerable<TInputEvent> input,

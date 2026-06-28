@@ -1,28 +1,7 @@
 /*
- * Renders the C# client for a service.
- *
- * Emits a single `I{Service}Client` interface plus a concrete `{Service}Client`. The wire protocol
- * is chosen at construction via an optional `IProtocol` constructor parameter — defaulting to the
- * service's primary declared protocol — over the same invoker/protocol machinery
- * (SmithyOperationInvoker + IServiceProtocol/IOperationProtocol) for every protocol:
- *
- *   new WeatherClient(endpoint);                                  // default (primary) protocol
- *   new LibraryServiceClient(endpoint, protocol: new GrpcProtocol());
- *
- * A service may declare any combination of protocols (alloy#simpleRestJson, aws.protocols#restJson1,
- * aws.protocols#restXml, smithy.protocols#rpcv2Cbor, and/or @grpc); the same client speaks whichever
- * `IProtocol` it is given. Three constructors give a clean ownership split:
- *   - (endpoint, ...)   — the client creates and owns its HttpClient (HTTP/2 when the protocol
- *                         requires it via `IProtocol.RequiresHttp2`).
- *   - (httpClient, ...) — the caller owns the HttpClient; the endpoint comes from its BaseAddress.
- *                         This is the only HttpClient-taking constructor, so IHttpClientFactory's
- *                         AddHttpClient<I,T> resolves the client unambiguously.
- *   - (invoker, ...)    — the caller owns the whole transport/middleware pipeline (DI, testing).
- *
- * All request/response/error wiring is delegated to the bound protocol at runtime via each
- * operation's functional schema; the generated client only threads inputs/outputs through
- * SerializeRequest / DeserializeResponse / DeserializeError, and applies protocol-agnostic request
- * mutations (compression, content-MD5) via SmithyRequestModifiers.
+ * Renders the generated C# service client and client interface.
+ * Protocol-specific wire behavior lives behind IServiceProtocol and the bound operation protocols;
+ * this generator wires those protocols into idiomatic client methods and constructors.
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
@@ -137,9 +116,7 @@ public final class ClientGenerator implements Runnable {
         hasEventStreamOperations && supportsEventStreamOperations();
     boolean needsHttpClient = hasUnaryOperations || wiresEventStreamOperations;
     boolean needsIdempotency =
-        operations.stream()
-            .filter(op -> !isEventStreamOperation(model, op))
-            .anyMatch(op -> operationNeedsIdempotencyToken(model, op));
+        operations.stream().anyMatch(op -> operationCanDefaultIdempotencyToken(model, op));
     writer.write("public sealed class $L : $L", typeName, interfaceName);
     writer.openBlock(
         "{",
@@ -463,6 +440,13 @@ public final class ClientGenerator implements Runnable {
         .anyMatch(m -> m.hasTrait(IdempotencyTokenTrait.class) && ShapeSupport.isNullable(m));
   }
 
+  private boolean operationCanDefaultIdempotencyToken(Model model, OperationShape op) {
+    // Client/bidirectional event streams take the input event sequence as the generated method
+    // parameter, so there is no modeled input container to rewrite with a default token. Unary,
+    // blob-streaming, and server-event-streaming operations keep a normal input container.
+    return !isInputStreaming(model, op) && operationNeedsIdempotencyToken(model, op);
+  }
+
   // ---------------- operation bindings ----------------
 
   /**
@@ -621,6 +605,10 @@ public final class ClientGenerator implements Runnable {
           }
 
           if (outputStreaming) {
+            if (hasContainerInput) {
+              writeIdempotencyTokenDefaults(
+                  model.expectShape(op.getInputShape(), StructureShape.class));
+            }
             writer.write("return InvokeAsync();");
             writer.write("");
             writer.write(
