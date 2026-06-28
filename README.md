@@ -18,8 +18,8 @@
    <a href="LICENSE">
       <img src="https://img.shields.io/github/license/thomaslaich/smithy-dotnet" alt="License" />
    </a>
-   <a href="https://github.com/smithy-lang/smithy/releases/tag/1.68.0">
-      <img src="https://img.shields.io/badge/smithy--cli-1.68.0-orange" alt="Smithy CLI" />
+   <a href="https://github.com/smithy-lang/smithy/releases/tag/1.71.0">
+      <img src="https://img.shields.io/badge/smithy--cli-1.71.0-orange" alt="Smithy CLI" />
    </a>
 </p>
 

@@ -19,7 +19,7 @@ numbers.
 ## Maven Dependency
 
 ```json
-"software.amazon.smithy:smithy-aws-traits:1.68.0"
+"software.amazon.smithy:smithy-aws-traits:1.71.0"
 ```
 
 ## NuGet Package
