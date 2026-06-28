@@ -1,8 +1,12 @@
 using System.Buffers.Binary;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
+using NSmithy.Codecs.Proto;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Http;
 using NSmithy.Protocols.Grpc;
+using NSmithy.Server.AspNetCore;
 
 namespace NSmithy.Tests.Protocols.Grpc;
 
@@ -267,6 +271,136 @@ public sealed class GrpcProtocolTests
         Assert.Equal([new Echo("response")], await DecodeEvents(response.Events));
     }
 
+    [Fact]
+    public async Task StreamingClientThrowsOnNonZeroGrpcStatusTrailer()
+    {
+        using var httpClient = GrpcStreamClient(grpcStatus: "13", grpcMessage: "handler blew up");
+        var transport = new GrpcEventStreamHttpClientTransport(httpClient);
+
+        var response = await transport.SendAsync(StreamRequest());
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CollectAsync(response.Events)
+        );
+        Assert.Contains("13", ex.Message);
+        Assert.Contains("Internal", ex.Message); // grpc-status 13 → Internal
+        Assert.Contains("handler blew up", ex.Message);
+    }
+
+    [Fact]
+    public async Task StreamingClientThrowsOnMissingGrpcStatusTrailer()
+    {
+        // A stream that ends with no grpc-status (a truncated or non-compliant response) must surface
+        // as an error rather than a clean, successful completion.
+        using var httpClient = GrpcStreamClient(grpcStatus: null);
+        var transport = new GrpcEventStreamHttpClientTransport(httpClient);
+
+        var response = await transport.SendAsync(StreamRequest());
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            CollectAsync(response.Events)
+        );
+        Assert.Contains("without a grpc-status", ex.Message);
+    }
+
+    [Fact]
+    public void StreamingDeserializeThrowsDetailedErrorOnTransportFailure()
+    {
+        var protocol = BuildEventStreamServiceProtocol()
+            .ForServerEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
+        var response = new SmithyEventStreamHttpResponse(
+            System.Net.HttpStatusCode.ServiceUnavailable,
+            "Service Unavailable",
+            ToAsync(Array.Empty<SmithyEventFrame>()),
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["grpc-message"] = ["upstream is down"],
+            },
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        );
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            protocol.DeserializeResponseEventsAsync(response)
+        );
+        Assert.Contains("503", ex.Message);
+        Assert.Contains("upstream is down", ex.Message);
+    }
+
+    [Fact]
+    public void DeserializesAllDefaultMessageAsEmptyInstanceNotNull()
+    {
+        // An all-default message proto-encodes to zero bytes; the framed body is then a header with a
+        // zero-length payload. Deserialization must yield an (empty) instance, not null.
+        var protocol = BuildProtocol();
+        var response = protocol.SerializeResponse(new Echo(null!));
+
+        var output = protocol.DeserializeResponse(response);
+
+        Assert.NotNull(output);
+    }
+
+    [Fact]
+    public void ProtoCodecReturnsNullForUnrecognizedUnionCase()
+    {
+        // A peer (e.g. a newer Grpc.Net build) sends a union whose only field is a case number this
+        // build doesn't know. Deserialization must skip it (return null) rather than throw.
+        var futureBytes = FutureChatEventSchema()
+            .SerializeForTest(new ChatEvent.Message(new Echo("from the future")));
+
+        var decoded = ProtoCodec.FromSchema(ChatEventSchema("ChatEvent")).Deserialize(futureBytes);
+
+        Assert.Null(decoded);
+    }
+
+    [Fact]
+    public async Task ServerStreamingSkipsUnrecognizedUnionEvents()
+    {
+        var protocol = BuildEventStreamServiceProtocol()
+            .ForServerEventStreamOperation(EchoOperation("Watch"), ChatEventSchema("WatchEvent"));
+        var response = EventStreamResponse([
+            new SmithyEventFrame(
+                ChatEventSchema("WatchEvent")
+                    .SerializeForTest(new ChatEvent.Message(new Echo("known")))
+            ),
+            new SmithyEventFrame(
+                FutureChatEventSchema().SerializeForTest(new ChatEvent.Message(new Echo("unknown")))
+            ),
+        ]);
+
+        var events = await CollectAsync(protocol.DeserializeResponseEventsAsync(response));
+
+        var only = Assert.Single(events);
+        Assert.Equal(new Echo("known"), Assert.IsType<ChatEvent.Message>(only).Value);
+    }
+
+    [Fact]
+    public async Task ServerStreamWritesOkTrailerOnSuccess()
+    {
+        var (httpContext, trailers) = NewGrpcResponseContext();
+
+        await SmithyAspNetCoreProtocol.WriteSmithyGrpcEventStreamResponseAsync(
+            httpContext,
+            ToAsync([new SmithyEventFrame(EchoSchema("Out").SerializeForTest(new Echo("one")))])
+        );
+
+        Assert.Equal("0", trailers.Trailers["grpc-status"].ToString());
+    }
+
+    [Fact]
+    public async Task ServerStreamWritesErrorTrailerWhenHandlerThrows()
+    {
+        var (httpContext, trailers) = NewGrpcResponseContext();
+
+        await SmithyAspNetCoreProtocol.WriteSmithyGrpcEventStreamResponseAsync(
+            httpContext,
+            ThrowingEvents()
+        );
+
+        // Internal (13) + message, instead of silently truncating the stream with no status.
+        Assert.Equal("13", trailers.Trailers["grpc-status"].ToString());
+        Assert.Equal("kaboom", trailers.Trailers["grpc-message"].ToString());
+    }
+
     private static SmithyEventStreamHttpResponse EventStreamResponse(
         IEnumerable<SmithyEventFrame> frames
     ) =>
@@ -315,6 +449,94 @@ public sealed class GrpcProtocolTests
 
     private static IAsyncEnumerable<SmithyEventFrame> FramesFromBytes(byte[] body) =>
         GrpcMessageFraming.ReadAllAsync(new MemoryStream(body));
+
+    // A union schema that carries the ChatEvent.Message case at a proto field number (99) the normal
+    // ChatEventSchema (field 1) does not recognize — stands in for a newer peer's added oneof case.
+    private static Schema<ChatEvent> FutureChatEventSchema() =>
+        Schemas
+            .Union<ChatEvent>(ShapeId.Parse("example.greeter#FutureChatEvent"))
+            .Case(
+                "future",
+                static value => value is ChatEvent.Message,
+                static value => ((ChatEvent.Message)value).Value,
+                static value => new ChatEvent.Message(value!),
+                EchoSchema("FutureMessage"),
+                Field(99)
+            )
+            .Build();
+
+    private static SmithyEventStreamHttpRequest StreamRequest() =>
+        new(HttpMethod.Post, "/example.greeter.Greeter/Stream")
+        {
+            ContentType = "application/grpc+proto",
+            Events = ToAsync([
+                new SmithyEventFrame(EchoSchema("StreamInput").SerializeForTest(new Echo("req"))),
+            ]),
+        };
+
+    private static HttpClient GrpcStreamClient(
+        string? grpcStatus = "0",
+        string? grpcMessage = null
+    ) =>
+        new(
+            new DelegateHandler(
+                async (request, cancellationToken) =>
+                {
+                    await request.Content!.ReadAsByteArrayAsync(cancellationToken);
+                    var body = GrpcMessageFraming.Frame(
+                        EchoSchema("StreamOutput").SerializeForTest(new Echo("event"))
+                    );
+                    var response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                    {
+                        Content = new ByteArrayContent(body)
+                        {
+                            Headers = { ContentType = new("application/grpc+proto") },
+                        },
+                    };
+                    if (grpcStatus is not null)
+                    {
+                        response.TrailingHeaders.TryAddWithoutValidation("grpc-status", grpcStatus);
+                    }
+
+                    if (grpcMessage is not null)
+                    {
+                        response.TrailingHeaders.TryAddWithoutValidation(
+                            "grpc-message",
+                            grpcMessage
+                        );
+                    }
+
+                    return response;
+                }
+            )
+        )
+        {
+            BaseAddress = new Uri("http://localhost"),
+        };
+
+    private static async IAsyncEnumerable<SmithyEventFrame> ThrowingEvents()
+    {
+        await Task.CompletedTask;
+        yield return new SmithyEventFrame(EchoSchema("Out").SerializeForTest(new Echo("partial")));
+        throw new InvalidOperationException("kaboom");
+    }
+
+    private static (
+        DefaultHttpContext Context,
+        FakeResponseTrailersFeature Trailers
+    ) NewGrpcResponseContext()
+    {
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+        var trailers = new FakeResponseTrailersFeature();
+        context.Features.Set<IHttpResponseTrailersFeature>(trailers);
+        return (context, trailers);
+    }
+
+    private sealed class FakeResponseTrailersFeature : IHttpResponseTrailersFeature
+    {
+        public IHeaderDictionary Trailers { get; set; } = new HeaderDictionary();
+    }
 
     private sealed class DelegateHandler(
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send
