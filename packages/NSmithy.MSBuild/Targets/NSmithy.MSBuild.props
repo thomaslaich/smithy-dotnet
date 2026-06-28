@@ -12,7 +12,7 @@
       Smithy CLI version bundled in this package. software.amazon.smithy:* Maven
       artifacts in your contracts smithy-build.json should use this version.
     -->
-    <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.68.0</SmithyVersion>
+    <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.71.0</SmithyVersion>
     <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''">0.3.0-SNAPSHOT</SmithyCSharpCodegenVersion>
     <!--
       Set to 'true' to inject the smithy-docgen plugin into the synthesized smithy-build.json
