@@ -6,28 +6,28 @@
 }:
 
 let
-  version = "1.68.0";
+  version = "1.71.0";
 
   platform =
     if stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isAarch64 then
       {
         name = "darwin-aarch64";
-        hash = "e836bb468eb117f05597fa263864681728950e32c10a85592eb4dd643cfdee88";
+        hash = "447e1d3e08b54e1787fedd10057a259ed48954ed950f2909713de28d8ea0d3dc";
       }
     else if stdenv.hostPlatform.isDarwin && stdenv.hostPlatform.isx86_64 then
       {
         name = "darwin-x86_64";
-        hash = "55b5e397fd42fea407326e512daf9bcd38819c03534e1243e4a0fc71a9ec5ded";
+        hash = "dcda65061f51687ccded52ede603ea66381e3ca2eeaf708bdf96f93df9eb535d";
       }
     else if stdenv.hostPlatform.isLinux && stdenv.hostPlatform.isAarch64 then
       {
         name = "linux-aarch64";
-        hash = "2bbed6177b0c4fc2f75c4266a5cf72571ca35ce66da8800a90d4cf03c6bb2d42";
+        hash = "1de152a114bcb96a31bb1b3596df5b65794a2c81e292149596e5f065330d6816";
       }
     else if stdenv.hostPlatform.isLinux && stdenv.hostPlatform.isx86_64 then
       {
         name = "linux-x86_64";
-        hash = "ee6e6d24416b53624ba7f323628b2ca8aa67a349fbe3b2e92e98172c3f3d6a45";
+        hash = "5bddf40fb64fd0581d85b6bdc51ae67bdc4dff0297b3db92cb800b324fa3b2ea";
       }
     else
       throw "Unsupported platform for smithy-cli: ${stdenv.hostPlatform.system}";
