@@ -143,13 +143,13 @@ public final class ClientGenerator implements Runnable {
               if (wiresEventStreamOperations) {
                 writeEventStreamProtocolField(sp, model, op);
               }
-              continue;
+            } else {
+              writer.write(
+                  "private readonly IOperationProtocol<$L, $L> $LProtocol;",
+                  SchemaGenerator.operationShapeType(context, op.getInputShape()),
+                  SchemaGenerator.operationShapeType(context, op.getOutputShape()),
+                  CSharpNaming.typeName(op.getId().getName()));
             }
-            writer.write(
-                "private readonly IOperationProtocol<$L, $L> $LProtocol;",
-                SchemaGenerator.operationShapeType(context, op.getInputShape()),
-                SchemaGenerator.operationShapeType(context, op.getOutputShape()),
-                CSharpNaming.typeName(op.getId().getName()));
           }
           writer.write("");
 
