@@ -930,7 +930,7 @@ public static class RestProtocol
         object value
     )
     {
-        builder.Append(builder.ToString().Contains('?') ? '&' : '?');
+        builder.Append(builder.ToString().Contains('?', StringComparison.Ordinal) ? '&' : '?');
         builder.Append(Uri.EscapeDataString(name));
         builder.Append('=');
         builder.Append(Uri.EscapeDataString(FormatHttpValue(schema, traits, value)));

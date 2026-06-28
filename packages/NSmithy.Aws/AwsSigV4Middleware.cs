@@ -213,10 +213,14 @@ public sealed class AwsSigV4Middleware(
                     var value = equals >= 0 ? part[(equals + 1)..] : "";
                     return (
                         Name: EscapeQueryComponent(
-                            Uri.UnescapeDataString(name.Replace("+", "%20"))
+                            Uri.UnescapeDataString(
+                                name.Replace("+", "%20", StringComparison.Ordinal)
+                            )
                         ),
                         Value: EscapeQueryComponent(
-                            Uri.UnescapeDataString(value.Replace("+", "%20"))
+                            Uri.UnescapeDataString(
+                                value.Replace("+", "%20", StringComparison.Ordinal)
+                            )
                         )
                     );
                 })
