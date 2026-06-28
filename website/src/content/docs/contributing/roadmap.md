@@ -75,6 +75,13 @@ model's documentation rather than being empty.
 - Improve unsupported-shape and unsupported-trait diagnostics.
 - Continue simplifying generator internals where semantics are harder to follow
   than they need to be.
+- Evaluate Java static analysis for the codegen modules. Start with
+  Error Prone for correctness checks, then consider SonarCloud, PMD, or similar
+  tooling for dead-code and maintainability findings that the Java compiler does
+  not report.
+- Revisit the generated server mapping API so service mapping can be
+  protocol-selectable, for example `MapFooService(protocols)`, while preserving
+  protocol-specific internals and handling route conflicts explicitly.
 
 ### 5. Improve CBOR and XML codec performance through schema-compiled codecs
 

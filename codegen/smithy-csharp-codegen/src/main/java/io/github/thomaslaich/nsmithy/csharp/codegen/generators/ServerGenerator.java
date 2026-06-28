@@ -60,26 +60,21 @@ public final class ServerGenerator implements Runnable {
             .sorted(Comparator.comparing(o -> o.getId().toString()))
             .collect(Collectors.toList());
 
-    boolean emitsAspNet = ProtocolSupport.emitsAspNetCoreServer(service);
+    boolean emitsAspNetCore = ProtocolSupport.emitsAspNetCoreServer(service);
+    boolean emitsHttp = ProtocolSupport.emitsHttpAspNetCoreServer(service);
     boolean emitsGrpc = ProtocolSupport.isGrpcService(service);
 
     writer.addImport(RuntimeTypes.NSMITHY_CORE);
     writer.addImport(RuntimeTypes.MS_EXT_DI);
-    if (emitsAspNet) {
+    if (emitsAspNetCore) {
       writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
       writer.addImport(RuntimeTypes.NSMITHY_HTTP);
-      writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kind));
-      writer.addImport(RuntimeTypes.NSMITHY_SERVER_ASPNETCORE);
-      writer.addImport(RuntimeTypes.MS_ASPNETCORE_BUILDER);
-      writer.addImport(RuntimeTypes.MS_ASPNETCORE_HTTP);
-      writer.addImport(RuntimeTypes.MS_ASPNETCORE_ROUTING);
-    }
-    // Native gRPC server: no protoc/Grpc.AspNetCore — the generated map reads/writes the gRPC wire
-    // format itself via GrpcProtocol + the ASP.NET helpers, exactly like the rpcv2Cbor server.
-    if (emitsGrpc) {
-      writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
-      writer.addImport(RuntimeTypes.NSMITHY_HTTP);
-      writer.addImport(RuntimeTypes.NSMITHY_PROTOCOLS_GRPC);
+      if (emitsHttp) {
+        writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kind));
+      }
+      if (emitsGrpc) {
+        writer.addImport(RuntimeTypes.NSMITHY_PROTOCOLS_GRPC);
+      }
       writer.addImport(RuntimeTypes.NSMITHY_SERVER_ASPNETCORE);
       writer.addImport(RuntimeTypes.MS_ASPNETCORE_BUILDER);
       writer.addImport(RuntimeTypes.MS_ASPNETCORE_HTTP);
@@ -110,7 +105,7 @@ public final class ServerGenerator implements Runnable {
     writer.write("");
 
     // ASP.NET Core endpoint extensions (HTTP REST)
-    if (emitsAspNet) {
+    if (emitsHttp) {
       writeAspNetCoreExtensions(sp, ops, contract);
       writer.write("");
     }
