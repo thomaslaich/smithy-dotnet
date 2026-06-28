@@ -33,11 +33,13 @@ NSmithy is a .NET toolkit that turns a [Smithy](https://smithy.io) model into id
 
 ## Features
 
-- **Contract-first, protocol-agnostic**: Define your service once in Smithy independent of any wire protocol. The same model can target a different protocol without rewriting your contract.
-- **MSBuild integration**: Generate C# models, typed clients, and ASP.NET Core minimal API server stubs from a Smithy IDL as part of `dotnet build` — no separate codegen step, no Java or JRE installation required.
-- **Smithy-native codegen architecture**: Follows Smithy's official [code generator guidance](https://smithy.io/2.0/guides/building-codegen/index.html) for reusable shape generation, protocol integration, and separation between generated code and runtime libraries.
-- **Protocol support**: REST JSON, REST XML, RPC v2 CBOR, and gRPC.
-- **Conformance-tested**: Validated against official Smithy, AWS, and alloy conformance suites.
+- **Contract-first**: The Smithy model is the source of truth: operations, shapes, errors, traits, and documentation live in one distributable contract. NSmithy generates C# model types, typed clients, and ASP.NET Core server handlers from it.
+- **Protocol-agnostic**: The same model can target multiple protocols, serialization formats, and wire shapes without rewriting the service contract.
+- **Language-agnostic interop**: Smithy has generators across many ecosystems. A service generated with NSmithy can share a contract with clients or servers generated for Java, TypeScript, Python, Go, Rust, Swift, and more.
+- **Smithy-native architecture**: NSmithy follows Smithy's official [code generator guidance](https://smithy.io/2.0/guides/building-codegen/index.html): reusable shape generation, protocol-specific runtime packages, and a clear boundary between generated code and runtime libraries.
+- **Protocol support**: Supports REST JSON, REST XML, AWS JSON, RPC v2 CBOR, and native gRPC.
+- **Streaming support**: Supports unary operations, event streaming, bidirectional streaming, and streaming blob payloads across protocols.
+- **Conformance-tested**: Protocol implementations are tested against official Smithy, AWS, and alloy conformance suites.
 
 ## Development
 

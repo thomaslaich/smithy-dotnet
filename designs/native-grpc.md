@@ -121,9 +121,10 @@ The full unary `alloy.proto#grpc` surface now works, verified end-to-end by the
 
 ## Remaining gaps
 
-- **Streaming** — unary only; `@streaming` needs a separate streaming protocol
-  interface (the proto `stream` keyword is already modeled in codegen). This is
-  the one large remaining piece.
+- **Streaming hardening** — event streaming now has a native protocol interface,
+  HTTP/2 framing transport, and generated client/server signatures. It still
+  needs broader end-to-end coverage for cancellation, stream errors, and
+  interop with a real `Grpc.Net` peer.
 - **`@sparse` map values that are aggregates** (struct/list) — only scalar sparse
   values map to `Value` today; the example uses `map<string,string>`.
 - **`@protoNumType` on list/map elements** — honored on struct members only.
@@ -148,6 +149,10 @@ The full unary `alloy.proto#grpc` surface now works, verified end-to-end by the
   The client configures HTTP/2 automatically when it owns the `HttpClient`. For a
   service that declares both an HTTP protocol and `@grpc`, the one client speaks
   either.
+- **Native streaming codegen.** Streaming gRPC operations use
+  `IAsyncEnumerable<TEvent>` for server streaming, client streaming, and
+  bidirectional streaming. `examples/grpc-streaming` exercises the generated
+  event-stream surface without `Grpc.Tools` or `Grpc.Net`.
 - **Runtime member traits already flow.** `SchemaGenerator.memberTraitsExpr`
   emits *all* member traits (including `@protoIndex` / `@protoNumType`) into the
   generated `Schema<T>`, so `ProtoCodec` reads them at runtime with no further
@@ -169,12 +174,11 @@ One HTTP detail mattered: `HttpClientTransport` now sets the request
 
 ## Next steps
 
-1. **Streaming** — the large remaining `alloy.grpc` piece: a streaming protocol
-   interface + duplex frame streaming over HTTP/2, plus codegen for the streaming
-   operation signatures.
-2. **End-to-end interop test** — native server ↔ native client (works today),
+1. **End-to-end interop test** — native server ↔ native client (works today),
    plus native ↔ a real `Grpc.Net` peer built from the emitted `.proto`
    (box **3 ↔ 4**), as an automated test.
+2. **Streaming hardening** — cancellation, stream errors, and trailers across
+   all streaming shapes.
 3. **Smaller**: aggregate `@sparse` map values, `@protoNumType` on list/map
    elements, and gRPC niceties beyond `alloy.grpc` (compression, deadlines,
    metadata).

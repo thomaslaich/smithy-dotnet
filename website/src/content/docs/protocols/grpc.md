@@ -125,6 +125,18 @@ gRPC, or leave `Protocol` unset for the default (primary) protocol. To reuse a
 pre-configured `HttpClient`, pass it as the first argument (it must be HTTP/2 for
 gRPC). See [Client Configuration](/smithy-dotnet/guides/client-configuration/).
 
+## Streaming
+
+Native gRPC supports event streaming operations whose streaming member targets an
+event union. Generated clients and handlers use `IAsyncEnumerable<TEvent>`:
+
+- server streaming returns `IAsyncEnumerable<TEvent>`
+- client streaming accepts `IAsyncEnumerable<TEvent>`
+- bidirectional streaming accepts and returns `IAsyncEnumerable<TEvent>`
+
+Streaming payload blobs are not implemented yet. The streaming support here is
+for event streams, matching the common gRPC shape.
+
 ## Generating a `.proto` for external peers
 
 Setting `SmithyGrpc` (or running `smithy-proto-codegen`) still emits a `.proto`
@@ -135,8 +147,9 @@ surfaces speak the same wire format.
 ## Current Limitations
 
 - `@protoIndex` is required on every input and output member.
-- **No streaming operations yet (unary only).** This is the main remaining gap;
-  the full unary surface — scalars and `@protoNumType`, lists/maps, `@sparse`
+- Streaming support is event-stream oriented and still early; streaming payload
+  blobs, stream errors, and cancellation behavior need more coverage.
+- The full unary surface — scalars and `@protoNumType`, lists/maps, `@sparse`
   maps, string and int enums, unions and `@protoInlinedOneOf`, `Timestamp`, and
   `Document` — is supported.
 - Cleartext development requires separate HTTP/1.1 and HTTP/2 ports.

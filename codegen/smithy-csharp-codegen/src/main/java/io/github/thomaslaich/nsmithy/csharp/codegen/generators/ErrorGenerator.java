@@ -66,7 +66,7 @@ public final class ErrorGenerator implements Runnable {
     if (!hasRequired) sig.append(" = null");
     for (MemberShape m : ctor) {
       sig.append(", ")
-          .append(ShapeSupport.parameterTypeExpr(sp, m))
+          .append(ShapeSupport.parameterTypeExpr(model, sp, m))
           .append(' ')
           .append(CSharpNaming.parameterName(m.getMemberName()));
       if (ShapeSupport.isOptionalParameter(m)) sig.append(" = null");
@@ -103,7 +103,7 @@ public final class ErrorGenerator implements Runnable {
     for (MemberShape m : ShapeSupport.sortedMembers(shape, excluded)) {
       String prop = CSharpNaming.propertyName(m.getMemberName());
       boolean nullable = ShapeSupport.isNullable(m);
-      String type = ShapeSupport.memberTypeExpr(sp, m, nullable);
+      String type = ShapeSupport.memberTypeExpr(model, sp, m, nullable);
       writer.write("public $L $L { get; }", type, prop);
     }
   }

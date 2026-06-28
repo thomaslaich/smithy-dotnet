@@ -173,7 +173,7 @@ public final class SchemaGenerator {
                 for (MemberShape member : members) {
                   writer.write(
                       "public $L $L { get; set; }",
-                      ShapeSupport.memberTypeExpr(sp, member, true),
+                      ShapeSupport.memberTypeExpr(context.model(), sp, member, true),
                       CSharpNaming.propertyName(member.getMemberName()));
                 }
               });
@@ -364,7 +364,8 @@ public final class SchemaGenerator {
   private static String memberTargetExpr(GenerationContext context, MemberShape member) {
     Shape target = context.model().expectShape(member.getTarget());
     String targetExpr = targetSchemaExpr(context, member, target);
-    String nullableMemberType = ShapeSupport.memberTypeExpr(context.symbolProvider(), member, true);
+    String nullableMemberType =
+        ShapeSupport.memberTypeExpr(context.model(), context.symbolProvider(), member, true);
     if (!nullableMemberType.endsWith("?")) {
       return targetExpr;
     }
@@ -395,6 +396,9 @@ public final class SchemaGenerator {
       if (!memberFormat.isEmpty()) {
         return "Schemas.TimestampWithTraits(" + traitsExpr(memberFormat) + ")";
       }
+    }
+    if (ShapeSupport.isStreamingBlobMember(context.model(), member)) {
+      return "Schemas.StreamingBlob";
     }
     return shapeSchemaAccessor(context, target);
   }

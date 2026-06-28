@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace></RootNamespace>
+    <SmithyService>example.chat#ChatService</SmithyService>
+    <SmithyGeneratedNamespaces>example.chat</SmithyGeneratedNamespaces>
+    <SmithyGenerateClient>false</SmithyGenerateClient>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../contracts/Streaming.Contracts.csproj" />
+    <PackageReference Include="NSmithy.Core" Version="0.3.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.3.0-SNAPSHOT" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Protocols.Grpc" Version="0.3.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.3.0-SNAPSHOT" />
+  </ItemGroup>
+</Project>

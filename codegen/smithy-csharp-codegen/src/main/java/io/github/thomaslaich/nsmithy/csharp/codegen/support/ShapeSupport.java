@@ -1,7 +1,3 @@
-/*
- * Shared shape/member utilities used by all generators. Mirrors the inline
- * helpers in NSmithy.CodeGeneration.CSharp.CSharpShapeGenerator.cs.
- */
 package io.github.thomaslaich.nsmithy.csharp.codegen.support;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
@@ -29,6 +25,7 @@ import software.amazon.smithy.model.traits.HttpQueryTrait;
 import software.amazon.smithy.model.traits.HttpResponseCodeTrait;
 import software.amazon.smithy.model.traits.RequiredTrait;
 import software.amazon.smithy.model.traits.SparseTrait;
+import software.amazon.smithy.model.traits.StreamingTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -80,9 +77,7 @@ public final class ShapeSupport {
       Shape target,
       software.amazon.smithy.model.node.Node node,
       String typeName) {
-    if (target.getType() == ShapeType.DOCUMENT) {
-      return documentLiteral(node);
-    }
+    if (target.getType() == ShapeType.DOCUMENT) return documentLiteral(node);
     if (node.isNullNode()) return null;
     return switch (target.getType()) {
       case BLOB ->
@@ -313,9 +308,22 @@ public final class ShapeSupport {
     return nullable ? base + "?" : base;
   }
 
+  public static String memberTypeExpr(
+      Model model, SymbolProvider sp, MemberShape member, boolean nullable) {
+    String base =
+        isStreamingBlobMember(model, member)
+            ? "System.IO.Stream"
+            : CSharpSymbolProvider.qualified(sp.toSymbol(member));
+    return nullable ? base + "?" : base;
+  }
+
   /** Parameter type: nullable if member is nullable OR has a default. */
   public static String parameterTypeExpr(SymbolProvider sp, MemberShape member) {
     return memberTypeExpr(sp, member, isNullable(member) || hasDefault(member));
+  }
+
+  public static String parameterTypeExpr(Model model, SymbolProvider sp, MemberShape member) {
+    return memberTypeExpr(model, sp, member, isNullable(member) || hasDefault(member));
   }
 
   public static boolean isHttpLabel(MemberShape m) {
@@ -368,6 +376,59 @@ public final class ShapeSupport {
 
   public static boolean isSparse(Shape shape) {
     return shape.hasTrait(SparseTrait.class);
+  }
+
+  /** True when a shape itself, one of its members, or a member target carries @streaming. */
+  public static boolean isStreamingShape(Model model, ShapeId shapeId) {
+    Shape shape = model.expectShape(shapeId);
+    if (shape.hasTrait(StreamingTrait.class)) {
+      return true;
+    }
+
+    return shape.members().stream()
+        .anyMatch(
+            member ->
+                member.hasTrait(StreamingTrait.class)
+                    || model.expectShape(member.getTarget()).hasTrait(StreamingTrait.class));
+  }
+
+  /**
+   * Returns the event/message shape of a streaming operation input/output. For the Smithy event
+   * stream pattern this is the target of the streaming member; for direct streaming shapes this is
+   * the shape itself.
+   */
+  public static Optional<ShapeId> streamingMemberTarget(Model model, ShapeId shapeId) {
+    Shape shape = model.expectShape(shapeId);
+    if (shape.hasTrait(StreamingTrait.class)) {
+      return Optional.of(shapeId);
+    }
+
+    return shape.members().stream()
+        .filter(
+            member ->
+                member.hasTrait(StreamingTrait.class)
+                    || model.expectShape(member.getTarget()).hasTrait(StreamingTrait.class))
+        .map(MemberShape::getTarget)
+        .findFirst();
+  }
+
+  public static boolean isStreamingBlobMember(Model model, MemberShape member) {
+    Shape target = model.expectShape(member.getTarget());
+    return target.getType() == ShapeType.BLOB
+        && (member.hasTrait(StreamingTrait.class) || target.hasTrait(StreamingTrait.class));
+  }
+
+  public static boolean isStreamingBlobShape(Model model, ShapeId shapeId) {
+    Shape shape = model.expectShape(shapeId);
+    if (shape.getType() == ShapeType.BLOB && shape.hasTrait(StreamingTrait.class)) {
+      return true;
+    }
+
+    return shape.members().stream().anyMatch(member -> isStreamingBlobMember(model, member));
+  }
+
+  public static boolean isEventStreamShape(Model model, ShapeId shapeId) {
+    return isStreamingShape(model, shapeId) && !isStreamingBlobShape(model, shapeId);
   }
 
   /** "Foo" -> "FooAsync". Convenience for generated method names. */

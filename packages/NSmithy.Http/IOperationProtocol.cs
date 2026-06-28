@@ -22,18 +22,6 @@ public interface IProtocol
 }
 
 /// <summary>
-/// A protocol bound to a single service. Produced from a <see cref="ServiceSchema"/>; hands out
-/// per-operation protocols. Service-level concerns (e.g. deriving the rpcv2Cbor request path from
-/// the service shape name, and — in future — auth and endpoint resolution) live here, set up once.
-/// </summary>
-public interface IServiceProtocol
-{
-    IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation
-    );
-}
-
-/// <summary>
 /// A protocol bound to a single (service, operation) pair. The generated client and server call
 /// these methods uniformly; every protocol-specific wire detail (URI scheme, framing, error
 /// discrimination) lives behind the implementation. This is the <em>unary</em> shape — a streaming

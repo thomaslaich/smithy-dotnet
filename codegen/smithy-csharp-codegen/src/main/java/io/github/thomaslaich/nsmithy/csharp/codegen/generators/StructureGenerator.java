@@ -48,7 +48,7 @@ public final class StructureGenerator implements Runnable {
     StringBuilder sig = new StringBuilder("(");
     for (int i = 0; i < ctorMembers.size(); i++) {
       MemberShape member = ctorMembers.get(i);
-      sig.append(ShapeSupport.parameterTypeExpr(sp, member))
+      sig.append(ShapeSupport.parameterTypeExpr(context.model(), sp, member))
           .append(' ')
           .append(CSharpNaming.propertyName(member.getMemberName()));
       if (ShapeSupport.isOptionalParameter(member)) {

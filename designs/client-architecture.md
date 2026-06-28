@@ -1,0 +1,238 @@
+# Client Architecture
+
+Target architecture for generated NSmithy clients and the shared client runtime.
+
+## Goal
+
+Generated clients should expose a natural .NET surface while delegating wire
+behavior to protocol implementations and cross-cutting behavior to a shared
+client lifecycle. The generated method should describe the modeled operation;
+the runtime should own execution.
+
+The desired shape is:
+
+```text
+start execution
+  -> create execution context
+  -> run before-execution interceptors
+  -> prepare typed input
+  -> resolve endpoint
+  -> serialize request
+  -> resolve auth identity and signer
+  -> sign request
+  -> transmit attempt
+  -> deserialize response or modeled error
+  -> run completion interceptors
+  -> return typed output
+```
+
+Retries wrap the attempt portion of the lifecycle. Telemetry observes both the
+overall execution and individual attempts.
+
+## Generated Client Surface
+
+Each generated service has one interface and one concrete client:
+
+```csharp
+public interface IWeatherClient : IDisposable
+{
+    Task<GetForecastOutput> GetForecastAsync(
+        GetForecastInput input,
+        CancellationToken cancellationToken = default);
+}
+```
+
+The concrete client has a per-service config type:
+
+```csharp
+public sealed class WeatherClientConfig : SmithyClientConfig
+{
+}
+```
+
+The public constructors keep transport ownership explicit:
+
+```csharp
+new WeatherClient(endpoint, config);      // client owns HttpClient
+new WeatherClient(httpClient, config);    // caller owns HttpClient
+new WeatherClient(invoker, config);       // caller owns full execution pipeline
+```
+
+`Endpoint` lives on config internally. The endpoint convenience constructor is
+the common path and copies the supplied endpoint into config before delegating to
+the internal config-based construction path.
+
+Generated clients implement `IDisposable`. Disposal releases only resources the
+client created itself.
+
+## Configuration
+
+`SmithyClientConfig` is the stable home for client knobs:
+
+```csharp
+public class SmithyClientConfig
+{
+    public Uri? Endpoint { get; set; }
+    public IProtocol? Protocol { get; set; }
+    public IEndpointResolver? EndpointResolver { get; set; }
+    public IList<IClientInterceptor> Interceptors { get; }
+    public IList<ISmithyAuthScheme> AuthSchemes { get; }
+    public RetryStrategy? RetryStrategy { get; set; }
+    public TimeSpan? OperationTimeout { get; set; }
+    public Func<string>? IdempotencyTokenProvider { get; set; }
+}
+```
+
+Adding a property is version-friendly; adding constructor parameters is not. The
+config object also maps cleanly to `IHttpClientFactory` and DI callback patterns.
+
+## Execution Context
+
+Every operation invocation gets a typed context:
+
+```csharp
+public sealed class ContextKey<T>(string name);
+
+public sealed class SmithyContext
+{
+    public T? Get<T>(ContextKey<T> key);
+    public void Set<T>(ContextKey<T> key, T value);
+}
+```
+
+The context carries operation metadata, endpoint resolution state, selected auth
+scheme, retry attempt state, telemetry objects, deadlines, and user-defined
+values. It avoids untyped string bags while still allowing protocol and runtime
+features to compose without adding parameters to every method.
+
+## Interceptors
+
+Interceptors are the primary extension point. They observe and modify named
+lifecycle stages:
+
+```csharp
+public interface IClientInterceptor
+{
+    void ReadBeforeExecution(SmithyContext context);
+    object? ModifyBeforeSerialization(SmithyContext context, object? input);
+    SmithyHttpRequest ModifyBeforeSigning(SmithyContext context, SmithyHttpRequest request);
+    SmithyHttpRequest ModifyBeforeTransmit(SmithyContext context, SmithyHttpRequest request);
+    void ReadAfterTransmit(SmithyContext context, SmithyHttpResponse response);
+    object? ModifyBeforeCompletion(SmithyContext context, object? output);
+}
+```
+
+Interceptors run in configured order before transmit and reverse order after
+transmit/completion. They are scoped to the client and must be safe for
+concurrent calls unless explicitly documented otherwise.
+
+Send-stage middleware is representable as an interceptor pair:
+`ModifyBeforeTransmit` plus `ReadAfterTransmit`. The long-term public concept is
+interceptors; middleware remains an adapter pattern, not the architectural
+center.
+
+## Endpoint Resolution
+
+Endpoint resolution is per operation. The resolver sees operation metadata,
+client config, and typed input:
+
+```csharp
+public interface IEndpointResolver
+{
+    Endpoint ResolveEndpoint(EndpointParameters parameters);
+}
+
+public sealed record Endpoint(
+    Uri Uri,
+    IReadOnlyDictionary<string, string> Headers,
+    IReadOnlyList<string>? AuthSchemes = null);
+```
+
+A static `Config.Endpoint` is the simplest resolver and takes precedence when
+set explicitly. Protocols and generated code apply host labels and operation
+endpoint traits through the same resolution path.
+
+Resolved endpoints may narrow auth schemes. That lets endpoint rules and auth
+selection compose without protocol-specific branches in generated clients.
+
+## Auth
+
+Auth has three separable concepts:
+
+- **scheme resolution** chooses the effective modeled auth scheme for the
+  operation.
+- **identity resolution** obtains credentials or tokens for that scheme.
+- **signing** mutates the serialized request before transmit.
+
+Auth schemes are keyed by Smithy auth trait shape id. Per-operation `@auth`
+overrides, endpoint-driven auth overrides, and anonymous operations all feed the
+same resolver.
+
+Identity providers own caching and refresh. Signers are stateless or explicitly
+thread-safe services that operate on a request plus context.
+
+## Retries
+
+Retries are part of the client lifecycle, not a transport wrapper. A retry
+strategy decides whether to retry after modeled errors, response metadata, or
+transport failures.
+
+The standard strategy uses:
+
+- exponential backoff with full jitter
+- a maximum backoff cap
+- retry quota shared by the client
+- `Retry-After` when present
+- retryability from Smithy traits and protocol error classification
+- `TimeProvider` for deterministic tests
+
+Request streams are retried only when they can be replayed or when the caller
+provides a replay strategy.
+
+## Protocol Boundary
+
+Protocols own wire behavior:
+
+- request serialization
+- response and error deserialization
+- protocol-specific error discrimination
+- event-stream framing
+- payload binding
+- trailer interpretation
+
+Generated clients should not branch on protocol-specific wire rules. They bind
+operation schemas once, select the configured protocol, and pass protocol-bound
+delegates into the client lifecycle.
+
+## Observability
+
+The runtime exposes OpenTelemetry-friendly primitives:
+
+- `ActivitySource` spans for operation execution and retry attempts
+- `Meter` counters/histograms for attempts, retries, latency, failures, and
+  stream duration
+- interceptor hooks for custom logging and diagnostics
+
+Telemetry uses Smithy operation and service identifiers as stable names and
+dimensions.
+
+## Pagination
+
+Operations with `@paginated` generate paginator helpers that return
+`IAsyncEnumerable<T>`. Paginators use the normal client lifecycle for each page,
+so auth, retries, endpoint resolution, and telemetry behave like any other
+operation call.
+
+## Streaming
+
+Event streams and streaming blob payloads follow the streaming design. They are
+not special cases outside the client lifecycle:
+
+- event-stream operations use event-stream protocol bindings and
+  `IAsyncEnumerable<TEvent>`
+- streaming blobs use unary protocol bindings with a streaming HTTP body
+  abstraction
+- retries, auth, checksums, and telemetry flow through the same context and
+  interceptor model
+
+See [streaming.md](streaming.md) for the dedicated streaming architecture.
