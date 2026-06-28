@@ -898,11 +898,11 @@ public final class ClientGenerator implements Runnable {
   }
 
   private boolean isInputStreaming(Model model, OperationShape op) {
-    return ShapeSupport.isStreamingShape(model, op.getInputShape());
+    return ShapeSupport.isEventStreamShape(model, op.getInputShape());
   }
 
   private boolean isOutputStreaming(Model model, OperationShape op) {
-    return ShapeSupport.isStreamingShape(model, op.getOutputShape());
+    return ShapeSupport.isEventStreamShape(model, op.getOutputShape());
   }
 
   private String streamingEventType(SymbolProvider sp, Model model, ShapeId shapeId) {

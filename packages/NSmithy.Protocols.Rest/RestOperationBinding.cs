@@ -32,6 +32,9 @@ public sealed class RestOperationBinding<TInput, TOutput>
     /// <summary>Pre-resolved value for the request's <c>Accept</c> header.</summary>
     public required string AcceptType { get; init; }
 
+    /// <summary>True when the response payload is a streaming blob and must not be buffered.</summary>
+    public required bool OutputHasStreamingPayload { get; init; }
+
     // Input
     public required IStructSchema<TInput> InputSchema { get; init; }
     public required IReadOnlyList<IMemberSchema> LabelMembers { get; init; }
@@ -48,7 +51,7 @@ public sealed class RestOperationBinding<TInput, TOutput>
     public Func<TInput, RestBody>? InputPayloadWriter { get; init; }
 
     /// <summary>Reads the <c>@httpPayload</c> input from a body into the builder.</summary>
-    public Action<byte[]?, object>? InputPayloadReader { get; init; }
+    public RestPayloadReader? InputPayloadReader { get; init; }
 
     // Output
     public required IStructSchema<TOutput> OutputSchema { get; init; }
@@ -63,7 +66,7 @@ public sealed class RestOperationBinding<TInput, TOutput>
     public Func<TOutput, RestBody>? OutputPayloadWriter { get; init; }
 
     /// <summary>Reads the <c>@httpPayload</c> output from a body into the builder.</summary>
-    public Action<byte[]?, object>? OutputPayloadReader { get; init; }
+    public RestPayloadReader? OutputPayloadReader { get; init; }
 
     internal static RestOperationBinding<TInput, TOutput> CreateFrom(
         OperationSchema<TInput, TOutput> operation,
@@ -220,6 +223,9 @@ public sealed class RestOperationBinding<TInput, TOutput>
                     codecFactory,
                     rawStringPayloads
                 ),
+            OutputHasStreamingPayload =
+                outputPayloadMember is not null
+                && outputPayloadMember.Traits.ContainsKey(RestTraits.Streaming),
             InputSchema = inputSchema,
             LabelMembers = labelMembers,
             QueryMembers = queryMembers,

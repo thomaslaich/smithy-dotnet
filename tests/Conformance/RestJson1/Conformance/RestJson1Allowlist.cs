@@ -9,24 +9,6 @@ internal static class RestJson1Allowlist
 {
     public const string Protocol = "aws.protocols#restJson1";
 
-    public static readonly IReadOnlySet<string> UnsupportedStreamingBlobRequestCases =
-        new HashSet<string>(StringComparer.Ordinal)
-        {
-            "RestJsonStreamingTraitsRequireLengthWithBlob",
-            "RestJsonStreamingTraitsRequireLengthWithNoBlobBody",
-            "RestJsonStreamingTraitsWithBlob",
-            "RestJsonStreamingTraitsWithMediaTypeWithBlob",
-            "RestJsonStreamingTraitsWithNoBlobBody",
-        };
-
-    public static readonly IReadOnlySet<string> UnsupportedStreamingBlobResponseCases =
-        new HashSet<string>(StringComparer.Ordinal)
-        {
-            "RestJsonStreamingTraitsWithBlob",
-            "RestJsonStreamingTraitsWithMediaTypeWithBlob",
-            "RestJsonStreamingTraitsWithNoBlobBody",
-        };
-
     public static readonly IReadOnlySet<string> ExecutableRequestCases = new HashSet<string>(
         StringComparer.Ordinal
     )
@@ -91,6 +73,8 @@ internal static class RestJson1Allowlist
         "RestJsonHttpPayloadTraitsWithNoBlobBody",
         "RestJsonHttpPayloadWithUnion",
         "RestJsonHttpPayloadWithUnsetUnion",
+        "RestJsonStreamingTraitsWithBlob",
+        "RestJsonStreamingTraitsWithNoBlobBody",
         "RestJsonHttpWithEmptyBlobPayload",
         "RestJsonEnumPayloadRequest",
         "RestJsonStringPayloadRequest",
@@ -154,6 +138,9 @@ internal static class RestJson1Allowlist
         "RestJsonHostWithPath",
         "RestJsonInputAndOutputWithQuotedStringHeaders",
         "RestJsonHttpPayloadTraitsWithMediaTypeWithBlob",
+        "RestJsonStreamingTraitsRequireLengthWithBlob",
+        "RestJsonStreamingTraitsRequireLengthWithNoBlobBody",
+        "RestJsonStreamingTraitsWithMediaTypeWithBlob",
         "RestJsonTestBodyStructure",
         "RestJsonTestPayloadBlob",
         "RestJsonTestPayloadStructure",
@@ -215,6 +202,8 @@ internal static class RestJson1Allowlist
         "RestJsonHttpPayloadTraitsWithNoBlobBody",
         "RestJsonHttpPayloadWithUnion",
         "RestJsonHttpPayloadWithUnsetUnion",
+        "RestJsonStreamingTraitsWithBlob",
+        "RestJsonStreamingTraitsWithNoBlobBody",
         "RestJsonEnumPayloadResponse",
         "RestJsonStringPayloadResponse",
         "RestJsonDeserializesDenseSetMap",
@@ -280,5 +269,6 @@ internal static class RestJson1Allowlist
         "RestJsonInputAndOutputWithQuotedStringHeaders",
         "RestJsonUnitInputAndOutputNoOutput",
         "RestJsonHttpPayloadTraitsWithMediaTypeWithBlob",
+        "RestJsonStreamingTraitsWithMediaTypeWithBlob",
     };
 }

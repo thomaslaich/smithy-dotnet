@@ -46,9 +46,21 @@ public sealed class HttpClientTransport : IHttpTransport
             message.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }
 
-        if (request.Content is not null)
+        if (request.StreamingContent is not null)
+        {
+            message.Content = new StreamContent(request.StreamingContent);
+            if (request.StreamingContentLength is { } contentLength)
+            {
+                message.Content.Headers.ContentLength = contentLength;
+            }
+        }
+        else if (request.Content is not null)
         {
             message.Content = new ByteArrayContent(request.Content);
+        }
+
+        if (message.Content is not null)
+        {
             if (!string.IsNullOrWhiteSpace(request.ContentType))
             {
                 message.Content.Headers.ContentType =
@@ -61,9 +73,34 @@ public sealed class HttpClientTransport : IHttpTransport
             }
         }
 
-        using var response = await httpClient
+        var response = await httpClient
             .SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
+        if (request.ExpectStreamingResponse)
+        {
+            var contentHeaders = response.Content is null
+                ? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                : ToHeaderDictionary(response.Content.Headers);
+            return new SmithyHttpResponse(
+                response.StatusCode,
+                response.ReasonPhrase,
+                [],
+                ToHeaderDictionary(response.Headers),
+                contentHeaders
+            )
+            {
+                StreamingContent = new ResponseContentStream(
+                    response,
+                    response.Content is null
+                        ? Stream.Null
+                        : await response
+                            .Content.ReadAsStreamAsync(cancellationToken)
+                            .ConfigureAwait(false)
+                ),
+            };
+        }
+
+        using var bufferedResponse = response;
         var content = response.Content is null
             ? []
             : await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
@@ -123,5 +160,66 @@ public sealed class HttpClientTransport : IHttpTransport
             header => (IReadOnlyList<string>)header.Value.ToArray(),
             StringComparer.OrdinalIgnoreCase
         );
+    }
+
+    private sealed class ResponseContentStream(HttpResponseMessage response, Stream inner) : Stream
+    {
+        public override bool CanRead => inner.CanRead;
+
+        public override bool CanSeek => inner.CanSeek;
+
+        public override bool CanWrite => false;
+
+        public override long Length => inner.Length;
+
+        public override long Position
+        {
+            get => inner.Position;
+            set => inner.Position = value;
+        }
+
+        public override void Flush() => inner.Flush();
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            inner.Read(buffer, offset, count);
+
+        public override int Read(Span<byte> buffer) => inner.Read(buffer);
+
+        public override Task<int> ReadAsync(
+            byte[] buffer,
+            int offset,
+            int count,
+            CancellationToken cancellationToken
+        ) => inner.ReadAsync(buffer, offset, count, cancellationToken);
+
+        public override ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default
+        ) => inner.ReadAsync(buffer, cancellationToken);
+
+        public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
+
+        public override void SetLength(long value) => inner.SetLength(value);
+
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                inner.Dispose();
+                response.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+
+        public override async ValueTask DisposeAsync()
+        {
+            await inner.DisposeAsync().ConfigureAwait(false);
+            response.Dispose();
+            await base.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }

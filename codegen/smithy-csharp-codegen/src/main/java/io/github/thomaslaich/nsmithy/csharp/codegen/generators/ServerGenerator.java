@@ -472,9 +472,15 @@ public final class ServerGenerator implements Runnable {
     // serialization metadata, so a separate per-operation descriptor is unnecessary.
     String handlerCall;
     if (hasInput) {
-      writer.write(
-          "var smithyRequest = await SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync("
-              + "httpContext, cancellationToken).ConfigureAwait(false);");
+      if (!rpc && ShapeSupport.isStreamingBlobShape(context.model(), op.getInputShape())) {
+        writer.write(
+            "var smithyRequest = await SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync("
+                + "httpContext, streamBody: true, cancellationToken).ConfigureAwait(false);");
+      } else {
+        writer.write(
+            "var smithyRequest = await SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync("
+                + "httpContext, cancellationToken).ConfigureAwait(false);");
+      }
       writer.write("var input = $L.DeserializeRequest(smithyRequest);", opProtocol);
       handlerCall = "handler." + methodName + "(input, cancellationToken)";
     } else {
@@ -726,11 +732,11 @@ public final class ServerGenerator implements Runnable {
   }
 
   private boolean isInputStreaming(Model model, OperationShape op) {
-    return ShapeSupport.isStreamingShape(model, op.getInputShape());
+    return ShapeSupport.isEventStreamShape(model, op.getInputShape());
   }
 
   private boolean isOutputStreaming(Model model, OperationShape op) {
-    return ShapeSupport.isStreamingShape(model, op.getOutputShape());
+    return ShapeSupport.isEventStreamShape(model, op.getOutputShape());
   }
 
   private String streamingEventType(SymbolProvider sp, Model model, ShapeId shapeId) {

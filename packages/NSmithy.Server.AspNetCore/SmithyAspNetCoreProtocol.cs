@@ -13,6 +13,7 @@ public static class SmithyAspNetCoreProtocol
 
     public static async Task<SmithyHttpRequest> CreateSmithyHttpRequestAsync(
         HttpContext httpContext,
+        bool streamBody,
         CancellationToken cancellationToken = default
     )
     {
@@ -37,10 +38,23 @@ public static class SmithyAspNetCoreProtocol
         }
 
         request.ContentType = httpContext.Request.ContentType;
-        request.Content = await ReadRequestBodyContentAsync(httpContext, cancellationToken)
-            .ConfigureAwait(false);
+        if (streamBody)
+        {
+            request.StreamingContent = httpContext.Request.Body;
+            request.StreamingContentLength = httpContext.Request.ContentLength;
+        }
+        else
+        {
+            request.Content = await ReadRequestBodyContentAsync(httpContext, cancellationToken)
+                .ConfigureAwait(false);
+        }
         return request;
     }
+
+    public static Task<SmithyHttpRequest> CreateSmithyHttpRequestAsync(
+        HttpContext httpContext,
+        CancellationToken cancellationToken = default
+    ) => CreateSmithyHttpRequestAsync(httpContext, streamBody: false, cancellationToken);
 
     public static async Task WriteSmithyHttpResponseAsync(
         HttpContext httpContext,
@@ -62,7 +76,13 @@ public static class SmithyAspNetCoreProtocol
             httpContext.Response.Headers[header.Key] = header.Value.ToArray();
         }
 
-        if (response.Content.Length > 0)
+        if (response.StreamingContent is not null)
+        {
+            await response
+                .StreamingContent.CopyToAsync(httpContext.Response.Body, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        else if (response.Content.Length > 0)
         {
             await httpContext
                 .Response.Body.WriteAsync(response.Content, cancellationToken)

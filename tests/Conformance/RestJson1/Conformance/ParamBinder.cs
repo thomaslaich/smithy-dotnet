@@ -58,6 +58,10 @@ internal static class ParamBinder
                 return System.Text.Encoding.UTF8.GetBytes(text);
             }
         }
+        if (targetType == typeof(Stream))
+        {
+            return new MemoryStream((byte[])Bind(typeof(byte[]), value)!);
+        }
         if (targetType == typeof(float))
         {
             var raw = value!.AsValue();
@@ -289,13 +293,17 @@ internal static class ParamBinder
             {
                 var memberSchema = (schema as IStructSchema)?.GetMember(memberName);
                 if (
-                    p.ParameterType == typeof(byte[])
+                    (p.ParameterType == typeof(byte[]) || p.ParameterType == typeof(Stream))
                     && node is JsonValue scalar
                     && scalar.TryGetValue<string>(out var text)
                     && memberSchema?.Traits.ContainsKey(HttpPayloadTraitId) == true
                 )
                 {
-                    args[i] = System.Text.Encoding.UTF8.GetBytes(text);
+                    var bytes = System.Text.Encoding.UTF8.GetBytes(text);
+                    args[i] =
+                        p.ParameterType == typeof(Stream)
+                            ? new MemoryStream(bytes, writable: false)
+                            : bytes;
                 }
                 else
                 {

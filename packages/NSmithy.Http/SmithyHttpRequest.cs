@@ -12,6 +12,12 @@ public sealed class SmithyHttpRequest(HttpMethod method, string requestUri)
 
     public byte[]? Content { get; set; }
 
+    public Stream? StreamingContent { get; set; }
+
+    public long? StreamingContentLength { get; set; }
+
+    public bool ExpectStreamingResponse { get; set; }
+
     public string? ContentType { get; set; }
 
     public IDictionary<string, IReadOnlyList<string>> ContentHeaders { get; } =

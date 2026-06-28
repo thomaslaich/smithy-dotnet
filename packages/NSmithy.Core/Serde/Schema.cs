@@ -1145,6 +1145,13 @@ public static class Schemas
     public static Schema<byte[]> Blob { get; } =
         new PrimitiveSchema<byte[]>(new ShapeId(PreludeNamespace, "Blob"), ShapeKind.Blob);
 
+    public static Schema<Stream> StreamingBlob { get; } =
+        new PrimitiveSchema<Stream>(
+            new ShapeId(PreludeNamespace, "Blob"),
+            ShapeKind.Blob,
+            [new Trait(new ShapeId(PreludeNamespace, "streaming"))]
+        );
+
     public static Schema<DateTimeOffset> Timestamp { get; } =
         new PrimitiveSchema<DateTimeOffset>(
             new ShapeId(PreludeNamespace, "Timestamp"),
