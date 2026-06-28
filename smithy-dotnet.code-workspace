@@ -25,6 +25,10 @@
       "path": "examples/grpc"
     },
     {
+      "name": "Example: gRPC streaming",
+      "path": "examples/grpc-streaming"
+    },
+    {
       "name": "Example: Polyglot",
       "path": "examples/polyglot"
     },

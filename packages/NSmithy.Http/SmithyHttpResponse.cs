@@ -12,4 +12,6 @@ public sealed record SmithyHttpResponse(
 )
 {
     public string ContentText => Encoding.UTF8.GetString(Content);
+
+    public Stream? StreamingContent { get; init; }
 }

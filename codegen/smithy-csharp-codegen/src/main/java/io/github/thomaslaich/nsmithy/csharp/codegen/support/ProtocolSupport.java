@@ -60,16 +60,11 @@ public final class ProtocolSupport {
     return s.findTrait(TraitIds.GRPC).isPresent();
   }
 
-  public static boolean emitsHttpClient(ServiceShape s) {
-    return isAwsJson10Service(s)
-        || isAwsJson11Service(s)
-        || isSimpleRestJsonService(s)
-        || isRestJson1Service(s)
-        || isRestXmlService(s)
-        || isRpcV2CborService(s);
+  public static boolean emitsAspNetCoreServer(ServiceShape s) {
+    return emitsHttpAspNetCoreServer(s) || isGrpcService(s);
   }
 
-  public static boolean emitsAspNetCoreServer(ServiceShape s) {
+  public static boolean emitsHttpAspNetCoreServer(ServiceShape s) {
     return isSimpleRestJsonService(s) || isRestJson1Service(s) || isRpcV2CborService(s);
   }
 
@@ -79,6 +74,7 @@ public final class ProtocolSupport {
     if (isAwsJson11Service(s)) return Kind.AWS_JSON_1_1;
     if (isAwsJson10Service(s)) return Kind.AWS_JSON_1_0;
     if (isSimpleRestJsonService(s)) return Kind.SIMPLE_REST_JSON;
+    if (isGrpcService(s)) return Kind.GRPC;
     return Kind.REST_JSON_1;
   }
 

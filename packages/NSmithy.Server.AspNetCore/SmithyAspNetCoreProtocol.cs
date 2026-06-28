@@ -1,6 +1,9 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
 using NSmithy.Http;
+using NSmithy.Protocols.Grpc;
 
 namespace NSmithy.Server.AspNetCore;
 
@@ -10,6 +13,7 @@ public static class SmithyAspNetCoreProtocol
 
     public static async Task<SmithyHttpRequest> CreateSmithyHttpRequestAsync(
         HttpContext httpContext,
+        bool streamBody,
         CancellationToken cancellationToken = default
     )
     {
@@ -34,10 +38,23 @@ public static class SmithyAspNetCoreProtocol
         }
 
         request.ContentType = httpContext.Request.ContentType;
-        request.Content = await ReadRequestBodyContentAsync(httpContext, cancellationToken)
-            .ConfigureAwait(false);
+        if (streamBody)
+        {
+            request.StreamingContent = httpContext.Request.Body;
+            request.StreamingContentLength = httpContext.Request.ContentLength;
+        }
+        else
+        {
+            request.Content = await ReadRequestBodyContentAsync(httpContext, cancellationToken)
+                .ConfigureAwait(false);
+        }
         return request;
     }
+
+    public static Task<SmithyHttpRequest> CreateSmithyHttpRequestAsync(
+        HttpContext httpContext,
+        CancellationToken cancellationToken = default
+    ) => CreateSmithyHttpRequestAsync(httpContext, streamBody: false, cancellationToken);
 
     public static async Task WriteSmithyHttpResponseAsync(
         HttpContext httpContext,
@@ -59,7 +76,13 @@ public static class SmithyAspNetCoreProtocol
             httpContext.Response.Headers[header.Key] = header.Value.ToArray();
         }
 
-        if (response.Content.Length > 0)
+        if (response.StreamingContent is not null)
+        {
+            await response
+                .StreamingContent.CopyToAsync(httpContext.Response.Body, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        else if (response.Content.Length > 0)
         {
             await httpContext
                 .Response.Body.WriteAsync(response.Content, cancellationToken)
@@ -135,6 +158,127 @@ public static class SmithyAspNetCoreProtocol
         }
     }
 
+    public static SmithyEventStreamHttpRequest CreateSmithyGrpcEventStreamRequest(
+        HttpContext httpContext,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+
+        var minRequestBodyDataRateFeature =
+            httpContext.Features.Get<IHttpMinRequestBodyDataRateFeature>();
+        if (minRequestBodyDataRateFeature is not null)
+        {
+            minRequestBodyDataRateFeature.MinDataRate = null;
+        }
+
+        var request = new SmithyEventStreamHttpRequest(
+            new HttpMethod(httpContext.Request.Method),
+            httpContext.Request.PathBase.ToString() + httpContext.Request.Path.ToString()
+        )
+        {
+            ContentType = httpContext.Request.ContentType,
+            Events = GrpcMessageFraming.ReadAllAsync(httpContext.Request.Body, cancellationToken),
+        };
+        foreach (var header in httpContext.Request.Headers)
+        {
+            request.Headers[header.Key] = [.. header.Value.Select(value => value ?? string.Empty)];
+        }
+
+        return request;
+    }
+
+    public static async Task WriteSmithyGrpcEventStreamResponseAsync(
+        HttpContext httpContext,
+        IAsyncEnumerable<SmithyEventFrame> events,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(events);
+
+        httpContext.Response.StatusCode = StatusCodes.Status200OK;
+        httpContext.Response.Headers.ContentType = "application/grpc+proto";
+
+        var supportsTrailers = httpContext.Response.SupportsTrailers();
+        if (supportsTrailers)
+        {
+            httpContext.Response.DeclareTrailer("grpc-status");
+            httpContext.Response.DeclareTrailer("grpc-message");
+        }
+        else
+        {
+            // No HTTP/2 trailers (e.g. HTTP/1.1 in tests): grpc-status can only travel as a leading
+            // header, so it must be set before the body is flushed — we cannot know the final status
+            // yet, so we optimistically signal success. A mid-stream failure is instead surfaced by
+            // letting the exception abort the response (below) so the client sees a broken stream
+            // rather than trusting this header. Setting it after StartAsync would throw.
+            httpContext.Response.Headers["grpc-status"] = "0";
+        }
+
+        await httpContext.Response.StartAsync(cancellationToken).ConfigureAwait(false);
+
+        var status = GrpcStatus.Ok;
+        string? message = null;
+        try
+        {
+            await foreach (
+                var frame in events.WithCancellation(cancellationToken).ConfigureAwait(false)
+            )
+            {
+                await GrpcMessageFraming
+                    .WriteAsync(httpContext.Response.Body, frame.Payload, cancellationToken)
+                    .ConfigureAwait(false);
+                await httpContext.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            if (!supportsTrailers)
+            {
+                // The leading grpc-status:0 has already been flushed and cannot be changed. Surface
+                // the failure as an aborted stream so the client does not read it as a clean,
+                // successful completion.
+                throw;
+            }
+
+            status = GrpcStatus.Internal;
+            message = ex.Message;
+        }
+
+        if (supportsTrailers)
+        {
+            httpContext.Response.AppendTrailer(
+                "grpc-status",
+                ((int)status).ToString(CultureInfo.InvariantCulture)
+            );
+            if (message is not null)
+            {
+                httpContext.Response.AppendTrailer("grpc-message", message);
+            }
+        }
+
+        await httpContext.Response.CompleteAsync().ConfigureAwait(false);
+    }
+
+    public static Task WriteSmithyGrpcEventStreamResponseAsync(
+        HttpContext httpContext,
+        SmithyEventFrame eventFrame,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(eventFrame);
+        return WriteSmithyGrpcEventStreamResponseAsync(
+            httpContext,
+            SingleEvent(eventFrame),
+            cancellationToken
+        );
+    }
+
     public static bool HasExpectedQueryLiteral(
         HttpContext httpContext,
         string name,
@@ -172,5 +316,11 @@ public static class SmithyAspNetCoreProtocol
         var content = stream.ToArray();
         httpContext.Items[JsonRequestBodyItemKey] = content;
         return content;
+    }
+
+    private static async IAsyncEnumerable<SmithyEventFrame> SingleEvent(SmithyEventFrame eventFrame)
+    {
+        await Task.CompletedTask.ConfigureAwait(false);
+        yield return eventFrame;
     }
 }

@@ -1,4 +1,6 @@
 using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
+using NSmithy.Http;
 
 namespace NSmithy.Protocols.Grpc;
 
@@ -48,12 +50,106 @@ public static class GrpcMessageFraming
             );
         }
 
-        var length = (int)BinaryPrimitives.ReadUInt32BigEndian(body.Slice(1, 4));
+        var length = ReadFrameLength(body.Slice(1, 4));
         if (body.Length < HeaderLength + length)
         {
             throw new InvalidOperationException("Truncated gRPC frame payload.");
         }
 
         return body.Slice(HeaderLength, length).ToArray();
+    }
+
+    public static async ValueTask WriteAsync(
+        Stream stream,
+        ReadOnlyMemory<byte> payload,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        var header = new byte[HeaderLength];
+        BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(1, 4), (uint)payload.Length);
+
+        await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
+        if (payload.Length > 0)
+        {
+            await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    public static async IAsyncEnumerable<SmithyEventFrame> ReadAllAsync(
+        Stream stream,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        var header = new byte[HeaderLength];
+        while (await TryReadExactAsync(stream, header, cancellationToken).ConfigureAwait(false))
+        {
+            if (header[0] != 0)
+            {
+                throw new NotSupportedException(
+                    "Compressed gRPC messages are not yet supported by NSmithy."
+                );
+            }
+
+            var length = ReadFrameLength(header.AsSpan(1, 4));
+            var payload = new byte[length];
+            if (
+                length > 0
+                && !await TryReadExactAsync(stream, payload, cancellationToken)
+                    .ConfigureAwait(false)
+            )
+            {
+                throw new InvalidOperationException("Truncated gRPC frame payload.");
+            }
+
+            yield return new SmithyEventFrame(payload);
+        }
+    }
+
+    /// <summary>
+    /// Reads the 4-byte big-endian frame length and guards against the value overflowing
+    /// <see cref="int"/> — a frame header declaring more than <see cref="int.MaxValue"/> bytes
+    /// (e.g. from a buggy or hostile peer) would otherwise wrap negative and crash the allocation.
+    /// </summary>
+    public static int ReadFrameLength(ReadOnlySpan<byte> lengthBytes)
+    {
+        var length = BinaryPrimitives.ReadUInt32BigEndian(lengthBytes);
+        if (length > int.MaxValue)
+        {
+            throw new InvalidOperationException(
+                $"gRPC frame length {length} exceeds the maximum supported size of {int.MaxValue} bytes."
+            );
+        }
+
+        return (int)length;
+    }
+
+    private static async ValueTask<bool> TryReadExactAsync(
+        Stream stream,
+        Memory<byte> buffer,
+        CancellationToken cancellationToken
+    )
+    {
+        var read = 0;
+        while (read < buffer.Length)
+        {
+            var count = await stream
+                .ReadAsync(buffer[read..], cancellationToken)
+                .ConfigureAwait(false);
+            if (count == 0)
+            {
+                if (read == 0)
+                {
+                    return false;
+                }
+
+                throw new InvalidOperationException("Truncated gRPC frame header.");
+            }
+
+            read += count;
+        }
+
+        return true;
     }
 }

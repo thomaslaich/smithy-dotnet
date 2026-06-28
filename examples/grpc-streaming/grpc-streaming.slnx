@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/contracts/">
+    <Project Path="contracts/Streaming.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/client/">
+    <Project Path="client/NSmithy.Examples.GrpcStreaming.Client.csproj" />
+  </Folder>
+  <Folder Name="/server/">
+    <Project Path="server/NSmithy.Examples.GrpcStreaming.Server.csproj" />
+  </Folder>
+  <Folder Name="/grpcnet-client/">
+    <Project Path="grpcnet-client/NSmithy.Examples.GrpcStreaming.GrpcNetClient.csproj" />
+  </Folder>
+  <Folder Name="/grpcnet-server/">
+    <Project Path="grpcnet-server/NSmithy.Examples.GrpcStreaming.GrpcNetServer.csproj" />
+  </Folder>
+</Solution>

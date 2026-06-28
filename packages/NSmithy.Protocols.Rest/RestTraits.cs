@@ -26,6 +26,10 @@ public static class RestTraits
 
     public static ShapeId MediaType { get; } = new(SmithyApi, "mediaType");
 
+    public static ShapeId RequiresLength { get; } = new(SmithyApi, "requiresLength");
+
+    public static ShapeId Streaming { get; } = new(SmithyApi, "streaming");
+
     public static Trait HttpTrait(string method, string uri)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(method);

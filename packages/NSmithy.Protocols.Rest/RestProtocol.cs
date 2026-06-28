@@ -28,13 +28,21 @@ public interface IRestBodyCodecFactory
     );
 }
 
-/// <summary>A serialized REST body: the encoded bytes plus the Content-Type to advertise.</summary>
-public readonly record struct RestBody(byte[] Content, string? ContentType)
+public delegate void RestPayloadReader(byte[]? content, Stream? streamingContent, object builder);
+
+/// <summary>A serialized REST body: buffered bytes or a stream plus the Content-Type to advertise.</summary>
+public readonly record struct RestBody(
+    byte[] Content,
+    string? ContentType,
+    Stream? StreamingContent = null,
+    long? StreamingContentLength = null
+)
 {
     /// <summary>No body — the member was null/absent, so neither content nor Content-Type is written.</summary>
     public static RestBody None { get; } = new([], null);
 
-    public bool HasContent => Content.Length > 0 || ContentType is not null;
+    public bool HasContent =>
+        StreamingContent is not null || Content.Length > 0 || ContentType is not null;
 }
 
 public static class RestProtocol
@@ -57,6 +65,7 @@ public static class RestProtocol
 
         var request = new SmithyHttpRequest(binding.HttpMethod, requestUri);
         request.Headers["Accept"] = [binding.AcceptType];
+        request.ExpectStreamingResponse = binding.OutputHasStreamingPayload;
 
         foreach (var (member, headerName) in binding.RequestHeaderMembers)
             AddRequestHeader(request, headerName, member, input!);
@@ -68,7 +77,9 @@ public static class RestProtocol
             var body = writePayload(input!);
             if (body.HasContent)
             {
-                request.Content = body.Content;
+                request.Content = body.StreamingContent is null ? body.Content : null;
+                request.StreamingContent = body.StreamingContent;
+                request.StreamingContentLength = body.StreamingContentLength;
                 if (body.ContentType is not null)
                     SetContentTypeIfMissing(request, body.ContentType);
             }
@@ -124,7 +135,7 @@ public static class RestProtocol
         if (binding.QueryParamsMember is { } qpMember)
             qpMember.SetObject(builder, ReadQueryParams(qpMember, query, binding.BoundQueryNames));
         if (binding.InputPayloadReader is { } readPayload)
-            readPayload(request.Content, builder);
+            readPayload(request.Content, request.StreamingContent, builder);
         else if (binding.InputBodyCodec is { } codec && request.Content is { Length: > 0 } content)
             codec.ReadInto(content, builder);
 
@@ -159,10 +170,12 @@ public static class RestProtocol
             AddPrefixedHeaders(headers, respPhMember.Prefix, respPhMember.Member, output!);
 
         byte[] content = [];
+        Stream? streamingContent = null;
         if (binding.OutputPayloadWriter is { } writePayload)
         {
             var body = writePayload(output!);
-            content = body.Content;
+            content = body.StreamingContent is null ? body.Content : [];
+            streamingContent = body.StreamingContent;
             if (body.ContentType is not null)
                 contentHeaders["Content-Type"] = [body.ContentType];
         }
@@ -172,7 +185,10 @@ public static class RestProtocol
             contentHeaders["Content-Type"] = [binding.BodyContentType];
         }
 
-        return new SmithyHttpResponse(statusCode, null, content, headers, contentHeaders);
+        return new SmithyHttpResponse(statusCode, null, content, headers, contentHeaders)
+        {
+            StreamingContent = streamingContent,
+        };
     }
 
     public static TOutput DeserializeResponse<TInput, TOutput>(
@@ -212,7 +228,7 @@ public static class RestProtocol
                 ReadPrefixedHeaders(respPhMember.Member, response.Headers, respPhMember.Prefix)
             );
         if (binding.OutputPayloadReader is { } readPayload)
-            readPayload(response.Content, builder);
+            readPayload(response.Content, response.StreamingContent, builder);
         else if (binding.OutputBodyCodec is { } codec && response.Content.Length > 0)
             codec.ReadInto(response.Content, builder);
 
@@ -281,6 +297,7 @@ public static class RestProtocol
             {
                 BuildPayloadReader(member, codecFactory, rawStringPayloads)(
                     response.Content,
+                    response.StreamingContent,
                     builder
                 );
             }
@@ -458,7 +475,7 @@ public static class RestProtocol
     }
 
     /// <summary>Builds — once — a delegate that reads an <c>@httpPayload</c> member from the body.</summary>
-    internal static Action<byte[]?, object> BuildPayloadReader<TContainer>(
+    internal static RestPayloadReader BuildPayloadReader<TContainer>(
         IMemberSchema<TContainer> member,
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads
@@ -483,6 +500,35 @@ public static class RestProtocol
             var traits = member.Traits;
             var mediaType = GetMediaType(target, traits);
             var kind = UnwrapNullable(target).Kind;
+
+            if (kind == ShapeKind.Blob && traits.ContainsKey(RestTraits.Streaming))
+            {
+                var contentType = mediaType ?? codecFactory.BlobContentType;
+                var requiresLength = traits.ContainsKey(RestTraits.RequiresLength);
+                Result = container =>
+                {
+                    if (member.GetValue(container) is not { } value)
+                    {
+                        return RestBody.None;
+                    }
+
+                    var stream = (Stream)(object)value;
+                    if (!requiresLength)
+                    {
+                        return new RestBody([], contentType, stream);
+                    }
+
+                    if (!stream.CanSeek)
+                    {
+                        throw new InvalidOperationException(
+                            "Streaming blob payloads with @requiresLength require a seekable stream."
+                        );
+                    }
+
+                    return new RestBody([], contentType, stream, stream.Length - stream.Position);
+                };
+                return;
+            }
 
             if (kind == ShapeKind.Blob)
             {
@@ -549,7 +595,7 @@ public static class RestProtocol
         bool rawStringPayloads
     ) : IMemberVisitor<TContainer>
     {
-        public Action<byte[]?, object>? Result { get; private set; }
+        public RestPayloadReader? Result { get; private set; }
 
         public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
         {
@@ -557,9 +603,32 @@ public static class RestProtocol
             var traits = member.Traits;
             var unwrapped = UnwrapNullable(target);
 
+            if (unwrapped.Kind == ShapeKind.Blob && traits.ContainsKey(RestTraits.Streaming))
+            {
+                Result = (content, streamingContent, builder) =>
+                {
+                    if (streamingContent is not null)
+                    {
+                        member.SetObject(builder, streamingContent);
+                    }
+                    else if (content is null or { Length: 0 })
+                    {
+                        if (traits.ContainsKey(DefaultTrait))
+                        {
+                            member.SetObject(builder, Stream.Null);
+                        }
+                    }
+                    else
+                    {
+                        member.SetObject(builder, new MemoryStream(content, writable: false));
+                    }
+                };
+                return;
+            }
+
             if (unwrapped.Kind == ShapeKind.Blob)
             {
-                Result = (content, builder) =>
+                Result = (content, streamingContent, builder) =>
                 {
                     if (content is null or { Length: 0 })
                         ApplyDefault(member, target, traits, builder);
@@ -571,7 +640,7 @@ public static class RestProtocol
 
             if (!UseBodyCodecForPayload(target, traits, rawStringPayloads))
             {
-                Result = (content, builder) =>
+                Result = (content, streamingContent, builder) =>
                 {
                     if (content is null or { Length: 0 })
                     {
@@ -590,7 +659,7 @@ public static class RestProtocol
             }
 
             var codec = codecFactory.CodecFor(target);
-            Result = (content, builder) =>
+            Result = (content, streamingContent, builder) =>
             {
                 if (content is null or { Length: 0 })
                     ApplyDefault(member, target, traits, builder);

@@ -30,20 +30,20 @@ Not yet implemented (planned as **clients** — servers are not, see below):
 
 - EC2 Query and AWS Query
 
-## Streaming Is Not Supported
+## Streaming Support Is Narrow
 
-NSmithy generates **unary request/response** operations only. The `@streaming`
-trait is not yet honored, for **any** protocol:
+NSmithy supports experimental gRPC event streaming for operations whose streaming
+member targets an event union. Generated clients and ASP.NET Core servers expose
+server streaming, client streaming, and bidirectional streaming as
+`IAsyncEnumerable<T>` surfaces.
 
-- No client streaming, server streaming, or bidirectional streaming.
-- No event streams (`@streaming` on a union).
-- No streaming payloads (`@streaming` on a blob); blob payloads are buffered as
-  `byte[]` rather than streamed.
+Streaming is still limited:
 
-This applies to every protocol, including gRPC — where streaming RPCs are most
-commonly expected. Models that declare streaming members will not get a correct
-streaming surface. Adding streaming (including bidirectional) is a tracked
-near-term priority; see the [Roadmap](/smithy-dotnet/contributing/roadmap/).
+- Event streaming is implemented for native gRPC only.
+- Streaming payload blobs are not implemented; blob payloads are still buffered
+  as `byte[]`.
+- Other protocols still use unary request/response operation surfaces.
+- Stream error and cancellation behavior needs broader end-to-end coverage.
 
 ## gRPC Is Experimental
 
@@ -54,7 +54,7 @@ early-adopter track:
 
 - smaller test and example coverage than the HTTP/JSON paths
 - stricter model requirements, such as `alloy.proto#protoIndex` on members
-- unary only — no streaming RPCs yet (see above)
+- event streaming support is new and still experimental
 - implementation details that are still expected to move
 
 ## Servers: ASP.NET Core Only, Service-Oriented Protocols Only
