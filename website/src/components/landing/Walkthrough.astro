@@ -305,15 +305,12 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
     margin: 0;
     padding: 15px;
     overflow: auto;
-    max-height: 330px;
+    max-height: 500px;
     font-family: 'JetBrains Mono', ui-monospace, monospace;
     font-size: 12.5px;
     line-height: 1.75;
     color: #c9d1d9;
     white-space: pre;
-  }
-  .wt__outcode {
-    animation: wtFade 0.3s ease;
   }
   .wt__outcode[hidden] {
     display: none;
@@ -365,17 +362,6 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
     display: none;
   }
 
-  @keyframes wtFade {
-    from {
-      opacity: 0;
-      transform: translateY(6px);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
-  }
-
   /* Responsive: stack source over output, arrow becomes a horizontal divider */
   @media (max-width: 52rem) {
     .wt__body {
@@ -399,11 +385,6 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
     .wt__out {
       border-left: none;
       border-top: 1px solid #17171f;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .wt__outcode {
-      animation: none;
     }
   }
 </style>

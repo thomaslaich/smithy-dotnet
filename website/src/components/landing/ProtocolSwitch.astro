@@ -78,23 +78,25 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
     }
   </div>
 
-  {
-    panels.map((p, i) => (
-      <div class={`psw__panel${i === 0 ? ' is-active' : ''}`} data-idx={i} hidden={i !== 0}>
-        <p class="psw__cap">{p.cap}</p>
-        <div class="psw__io">
-          <div class="psw__col">
-            <span class="psw__tag psw__tag--req">REQUEST</span>
-            <pre class="psw__code" set:html={p.reqHtml} />
-          </div>
-          <div class="psw__col psw__col--res">
-            <span class="psw__tag psw__tag--res">RESPONSE</span>
-            <pre class="psw__code" set:html={p.resHtml} />
+  <div class="psw__panels">
+    {
+      panels.map((p, i) => (
+        <div class={`psw__panel${i === 0 ? ' is-active' : ''}`} data-idx={i}>
+          <p class="psw__cap">{p.cap}</p>
+          <div class="psw__io">
+            <div class="psw__col">
+              <span class="psw__tag psw__tag--req">REQUEST</span>
+              <pre class="psw__code" set:html={p.reqHtml} />
+            </div>
+            <div class="psw__col psw__col--res">
+              <span class="psw__tag psw__tag--res">RESPONSE</span>
+              <pre class="psw__code" set:html={p.resHtml} />
+            </div>
           </div>
         </div>
-      </div>
-    ))
-  }
+      ))
+    }
+  </div>
 </div>
 
 <style>
@@ -182,27 +184,18 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
     letter-spacing: 0.02em;
   }
 
-  /* Panels */
+  /* Panels — all stacked in one grid cell so the widget height is fixed to the
+     tallest protocol and never jumps as it auto-cycles. */
+  .psw__panels {
+    display: grid;
+  }
   .psw__panel {
-    animation: pswFade 0.3s ease;
+    grid-area: 1 / 1;
+    min-width: 0;
   }
-  .psw__panel[hidden] {
-    display: none;
-  }
-  @keyframes pswFade {
-    from {
-      opacity: 0;
-      transform: translateY(6px);
-    }
-    to {
-      opacity: 1;
-      transform: none;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .psw__panel {
-      animation: none;
-    }
+  .psw__panel:not(.is-active) {
+    visibility: hidden;
+    pointer-events: none;
   }
   .psw__cap {
     margin: 0;
@@ -284,12 +277,7 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
         t.classList.toggle('is-active', on);
         t.setAttribute('aria-selected', on ? 'true' : 'false');
       });
-      panels.forEach((p, i) => {
-        const on = i === n;
-        p.classList.toggle('is-active', on);
-        if (on) p.removeAttribute('hidden');
-        else p.setAttribute('hidden', '');
-      });
+      panels.forEach((p, i) => p.classList.toggle('is-active', i === n));
     }
 
     tabs.forEach((t, i) =>
