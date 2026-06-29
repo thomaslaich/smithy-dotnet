@@ -1,3 +1,3 @@
 namespace NSmithy.Client;
 
-internal interface ISmithyAuthHandler : ISmithyClientMiddleware, IClientInterceptor;
+internal interface ISmithyAuthHandler : IClientInterceptor;

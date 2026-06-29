@@ -17,21 +17,15 @@ public sealed class HttpBasicAuthScheme(string username, string password) : ISmi
 
     public string SchemeId => AuthSchemeIds.HttpBasicAuth;
 
-    public ISmithyClientMiddleware CreateMiddleware(SmithyAuthSchemeContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        return CreateAuthHandler();
-    }
-
     public IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
         return CreateAuthHandler();
     }
 
-    private HeaderAuthMiddleware CreateAuthHandler()
+    private HeaderAuthInterceptor CreateAuthHandler()
     {
         var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{password}"));
-        return new HeaderAuthMiddleware("Authorization", $"Basic {credentials}");
+        return new HeaderAuthInterceptor("Authorization", $"Basic {credentials}");
     }
 }

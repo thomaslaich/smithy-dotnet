@@ -53,7 +53,7 @@ status (e.g. `@httpResponseCode`) read `StatusCode` directly.
 
 Generated clients expose constructors rather than a builder. The common path is
 endpoint-first, with an optional per-service config object for protocol, auth,
-middleware, and future client knobs:
+interceptors, retry, and future client knobs:
 
 ```csharp
 new WeatherClient(endpoint);                                  // default config
@@ -64,11 +64,11 @@ new WeatherClient(invoker, config);                           // custom transpor
 
 The generated `{Service}ClientConfig : SmithyClientConfig` is the canonical
 configuration model. It currently carries `Endpoint`, `Protocol`, `AuthSchemes`,
-`Middleware`, and `IdempotencyTokenProvider`; service-specific and future runtime
-options can be added as properties without changing constructor signatures. The
-endpoint constructor writes the positional endpoint into config and then delegates
-to a private config constructor. The positional endpoint wins over any
-`config.Endpoint` value.
+`Interceptors`, `RetryStrategy`, and `IdempotencyTokenProvider`; service-specific
+and future runtime options can be added as properties without changing
+constructor signatures. The endpoint constructor writes the positional endpoint
+into config and then delegates to a private config constructor. The positional
+endpoint wins over any `config.Endpoint` value.
 
 When the caller supplies no `HttpClient`, the client creates one, configured for
 HTTP/2 when the protocol requires it (`IProtocol.RequiresHttp2`, true for native
@@ -112,9 +112,8 @@ services.AddHttpClient<IWeatherClient, WeatherClient>(c =>
 
 Consumers who need a fully custom transport instead implement `IHttpTransport`,
 build a `SmithyOperationInvoker`, and pass it to the invoker constructor. That
-constructor is intentionally lower-level: the invoker already owns the transport
-and middleware pipeline, so generated-client config middleware/auth do not apply
-there.
+constructor is intentionally lower-level: the invoker already owns the runtime
+transport path, so generated-client config auth/interceptors do not apply there.
 
 ## URI Construction
 

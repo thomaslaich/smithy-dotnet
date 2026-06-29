@@ -9,32 +9,6 @@ namespace NSmithy.Tests.Client;
 public sealed class SmithyOperationInvokerTests
 {
     [Fact]
-    public async Task InvokeAsyncRunsMiddlewareBeforeTransport()
-    {
-        var transport = new RecordingTransport(
-            new SmithyHttpResponse(
-                HttpStatusCode.OK,
-                "OK",
-                Encoding.UTF8.GetBytes("""{"ok":true}"""),
-                EmptyHeaders,
-                EmptyHeaders
-            )
-        );
-        var middleware = new HeaderMiddleware();
-        var invoker = new SmithyOperationInvoker(transport, [middleware]);
-
-        var response = await invoker.InvokeAsync(
-            "Weather",
-            "GetForecast",
-            new SmithyHttpRequest(HttpMethod.Get, "/forecast")
-        );
-
-        Assert.Equal("""{"ok":true}""", response.ContentText);
-        Assert.True(middleware.WasCalled);
-        Assert.Equal(["middleware"], transport.Request.Headers["x-smithy-test"]);
-    }
-
-    [Fact]
     public async Task InvokeAsyncThrowsDeserializedErrorForNonSuccessResponse()
     {
         var transport = new RecordingTransport(
@@ -86,40 +60,6 @@ public sealed class SmithyOperationInvokerTests
         );
 
         Assert.Equal(HttpStatusCode.InternalServerError, error.StatusCode);
-    }
-
-    [Fact]
-    public async Task InvokeAsyncCanRetryTransientResponsesWithMiddleware()
-    {
-        var transport = new SequenceTransport(
-            new SmithyHttpResponse(
-                HttpStatusCode.InternalServerError,
-                "Internal Server Error",
-                [],
-                EmptyHeaders,
-                EmptyHeaders
-            ),
-            new SmithyHttpResponse(
-                HttpStatusCode.OK,
-                "OK",
-                Encoding.UTF8.GetBytes("""{"ok":true}"""),
-                EmptyHeaders,
-                EmptyHeaders
-            )
-        );
-        var invoker = new SmithyOperationInvoker(
-            transport,
-            [new SmithyRetryMiddleware(maxAttempts: 2)]
-        );
-
-        var response = await invoker.InvokeAsync(
-            "Weather",
-            "GetForecast",
-            new SmithyHttpRequest(HttpMethod.Get, "/forecast")
-        );
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(2, transport.Attempts);
     }
 
     [Fact]
@@ -359,22 +299,6 @@ public sealed class SmithyOperationInvokerTests
 
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> EmptyHeaders { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
-
-    private sealed class HeaderMiddleware : ISmithyClientMiddleware
-    {
-        public bool WasCalled { get; private set; }
-
-        public Task<SmithyOperationResponse> InvokeAsync(
-            SmithyOperationRequest request,
-            SmithyOperationNext nextOperation,
-            CancellationToken cancellationToken = default
-        )
-        {
-            WasCalled = true;
-            request.Request.Headers["x-smithy-test"] = ["middleware"];
-            return nextOperation(request, cancellationToken);
-        }
-    }
 
     private sealed class RecordingTransport(SmithyHttpResponse response) : IHttpTransport
     {

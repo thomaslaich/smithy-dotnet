@@ -126,11 +126,6 @@ Interceptors run in configured order before transmit and reverse order after
 transmit/completion. They are scoped to the client and must be safe for
 concurrent calls unless explicitly documented otherwise.
 
-Send-stage middleware is representable as an interceptor pair:
-`ModifyBeforeTransmit` plus `ReadAfterTransmit`. The long-term public concept is
-interceptors; middleware remains an adapter pattern, not the architectural
-center.
-
 ## Endpoint Resolution
 
 Endpoint resolution is per operation. The resolver sees operation metadata,

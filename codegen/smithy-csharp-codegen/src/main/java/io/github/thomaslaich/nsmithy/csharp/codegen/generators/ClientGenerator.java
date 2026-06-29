@@ -190,9 +190,8 @@ public final class ClientGenerator implements Runnable {
                   writer.write(
                       "this.runtime = new SmithyClientRuntime(new"
                           + " HttpClientTransport(httpClient, endpoint),"
-                          + " SmithyAuthSchemeResolver.ResolveInterceptors(endpoint, $L,"
+                          + " SmithyAuthSchemeResolver.Resolve(endpoint, $L,"
                           + " ModeledAuthSchemes, config.AuthSchemes, config.Interceptors),"
-                          + " config.Middleware,"
                           + " config.RetryStrategy);",
                       serviceSchema);
                 }
@@ -237,9 +236,8 @@ public final class ClientGenerator implements Runnable {
                   writer.write(
                       "this.runtime = new SmithyClientRuntime(new"
                           + " HttpClientTransport(httpClient, endpoint),"
-                          + " SmithyAuthSchemeResolver.ResolveInterceptors(endpoint, $L,"
+                          + " SmithyAuthSchemeResolver.Resolve(endpoint, $L,"
                           + " ModeledAuthSchemes, config.AuthSchemes, config.Interceptors),"
-                          + " config.Middleware,"
                           + " config.RetryStrategy);",
                       serviceSchema);
                 }
@@ -257,8 +255,9 @@ public final class ClientGenerator implements Runnable {
 
           if (!wiresEventStreamOperations) {
             // Constructor: bring your own runtime (custom transport/pipeline, DI, testing). The
-            // runtime already owns the pipeline, so config.AuthSchemes/Middleware/Interceptors do
-            // not apply here; only Protocol and IdempotencyTokenProvider are read.
+            // runtime already owns the transport/interceptor pipeline, so config.AuthSchemes and
+            // config.Interceptors do not apply here; only Protocol and IdempotencyTokenProvider are
+            // read.
             if (hasUnaryOperations) {
               writer.write(
                   "public $L(SmithyClientRuntime runtime, $LConfig? config = null)",
