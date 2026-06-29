@@ -25,6 +25,9 @@ public class SmithyClientConfig
     /// <summary>Protocol-agnostic hooks for observing and modifying client execution.</summary>
     public IList<IClientInterceptor> Interceptors { get; } = [];
 
+    /// <summary>Runtime-owned retry policy. Null disables runtime retries.</summary>
+    public ISmithyRetryStrategy? RetryStrategy { get; set; }
+
     /// <summary>
     /// Configured auth schemes. The resolver installs the first scheme the service models for which
     /// a matching scheme is configured here; an empty list means anonymous access.

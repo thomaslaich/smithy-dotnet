@@ -77,7 +77,7 @@ public class SmithyClientConfig
     public IEndpointResolver? EndpointResolver { get; set; }
     public IList<IClientInterceptor> Interceptors { get; }
     public IList<ISmithyAuthScheme> AuthSchemes { get; }
-    public RetryStrategy? RetryStrategy { get; set; }
+    public ISmithyRetryStrategy? RetryStrategy { get; set; }
     public TimeSpan? OperationTimeout { get; set; }
     public Func<string>? IdempotencyTokenProvider { get; set; }
 }
