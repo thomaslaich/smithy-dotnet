@@ -23,6 +23,14 @@ public sealed class HttpAuthSchemeTests
     }
 
     [Fact]
+    public async Task BearerSchemeInterceptorSetsAuthorizationHeader()
+    {
+        var request = await InterceptAsync(new HttpBearerAuthScheme("my-token"), "/");
+
+        Assert.Equal(["Bearer my-token"], request.Headers["Authorization"]);
+    }
+
+    [Fact]
     public async Task BasicSchemeSetsBase64AuthorizationHeader()
     {
         var request = await SignAsync(new HttpBasicAuthScheme("alice", "s3cret"), "/");
@@ -54,6 +62,17 @@ public sealed class HttpAuthSchemeTests
     public async Task ApiKeyQuerySchemeAppendsQueryParameter()
     {
         var request = await SignAsync(
+            new HttpApiKeyAuthScheme("api_key", "se cret", ApiKeyLocation.Query),
+            "/list?limit=10"
+        );
+
+        Assert.Equal("/list?limit=10&api_key=se%20cret", request.RequestUri);
+    }
+
+    [Fact]
+    public async Task ApiKeyQueryInterceptorAppendsQueryParameter()
+    {
+        var request = await InterceptAsync(
             new HttpApiKeyAuthScheme("api_key", "se cret", ApiKeyLocation.Query),
             "/list?limit=10"
         );
@@ -104,5 +123,20 @@ public sealed class HttpAuthSchemeTests
         );
 
         return captured!;
+    }
+
+    private static async Task<SmithyHttpRequest> InterceptAsync(
+        ISmithyAuthScheme scheme,
+        string uri
+    )
+    {
+        var context = new SmithyContext();
+        context.Set(SmithyContextKeys.ServiceName, "Svc");
+        context.Set(SmithyContextKeys.OperationName, "Op");
+
+        return await scheme
+            .CreateInterceptor(Context)
+            .OnBeforeTransmitAsync(context, new SmithyHttpRequest(HttpMethod.Get, uri))
+            .ConfigureAwait(false);
     }
 }

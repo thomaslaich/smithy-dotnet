@@ -8,9 +8,17 @@ public interface IClientInterceptor
 
     void OnBeforeSerialization(SmithyContext context, object? input) { }
 
-    SmithyHttpRequest OnBeforeSigning(SmithyContext context, SmithyHttpRequest request) => request;
+    ValueTask<SmithyHttpRequest> OnBeforeSigningAsync(
+        SmithyContext context,
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken = default
+    ) => ValueTask.FromResult(request);
 
-    SmithyHttpRequest OnBeforeTransmit(SmithyContext context, SmithyHttpRequest request) => request;
+    ValueTask<SmithyHttpRequest> OnBeforeTransmitAsync(
+        SmithyContext context,
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken = default
+    ) => ValueTask.FromResult(request);
 
     void OnAfterTransmit(SmithyContext context, SmithyHttpResponse response) { }
 

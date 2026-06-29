@@ -14,6 +14,17 @@ public sealed class HttpBearerAuthScheme(string token) : ISmithyAuthScheme
     public ISmithyClientMiddleware CreateMiddleware(SmithyAuthSchemeContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+        return CreateAuthHandler();
+    }
+
+    public IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return CreateAuthHandler();
+    }
+
+    private HeaderAuthMiddleware CreateAuthHandler()
+    {
         return new HeaderAuthMiddleware("Authorization", $"Bearer {token}");
     }
 }

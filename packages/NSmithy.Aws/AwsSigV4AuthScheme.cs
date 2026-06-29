@@ -26,4 +26,10 @@ public sealed class AwsSigV4AuthScheme(
         ArgumentNullException.ThrowIfNull(context);
         return new AwsSigV4Middleware(context.Endpoint, service, region, credentialsProvider);
     }
+
+    public IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return new AwsSigV4Middleware(context.Endpoint, service, region, credentialsProvider);
+    }
 }

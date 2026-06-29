@@ -7,8 +7,7 @@ namespace NSmithy.Client;
 /// middleware. The request URI is immutable, so this rebuilds the HTTP request, carrying over
 /// method, body and headers.
 /// </summary>
-internal sealed class QueryParameterAuthMiddleware(string name, string value)
-    : ISmithyClientMiddleware
+internal sealed class QueryParameterAuthMiddleware(string name, string value) : ISmithyAuthHandler
 {
     private readonly string name = string.IsNullOrWhiteSpace(name)
         ? throw new ArgumentException("Query parameter name must be set.", nameof(name))
@@ -25,7 +24,18 @@ internal sealed class QueryParameterAuthMiddleware(string name, string value)
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(nextOperation);
 
-        var original = request.Request;
+        var signed = AddQueryParameter(request.Request);
+        return nextOperation(request with { Request = signed }, cancellationToken);
+    }
+
+    public ValueTask<SmithyHttpRequest> OnBeforeTransmitAsync(
+        SmithyContext context,
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken = default
+    ) => ValueTask.FromResult(AddQueryParameter(request));
+
+    private SmithyHttpRequest AddQueryParameter(SmithyHttpRequest original)
+    {
         var separator = original.RequestUri.Contains('?', StringComparison.Ordinal) ? '&' : '?';
         var requestUri =
             $"{original.RequestUri}{separator}{Uri.EscapeDataString(name)}={Uri.EscapeDataString(value)}";
@@ -34,6 +44,9 @@ internal sealed class QueryParameterAuthMiddleware(string name, string value)
         {
             Content = original.Content,
             ContentType = original.ContentType,
+            ExpectStreamingResponse = original.ExpectStreamingResponse,
+            StreamingContent = original.StreamingContent,
+            StreamingContentLength = original.StreamingContentLength,
         };
         foreach (var header in original.Headers)
         {
@@ -45,6 +58,6 @@ internal sealed class QueryParameterAuthMiddleware(string name, string value)
             signed.ContentHeaders[header.Key] = header.Value;
         }
 
-        return nextOperation(request with { Request = signed }, cancellationToken);
+        return signed;
     }
 }
