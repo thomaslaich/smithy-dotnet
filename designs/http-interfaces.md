@@ -78,7 +78,9 @@ The protocol implementation composes the transport with the codec and the
 protocol binding to produce a complete request pipeline. The generated client
 passes operation schemas and typed values into the protocol adapter; for the
 endpoint/HttpClient constructors it wraps the `HttpClient` in an
-`IHttpTransport` (`HttpClientTransport`) internally.
+`IHttpTransport` (`HttpClientTransport`) internally. The client runtime applies
+the effective endpoint to relative request URIs before handing the request to the
+transport, so `HttpClientTransport` sends the URI it receives.
 
 ## Why Not `HttpClient` Directly
 
@@ -117,14 +119,14 @@ path, so generated-client config auth/interceptors do not apply there.
 
 ## URI Construction
 
-REST protocol implementations build the request URI by combining:
+REST protocol implementations build the request URI in two layers:
 
-1. The client's endpoint (`config.Endpoint`, the endpoint constructor argument,
-   or `HttpClient.BaseAddress` for bring-your-own-`HttpClient` construction).
-2. The operation's URI template (from `@http`), with `@httpLabel` members
-   substituted.
-3. `@httpQuery` and `@httpQueryParams` members appended as query string
-   parameters.
+1. The protocol builds the operation-relative URI template (from `@http`), with
+   `@httpLabel` members substituted and `@httpQuery` / `@httpQueryParams`
+   members appended.
+2. The client runtime resolves that relative URI against the effective endpoint
+   (`config.Endpoint`, the endpoint constructor argument, or
+   `HttpClient.BaseAddress` for bring-your-own-`HttpClient` construction).
 
 URI template expansion follows the rules in
 [RFC 6570](https://www.rfc-editor.org/rfc/rfc6570) for the subset used by

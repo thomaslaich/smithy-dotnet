@@ -60,7 +60,9 @@ new WeatherClient(runtime, config);       // caller owns full execution pipeline
 
 `Endpoint` lives on config internally. The endpoint convenience constructor is
 the common path and copies the supplied endpoint into config before delegating to
-the internal config-based construction path.
+the internal config-based construction path. For static endpoints, the effective
+endpoint is resolved during construction and placed into each invocation's
+`SmithyContext`.
 
 Generated clients implement `IDisposable`. Disposal releases only resources the
 client created itself.
@@ -128,7 +130,7 @@ concurrent calls unless explicitly documented otherwise.
 
 ## Endpoint Resolution
 
-Endpoint resolution is per operation. The resolver sees operation metadata,
+Endpoint resolution can be per operation. The resolver sees operation metadata,
 client config, and typed input:
 
 ```csharp
@@ -144,8 +146,9 @@ public sealed record Endpoint(
 ```
 
 A static `Config.Endpoint` is the simplest resolver and takes precedence when
-set explicitly. Protocols and generated code apply host labels and operation
-endpoint traits through the same resolution path.
+set explicitly. Static endpoints are resolved once at construction. Protocols
+and generated code apply host labels and operation endpoint traits through the
+same resolution path when an endpoint depends on operation metadata or input.
 
 Resolved endpoints may narrow auth schemes. That lets endpoint rules and auth
 selection compose without protocol-specific branches in generated clients.

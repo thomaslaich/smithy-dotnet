@@ -6,25 +6,27 @@ namespace NSmithy.Tests.Http;
 public sealed class HttpClientTransportTests
 {
     [Fact]
-    public async Task SendAsyncResolvesRelativeRequestAgainstConfiguredEndpoint()
+    public async Task SendAsyncSendsRequestUriAsProvided()
     {
-        using var httpClient = new HttpClient(new Handler())
-        {
-            BaseAddress = new Uri("https://ignored.example"),
-        };
-        var transport = new HttpClientTransport(httpClient, new Uri("https://example.test/base"));
+        using var httpClient = new HttpClient(new Handler());
+        var transport = new HttpClientTransport(httpClient);
 
-        await transport.SendAsync(new SmithyHttpRequest(HttpMethod.Get, "/forecast?units=metric"));
+        await transport.SendAsync(
+            new SmithyHttpRequest(HttpMethod.Get, "https://example.test/base/forecast?units=metric")
+        );
     }
 
     [Fact]
     public async Task SendAsyncFoldsTrailingHeadersIntoResponseHeaders()
     {
         using var httpClient = new HttpClient(new TrailerHandler());
-        var transport = new HttpClientTransport(httpClient, new Uri("https://example.test"));
+        var transport = new HttpClientTransport(httpClient);
 
         var response = await transport.SendAsync(
-            new SmithyHttpRequest(HttpMethod.Post, "/example.greeter.Greeter/SayHello")
+            new SmithyHttpRequest(
+                HttpMethod.Post,
+                "https://example.test/example.greeter.Greeter/SayHello"
+            )
         );
 
         // grpc-status arrives as an HTTP/2 trailer; the transport surfaces it as a header.
