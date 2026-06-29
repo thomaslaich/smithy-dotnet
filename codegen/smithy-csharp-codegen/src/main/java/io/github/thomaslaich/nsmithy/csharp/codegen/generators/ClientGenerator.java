@@ -123,7 +123,7 @@ public final class ClientGenerator implements Runnable {
         "}",
         () -> {
           if (hasUnaryOperations) {
-            writer.write("private readonly SmithyOperationInvoker invoker;");
+            writer.write("private readonly SmithyClientRuntime runtime;");
           }
           if (wiresEventStreamOperations) {
             writer.write("private readonly SmithyEventStreamOperationInvoker eventStreamInvoker;");
@@ -188,8 +188,9 @@ public final class ClientGenerator implements Runnable {
                 }
                 if (hasUnaryOperations) {
                   writer.write(
-                      "this.invoker = new SmithyOperationInvoker(new"
+                      "this.runtime = new SmithyClientRuntime(new"
                           + " HttpClientTransport(httpClient, endpoint),"
+                          + " config.Interceptors,"
                           + " SmithyAuthSchemeResolver.Resolve(endpoint, $L, ModeledAuthSchemes,"
                           + " config.AuthSchemes, config.Middleware));",
                       serviceSchema);
@@ -233,8 +234,9 @@ public final class ClientGenerator implements Runnable {
                 }
                 if (hasUnaryOperations) {
                   writer.write(
-                      "this.invoker = new SmithyOperationInvoker(new"
+                      "this.runtime = new SmithyClientRuntime(new"
                           + " HttpClientTransport(httpClient, endpoint),"
+                          + " config.Interceptors,"
                           + " SmithyAuthSchemeResolver.Resolve(endpoint, $L, ModeledAuthSchemes,"
                           + " config.AuthSchemes, config.Middleware));",
                       serviceSchema);
@@ -252,12 +254,12 @@ public final class ClientGenerator implements Runnable {
           writer.write("");
 
           if (!wiresEventStreamOperations) {
-            // Constructor: bring your own invoker (custom transport/middleware, DI, testing). The
-            // invoker already owns the pipeline, so config.AuthSchemes/Middleware do not apply
-            // here; only Protocol and IdempotencyTokenProvider are read.
+            // Constructor: bring your own runtime (custom transport/pipeline, DI, testing). The
+            // runtime already owns the pipeline, so config.AuthSchemes/Middleware/Interceptors do
+            // not apply here; only Protocol and IdempotencyTokenProvider are read.
             if (hasUnaryOperations) {
               writer.write(
-                  "public $L(SmithyOperationInvoker invoker, $LConfig? config = null)",
+                  "public $L(SmithyClientRuntime runtime, $LConfig? config = null)",
                   typeName,
                   typeName);
               writer.openBlock(
@@ -265,8 +267,8 @@ public final class ClientGenerator implements Runnable {
                   "}",
                   () -> {
                     writer.write(
-                        "this.invoker = invoker ?? throw new"
-                            + " System.ArgumentNullException(nameof(invoker));");
+                        "this.runtime = runtime ?? throw new"
+                            + " System.ArgumentNullException(nameof(runtime));");
                     writer.write("config ??= new $LConfig();", typeName);
                     writer.write(
                         "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
@@ -279,7 +281,7 @@ public final class ClientGenerator implements Runnable {
             }
           } else if (hasUnaryOperations) {
             writer.write(
-                "public $L(SmithyOperationInvoker invoker, SmithyEventStreamOperationInvoker"
+                "public $L(SmithyClientRuntime runtime, SmithyEventStreamOperationInvoker"
                     + " eventStreamInvoker, $LConfig? config = null)",
                 typeName,
                 typeName);
@@ -288,8 +290,8 @@ public final class ClientGenerator implements Runnable {
                 "}",
                 () -> {
                   writer.write(
-                      "this.invoker = invoker ?? throw new"
-                          + " System.ArgumentNullException(nameof(invoker));");
+                      "this.runtime = runtime ?? throw new"
+                          + " System.ArgumentNullException(nameof(runtime));");
                   writer.write(
                       "this.eventStreamInvoker = eventStreamInvoker ?? throw new"
                           + " System.ArgumentNullException(nameof(eventStreamInvoker));");
@@ -370,7 +372,7 @@ public final class ClientGenerator implements Runnable {
           writer.write("");
 
           // Disposes the HttpClient the client created itself; a no-op when the caller supplied the
-          // HttpClient or invoker (ownedHttpClient is null), so injected transports are never
+          // HttpClient or runtime (ownedHttpClient is null), so injected transports are never
           // closed.
           if (needsHttpClient) {
             writer.write("public void Dispose() => ownedHttpClient?.Dispose();");
@@ -382,7 +384,7 @@ public final class ClientGenerator implements Runnable {
           for (OperationShape op : operations) writeOperationMethod(sp, model, op);
           for (OperationShape op : operations) {
             if (!isEventStreamOperation(model, op)) {
-              writeErrorDeserializer(sp, model, op);
+              writeErrorDeserializer(model, op);
             }
           }
         });
@@ -543,31 +545,26 @@ public final class ClientGenerator implements Runnable {
                 model.expectShape(op.getInputShape(), StructureShape.class));
           }
 
-          // The operation-bound protocol owns request serialization (and, for rpc, the path).
-          writer.write("var request = $LProtocol.SerializeRequest($L);", opName, inputArg);
-
-          if (op.findTrait(TraitIds.REQUEST_COMPRESSION).isPresent()) {
-            writer.write(
-                "SmithyRequestModifiers.ApplyRequestCompression(request, $L);",
-                requestCompressionEncoding(op));
-          }
-          if (op.findTrait(TraitIds.HTTP_CHECKSUM_REQUIRED).isPresent()) {
-            writer.write("SmithyRequestModifiers.ApplyContentMd5(request);");
-          }
-
-          writer.write("");
-          writer.write(
-              "var response = await invoker.InvokeAsync($L, $L, request, $L,"
-                  + " $LProtocol.IsErrorResponse, cancellationToken).ConfigureAwait(false);",
-              CSharpNaming.formatString(service.getId().getName()),
-              CSharpNaming.formatString(op.getId().getName()),
-              deserName,
-              opName);
-
           if (hasOutput) {
-            writer.write("");
-            writer.write("return $LProtocol.DeserializeResponse(response);", opName);
+            writer.write(
+                "return await runtime.InvokeAsync($L, $L, $LProtocol, $L, $L, $L,"
+                    + " cancellationToken).ConfigureAwait(false);",
+                CSharpNaming.formatString(service.getId().getName()),
+                CSharpNaming.formatString(op.getId().getName()),
+                opName,
+                inputArg,
+                requestModifier(op),
+                deserName);
           } else {
+            writer.write(
+                "await runtime.InvokeAsync($L, $L, $LProtocol, $L, $L, $L,"
+                    + " cancellationToken).ConfigureAwait(false);",
+                CSharpNaming.formatString(service.getId().getName()),
+                CSharpNaming.formatString(op.getId().getName()),
+                opName,
+                inputArg,
+                requestModifier(op),
+                deserName);
             writer.write("return;");
           }
         });
@@ -700,9 +697,29 @@ public final class ClientGenerator implements Runnable {
                         + " has no encodings — trait requires at least one"));
   }
 
+  private String requestModifier(OperationShape op) {
+    boolean hasCompression = op.findTrait(TraitIds.REQUEST_COMPRESSION).isPresent();
+    boolean hasMd5 = op.findTrait(TraitIds.HTTP_CHECKSUM_REQUIRED).isPresent();
+    if (!hasCompression && !hasMd5) {
+      return "null";
+    }
+
+    List<String> statements = new ArrayList<>();
+    if (hasCompression) {
+      statements.add(
+          "SmithyRequestModifiers.ApplyRequestCompression(request, "
+              + requestCompressionEncoding(op)
+              + ")");
+    }
+    if (hasMd5) {
+      statements.add("SmithyRequestModifiers.ApplyContentMd5(request)");
+    }
+    return "request => { " + String.join("; ", statements) + "; }";
+  }
+
   // ---------------- error deserializer ----------------
 
-  private void writeErrorDeserializer(SymbolProvider sp, Model model, OperationShape op) {
+  private void writeErrorDeserializer(Model model, OperationShape op) {
     String opName = CSharpNaming.typeName(op.getId().getName());
     String methodName = "Deserialize" + opName + "ErrorAsync";
     String receiver = opName + "Protocol";
@@ -751,7 +768,7 @@ public final class ClientGenerator implements Runnable {
                           + " || string.Equals(errorType, $L, System.StringComparison.Ordinal))",
                       CSharpNaming.formatString(errId.getName()),
                       CSharpNaming.formatString(errId.toString()));
-                  writer.openBlock("{", "}", () -> writeErrorReturn(sp, err, receiver));
+                  writer.openBlock("{", "}", () -> writeErrorReturn(err, receiver));
                 }
               });
 
@@ -770,7 +787,7 @@ public final class ClientGenerator implements Runnable {
                   for (ShapeId errId : statusErrors) {
                     StructureShape err = model.expectShape(errId, StructureShape.class);
                     writer.write("if ((int)response.StatusCode == $L)", httpErrorCode(err));
-                    writer.openBlock("{", "}", () -> writeErrorReturn(sp, err, receiver));
+                    writer.openBlock("{", "}", () -> writeErrorReturn(err, receiver));
                   }
                 });
           }
@@ -795,7 +812,7 @@ public final class ClientGenerator implements Runnable {
                             + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);"));
             writer.write("");
           }
-          writeErrorReturn(sp, err, receiver);
+          writeErrorReturn(err, receiver);
         });
     writer.write("");
   }
@@ -805,7 +822,7 @@ public final class ClientGenerator implements Runnable {
    * body for REST, whole CBOR/proto body for rpc/gRPC) via {@code receiver.DeserializeError(...)},
    * where the receiver is the operation-bound protocol field.
    */
-  private void writeErrorReturn(SymbolProvider sp, StructureShape err, String receiver) {
+  private void writeErrorReturn(StructureShape err, String receiver) {
     writer.write(
         "return System.Threading.Tasks.ValueTask.FromResult<System.Exception?>("
             + "$L.DeserializeError($L, response));",

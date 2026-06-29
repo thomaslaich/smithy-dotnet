@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using NSmithy.Client;
+using NSmithy.Core.Serde;
 using NSmithy.Http;
 
 namespace NSmithy.Tests.Client;
@@ -121,6 +122,94 @@ public sealed class SmithyOperationInvokerTests
         Assert.Equal(2, transport.Attempts);
     }
 
+    [Fact]
+    public async Task RuntimeRunsInterceptorsAroundTypedUnaryExecution()
+    {
+        List<string> calls = [];
+        var interceptor = new RecordingInterceptor("one", calls);
+        var transport = new RecordingTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(transport, [interceptor]);
+
+        var output = await runtime.InvokeAsync(
+            "Weather",
+            "GetForecast",
+            new TextProtocol(),
+            "input",
+            cancellationToken: CancellationToken.None
+        );
+
+        Assert.Equal("output", output);
+        Assert.Equal(
+            [
+                "one:before-execution:Weather.GetForecast",
+                "one:before-serialization:input",
+                "one:before-signing:/input",
+                "one:before-transmit:/input",
+                "one:after-transmit:OK",
+                "one:after-deserialization:output",
+                "one:after-execution",
+            ],
+            calls
+        );
+        Assert.Equal("/input", transport.Request.RequestUri);
+        Assert.Equal(["signed"], transport.Request.Headers["x-smithy-test"]);
+    }
+
+    [Fact]
+    public async Task RuntimeRunsAfterInterceptorsInReverseOrder()
+    {
+        List<string> calls = [];
+        var transport = new RecordingTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            [new RecordingInterceptor("one", calls), new RecordingInterceptor("two", calls)]
+        );
+
+        await runtime.InvokeAsync(
+            "Weather",
+            "GetForecast",
+            new TextProtocol(),
+            "input",
+            cancellationToken: CancellationToken.None
+        );
+
+        Assert.Equal(
+            [
+                "one:before-execution:Weather.GetForecast",
+                "two:before-execution:Weather.GetForecast",
+                "one:before-serialization:input",
+                "two:before-serialization:input",
+                "one:before-signing:/input",
+                "two:before-signing:/input",
+                "one:before-transmit:/input",
+                "two:before-transmit:/input",
+                "two:after-transmit:OK",
+                "one:after-transmit:OK",
+                "two:after-deserialization:output",
+                "one:after-deserialization:output",
+                "two:after-execution",
+                "one:after-execution",
+            ],
+            calls
+        );
+    }
+
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> EmptyHeaders { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
@@ -167,5 +256,87 @@ public sealed class SmithyOperationInvokerTests
             Attempts++;
             return Task.FromResult(responses[index]);
         }
+    }
+
+    private sealed class RecordingInterceptor(string name, List<string> calls) : IClientInterceptor
+    {
+        public void OnBeforeExecution(SmithyContext context)
+        {
+            calls.Add(
+                $"{name}:before-execution:{context.Get(SmithyContextKeys.ServiceName)}.{context.Get(SmithyContextKeys.OperationName)}"
+            );
+        }
+
+        public void OnBeforeSerialization(SmithyContext context, object? input)
+        {
+            calls.Add($"{name}:before-serialization:{input}");
+        }
+
+        public SmithyHttpRequest OnBeforeSigning(SmithyContext context, SmithyHttpRequest request)
+        {
+            calls.Add($"{name}:before-signing:{request.RequestUri}");
+            request.Headers["x-smithy-test"] = ["signed"];
+            return request;
+        }
+
+        public SmithyHttpRequest OnBeforeTransmit(SmithyContext context, SmithyHttpRequest request)
+        {
+            calls.Add($"{name}:before-transmit:{request.RequestUri}");
+            return request;
+        }
+
+        public void OnAfterTransmit(SmithyContext context, SmithyHttpResponse response)
+        {
+            calls.Add($"{name}:after-transmit:{response.ReasonPhrase}");
+        }
+
+        public void OnAfterDeserialization(SmithyContext context, object? output)
+        {
+            calls.Add($"{name}:after-deserialization:{output}");
+        }
+
+        public void OnAfterExecution(SmithyContext context)
+        {
+            calls.Add($"{name}:after-execution");
+        }
+    }
+
+    private sealed class TextProtocol : IOperationProtocol<string, string>
+    {
+        public SmithyHttpRequest SerializeRequest(string input) =>
+            new(HttpMethod.Post, $"/{input}");
+
+        public string DeserializeResponse(SmithyHttpResponse response) => "output";
+
+        public string DeserializeRequest(SmithyHttpRequest request) => request.RequestUri;
+
+        public SmithyHttpResponse SerializeResponse(string output) =>
+            new(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes(output),
+                EmptyHeaders,
+                EmptyHeaders
+            );
+
+        public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
+
+        public string? GetErrorDiscriminator(SmithyHttpResponse response) => null;
+
+        public bool RequiresErrorDiscriminator => false;
+
+        public bool SupportsHttpStatusErrorFallback => true;
+
+        public TError DeserializeError<TError>(
+            Schema<TError> errorSchema,
+            SmithyHttpResponse response
+        ) => throw new NotSupportedException();
+
+        public SmithyHttpResponse SerializeError<TError>(
+            Schema<TError> errorSchema,
+            TError value,
+            string errorShapeId,
+            int statusCode
+        ) => throw new NotSupportedException();
     }
 }
