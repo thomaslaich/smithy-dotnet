@@ -6,14 +6,14 @@ public sealed class SmithyClientRuntime(
     IHttpTransport transport,
     IEnumerable<IClientInterceptor>? interceptors = null,
     IEnumerable<ISmithyClientMiddleware>? middlewares = null,
-    SmithyRetryStrategy? retryStrategy = null
+    ISmithyRetryStrategy? retryStrategy = null
 )
 {
     private readonly IHttpTransport transport =
         transport ?? throw new ArgumentNullException(nameof(transport));
     private readonly IReadOnlyList<IClientInterceptor> interceptors = [.. interceptors ?? []];
     private readonly IReadOnlyList<ISmithyClientMiddleware> middlewares = [.. middlewares ?? []];
-    private readonly SmithyRetryStrategy? retryStrategy = retryStrategy;
+    private readonly ISmithyRetryStrategy? retryStrategy = retryStrategy;
 
     public async Task<TOutput> InvokeAsync<TInput, TOutput>(
         string serviceName,
@@ -153,14 +153,17 @@ public sealed class SmithyClientRuntime(
                 interceptors[i].OnAfterTransmit(context, response);
             }
 
+            var retryContext = new SmithyRetryContext(attempt, response, context);
             if (
                 retryStrategy is not null
                 && attempt < retryStrategy.MaxAttempts
                 && request.StreamingContent is null
-                && retryStrategy.ShouldRetry(response)
+                && retryStrategy.ShouldRetry(retryContext)
             )
             {
-                await retryStrategy.DelayAsync(attempt, cancellationToken).ConfigureAwait(false);
+                await retryStrategy
+                    .DelayAsync(retryContext, cancellationToken)
+                    .ConfigureAwait(false);
                 continue;
             }
 

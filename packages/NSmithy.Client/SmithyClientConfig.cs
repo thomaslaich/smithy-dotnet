@@ -26,7 +26,7 @@ public class SmithyClientConfig
     public IList<IClientInterceptor> Interceptors { get; } = [];
 
     /// <summary>Runtime-owned retry policy. Null disables runtime retries.</summary>
-    public SmithyRetryStrategy? RetryStrategy { get; set; }
+    public ISmithyRetryStrategy? RetryStrategy { get; set; }
 
     /// <summary>
     /// Configured auth schemes. The resolver installs the first scheme the service models for which

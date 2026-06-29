@@ -231,7 +231,7 @@ public sealed class SmithyOperationInvokerTests
         );
         var runtime = new SmithyClientRuntime(
             transport,
-            retryStrategy: new SmithyRetryStrategy(maxAttempts: 2)
+            retryStrategy: new SmithySimpleRetryStrategy(maxAttempts: 2)
         );
 
         var output = await runtime.InvokeAsync(
@@ -269,7 +269,7 @@ public sealed class SmithyOperationInvokerTests
         var runtime = new SmithyClientRuntime(
             transport,
             [new AttemptRecordingInterceptor(attempts)],
-            retryStrategy: new SmithyRetryStrategy(maxAttempts: 2)
+            retryStrategy: new SmithySimpleRetryStrategy(maxAttempts: 2)
         );
 
         await runtime.InvokeAsync(
@@ -305,7 +305,7 @@ public sealed class SmithyOperationInvokerTests
         var runtime = new SmithyClientRuntime(
             transport,
             [new QueryAppendingInterceptor()],
-            retryStrategy: new SmithyRetryStrategy(maxAttempts: 2)
+            retryStrategy: new SmithySimpleRetryStrategy(maxAttempts: 2)
         );
 
         await runtime.InvokeAsync(
@@ -343,7 +343,7 @@ public sealed class SmithyOperationInvokerTests
         );
         var runtime = new SmithyClientRuntime(
             transport,
-            retryStrategy: new SmithyRetryStrategy(maxAttempts: 2)
+            retryStrategy: new SmithySimpleRetryStrategy(maxAttempts: 2)
         );
         var request = new SmithyHttpRequest(HttpMethod.Post, "/upload")
         {
