@@ -103,6 +103,28 @@ public sealed class AwsSigV4MiddlewareTests
         Assert.Equal(HttpStatusCode.OK, response.Response.StatusCode);
     }
 
+    [Fact]
+    public async Task InterceptorSignsBeforeTransmit()
+    {
+        var interceptor = new AwsSigV4Middleware(
+            new Uri("http://localhost:4566"),
+            "s3",
+            "us-east-1",
+            new StaticAwsCredentialsProvider(new AwsCredentials("test", "test", "token")),
+            TimeProvider.System
+        );
+        var context = new SmithyContext();
+        context.Set(SmithyContextKeys.ServiceName, "S3");
+        context.Set(SmithyContextKeys.OperationName, "ListBuckets");
+        var request = new SmithyHttpRequest(HttpMethod.Get, "/");
+
+        var signed = await interceptor.OnBeforeTransmitAsync(context, request);
+
+        Assert.Same(request, signed);
+        Assert.True(request.Headers.ContainsKey("Authorization"));
+        Assert.Equal(["token"], request.Headers["X-Amz-Security-Token"]);
+    }
+
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => utcNow;

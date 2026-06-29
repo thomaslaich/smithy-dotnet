@@ -272,17 +272,25 @@ public sealed class SmithyOperationInvokerTests
             calls.Add($"{name}:before-serialization:{input}");
         }
 
-        public SmithyHttpRequest OnBeforeSigning(SmithyContext context, SmithyHttpRequest request)
+        public ValueTask<SmithyHttpRequest> OnBeforeSigningAsync(
+            SmithyContext context,
+            SmithyHttpRequest request,
+            CancellationToken cancellationToken = default
+        )
         {
             calls.Add($"{name}:before-signing:{request.RequestUri}");
             request.Headers["x-smithy-test"] = ["signed"];
-            return request;
+            return ValueTask.FromResult(request);
         }
 
-        public SmithyHttpRequest OnBeforeTransmit(SmithyContext context, SmithyHttpRequest request)
+        public ValueTask<SmithyHttpRequest> OnBeforeTransmitAsync(
+            SmithyContext context,
+            SmithyHttpRequest request,
+            CancellationToken cancellationToken = default
+        )
         {
             calls.Add($"{name}:before-transmit:{request.RequestUri}");
-            return request;
+            return ValueTask.FromResult(request);
         }
 
         public void OnAfterTransmit(SmithyContext context, SmithyHttpResponse response)

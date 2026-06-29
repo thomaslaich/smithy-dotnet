@@ -12,7 +12,7 @@ public sealed class AwsSigV4Middleware(
     string region,
     IAwsCredentialsProvider credentialsProvider,
     TimeProvider? timeProvider = null
-) : ISmithyClientMiddleware
+) : ISmithyClientMiddleware, IClientInterceptor
 {
     private const string Algorithm = "AWS4-HMAC-SHA256";
     private static readonly DateTimeFormatInfo InvariantDateTime = CultureInfo
@@ -50,6 +50,19 @@ public sealed class AwsSigV4Middleware(
             .ConfigureAwait(false);
         Sign(request.Request, credentials, timeProvider.GetUtcNow());
         return await nextOperation(request, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async ValueTask<SmithyHttpRequest> OnBeforeTransmitAsync(
+        SmithyContext context,
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var credentials = await credentialsProvider
+            .GetCredentialsAsync(cancellationToken)
+            .ConfigureAwait(false);
+        Sign(request, credentials, timeProvider.GetUtcNow());
+        return request;
     }
 
     internal void Sign(SmithyHttpRequest request, AwsCredentials credentials, DateTimeOffset now)
