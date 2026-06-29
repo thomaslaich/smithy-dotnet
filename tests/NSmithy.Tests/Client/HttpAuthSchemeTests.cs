@@ -17,14 +17,6 @@ public sealed class HttpAuthSchemeTests
     [Fact]
     public async Task BearerSchemeSetsAuthorizationHeader()
     {
-        var request = await SignAsync(new HttpBearerAuthScheme("my-token"), "/");
-
-        Assert.Equal(["Bearer my-token"], request.Headers["Authorization"]);
-    }
-
-    [Fact]
-    public async Task BearerSchemeInterceptorSetsAuthorizationHeader()
-    {
         var request = await InterceptAsync(new HttpBearerAuthScheme("my-token"), "/");
 
         Assert.Equal(["Bearer my-token"], request.Headers["Authorization"]);
@@ -33,7 +25,7 @@ public sealed class HttpAuthSchemeTests
     [Fact]
     public async Task BasicSchemeSetsBase64AuthorizationHeader()
     {
-        var request = await SignAsync(new HttpBasicAuthScheme("alice", "s3cret"), "/");
+        var request = await InterceptAsync(new HttpBasicAuthScheme("alice", "s3cret"), "/");
 
         var expected = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes("alice:s3cret"));
         Assert.Equal([expected], request.Headers["Authorization"]);
@@ -42,7 +34,7 @@ public sealed class HttpAuthSchemeTests
     [Fact]
     public async Task ApiKeyHeaderSchemeSetsNamedHeader()
     {
-        var request = await SignAsync(new HttpApiKeyAuthScheme("X-Api-Key", "secret"), "/");
+        var request = await InterceptAsync(new HttpApiKeyAuthScheme("X-Api-Key", "secret"), "/");
 
         Assert.Equal(["secret"], request.Headers["X-Api-Key"]);
     }
@@ -50,7 +42,7 @@ public sealed class HttpAuthSchemeTests
     [Fact]
     public async Task ApiKeyHeaderSchemeAppliesSchemePrefix()
     {
-        var request = await SignAsync(
+        var request = await InterceptAsync(
             new HttpApiKeyAuthScheme("Authorization", "secret", ApiKeyLocation.Header, "ApiKey"),
             "/"
         );
@@ -60,17 +52,6 @@ public sealed class HttpAuthSchemeTests
 
     [Fact]
     public async Task ApiKeyQuerySchemeAppendsQueryParameter()
-    {
-        var request = await SignAsync(
-            new HttpApiKeyAuthScheme("api_key", "se cret", ApiKeyLocation.Query),
-            "/list?limit=10"
-        );
-
-        Assert.Equal("/list?limit=10&api_key=se%20cret", request.RequestUri);
-    }
-
-    [Fact]
-    public async Task ApiKeyQueryInterceptorAppendsQueryParameter()
     {
         var request = await InterceptAsync(
             new HttpApiKeyAuthScheme("api_key", "se cret", ApiKeyLocation.Query),
@@ -94,35 +75,6 @@ public sealed class HttpAuthSchemeTests
         Assert.Throws<ArgumentException>(() =>
             new HttpApiKeyAuthScheme("k", "v", ApiKeyLocation.Query, "ApiKey")
         );
-    }
-
-    private static async Task<SmithyHttpRequest> SignAsync(ISmithyAuthScheme scheme, string uri)
-    {
-        var middleware = scheme.CreateMiddleware(Context);
-        SmithyHttpRequest? captured = null;
-
-        await middleware.InvokeAsync(
-            new SmithyOperationRequest("Svc", "Op", new SmithyHttpRequest(HttpMethod.Get, uri)),
-            (request, _) =>
-            {
-                captured = request.Request;
-                return Task.FromResult(
-                    new SmithyOperationResponse(
-                        request.ServiceName,
-                        request.OperationName,
-                        new SmithyHttpResponse(
-                            HttpStatusCode.OK,
-                            "OK",
-                            [],
-                            new Dictionary<string, IReadOnlyList<string>>(),
-                            new Dictionary<string, IReadOnlyList<string>>()
-                        )
-                    )
-                );
-            }
-        );
-
-        return captured!;
     }
 
     private static async Task<SmithyHttpRequest> InterceptAsync(

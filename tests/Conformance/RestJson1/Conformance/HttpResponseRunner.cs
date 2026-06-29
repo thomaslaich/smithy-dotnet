@@ -264,9 +264,7 @@ internal static class ConformanceClients
     }
 
     /// <summary>
-    /// Constructs a generated client via its <c>(Uri endpoint, IProtocol? protocol,
-    /// HttpClient? httpClient, IEnumerable&lt;ISmithyClientMiddleware&gt;? middleware,
-    /// IEnumerable&lt;ISmithyAuthScheme&gt;? authSchemes, Func&lt;string&gt;? idempotencyTokenProvider)</c> constructor, using the default protocol.
+    /// Constructs a generated client through its HttpClient constructor, using the default protocol.
     /// </summary>
     public static object Build(
         Type clientType,

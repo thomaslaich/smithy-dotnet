@@ -43,17 +43,17 @@ architecture.
 
 This work includes:
 
-- Replacing send-stage middleware as the primary extension point with named
-  client interceptors and a typed per-call execution context.
+- Continuing to harden named client interceptors and the typed per-call
+  execution context.
 - Moving serialization, endpoint resolution, auth resolution, signing, transmit,
   retry, deserialization, and completion into one orchestrated client lifecycle.
 - Adding per-operation endpoint resolution, including host labels and endpoint
   auth-scheme overrides.
 - Splitting auth into scheme resolution, identity resolution, and signing;
   adding per-operation `@auth` overrides and identity caching/refresh.
-- Replacing the simple retry middleware with a standard retry strategy:
-  exponential backoff with full jitter, retry quota, `Retry-After`, modeled
-  retryability, and deterministic `TimeProvider` tests.
+- Extending the retry strategy model with exponential backoff with full jitter,
+  retry quota, `Retry-After`, modeled retryability, and deterministic
+  `TimeProvider` tests.
 - Adding operation timeout support through execution context rather than only
   `HttpClient.Timeout`.
 - Adding OpenTelemetry-friendly tracing and metrics with `ActivitySource` and

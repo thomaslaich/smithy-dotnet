@@ -68,7 +68,7 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
           writer.write(
               "/// <summary>Registers <see cref=\"$L\"/> as a typed HttpClient"
                   + " (IHttpClientFactory) for the given endpoint. Set the protocol, auth schemes,"
-                  + " and middleware via <paramref name=\"configure\"/>.</summary>",
+                  + " and interceptors via <paramref name=\"configure\"/>.</summary>",
               interfaceName);
           writer.write("public static IHttpClientBuilder Add$L(", clientName);
           writer.write("    this IServiceCollection services,");
@@ -84,7 +84,7 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
               "/// <summary>Registers <see cref=\"$L\"/> as a typed HttpClient"
                   + " (IHttpClientFactory). Configure the HttpClient (at minimum its BaseAddress)"
                   + " via <paramref name=\"configureClient\"/>; set the protocol, auth schemes, and"
-                  + " middleware via <paramref name=\"configure\"/>.</summary>",
+                  + " interceptors via <paramref name=\"configure\"/>.</summary>",
               interfaceName);
           writer.write("public static IHttpClientBuilder Add$L(", clientName);
           writer.write("    this IServiceCollection services,");

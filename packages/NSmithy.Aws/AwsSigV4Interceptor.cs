@@ -6,13 +6,13 @@ using NSmithy.Http;
 
 namespace NSmithy.Aws;
 
-public sealed class AwsSigV4Middleware(
+public sealed class AwsSigV4Interceptor(
     Uri endpoint,
     string service,
     string region,
     IAwsCredentialsProvider credentialsProvider,
     TimeProvider? timeProvider = null
-) : ISmithyClientMiddleware, IClientInterceptor
+) : IClientInterceptor
 {
     private const string Algorithm = "AWS4-HMAC-SHA256";
     private static readonly DateTimeFormatInfo InvariantDateTime = CultureInfo
@@ -35,22 +35,6 @@ public sealed class AwsSigV4Middleware(
         credentialsProvider ?? throw new ArgumentNullException(nameof(credentialsProvider));
 
     private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
-
-    public async Task<SmithyOperationResponse> InvokeAsync(
-        SmithyOperationRequest request,
-        SmithyOperationNext nextOperation,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(nextOperation);
-
-        var credentials = await credentialsProvider
-            .GetCredentialsAsync(cancellationToken)
-            .ConfigureAwait(false);
-        Sign(request.Request, credentials, timeProvider.GetUtcNow());
-        return await nextOperation(request, cancellationToken).ConfigureAwait(false);
-    }
 
     public async ValueTask<SmithyHttpRequest> OnBeforeTransmitAsync(
         SmithyContext context,

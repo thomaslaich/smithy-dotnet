@@ -2,12 +2,9 @@ using NSmithy.Http;
 
 namespace NSmithy.Client;
 
-public sealed class SmithyOperationInvoker(
-    IHttpTransport transport,
-    IEnumerable<ISmithyClientMiddleware>? middlewares = null
-)
+public sealed class SmithyOperationInvoker(IHttpTransport transport)
 {
-    private readonly SmithyClientRuntime runtime = new(transport, middlewares: middlewares);
+    private readonly SmithyClientRuntime runtime = new(transport);
 
     public Task<SmithyHttpResponse> InvokeAsync(
         string serviceName,

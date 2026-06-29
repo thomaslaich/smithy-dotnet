@@ -19,9 +19,6 @@ public class SmithyClientConfig
     /// <summary>The wire protocol; defaults to the service's primary declared protocol.</summary>
     public IProtocol? Protocol { get; set; }
 
-    /// <summary>Extra middleware prepended to the operation pipeline.</summary>
-    public IList<ISmithyClientMiddleware> Middleware { get; } = [];
-
     /// <summary>Protocol-agnostic hooks for observing and modifying client execution.</summary>
     public IList<IClientInterceptor> Interceptors { get; } = [];
 

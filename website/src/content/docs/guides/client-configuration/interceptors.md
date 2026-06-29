@@ -44,6 +44,3 @@ Available hooks:
 | `OnAfterExecution` | Run cleanup or final observation after the call completes. |
 
 Before hooks run in configured order. After hooks run in reverse order.
-
-`ISmithyClientMiddleware` remains available for compatibility with older
-send-stage extensions, but new client extensions should use interceptors.

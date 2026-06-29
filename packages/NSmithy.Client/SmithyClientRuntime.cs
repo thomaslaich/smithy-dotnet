@@ -5,14 +5,12 @@ namespace NSmithy.Client;
 public sealed class SmithyClientRuntime(
     IHttpTransport transport,
     IEnumerable<IClientInterceptor>? interceptors = null,
-    IEnumerable<ISmithyClientMiddleware>? middlewares = null,
     ISmithyRetryStrategy? retryStrategy = null
 )
 {
     private readonly IHttpTransport transport =
         transport ?? throw new ArgumentNullException(nameof(transport));
     private readonly IReadOnlyList<IClientInterceptor> interceptors = [.. interceptors ?? []];
-    private readonly IReadOnlyList<ISmithyClientMiddleware> middlewares = [.. middlewares ?? []];
     private readonly ISmithyRetryStrategy? retryStrategy = retryStrategy;
 
     public async Task<TOutput> InvokeAsync<TInput, TOutput>(
@@ -138,15 +136,9 @@ public sealed class SmithyClientRuntime(
                 )
                 .ConfigureAwait(false);
 
-            var operationRequest = new SmithyOperationRequest(
-                serviceName,
-                operationName,
-                attemptRequest
-            );
-            var operationResponse = await BuildPipeline(0)
-                .Invoke(operationRequest, cancellationToken)
+            var response = await transport
+                .SendAsync(attemptRequest, cancellationToken)
                 .ConfigureAwait(false);
-            var response = operationResponse.Response;
 
             for (var i = interceptors.Count - 1; i >= 0; i--)
             {
@@ -232,29 +224,6 @@ public sealed class SmithyClientRuntime(
         }
 
         return clone;
-    }
-
-    private SmithyOperationNext BuildPipeline(int index)
-    {
-        if (index >= middlewares.Count)
-        {
-            return async (request, cancellationToken) =>
-            {
-                var response = await transport
-                    .SendAsync(request.Request, cancellationToken)
-                    .ConfigureAwait(false);
-                return new SmithyOperationResponse(
-                    request.ServiceName,
-                    request.OperationName,
-                    response
-                );
-            };
-        }
-
-        var current = middlewares[index];
-        var next = BuildPipeline(index + 1);
-        return (request, cancellationToken) =>
-            current.InvokeAsync(request, next, cancellationToken);
     }
 
     private static SmithyContext CreateContext(string serviceName, string operationName)

@@ -5,7 +5,7 @@ using NSmithy.Http;
 
 namespace NSmithy.Tests.Aws;
 
-public sealed class AwsSigV4MiddlewareTests
+public sealed class AwsSigV4InterceptorTests
 {
     [Fact]
     public async Task SignAddsSigV4Headers()
@@ -15,7 +15,7 @@ public sealed class AwsSigV4MiddlewareTests
         request.ContentType = "application/x-amz-json-1.0";
         request.Headers["X-Amz-Target"] = ["DynamoDB_20120810.ListTables"];
 
-        var middleware = new AwsSigV4Middleware(
+        var interceptor = new AwsSigV4Interceptor(
             new Uri("http://localhost:4566"),
             "dynamodb",
             "us-east-1",
@@ -25,23 +25,10 @@ public sealed class AwsSigV4MiddlewareTests
             new FixedTimeProvider(new DateTimeOffset(2026, 06, 22, 12, 34, 56, TimeSpan.Zero))
         );
 
-        _ = await middleware.InvokeAsync(
-            new SmithyOperationRequest("DynamoDB", "ListTables", request),
-            (operationRequest, _) =>
-                Task.FromResult(
-                    new SmithyOperationResponse(
-                        operationRequest.ServiceName,
-                        operationRequest.OperationName,
-                        new SmithyHttpResponse(
-                            HttpStatusCode.OK,
-                            "OK",
-                            [],
-                            new Dictionary<string, IReadOnlyList<string>>(),
-                            new Dictionary<string, IReadOnlyList<string>>()
-                        )
-                    )
-                )
-        );
+        var context = new SmithyContext();
+        context.Set(SmithyContextKeys.ServiceName, "DynamoDB");
+        context.Set(SmithyContextKeys.OperationName, "ListTables");
+        _ = await interceptor.OnBeforeTransmitAsync(context, request);
 
         Assert.Equal(["localhost:4566"], request.Headers["Host"]);
         Assert.Equal(["20260622T123456Z"], request.Headers["X-Amz-Date"]);
@@ -65,48 +52,9 @@ public sealed class AwsSigV4MiddlewareTests
     }
 
     [Fact]
-    public async Task InvokeSignsThenCallsNextMiddleware()
-    {
-        var middleware = new AwsSigV4Middleware(
-            new Uri("http://localhost:4566"),
-            "s3",
-            "us-east-1",
-            new StaticAwsCredentialsProvider(new AwsCredentials("test", "test", "token")),
-            TimeProvider.System
-        );
-        var httpRequest = new SmithyHttpRequest(HttpMethod.Get, "/");
-        var operationRequest = new SmithyOperationRequest("S3", "ListBuckets", httpRequest);
-
-        var response = await middleware.InvokeAsync(
-            operationRequest,
-            (request, _) =>
-            {
-                Assert.Same(operationRequest, request);
-                Assert.True(httpRequest.Headers.ContainsKey("Authorization"));
-                Assert.Equal(["token"], httpRequest.Headers["X-Amz-Security-Token"]);
-                return Task.FromResult(
-                    new SmithyOperationResponse(
-                        request.ServiceName,
-                        request.OperationName,
-                        new SmithyHttpResponse(
-                            HttpStatusCode.OK,
-                            "OK",
-                            [],
-                            new Dictionary<string, IReadOnlyList<string>>(),
-                            new Dictionary<string, IReadOnlyList<string>>()
-                        )
-                    )
-                );
-            }
-        );
-
-        Assert.Equal(HttpStatusCode.OK, response.Response.StatusCode);
-    }
-
-    [Fact]
     public async Task InterceptorSignsBeforeTransmit()
     {
-        var interceptor = new AwsSigV4Middleware(
+        var interceptor = new AwsSigV4Interceptor(
             new Uri("http://localhost:4566"),
             "s3",
             "us-east-1",

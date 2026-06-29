@@ -12,10 +12,7 @@ public interface ISmithyAuthScheme
     /// <summary>Absolute shape id of the auth trait this scheme implements.</summary>
     string SchemeId { get; }
 
-    ISmithyClientMiddleware CreateMiddleware(SmithyAuthSchemeContext context);
-
-    IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context) =>
-        new MiddlewareClientInterceptor(CreateMiddleware(context));
+    IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context);
 }
 
 public sealed record SmithyAuthSchemeContext(Uri Endpoint, ServiceSchema Service);

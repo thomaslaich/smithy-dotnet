@@ -21,15 +21,9 @@ public sealed class AwsSigV4AuthScheme(
 
     public string SchemeId => "aws.auth#sigv4";
 
-    public ISmithyClientMiddleware CreateMiddleware(SmithyAuthSchemeContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        return new AwsSigV4Middleware(context.Endpoint, service, region, credentialsProvider);
-    }
-
     public IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        return new AwsSigV4Middleware(context.Endpoint, service, region, credentialsProvider);
+        return new AwsSigV4Interceptor(context.Endpoint, service, region, credentialsProvider);
     }
 }
