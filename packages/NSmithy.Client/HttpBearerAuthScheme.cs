@@ -11,20 +11,14 @@ public sealed class HttpBearerAuthScheme(string token) : ISmithyAuthScheme
 
     public string SchemeId => AuthSchemeIds.HttpBearerAuth;
 
-    public ISmithyClientMiddleware CreateMiddleware(SmithyAuthSchemeContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        return CreateAuthHandler();
-    }
-
     public IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
         return CreateAuthHandler();
     }
 
-    private HeaderAuthMiddleware CreateAuthHandler()
+    private HeaderAuthInterceptor CreateAuthHandler()
     {
-        return new HeaderAuthMiddleware("Authorization", $"Bearer {token}");
+        return new HeaderAuthInterceptor("Authorization", $"Bearer {token}");
     }
 }

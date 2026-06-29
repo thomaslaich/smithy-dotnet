@@ -3,30 +3,16 @@ using NSmithy.Http;
 namespace NSmithy.Client;
 
 /// <summary>
-/// Appends a credential as a query-string parameter on the request URI, then calls the next
-/// middleware. The request URI is immutable, so this rebuilds the HTTP request, carrying over
-/// method, body and headers.
+/// Appends a credential as a query-string parameter on the request URI. The request URI is
+/// immutable, so this rebuilds the HTTP request, carrying over method, body and headers.
 /// </summary>
-internal sealed class QueryParameterAuthMiddleware(string name, string value) : ISmithyAuthHandler
+internal sealed class QueryParameterAuthInterceptor(string name, string value) : ISmithyAuthHandler
 {
     private readonly string name = string.IsNullOrWhiteSpace(name)
         ? throw new ArgumentException("Query parameter name must be set.", nameof(name))
         : name;
 
     private readonly string value = value ?? throw new ArgumentNullException(nameof(value));
-
-    public Task<SmithyOperationResponse> InvokeAsync(
-        SmithyOperationRequest request,
-        SmithyOperationNext nextOperation,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(nextOperation);
-
-        var signed = AddQueryParameter(request.Request);
-        return nextOperation(request with { Request = signed }, cancellationToken);
-    }
 
     public ValueTask<SmithyHttpRequest> OnBeforeTransmitAsync(
         SmithyContext context,

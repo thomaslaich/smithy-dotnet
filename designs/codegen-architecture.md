@@ -161,7 +161,7 @@ Generated code depends on .NET packages published to NuGet:
 
 - `NSmithy.Core` — `Schema`, `ShapeId`, `Trait`, codec interfaces
 - `NSmithy.Http` — `IHttpTransport`, `SmithyHttpRequest`, `SmithyHttpResponse`
-- `NSmithy.Client` — `SmithyOperationInvoker`, `ISmithyClientMiddleware`
+- `NSmithy.Client` — `SmithyClientRuntime`, `IClientInterceptor`
 - `NSmithy.Server` / `NSmithy.Server.AspNetCore` — server framework
 - `NSmithy.Codecs.Json/Xml/Cbor` — schema-bound body codec implementations
 - `NSmithy.Protocols.Rest` — shared REST HTTP binding projection

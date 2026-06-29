@@ -46,7 +46,6 @@ including HTTP/2 for native gRPC.
 
 ## Custom invokers
 
-The invoker constructor is for custom transports, custom compatibility
-middleware pipelines, and low-level tests. It bypasses generated transport setup,
-so prefer the endpoint, `HttpClient`, or DI constructors unless you need to own
-the full operation pipeline.
+The invoker constructor is for custom transports and low-level tests. It bypasses
+generated transport setup, so prefer the endpoint, `HttpClient`, or DI
+constructors unless you need to own the lower-level runtime path.

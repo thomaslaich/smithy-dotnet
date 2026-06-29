@@ -45,7 +45,6 @@ when you want to set client options.
 | `AuthSchemes` | Configured auth schemes; the resolver installs the first scheme the service models. An empty list means anonymous. |
 | `RetryStrategy` | Runtime-owned retry policy. `null` disables runtime retries. |
 | `Interceptors` | Protocol-agnostic hooks for observing and modifying client execution. |
-| `Middleware` | Compatibility extension point for send-stage middleware. Prefer interceptors for new code. |
 | `IdempotencyTokenProvider` | Overrides the idempotency-token generator (default: a random GUID). |
 
 Everything except `Endpoint` is optional. The config is a per-service type
@@ -59,7 +58,7 @@ The public constructors differ mainly by who owns the HTTP transport:
 ```csharp
 new WeatherClient(endpoint, config);      // normal direct construction; endpoint wins over config.Endpoint
 new WeatherClient(httpClient, config);    // you own the HttpClient; endpoint from config.Endpoint ?? BaseAddress
-new WeatherClient(invoker, config);       // you own the whole transport/middleware pipeline
+new WeatherClient(invoker, config);       // you own the lower-level runtime path
 ```
 
 `config` is optional on all public constructors.
@@ -70,8 +69,7 @@ Keep the constructor choice simple:
 - Use the generated `Add{Service}Client` helper for dependency injection.
 - Use the `HttpClient` constructor only when something else already owns and
   configures the `HttpClient`.
-- Use the invoker constructor only for custom transports, custom compatibility
-  middleware pipelines, and low-level tests.
+- Use the invoker constructor only for custom transports and low-level tests.
 
 ## Lifetime
 

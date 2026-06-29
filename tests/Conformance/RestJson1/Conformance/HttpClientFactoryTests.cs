@@ -44,9 +44,9 @@ public sealed class HttpClientFactoryTests
         Assert.StartsWith("https://example.test/", handler.Captured!.RequestUri.ToString());
     }
 
-    // Verifies the explicit-factory form used to pick a non-default protocol (or pass middleware /
-    // an idempotency-token provider) in DI. This is the snippet documented for multi-protocol
-    // services where AddHttpClient<I,T>'s default (primary protocol) is not what you want.
+    // Verifies the explicit-factory form used to pick a non-default protocol in DI. This is the
+    // snippet documented for multi-protocol services where AddHttpClient<I,T>'s default (primary
+    // protocol) is not what you want.
     [Fact]
     public async Task TypedHttpClientWithExplicitProtocolFactory()
     {

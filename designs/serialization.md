@@ -495,15 +495,15 @@ request/response codecs for rpcv2Cbor — is computed when the field is
 initialized and reused for every request. The hot path serializes through those
 precomputed objects instead of reanalyzing schema metadata.
 
-### The invoker
+### The client runtime
 
-`SmithyOperationInvoker` owns the parts that are *not* protocol-specific: the
-middleware pipeline (retry, logging, auth, …) and the transport send. It is
-deliberately ignorant of wire formats. The one protocol decision it needs —
-"is this response an error?" — is injected as `IOperationProtocol.IsErrorResponse`
+`SmithyClientRuntime` owns the parts that are *not* protocol-specific:
+interceptors, auth signing, retry decisions, and the transport send. It is
+deliberately ignorant of wire formats. The one protocol decision it needs, "is
+this response an error?", is injected as `IOperationProtocol.IsErrorResponse`
 rather than assumed to be "HTTP 4xx", so a transport that signals failure
 differently (gRPC's `grpc-status` trailer over an HTTP 200) fits without
-changing the invoker. Error *dispatch* stays in the generated
+changing the runtime. Error *dispatch* stays in the generated
 `Deserialize{Operation}ErrorAsync` delegate, since the set of modeled errors is
 operation-specific model data.
 
