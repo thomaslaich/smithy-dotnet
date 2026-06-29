@@ -1,0 +1,752 @@
+---
+/**
+ * LandingPage — full custom landing, ported from the Claude Design
+ * "Smithy Landing.dc.html" (violet / Space Grotesk design).
+ *
+ * Rendered inside Starlight's splash page; Starlight's own chrome (header,
+ * content max-width) is hidden/neutralised on the landing page only — see the
+ * `html.nsmithy-landing` rules below. The marker class is added in <head> via
+ * index.mdx frontmatter so there is no flash.
+ */
+import Walkthrough from './Walkthrough.astro';
+import ProtocolSwitch from './ProtocolSwitch.astro';
+
+const intro = 'https://thomaslaich.github.io/smithy-dotnet/getting-started/introduction/';
+const repo = 'https://github.com/thomaslaich/smithy-dotnet';
+const logo = '/smithy-dotnet/brand/nsmithy_logo_1.png';
+
+const features = [
+  { t: 'Protocol agnostic', d: 'REST, JSON-RPC, gRPC and CBOR from one model — switch or serve several at once.' },
+  { t: 'MSBuild-native', d: 'No separate codegen step. MSBuild runs <code>smithy build</code>, adds <code>.g.cs</code> files, and tracks model changes for incremental builds.' },
+  { t: 'Type-safe contracts', d: 'Generated handlers and clients are strongly typed C# records. No string URLs, no manual JSON, no runtime surprises.' },
+  { t: 'Cross-ecosystem', d: 'The same contract powers clients in Java, Python, TypeScript, Rust, Swift and more — your .NET service stays interoperable.' },
+  { t: 'Docs included', d: 'A Scalar OpenAPI explorer and Sphinx reference are generated at compile time and served as static files.' },
+  { t: 'Extensible', d: 'Add protocols and generators through a plugin surface — the model stays the single source of truth.' },
+];
+
+const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 'Go'];
+---
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+  rel="stylesheet"
+/>
+
+<div class="nsl not-content">
+  <!-- Header -->
+  <header class="nsl-header">
+    <a class="nsl-brand" href="/smithy-dotnet/">
+      <img src={logo} alt="NSmithy" width="30" height="30" />
+      <span>NSmithy</span>
+    </a>
+    <nav class="nsl-nav">
+      <a href="#workflow">Workflow</a>
+      <a href="#protocols">Protocols</a>
+      <a href="#ecosystem">Ecosystem</a>
+      <a href={repo}>GitHub</a>
+      <a class="nsl-nav-ext" href="https://smithy.io">Smithy.io <span aria-hidden="true">↗</span></a>
+    </nav>
+    <div class="nsl-header-actions">
+      <button type="button" class="nsl-theme" aria-label="Toggle theme"></button>
+      <a class="nsl-btn nsl-btn-primary nsl-btn-sm" href={intro}>Get Started</a>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="nsl-hero">
+    <div class="nsl-hero-glow" aria-hidden="true"></div>
+    <div class="nsl-hero-inner">
+      <a class="nsl-badge" href="https://smithy.io">
+        <span class="nsl-badge-dot"></span>
+        Built on Smithy IDL&nbsp;&nbsp;·&nbsp;&nbsp;smithy.io <span aria-hidden="true">↗</span>
+      </a>
+      <h1 class="nsl-h1">One contract.<br />Every layer of your&nbsp;service.</h1>
+      <p class="nsl-lead">
+        NSmithy turns a single Smithy model into typed servers, clients, and live documentation for .NET —
+        protocol-agnostic, MSBuild-native, zero hand-written glue.
+      </p>
+      <div class="nsl-hero-actions">
+        <a class="nsl-btn nsl-btn-primary" href={intro}>Get Started</a>
+        <a class="nsl-btn nsl-btn-ghost" href={repo}>View on GitHub</a>
+      </div>
+      <div class="nsl-chips">
+        <span class="nsl-chip">REST</span>
+        <span class="nsl-chip">JSON-RPC</span>
+        <span class="nsl-chip">gRPC</span>
+        <span class="nsl-chip">CBOR</span>
+        <span class="nsl-chip nsl-chip-ext">+ extensible</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Workflow -->
+  <section id="workflow" class="nsl-section">
+    <div class="nsl-sechead">
+      <div class="nsl-kicker">The workflow</div>
+      <h2 class="nsl-h2">From model to runtime in one build</h2>
+      <p class="nsl-secp">Describe operations, shapes, and traits once. MSBuild runs <code>smithy&nbsp;build</code> and emits the server stub, the client, and the docs.</p>
+    </div>
+    <Walkthrough />
+  </section>
+
+  <!-- Protocols -->
+  <section id="protocols" class="nsl-section">
+    <div class="nsl-sechead nsl-sechead-wide">
+      <div class="nsl-kicker">Protocol agnostic</div>
+      <h2 class="nsl-h2">Same code. Any protocol.</h2>
+      <p class="nsl-secp">Your handler and client never change. Annotate the service with a different protocol trait and NSmithy regenerates the wire format — REST, JSON-RPC, binary CBOR, or gRPC over HTTP/2.</p>
+    </div>
+    <ProtocolSwitch />
+  </section>
+
+  <!-- Ecosystem -->
+  <section id="ecosystem" class="nsl-section nsl-eco">
+    <h2 class="nsl-h2">The same contract, every ecosystem</h2>
+    <p class="nsl-secp nsl-eco-p">Smithy is the IDL behind AWS's public APIs. One model generates idiomatic clients across the ecosystem.</p>
+    <div class="nsl-langs">
+      {langs.map((l) => <span class={`nsl-lang${l === 'C#' ? ' nsl-lang-on' : ''}`}>{l}</span>)}
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="nsl-section">
+    <div class="nsl-cards">
+      {
+        features.map((f) => (
+          <div class="nsl-card">
+            <span class="nsl-card-mark" />
+            <h3 class="nsl-card-t">{f.t}</h3>
+            <p class="nsl-card-d" set:html={f.d} />
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Docs -->
+  <section class="nsl-section">
+    <div class="nsl-docs">
+      <div>
+        <div class="nsl-kicker">Documentation</div>
+        <h2 class="nsl-h2 nsl-docs-h">Docs that build themselves</h2>
+        <p class="nsl-secp nsl-docs-p">
+          No hand-authored spec. <code>app.MapSmithyOpenApi()</code> mounts an interactive Scalar explorer;
+          <code>app.MapSmithyDocs()</code> serves the reference — both straight from the model.
+        </p>
+        <div class="nsl-docs-routes">
+          <span>→ /openapi</span>
+          <span>→ /docs</span>
+        </div>
+      </div>
+      <img
+        class="nsl-docs-img"
+        src="/smithy-dotnet/screenshots/landing-page-scalar-ui.png"
+        alt="Scalar OpenAPI explorer generated from the Smithy model"
+        loading="lazy"
+      />
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="nsl-section">
+    <div class="nsl-cta">
+      <div class="nsl-cta-glow" aria-hidden="true"></div>
+      <div class="nsl-cta-inner">
+        <h2 class="nsl-cta-h">Forge your API.</h2>
+        <p class="nsl-cta-p">Model once. Generate the server, the clients, the docs.</p>
+        <div class="nsl-hero-actions nsl-cta-actions">
+          <a class="nsl-btn nsl-btn-primary" href={intro}>Get Started</a>
+          <a class="nsl-btn nsl-btn-ghost" href={repo}>GitHub</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="nsl-footer">
+    <div class="nsl-footer-inner">
+      <a class="nsl-brand" href="/smithy-dotnet/">
+        <img src={logo} alt="NSmithy" width="22" height="22" />
+        <span>NSmithy</span>
+      </a>
+      <div class="nsl-footer-links">
+        <a href={intro}>Docs</a>
+        <a href={repo}>GitHub</a>
+        <a href="https://smithy.io">Smithy.io</a>
+      </div>
+      <span class="nsl-footer-copy">© 2026 · MIT licensed</span>
+    </div>
+  </footer>
+</div>
+
+<style is:global>
+  /* ── Theme tokens (landing only) ─────────────────────────────────────────── */
+  html.nsmithy-landing {
+    --bg: #08080c;
+    --bg2: #0d0d14;
+    --panel: #101019;
+    --text: #f5f5f8;
+    --dim: #a2a2b2;
+    --faint: #6a6a7c;
+    --border: #20202c;
+    --borderSoft: #171720;
+    --accent: #6d4aff;
+    --accentText: #b8a5ff;
+    --accentSoft: rgba(109, 74, 255, 0.14);
+    --pill: #13131c;
+  }
+  html.nsmithy-landing[data-theme='light'] {
+    --bg: #f6f6f8;
+    --bg2: #ffffff;
+    --panel: #ffffff;
+    --text: #0e0e14;
+    --dim: #54546a;
+    --faint: #8a8a9a;
+    --border: #e6e6ec;
+    --borderSoft: #eeeef2;
+    --accentText: #5b35e0;
+    --accentSoft: rgba(109, 74, 255, 0.09);
+    --pill: #f1f1f5;
+  }
+
+  /* ── Neutralise Starlight chrome on the landing page only ────────────────── */
+  html.nsmithy-landing body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  }
+  html.nsmithy-landing .header,
+  html.nsmithy-landing .sidebar-pane,
+  html.nsmithy-landing .right-sidebar-container,
+  html.nsmithy-landing h1[id='_top'],
+  html.nsmithy-landing h1[data-page-title] {
+    display: none !important;
+  }
+  html.nsmithy-landing .main-frame {
+    padding-top: 0 !important;
+    padding-inline-start: 0 !important;
+  }
+  html.nsmithy-landing .main-pane,
+  html.nsmithy-landing main {
+    width: 100% !important;
+  }
+  html.nsmithy-landing .content-panel {
+    padding: 0 !important;
+    border: 0 !important;
+  }
+  html.nsmithy-landing .sl-container {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  html.nsmithy-landing ::selection {
+    background: rgba(109, 74, 255, 0.3);
+  }
+
+  /* ── Landing root ────────────────────────────────────────────────────────── */
+  .nsl {
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .nsl a {
+    text-decoration: none;
+  }
+  .nsl code {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.9em;
+  }
+
+  /* ── Header ──────────────────────────────────────────────────────────────── */
+  .nsl-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 18px 40px;
+    position: relative;
+    z-index: 3;
+  }
+  .nsl-brand {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+  }
+  .nsl-brand img {
+    display: block;
+    border-radius: 7px;
+  }
+  .nsl-brand span {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 19px;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+  .nsl-nav {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    font-size: 14.5px;
+  }
+  .nsl-nav a {
+    color: var(--dim);
+    transition: color 0.15s ease;
+  }
+  .nsl-nav a:hover {
+    color: var(--text);
+  }
+  .nsl-nav-ext {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--accentText) !important;
+  }
+  .nsl-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .nsl-theme {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: var(--pill);
+    border: 1px solid var(--border);
+    color: var(--dim);
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+  .nsl-theme:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
+  /* ── Buttons ─────────────────────────────────────────────────────────────── */
+  .nsl-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 11px;
+    font-weight: 600;
+    font-size: 16px;
+    padding: 14px 26px;
+    transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+  }
+  .nsl-btn-sm {
+    padding: 10px 18px;
+    font-size: 14.5px;
+    border-radius: 9px;
+  }
+  .nsl-btn-primary {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 12px 30px -10px rgba(109, 74, 255, 0.7);
+  }
+  .nsl-btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 36px -10px rgba(109, 74, 255, 0.8);
+  }
+  .nsl-btn-ghost {
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .nsl-btn-ghost:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+  }
+
+  /* ── Hero ────────────────────────────────────────────────────────────────── */
+  .nsl-hero {
+    position: relative;
+    padding: 100px 40px 80px;
+    text-align: center;
+    overflow: hidden;
+  }
+  .nsl-hero-glow {
+    position: absolute;
+    top: -180px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 820px;
+    height: 480px;
+    max-width: 100%;
+    background: radial-gradient(closest-side, rgba(109, 74, 255, 0.22), transparent 72%);
+    pointer-events: none;
+  }
+  .nsl-hero-inner {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .nsl-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accentText);
+    border: 1px solid var(--border);
+    background: var(--pill);
+    padding: 7px 14px;
+    border-radius: 100px;
+    margin-bottom: 30px;
+  }
+  .nsl-badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
+  }
+  .nsl-h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: clamp(40px, 7.2vw, 68px);
+    line-height: 1.03;
+    letter-spacing: -0.035em;
+    color: var(--text);
+    margin: 0 0 22px;
+  }
+  .nsl-lead {
+    font-size: clamp(16.5px, 1.2vw, 20px);
+    line-height: 1.55;
+    color: var(--dim);
+    max-width: 630px;
+    margin: 0 auto 36px;
+    text-wrap: pretty;
+  }
+  .nsl-hero-actions {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    margin-bottom: 42px;
+    flex-wrap: wrap;
+  }
+  .nsl-chips {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .nsl-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--dim);
+    padding: 8px 15px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--panel);
+  }
+  .nsl-chip-ext {
+    color: var(--accentText);
+    border: 1px dashed var(--border);
+    background: var(--accentSoft);
+  }
+
+  /* ── Sections ────────────────────────────────────────────────────────────── */
+  .nsl-section {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 40px 100px;
+  }
+  #workflow.nsl-section {
+    padding-top: 8px;
+  }
+  .nsl-sechead {
+    text-align: center;
+    max-width: 700px;
+    margin: 0 auto 40px;
+  }
+  .nsl-sechead-wide {
+    max-width: 740px;
+  }
+  .nsl-kicker {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accentText);
+    margin-bottom: 14px;
+  }
+  .nsl-h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: clamp(28px, 4vw, 42px);
+    letter-spacing: -0.025em;
+    color: var(--text);
+    margin: 0 0 14px;
+  }
+  .nsl-secp {
+    font-size: 16.5px;
+    line-height: 1.6;
+    color: var(--dim);
+    margin: 0;
+  }
+  .nsl-secp code {
+    color: var(--accentText);
+  }
+
+  /* Ecosystem */
+  .nsl-eco {
+    text-align: center;
+  }
+  .nsl-eco .nsl-h2 {
+    font-size: clamp(26px, 3.4vw, 36px);
+    margin-bottom: 12px;
+  }
+  .nsl-eco-p {
+    max-width: 620px;
+    margin: 0 auto 34px;
+    font-size: 16px;
+  }
+  .nsl-langs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    max-width: 840px;
+    margin: 0 auto;
+  }
+  .nsl-lang {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14.5px;
+    color: var(--dim);
+    padding: 11px 20px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+  }
+  .nsl-lang-on {
+    color: var(--accentText);
+    border-color: var(--accent);
+    background: var(--accentSoft);
+    font-weight: 500;
+  }
+
+  /* Feature cards */
+  .nsl-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  .nsl-card {
+    padding: 28px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--panel);
+    transition: transform 0.16s ease, border-color 0.16s ease;
+  }
+  .nsl-card:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
+  }
+  .nsl-card-mark {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    background: var(--accent);
+    transform: rotate(45deg);
+    border-radius: 2px;
+    margin-bottom: 18px;
+  }
+  .nsl-card-t {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 19px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 9px;
+  }
+  .nsl-card-d {
+    font-size: 14.5px;
+    line-height: 1.62;
+    color: var(--dim);
+    margin: 0;
+  }
+
+  /* Docs */
+  .nsl-docs {
+    display: grid;
+    grid-template-columns: 1fr 1.15fr;
+    gap: 44px;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--panel);
+    padding: 44px;
+  }
+  .nsl-docs-h {
+    font-size: clamp(26px, 3vw, 34px);
+    margin: 0 0 16px;
+    line-height: 1.1;
+  }
+  .nsl-docs-p {
+    margin: 0 0 22px;
+    font-size: 16px;
+  }
+  .nsl-docs-routes {
+    display: flex;
+    gap: 22px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13.5px;
+  }
+  .nsl-docs-routes span {
+    color: var(--accentText);
+  }
+  .nsl-docs-img {
+    width: 100%;
+    height: 300px;
+    object-fit: cover;
+    object-position: top left;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    display: block;
+  }
+
+  /* CTA */
+  .nsl-cta {
+    position: relative;
+    overflow: hidden;
+    border-radius: 22px;
+    border: 1px solid var(--accent);
+    background: linear-gradient(180deg, var(--accentSoft), transparent);
+    padding: 72px 44px;
+    text-align: center;
+  }
+  .nsl-cta-glow {
+    position: absolute;
+    bottom: -180px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 720px;
+    height: 420px;
+    max-width: 100%;
+    background: radial-gradient(closest-side, rgba(109, 74, 255, 0.28), transparent 70%);
+    pointer-events: none;
+  }
+  .nsl-cta-inner {
+    position: relative;
+    z-index: 1;
+  }
+  .nsl-cta-h {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: clamp(34px, 5vw, 48px);
+    letter-spacing: -0.03em;
+    color: var(--text);
+    margin: 0 0 16px;
+  }
+  .nsl-cta-p {
+    font-size: 18px;
+    color: var(--dim);
+    margin: 0 0 32px;
+  }
+  .nsl-cta-actions {
+    margin-bottom: 0;
+  }
+
+  /* Footer */
+  .nsl-footer {
+    border-top: 1px solid var(--borderSoft);
+    padding: 30px 40px;
+  }
+  .nsl-footer-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .nsl-footer-links {
+    display: flex;
+    gap: 26px;
+    font-size: 14px;
+  }
+  .nsl-footer-links a {
+    color: var(--dim);
+  }
+  .nsl-footer-links a:hover {
+    color: var(--text);
+  }
+  .nsl-footer-copy {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    color: var(--faint);
+  }
+
+  /* ── Responsive ──────────────────────────────────────────────────────────── */
+  @media (max-width: 60rem) {
+    .nsl-cards {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .nsl-docs {
+      grid-template-columns: 1fr;
+      gap: 28px;
+      padding: 32px;
+    }
+    .nsl-docs-img {
+      height: 240px;
+    }
+  }
+  @media (max-width: 48rem) {
+    .nsl-nav {
+      display: none;
+    }
+    .nsl-header,
+    .nsl-section,
+    .nsl-footer {
+      padding-inline: 22px;
+    }
+    .nsl-hero {
+      padding: 64px 22px 60px;
+    }
+    .nsl-cards {
+      grid-template-columns: 1fr;
+    }
+    .nsl-cta {
+      padding: 52px 24px;
+    }
+    .nsl-footer-inner {
+      justify-content: center;
+      text-align: center;
+    }
+  }
+</style>
+
+<script>
+  // Theme toggle — drives Starlight's theme (data-theme + localStorage) so the
+  // landing and the docs pages stay in sync.
+  (function () {
+    const btn = document.querySelector<HTMLButtonElement>('.nsl-theme');
+    if (!btn) return;
+    const sun = '☀';
+    const moon = '☾';
+    const current = () =>
+      document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    const paint = () => {
+      btn.textContent = current() === 'dark' ? moon : sun;
+    };
+    paint();
+    btn.addEventListener('click', () => {
+      const next = current() === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try {
+        localStorage.setItem('starlight-theme', next);
+      } catch {}
+      paint();
+    });
+  })();
+</script>

@@ -1,0 +1,310 @@
+---
+/**
+ * ProtocolSwitch — "Same code. Any protocol." widget.
+ * Ported from the Claude Design "ProtocolSwitch.dc.html". The same GetForecast
+ * operation rendered across four protocols; auto-cycles every 4.2s, pauses on
+ * hover. Always-dark code panel (does not follow the page theme).
+ */
+type Proto = { name: string; sub: string; cap: string; req: string; res: string };
+
+const protocols: Proto[] = [
+  {
+    name: 'restJson1',
+    sub: 'REST · JSON',
+    cap: 'Plain REST with JSON bodies and full HTTP semantics — the default for browser-facing APIs.',
+    req: 'GET /forecast/Zurich HTTP/1.1\naccept: application/json',
+    res: 'HTTP/1.1 200 OK\ncontent-type: application/json\n\n{\n  "tempC": 18.4,\n  "summary": "Clear skies over Zurich"\n}',
+  },
+  {
+    name: 'awsJson1_0',
+    sub: 'RPC · JSON',
+    cap: 'JSON-RPC: every operation is a POST to a uniform endpoint, framed by an operation target.',
+    req: 'POST /service/Weather/operation/GetForecast HTTP/1.1\ncontent-type: application/json\nx-amz-target: Weather.GetForecast\n\n{ "city": "Zurich" }',
+    res: 'HTTP/1.1 200 OK\ncontent-type: application/json\n\n{ "tempC": 18.4,\n  "summary": "Clear skies over Zurich" }',
+  },
+  {
+    name: 'rpcv2Cbor',
+    sub: 'RPC · CBOR',
+    cap: 'Compact binary CBOR over HTTP — smaller payloads and faster parsing, exact same model.',
+    req: 'POST /service/Weather/operation/GetForecast HTTP/1.1\nsmithy-protocol: rpc-v2-cbor\ncontent-type: application/cbor\n\nA1                        # map(1)\n   64 63 69 74 79         #   "city"\n   66 5A 75 72 69 63 68   #   "Zurich"',
+    res: 'HTTP/1.1 200 OK\nsmithy-protocol: rpc-v2-cbor\ncontent-type: application/cbor\n\nA2                        # map(2)\n   65 74 65 6D 70 43      #   "tempC"\n   FB 40 32 66 66 66 66   #   18.4\n   67 73 75 6D 6D 61 72 79 #   "summary"\n   77 43 6C 65 61 72 ...  #   "Clear skies …"',
+  },
+  {
+    name: 'grpc',
+    sub: 'RPC · Protobuf',
+    cap: 'gRPC: length-prefixed Protobuf frames over HTTP/2 — ideal for service-to-service calls.',
+    req: 'POST /weather.Weather/GetForecast HTTP/2\ncontent-type: application/grpc+proto\nte: trailers\n\n00 00 00 00 08            # frame: 8 bytes\n0A 06 5A 75 72 69 63 68   #   field 1 "Zurich"',
+    res: 'HTTP/2 200\ncontent-type: application/grpc+proto\n\n00 00 00 00 1E            # frame: 30 bytes\n0D 66 66 93 41            #   tempC = 18.4\n12 17 43 6C 65 61 72 ...  #   summary "Clear …"',
+  },
+];
+
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function hl(code: string): string {
+  const re = /(#[^\n]*)|("(?:[^"\\]|\\.)*")|\b(GET|POST|HTTP|OK|200)\b|([a-zA-Z][\w-]*:)(?=\s)/g;
+  return esc(code).replace(re, (m, comment, str, verb, header) => {
+    if (comment) return `<span style="color:#5c5c6b">${comment}</span>`;
+    if (str) return `<span style="color:#7ee787">${str}</span>`;
+    if (verb) return `<span style="color:#ff7b72">${verb}</span>`;
+    if (header) return `<span style="color:#79c0ff">${header}</span>`;
+    return m;
+  });
+}
+
+const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.res) }));
+---
+
+<div class="psw" data-cycle="4200">
+  <div class="psw__bar">
+    <span class="psw__diamond"></span>
+    <span class="psw__op">GetForecast</span>
+    <span class="psw__meta">handler &amp; client — <span class="psw__ok">unchanged</span></span>
+  </div>
+
+  <div class="psw__tabs" role="tablist">
+    {
+      panels.map((p, i) => (
+        <button
+          type="button"
+          role="tab"
+          class={`psw__tab${i === 0 ? ' is-active' : ''}`}
+          data-idx={i}
+          aria-selected={i === 0 ? 'true' : 'false'}
+        >
+          <span class="psw__tabname">{p.name}</span>
+          <span class="psw__tabsub">{p.sub}</span>
+        </button>
+      ))
+    }
+  </div>
+
+  {
+    panels.map((p, i) => (
+      <div class={`psw__panel${i === 0 ? ' is-active' : ''}`} data-idx={i} hidden={i !== 0}>
+        <p class="psw__cap">{p.cap}</p>
+        <div class="psw__io">
+          <div class="psw__col">
+            <span class="psw__tag psw__tag--req">REQUEST</span>
+            <pre class="psw__code" set:html={p.reqHtml} />
+          </div>
+          <div class="psw__col psw__col--res">
+            <span class="psw__tag psw__tag--res">RESPONSE</span>
+            <pre class="psw__code" set:html={p.resHtml} />
+          </div>
+        </div>
+      </div>
+    ))
+  }
+</div>
+
+<style>
+  .psw {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    background: #0b0b11;
+    border: 1px solid #20202c;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 30px 70px -24px rgba(0, 0, 0, 0.7);
+    width: 100%;
+    color: #bcbccb;
+  }
+
+  /* Title bar */
+  .psw__bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 15px;
+    border-bottom: 1px solid #1b1b25;
+    background: #0e0e15;
+  }
+  .psw__diamond {
+    width: 9px;
+    height: 9px;
+    background: #6d4aff;
+    transform: rotate(45deg);
+    box-shadow: 0 0 12px #6d4aff;
+  }
+  .psw__op {
+    font-size: 12px;
+    color: #c9c9d6;
+  }
+  .psw__meta {
+    margin-left: auto;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: #6f6f80;
+  }
+  .psw__ok {
+    color: #56c267;
+  }
+
+  /* Tabs */
+  .psw__tabs {
+    display: flex;
+    gap: 8px;
+    padding: 12px 15px;
+    border-bottom: 1px solid #17171f;
+    overflow-x: auto;
+  }
+  .psw__tab {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    align-items: flex-start;
+    padding: 8px 14px;
+    border-radius: 9px;
+    cursor: pointer;
+    white-space: nowrap;
+    background: transparent;
+    border: 1px solid transparent;
+    font: inherit;
+    transition: all 0.2s ease;
+  }
+  .psw__tab:hover {
+    background: rgba(109, 74, 255, 0.07);
+  }
+  .psw__tab.is-active {
+    background: rgba(109, 74, 255, 0.12);
+    border-color: #4a3a8a;
+  }
+  .psw__tabname {
+    font-size: 13px;
+    font-weight: 700;
+    color: #9a9aab;
+  }
+  .psw__tab.is-active .psw__tabname {
+    color: #cdbcff;
+  }
+  .psw__tabsub {
+    font-size: 10.5px;
+    color: #6a6a7c;
+    letter-spacing: 0.02em;
+  }
+
+  /* Panels */
+  .psw__panel {
+    animation: pswFade 0.3s ease;
+  }
+  .psw__panel[hidden] {
+    display: none;
+  }
+  @keyframes pswFade {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .psw__panel {
+      animation: none;
+    }
+  }
+  .psw__cap {
+    margin: 0;
+    padding: 13px 15px 4px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #9a9aab;
+  }
+  .psw__io {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .psw__col {
+    min-width: 0;
+    padding: 14px 15px;
+  }
+  .psw__col--res {
+    border-left: 1px solid #17171f;
+  }
+  .psw__tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    padding: 4px 9px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+  }
+  .psw__tag--req {
+    color: #e0996f;
+    background: rgba(217, 119, 87, 0.16);
+  }
+  .psw__tag--res {
+    color: #56c267;
+    background: rgba(86, 194, 103, 0.14);
+  }
+  .psw__code {
+    margin: 0;
+    overflow-x: auto;
+    max-height: 240px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #bcbccb;
+    white-space: pre;
+  }
+  .psw__code::-webkit-scrollbar {
+    height: 7px;
+    width: 7px;
+  }
+  .psw__code::-webkit-scrollbar-thumb {
+    background: #2c2c3a;
+    border-radius: 4px;
+  }
+
+  @media (max-width: 40rem) {
+    .psw__io {
+      grid-template-columns: 1fr;
+    }
+    .psw__col--res {
+      border-left: none;
+      border-top: 1px solid #17171f;
+    }
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.psw').forEach((root) => {
+    const tabs = Array.from(root.querySelectorAll<HTMLElement>('.psw__tab'));
+    const panels = Array.from(root.querySelectorAll<HTMLElement>('.psw__panel'));
+    const interval = Number(root.dataset.cycle || '4200');
+    let idx = 0;
+    let paused = false;
+
+    function show(n: number) {
+      idx = n;
+      tabs.forEach((t, i) => {
+        const on = i === n;
+        t.classList.toggle('is-active', on);
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      panels.forEach((p, i) => {
+        const on = i === n;
+        p.classList.toggle('is-active', on);
+        if (on) p.removeAttribute('hidden');
+        else p.setAttribute('hidden', '');
+      });
+    }
+
+    tabs.forEach((t, i) =>
+      t.addEventListener('click', () => {
+        paused = true;
+        show(i);
+      })
+    );
+    root.addEventListener('mouseenter', () => (paused = true));
+    root.addEventListener('mouseleave', () => (paused = false));
+
+    if (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setInterval(() => {
+        if (!paused) show((idx + 1) % tabs.length);
+      }, interval);
+    }
+  });
+</script>
