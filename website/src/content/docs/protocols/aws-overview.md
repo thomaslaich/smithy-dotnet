@@ -50,7 +50,7 @@ Callers provide the endpoint, signing service name, region, and credentials
 provider. This is enough for LocalStack examples and narrow smoke tests, but it
 is not a production AWS auth stack.
 
-See [Authentication](/smithy-dotnet/guides/authentication/) for configuration
+See [Authentication](/smithy-dotnet/guides/client-configuration/authentication/) for configuration
 details and current limitations.
 
 ## AWS JSON Is Client-Only
