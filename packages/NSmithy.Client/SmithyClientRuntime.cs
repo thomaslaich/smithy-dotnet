@@ -5,13 +5,15 @@ namespace NSmithy.Client;
 public sealed class SmithyClientRuntime(
     IHttpTransport transport,
     IEnumerable<IClientInterceptor>? interceptors = null,
-    IEnumerable<ISmithyClientMiddleware>? middlewares = null
+    IEnumerable<ISmithyClientMiddleware>? middlewares = null,
+    SmithyRetryStrategy? retryStrategy = null
 )
 {
     private readonly IHttpTransport transport =
         transport ?? throw new ArgumentNullException(nameof(transport));
     private readonly IReadOnlyList<IClientInterceptor> interceptors = [.. interceptors ?? []];
     private readonly IReadOnlyList<ISmithyClientMiddleware> middlewares = [.. middlewares ?? []];
+    private readonly SmithyRetryStrategy? retryStrategy = retryStrategy;
 
     public async Task<TOutput> InvokeAsync<TInput, TOutput>(
         string serviceName,
@@ -126,6 +128,68 @@ public sealed class SmithyClientRuntime(
         CancellationToken cancellationToken
     )
     {
+        for (var attempt = 1; ; attempt++)
+        {
+            context.Set(SmithyContextKeys.Attempt, attempt);
+            var attemptRequest = await ApplyRequestInterceptorsAsync(
+                    context,
+                    CloneRequest(request),
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+
+            var operationRequest = new SmithyOperationRequest(
+                serviceName,
+                operationName,
+                attemptRequest
+            );
+            var operationResponse = await BuildPipeline(0)
+                .Invoke(operationRequest, cancellationToken)
+                .ConfigureAwait(false);
+            var response = operationResponse.Response;
+
+            for (var i = interceptors.Count - 1; i >= 0; i--)
+            {
+                interceptors[i].OnAfterTransmit(context, response);
+            }
+
+            if (
+                retryStrategy is not null
+                && attempt < retryStrategy.MaxAttempts
+                && request.StreamingContent is null
+                && retryStrategy.ShouldRetry(response)
+            )
+            {
+                await retryStrategy.DelayAsync(attempt, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            var isError = isErrorResponse?.Invoke(response) ?? (int)response.StatusCode >= 400;
+            if (!isError)
+            {
+                return response;
+            }
+
+            if (errorDeserializer is not null)
+            {
+                var error = await errorDeserializer(response, cancellationToken)
+                    .ConfigureAwait(false);
+                if (error is not null)
+                {
+                    throw error;
+                }
+            }
+
+            throw new SmithyClientException(response.StatusCode, response.ReasonPhrase);
+        }
+    }
+
+    private async Task<SmithyHttpRequest> ApplyRequestInterceptorsAsync(
+        SmithyContext context,
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken
+    )
+    {
         foreach (var interceptor in interceptors)
         {
             request = await interceptor
@@ -140,33 +204,31 @@ public sealed class SmithyClientRuntime(
                 .ConfigureAwait(false);
         }
 
-        var operationRequest = new SmithyOperationRequest(serviceName, operationName, request);
-        var operationResponse = await BuildPipeline(0)
-            .Invoke(operationRequest, cancellationToken)
-            .ConfigureAwait(false);
-        var response = operationResponse.Response;
+        return request;
+    }
 
-        for (var i = interceptors.Count - 1; i >= 0; i--)
+    private static SmithyHttpRequest CloneRequest(SmithyHttpRequest request)
+    {
+        var clone = new SmithyHttpRequest(request.Method, request.RequestUri)
         {
-            interceptors[i].OnAfterTransmit(context, response);
+            Content = request.Content,
+            StreamingContent = request.StreamingContent,
+            StreamingContentLength = request.StreamingContentLength,
+            ExpectStreamingResponse = request.ExpectStreamingResponse,
+            ContentType = request.ContentType,
+        };
+
+        foreach (var header in request.Headers)
+        {
+            clone.Headers[header.Key] = header.Value;
         }
 
-        var isError = isErrorResponse?.Invoke(response) ?? (int)response.StatusCode >= 400;
-        if (!isError)
+        foreach (var header in request.ContentHeaders)
         {
-            return response;
+            clone.ContentHeaders[header.Key] = header.Value;
         }
 
-        if (errorDeserializer is not null)
-        {
-            var error = await errorDeserializer(response, cancellationToken).ConfigureAwait(false);
-            if (error is not null)
-            {
-                throw error;
-            }
-        }
-
-        throw new SmithyClientException(response.StatusCode, response.ReasonPhrase);
+        return clone;
     }
 
     private SmithyOperationNext BuildPipeline(int index)

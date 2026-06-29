@@ -192,7 +192,8 @@ public final class ClientGenerator implements Runnable {
                           + " HttpClientTransport(httpClient, endpoint),"
                           + " SmithyAuthSchemeResolver.ResolveInterceptors(endpoint, $L,"
                           + " ModeledAuthSchemes, config.AuthSchemes, config.Interceptors),"
-                          + " config.Middleware);",
+                          + " config.Middleware,"
+                          + " config.RetryStrategy);",
                       serviceSchema);
                 }
                 if (wiresEventStreamOperations) {
@@ -238,7 +239,8 @@ public final class ClientGenerator implements Runnable {
                           + " HttpClientTransport(httpClient, endpoint),"
                           + " SmithyAuthSchemeResolver.ResolveInterceptors(endpoint, $L,"
                           + " ModeledAuthSchemes, config.AuthSchemes, config.Interceptors),"
-                          + " config.Middleware);",
+                          + " config.Middleware,"
+                          + " config.RetryStrategy);",
                       serviceSchema);
                 }
                 if (wiresEventStreamOperations) {

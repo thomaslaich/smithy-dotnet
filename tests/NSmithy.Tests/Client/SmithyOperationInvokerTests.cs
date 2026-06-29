@@ -210,6 +210,153 @@ public sealed class SmithyOperationInvokerTests
         );
     }
 
+    [Fact]
+    public async Task RuntimeCanRetryTransientResponses()
+    {
+        var transport = new SequenceTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.InternalServerError,
+                "Internal Server Error",
+                [],
+                EmptyHeaders,
+                EmptyHeaders
+            ),
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            retryStrategy: new SmithyRetryStrategy(maxAttempts: 2)
+        );
+
+        var output = await runtime.InvokeAsync(
+            "Weather",
+            "GetForecast",
+            new TextProtocol(),
+            "input",
+            cancellationToken: CancellationToken.None
+        );
+
+        Assert.Equal("output", output);
+        Assert.Equal(2, transport.Attempts);
+    }
+
+    [Fact]
+    public async Task RuntimeRunsRequestInterceptorsForEachRetryAttempt()
+    {
+        List<int> attempts = [];
+        var transport = new SequenceTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.InternalServerError,
+                "Internal Server Error",
+                [],
+                EmptyHeaders,
+                EmptyHeaders
+            ),
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            [new AttemptRecordingInterceptor(attempts)],
+            retryStrategy: new SmithyRetryStrategy(maxAttempts: 2)
+        );
+
+        await runtime.InvokeAsync(
+            "Weather",
+            "GetForecast",
+            new TextProtocol(),
+            "input",
+            cancellationToken: CancellationToken.None
+        );
+
+        Assert.Equal([1, 2], attempts);
+    }
+
+    [Fact]
+    public async Task RuntimeStartsEachRetryAttemptFromSerializedRequest()
+    {
+        var transport = new SequenceTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.InternalServerError,
+                "Internal Server Error",
+                [],
+                EmptyHeaders,
+                EmptyHeaders
+            ),
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            [new QueryAppendingInterceptor()],
+            retryStrategy: new SmithyRetryStrategy(maxAttempts: 2)
+        );
+
+        await runtime.InvokeAsync(
+            "Weather",
+            "GetForecast",
+            new TextProtocol(),
+            "input",
+            cancellationToken: CancellationToken.None
+        );
+
+        Assert.Equal(
+            ["/input?attempt=1", "/input?attempt=2"],
+            transport.Requests.Select(r => r.RequestUri)
+        );
+    }
+
+    [Fact]
+    public async Task RuntimeDoesNotRetryStreamingRequestBodies()
+    {
+        var transport = new SequenceTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.InternalServerError,
+                "Internal Server Error",
+                [],
+                EmptyHeaders,
+                EmptyHeaders
+            ),
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            retryStrategy: new SmithyRetryStrategy(maxAttempts: 2)
+        );
+        var request = new SmithyHttpRequest(HttpMethod.Post, "/upload")
+        {
+            StreamingContent = new MemoryStream("hello"u8.ToArray()),
+        };
+
+        await Assert.ThrowsAsync<SmithyClientException>(() =>
+            runtime.InvokeAsync("Weather", "Upload", request)
+        );
+
+        Assert.Equal(1, transport.Attempts);
+    }
+
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> EmptyHeaders { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
@@ -247,6 +394,8 @@ public sealed class SmithyOperationInvokerTests
     {
         public int Attempts { get; private set; }
 
+        public List<SmithyHttpRequest> Requests { get; } = [];
+
         public Task<SmithyHttpResponse> SendAsync(
             SmithyHttpRequest request,
             CancellationToken cancellationToken = default
@@ -254,6 +403,7 @@ public sealed class SmithyOperationInvokerTests
         {
             var index = Math.Min(Attempts, responses.Length - 1);
             Attempts++;
+            Requests.Add(request);
             return Task.FromResult(responses[index]);
         }
     }
@@ -306,6 +456,41 @@ public sealed class SmithyOperationInvokerTests
         public void OnAfterExecution(SmithyContext context)
         {
             calls.Add($"{name}:after-execution");
+        }
+    }
+
+    private sealed class AttemptRecordingInterceptor(List<int> attempts) : IClientInterceptor
+    {
+        public ValueTask<SmithyHttpRequest> OnBeforeSigningAsync(
+            SmithyContext context,
+            SmithyHttpRequest request,
+            CancellationToken cancellationToken = default
+        )
+        {
+            attempts.Add(context.Get(SmithyContextKeys.Attempt));
+            request.Headers["x-smithy-attempt"] =
+            [
+                context.Get(SmithyContextKeys.Attempt).ToString(),
+            ];
+            return ValueTask.FromResult(request);
+        }
+    }
+
+    private sealed class QueryAppendingInterceptor : IClientInterceptor
+    {
+        public ValueTask<SmithyHttpRequest> OnBeforeTransmitAsync(
+            SmithyContext context,
+            SmithyHttpRequest request,
+            CancellationToken cancellationToken = default
+        )
+        {
+            var separator = request.RequestUri.Contains('?', StringComparison.Ordinal) ? '&' : '?';
+            return ValueTask.FromResult(
+                new SmithyHttpRequest(
+                    request.Method,
+                    $"{request.RequestUri}{separator}attempt={context.Get(SmithyContextKeys.Attempt)}"
+                )
+            );
         }
     }
 
