@@ -38,7 +38,13 @@ export default defineConfig({
 			editLink: {
 				baseUrl: 'https://github.com/thomaslaich/smithy-dotnet/edit/main/website/',
 			},
+			// Shared code-block styling so Expressive Code blocks and the custom
+			// TypeHintCode blocks render identically (see src/styles/code.css).
+			customCss: ['./src/styles/code.css'],
 			expressiveCode: {
+				// Match TypeHintCode's highlighter (github-dark / github-light) so
+				// token colours and code backgrounds are identical across both.
+				themes: ['github-dark', 'github-light'],
 				shiki: {
 					langs: [smithyGrammar],
 				},

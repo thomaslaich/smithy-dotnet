@@ -1,0 +1,67 @@
+/*
+ * Unified code-block styling.
+ *
+ * Two code renderers exist on this site: Expressive Code (the `<Code>` /
+ * fenced-code component, used everywhere) and the custom TypeHintCode component
+ * (the landing page's C# blocks with type tooltips). Out of the box they look
+ * different — EC uses a square frame with a floating filename "tab", while
+ * TypeHintCode uses a rounded frame with a flat filename bar.
+ *
+ * These variables are the single source of truth for both; the rules below
+ * restyle EC's frame to match TypeHintCode (rounded, bordered, flat header bar).
+ */
+:root {
+	--code-border: var(--sl-color-gray-5);
+	--code-radius: 0.5rem;
+	--code-title-bg: #eaeef2;
+	--code-bg: #f6f8fa;
+}
+:root[data-theme='dark'] {
+	--code-title-bg: #2d333b;
+	--code-bg: #24292e;
+}
+
+/* ── Expressive Code: frame → bordered, rounded card ───────────────────────── */
+.expressive-code .frame {
+	box-shadow: none;
+	border: 1px solid var(--code-border);
+	border-radius: var(--code-radius);
+}
+.expressive-code .frame pre {
+	background: var(--code-bg);
+	border-radius: var(--code-radius);
+}
+.expressive-code .frame.has-title pre,
+.expressive-code .frame.is-terminal pre {
+	border-radius: 0 0 var(--code-radius) var(--code-radius);
+}
+
+/* ── Expressive Code: filename tab → flat full-width header bar ─────────────── */
+.expressive-code .frame.has-title:not(.is-terminal) .header {
+	background: var(--code-title-bg);
+	border-bottom: 1px solid var(--code-border);
+}
+.expressive-code .frame.has-title:not(.is-terminal) .header::before {
+	display: none; /* EC's tab-bar border box */
+}
+.expressive-code .frame.has-title:not(.is-terminal) .title {
+	margin: 0;
+	padding: 0.5rem 1rem;
+	background: transparent;
+	border: 0;
+	border-radius: 0;
+	color: var(--sl-color-gray-2);
+	font-size: var(--sl-text-xs);
+	font-family: var(
+		--__sl-font-mono,
+		ui-monospace,
+		'Cascadia Code',
+		'Source Code Pro',
+		Menlo,
+		Consolas,
+		monospace
+	);
+}
+.expressive-code .frame.has-title:not(.is-terminal) .title::after {
+	display: none; /* EC's active-tab indicator line */
+}
