@@ -49,9 +49,17 @@ export default defineConfig({
 					items: [
 						{ label: 'Introduction', slug: 'getting-started/introduction' },
 						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
-						{ label: 'Client Configuration', slug: 'guides/client-configuration' },
-						{ label: 'Dependency Injection', slug: 'guides/dependency-injection' },
-						{ label: 'Authentication', slug: 'guides/authentication' },
+						{
+							label: 'Client Configuration',
+							items: [
+								{ label: 'Overview', slug: 'guides/client-configuration' },
+								{ label: 'Authentication', slug: 'guides/client-configuration/authentication' },
+								{ label: 'Retry', slug: 'guides/client-configuration/retry' },
+								{ label: 'Interceptors', slug: 'guides/client-configuration/interceptors' },
+								{ label: 'Transport', slug: 'guides/client-configuration/transport' },
+								{ label: 'Dependency Injection', slug: 'guides/client-configuration/dependency-injection' },
+							],
+						},
 						{ label: 'Distributing Contracts', slug: 'guides/distributing-contracts' },
 						{ label: 'Endpoint Documentation', slug: 'guides/endpoint-documentation' },
 					],

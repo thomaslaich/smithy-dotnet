@@ -108,7 +108,7 @@ Console.WriteLine(city.Name);
 ```
 
 Explicit SigV4 signing exists in early preview; see
-[Authentication](/smithy-dotnet/guides/authentication/). NSmithy does not yet
+[Authentication](/smithy-dotnet/guides/client-configuration/authentication/). NSmithy does not yet
 provide AWS SDK-style endpoint resolution, credential chains, retries, or
 pagination helpers. Use the official AWS SDK for .NET for production calls to
 AWS services.
