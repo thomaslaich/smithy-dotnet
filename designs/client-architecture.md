@@ -55,7 +55,7 @@ The public constructors keep transport ownership explicit:
 ```csharp
 new WeatherClient(endpoint, config);      // client owns HttpClient
 new WeatherClient(httpClient, config);    // caller owns HttpClient
-new WeatherClient(invoker, config);       // caller owns full execution pipeline
+new WeatherClient(runtime, config);       // caller owns full execution pipeline
 ```
 
 `Endpoint` lives on config internally. The endpoint convenience constructor is

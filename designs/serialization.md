@@ -163,13 +163,13 @@ var request = getForecastProtocol.SerializeRequest(
 ```
 
 Generated clients bind protocols once in static fields. Operation methods stay
-protocol-agnostic: they ask the operation protocol to write the request, send it
-through the invoker, then ask the operation protocol to read the response:
+protocol-agnostic: they pass the bound operation protocol and typed input to the
+shared client runtime:
 
 ```csharp
 public sealed class WeatherServiceClient
 {
-    private readonly SmithyOperationInvoker invoker;
+    private readonly SmithyClientRuntime runtime;
 
     private static readonly IServiceProtocol ServiceProtocol =
         RestJsonProtocol.ForService(WeatherServiceSchema.Schema);
@@ -181,19 +181,16 @@ public sealed class WeatherServiceClient
         GetForecastInput input,
         CancellationToken cancellationToken = default)
     {
-        var request = GetForecastProtocol.SerializeRequest(input);
-
-        var response = await invoker
+        return await runtime
             .InvokeAsync(
                 "WeatherService",
                 "GetForecast",
-                request,
+                GetForecastProtocol,
+                input,
+                null,
                 DeserializeGetForecastErrorAsync,
-                GetForecastProtocol.IsErrorResponse,
                 cancellationToken)
             .ConfigureAwait(false);
-
-        return GetForecastProtocol.DeserializeResponse(response);
     }
 }
 ```
@@ -473,19 +470,15 @@ public async Task<GreetingWithErrorsOutput> GreetingWithErrorsAsync(
     CancellationToken cancellationToken = default)
 {
     ArgumentNullException.ThrowIfNull(input);
-    var request = GreetingWithErrorsProtocol.SerializeRequest(input);
-
-    var response = await invoker
-        .InvokeAsync(
+    return await runtime.InvokeAsync(
             "RpcV2Protocol",
             "GreetingWithErrors",
-            request,
+            GreetingWithErrorsProtocol,
+            input,
+            null,
             DeserializeGreetingWithErrorsErrorAsync,
-            GreetingWithErrorsProtocol.IsErrorResponse,
             cancellationToken)
         .ConfigureAwait(false);
-
-    return GreetingWithErrorsProtocol.DeserializeResponse(response);
 }
 ```
 
