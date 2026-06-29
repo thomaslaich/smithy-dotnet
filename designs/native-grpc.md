@@ -143,7 +143,7 @@ The full unary `alloy.proto#grpc` surface now works, verified end-to-end by the
 - **Native client codegen.** `ClientGenerator` emits a single `{Service}Client`
   whose protocol is chosen through `{Service}ClientConfig`
   (`new {Service}Client(endpoint, new() { Protocol = new GrpcProtocol() })`,
-  defaulting to the primary declared protocol) through the *same* invoker/protocol
+  defaulting to the primary declared protocol) through the same runtime/protocol
   machinery as the rpc client (gRPC is a `ProtocolSupport.Kind`), bound to
   `GrpcProtocol` over an HTTP/2 `HttpClient` — no `GrpcChannel`/`Grpc.Net.Client`.
   The client configures HTTP/2 automatically when it owns the `HttpClient`. For a

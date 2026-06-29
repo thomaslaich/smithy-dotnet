@@ -59,7 +59,7 @@ interceptors, retry, and future client knobs:
 new WeatherClient(endpoint);                                  // default config
 new LibraryServiceClient(endpoint, new() { Protocol = new GrpcProtocol() });
 new WeatherClient(httpClient, config);                        // endpoint from config.Endpoint ?? BaseAddress
-new WeatherClient(invoker, config);                           // custom transport/pipeline/testing
+new WeatherClient(runtime, config);                           // custom transport/interceptors/testing
 ```
 
 The generated `{Service}ClientConfig : SmithyClientConfig` is the canonical
@@ -111,9 +111,9 @@ services.AddHttpClient<IWeatherClient, WeatherClient>(c =>
 ```
 
 Consumers who need a fully custom transport instead implement `IHttpTransport`,
-build a `SmithyOperationInvoker`, and pass it to the invoker constructor. That
-constructor is intentionally lower-level: the invoker already owns the runtime
-transport path, so generated-client config auth/interceptors do not apply there.
+build a `SmithyClientRuntime`, and pass it to the runtime constructor. That
+constructor is intentionally lower-level: the runtime already owns the transport
+path, so generated-client config auth/interceptors do not apply there.
 
 ## URI Construction
 

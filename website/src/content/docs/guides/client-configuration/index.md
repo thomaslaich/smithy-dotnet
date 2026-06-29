@@ -58,7 +58,7 @@ The public constructors differ mainly by who owns the HTTP transport:
 ```csharp
 new WeatherClient(endpoint, config);      // normal direct construction; endpoint wins over config.Endpoint
 new WeatherClient(httpClient, config);    // you own the HttpClient; endpoint from config.Endpoint ?? BaseAddress
-new WeatherClient(invoker, config);       // you own the lower-level runtime path
+new WeatherClient(runtime, config);       // you own the lower-level runtime path
 ```
 
 `config` is optional on all public constructors.
@@ -69,12 +69,12 @@ Keep the constructor choice simple:
 - Use the generated `Add{Service}Client` helper for dependency injection.
 - Use the `HttpClient` constructor only when something else already owns and
   configures the `HttpClient`.
-- Use the invoker constructor only for custom transports and low-level tests.
+- Use the runtime constructor only for custom transports and low-level tests.
 
 ## Lifetime
 
 The client implements `IDisposable`. When the client creates the `HttpClient`
-itself, `Dispose` releases it. When you supply an `HttpClient` or invoker,
+itself, `Dispose` releases it. When you supply an `HttpClient` or runtime,
 `Dispose` is a no-op, so the transport you own is never closed:
 
 ```csharp
@@ -93,6 +93,6 @@ For a long-lived application, prefer registering the client once with
 - [Interceptors](/smithy-dotnet/guides/client-configuration/interceptors/)
   covers client execution hooks.
 - [Transport](/smithy-dotnet/guides/client-configuration/transport/) covers
-  endpoint, `HttpClient`, and low-level invoker ownership.
+  endpoint, `HttpClient`, and low-level runtime ownership.
 - [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/)
   covers `Add{Service}Client`, `IHttpClientFactory`, and typed-client lifetime.
