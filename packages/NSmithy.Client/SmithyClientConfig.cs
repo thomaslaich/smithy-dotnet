@@ -22,6 +22,9 @@ public class SmithyClientConfig
     /// <summary>Extra middleware prepended to the operation pipeline.</summary>
     public IList<ISmithyClientMiddleware> Middleware { get; } = [];
 
+    /// <summary>Protocol-agnostic hooks for observing and modifying client execution.</summary>
+    public IList<IClientInterceptor> Interceptors { get; } = [];
+
     /// <summary>
     /// Configured auth schemes. The resolver installs the first scheme the service models for which
     /// a matching scheme is configured here; an empty list means anonymous access.

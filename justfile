@@ -55,6 +55,8 @@ refresh-examples:
     rm -rf examples/grpc-streaming/contracts/obj
     rm -rf examples/grpc-streaming/server/obj
     rm -rf examples/grpc-streaming/client/obj
+    rm -rf examples/grpc-streaming/grpcnet-server/obj
+    rm -rf examples/grpc-streaming/grpcnet-client/obj
     rm -rf examples/polyglot/dotnet/obj
     dotnet clean examples/simple-rest-json/server/NSmithy.Examples.SimpleRestJson.Server.csproj --verbosity minimal
     dotnet clean examples/simple-rest-json/client/NSmithy.Examples.SimpleRestJson.Client.csproj --verbosity minimal
@@ -84,13 +86,16 @@ refresh-examples:
     dotnet restore examples/grpc-streaming/contracts/Streaming.Contracts.csproj --no-cache --force
     dotnet restore examples/grpc-streaming/server/NSmithy.Examples.GrpcStreaming.Server.csproj --no-cache --force
     dotnet restore examples/grpc-streaming/client/NSmithy.Examples.GrpcStreaming.Client.csproj --no-cache --force
+    dotnet restore examples/grpc-streaming/grpcnet-server/NSmithy.Examples.GrpcStreaming.GrpcNetServer.csproj --no-cache --force
+    dotnet restore examples/grpc-streaming/grpcnet-client/NSmithy.Examples.GrpcStreaming.GrpcNetClient.csproj --no-cache --force
     dotnet restore examples/polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj --no-cache --force
     # gRPC examples need two build passes: the first generates the .proto file via the
     # smithy build, the second picks it up via the static <Protobuf> glob and compiles
     # it with Grpc.Tools. (MSBuild evaluates Protobuf_Compile's item condition at
     # graph-build time, before dynamic items added inside target bodies are visible.)
-    dotnet build examples/grpc/server/NSmithy.Examples.Grpc.Server.csproj --verbosity minimal 2>/dev/null || true
-    dotnet build examples/grpc/client/NSmithy.Examples.Grpc.Client.csproj --verbosity minimal 2>/dev/null || true
+    dotnet build examples/grpc/server/NSmithy.Examples.Grpc.Server.csproj --verbosity minimal >/dev/null 2>&1 || true
+    dotnet build examples/grpc/client/NSmithy.Examples.Grpc.Client.csproj --verbosity minimal >/dev/null 2>&1 || true
+    dotnet build examples/grpc-streaming/grpc-streaming.slnx --verbosity minimal >/dev/null 2>&1 || true
     dotnet build examples/grpc-streaming/grpc-streaming.slnx --verbosity minimal
 
 ci: check-format build test pack
