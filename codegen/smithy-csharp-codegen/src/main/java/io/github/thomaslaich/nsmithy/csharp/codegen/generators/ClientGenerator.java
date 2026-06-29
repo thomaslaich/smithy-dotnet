@@ -129,7 +129,7 @@ public final class ClientGenerator implements Runnable {
             writer.write("private readonly SmithyEventStreamOperationInvoker eventStreamInvoker;");
           }
           // Only set when the client created the HttpClient itself (the endpoint ctor); null when
-          // the caller supplied an HttpClient or invoker, so Dispose never touches what it doesn't
+          // the caller supplied an HttpClient or runtime, so Dispose never touches what it doesn't
           // own.
           if (needsHttpClient) {
             writer.write("private readonly System.Net.Http.HttpClient? ownedHttpClient;");
@@ -254,7 +254,7 @@ public final class ClientGenerator implements Runnable {
           writer.write("");
 
           if (!wiresEventStreamOperations) {
-            // Constructor: bring your own runtime (custom transport/pipeline, DI, testing). The
+            // Constructor: bring your own runtime (custom transport/interceptors, DI, testing). The
             // runtime already owns the transport/interceptor pipeline, so config.AuthSchemes and
             // config.Interceptors do not apply here; only Protocol and IdempotencyTokenProvider are
             // read.

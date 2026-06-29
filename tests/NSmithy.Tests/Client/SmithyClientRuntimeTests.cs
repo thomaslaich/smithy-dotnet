@@ -6,7 +6,7 @@ using NSmithy.Http;
 
 namespace NSmithy.Tests.Client;
 
-public sealed class SmithyOperationInvokerTests
+public sealed class SmithyClientRuntimeTests
 {
     [Fact]
     public async Task InvokeAsyncThrowsDeserializedErrorForNonSuccessResponse()
@@ -20,10 +20,10 @@ public sealed class SmithyOperationInvokerTests
                 EmptyHeaders
             )
         );
-        var invoker = new SmithyOperationInvoker(transport);
+        var runtime = new SmithyClientRuntime(transport);
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            invoker.InvokeAsync(
+            runtime.InvokeAsync(
                 "Weather",
                 "GetForecast",
                 new SmithyHttpRequest(HttpMethod.Get, "/forecast"),
@@ -49,10 +49,10 @@ public sealed class SmithyOperationInvokerTests
                 EmptyHeaders
             )
         );
-        var invoker = new SmithyOperationInvoker(transport);
+        var runtime = new SmithyClientRuntime(transport);
 
         var error = await Assert.ThrowsAsync<SmithyClientException>(() =>
-            invoker.InvokeAsync(
+            runtime.InvokeAsync(
                 "Weather",
                 "GetForecast",
                 new SmithyHttpRequest(HttpMethod.Get, "/forecast")

@@ -119,5 +119,5 @@ must configure the `HttpClient` version and policy yourself.
 
 Outside of DI, the generated `{Service}Client` is constructed from a
 direct endpoint argument plus an optional `{Service}ClientConfig`, or from an
-`HttpClient` / invoker plus an optional config. See
+`HttpClient` / runtime plus an optional config. See
 [Client Configuration](/smithy-dotnet/guides/client-configuration/).
