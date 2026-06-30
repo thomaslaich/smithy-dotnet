@@ -5,13 +5,18 @@ namespace NSmithy.Client;
 public sealed class SmithyClientRuntime(
     IHttpTransport transport,
     IEnumerable<IClientInterceptor>? interceptors = null,
-    ISmithyRetryStrategy? retryStrategy = null
+    ISmithyRetryStrategy? retryStrategy = null,
+    Uri? endpoint = null
 )
 {
     private readonly IHttpTransport transport =
         transport ?? throw new ArgumentNullException(nameof(transport));
     private readonly IReadOnlyList<IClientInterceptor> interceptors = [.. interceptors ?? []];
     private readonly ISmithyRetryStrategy? retryStrategy = retryStrategy;
+    private readonly Uri? endpoint =
+        endpoint is null || endpoint.IsAbsoluteUri
+            ? endpoint
+            : throw new ArgumentException("Endpoint must be an absolute URI.", nameof(endpoint));
 
     public async Task<TOutput> InvokeAsync<TInput, TOutput>(
         string serviceName,
@@ -129,9 +134,10 @@ public sealed class SmithyClientRuntime(
         for (var attempt = 1; ; attempt++)
         {
             context.Set(SmithyContextKeys.Attempt, attempt);
+            var resolvedRequest = ApplyEndpoint(CloneRequest(request));
             var attemptRequest = await ApplyRequestInterceptorsAsync(
                     context,
-                    CloneRequest(request),
+                    resolvedRequest,
                     cancellationToken
                 )
                 .ConfigureAwait(false);
@@ -202,9 +208,22 @@ public sealed class SmithyClientRuntime(
         return request;
     }
 
-    private static SmithyHttpRequest CloneRequest(SmithyHttpRequest request)
+    private SmithyHttpRequest ApplyEndpoint(SmithyHttpRequest request)
     {
-        var clone = new SmithyHttpRequest(request.Method, request.RequestUri)
+        if (endpoint is null || IsHttpAbsoluteUri(request.RequestUri))
+        {
+            return request;
+        }
+
+        return CloneRequest(request, ResolveRequestUri(endpoint, request.RequestUri));
+    }
+
+    private static SmithyHttpRequest CloneRequest(SmithyHttpRequest request) =>
+        CloneRequest(request, request.RequestUri);
+
+    private static SmithyHttpRequest CloneRequest(SmithyHttpRequest request, string requestUri)
+    {
+        var clone = new SmithyHttpRequest(request.Method, requestUri)
         {
             Content = request.Content,
             StreamingContent = request.StreamingContent,
@@ -226,11 +245,30 @@ public sealed class SmithyClientRuntime(
         return clone;
     }
 
-    private static SmithyContext CreateContext(string serviceName, string operationName)
+    private static string ResolveRequestUri(Uri endpoint, string requestUri)
+    {
+        var endpointText = endpoint.ToString().TrimEnd('/');
+        var requestText = requestUri.TrimStart('/');
+        return $"{endpointText}/{requestText}";
+    }
+
+    private static bool IsHttpAbsoluteUri(string requestUri)
+    {
+        return Uri.TryCreate(requestUri, UriKind.Absolute, out var uri)
+            && uri.IsAbsoluteUri
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    }
+
+    private SmithyContext CreateContext(string serviceName, string operationName)
     {
         var context = new SmithyContext();
         context.Set(SmithyContextKeys.ServiceName, serviceName);
         context.Set(SmithyContextKeys.OperationName, operationName);
+        if (endpoint is not null)
+        {
+            context.Set(SmithyContextKeys.Endpoint, endpoint);
+        }
+
         return context;
     }
 }

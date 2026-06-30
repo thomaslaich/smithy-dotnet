@@ -189,10 +189,11 @@ public final class ClientGenerator implements Runnable {
                 if (hasUnaryOperations) {
                   writer.write(
                       "this.runtime = new SmithyClientRuntime(new"
-                          + " HttpClientTransport(httpClient, endpoint),"
+                          + " HttpClientTransport(httpClient),"
                           + " SmithyAuthSchemeResolver.Resolve(endpoint, $L,"
                           + " ModeledAuthSchemes, config.AuthSchemes, config.Interceptors),"
-                          + " config.RetryStrategy);",
+                          + " config.RetryStrategy,"
+                          + " endpoint);",
                       serviceSchema);
                 }
                 if (wiresEventStreamOperations) {
@@ -235,10 +236,11 @@ public final class ClientGenerator implements Runnable {
                 if (hasUnaryOperations) {
                   writer.write(
                       "this.runtime = new SmithyClientRuntime(new"
-                          + " HttpClientTransport(httpClient, endpoint),"
+                          + " HttpClientTransport(httpClient),"
                           + " SmithyAuthSchemeResolver.Resolve(endpoint, $L,"
                           + " ModeledAuthSchemes, config.AuthSchemes, config.Interceptors),"
-                          + " config.RetryStrategy);",
+                          + " config.RetryStrategy,"
+                          + " endpoint);",
                       serviceSchema);
                 }
                 if (wiresEventStreamOperations) {
