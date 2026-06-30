@@ -1,14 +1,8 @@
 /*
- * Unified code-block styling.
- *
- * Two code renderers exist on this site: Expressive Code (the `<Code>` /
- * fenced-code component, used everywhere) and the custom TypeHintCode component
- * (the landing page's C# blocks with type tooltips). Out of the box they look
- * different — EC uses a square frame with a floating filename "tab", while
- * TypeHintCode uses a rounded frame with a flat filename bar.
- *
- * These variables are the single source of truth for both; the rules below
- * restyle EC's frame to match TypeHintCode (rounded, bordered, flat header bar).
+ * Code-block styling for the docs (Expressive Code). Restyles EC's default
+ * square frame + floating filename "tab" into a rounded, bordered card with a
+ * flat filename bar. Terminal frames keep their traffic-light dots. The
+ * --code-* variables are the single source of truth.
  */
 :root {
 	--code-border: var(--sl-color-gray-5);
@@ -34,6 +28,13 @@
 .expressive-code .frame.has-title pre,
 .expressive-code .frame.is-terminal pre {
 	border-radius: 0 0 var(--code-radius) var(--code-radius);
+}
+/* Round the header's top corners to match the frame — otherwise the header
+   (e.g. a terminal frame's traffic-light bar) keeps EC's ~1px radius and its
+   square corners overflow the rounded frame. */
+.expressive-code .frame .header {
+	border-top-left-radius: var(--code-radius);
+	border-top-right-radius: var(--code-radius);
 }
 
 /* ── Expressive Code: filename tab → flat full-width header bar ─────────────── */

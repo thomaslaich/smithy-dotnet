@@ -18,6 +18,18 @@ export default defineConfig({
 		starlight({
 			title: 'NSmithy',
 			description: 'Generate C# models, typed HTTP clients, and ASP.NET Core servers from Smithy models.',
+			// Load the landing-page fonts globally so the docs share the same type.
+			head: [
+				{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
+				{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: true } },
+				{
+					tag: 'link',
+					attrs: {
+						rel: 'stylesheet',
+						href: 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap',
+					},
+				},
+			],
 			plugins: [
 				// Emit /llms.txt (curated index) and /llms-full.txt (full docs) for LLM consumption.
 				// https://llmstxt.org · https://github.com/HiDeoo/starlight-llms-txt
@@ -38,9 +50,13 @@ export default defineConfig({
 			editLink: {
 				baseUrl: 'https://github.com/thomaslaich/smithy-dotnet/edit/main/website/',
 			},
-			// Shared code-block styling so Expressive Code blocks and the custom
-			// TypeHintCode blocks render identically (see src/styles/code.css).
-			customCss: ['./src/styles/code.css'],
+			// Replace the default theme dropdown with the landing's sun/moon toggle.
+			components: {
+				ThemeSelect: './src/components/StarlightThemeToggle.astro',
+			},
+			// Shared code-block styling (src/styles/code.css) + landing/docs theme
+			// alignment — fonts and a near-black dark mode (src/styles/docs-theme.css).
+			customCss: ['./src/styles/code.css', './src/styles/docs-theme.css'],
 			expressiveCode: {
 				// Match TypeHintCode's highlighter (github-dark / github-light) so
 				// token colours and code backgrounds are identical across both.

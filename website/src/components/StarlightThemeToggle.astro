@@ -1,0 +1,67 @@
+---
+/**
+ * Overrides Starlight's default ThemeSelect dropdown with a sun/moon button
+ * toggle that matches the landing page's theme switch. Writes the same
+ * `starlight-theme` localStorage key + `data-theme` attribute Starlight uses,
+ * so it stays in sync with the rest of the site.
+ */
+---
+
+<button type="button" class="sl-theme-toggle" aria-label="Toggle dark / light theme"></button>
+
+<script is:inline>
+  (function () {
+    // ︎ forces monochrome text presentation (not a colourful emoji),
+    // matching the landing page's toggle.
+    var moon = '☾︎';
+    var sun = '☀︎';
+    function current() {
+      return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    }
+    function paint() {
+      document.querySelectorAll('.sl-theme-toggle').forEach(function (b) {
+        b.textContent = current() === 'dark' ? moon : sun;
+      });
+    }
+    paint();
+    // Starlight renders ThemeSelect more than once (header + mobile menu), so
+    // this script runs multiple times. Bind the click handler exactly once via
+    // delegation to avoid double-toggling.
+    if (window.__nsmithyThemeToggleBound) return;
+    window.__nsmithyThemeToggleBound = true;
+    document.addEventListener('click', function (e) {
+      var b = e.target && e.target.closest && e.target.closest('.sl-theme-toggle');
+      if (!b) return;
+      var next = current() === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      try {
+        localStorage.setItem('starlight-theme', next);
+      } catch (err) {}
+      paint();
+    });
+  })();
+</script>
+
+<style>
+  .sl-theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.55rem;
+    border: 1px solid var(--sl-color-gray-5);
+    background: var(--sl-color-gray-6, var(--sl-color-bg-nav));
+    color: var(--sl-color-gray-2);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+  .sl-theme-toggle:hover {
+    color: var(--sl-color-white);
+    border-color: var(--sl-color-accent);
+  }
+</style>
