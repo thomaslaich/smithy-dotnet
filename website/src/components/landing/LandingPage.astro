@@ -16,7 +16,7 @@ const repo = 'https://github.com/thomaslaich/smithy-dotnet';
 const logo = '/smithy-dotnet/brand/nsmithy_logo_1.png';
 
 const features = [
-  { t: 'Protocol agnostic', d: 'REST, JSON-RPC, gRPC and CBOR from one model — switch or serve several at once.' },
+  { t: 'Protocol agnostic', d: 'REST, JSON-RPC, CBOR and gRPC from one model — switch or serve several at once.' },
   { t: 'MSBuild-native', d: 'No separate codegen step. MSBuild runs <code>smithy build</code>, adds <code>.g.cs</code> files, and tracks model changes for incremental builds.' },
   { t: 'Type-safe contracts', d: 'Generated handlers and clients are strongly typed C# records. No string URLs, no manual JSON, no runtime surprises.' },
   { t: 'Cross-ecosystem', d: 'The same contract powers clients in Java, Python, TypeScript, Rust, Swift and more — your .NET service stays interoperable.' },
@@ -24,15 +24,18 @@ const features = [
   { t: 'Extensible', d: 'Add protocols and generators through a plugin surface — the model stays the single source of truth.' },
 ];
 
-const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 'Go'];
+// Each pill links to that language's official Smithy code generator.
+const langs = [
+  { name: 'C#', url: repo },
+  { name: 'Java', url: 'https://github.com/smithy-lang/smithy-java' },
+  { name: 'TypeScript', url: 'https://github.com/smithy-lang/smithy-typescript' },
+  { name: 'Python', url: 'https://github.com/smithy-lang/smithy-python' },
+  { name: 'Rust', url: 'https://github.com/smithy-lang/smithy-rs' },
+  { name: 'Swift', url: 'https://github.com/smithy-lang/smithy-swift' },
+  { name: 'Kotlin', url: 'https://github.com/smithy-lang/smithy-kotlin' },
+  { name: 'Go', url: 'https://github.com/aws/smithy-go' },
+];
 ---
-
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link
-  href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
-  rel="stylesheet"
-/>
 
 <script is:inline>
   // Scroll reveal: add `reveal-ready` synchronously (before content paints) so
@@ -86,27 +89,33 @@ const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 
 
   <!-- Hero -->
   <section class="nsl-hero">
-    <div class="nsl-hero-glow" aria-hidden="true"></div>
     <div class="nsl-hero-inner">
-      <a class="nsl-badge reveal" href="https://smithy.io">
-        <span class="nsl-badge-dot"></span>
-        Built on Smithy IDL&nbsp;&nbsp;·&nbsp;&nbsp;smithy.io <span aria-hidden="true">↗</span>
-      </a>
-      <h1 class="nsl-h1 reveal" style="--reveal-delay: 80ms">One contract.<br />Every layer of your&nbsp;service.</h1>
-      <p class="nsl-lead reveal" style="--reveal-delay: 160ms">
-        NSmithy turns a single Smithy model into typed servers, clients, and live documentation for .NET —
-        protocol-agnostic, MSBuild-native, zero hand-written glue.
-      </p>
-      <div class="nsl-hero-actions reveal" style="--reveal-delay: 240ms">
-        <a class="nsl-btn nsl-btn-primary" href={intro}>Get Started</a>
-        <a class="nsl-btn nsl-btn-ghost" href={repo}>View on GitHub</a>
+      <div class="nsl-hero-copy">
+        <a class="nsl-badge reveal" href="https://smithy.io">
+          <span class="nsl-badge-dot"></span>
+          Built on Smithy IDL&nbsp;&nbsp;·&nbsp;&nbsp;smithy.io <span aria-hidden="true">↗</span>
+        </a>
+        <h1 class="nsl-h1 reveal" style="--reveal-delay: 80ms">One contract.<br />Every layer of your&nbsp;service.</h1>
+        <p class="nsl-lead reveal" style="--reveal-delay: 160ms">
+          NSmithy turns a single Smithy model into typed servers, clients, and live documentation for .NET —
+          protocol-agnostic, MSBuild-native, zero hand-written glue.
+        </p>
+        <div class="nsl-hero-actions reveal" style="--reveal-delay: 240ms">
+          <a class="nsl-btn nsl-btn-primary" href={intro}>Get Started</a>
+          <a class="nsl-btn nsl-btn-ghost" href={repo}>View on GitHub</a>
+        </div>
+        <div class="nsl-chips reveal" style="--reveal-delay: 320ms">
+          <span class="nsl-chip">REST</span>
+          <span class="nsl-chip">JSON-RPC</span>
+          <span class="nsl-chip">CBOR-RPC</span>
+          <span class="nsl-chip">gRPC</span>
+          <span class="nsl-chip nsl-chip-ext">+ extensible</span>
+        </div>
       </div>
-      <div class="nsl-chips reveal" style="--reveal-delay: 320ms">
-        <span class="nsl-chip">REST</span>
-        <span class="nsl-chip">JSON-RPC</span>
-        <span class="nsl-chip">CBOR-RPC</span>
-        <span class="nsl-chip">gRPC</span>
-        <span class="nsl-chip nsl-chip-ext">+ extensible</span>
+
+      <div class="nsl-hero-art reveal" style="--reveal-delay: 220ms" aria-hidden="true">
+        <div class="nsl-hero-glow"></div>
+        <img class="nsl-anvil" src={logo} alt="" width="340" height="340" />
       </div>
     </div>
   </section>
@@ -116,7 +125,7 @@ const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 
     <div class="nsl-sechead reveal">
       <div class="nsl-kicker">The workflow</div>
       <h2 class="nsl-h2">From model to runtime in one build</h2>
-      <p class="nsl-secp">Describe operations, shapes, and traits once. MSBuild runs <code>smithy&nbsp;build</code> and emits the server stub, the client, and the docs.</p>
+      <p class="nsl-secp">Describe operations, shapes, and traits once. <code>dotnet&nbsp;build</code> emits the server stub, the client, and the docs.</p>
     </div>
     <div class="reveal"><Walkthrough /></div>
   </section>
@@ -133,10 +142,22 @@ const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 
 
   <!-- Ecosystem -->
   <section id="ecosystem" class="nsl-section nsl-eco">
-    <h2 class="nsl-h2 reveal">Same model. Any language.</h2>
-    <p class="nsl-secp nsl-eco-p reveal" style="--reveal-delay: 80ms">Smithy is the IDL behind AWS's public APIs. One model generates idiomatic clients across the ecosystem.</p>
-    <div class="nsl-langs reveal" style="--reveal-delay: 160ms">
-      {langs.map((l) => <span class={`nsl-lang${l === 'C#' ? ' nsl-lang-on' : ''}`}>{l}</span>)}
+    <div class="nsl-kicker reveal">Cross-ecosystem</div>
+    <h2 class="nsl-h2 reveal" style="--reveal-delay: 80ms">Same model. Any language.</h2>
+    <p class="nsl-secp nsl-eco-p reveal" style="--reveal-delay: 160ms">Smithy is the IDL behind AWS's public APIs. One model generates idiomatic clients across the ecosystem.</p>
+    <div class="nsl-langs reveal" style="--reveal-delay: 240ms">
+      {
+        langs.map((l) => (
+          <a
+            class={`nsl-lang${l.name === 'C#' ? ' nsl-lang-on' : ''}`}
+            href={l.url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {l.name}
+          </a>
+        ))
+      }
     </div>
   </section>
 
@@ -163,19 +184,27 @@ const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 
         <h2 class="nsl-h2 nsl-docs-h">Docs that build themselves</h2>
         <p class="nsl-secp nsl-docs-p">
           No hand-authored spec. <code>app.MapSmithyOpenApi()</code> mounts an interactive Scalar explorer;
-          <code>app.MapSmithyDocs()</code> serves the reference — both straight from the model.
+          <code>app.MapSmithyDocs()</code> serves the Sphinx reference — both generated straight from the model at build time.
         </p>
-        <div class="nsl-docs-routes">
-          <span>→ /openapi</span>
-          <span>→ /docs</span>
-        </div>
       </div>
-      <img
-        class="nsl-docs-img"
-        src="/smithy-dotnet/screenshots/landing-page-scalar-ui.png"
-        alt="Scalar OpenAPI explorer generated from the Smithy model"
-        loading="lazy"
-      />
+      <div class="nsl-docs-shots">
+        <figure class="nsl-shot">
+          <img
+            src="/smithy-dotnet/screenshots/scalar-ui.png"
+            alt="Scalar OpenAPI explorer showing the GetForecast endpoint"
+            loading="lazy"
+          />
+          <figcaption>Scalar explorer&nbsp;·&nbsp;<code>/openapi</code></figcaption>
+        </figure>
+        <figure class="nsl-shot">
+          <img
+            src="/smithy-dotnet/screenshots/smithy-docs.png"
+            alt="Sphinx reference documentation showing the GetForecast operation"
+            loading="lazy"
+          />
+          <figcaption>Sphinx reference&nbsp;·&nbsp;<code>/docs</code></figcaption>
+        </figure>
+      </div>
     </div>
   </section>
 
@@ -418,29 +447,24 @@ const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 
     border-color: var(--accent);
   }
 
-  /* ── Hero ────────────────────────────────────────────────────────────────── */
+  /* ── Hero (asymmetric: copy left, forge motif right) ─────────────────────── */
   .nsl-hero {
     position: relative;
-    padding: 100px 40px 80px;
-    text-align: center;
+    padding: 72px 40px 92px;
     overflow: hidden;
-  }
-  .nsl-hero-glow {
-    position: absolute;
-    top: -180px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 820px;
-    height: 480px;
-    max-width: 100%;
-    background: radial-gradient(closest-side, rgba(109, 74, 255, 0.22), transparent 72%);
-    pointer-events: none;
   }
   .nsl-hero-inner {
     position: relative;
     z-index: 1;
-    max-width: 900px;
+    max-width: 1180px;
     margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    align-items: center;
+    gap: clamp(24px, 4vw, 56px);
+  }
+  .nsl-hero-copy {
+    min-width: 0;
   }
   .nsl-badge {
     display: inline-flex;
@@ -455,7 +479,7 @@ const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 
     background: var(--pill);
     padding: 7px 14px;
     border-radius: 100px;
-    margin-bottom: 30px;
+    margin-bottom: 28px;
   }
   .nsl-badge-dot {
     width: 6px;
@@ -467,32 +491,68 @@ const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 
   .nsl-h1 {
     font-family: 'Space Grotesk', sans-serif;
     font-weight: 600;
-    font-size: clamp(40px, 7.2vw, 68px);
-    line-height: 1.03;
+    font-size: clamp(38px, 5.4vw, 60px);
+    line-height: 1.04;
     letter-spacing: -0.035em;
     color: var(--text);
     margin: 0 0 22px;
   }
   .nsl-lead {
-    font-size: clamp(16.5px, 1.2vw, 20px);
+    font-size: clamp(16px, 1.1vw, 19px);
     line-height: 1.55;
     color: var(--dim);
-    max-width: 630px;
-    margin: 0 auto 36px;
+    max-width: 540px;
+    margin: 0 0 34px;
     text-wrap: pretty;
   }
   .nsl-hero-actions {
     display: flex;
     gap: 14px;
-    justify-content: center;
-    margin-bottom: 42px;
+    justify-content: flex-start;
+    margin-bottom: 34px;
     flex-wrap: wrap;
   }
   .nsl-chips {
     display: flex;
     gap: 10px;
-    justify-content: center;
+    justify-content: flex-start;
     flex-wrap: wrap;
+  }
+
+  /* Hero art: anvil + forge glow + rising sparks */
+  .nsl-hero-art {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 360px;
+  }
+  .nsl-hero-glow {
+    position: absolute;
+    inset: -8%;
+    background: radial-gradient(closest-side, rgba(109, 74, 255, 0.3), transparent 70%);
+    pointer-events: none;
+    z-index: -1;
+  }
+  .nsl-anvil {
+    width: min(330px, 92%);
+    height: auto;
+    filter: drop-shadow(0 22px 50px rgba(109, 74, 255, 0.45));
+    animation: nslFloat 6s ease-in-out infinite;
+  }
+  @keyframes nslFloat {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .nsl-anvil {
+      animation: none;
+    }
   }
   .nsl-chip {
     font-family: 'JetBrains Mono', monospace;
@@ -581,6 +641,13 @@ const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--panel);
+    transition:
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+  .nsl-lang:hover {
+    color: var(--text);
+    border-color: var(--accent);
   }
   .nsl-lang-on {
     color: var(--accentText);
@@ -658,14 +725,33 @@ const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 
   .nsl-docs-routes span {
     color: var(--accentText);
   }
-  .nsl-docs-img {
+  .nsl-docs-shots {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    min-width: 0;
+  }
+  .nsl-shot {
+    margin: 0;
+  }
+  .nsl-shot img {
     width: 100%;
-    height: 300px;
+    height: 200px;
     object-fit: cover;
     object-position: top left;
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: 12px;
     display: block;
+    background: #fff;
+  }
+  .nsl-shot figcaption {
+    margin-top: 9px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    color: var(--dim);
+  }
+  .nsl-shot figcaption code {
+    color: var(--accentText);
   }
 
   /* CTA */
@@ -743,6 +829,29 @@ const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 
 
   /* ── Responsive ──────────────────────────────────────────────────────────── */
   @media (max-width: 60rem) {
+    .nsl-hero-inner {
+      grid-template-columns: 1fr;
+      text-align: center;
+      gap: 4px;
+    }
+    .nsl-hero-copy {
+      order: 2;
+    }
+    .nsl-hero-art {
+      order: 1;
+      min-height: 200px;
+      margin-bottom: 6px;
+    }
+    .nsl-anvil {
+      width: min(180px, 52%);
+    }
+    .nsl-hero-actions,
+    .nsl-chips {
+      justify-content: center;
+    }
+    .nsl-lead {
+      margin-inline: auto;
+    }
     .nsl-cards {
       grid-template-columns: repeat(2, 1fr);
     }
@@ -751,8 +860,8 @@ const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 
       gap: 28px;
       padding: 32px;
     }
-    .nsl-docs-img {
-      height: 240px;
+    .nsl-shot img {
+      height: 180px;
     }
   }
   @media (max-width: 48rem) {
@@ -786,8 +895,8 @@ const langs = ['C#', 'Java', 'TypeScript', 'Python', 'Rust', 'Swift', 'Kotlin', 
   (function () {
     const btn = document.querySelector<HTMLButtonElement>('.nsl-theme');
     if (!btn) return;
-    const sun = '☀';
-    const moon = '☾';
+    const sun = '☀︎';
+    const moon = '☾︎';
     const current = () =>
       document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
     const paint = () => {
