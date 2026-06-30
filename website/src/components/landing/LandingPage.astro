@@ -11,7 +11,9 @@
 import Walkthrough from './Walkthrough.astro';
 import ProtocolSwitch from './ProtocolSwitch.astro';
 
-const intro = 'https://thomaslaich.github.io/smithy-dotnet/getting-started/introduction/';
+// Base-relative so it works on the local dev server and the deployed site
+// (the GitHub Pages base is /smithy-dotnet). `repo` stays absolute — it's external.
+const intro = '/smithy-dotnet/getting-started/introduction/';
 const repo = 'https://github.com/thomaslaich/smithy-dotnet';
 const logo = '/smithy-dotnet/brand/nsmithy_logo_1.png';
 
