@@ -1,0 +1,433 @@
+---
+/**
+ * Walkthrough — "From model to runtime in one build" widget.
+ * Ported from the Claude Design "Walkthrough.dc.html" (forge variant). Source
+ * weather.smithy on the left forges into a tabbed Server/Client/Docs output;
+ * auto-cycles the 3 outputs every 3.6s, pauses on hover. Always-dark panel.
+ */
+const model = `$version: "2"
+namespace example.weather
+
+use aws.protocols#restJson1
+
+@restJson1
+service Weather {
+    version: "2024-01-01"
+    operations: [GetForecast]
+}
+
+@readonly
+@http(method: "GET", uri: "/forecast/{city}")
+operation GetForecast {
+    input := {
+        @required
+        @httpLabel
+        city: String
+    }
+    output := {
+        @required
+        tempC: Float
+        summary: String
+    }
+}`;
+
+type Tab = { label: string; file: string; cap: string; code: string };
+const tabs: Tab[] = [
+  {
+    label: 'Server',
+    file: 'WeatherHandler.cs',
+    cap: 'Fill in the typed handler, then register and map it — routing, serialization, and docs are wired for you.',
+    code: `using Example.Weather; // generated
+
+public class WeatherHandler : IWeatherHandler
+{
+    public Task<GetForecastOutput> GetForecastAsync(
+        GetForecastInput input,
+        CancellationToken ct = default)
+    {
+        return Task.FromResult(new GetForecastOutput(
+            tempC: 18.4f,
+            summary: $"Clear skies over {input.City}"));
+    }
+}
+
+// register the handler, map the routes + docs
+builder.Services.AddWeatherHandler<WeatherHandler>();
+app.MapWeatherHttp();     // REST routes -> /forecast/{city}
+app.MapSmithyOpenApi();   // Scalar UI   -> /openapi
+app.MapSmithyDocs();      // Sphinx docs -> /docs`,
+  },
+  {
+    label: 'Client',
+    file: 'Program.cs',
+    cap: 'A strongly-typed async client — no string URLs, no manual JSON, no reflection.',
+    code: `using Example.Weather; // generated
+
+IWeatherClient client = new WeatherClient(endpoint);
+
+var forecast = await client.GetForecastAsync(
+    new GetForecastInput(City: "Zurich"));
+
+Console.WriteLine(forecast.Summary);
+// Clear skies over Zurich`,
+  },
+];
+
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function hl(code: string, lang: 'smithy' | 'csharp'): string {
+  const kw =
+    lang === 'smithy'
+      ? ['version', 'namespace', 'service', 'operation', 'use', 'metadata', 'structure', 'enum', 'list', 'map', 'apply', 'resource']
+      : ['public', 'private', 'class', 'new', 'return', 'using', 'namespace', 'await', 'async', 'var', 'void', 'default', 'record', 'interface', 'this', 'null', 'true', 'false', 'static'];
+  const types =
+    lang === 'smithy'
+      ? ['String', 'Float', 'Integer', 'Boolean', 'Long', 'Double', 'Timestamp', 'Blob', 'Document']
+      : ['Task', 'CancellationToken', 'String', 'Float', 'Console', 'IWeatherClient', 'WeatherClient', 'GetForecastInput', 'GetForecastOutput', 'IWeatherHandler', 'WeatherHandler'];
+  const re = /(\/\/[^\n]*)|("(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)|(@[A-Za-z][\w.#]*|\$[a-z]+)|\b([A-Za-z_][A-Za-z0-9_]*)\b/g;
+  return esc(code).replace(re, (m, comment, str, ann, word) => {
+    if (comment) return `<span style="color:#6b7280">${comment}</span>`;
+    if (str) return `<span style="color:#7ee787">${str}</span>`;
+    if (ann) return `<span style="color:#d2a8ff">${ann}</span>`;
+    if (word) {
+      if (kw.indexOf(word) >= 0) return `<span style="color:#ff7b72">${word}</span>`;
+      if (types.indexOf(word) >= 0) return `<span style="color:#79c0ff">${word}</span>`;
+    }
+    return m;
+  });
+}
+
+const modelHtml = hl(model, 'smithy');
+const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
+---
+
+<div class="wt" data-cycle="3600">
+  <div class="wt__bar">
+    <span class="wt__diamond"></span>
+    <span class="wt__title">smithy&nbsp;build</span>
+    <span class="wt__status"><span class="wt__statusdot"></span>0 errors</span>
+  </div>
+
+  <div class="wt__body">
+    <div class="wt__src">
+      <div class="wt__srchead">
+        <span class="wt__sq"></span>
+        <span class="wt__file">weather.smithy</span>
+        <span class="wt__srclabel">source</span>
+      </div>
+      <pre class="wt__code" set:html={modelHtml} />
+    </div>
+
+    <div class="wt__mid">
+      <span class="wt__line"></span>
+      <span class="wt__arrow">→</span>
+    </div>
+
+    <div class="wt__out">
+      <div class="wt__tabs" role="tablist">
+        {
+          tabsHtml.map((t, i) => (
+            <button type="button" role="tab" class={`wt__tab${i === 0 ? ' is-active' : ''}`} data-idx={i} aria-selected={i === 0 ? 'true' : 'false'}>
+              {t.label}
+            </button>
+          ))
+        }
+      </div>
+      {
+        tabsHtml.map((t, i) => (
+          <pre class={`wt__code wt__outcode${i === 0 ? ' is-active' : ''}`} data-idx={i} hidden={i !== 0} set:html={t.codeHtml} />
+        ))
+      }
+    </div>
+  </div>
+
+  <div class="wt__foot">
+    <div class="wt__dots">
+      {tabs.map((_, i) => <button type="button" class={`wt__dot${i === 0 ? ' is-active' : ''}`} data-idx={i} aria-label={`Step ${i + 1}`} />)}
+    </div>
+    {
+      tabs.map((t, i) => (
+        <span class={`wt__cap${i === 0 ? ' is-active' : ''}`} data-idx={i} hidden={i !== 0}>
+          {t.cap}
+        </span>
+      ))
+    }
+  </div>
+</div>
+
+<style>
+  .wt {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    background: #0b0b11;
+    border: 1px solid #20202c;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 30px 70px -24px rgba(0, 0, 0, 0.7);
+    width: 100%;
+    color: #c9d1d9;
+  }
+
+  /* Title bar */
+  .wt__bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 15px;
+    border-bottom: 1px solid #1b1b25;
+    background: #0e0e15;
+  }
+  .wt__diamond {
+    width: 9px;
+    height: 9px;
+    background: #6d4aff;
+    transform: rotate(45deg);
+    box-shadow: 0 0 12px #6d4aff;
+  }
+  .wt__title {
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #7a7a8c;
+    font-weight: 500;
+  }
+  .wt__status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #56c267;
+  }
+  .wt__statusdot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #56c267;
+    box-shadow: 0 0 8px #56c267;
+  }
+
+  /* Body: source | arrow | output */
+  .wt__body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr);
+  }
+  .wt__src {
+    min-width: 0;
+  }
+  .wt__srchead {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 15px;
+    border-bottom: 1px solid #17171f;
+  }
+  .wt__sq {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    background: #6d4aff;
+  }
+  .wt__file {
+    font-size: 12px;
+    color: #c9c9d6;
+  }
+  .wt__srclabel {
+    margin-left: auto;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: #5a5a6b;
+    text-transform: uppercase;
+  }
+
+  .wt__mid {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .wt__line {
+    position: absolute;
+    top: 14px;
+    bottom: 14px;
+    width: 1px;
+    background: linear-gradient(#17171f, #352b52, #17171f);
+  }
+  .wt__arrow {
+    position: relative;
+    z-index: 1;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #13101e;
+    border: 1px solid #2e2547;
+    color: #b8a5ff;
+    font-size: 15px;
+    box-shadow: 0 0 20px rgba(109, 74, 255, 0.4);
+  }
+
+  .wt__out {
+    min-width: 0;
+    border-left: 1px solid #17171f;
+  }
+  .wt__tabs {
+    display: flex;
+    gap: 3px;
+    padding: 6px 9px;
+    border-bottom: 1px solid #17171f;
+    overflow-x: auto;
+  }
+  .wt__tab {
+    padding: 6px 12px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11.5px;
+    font-weight: 500;
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+    background: transparent;
+    color: #6f6f80;
+    transition: all 0.2s ease;
+  }
+  .wt__tab.is-active {
+    background: rgba(109, 74, 255, 0.16);
+    color: #cdbcff;
+    font-weight: 600;
+  }
+
+  /* Code */
+  .wt__code {
+    margin: 0;
+    padding: 15px;
+    overflow: auto;
+    max-height: 578px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 12.5px;
+    line-height: 1.75;
+    color: #c9d1d9;
+    white-space: pre;
+  }
+  .wt__outcode[hidden] {
+    display: none;
+  }
+  .wt__code::-webkit-scrollbar {
+    height: 7px;
+    width: 7px;
+  }
+  .wt__code::-webkit-scrollbar-thumb {
+    background: #2c2c3a;
+    border-radius: 4px;
+  }
+
+  /* Footer: dots + caption */
+  .wt__foot {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 11px 15px;
+    border-top: 1px solid #1b1b25;
+    background: #0e0e15;
+  }
+  .wt__dots {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    flex: none;
+  }
+  .wt__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 4px;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    background: #2c2c3a;
+    transition: all 0.35s ease;
+  }
+  .wt__dot.is-active {
+    width: 22px;
+    background: #6d4aff;
+  }
+  .wt__cap {
+    font-size: 11.5px;
+    color: #8a8a9a;
+    line-height: 1.4;
+  }
+  .wt__cap[hidden] {
+    display: none;
+  }
+
+  /* Responsive: stack source over output, arrow becomes a horizontal divider */
+  @media (max-width: 52rem) {
+    .wt__body {
+      grid-template-columns: 1fr;
+    }
+    .wt__mid {
+      height: 42px;
+    }
+    .wt__line {
+      top: 50%;
+      bottom: auto;
+      left: 14px;
+      right: 14px;
+      width: auto;
+      height: 1px;
+      background: linear-gradient(90deg, #17171f, #352b52, #17171f);
+    }
+    .wt__arrow {
+      transform: rotate(90deg);
+    }
+    .wt__out {
+      border-left: none;
+      border-top: 1px solid #17171f;
+    }
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.wt').forEach((root) => {
+    const tabs = Array.from(root.querySelectorAll<HTMLElement>('.wt__tab'));
+    const outs = Array.from(root.querySelectorAll<HTMLElement>('.wt__outcode'));
+    const dots = Array.from(root.querySelectorAll<HTMLElement>('.wt__dot'));
+    const caps = Array.from(root.querySelectorAll<HTMLElement>('.wt__cap'));
+    const interval = Number(root.dataset.cycle || '3600');
+    let idx = 0;
+    let paused = false;
+
+    function show(n: number) {
+      idx = n;
+      const toggle = (els: HTMLElement[], hideAttr: boolean) =>
+        els.forEach((el, i) => {
+          const on = i === n;
+          el.classList.toggle('is-active', on);
+          if (hideAttr) {
+            if (on) el.removeAttribute('hidden');
+            else el.setAttribute('hidden', '');
+          }
+        });
+      tabs.forEach((t, i) => t.setAttribute('aria-selected', i === n ? 'true' : 'false'));
+      toggle(tabs, false);
+      toggle(outs, true);
+      toggle(dots, false);
+      toggle(caps, true);
+    }
+
+    [...tabs, ...dots].forEach((el) =>
+      el.addEventListener('click', () => {
+        paused = true;
+        show(Number(el.dataset.idx));
+      })
+    );
+    root.addEventListener('mouseenter', () => (paused = true));
+    root.addEventListener('mouseleave', () => (paused = false));
+
+    if (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setInterval(() => {
+        if (!paused) show((idx + 1) % tabs.length);
+      }, interval);
+    }
+  });
+</script>
