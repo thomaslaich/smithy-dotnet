@@ -1,0 +1,28 @@
+/*
+ * Align the Starlight docs with the landing page: same fonts everywhere, and a
+ * near-black dark mode so moving between them feels seamless.
+ */
+
+/* Fonts — match the landing (IBM Plex Sans body, JetBrains Mono code). */
+:root {
+  --sl-font: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --sl-font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+}
+
+/* Big headings echo the landing's display face; smaller ones stay in the body
+   font for scannability. Excluded on the landing, which styles its own. */
+html:not(.nsmithy-landing) .sl-markdown-content :is(h1, h2),
+html:not(.nsmithy-landing) .content-panel h1 {
+  font-family: 'Space Grotesk', var(--sl-font);
+  letter-spacing: -0.02em;
+}
+
+/* Dark mode: a cool, comfortable reading dark — clearly lifted off the
+   landing's near-black (#08080c) for long-form reading, but tinted so it still
+   feels part of the same family. Light is unchanged. */
+:root[data-theme='dark'] {
+  --sl-color-bg: #14151d; /* page */
+  --sl-color-bg-nav: #1b1c25; /* top header */
+  --sl-color-bg-sidebar: #17181f; /* left sidebar */
+  --sl-color-bg-inline-code: #21232c;
+}
