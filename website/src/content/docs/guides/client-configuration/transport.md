@@ -39,6 +39,9 @@ var client = new WeatherClient(httpClient);
 If both `config.Endpoint` and `HttpClient.BaseAddress` are set,
 `config.Endpoint` wins.
 
+For unary HTTP operations, the client runtime resolves operation-relative request
+URIs against the effective endpoint before handing the request to the transport.
+
 For long-lived applications, prefer the generated
 [`Add{Service}Client`](/smithy-dotnet/guides/client-configuration/dependency-injection/)
 helper. It uses `IHttpClientFactory` and applies protocol-specific HTTP settings,

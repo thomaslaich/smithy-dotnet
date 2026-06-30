@@ -44,3 +44,7 @@ Available hooks:
 | `OnAfterExecution` | Run cleanup or final observation after the call completes. |
 
 Before hooks run in configured order. After hooks run in reverse order.
+
+The per-call `SmithyContext` includes `ServiceName`, `OperationName`, `Attempt`,
+and, for generated clients constructed with an endpoint or `HttpClient`,
+`Endpoint`.

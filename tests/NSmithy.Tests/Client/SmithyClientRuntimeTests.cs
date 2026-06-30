@@ -104,6 +104,108 @@ public sealed class SmithyClientRuntimeTests
     }
 
     [Fact]
+    public async Task RuntimeExposesConstructorEndpointInContext()
+    {
+        List<Uri> endpoints = [];
+        var transport = new RecordingTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var endpoint = new Uri("https://api.example.com");
+        var runtime = new SmithyClientRuntime(
+            transport,
+            [new EndpointRecordingInterceptor(endpoints)],
+            endpoint: endpoint
+        );
+
+        await runtime.InvokeAsync(
+            "Weather",
+            "GetForecast",
+            new TextProtocol(),
+            "input",
+            cancellationToken: CancellationToken.None
+        );
+
+        Assert.Equal([endpoint], endpoints);
+    }
+
+    [Fact]
+    public async Task RuntimeResolvesRelativeRequestUriAgainstEndpointBeforeTransmit()
+    {
+        var transport = new RecordingTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            endpoint: new Uri("https://api.example.com/base")
+        );
+
+        await runtime.InvokeAsync(
+            "Weather",
+            "GetForecast",
+            new TextProtocol(),
+            "input",
+            cancellationToken: CancellationToken.None
+        );
+
+        Assert.Equal("https://api.example.com/base/input", transport.Request.RequestUri);
+    }
+
+    [Fact]
+    public async Task RuntimeLeavesAbsoluteRequestUriUnchanged()
+    {
+        var transport = new RecordingTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            endpoint: new Uri("https://api.example.com")
+        );
+
+        await runtime.InvokeAsync(
+            "Weather",
+            "GetForecast",
+            new AbsoluteUriProtocol(),
+            "input",
+            cancellationToken: CancellationToken.None
+        );
+
+        Assert.Equal("https://override.example/input", transport.Request.RequestUri);
+    }
+
+    [Fact]
+    public void RuntimeRejectsRelativeEndpoint()
+    {
+        var error = Assert.Throws<ArgumentException>(() =>
+            new SmithyClientRuntime(
+                new RecordingTransport(
+                    new SmithyHttpResponse(HttpStatusCode.OK, "OK", [], EmptyHeaders, EmptyHeaders)
+                ),
+                endpoint: new Uri("/relative", UriKind.Relative)
+            )
+        );
+
+        Assert.Equal("endpoint", error.ParamName);
+    }
+
+    [Fact]
     public async Task RuntimeRunsAfterInterceptorsInReverseOrder()
     {
         List<string> calls = [];
@@ -400,6 +502,14 @@ public sealed class SmithyClientRuntimeTests
         }
     }
 
+    private sealed class EndpointRecordingInterceptor(List<Uri> endpoints) : IClientInterceptor
+    {
+        public void OnBeforeExecution(SmithyContext context)
+        {
+            endpoints.Add(context.Get(SmithyContextKeys.Endpoint));
+        }
+    }
+
     private sealed class QueryAppendingInterceptor : IClientInterceptor
     {
         public ValueTask<SmithyHttpRequest> OnBeforeTransmitAsync(
@@ -418,9 +528,9 @@ public sealed class SmithyClientRuntimeTests
         }
     }
 
-    private sealed class TextProtocol : IOperationProtocol<string, string>
+    private class TextProtocol : IOperationProtocol<string, string>
     {
-        public SmithyHttpRequest SerializeRequest(string input) =>
+        public virtual SmithyHttpRequest SerializeRequest(string input) =>
             new(HttpMethod.Post, $"/{input}");
 
         public string DeserializeResponse(SmithyHttpResponse response) => "output";
@@ -455,5 +565,11 @@ public sealed class SmithyClientRuntimeTests
             string errorShapeId,
             int statusCode
         ) => throw new NotSupportedException();
+    }
+
+    private sealed class AbsoluteUriProtocol : TextProtocol
+    {
+        public override SmithyHttpRequest SerializeRequest(string input) =>
+            new(HttpMethod.Post, $"https://override.example/{input}");
     }
 }

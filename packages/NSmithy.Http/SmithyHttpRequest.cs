@@ -1,5 +1,10 @@
 namespace NSmithy.Http;
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Design",
+    "CA1054:URI-like parameters should not be strings",
+    Justification = "SmithyHttpRequest preserves protocol-relative request URI text before endpoint resolution."
+)]
 public sealed class SmithyHttpRequest(HttpMethod method, string requestUri)
 {
     public HttpMethod Method { get; } = method ?? throw new ArgumentNullException(nameof(method));
@@ -10,6 +15,11 @@ public sealed class SmithyHttpRequest(HttpMethod method, string requestUri)
     public IDictionary<string, IReadOnlyList<string>> Headers { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Performance",
+        "CA1819:Properties should not return arrays",
+        Justification = "SmithyHttpRequest is a mutable low-level transport DTO for buffered wire bytes."
+    )]
     public byte[]? Content { get; set; }
 
     public Stream? StreamingContent { get; set; }
