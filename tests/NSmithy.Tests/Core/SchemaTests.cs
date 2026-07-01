@@ -11,6 +11,13 @@ public sealed class SchemaTests
 
     public sealed record Address(string City);
 
+    public sealed class TestException(string? message) : Exception(message);
+
+    public sealed class TestExceptionBuilder
+    {
+        public string? Message { get; set; }
+    }
+
     public sealed class PersonBuilder
     {
         public string? Name { get; set; }
@@ -558,5 +565,34 @@ public sealed class SchemaTests
         Assert.False(
             inputSchema.GetMember("displayName")!.Traits.ContainsKey(RestTraits.HttpLabel)
         );
+    }
+
+    [Fact]
+    public void OperationSchemaCarriesModeledErrors()
+    {
+        var errorSchema = Schemas
+            .Structure<TestException, TestExceptionBuilder>(new ShapeId("example", "BadRequest"))
+            .Optional(
+                "message",
+                static error => error.Message,
+                static (builder, value) => builder.Message = value,
+                Schemas.String
+            )
+            .Build(
+                static () => new TestExceptionBuilder(),
+                static builder => new TestException(builder.Message)
+            );
+
+        var error = Schemas.OperationError(new ShapeId("example", "BadRequest"), errorSchema, 400);
+        var operation = Schemas.Operation(
+            new ShapeId("example", "GetUser"),
+            Schemas.Unit,
+            Schemas.Unit,
+            [error]
+        );
+
+        Assert.Same(error, operation.Errors[0]);
+        Assert.Same(errorSchema, ((OperationErrorSchema<TestException>)operation.Errors[0]).Schema);
+        Assert.Equal(400, operation.Errors[0].HttpStatusCode);
     }
 }

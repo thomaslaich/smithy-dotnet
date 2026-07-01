@@ -385,11 +385,6 @@ public final class ClientGenerator implements Runnable {
           writer.write("");
 
           for (OperationShape op : operations) writeOperationMethod(sp, model, op);
-          for (OperationShape op : operations) {
-            if (!isEventStreamOperation(model, op)) {
-              writeErrorDeserializer(model, op);
-            }
-          }
         });
     writer.write("");
     writeConfigClass(typeName);
@@ -467,15 +462,14 @@ public final class ClientGenerator implements Runnable {
       }
       writer.write(
           "this.$LBinding = new SmithyOperationBinding<$L, $L>($L, $L,"
-              + " serviceProtocol.ForOperation($L), $L, Deserialize$LErrorAsync);",
+              + " serviceProtocol.ForOperation($L), $L);",
           CSharpNaming.typeName(op.getId().getName()),
           SchemaGenerator.operationShapeType(context, op.getInputShape()),
           SchemaGenerator.operationShapeType(context, op.getOutputShape()),
           CSharpNaming.formatString(service.getId().getName()),
           CSharpNaming.formatString(op.getId().getName()),
           SchemaGenerator.operationSchemaAccessor(context, op),
-          requestModifier(op),
-          CSharpNaming.typeName(op.getId().getName()));
+          requestModifier(op));
     }
   }
 
@@ -716,131 +710,6 @@ public final class ClientGenerator implements Runnable {
       statements.add("SmithyRequestModifiers.ApplyContentMd5(request)");
     }
     return "request => { " + String.join("; ", statements) + "; }";
-  }
-
-  // ---------------- error deserializer ----------------
-
-  private void writeErrorDeserializer(Model model, OperationShape op) {
-    String opName = CSharpNaming.typeName(op.getId().getName());
-    String methodName = "Deserialize" + opName + "ErrorAsync";
-    String receiver = opName + "Binding.Protocol";
-    List<ShapeId> errorIds = new ArrayList<>(op.getErrors(service));
-    errorIds.sort(Comparator.comparing(ShapeId::toString));
-
-    writer.write(
-        "private System.Threading.Tasks.ValueTask<System.Exception?> $L(SmithyHttpResponse"
-            + " response, System.Threading.CancellationToken cancellationToken)",
-        methodName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          if (errorIds.isEmpty()) {
-            writer.write("");
-            writer.write(
-                "return System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);");
-            return;
-          }
-
-          // The bound protocol owns error discrimination; its RequiresErrorDiscriminator /
-          // SupportsHttpStatusErrorFallback flags adapt this uniform dispatch to REST vs rpc/gRPC.
-          writer.write("var errorType = $L.GetErrorDiscriminator(response);", receiver);
-          writer.write("if (errorType is null && $L.RequiresErrorDiscriminator)", receiver);
-          writer.openBlock(
-              "{",
-              "}",
-              () ->
-                  writer.write(
-                      "return"
-                          + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);"));
-
-          writer.write("");
-          writer.write("if (errorType is not null)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                for (ShapeId errId : errorIds) {
-                  StructureShape err = model.expectShape(errId, StructureShape.class);
-                  // The discriminator may be a bare shape name (REST, rpcv2Cbor) or an absolute
-                  // shape id (rpcv2Cbor); accept either.
-                  writer.write(
-                      "if (string.Equals(errorType, $L, System.StringComparison.Ordinal)"
-                          + " || string.Equals(errorType, $L, System.StringComparison.Ordinal))",
-                      CSharpNaming.formatString(errId.getName()),
-                      CSharpNaming.formatString(errId.toString()));
-                  writer.openBlock("{", "}", () -> writeErrorReturn(err, receiver));
-                }
-              });
-
-          // REST-only fallback to the HTTP status code, gated at runtime by the bound protocol.
-          List<ShapeId> statusErrors =
-              errorIds.stream()
-                  .filter(id -> httpErrorCode(model.expectShape(id, StructureShape.class)) != null)
-                  .collect(Collectors.toList());
-          if (!statusErrors.isEmpty()) {
-            writer.write("");
-            writer.write("if ($L.SupportsHttpStatusErrorFallback)", receiver);
-            writer.openBlock(
-                "{",
-                "}",
-                () -> {
-                  for (ShapeId errId : statusErrors) {
-                    StructureShape err = model.expectShape(errId, StructureShape.class);
-                    writer.write("if ((int)response.StatusCode == $L)", httpErrorCode(err));
-                    writer.openBlock("{", "}", () -> writeErrorReturn(err, receiver));
-                  }
-                });
-          }
-
-          // Fallback: first error. For REST errors that carry body members, an empty body means we
-          // recognised nothing — return null so InvokeAsync throws a generic SmithyClientException.
-          // rpc/gRPC never guard on body emptiness (gated by SupportsHttpStatusErrorFallback).
-          ShapeId fallback = errorIds.get(0);
-          StructureShape err = model.expectShape(fallback, StructureShape.class);
-          boolean fallbackHasBody = !responseBodyMembers(err).isEmpty();
-          writer.write("");
-          if (fallbackHasBody) {
-            writer.write(
-                "if ($L.SupportsHttpStatusErrorFallback && response.Content.Length == 0)",
-                receiver);
-            writer.openBlock(
-                "{",
-                "}",
-                () ->
-                    writer.write(
-                        "return"
-                            + " System.Threading.Tasks.ValueTask.FromResult<System.Exception?>(null);"));
-            writer.write("");
-          }
-          writeErrorReturn(err, receiver);
-        });
-    writer.write("");
-  }
-
-  /**
-   * Functional error return: deserialize the error structure from the response (HTTP bindings +
-   * body for REST, whole CBOR/proto body for rpc/gRPC) via {@code receiver.DeserializeError(...)},
-   * where the receiver is the operation-bound protocol field.
-   */
-  private void writeErrorReturn(StructureShape err, String receiver) {
-    writer.write(
-        "return System.Threading.Tasks.ValueTask.FromResult<System.Exception?>("
-            + "$L.DeserializeError($L, response));",
-        receiver,
-        SchemaGenerator.shapeSchemaAccessor(context, err));
-  }
-
-  private static Integer httpErrorCode(StructureShape err) {
-    Integer explicit =
-        err.getTrait(software.amazon.smithy.model.traits.HttpErrorTrait.class)
-            .map(t -> t.getCode())
-            .orElse(null);
-    if (explicit != null) return explicit;
-    // Smithy default: @error("client") → 400, @error("server") → 500.
-    return err.getTrait(software.amazon.smithy.model.traits.ErrorTrait.class)
-        .map(t -> t.isClientError() ? 400 : 500)
-        .orElse(null);
   }
 
   // =====================================================================

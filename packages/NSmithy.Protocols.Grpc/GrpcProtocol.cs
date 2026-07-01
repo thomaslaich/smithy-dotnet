@@ -129,7 +129,10 @@ public sealed class GrpcProtocol : IProtocol
             outputIsUnit = IsUnit<TOutput>(operation.Output);
             requestCodec = inputIsUnit ? null : ProtoCodec.FromSchema(operation.Input);
             responseCodec = outputIsUnit ? null : ProtoCodec.FromSchema(operation.Output);
+            ModeledErrors = operation.Errors;
         }
+
+        public IReadOnlyList<IOperationErrorSchema> ModeledErrors { get; }
 
         public SmithyHttpRequest SerializeRequest(TInput input)
         {

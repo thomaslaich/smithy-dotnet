@@ -26,6 +26,7 @@ public sealed class RestServiceProtocol(
         ArgumentNullException.ThrowIfNull(operation);
         return new RestOperationProtocol<TInput, TOutput>(
             RestOperationBinding.From(operation, codecFactory, rawStringPayloads),
+            operation.Errors,
             codecFactory,
             errorDiscriminator,
             rawStringPayloads,
@@ -41,6 +42,7 @@ public sealed class RestServiceProtocol(
 /// </summary>
 public sealed class RestOperationProtocol<TInput, TOutput>(
     RestOperationBinding<TInput, TOutput> binding,
+    IReadOnlyList<IOperationErrorSchema> modeledErrors,
     IRestBodyCodecFactory codecFactory,
     Func<SmithyHttpResponse, string?> errorDiscriminator,
     bool rawStringPayloads,
@@ -67,6 +69,8 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
     public bool RequiresErrorDiscriminator => false;
 
     public bool SupportsHttpStatusErrorFallback => true;
+
+    public IReadOnlyList<IOperationErrorSchema> ModeledErrors { get; } = modeledErrors;
 
     public TError DeserializeError<TError>(
         Schema<TError> errorSchema,
