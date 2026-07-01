@@ -70,7 +70,10 @@ public sealed class RpcV2CborProtocol : IProtocol
                 operation.Output,
                 materializeTopLevelDefaults: true
             );
+            ModeledErrors = operation.Errors;
         }
+
+        public IReadOnlyList<IOperationErrorSchema> ModeledErrors { get; }
 
         public SmithyHttpRequest SerializeRequest(TInput input)
         {
