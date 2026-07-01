@@ -491,20 +491,20 @@ precomputed objects instead of reanalyzing schema metadata.
 The generated client also precomputes a client-runtime operation binding per
 unary operation. That binding wraps the operation-bound protocol together with
 the service/operation names, request modifiers such as compression/checksum
-hooks, and the modeled-error deserializer. Runtime invocation receives the
-binding plus typed input, so per-call generated code stays thin.
+hooks, and other lifecycle metadata. The operation-bound protocol owns modeled
+error deserialization; operation schemas carry the modeled error descriptors it
+uses for dispatch. Runtime invocation receives the binding plus typed input, so
+per-call generated code stays thin.
 
 ### The client runtime
 
 `SmithyClientRuntime` owns the parts that are *not* protocol-specific:
 interceptors, auth signing, retry decisions, and the transport send. It is
-deliberately ignorant of wire formats. The one protocol decision it needs, "is
-this response an error?", is injected as `IOperationProtocol.IsErrorResponse`
-rather than assumed to be "HTTP 4xx", so a transport that signals failure
-differently (gRPC's `grpc-status` trailer over an HTTP 200) fits without
-changing the runtime. Error *dispatch* stays in the generated
-`Deserialize{Operation}ErrorAsync` delegate, since the set of modeled errors is
-operation-specific model data.
+deliberately ignorant of wire formats. Protocol decisions such as "is this
+response an error?" and "which modeled exception does this response represent?"
+come from the operation-bound protocol rather than runtime HTTP assumptions, so
+a transport that signals failure differently (gRPC's `grpc-status` trailer over
+an HTTP 200) fits without changing the runtime.
 
 ## HTTP Binding Values
 

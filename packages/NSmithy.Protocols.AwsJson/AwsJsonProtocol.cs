@@ -73,7 +73,10 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             outputSchema = operation.Output;
             requestCodec = JsonCodec.FromSchema(operation.Input);
             responseCodec = JsonCodec.FromSchema(operation.Output);
+            ModeledErrors = operation.Errors;
         }
+
+        public IReadOnlyList<IOperationErrorSchema> ModeledErrors { get; }
 
         public SmithyHttpRequest SerializeRequest(TInput input)
         {

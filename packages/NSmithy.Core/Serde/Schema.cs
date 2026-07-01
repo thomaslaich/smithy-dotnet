@@ -1053,6 +1053,7 @@ public sealed class OperationSchema<TInput, TOutput>
         ShapeId id,
         Schema<TInput> input,
         Schema<TOutput> output,
+        IEnumerable<IOperationErrorSchema>? errors = null,
         IEnumerable<Trait>? traits = null
     )
     {
@@ -1061,6 +1062,7 @@ public sealed class OperationSchema<TInput, TOutput>
         Id = id;
         Input = input;
         Output = output;
+        Errors = errors?.ToArray() ?? [];
         Traits = Schema.BuildTraits(traits);
     }
 
@@ -1072,11 +1074,39 @@ public sealed class OperationSchema<TInput, TOutput>
 
     public Schema<TOutput> Output { get; }
 
+    public IReadOnlyList<IOperationErrorSchema> Errors { get; }
+
     public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
 
     public Trait? GetTrait(ShapeId id) => Traits.TryGetValue(id, out var trait) ? trait : null;
 
     public bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
+}
+
+public interface IOperationErrorSchema
+{
+    ShapeId Id { get; }
+
+    Schema UntypedSchema { get; }
+
+    int HttpStatusCode { get; }
+}
+
+public sealed class OperationErrorSchema<TError>(
+    ShapeId id,
+    Schema<TError> schema,
+    int httpStatusCode
+) : IOperationErrorSchema
+    where TError : Exception
+{
+    public ShapeId Id { get; } = id;
+
+    public Schema<TError> Schema { get; } =
+        schema ?? throw new ArgumentNullException(nameof(schema));
+
+    public Schema UntypedSchema => Schema;
+
+    public int HttpStatusCode { get; } = httpStatusCode;
 }
 
 /// <summary>
@@ -1281,7 +1311,22 @@ public static class Schemas
         Schema<TInput> input,
         Schema<TOutput> output,
         IEnumerable<Trait>? traits = null
-    ) => new(id, input, output, traits);
+    ) => new(id, input, output, null, traits);
+
+    public static OperationSchema<TInput, TOutput> Operation<TInput, TOutput>(
+        ShapeId id,
+        Schema<TInput> input,
+        Schema<TOutput> output,
+        IEnumerable<IOperationErrorSchema>? errors,
+        IEnumerable<Trait>? traits = null
+    ) => new(id, input, output, errors, traits);
+
+    public static OperationErrorSchema<TError> OperationError<TError>(
+        ShapeId id,
+        Schema<TError> schema,
+        int httpStatusCode
+    )
+        where TError : Exception => new(id, schema, httpStatusCode);
 
     public static ServiceSchema Service(ShapeId id, IEnumerable<Trait>? traits = null) =>
         new(id, traits);

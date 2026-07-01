@@ -38,9 +38,6 @@ public interface IOperationProtocol<TInput, TOutput>
     SmithyHttpResponse SerializeResponse(TOutput output);
 
     // ---- errors ----
-    // The *set* of an operation's errors is model data, so dispatch stays generated; the
-    // protocol-specific mechanism (when a response is an error, header vs __type, status fallback)
-    // is hidden here.
 
     /// <summary>
     /// Decides whether a response represents an error, by the protocol's own rules — HTTP status
@@ -68,6 +65,17 @@ public interface IOperationProtocol<TInput, TOutput>
     bool SupportsHttpStatusErrorFallback { get; }
 
     TError DeserializeError<TError>(Schema<TError> errorSchema, SmithyHttpResponse response);
+
+    IReadOnlyList<IOperationErrorSchema> ModeledErrors => [];
+
+    /// <summary>
+    /// Attempts to deserialize the response into one of the operation's modeled exceptions.
+    /// Returns null when the protocol cannot resolve a modeled error from the response.
+    /// </summary>
+    ValueTask<Exception?> DeserializeErrorAsync(
+        SmithyHttpResponse response,
+        CancellationToken cancellationToken = default
+    ) => ValueTask.FromResult(OperationProtocolErrors.DeserializeModeledError(this, response));
 
     SmithyHttpResponse SerializeError<TError>(
         Schema<TError> errorSchema,

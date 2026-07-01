@@ -8,8 +8,7 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
         string serviceName,
         string operationName,
         IOperationProtocol<TInput, TOutput> protocol,
-        Action<SmithyHttpRequest>? modifyRequest = null,
-        SmithyErrorDeserializer? errorDeserializer = null
+        Action<SmithyHttpRequest>? modifyRequest = null
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
@@ -20,7 +19,6 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
         OperationName = operationName;
         Protocol = protocol;
         ModifyRequest = modifyRequest;
-        ErrorDeserializer = errorDeserializer;
     }
 
     public string ServiceName { get; }
@@ -30,6 +28,4 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
     public IOperationProtocol<TInput, TOutput> Protocol { get; }
 
     public Action<SmithyHttpRequest>? ModifyRequest { get; }
-
-    public SmithyErrorDeserializer? ErrorDeserializer { get; }
 }

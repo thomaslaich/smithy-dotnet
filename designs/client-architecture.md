@@ -201,9 +201,9 @@ Protocols own wire behavior:
 Generated clients should not branch on protocol-specific wire rules. They bind
 operation schemas once, select the configured protocol, and precompute
 operation bindings that contain the service name, operation name,
-operation-bound protocol, request modifier, and modeled-error deserializer. The
-operation method hot path then passes the binding and typed input into the
-runtime.
+operation-bound protocol, and request modifier. The operation-bound protocol
+owns modeled error deserialization. The operation method hot path then passes
+the binding and typed input into the runtime.
 
 ## Observability
 
