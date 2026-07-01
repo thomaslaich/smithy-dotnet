@@ -78,6 +78,24 @@ work the same way as in `simpleRestJson` — members without an explicit binding
 into the XML body. See the [Modeling guide](/smithy-dotnet/guides/modeling/) for
 the full set.
 
+## On the Wire
+
+`GetCity` binds `cityId` to the URI path label; the response body is XML. The
+`@xmlName("Name")` on the output member sets its element name:
+
+```http
+GET /cities/123 HTTP/1.1
+Host: api.example.com
+Accept: application/xml
+
+HTTP/1.1 200 OK
+Content-Type: application/xml
+
+<GetCityOutput><Name>Seattle</Name></GetCityOutput>
+```
+
+Members without an HTTP binding are carried in the XML body.
+
 ## Usage
 
 The XML codec is wired up automatically by the generated client, which is used

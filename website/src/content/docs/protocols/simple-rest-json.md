@@ -73,6 +73,25 @@ Members without an explicit HTTP binding are serialized in the JSON body. For
 resources, pagination, and the full set of HTTP binding traits, see the
 [Modeling guide](/smithy-dotnet/guides/modeling/).
 
+## On the Wire
+
+`GetCity` binds `cityId` to the URI path label; the response comes back as a JSON
+body:
+
+```http
+GET /cities/123 HTTP/1.1
+Host: api.example.com
+Accept: application/json
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"name":"Seattle"}
+```
+
+Members without an HTTP binding are carried in the JSON body. Errors are
+discriminated by the `X-Error-Type` response header.
+
 ## Usage
 
 NSmithy generates one `IWeatherServiceHandler` interface with a method per
