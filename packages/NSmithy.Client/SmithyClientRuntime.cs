@@ -19,20 +19,14 @@ public sealed class SmithyClientRuntime(
             : throw new ArgumentException("Endpoint must be an absolute URI.", nameof(endpoint));
 
     public async Task<TOutput> InvokeAsync<TInput, TOutput>(
-        string serviceName,
-        string operationName,
-        IOperationProtocol<TInput, TOutput> protocol,
+        SmithyOperationBinding<TInput, TOutput> binding,
         TInput input,
-        Action<SmithyHttpRequest>? modifyRequest = null,
-        SmithyErrorDeserializer? errorDeserializer = null,
         CancellationToken cancellationToken = default
     )
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
-        ArgumentNullException.ThrowIfNull(protocol);
+        ArgumentNullException.ThrowIfNull(binding);
 
-        var context = CreateContext(serviceName, operationName);
+        var context = CreateContext(binding.ServiceName, binding.OperationName);
         foreach (var interceptor in interceptors)
         {
             interceptor.OnBeforeExecution(context);
@@ -45,20 +39,18 @@ public sealed class SmithyClientRuntime(
                 interceptor.OnBeforeSerialization(context, input);
             }
 
-            var request = protocol.SerializeRequest(input);
-            modifyRequest?.Invoke(request);
+            var request = binding.Protocol.SerializeRequest(input);
+            binding.ModifyRequest?.Invoke(request);
             var response = await SendAsync(
                     context,
-                    serviceName,
-                    operationName,
                     request,
-                    errorDeserializer,
-                    protocol.IsErrorResponse,
+                    binding.ErrorDeserializer,
+                    binding.Protocol.IsErrorResponse,
                     cancellationToken
                 )
                 .ConfigureAwait(false);
 
-            var output = protocol.DeserializeResponse(response);
+            var output = binding.Protocol.DeserializeResponse(response);
             for (var i = interceptors.Count - 1; i >= 0; i--)
             {
                 interceptors[i].OnAfterDeserialization(context, output);
@@ -73,6 +65,29 @@ public sealed class SmithyClientRuntime(
                 interceptors[i].OnAfterExecution(context);
             }
         }
+    }
+
+    public Task<TOutput> InvokeAsync<TInput, TOutput>(
+        string serviceName,
+        string operationName,
+        IOperationProtocol<TInput, TOutput> protocol,
+        TInput input,
+        Action<SmithyHttpRequest>? modifyRequest = null,
+        SmithyErrorDeserializer? errorDeserializer = null,
+        CancellationToken cancellationToken = default
+    )
+    {
+        return InvokeAsync(
+            new SmithyOperationBinding<TInput, TOutput>(
+                serviceName,
+                operationName,
+                protocol,
+                modifyRequest,
+                errorDeserializer
+            ),
+            input,
+            cancellationToken
+        );
     }
 
     public Task<SmithyHttpResponse> InvokeAsync(
@@ -102,8 +117,6 @@ public sealed class SmithyClientRuntime(
             {
                 return await SendAsync(
                         context,
-                        serviceName,
-                        operationName,
                         request,
                         errorDeserializer,
                         isErrorResponse,
@@ -123,8 +136,6 @@ public sealed class SmithyClientRuntime(
 
     private async Task<SmithyHttpResponse> SendAsync(
         SmithyContext context,
-        string serviceName,
-        string operationName,
         SmithyHttpRequest request,
         SmithyErrorDeserializer? errorDeserializer,
         Func<SmithyHttpResponse, bool>? isErrorResponse,

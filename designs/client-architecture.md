@@ -199,8 +199,11 @@ Protocols own wire behavior:
 - trailer interpretation
 
 Generated clients should not branch on protocol-specific wire rules. They bind
-operation schemas once, select the configured protocol, and pass protocol-bound
-delegates into the client lifecycle.
+operation schemas once, select the configured protocol, and precompute
+operation bindings that contain the service name, operation name,
+operation-bound protocol, request modifier, and modeled-error deserializer. The
+operation method hot path then passes the binding and typed input into the
+runtime.
 
 ## Observability
 

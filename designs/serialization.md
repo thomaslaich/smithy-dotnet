@@ -488,6 +488,12 @@ request/response codecs for rpcv2Cbor — is computed when the field is
 initialized and reused for every request. The hot path serializes through those
 precomputed objects instead of reanalyzing schema metadata.
 
+The generated client also precomputes a client-runtime operation binding per
+unary operation. That binding wraps the operation-bound protocol together with
+the service/operation names, request modifiers such as compression/checksum
+hooks, and the modeled-error deserializer. Runtime invocation receives the
+binding plus typed input, so per-call generated code stays thin.
+
 ### The client runtime
 
 `SmithyClientRuntime` owns the parts that are *not* protocol-specific:
