@@ -16,18 +16,27 @@ public static class SmithyRequestModifiers
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(encoding);
 
-        if (request.Content is null)
+        if (ReferenceEquals(request.Body, SmithyHttpBody.Empty))
         {
             return;
         }
 
-        request.Content = encoding switch
+        if (request.Body is not SmithyHttpBody.Bytes bytes)
         {
-            "gzip" => CompressGzip(request.Content),
-            _ => throw new NotSupportedException(
-                $"Request compression encoding '{encoding}' is not supported."
-            ),
-        };
+            throw new InvalidOperationException(
+                "Request compression for streaming bodies is not supported."
+            );
+        }
+
+        request.Body = new SmithyHttpBody.Bytes(
+            encoding switch
+            {
+                "gzip" => CompressGzip(bytes.Content),
+                _ => throw new NotSupportedException(
+                    $"Request compression encoding '{encoding}' is not supported."
+                ),
+            }
+        );
 
         if (
             request.ContentHeaders.TryGetValue("Content-Encoding", out var values)
@@ -49,14 +58,21 @@ public static class SmithyRequestModifiers
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (request.Content is null)
+        if (ReferenceEquals(request.Body, SmithyHttpBody.Empty))
         {
             return;
         }
 
+        if (request.Body is not SmithyHttpBody.Bytes bytes)
+        {
+            throw new InvalidOperationException(
+                "Content-MD5 for streaming bodies is not supported."
+            );
+        }
+
         request.ContentHeaders["Content-MD5"] =
         [
-            Convert.ToBase64String(MD5.HashData(request.Content)),
+            Convert.ToBase64String(MD5.HashData(bytes.Content)),
         ];
     }
 #pragma warning restore CA5351

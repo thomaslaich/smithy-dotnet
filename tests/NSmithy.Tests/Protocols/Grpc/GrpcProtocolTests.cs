@@ -127,7 +127,8 @@ public sealed class GrpcProtocolTests
         string[] trailers = ["trailers"];
         Assert.Equal(trailers, request.Headers["te"]);
         // 5-byte frame header + proto body (0A 02 'h' 'i')
-        Assert.Equal(GrpcMessageFraming.HeaderLength + 4, request.Content!.Length);
+        var body = Assert.IsType<SmithyHttpBody.Bytes>(request.Body);
+        Assert.Equal(GrpcMessageFraming.HeaderLength + 4, body.Content.Length);
     }
 
     [Fact]

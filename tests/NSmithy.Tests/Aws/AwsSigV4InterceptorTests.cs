@@ -11,7 +11,7 @@ public sealed class AwsSigV4InterceptorTests
     public async Task SignAddsSigV4Headers()
     {
         var request = new SmithyHttpRequest(HttpMethod.Post, "/");
-        request.Content = "{}"u8.ToArray();
+        request.Body = new SmithyHttpBody.Bytes("{}"u8.ToArray());
         request.ContentType = "application/x-amz-json-1.0";
         request.Headers["X-Amz-Target"] = ["DynamoDB_20120810.ListTables"];
 

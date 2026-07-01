@@ -57,7 +57,7 @@ public sealed class AwsSigV4Interceptor(
         var requestUri = ResolveRequestUri(request.RequestUri);
         var amzDate = now.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", InvariantDateTime);
         var date = now.UtcDateTime.ToString("yyyyMMdd", InvariantDateTime);
-        var payloadHash = Sha256Hex(request.Content ?? []);
+        var payloadHash = Sha256Hex(SignablePayloadBytes(request.Body));
 
         request.Headers["Host"] = [HostHeader(requestUri)];
         request.Headers["X-Amz-Date"] = [amzDate];
@@ -113,6 +113,16 @@ public sealed class AwsSigV4Interceptor(
 
         return new Uri(endpoint, requestUri);
     }
+
+    private static byte[] SignablePayloadBytes(SmithyHttpBody body) =>
+        body switch
+        {
+            SmithyHttpBody.Bytes bytes => bytes.Content,
+            SmithyHttpBody.Streaming => throw new InvalidOperationException(
+                "AWS SigV4 signing for streaming request bodies is not supported yet."
+            ),
+            _ => [],
+        };
 
     private static string HostHeader(Uri uri)
     {

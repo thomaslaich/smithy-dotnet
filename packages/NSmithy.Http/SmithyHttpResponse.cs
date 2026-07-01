@@ -6,12 +6,32 @@ namespace NSmithy.Http;
 public sealed record SmithyHttpResponse(
     HttpStatusCode StatusCode,
     string? ReasonPhrase,
-    byte[] Content,
+    SmithyHttpBody Body,
     IReadOnlyDictionary<string, IReadOnlyList<string>> Headers,
     IReadOnlyDictionary<string, IReadOnlyList<string>> ContentHeaders
 )
 {
-    public string ContentText => Encoding.UTF8.GetString(Content);
+    public SmithyHttpResponse(
+        HttpStatusCode statusCode,
+        string? reasonPhrase,
+        byte[] content,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> contentHeaders
+    )
+        : this(
+            statusCode,
+            reasonPhrase,
+            content.Length == 0 ? SmithyHttpBody.Empty : new SmithyHttpBody.Bytes(content),
+            headers,
+            contentHeaders
+        ) { }
 
-    public Stream? StreamingContent { get; init; }
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Performance",
+        "CA1819:Properties should not return arrays",
+        Justification = "SmithyHttpResponse exposes buffered wire bytes for protocol codecs."
+    )]
+    public byte[] Content => Body is SmithyHttpBody.Bytes bytes ? bytes.Content : [];
+
+    public string ContentText => Encoding.UTF8.GetString(Content);
 }

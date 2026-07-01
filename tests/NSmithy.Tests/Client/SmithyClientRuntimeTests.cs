@@ -416,7 +416,7 @@ public sealed class SmithyClientRuntimeTests
         );
         var request = new SmithyHttpRequest(HttpMethod.Post, "/upload")
         {
-            StreamingContent = new MemoryStream("hello"u8.ToArray()),
+            Body = new SmithyHttpBody.Streaming(new MemoryStream("hello"u8.ToArray())),
         };
 
         await Assert.ThrowsAsync<SmithyClientException>(() =>

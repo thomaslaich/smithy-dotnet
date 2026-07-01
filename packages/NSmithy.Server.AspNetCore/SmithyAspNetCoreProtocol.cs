@@ -40,13 +40,17 @@ public static class SmithyAspNetCoreProtocol
         request.ContentType = httpContext.Request.ContentType;
         if (streamBody)
         {
-            request.StreamingContent = httpContext.Request.Body;
-            request.StreamingContentLength = httpContext.Request.ContentLength;
+            request.Body = new SmithyHttpBody.Streaming(
+                httpContext.Request.Body,
+                httpContext.Request.ContentLength
+            );
         }
         else
         {
-            request.Content = await ReadRequestBodyContentAsync(httpContext, cancellationToken)
-                .ConfigureAwait(false);
+            request.Body = ToHttpBody(
+                await ReadRequestBodyContentAsync(httpContext, cancellationToken)
+                    .ConfigureAwait(false)
+            );
         }
         return request;
     }
@@ -76,16 +80,21 @@ public static class SmithyAspNetCoreProtocol
             httpContext.Response.Headers[header.Key] = header.Value.ToArray();
         }
 
-        if (response.StreamingContent is not null)
+        if (response.Body is SmithyHttpBody.Streaming streamBody)
         {
-            await response
-                .StreamingContent.CopyToAsync(httpContext.Response.Body, cancellationToken)
+            if (streamBody.ContentLength is { } contentLength)
+            {
+                httpContext.Response.ContentLength = contentLength;
+            }
+
+            await streamBody
+                .Content.CopyToAsync(httpContext.Response.Body, cancellationToken)
                 .ConfigureAwait(false);
         }
-        else if (response.Content.Length > 0)
+        else if (response.Body is SmithyHttpBody.Bytes bytesBody && bytesBody.Content.Length > 0)
         {
             await httpContext
-                .Response.Body.WriteAsync(response.Content, cancellationToken)
+                .Response.Body.WriteAsync(bytesBody.Content, cancellationToken)
                 .ConfigureAwait(false);
         }
     }
@@ -323,4 +332,7 @@ public static class SmithyAspNetCoreProtocol
         await Task.CompletedTask.ConfigureAwait(false);
         yield return eventFrame;
     }
+
+    private static SmithyHttpBody ToHttpBody(byte[] content) =>
+        content.Length == 0 ? SmithyHttpBody.Empty : new SmithyHttpBody.Bytes(content);
 }

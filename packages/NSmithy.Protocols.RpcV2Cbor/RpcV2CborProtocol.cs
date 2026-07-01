@@ -82,7 +82,7 @@ public sealed class RpcV2CborProtocol : IProtocol
             request.Headers["Accept"] = [ContentType];
             if (!inputIsUnit)
             {
-                request.Content = requestCodec.Serialize(input);
+                request.Body = new SmithyHttpBody.Bytes(requestCodec.Serialize(input));
                 request.ContentType = ContentType;
             }
 
@@ -111,7 +111,7 @@ public sealed class RpcV2CborProtocol : IProtocol
                 return default!;
             }
 
-            var content = request.Content ?? [];
+            var content = BodyBytes(request.Body);
             return content.Length == 0 ? default! : requestCodec.Deserialize(content);
         }
 
@@ -181,6 +181,9 @@ public sealed class RpcV2CborProtocol : IProtocol
                 response => DeserializeRequiredBody(codec, response.Content)
             );
         }
+
+        private static byte[] BodyBytes(SmithyHttpBody body) =>
+            body is SmithyHttpBody.Bytes bytes ? bytes.Content : [];
     }
 
     /// <summary>

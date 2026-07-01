@@ -138,8 +138,8 @@ public sealed class GrpcProtocol : IProtocol
         {
             var request = new SmithyHttpRequest(HttpMethod.Post, methodPath)
             {
-                Content = GrpcMessageFraming.Frame(
-                    inputIsUnit ? [] : requestCodec!.Serialize(input)
+                Body = new SmithyHttpBody.Bytes(
+                    GrpcMessageFraming.Frame(inputIsUnit ? [] : requestCodec!.Serialize(input))
                 ),
                 ContentType = ContentType,
             };
@@ -170,7 +170,7 @@ public sealed class GrpcProtocol : IProtocol
                 return default!;
             }
 
-            var payload = GrpcMessageFraming.ReadSingle(request.Content ?? []);
+            var payload = GrpcMessageFraming.ReadSingle(BodyBytes(request.Body));
             return requestCodec!.Deserialize(payload);
         }
 
@@ -305,7 +305,7 @@ public sealed class GrpcProtocol : IProtocol
                 return default!;
             }
 
-            var payload = GrpcMessageFraming.ReadSingle(request.Content ?? []);
+            var payload = GrpcMessageFraming.ReadSingle(BodyBytes(request.Body));
             return requestCodec!.Deserialize(payload);
         }
 
@@ -570,6 +570,9 @@ public sealed class GrpcProtocol : IProtocol
         && contentType.Any(value =>
             value.StartsWith("application/grpc", StringComparison.OrdinalIgnoreCase)
         );
+
+    private static byte[] BodyBytes(SmithyHttpBody body) =>
+        body is SmithyHttpBody.Bytes bytes ? bytes.Content : [];
 
     private static void EnsureGrpcResponse(SmithyHttpResponse response)
     {

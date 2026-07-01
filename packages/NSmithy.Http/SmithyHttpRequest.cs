@@ -15,16 +15,7 @@ public sealed class SmithyHttpRequest(HttpMethod method, string requestUri)
     public IDictionary<string, IReadOnlyList<string>> Headers { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage(
-        "Performance",
-        "CA1819:Properties should not return arrays",
-        Justification = "SmithyHttpRequest is a mutable low-level transport DTO for buffered wire bytes."
-    )]
-    public byte[]? Content { get; set; }
-
-    public Stream? StreamingContent { get; set; }
-
-    public long? StreamingContentLength { get; set; }
+    public SmithyHttpBody Body { get; set; } = SmithyHttpBody.Empty;
 
     public bool ExpectStreamingResponse { get; set; }
 

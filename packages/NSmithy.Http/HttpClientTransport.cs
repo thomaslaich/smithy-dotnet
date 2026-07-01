@@ -36,17 +36,17 @@ public sealed class HttpClientTransport : IHttpTransport
             message.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }
 
-        if (request.StreamingContent is not null)
+        if (request.Body is SmithyHttpBody.Streaming streamBody)
         {
-            message.Content = new StreamContent(request.StreamingContent);
-            if (request.StreamingContentLength is { } contentLength)
+            message.Content = new StreamContent(streamBody.Content);
+            if (streamBody.ContentLength is { } contentLength)
             {
                 message.Content.Headers.ContentLength = contentLength;
             }
         }
-        else if (request.Content is not null)
+        else if (request.Body is SmithyHttpBody.Bytes bytesBody)
         {
-            message.Content = new ByteArrayContent(request.Content);
+            message.Content = new ByteArrayContent(bytesBody.Content);
         }
 
         if (message.Content is not null)
@@ -74,20 +74,20 @@ public sealed class HttpClientTransport : IHttpTransport
             return new SmithyHttpResponse(
                 response.StatusCode,
                 response.ReasonPhrase,
-                [],
+                new SmithyHttpBody.Streaming(
+                    new ResponseContentStream(
+                        response,
+                        response.Content is null
+                            ? Stream.Null
+                            : await response
+                                .Content.ReadAsStreamAsync(cancellationToken)
+                                .ConfigureAwait(false)
+                    ),
+                    response.Content?.Headers.ContentLength
+                ),
                 ToHeaderDictionary(response.Headers),
                 contentHeaders
-            )
-            {
-                StreamingContent = new ResponseContentStream(
-                    response,
-                    response.Content is null
-                        ? Stream.Null
-                        : await response
-                            .Content.ReadAsStreamAsync(cancellationToken)
-                            .ConfigureAwait(false)
-                ),
-            };
+            );
         }
 
         using var bufferedResponse = response;
@@ -103,7 +103,7 @@ public sealed class HttpClientTransport : IHttpTransport
         return new SmithyHttpResponse(
             response.StatusCode,
             response.ReasonPhrase,
-            content,
+            content.Length == 0 ? SmithyHttpBody.Empty : new SmithyHttpBody.Bytes(content),
             headers,
             response.Content is null
                 ? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
