@@ -22,11 +22,14 @@ numbers.
 "software.amazon.smithy:smithy-aws-traits:1.71.0"
 ```
 
-## NuGet Package
+## NuGet Packages
 
-```xml
-<PackageReference Include="NSmithy.Protocols.AwsJson" Version="0.4.0" />
-```
+| Purpose | Packages |
+| --- | --- |
+| Client | `NSmithy.Client`, `NSmithy.Protocols.AwsJson` |
+
+`NSmithy.Protocols.AwsJson` pulls in `NSmithy.Codecs.Json` (the JSON codec)
+transitively.
 
 ## Modeling
 
@@ -63,6 +66,30 @@ structure NoSuchResource {
     resourceType: String
 }
 ```
+
+## On the Wire
+
+AWS JSON is RPC-style: every call is a `POST /`, the operation is selected by the
+`X-Amz-Target` header, and input/output are JSON:
+
+```http
+POST / HTTP/1.1
+Host: api.example.com
+Content-Type: application/x-amz-json-1.1
+Accept: application/x-amz-json-1.1
+X-Amz-Target: Weather.GetCity
+
+{"cityId":"123"}
+
+HTTP/1.1 200 OK
+Content-Type: application/x-amz-json-1.1
+
+{"name":"Seattle"}
+```
+
+`X-Amz-Target` is `{Service}.{Operation}` (`awsJson1_0` uses the
+`application/x-amz-json-1.0` content type). Errors are discriminated by the
+`X-Amzn-Errortype` header or a `__type` field in the body.
 
 ## Usage
 

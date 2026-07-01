@@ -90,21 +90,25 @@ giving protocols and codecs full Smithy metadata.
 
 ## Errors
 
-Smithy error shapes are generated as C# `Exception` subclasses. The generated
-class extends a service-specific base error type, which in turn extends
-`SmithyException` from `NSmithy.Core`.
+Smithy error shapes are generated as `sealed partial` classes that extend
+`System.Exception` directly:
 
 ```csharp
 // Smithy: @error("client") structure NotFoundException { message: String }
-public sealed class NotFoundException : HelloServiceException
+public sealed partial class NotFoundException : System.Exception
 {
-    public string? Message { get; }
-    // ...
+    public NotFoundException(string? message = null /* , modeled members */)
+        : base(message) { /* ... */ }
+
+    // modeled members surface as read-only properties
 }
 ```
 
-The `@fault` value (`"client"` or `"server"`) and the error code (shape name)
-are accessible as properties on the exception.
+Modeled members become constructor parameters and read-only properties. The
+protocol layer maps a wire error to the right exception type using the
+operation's error discriminator (see [serialization.md](serialization.md)); the
+generated exception exposes its modeled members but no separate fault/code
+properties.
 
 ## Unions
 

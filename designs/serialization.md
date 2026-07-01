@@ -162,38 +162,46 @@ var request = getForecastProtocol.SerializeRequest(
 // GET /forecast/Berlin?units=metric
 ```
 
-Generated clients bind protocols once in static fields. Operation methods stay
-protocol-agnostic: they pass the bound operation protocol and typed input to the
-shared client runtime:
+Generated clients precompute one operation binding per operation in the
+constructor. Operation methods stay protocol-agnostic: they hand the bound
+operation and typed input to the shared client runtime:
 
 ```csharp
 public sealed class WeatherServiceClient
 {
     private readonly SmithyClientRuntime runtime;
 
-    private static readonly IServiceProtocol ServiceProtocol =
-        RestJsonProtocol.ForService(WeatherServiceSchema.Schema);
+    private readonly SmithyOperationBinding<GetForecastInput, GetForecastOutput>
+        GetForecastBinding;
 
-    private static readonly IOperationProtocol<GetForecastInput, GetForecastOutput>
-        GetForecastProtocol = ServiceProtocol.ForOperation(GetForecastSchema.Schema);
+    public WeatherServiceClient(/* endpoint / config / runtime */)
+    {
+        IServiceProtocol serviceProtocol =
+            RestJsonProtocol.ForService(WeatherServiceSchema.Schema);
+
+        GetForecastBinding = new SmithyOperationBinding<GetForecastInput, GetForecastOutput>(
+            serviceName: "WeatherService",
+            operationName: "GetForecast",
+            protocol: serviceProtocol.ForOperation(GetForecastSchema.Schema),
+            modifyRequest: null);
+        // ... one binding per operation, plus runtime construction
+    }
 
     public async Task<GetForecastOutput> GetForecastAsync(
         GetForecastInput input,
         CancellationToken cancellationToken = default)
     {
         return await runtime
-            .InvokeAsync(
-                "WeatherService",
-                "GetForecast",
-                GetForecastProtocol,
-                input,
-                null,
-                DeserializeGetForecastErrorAsync,
-                cancellationToken)
+            .InvokeAsync(GetForecastBinding, input, cancellationToken)
             .ConfigureAwait(false);
     }
 }
 ```
+
+The binding carries the service and operation names, the bound operation
+protocol, and an optional request modifier. The runtime owns execution —
+interceptors, auth, retries — and modeled-error deserialization runs through the
+binding's protocol, so the generated method has no protocol-specific branches.
 
 For a different protocol, the model types and schemas stay the same. Only the
 service protocol factory changes, for example to
@@ -397,13 +405,29 @@ public interface IOperationProtocol<TInput, TOutput>
     TInput             DeserializeRequest(SmithyHttpRequest request);   // server
     SmithyHttpResponse SerializeResponse(TOutput output);
 
+    // errors
     bool    IsErrorResponse(SmithyHttpResponse response);
     string? GetErrorDiscriminator(SmithyHttpResponse response);
-    TError  DeserializeError<TError>(Schema<TError> errorSchema, SmithyHttpResponse response);
+    bool    RequiresErrorDiscriminator { get; }
+    bool    SupportsHttpStatusErrorFallback { get; }
+    IReadOnlyList<HttpOperationError> HttpErrors => [];
+
+    ValueTask<Exception?> DeserializeErrorAsync(
+        SmithyHttpResponse response,
+        CancellationToken cancellationToken = default);
+
     SmithyHttpResponse SerializeError<TError>(
         Schema<TError> errorSchema, TError value, string errorShapeId, int statusCode);
 }
 ```
+
+Modeled-error handling is precomputed: each protocol exposes its operation's
+modeled errors as `HttpErrors`, and the default `DeserializeErrorAsync`
+dispatches on the discriminator — falling back to the HTTP status code when
+`SupportsHttpStatusErrorFallback` is set — to build the typed exception.
+`RequiresErrorDiscriminator` and `SupportsHttpStatusErrorFallback` capture each
+protocol's error-detection rules (rpc-style protocols always carry a
+discriminator; REST can resolve an error from status alone).
 
 Each protocol provides a `ForService(ServiceSchema)` factory that returns an
 `IServiceProtocol`, which in turn hands out an `IOperationProtocol` per

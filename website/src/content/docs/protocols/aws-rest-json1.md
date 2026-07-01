@@ -72,6 +72,25 @@ Members without an explicit HTTP binding are serialized in the JSON body.
 `@requestCompression`, `@httpChecksumRequired`, and AWS-style error
 deserialization.
 
+## On the Wire
+
+`GetCity` binds `cityId` to the URI path label; the response comes back as a JSON
+body:
+
+```http
+GET /cities/123 HTTP/1.1
+Host: api.example.com
+Accept: application/json
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"name":"Seattle"}
+```
+
+Members without an HTTP binding are carried in the JSON body. Errors are
+discriminated by the `X-Amzn-Errortype` response header.
+
 ## Usage
 
 The generated `IWeatherServiceHandler` and `WeatherClient` are identical to every

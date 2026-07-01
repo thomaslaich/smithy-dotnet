@@ -115,14 +115,29 @@ lifecycle stages:
 ```csharp
 public interface IClientInterceptor
 {
-    void ReadBeforeExecution(SmithyContext context);
-    object? ModifyBeforeSerialization(SmithyContext context, object? input);
-    SmithyHttpRequest ModifyBeforeSigning(SmithyContext context, SmithyHttpRequest request);
-    SmithyHttpRequest ModifyBeforeTransmit(SmithyContext context, SmithyHttpRequest request);
-    void ReadAfterTransmit(SmithyContext context, SmithyHttpResponse response);
-    object? ModifyBeforeCompletion(SmithyContext context, object? output);
+    void OnBeforeExecution(SmithyContext context) { }
+    void OnBeforeSerialization(SmithyContext context, object? input) { }
+
+    ValueTask<SmithyHttpRequest> OnBeforeSigningAsync(
+        SmithyContext context,
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<SmithyHttpRequest> OnBeforeTransmitAsync(
+        SmithyContext context,
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken = default);
+
+    void OnAfterTransmit(SmithyContext context, SmithyHttpResponse response) { }
+    void OnAfterDeserialization(SmithyContext context, object? output) { }
+    void OnAfterExecution(SmithyContext context) { }
 }
 ```
+
+Every hook has a default implementation, so an interceptor overrides only the
+stages it cares about. The signing and transmit hooks are async so they can do
+I/O — fetching credentials or tokens — before the request goes out. Auth signing
+is itself modeled as an interceptor.
 
 Interceptors run in configured order before transmit and reverse order after
 transmit/completion. They are scoped to the client and must be safe for
