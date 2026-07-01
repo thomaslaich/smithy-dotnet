@@ -13,13 +13,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSmithy.Aws" Version="0.3.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Client" Version="0.3.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Codecs.Json" Version="0.3.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Codecs.Xml" Version="0.3.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Protocols.AwsJson" Version="0.3.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.3.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Protocols.RestXml" Version="0.3.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.MSBuild" Version="0.3.0-SNAPSHOT" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Aws" Version="0.4.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Client" Version="0.4.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Codecs.Json" Version="0.4.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Codecs.Xml" Version="0.4.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Protocols.AwsJson" Version="0.4.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.4.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Protocols.RestXml" Version="0.4.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.4.0-SNAPSHOT" PrivateAssets="all" />
   </ItemGroup>
 </Project>

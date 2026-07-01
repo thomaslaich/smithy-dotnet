@@ -32,7 +32,7 @@ ASP.NET Core's static file middleware can serve it.
 Add `NSmithy.Server.AspNetCore.Docs` to your server project:
 
 ```xml
-<PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="0.3.0" />
+<PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="0.4.0" />
 ```
 
 This package provides the `MapSmithyOpenApi()` and `MapSmithyDocs()` extension
@@ -101,7 +101,7 @@ is sufficient. If you use [pixi](https://pixi.sh) or
 Add `wwwroot/` to your `.gitignore` since the output is always regenerated at
 build time:
 
-```gitignore
+```txt
 wwwroot/
 ```
 
