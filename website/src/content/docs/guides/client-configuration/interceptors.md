@@ -45,6 +45,8 @@ Available hooks:
 
 Before hooks run in configured order. After hooks run in reverse order.
 
-The per-call `SmithyContext` includes `ServiceName`, `OperationName`, `Attempt`,
-and, for generated clients constructed with an endpoint or `HttpClient`,
-`Endpoint`.
+The per-call `SmithyContext` is a typed value bag read through
+`SmithyContextKeys` — for example `context.Get(SmithyContextKeys.ServiceName)`.
+The runtime populates `ServiceName` and `OperationName` (`string`), `Attempt`
+(`int`), and — for clients constructed with an endpoint or `HttpClient` —
+`Endpoint` (`Uri`).

@@ -71,6 +71,39 @@ operation GetCity {
 member that appears in a proto message — omitting it is a model error.
 `@protoNumType` selects integer wire types (`sint`/`uint`/`fixed`/`sfixed`).
 
+## On the Wire
+
+NSmithy speaks standard gRPC — length-prefixed protobuf over HTTP/2,
+interoperable with any gRPC peer. Each member's `@protoIndex` is its protobuf
+field number.
+
+A unary `GetCity { cityId: "123" }` call posts to
+`/{namespace}.{Service}/{Method}`:
+
+```
+POST /example.weather.Weather/GetCity HTTP/2
+content-type: application/grpc+proto
+te: trailers
+
+<gRPC frame><protobuf message>
+```
+
+Each message is a gRPC frame — a 1-byte compression flag, a 4-byte big-endian
+length, then the protobuf payload. For `cityId: "123"`:
+
+```
+00              compression flag (0 = uncompressed)
+00 00 00 05     message length = 5 bytes (big-endian)
+0a              field 1, wire type 2 (LEN)   ← cityId, @protoIndex(1)
+03              string length = 3
+31 32 33        "123"
+```
+
+The response returns the output in the same framing and signals the result with
+the `grpc-status` trailer (`0` = OK). Modeled errors return HTTP 200 with a
+non-zero `grpc-status`; NSmithy carries the Smithy error shape id in the
+`grpc-message` / `x-smithy-grpc-error` trailer for typed dispatch.
+
 ## Server
 
 gRPC is the one protocol where the hosting and client code differs from the

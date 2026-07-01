@@ -29,7 +29,8 @@ All day-to-day tasks are defined as [just](https://just.systems) recipes. Run
 | Recipe | What it does |
 |---|---|
 | `just restore` | Restore NuGet packages |
-| `just build` | Build in Release configuration |
+| `just codegen` | Run Smithy code generation (Java plugin → generated C#) |
+| `just build` | Build in Release configuration (runs `codegen` and `restore` first) |
 | `just test` | Run the test suite |
 | `just fmt` | Format all sources (C#, Nix, YAML, Justfile) |
 | `just check-format` | Verify formatting (used in CI) |

@@ -33,27 +33,35 @@ the protocol's normal rules.
 
 ## Event Streams
 
-Event-stream operation protocols should be named explicitly as event-stream
-protocols:
+Event-stream operations are bound through the same `IServiceProtocol` that hands
+out unary operations. Alongside `ForOperation`, it exposes three event-stream
+binding methods with default implementations that throw `NotSupportedException`,
+so a protocol opts in only to the streaming shapes it actually supports:
 
 ```csharp
-public interface IEventStreamServiceProtocol
+public interface IServiceProtocol
 {
+    IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation);
+
     IServerEventStreamOperationProtocol<TInput, TOutputEvent>
         ForServerEventStreamOperation<TInput, TOutput, TOutputEvent>(
             OperationSchema<TInput, TOutput> operation,
-            Schema<TOutputEvent> outputEvent);
+            Schema<TOutputEvent> outputEvent)
+        => throw new NotSupportedException();
 
     IClientEventStreamOperationProtocol<TInputEvent, TOutput>
         ForClientEventStreamOperation<TInput, TInputEvent, TOutput>(
             OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent);
+            Schema<TInputEvent> inputEvent)
+        => throw new NotSupportedException();
 
     IBidirectionalEventStreamOperationProtocol<TInputEvent, TOutputEvent>
         ForBidirectionalEventStreamOperation<TInput, TOutput, TInputEvent, TOutputEvent>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent,
-            Schema<TOutputEvent> outputEvent);
+            Schema<TOutputEvent> outputEvent)
+        => throw new NotSupportedException();
 }
 ```
 
@@ -117,24 +125,27 @@ Streaming blob payloads belong to the unary operation path. A `GetObject`-style
 operation is still one request and one response; only the payload member is a
 stream.
 
-The HTTP model should use an explicit body abstraction instead of parallel
-nullable byte and stream properties:
+The HTTP model represents the body as an explicit abstraction rather than
+parallel nullable byte and stream properties:
 
 ```csharp
 public abstract record SmithyHttpBody
 {
+    public static SmithyHttpBody Empty { get; }
+
     public sealed record Bytes(byte[] Content) : SmithyHttpBody;
 
-    public sealed record Stream(
+    public sealed record Streaming(
         System.IO.Stream Content,
         long? ContentLength = null
     ) : SmithyHttpBody;
 }
 ```
 
-`SmithyHttpRequest` and `SmithyHttpResponse` carry `SmithyHttpBody?`. Protocols
-that buffer payloads use `SmithyHttpBody.Bytes`; protocols that bind a streaming
-blob payload use `SmithyHttpBody.Stream`.
+`SmithyHttpRequest` and `SmithyHttpResponse` carry a non-nullable
+`SmithyHttpBody` that defaults to `SmithyHttpBody.Empty`. Protocols that buffer
+payloads use `SmithyHttpBody.Bytes`; protocols that bind a streaming blob payload
+use `SmithyHttpBody.Streaming`.
 
 ### Generated API
 

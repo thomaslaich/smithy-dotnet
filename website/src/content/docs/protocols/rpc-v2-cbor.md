@@ -60,6 +60,31 @@ structure NoSuchResource {
 }
 ```
 
+## On the Wire
+
+rpcv2Cbor is RPC-style over a fixed path with a CBOR body. The bodies below are
+shown in CBOR diagnostic notation; on the wire they are binary CBOR (structures
+are encoded as indefinite-length maps):
+
+```http
+POST /service/Weather/operation/GetCity HTTP/1.1
+Host: api.example.com
+Smithy-Protocol: rpc-v2-cbor
+Content-Type: application/cbor
+Accept: application/cbor
+
+{"cityId": "123"}      # CBOR, diagnostic notation
+
+HTTP/1.1 200 OK
+Smithy-Protocol: rpc-v2-cbor
+Content-Type: application/cbor
+
+{"name": "Seattle"}    # CBOR, diagnostic notation
+```
+
+The path is always `/service/{Service}/operation/{Operation}` — operations carry
+no `@http` traits. Errors carry a `__type` discriminator in the CBOR body.
+
 ## Usage
 
 The generated handler and client are identical to every other HTTP-JSON/CBOR
