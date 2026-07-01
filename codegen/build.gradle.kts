@@ -22,7 +22,7 @@ allprojects {
     // The release pipeline overrides this with `-Pversion=<x.y.z>` so the published
     // Maven Central artifact carries the matching release version.
     version = (findProperty("version") as String?).takeUnless { it.isNullOrBlank() || it == "unspecified" }
-        ?: "0.3.0-SNAPSHOT"
+        ?: "0.4.0-SNAPSHOT"
 }
 
 subprojects {

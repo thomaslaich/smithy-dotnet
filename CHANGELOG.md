@@ -11,6 +11,44 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.4.0]
+
+This release expands protocol and authentication coverage, adds generated
+bidirectional gRPC event streaming, and moves the generated client stack onto the
+new runtime pipeline with interceptors, auth-scheme resolution, retry, and
+precomputed operation bindings.
+
+### Added
+
+- **AWS JSON client protocol.** `NSmithy.Protocols.AwsJson` adds client-side
+  support for AWS JSON protocol services. (#60)
+- **AWS authentication.** `NSmithy.Aws` adds SigV4 request signing, generated
+  auth-scheme wiring, and an AWS LocalStack example for exercising real AWS-style
+  authentication locally. (#61)
+- **gRPC event streaming.** Generated gRPC clients and ASP.NET Core servers now
+  support bidirectional event streams, with an interop example that can compare
+  NSmithy's native gRPC transport against `Grpc.Net`. (#62)
+- **Client runtime pipeline.** Generated clients now route calls through
+  `SmithyClientRuntime`, interceptor hooks, auth resolution, and runtime-owned
+  retry strategy configuration. (#65, #66, #67)
+- **Analyzer coverage.** Java codegen builds now use Error Prone, and .NET builds
+  enable globalization analyzers. (#63)
+
+### Changed
+
+- **Middleware replaced by interceptors.** The old client middleware abstraction
+  has been removed in favor of Smithy-style interceptors. (#69)
+- **Client operation dispatch simplified.** The generated client no longer wraps
+  calls in `SmithyOperationInvoker`; operation bindings and modeled error
+  deserializers are precomputed at construction time. (#70, #73, #74, #76)
+- **Docs reworked.** The README, landing page, docs theme, and client
+  configuration guides were reorganized around the current client architecture.
+  (#68, #72, #75)
+
+### Packages
+
+All packages are published to NuGet at `0.4.0`.
+
 ## [0.3.0]
 
 Native gRPC arrives, and client construction is reworked so a single generated
@@ -178,7 +216,8 @@ All published to NuGet at `0.1.0`:
 - **Protocols:** `NSmithy.Protocols.Rest`, `NSmithy.Protocols.RestJson`, `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`
 - **Tooling:** `NSmithy.Templates` (project templates), `dotnet-nsmithy` (CLI tool)
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/thomaslaich/smithy-dotnet/releases/tag/v0.1.0

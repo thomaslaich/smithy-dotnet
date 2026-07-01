@@ -11,7 +11,7 @@
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <VersionPrefix>0.3.0</VersionPrefix>
+    <VersionPrefix>0.4.0</VersionPrefix>
     <VersionSuffix>SNAPSHOT</VersionSuffix>
     <Authors>Thomas Laich</Authors>
     <Description>NSmithy — C# code generation and runtime toolkit for Smithy models.</Description>
