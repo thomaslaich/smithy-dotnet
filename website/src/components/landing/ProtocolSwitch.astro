@@ -197,7 +197,8 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
   }
 
   /* Panels — all stacked in one grid cell so the widget height is fixed to the
-     tallest protocol and never jumps as it auto-cycles. */
+     tallest protocol and never jumps as it auto-cycles. On mobile the auto-cycle
+     is disabled and this stacking is dropped (see the stacked media query). */
   .psw__panels {
     display: grid;
   }
@@ -302,6 +303,11 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
       border-left: none;
       border-top: 1px solid #17171f;
     }
+    /* Stacked: auto-cycle is off (see script), so the panel follows the active
+       protocol's natural height instead of reserving the tallest one's. */
+    .psw__panel:not(.is-active) {
+      display: none;
+    }
   }
 </style>
 
@@ -312,6 +318,10 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
     const dots = Array.from(root.querySelectorAll<HTMLElement>('.psw__dot'));
     const caps = Array.from(root.querySelectorAll<HTMLElement>('.psw__cap'));
     const interval = Number(root.dataset.cycle || '4200');
+    // On mobile the request/response columns stack vertically; the panels then
+    // take their natural height, so auto-cycling would make the page jump. Skip
+    // the auto-advance while stacked (manual tab/dot taps still work).
+    const stacked = window.matchMedia?.('(max-width: 40rem)');
     let idx = 0;
     let paused = false;
 
@@ -343,7 +353,7 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
 
     if (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setInterval(() => {
-        if (!paused) show((idx + 1) % tabs.length);
+        if (!paused && !stacked?.matches) show((idx + 1) % tabs.length);
       }, interval);
     }
   });
