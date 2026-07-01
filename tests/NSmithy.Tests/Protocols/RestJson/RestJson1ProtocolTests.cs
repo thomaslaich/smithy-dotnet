@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using Microsoft.AspNetCore.Http;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Http;
@@ -89,7 +90,8 @@ public sealed class RestJson1ProtocolTests
         Assert.Equal("/users/ada%20lovelace", request.RequestUri);
         Assert.Equal("token-123", request.Headers["X-Request-Token"].Single());
         Assert.Equal("application/json", request.ContentType);
-        Assert.Equal("{\"displayName\":\"Ada\"}", Encoding.UTF8.GetString(request.Content!));
+        var body = Assert.IsType<SmithyHttpBody.Bytes>(request.Body);
+        Assert.Equal("{\"displayName\":\"Ada\"}", Encoding.UTF8.GetString(body.Content));
     }
 
     [Fact]
@@ -140,7 +142,7 @@ public sealed class RestJson1ProtocolTests
         );
         var request = new SmithyHttpRequest(HttpMethod.Put, "/users/ada%20lovelace")
         {
-            Content = Encoding.UTF8.GetBytes("{\"displayName\":\"Ada\"}"),
+            Body = new SmithyHttpBody.Bytes(Encoding.UTF8.GetBytes("{\"displayName\":\"Ada\"}")),
             ContentType = "application/json",
         };
         request.Headers["X-Request-Token"] = ["token-123"];
@@ -252,7 +254,7 @@ public sealed class RestJson1ProtocolTests
             request.RequestUri
         );
         Assert.Equal("abc", request.Headers["X-Extra-Trace"].Single());
-        Assert.Null(request.Content);
+        Assert.Same(SmithyHttpBody.Empty, request.Body);
         Assert.Null(request.ContentType);
     }
 
@@ -671,6 +673,30 @@ public sealed class RestJson1ProtocolTests
 
     public sealed class UploadUserAvatarOutputBuilder { }
 
+    public sealed record UploadUserAvatarStreamInput(
+        string UserId,
+        string Checksum,
+        Stream Payload
+    );
+
+    public sealed class UploadUserAvatarStreamInputBuilder
+    {
+        public string? UserId { get; set; }
+
+        public string? Checksum { get; set; }
+
+        public Stream? Payload { get; set; }
+    }
+
+    public sealed record GetUserAvatarStreamOutput(string ETag, Stream Payload);
+
+    public sealed class GetUserAvatarStreamOutputBuilder
+    {
+        public string? ETag { get; set; }
+
+        public Stream? Payload { get; set; }
+    }
+
     [Fact]
     public void RestJson1ProtocolSerializesHttpPayload()
     {
@@ -730,8 +756,240 @@ public sealed class RestJson1ProtocolTests
         Assert.Equal("/users/ada/avatar", request.RequestUri);
         Assert.Equal("abc123", request.Headers["X-Checksum"].Single());
         Assert.Equal("application/octet-stream", request.ContentType);
-        Assert.Equal(payload, request.Content);
+        var body = Assert.IsType<SmithyHttpBody.Bytes>(request.Body);
+        Assert.Equal(payload, body.Content);
     }
+
+    [Fact]
+    public void RestJson1ProtocolSerializesStreamingBlobPayloadWithoutBuffering()
+    {
+        var inputSchema = StreamingUploadInputSchema();
+        var outputSchema = Schemas
+            .Structure<UploadUserAvatarOutput, UploadUserAvatarOutputBuilder>(
+                new ShapeId("example", "UploadUserAvatarOutput")
+            )
+            .Build(
+                static () => new UploadUserAvatarOutputBuilder(),
+                static _ => new UploadUserAvatarOutput()
+            );
+        var operation = Schemas.Operation(
+            new ShapeId("example", "UploadUserAvatar"),
+            inputSchema,
+            outputSchema,
+            traits: [RestTraits.HttpTrait("PUT", "/users/{userId}/avatar")]
+        );
+        var payload = new MemoryStream("avatar bytes"u8.ToArray());
+        payload.Position = 2;
+        var input = new UploadUserAvatarStreamInput("ada", "abc123", payload);
+
+        var request = Protocol(operation).SerializeRequest(input);
+
+        Assert.Equal(HttpMethod.Put, request.Method);
+        Assert.Equal("/users/ada/avatar", request.RequestUri);
+        Assert.Equal("abc123", request.Headers["X-Checksum"].Single());
+        Assert.Equal("application/octet-stream", request.ContentType);
+        var body = Assert.IsType<SmithyHttpBody.Streaming>(request.Body);
+        Assert.Same(payload, body.Content);
+        Assert.Equal(payload.Length - 2, body.ContentLength);
+        Assert.False(request.ExpectStreamingResponse);
+    }
+
+    [Fact]
+    public void RestJson1ProtocolDeserializesStreamingBlobPayloadWithoutBuffering()
+    {
+        var inputSchema = StreamingUploadInputSchema();
+        var outputSchema = Schemas
+            .Structure<UploadUserAvatarOutput, UploadUserAvatarOutputBuilder>(
+                new ShapeId("example", "UploadUserAvatarOutput")
+            )
+            .Build(
+                static () => new UploadUserAvatarOutputBuilder(),
+                static _ => new UploadUserAvatarOutput()
+            );
+        var operation = Schemas.Operation(
+            new ShapeId("example", "UploadUserAvatar"),
+            inputSchema,
+            outputSchema,
+            traits: [RestTraits.HttpTrait("PUT", "/users/{userId}/avatar")]
+        );
+        var payload = new MemoryStream("avatar bytes"u8.ToArray());
+        var request = new SmithyHttpRequest(HttpMethod.Put, "/users/ada/avatar")
+        {
+            Body = new SmithyHttpBody.Streaming(payload, payload.Length),
+            ContentType = "application/octet-stream",
+        };
+        request.Headers["X-Checksum"] = ["abc123"];
+
+        var input = Protocol(operation).DeserializeRequest(request);
+
+        Assert.Equal("ada", input.UserId);
+        Assert.Equal("abc123", input.Checksum);
+        Assert.Same(payload, input.Payload);
+    }
+
+    [Fact]
+    public void RestJson1ProtocolDeserializesStreamingBlobResponseWithoutBuffering()
+    {
+        var inputSchema = Schemas
+            .Structure<GetUserOutput, GetUserOutputBuilder>(new ShapeId("example", "GetUserInput"))
+            .Build(static () => new GetUserOutputBuilder(), static _ => new GetUserOutput());
+        var outputSchema = StreamingAvatarOutputSchema();
+        var operation = Schemas.Operation(
+            new ShapeId("example", "GetUserAvatar"),
+            inputSchema,
+            outputSchema,
+            traits: [RestTraits.HttpTrait("GET", "/users/{userId}/avatar")]
+        );
+        var payload = new MemoryStream("avatar bytes"u8.ToArray());
+        var response = new SmithyHttpResponse(
+            HttpStatusCode.OK,
+            null,
+            new SmithyHttpBody.Streaming(payload),
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["ETag"] = ["etag-1"],
+            },
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Content-Type"] = ["application/octet-stream"],
+            }
+        );
+
+        var output = Protocol(operation).DeserializeResponse(response);
+
+        Assert.Equal("etag-1", output.ETag);
+        Assert.Same(payload, output.Payload);
+    }
+
+    [Fact]
+    public void RestJson1ProtocolSerializesStreamingBlobResponseWithoutBuffering()
+    {
+        var inputSchema = Schemas
+            .Structure<GetUserOutput, GetUserOutputBuilder>(new ShapeId("example", "GetUserInput"))
+            .Build(static () => new GetUserOutputBuilder(), static _ => new GetUserOutput());
+        var outputSchema = StreamingAvatarOutputSchema();
+        var operation = Schemas.Operation(
+            new ShapeId("example", "GetUserAvatar"),
+            inputSchema,
+            outputSchema,
+            traits: [RestTraits.HttpTrait("GET", "/users/{userId}/avatar")]
+        );
+        var payload = new MemoryStream("avatar bytes"u8.ToArray());
+        var output = new GetUserAvatarStreamOutput("etag-1", payload);
+
+        var response = Protocol(operation).SerializeResponse(output);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("etag-1", response.Headers["ETag"].Single());
+        Assert.Equal("application/octet-stream", response.ContentHeaders["Content-Type"].Single());
+        Assert.Empty(response.Content);
+        var body = Assert.IsType<SmithyHttpBody.Streaming>(response.Body);
+        Assert.Same(payload, body.Content);
+        Assert.Equal(payload.Length, body.ContentLength);
+    }
+
+    [Fact]
+    public async Task AspNetCoreProtocolWritesStreamingBlobResponseLength()
+    {
+        var payload = new MemoryStream("avatar bytes"u8.ToArray());
+        var response = new SmithyHttpResponse(
+            HttpStatusCode.OK,
+            null,
+            new SmithyHttpBody.Streaming(payload, payload.Length),
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase),
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Content-Type"] = ["application/octet-stream"],
+            }
+        );
+        var httpContext = new DefaultHttpContext();
+        httpContext.Response.Body = new MemoryStream();
+
+        await NSmithy.Server.AspNetCore.SmithyAspNetCoreProtocol.WriteSmithyHttpResponseAsync(
+            httpContext,
+            response
+        );
+
+        Assert.Equal(payload.Length, httpContext.Response.ContentLength);
+        httpContext.Response.Body.Position = 0;
+        using var reader = new StreamReader(httpContext.Response.Body, Encoding.UTF8);
+        Assert.Equal("avatar bytes", await reader.ReadToEndAsync());
+    }
+
+    private static StructSchema<
+        UploadUserAvatarStreamInput,
+        UploadUserAvatarStreamInputBuilder
+    > StreamingUploadInputSchema() =>
+        Schemas
+            .Structure<UploadUserAvatarStreamInput, UploadUserAvatarStreamInputBuilder>(
+                new ShapeId("example", "UploadUserAvatarInput")
+            )
+            .Required(
+                "userId",
+                static input => input.UserId,
+                static (builder, value) => builder.UserId = value,
+                Schemas.String,
+                traits: [RestTraits.HttpLabelTrait]
+            )
+            .Required(
+                "checksum",
+                static input => input.Checksum,
+                static (builder, value) => builder.Checksum = value,
+                Schemas.String,
+                traits: [RestTraits.HttpHeaderTrait("X-Checksum")]
+            )
+            .Required(
+                "payload",
+                static input => input.Payload,
+                static (builder, value) => builder.Payload = value,
+                Schemas.StreamingBlob,
+                traits:
+                [
+                    RestTraits.HttpPayloadTrait,
+                    new Trait(RestTraits.Streaming),
+                    new Trait(RestTraits.RequiresLength),
+                ]
+            )
+            .Build(
+                static () => new UploadUserAvatarStreamInputBuilder(),
+                static builder => new UploadUserAvatarStreamInput(
+                    builder.UserId!,
+                    builder.Checksum!,
+                    builder.Payload!
+                )
+            );
+
+    private static StructSchema<
+        GetUserAvatarStreamOutput,
+        GetUserAvatarStreamOutputBuilder
+    > StreamingAvatarOutputSchema() =>
+        Schemas
+            .Structure<GetUserAvatarStreamOutput, GetUserAvatarStreamOutputBuilder>(
+                new ShapeId("example", "GetUserAvatarOutput")
+            )
+            .Required(
+                "eTag",
+                static output => output.ETag,
+                static (builder, value) => builder.ETag = value,
+                Schemas.String,
+                traits: [RestTraits.HttpHeaderTrait("ETag")]
+            )
+            .Required(
+                "payload",
+                static output => output.Payload,
+                static (builder, value) => builder.Payload = value,
+                Schemas.StreamingBlob,
+                traits:
+                [
+                    RestTraits.HttpPayloadTrait,
+                    new Trait(RestTraits.Streaming),
+                    new Trait(RestTraits.RequiresLength),
+                ]
+            )
+            .Build(
+                static () => new GetUserAvatarStreamOutputBuilder(),
+                static builder => new GetUserAvatarStreamOutput(builder.ETag!, builder.Payload!)
+            );
 
     public sealed record GetUserProfileOutput(
         int StatusCode,

@@ -28,11 +28,9 @@ internal sealed class QueryParameterAuthInterceptor(string name, string value) :
 
         var signed = new SmithyHttpRequest(original.Method, requestUri)
         {
-            Content = original.Content,
+            Body = original.Body,
             ContentType = original.ContentType,
             ExpectStreamingResponse = original.ExpectStreamingResponse,
-            StreamingContent = original.StreamingContent,
-            StreamingContentLength = original.StreamingContentLength,
         };
         foreach (var header in original.Headers)
         {

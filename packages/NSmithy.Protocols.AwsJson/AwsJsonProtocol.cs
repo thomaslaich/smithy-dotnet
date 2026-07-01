@@ -82,10 +82,11 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         {
             var request = new SmithyHttpRequest(HttpMethod.Post, "/")
             {
-                Content =
+                Body = new SmithyHttpBody.Bytes(
                     typeof(TInput) == typeof(SmithyUnit)
                         ? EmptyJsonObject
-                        : requestCodec.Serialize(input),
+                        : requestCodec.Serialize(input)
+                ),
                 ContentType = contentType,
             };
             request.Headers["Accept"] = [contentType];
@@ -118,9 +119,8 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         public TInput DeserializeRequest(SmithyHttpRequest request)
         {
             ArgumentNullException.ThrowIfNull(request);
-            return request.Content is null || request.Content.Length == 0
-                ? default!
-                : requestCodec.Deserialize(request.Content);
+            var content = BodyBytes(request.Body);
+            return content.Length == 0 ? default! : requestCodec.Deserialize(content);
         }
 
         public SmithyHttpResponse SerializeResponse(TOutput output) =>
@@ -152,6 +152,9 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
 
             return default!;
         }
+
+        private static byte[] BodyBytes(SmithyHttpBody body) =>
+            body is SmithyHttpBody.Bytes bytes ? bytes.Content : [];
 
         private static HttpOperationError[] CompileErrors(
             IReadOnlyList<IOperationErrorSchema> errors
