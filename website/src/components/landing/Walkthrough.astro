@@ -133,11 +133,13 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
           ))
         }
       </div>
-      {
-        tabsHtml.map((t, i) => (
-          <pre class={`wt__code wt__outcode${i === 0 ? ' is-active' : ''}`} data-idx={i} hidden={i !== 0} set:html={t.codeHtml} />
-        ))
-      }
+      <div class="wt__panels">
+        {
+          tabsHtml.map((t, i) => (
+            <pre class={`wt__code wt__outcode${i === 0 ? ' is-active' : ''}`} data-idx={i} set:html={t.codeHtml} />
+          ))
+        }
+      </div>
     </div>
   </div>
 
@@ -298,6 +300,21 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
     font-weight: 600;
   }
 
+  /* Output code panels — all stacked in one grid cell so the widget height is
+     fixed to the tallest tab (Server) and never jumps as it auto-cycles or the
+     visitor switches between Server and Client. */
+  .wt__panels {
+    display: grid;
+  }
+  .wt__outcode {
+    grid-area: 1 / 1;
+    min-width: 0;
+  }
+  .wt__outcode:not(.is-active) {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   /* Code */
   .wt__code {
     margin: 0;
@@ -309,9 +326,6 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
     line-height: 1.75;
     color: #c9d1d9;
     white-space: pre;
-  }
-  .wt__outcode[hidden] {
-    display: none;
   }
   .wt__code::-webkit-scrollbar {
     height: 7px;
@@ -410,7 +424,7 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
         });
       tabs.forEach((t, i) => t.setAttribute('aria-selected', i === n ? 'true' : 'false'));
       toggle(tabs, false);
-      toggle(outs, true);
+      toggle(outs, false);
       toggle(dots, false);
       toggle(caps, true);
     }
