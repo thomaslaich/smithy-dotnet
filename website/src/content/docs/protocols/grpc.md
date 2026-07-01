@@ -42,27 +42,27 @@ input or output:
 ```smithy
 $version: "2"
 
-namespace example.hello
+namespace example.weather
 
 use alloy.proto#grpc
 use alloy.proto#protoIndex
 
 @grpc
-service HelloService {
+service Weather {
     version: "2026-01-01"
-    operations: [SayHello]
+    operations: [GetCity]
 }
 
-operation SayHello {
+operation GetCity {
     input := {
         @required
         @protoIndex(1)
-        name: String
+        cityId: String
     }
     output := {
         @required
         @protoIndex(1)
-        message: String
+        name: String
     }
 }
 ```
@@ -73,13 +73,18 @@ member that appears in a proto message — omitting it is a model error.
 
 ## Server
 
+gRPC is the one protocol where the hosting and client code differs from the
+[shared usage example](/smithy-dotnet/protocols/usage/): it needs HTTP/2
+transport and a gRPC-specific client protocol. The generated handler interface
+itself works the same way — you implement one method per operation.
+
 Configure Kestrel to serve HTTP/2 on a dedicated port. Cleartext gRPC requires
 HTTP/2; mixing HTTP/1.1 REST and cleartext gRPC on the same port is unreliable
-without TLS/ALPN. There is no `AddGrpc()` call — the generated `MapHelloServiceGrpc`
+without TLS/ALPN. There is no `AddGrpc()` call — the generated `MapWeatherServiceGrpc`
 maps the gRPC method routes itself:
 
 ```csharp
-using Example.Hello;
+using Example.Weather;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -87,36 +92,36 @@ builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenLocalhost(5001, o => o.Protocols = HttpProtocols.Http2);
 });
-builder.Services.AddHelloServiceHandler<HelloHandler>();
+builder.Services.AddWeatherServiceHandler<WeatherHandler>();
 
 var app = builder.Build();
-app.MapHelloServiceGrpc();
+app.MapWeatherServiceGrpc();
 app.Run();
 
-internal sealed class HelloHandler : IHelloServiceHandler
+internal sealed class WeatherHandler : IWeatherServiceHandler
 {
-    public Task<SayHelloOutput> SayHelloAsync(
-        SayHelloInput input, CancellationToken ct = default) =>
-        Task.FromResult(new SayHelloOutput($"Hello, {input.Name}!"));
+    public Task<GetCityOutput> GetCityAsync(
+        GetCityInput input, CancellationToken ct = default) =>
+        Task.FromResult(new GetCityOutput("Seattle"));
 }
 ```
 
 ## Client
 
-The generated `HelloServiceClient` is a native NSmithy client over an HTTP/2
+The generated `WeatherClient` is a native NSmithy client over an HTTP/2
 `HttpClient` — no `GrpcChannel`. Pass `GrpcProtocol` to select gRPC; the client
 configures the HTTP/2 `HttpClient` for you:
 
 ```csharp
-using Example.Hello;
+using Example.Weather;
 using NSmithy.Protocols.Grpc;
 
-var client = new HelloServiceClient(
+var client = new WeatherClient(
     new Uri("http://localhost:5001"),
     new() { Protocol = new GrpcProtocol() });
 
-var response = await client.SayHelloAsync(new SayHelloInput("world"));
-Console.WriteLine(response.Message); // Hello, world!
+var city = await client.GetCityAsync(new GetCityInput("SEA"));
+Console.WriteLine(city.Name); // Seattle
 ```
 
 For a service that also declares an HTTP protocol (e.g. `@simpleRestJson` +
@@ -133,6 +138,63 @@ event union. Generated clients and handlers use `IAsyncEnumerable<TEvent>`:
 - server streaming returns `IAsyncEnumerable<TEvent>`
 - client streaming accepts `IAsyncEnumerable<TEvent>`
 - bidirectional streaming accepts and returns `IAsyncEnumerable<TEvent>`
+
+Model a streaming operation by targeting a `@streaming` union. Each event member
+carries a `@protoIndex`, the same as any other gRPC member:
+
+```smithy
+@streaming
+union ChatEvent {
+    @protoIndex(1)
+    message: MessageEvent
+}
+
+/// Server-streaming: one request, many events.
+operation WatchRoom {
+    input := {
+        @required
+        @protoIndex(1)
+        room: String
+    }
+    output := {
+        @protoIndex(1)
+        events: ChatEvent
+    }
+}
+```
+
+The handler returns an `IAsyncEnumerable<ChatEvent>` and yields events as they
+occur:
+
+```csharp
+public async IAsyncEnumerable<ChatEvent> WatchRoomAsync(
+    WatchRoomInput input,
+    [EnumeratorCancellation] CancellationToken ct = default)
+{
+    for (var i = 1; i <= 3; i++)
+    {
+        await Task.Delay(25, ct);
+        yield return ChatEvent.FromMessage(
+            new MessageEvent(User: "server", Text: $"{input.Room}: update {i}"));
+    }
+}
+```
+
+The client consumes the stream with `await foreach`:
+
+```csharp
+await foreach (var evt in client.WatchRoomAsync(new WatchRoomInput("general"), ct))
+{
+    if (evt is ChatEvent.Message m)
+        Console.WriteLine($"{m.Value.User}: {m.Value.Text}");
+}
+```
+
+Client-streaming and bidirectional operations follow the same shape — the
+streaming member becomes an `IAsyncEnumerable<TEvent>` parameter, a return
+value, or both. See the runnable
+[`examples/grpc-streaming`](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/grpc-streaming)
+project for all three.
 
 Streaming payload blobs are not implemented yet. The streaming support here is
 for event streams, matching the common gRPC shape.

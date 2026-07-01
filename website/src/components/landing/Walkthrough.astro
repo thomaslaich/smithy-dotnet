@@ -302,7 +302,8 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
 
   /* Output code panels — all stacked in one grid cell so the widget height is
      fixed to the tallest tab (Server) and never jumps as it auto-cycles or the
-     visitor switches between Server and Client. */
+     visitor switches between Server and Client. On mobile the auto-cycle is
+     disabled and this stacking is dropped (see the stacked media query below). */
   .wt__panels {
     display: grid;
   }
@@ -398,6 +399,11 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
       border-left: none;
       border-top: 1px solid #17171f;
     }
+    /* Stacked: auto-cycle is off (see script), so the output follows the active
+       tab's natural height instead of reserving the tallest tab's height. */
+    .wt__outcode:not(.is-active) {
+      display: none;
+    }
   }
 </style>
 
@@ -408,6 +414,10 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
     const dots = Array.from(root.querySelectorAll<HTMLElement>('.wt__dot'));
     const caps = Array.from(root.querySelectorAll<HTMLElement>('.wt__cap'));
     const interval = Number(root.dataset.cycle || '3600');
+    // On mobile the source/output sections stack vertically; the panels then
+    // take their natural height, so auto-cycling would make the page jump. Skip
+    // the auto-advance while stacked (manual tab/dot taps still work).
+    const stacked = window.matchMedia?.('(max-width: 52rem)');
     let idx = 0;
     let paused = false;
 
@@ -440,7 +450,7 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
 
     if (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setInterval(() => {
-        if (!paused) show((idx + 1) % tabs.length);
+        if (!paused && !stacked?.matches) show((idx + 1) % tabs.length);
       }, interval);
     }
   });

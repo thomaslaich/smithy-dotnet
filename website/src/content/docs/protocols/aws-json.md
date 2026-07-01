@@ -35,36 +35,41 @@ Apply the AWS JSON protocol trait to the service:
 ```smithy
 $version: "2"
 
-namespace example.jsonrpc
+namespace example.weather
 
 use aws.protocols#awsJson1_1
 
 @awsJson1_1
-service ControlPlane {
+service Weather {
     version: "2026-01-01"
-    operations: [GetWidget]
+    operations: [GetCity]
 }
 
-operation GetWidget {
+operation GetCity {
     input := {
-        id: String
+        @required
+        cityId: String
     }
     output := {
+        @required
         name: String
     }
+    errors: [NoSuchResource]
+}
+
+@error("client")
+structure NoSuchResource {
+    @required
+    resourceType: String
 }
 ```
 
-## Client
+## Usage
 
-The generated client selects the declared protocol by default:
-
-```csharp
-using Example.Jsonrpc;
-
-var client = new ControlPlaneClient(new Uri("https://api.example.com"));
-var response = await client.GetWidgetAsync(new GetWidgetInput("abc"));
-```
+The generated client selects the declared protocol by default and is used
+exactly like every other NSmithy client — see [Client & Server
+Usage](/smithy-dotnet/protocols/usage/) for the client code. Only the
+`@awsJson1_1` (or `@awsJson1_0`) trait is specific to this protocol.
 
 AWS JSON support is client-only. NSmithy does not generate AWS JSON servers and
 does not yet provide AWS SDK-style endpoint resolution, credential chains,
