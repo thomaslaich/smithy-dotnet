@@ -145,7 +145,7 @@ public final class ClientGenerator implements Runnable {
               }
             } else {
               writer.write(
-                  "private readonly IOperationProtocol<$L, $L> $LProtocol;",
+                  "private readonly SmithyOperationBinding<$L, $L> $LBinding;",
                   SchemaGenerator.operationShapeType(context, op.getInputShape()),
                   SchemaGenerator.operationShapeType(context, op.getOutputShape()),
                   CSharpNaming.typeName(op.getId().getName()));
@@ -466,9 +466,16 @@ public final class ClientGenerator implements Runnable {
         continue;
       }
       writer.write(
-          "this.$LProtocol = serviceProtocol.ForOperation($L);",
+          "this.$LBinding = new SmithyOperationBinding<$L, $L>($L, $L,"
+              + " serviceProtocol.ForOperation($L), $L, Deserialize$LErrorAsync);",
           CSharpNaming.typeName(op.getId().getName()),
-          SchemaGenerator.operationSchemaAccessor(context, op));
+          SchemaGenerator.operationShapeType(context, op.getInputShape()),
+          SchemaGenerator.operationShapeType(context, op.getOutputShape()),
+          CSharpNaming.formatString(service.getId().getName()),
+          CSharpNaming.formatString(op.getId().getName()),
+          SchemaGenerator.operationSchemaAccessor(context, op),
+          requestModifier(op),
+          CSharpNaming.typeName(op.getId().getName()));
     }
   }
 
@@ -534,7 +541,6 @@ public final class ClientGenerator implements Runnable {
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String opName = CSharpNaming.typeName(op.getId().getName());
-    String deserName = "Deserialize" + opName + "ErrorAsync";
     String inputArg = hasInput ? "input" : "SmithyUnit.Value";
 
     writer.write("public async $L", operationSignature(sp, op));
@@ -550,24 +556,16 @@ public final class ClientGenerator implements Runnable {
 
           if (hasOutput) {
             writer.write(
-                "return await runtime.InvokeAsync($L, $L, $LProtocol, $L, $L, $L,"
+                "return await runtime.InvokeAsync($LBinding, $L,"
                     + " cancellationToken).ConfigureAwait(false);",
-                CSharpNaming.formatString(service.getId().getName()),
-                CSharpNaming.formatString(op.getId().getName()),
                 opName,
-                inputArg,
-                requestModifier(op),
-                deserName);
+                inputArg);
           } else {
             writer.write(
-                "await runtime.InvokeAsync($L, $L, $LProtocol, $L, $L, $L,"
+                "await runtime.InvokeAsync($LBinding, $L,"
                     + " cancellationToken).ConfigureAwait(false);",
-                CSharpNaming.formatString(service.getId().getName()),
-                CSharpNaming.formatString(op.getId().getName()),
                 opName,
-                inputArg,
-                requestModifier(op),
-                deserName);
+                inputArg);
             writer.write("return;");
           }
         });
@@ -725,7 +723,7 @@ public final class ClientGenerator implements Runnable {
   private void writeErrorDeserializer(Model model, OperationShape op) {
     String opName = CSharpNaming.typeName(op.getId().getName());
     String methodName = "Deserialize" + opName + "ErrorAsync";
-    String receiver = opName + "Protocol";
+    String receiver = opName + "Binding.Protocol";
     List<ShapeId> errorIds = new ArrayList<>(op.getErrors(service));
     errorIds.sort(Comparator.comparing(ShapeId::toString));
 

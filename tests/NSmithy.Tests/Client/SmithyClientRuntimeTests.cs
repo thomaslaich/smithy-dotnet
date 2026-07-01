@@ -104,6 +104,33 @@ public sealed class SmithyClientRuntimeTests
     }
 
     [Fact]
+    public async Task RuntimeInvokesOperationBinding()
+    {
+        var transport = new RecordingTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(transport);
+        var binding = new SmithyOperationBinding<string, string>(
+            "Weather",
+            "GetForecast",
+            new TextProtocol(),
+            request => request.Headers["x-test-binding"] = ["true"]
+        );
+
+        var output = await runtime.InvokeAsync(binding, "input");
+
+        Assert.Equal("output", output);
+        Assert.Equal("/input", transport.Request.RequestUri);
+        Assert.Equal(["true"], transport.Request.Headers["x-test-binding"]);
+    }
+
+    [Fact]
     public async Task RuntimeExposesConstructorEndpointInContext()
     {
         List<Uri> endpoints = [];
