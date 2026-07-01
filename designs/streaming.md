@@ -125,24 +125,27 @@ Streaming blob payloads belong to the unary operation path. A `GetObject`-style
 operation is still one request and one response; only the payload member is a
 stream.
 
-The HTTP model should use an explicit body abstraction instead of parallel
-nullable byte and stream properties:
+The HTTP model represents the body as an explicit abstraction rather than
+parallel nullable byte and stream properties:
 
 ```csharp
 public abstract record SmithyHttpBody
 {
+    public static SmithyHttpBody Empty { get; }
+
     public sealed record Bytes(byte[] Content) : SmithyHttpBody;
 
-    public sealed record Stream(
+    public sealed record Streaming(
         System.IO.Stream Content,
         long? ContentLength = null
     ) : SmithyHttpBody;
 }
 ```
 
-`SmithyHttpRequest` and `SmithyHttpResponse` carry `SmithyHttpBody?`. Protocols
-that buffer payloads use `SmithyHttpBody.Bytes`; protocols that bind a streaming
-blob payload use `SmithyHttpBody.Stream`.
+`SmithyHttpRequest` and `SmithyHttpResponse` carry a non-nullable
+`SmithyHttpBody` that defaults to `SmithyHttpBody.Empty`. Protocols that buffer
+payloads use `SmithyHttpBody.Bytes`; protocols that bind a streaming blob payload
+use `SmithyHttpBody.Streaming`.
 
 ### Generated API
 
