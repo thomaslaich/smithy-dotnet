@@ -51,9 +51,12 @@ Notes:
 
 ## Recommended Use
 
-- Prefer simpleRestJson if you want the smoothest end-to-end preview path.
+- Prefer simpleRestJson for the smoothest end-to-end preview path, especially
+  when your consumers are primarily .NET or Scala (via
+  [Smithy4s](https://disneystreaming.github.io/smithy4s/)).
 - Use AWS restJson1 when you need generated AWS-style REST/JSON clients or
-  ASP.NET Core server surfaces.
+  ASP.NET Core server surfaces, broad cross-ecosystem compatibility (most
+  official Smithy generators target it), or OpenAPI/Scalar generation.
 - Use `smithy.protocols#rpcv2Cbor` for binary CBOR-encoded services; client and
   server generation are both available.
 - Use AWS JSON or AWS restXml when you want to evaluate AWS-compatible client

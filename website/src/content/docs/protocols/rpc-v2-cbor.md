@@ -31,78 +31,41 @@ the protocol maps each operation to a fixed
 ```smithy
 $version: "2"
 
-namespace example.hello
+namespace example.weather
 
 use smithy.protocols#rpcv2Cbor
 
 @rpcv2Cbor
-service HelloService {
+service Weather {
     version: "2026-01-01"
-    operations: [SayHello]
+    operations: [GetCity]
 }
 
-operation SayHello {
+operation GetCity {
     input := {
         @required
-        name: String
+        cityId: String
     }
     output := {
         @required
-        message: String
+        name: String
     }
-    errors: [InvalidName]
+    errors: [NoSuchResource]
 }
 
 @error("client")
-structure InvalidName {
-    message: String
+structure NoSuchResource {
+    @required
+    resourceType: String
 }
 ```
 
-## Server
+## Usage
 
-Add the generated server handler to your ASP.NET Core app. The protocol path
-(`POST /service/{Service}/operation/{Operation}`) is mapped automatically:
-
-```csharp
-using Example.Hello;
-
-var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddHelloServiceHandler<MyHelloHandler>();
-
-var app = builder.Build();
-app.MapHelloServiceHttp();
-app.Run();
-
-internal sealed class MyHelloHandler : IHelloServiceHandler
-{
-    public Task<SayHelloOutput> SayHelloAsync(
-        SayHelloInput input,
-        CancellationToken cancellationToken = default
-    ) => Task.FromResult(new SayHelloOutput("my-server", $"Hello, {input.Name}!"));
-}
-```
-
-## Client
-
-The CBOR codec is wired up automatically by the generated client — no manual
-configuration is required:
-
-```csharp
-using Example.Hello;
-
-var client = new HelloServiceClient(new Uri("https://api.example.com"));
-
-try
-{
-    var response = await client.SayHelloAsync(new SayHelloInput("world"));
-    Console.WriteLine(response.Message);
-}
-catch (InvalidName ex)
-{
-    Console.WriteLine($"Error: {ex.Message}");
-}
-```
+The generated handler and client are identical to every other HTTP-JSON/CBOR
+protocol — see [Client & Server Usage](/smithy-dotnet/protocols/usage/). The CBOR
+codec is wired up automatically; the only thing specific to this protocol is the
+`@rpcv2Cbor` trait and the binary wire format on the fixed operation path.
 
 ## Example
 

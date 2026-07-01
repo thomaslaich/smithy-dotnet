@@ -13,7 +13,9 @@ A Smithy protocol trait on a service definition controls two things:
 NSmithy reads the protocol trait and generates the matching client and server
 surfaces. Your handler implementation is protocol-agnostic: the same
 `IMyServiceHandler` interface is used regardless of which protocol annotates the
-service.
+service. See [Client & Server Usage](/smithy-dotnet/protocols/usage/) for the
+canonical handler and client code — the protocol pages below only cover what is
+specific to each protocol (its trait, modeling rules, and wire format).
 
 ## Supported Protocols
 
@@ -27,21 +29,5 @@ service.
 | `smithy.protocols#rpcv2Cbor` | `@rpcv2Cbor` | .NET client, ASP.NET Core server | Preview |
 | `alloy.proto#grpc` | `@grpc` | gRPC client, ASP.NET Core gRPC server | Experimental |
 
-See [Protocol Status](/smithy-dotnet/protocols/status/) for conformance numbers and maturity details.
-
-## Which Protocol Should I Use?
-
-**[AWS restJson1](/smithy-dotnet/protocols/aws-rest-json1/)** is the
-recommended choice for new cross-ecosystem HTTP services. It has broad
-compatibility — most official Smithy code generators (Java, TypeScript, Python,
-Swift, Rust, Go) target `restJson1` — and NSmithy generates OpenAPI from it,
-giving you Scalar UI and standard tooling out of the box.
-
-**[simpleRestJson](/smithy-dotnet/protocols/simple-rest-json/)** is a simpler
-alternative if your consumers are exclusively .NET or Scala (via
-[Smithy4s](https://disneystreaming.github.io/smithy4s/)). It is the smoothest
-current NSmithy end-to-end path, but it has narrower ecosystem reach.
-
-**`alloy.proto#grpc`** is available for teams that need gRPC transport, but
-treat it as an early adopter path. It has the least maturity and more explicit
-modeling requirements.
+See [Protocol Status](/smithy-dotnet/protocols/status/) for conformance numbers,
+maturity details, and guidance on which protocol to choose.
