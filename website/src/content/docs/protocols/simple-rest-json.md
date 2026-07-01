@@ -31,8 +31,8 @@ numbers.
 
 ## Modeling
 
-The example below is adapted from the [Smithy quickstart](https://smithy.io/2.0/quickstart.html).
-It demonstrates resources, pagination, errors, and common HTTP binding traits.
+Apply `@simpleRestJson` to the service and Smithy's standard HTTP binding traits
+on operations and members:
 
 ```smithy
 $version: "2"
@@ -41,111 +41,25 @@ namespace example.weather
 
 use alloy#simpleRestJson
 
-/// Provides weather forecasts.
 @simpleRestJson
-@paginated(inputToken: "nextToken", outputToken: "nextToken", pageSize: "pageSize")
 service Weather {
-    version: "2006-03-01"
-    resources: [City]
-    operations: [GetCurrentTime]
-}
-
-resource City {
-    identifiers: { cityId: CityId }
-    properties: { coordinates: CityCoordinates }
-    read: GetCity
-    list: ListCities
-    resources: [Forecast]
-}
-
-resource Forecast {
-    identifiers: { cityId: CityId }
-    properties: { chanceOfRain: Float }
-    read: GetForecast
-}
-
-@pattern("^[A-Za-z0-9 ]+$")
-string CityId
-
-@readonly
-@http(method: "GET", uri: "/current-time")
-operation GetCurrentTime {
-    output := {
-        @required
-        time: Timestamp
-    }
+    version: "2026-01-01"
+    operations: [GetCity]
 }
 
 @readonly
 @http(method: "GET", uri: "/cities/{cityId}")
 operation GetCity {
-    input := for City {
+    input := {
         @required
         @httpLabel
-        $cityId
-    }
-    output := for City {
-        @required
-        @notProperty
-        name: String
-
-        @required
-        $coordinates
-    }
-    errors: [NoSuchResource]
-}
-
-@readonly
-@paginated(items: "items")
-@http(method: "GET", uri: "/cities")
-operation ListCities {
-    input := {
-        @httpQuery("nextToken")
-        nextToken: String
-
-        @httpQuery("pageSize")
-        pageSize: Integer
+        cityId: String
     }
     output := {
-        nextToken: String
-
         @required
-        items: CitySummaries
+        name: String
     }
-}
-
-@readonly
-@http(method: "GET", uri: "/cities/{cityId}/forecast")
-operation GetForecast {
-    input := for Forecast {
-        @required
-        @httpLabel
-        $cityId
-    }
-    output := for Forecast {
-        $chanceOfRain
-    }
-}
-
-structure CityCoordinates {
-    @required
-    latitude: Float
-
-    @required
-    longitude: Float
-}
-
-list CitySummaries {
-    member: CitySummary
-}
-
-@references([{resource: City}])
-structure CitySummary {
-    @required
-    cityId: CityId
-
-    @required
-    name: String
+    errors: [NoSuchResource]
 }
 
 @error("client")
@@ -155,81 +69,16 @@ structure NoSuchResource {
 }
 ```
 
-Key HTTP binding traits:
+Members without an explicit HTTP binding are serialized in the JSON body. For
+resources, pagination, and the full set of HTTP binding traits, see the
+[Modeling guide](/smithy-dotnet/guides/modeling/).
 
-| Trait | Binds member to |
-| --- | --- |
-| `@httpLabel` | URI path segment |
-| `@httpQuery("key")` | query string parameter |
-| `@httpHeader("name")` | request or response header |
-| `@httpPayload` | raw request/response body |
+## Usage
 
-Members without an explicit binding go into the JSON body.
-
-## Server
-
-NSmithy generates one `IWeatherServiceHandler` interface with a method for each
-operation. Implement it once; the generated ASP.NET Core minimal API adapter handles routing,
-serialization, and error dispatch.
-
-```csharp
-using Example.Weather;
-
-var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddWeatherServiceHandler<WeatherHandler>();
-
-var app = builder.Build();
-app.MapWeatherServiceHttp();
-app.Run();
-
-internal sealed class WeatherHandler : IWeatherServiceHandler
-{
-    public Task<GetCurrentTimeOutput> GetCurrentTimeAsync(
-        GetCurrentTimeInput input, CancellationToken ct = default) =>
-        Task.FromResult(new GetCurrentTimeOutput(DateTimeOffset.UtcNow));
-
-    public Task<GetCityOutput> GetCityAsync(
-        GetCityInput input, CancellationToken ct = default)
-    {
-        if (input.CityId == "unknown")
-            throw new NoSuchResource(null, "City");
-
-        return Task.FromResult(new GetCityOutput(
-            name: "Seattle",
-            coordinates: new CityCoordinates(47.6f, -122.3f)
-        ));
-    }
-
-    public Task<ListCitiesOutput> ListCitiesAsync(
-        ListCitiesInput input, CancellationToken ct = default) =>
-        Task.FromResult(new ListCitiesOutput(new CitySummaries([
-            new CitySummary("SEA", "Seattle"),
-            new CitySummary("NYC", "New York"),
-        ])));
-
-    public Task<GetForecastOutput> GetForecastAsync(
-        GetForecastInput input, CancellationToken ct = default) =>
-        Task.FromResult(new GetForecastOutput(chanceOfRain: 0.4f));
-}
-```
-
-Throwing a generated error type from a handler method causes the adapter to
-serialize it with the correct HTTP status code and JSON body.
-
-## Client
-
-```csharp
-using Example.Weather;
-
-var client = new WeatherClient(new Uri("http://localhost:5000"));
-
-var time = await client.GetCurrentTimeAsync(new GetCurrentTimeInput());
-Console.WriteLine(time.Time);
-
-var cities = await client.ListCitiesAsync(new ListCitiesInput(pageSize: 10));
-foreach (var c in cities.Items.Values)
-    Console.WriteLine($"{c.CityId}: {c.Name}");
-
-var seattle = await client.GetCityAsync(new GetCityInput("SEA"));
-Console.WriteLine($"{seattle.Name} ({seattle.Coordinates.Latitude}, {seattle.Coordinates.Longitude})");
-```
+NSmithy generates one `IWeatherServiceHandler` interface with a method per
+operation, plus a typed `WeatherClient`. Implement the handler once; the
+generated ASP.NET Core minimal API adapter handles routing, serialization, and
+error dispatch. This handler-and-client shape is the same across every
+HTTP-JSON/CBOR protocol — see [Client & Server
+Usage](/smithy-dotnet/protocols/usage/) for the full example. Only the
+`@simpleRestJson` trait is specific to this protocol.

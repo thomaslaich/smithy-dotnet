@@ -71,6 +71,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Introduction', slug: 'getting-started/introduction' },
 						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
+						{ label: 'Modeling', slug: 'guides/modeling' },
 						{
 							label: 'Client Configuration',
 							items: [
@@ -90,6 +91,7 @@ export default defineConfig({
 					label: 'Protocols',
 					items: [
 						{ label: 'Overview', slug: 'protocols/overview' },
+						{ label: 'Client & Server Usage', slug: 'protocols/usage' },
 						{ label: 'simpleRestJson', slug: 'protocols/simple-rest-json' },
 						{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor' },
 						{ label: 'gRPC', slug: 'protocols/grpc' },

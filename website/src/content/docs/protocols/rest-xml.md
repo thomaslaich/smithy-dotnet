@@ -34,27 +34,36 @@ Apply `@restXml` to the service and `@http` to each operation, the same as
 ```smithy
 $version: "2"
 
-namespace example.hello
+namespace example.weather
 
 use aws.protocols#restXml
 
 @restXml
-service HelloService {
+service Weather {
     version: "2026-01-01"
-    operations: [SayHello]
+    operations: [GetCity]
 }
 
-@http(method: "POST", uri: "/hello")
-operation SayHello {
+@readonly
+@http(method: "GET", uri: "/cities/{cityId}")
+operation GetCity {
     input := {
         @required
-        name: String
+        @httpLabel
+        cityId: String
     }
     output := {
         @required
-        @xmlName("Message")
-        message: String
+        @xmlName("Name")
+        name: String
     }
+    errors: [NoSuchResource]
+}
+
+@error("client")
+structure NoSuchResource {
+    @required
+    resourceType: String
 }
 ```
 
@@ -62,21 +71,17 @@ operation SayHello {
 member name is used as-is.
 
 HTTP binding traits (`@httpLabel`, `@httpQuery`, `@httpHeader`, `@httpPayload`)
-work the same way as in `simpleRestJson` — members without an explicit binding
-go into the XML body.
+work the same way as in `simpleRestJson` — members without an explicit binding go
+into the XML body. See the [Modeling guide](/smithy-dotnet/guides/modeling/) for
+the full set.
 
-## Client
+## Usage
 
-The XML codec is wired up automatically by the generated client:
-
-```csharp
-using Example.Hello;
-
-var client = new HelloServiceClient(new Uri("https://api.example.com"));
-
-var response = await client.SayHelloAsync(new SayHelloInput("world"));
-Console.WriteLine(response.Message);
-```
+The XML codec is wired up automatically by the generated client, which is used
+exactly like every other NSmithy client — see [Client & Server
+Usage](/smithy-dotnet/protocols/usage/). Only the `@restXml` trait and the XML
+wire format are specific to this protocol. NSmithy does not generate restXml
+servers.
 
 Explicit SigV4 signing exists in early preview; see
 [Authentication](/smithy-dotnet/guides/client-configuration/authentication/). For production calls to

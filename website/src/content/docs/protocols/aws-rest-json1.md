@@ -72,40 +72,14 @@ Members without an explicit HTTP binding are serialized in the JSON body.
 `@requestCompression`, `@httpChecksumRequired`, and AWS-style error
 deserialization.
 
-## Server
+## Usage
 
-```csharp
-using Example.Weather;
+The generated `IWeatherServiceHandler` and `WeatherClient` are identical to every
+other HTTP-JSON/CBOR protocol — see [Client & Server
+Usage](/smithy-dotnet/protocols/usage/) for the handler and client code. Only the
+`@restJson1` trait and the wire format above are specific to this protocol.
 
-var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddWeatherServiceHandler<WeatherHandler>();
-
-var app = builder.Build();
-app.MapWeatherServiceHttp();
-app.Run();
-
-internal sealed class WeatherHandler : IWeatherServiceHandler
-{
-    public Task<GetCityOutput> GetCityAsync(
-        GetCityInput input, CancellationToken ct = default)
-    {
-        if (input.CityId == "unknown")
-            throw new NoSuchResource(null, "City");
-
-        return Task.FromResult(new GetCityOutput("Seattle"));
-    }
-}
-```
-
-## Client
-
-```csharp
-using Example.Weather;
-
-var client = new WeatherClient(new Uri("https://api.example.com"));
-var city = await client.GetCityAsync(new GetCityInput("SEA"));
-Console.WriteLine(city.Name);
-```
+## AWS notes
 
 Explicit SigV4 signing exists in early preview; see
 [Authentication](/smithy-dotnet/guides/client-configuration/authentication/). NSmithy does not yet
