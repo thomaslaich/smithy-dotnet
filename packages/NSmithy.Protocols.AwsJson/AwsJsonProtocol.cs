@@ -73,10 +73,10 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             outputSchema = operation.Output;
             requestCodec = JsonCodec.FromSchema(operation.Input);
             responseCodec = JsonCodec.FromSchema(operation.Output);
-            ModeledErrors = operation.Errors;
+            HttpErrors = CompileErrors(operation.Errors);
         }
 
-        public IReadOnlyList<IOperationErrorSchema> ModeledErrors { get; }
+        public IReadOnlyList<HttpOperationError> HttpErrors { get; }
 
         public SmithyHttpRequest SerializeRequest(TInput input)
         {
@@ -135,11 +135,6 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
 
         public bool SupportsHttpStatusErrorFallback => true;
 
-        public TError DeserializeError<TError>(
-            Schema<TError> errorSchema,
-            SmithyHttpResponse response
-        ) => AwsJsonProtocol.DeserializeError(errorSchema, response);
-
         public SmithyHttpResponse SerializeError<TError>(
             Schema<TError> errorSchema,
             TError value,
@@ -156,6 +151,24 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             }
 
             return default!;
+        }
+
+        private static HttpOperationError[] CompileErrors(
+            IReadOnlyList<IOperationErrorSchema> errors
+        ) => errors.Select(error => (HttpOperationError)CompileError((dynamic)error)).ToArray();
+
+        private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
+            where TError : Exception
+        {
+            var codec = JsonCodec.FromSchema(error.Schema);
+            return new HttpOperationError(
+                error.Id,
+                error.HttpStatusCode,
+                response =>
+                    response.Content.Length == 0
+                        ? CreateEmptyError<TError>()
+                        : codec.Deserialize(response.Content)
+            );
         }
     }
 
@@ -206,22 +219,6 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         }
 
         return null;
-    }
-
-    public static TError DeserializeError<TError>(
-        Schema<TError> errorSchema,
-        SmithyHttpResponse response
-    )
-    {
-        ArgumentNullException.ThrowIfNull(errorSchema);
-        ArgumentNullException.ThrowIfNull(response);
-
-        if (response.Content.Length == 0)
-        {
-            return CreateEmptyError<TError>();
-        }
-
-        return JsonCodec.FromSchema(errorSchema).Deserialize(response.Content);
     }
 
     private static TError CreateEmptyError<TError>()

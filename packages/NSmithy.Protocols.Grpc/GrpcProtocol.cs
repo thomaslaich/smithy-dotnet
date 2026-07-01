@@ -129,10 +129,10 @@ public sealed class GrpcProtocol : IProtocol
             outputIsUnit = IsUnit<TOutput>(operation.Output);
             requestCodec = inputIsUnit ? null : ProtoCodec.FromSchema(operation.Input);
             responseCodec = outputIsUnit ? null : ProtoCodec.FromSchema(operation.Output);
-            ModeledErrors = operation.Errors;
+            HttpErrors = CompileErrors(operation.Errors);
         }
 
-        public IReadOnlyList<IOperationErrorSchema> ModeledErrors { get; }
+        public IReadOnlyList<HttpOperationError> HttpErrors { get; }
 
         public SmithyHttpRequest SerializeRequest(TInput input)
         {
@@ -215,17 +215,6 @@ public sealed class GrpcProtocol : IProtocol
 
         public bool SupportsHttpStatusErrorFallback => false;
 
-        public TError DeserializeError<TError>(
-            Schema<TError> errorSchema,
-            SmithyHttpResponse response
-        )
-        {
-            ArgumentNullException.ThrowIfNull(errorSchema);
-            ArgumentNullException.ThrowIfNull(response);
-            var payload = GrpcMessageFraming.ReadSingle(response.Content);
-            return ProtoCodec.FromSchema(errorSchema).Deserialize(payload);
-        }
-
         public SmithyHttpResponse SerializeError<TError>(
             Schema<TError> errorSchema,
             TError value,
@@ -253,6 +242,25 @@ public sealed class GrpcProtocol : IProtocol
                 new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["Content-Type"] = [ContentType],
+                }
+            );
+        }
+
+        private static HttpOperationError[] CompileErrors(
+            IReadOnlyList<IOperationErrorSchema> errors
+        ) => errors.Select(error => (HttpOperationError)CompileError((dynamic)error)).ToArray();
+
+        private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
+            where TError : Exception
+        {
+            var codec = ProtoCodec.FromSchema(error.Schema);
+            return new HttpOperationError(
+                error.Id,
+                error.HttpStatusCode,
+                response =>
+                {
+                    var payload = GrpcMessageFraming.ReadSingle(response.Content);
+                    return codec.Deserialize(payload);
                 }
             );
         }

@@ -70,10 +70,10 @@ public sealed class RpcV2CborProtocol : IProtocol
                 operation.Output,
                 materializeTopLevelDefaults: true
             );
-            ModeledErrors = operation.Errors;
+            HttpErrors = CompileErrors(operation.Errors);
         }
 
-        public IReadOnlyList<IOperationErrorSchema> ModeledErrors { get; }
+        public IReadOnlyList<HttpOperationError> HttpErrors { get; }
 
         public SmithyHttpRequest SerializeRequest(TInput input)
         {
@@ -160,28 +160,27 @@ public sealed class RpcV2CborProtocol : IProtocol
 
         public bool SupportsHttpStatusErrorFallback => false;
 
-        public TError DeserializeError<TError>(
-            Schema<TError> errorSchema,
-            SmithyHttpResponse response
-        ) => RpcV2CborProtocol.DeserializeError(errorSchema, response);
-
         public SmithyHttpResponse SerializeError<TError>(
             Schema<TError> errorSchema,
             TError error,
             string errorShapeId,
             int statusCode
         ) => RpcV2CborProtocol.SerializeError(errorSchema, error, errorShapeId, statusCode);
-    }
 
-    public static TError DeserializeError<TError>(
-        Schema<TError> errorSchema,
-        SmithyHttpResponse response
-    )
-    {
-        ArgumentNullException.ThrowIfNull(errorSchema);
-        ArgumentNullException.ThrowIfNull(response);
+        private static HttpOperationError[] CompileErrors(
+            IReadOnlyList<IOperationErrorSchema> errors
+        ) => errors.Select(error => (HttpOperationError)CompileError((dynamic)error)).ToArray();
 
-        return DeserializeRequiredBody(CborCodec.FromSchema(errorSchema), response.Content);
+        private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
+            where TError : Exception
+        {
+            var codec = CborCodec.FromSchema(error.Schema);
+            return new HttpOperationError(
+                error.Id,
+                error.HttpStatusCode,
+                response => DeserializeRequiredBody(codec, response.Content)
+            );
+        }
     }
 
     /// <summary>
