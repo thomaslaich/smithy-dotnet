@@ -77,9 +77,7 @@ public static class RestProtocol
             var body = writePayload(input!);
             if (body.HasContent)
             {
-                request.Content = body.StreamingContent is null ? body.Content : null;
-                request.StreamingContent = body.StreamingContent;
-                request.StreamingContentLength = body.StreamingContentLength;
+                request.Body = ToHttpBody(body);
                 if (body.ContentType is not null)
                     SetContentTypeIfMissing(request, body.ContentType);
             }
@@ -87,7 +85,7 @@ public static class RestProtocol
         }
         if (binding.InputBodyCodec is { } codec)
         {
-            request.Content = codec.Serialize(input!);
+            request.Body = ToHttpBody(codec.Serialize(input!));
             SetContentTypeIfMissing(request, binding.BodyContentType);
         }
 
@@ -135,8 +133,11 @@ public static class RestProtocol
         if (binding.QueryParamsMember is { } qpMember)
             qpMember.SetObject(builder, ReadQueryParams(qpMember, query, binding.BoundQueryNames));
         if (binding.InputPayloadReader is { } readPayload)
-            readPayload(request.Content, request.StreamingContent, builder);
-        else if (binding.InputBodyCodec is { } codec && request.Content is { Length: > 0 } content)
+            readPayload(BodyBytesOrNull(request.Body), BodyStreamOrNull(request.Body), builder);
+        else if (
+            binding.InputBodyCodec is { } codec
+            && BodyBytesOrNull(request.Body) is { Length: > 0 } content
+        )
             codec.ReadInto(content, builder);
 
         return (TInput)binding.InputSchema.BuildObject(builder);
@@ -169,26 +170,21 @@ public static class RestProtocol
         if (binding.ResponsePrefixHeadersMember is { } respPhMember)
             AddPrefixedHeaders(headers, respPhMember.Prefix, respPhMember.Member, output!);
 
-        byte[] content = [];
-        Stream? streamingContent = null;
+        SmithyHttpBody responseBody = SmithyHttpBody.Empty;
         if (binding.OutputPayloadWriter is { } writePayload)
         {
             var body = writePayload(output!);
-            content = body.StreamingContent is null ? body.Content : [];
-            streamingContent = body.StreamingContent;
+            responseBody = ToHttpBody(body);
             if (body.ContentType is not null)
                 contentHeaders["Content-Type"] = [body.ContentType];
         }
         else if (binding.OutputBodyCodec is { } codec)
         {
-            content = codec.Serialize(output!);
+            responseBody = ToHttpBody(codec.Serialize(output!));
             contentHeaders["Content-Type"] = [binding.BodyContentType];
         }
 
-        return new SmithyHttpResponse(statusCode, null, content, headers, contentHeaders)
-        {
-            StreamingContent = streamingContent,
-        };
+        return new SmithyHttpResponse(statusCode, null, responseBody, headers, contentHeaders);
     }
 
     public static TOutput DeserializeResponse<TInput, TOutput>(
@@ -228,7 +224,7 @@ public static class RestProtocol
                 ReadPrefixedHeaders(respPhMember.Member, response.Headers, respPhMember.Prefix)
             );
         if (binding.OutputPayloadReader is { } readPayload)
-            readPayload(response.Content, response.StreamingContent, builder);
+            readPayload(BodyBytesOrNull(response.Body), BodyStreamOrNull(response.Body), builder);
         else if (binding.OutputBodyCodec is { } codec && response.Content.Length > 0)
             codec.ReadInto(response.Content, builder);
 
@@ -347,7 +343,11 @@ public static class RestProtocol
                     );
                 }
 
-                payloadReader?.Invoke(response.Content, response.StreamingContent, builder);
+                payloadReader?.Invoke(
+                    BodyBytesOrNull(response.Body),
+                    BodyStreamOrNull(response.Body),
+                    builder
+                );
                 if (bodyCodec is not null && response.Content.Length > 0)
                 {
                     bodyCodec.ReadInto(response.Content, builder);
@@ -445,11 +445,25 @@ public static class RestProtocol
         return new SmithyHttpResponse(
             (HttpStatusCode)statusCode,
             null,
-            content,
+            ToHttpBody(content),
             headers,
             contentHeaders
         );
     }
+
+    private static SmithyHttpBody ToHttpBody(RestBody body) =>
+        body.StreamingContent is not null
+            ? new SmithyHttpBody.Streaming(body.StreamingContent, body.StreamingContentLength)
+            : ToHttpBody(body.Content);
+
+    private static SmithyHttpBody ToHttpBody(byte[] content) =>
+        content.Length == 0 ? SmithyHttpBody.Empty : new SmithyHttpBody.Bytes(content);
+
+    private static byte[]? BodyBytesOrNull(SmithyHttpBody body) =>
+        body is SmithyHttpBody.Bytes bytes ? bytes.Content : null;
+
+    private static Stream? BodyStreamOrNull(SmithyHttpBody body) =>
+        body is SmithyHttpBody.Streaming stream ? stream.Content : null;
 
     private static string LocalName(string shapeId)
     {

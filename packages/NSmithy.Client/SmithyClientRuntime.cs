@@ -188,7 +188,7 @@ public sealed class SmithyClientRuntime(
             if (
                 retryStrategy is not null
                 && attempt < retryStrategy.MaxAttempts
-                && request.StreamingContent is null
+                && request.Body is not SmithyHttpBody.Streaming
                 && retryStrategy.ShouldRetry(retryContext)
             )
             {
@@ -258,9 +258,7 @@ public sealed class SmithyClientRuntime(
     {
         var clone = new SmithyHttpRequest(request.Method, requestUri)
         {
-            Content = request.Content,
-            StreamingContent = request.StreamingContent,
-            StreamingContentLength = request.StreamingContentLength,
+            Body = request.Body,
             ExpectStreamingResponse = request.ExpectStreamingResponse,
             ContentType = request.ContentType,
         };
