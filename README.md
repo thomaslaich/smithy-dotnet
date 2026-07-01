@@ -1,27 +1,9 @@
-<p align="center">
-   <img src="https://raw.githubusercontent.com/thomaslaich/smithy-dotnet/main/website/public/brand/nsmithy_logo_1.png" alt="NSmithy logo" width="320" />
-</p>
-
-<p align="center">
-   <a href="https://github.com/thomaslaich/smithy-dotnet/actions/workflows/ci.yml">
-      <img src="https://github.com/thomaslaich/smithy-dotnet/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI" />
-   </a>
-   <a href="https://thomaslaich.github.io/smithy-dotnet/">
-      <img src="https://github.com/thomaslaich/smithy-dotnet/actions/workflows/docs.yml/badge.svg?branch=main" alt="Docs" />
-   </a>
-   <a href="https://www.nuget.org/packages/NSmithy.Client">
-      <img src="https://img.shields.io/nuget/v/NSmithy.Client" alt="NuGet" />
-   </a>
-   <a href="https://dotnet.microsoft.com/">
-      <img src="https://img.shields.io/badge/.NET-net10.0-512BD4" alt=".NET 10" />
-   </a>
-   <a href="LICENSE">
-      <img src="https://img.shields.io/github/license/thomaslaich/smithy-dotnet" alt="License" />
-   </a>
-   <a href="https://github.com/smithy-lang/smithy/releases/tag/1.71.0">
-      <img src="https://img.shields.io/badge/smithy--cli-1.71.0-orange" alt="Smithy CLI" />
-   </a>
-</p>
+[![CI](https://github.com/thomaslaich/smithy-dotnet/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/thomaslaich/smithy-dotnet/actions/workflows/ci.yml)
+[![Docs](https://github.com/thomaslaich/smithy-dotnet/actions/workflows/docs.yml/badge.svg?branch=main)](https://thomaslaich.github.io/smithy-dotnet/)
+[![NuGet](https://img.shields.io/nuget/v/NSmithy.Client)](https://www.nuget.org/packages/NSmithy.Client)
+[![.NET 10](https://img.shields.io/badge/.NET-net10.0-512BD4)](https://dotnet.microsoft.com/)
+[![License](https://img.shields.io/github/license/thomaslaich/smithy-dotnet)](https://github.com/thomaslaich/smithy-dotnet/blob/main/LICENSE)
+[![Smithy CLI](https://img.shields.io/badge/smithy--cli-1.71.0-orange)](https://github.com/smithy-lang/smithy/releases/tag/1.71.0)
 
 > **Preview:** NSmithy is in preview — expect some API changes before 1.0. Protocol implementations are not yet on par with the [Smithy reference implementations](https://github.com/smithy-lang/smithy).
 
