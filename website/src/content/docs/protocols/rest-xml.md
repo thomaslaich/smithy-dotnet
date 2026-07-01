@@ -20,11 +20,14 @@ numbers.
 "software.amazon.smithy:smithy-aws-traits:1.56.0"
 ```
 
-## NuGet Package
+## NuGet Packages
 
-```xml
-<PackageReference Include="NSmithy.Codecs.Xml" Version="0.4.0" />
-```
+| Purpose | Packages |
+| --- | --- |
+| Client | `NSmithy.Client`, `NSmithy.Protocols.RestXml` |
+
+`NSmithy.Protocols.RestXml` pulls in `NSmithy.Codecs.Xml` (the XML codec)
+transitively.
 
 ## Modeling
 

@@ -18,6 +18,24 @@ expanding that baseline rather than revisiting it.
 - Use protocol expansion to validate and strengthen the runtime seams that are
   already in place.
 
+## Recently Shipped
+
+The 0.4.0 release delivered several items that were previously on this roadmap:
+
+- **AWS JSON client protocol** (`NSmithy.Protocols.AwsJson`).
+- **AWS SigV4 signing** driven by `@aws.auth#sigv4`, generated auth-scheme
+  wiring, and an AWS LocalStack example — early preview.
+- **Client runtime pipeline** — the generated client stack now runs on
+  `SmithyClientRuntime` with named interceptors, a typed per-call execution
+  context, auth-scheme resolution, runtime-owned retry, and precomputed
+  operation bindings.
+- **Bidirectional gRPC event streaming** for generated clients and ASP.NET Core
+  servers.
+
+See the
+[changelog](https://github.com/thomaslaich/smithy-dotnet/blob/main/CHANGELOG.md)
+for the full list. The priorities below are what remains.
+
 ## Near-Term Priorities
 
 ### 1. Expand AWS protocol coverage and AWS readiness
@@ -26,27 +44,24 @@ expanding that baseline rather than revisiting it.
   especially AWS Query and EC2 Query.
 - Continue hardening `aws.protocols#restJson1`, `aws.protocols#restXml`, and
   `smithy.protocols#rpcv2Cbor` as real preview surfaces.
-- Implement AWS authentication support, especially SigV4 signing driven by
-  `@aws.auth#sigv4`, so generated clients can call real AWS-compatible
-  endpoints.
-- Add an integration test suite against LocalStack to validate generated AWS
-  clients against realistic protocol, signing, and endpoint behavior.
+- Mature AWS authentication beyond the early-preview SigV4 signing — endpoint
+  resolution, profile/SSO/IMDS credential chains, presigning, and golden-vector
+  coverage against AWS's SigV4 test suite.
+- Grow the LocalStack integration coverage beyond the initial example into a
+  broader suite that validates generated AWS clients against realistic protocol,
+  signing, and endpoint behavior.
 - Keep the scope driven by conformance and real runtime behavior rather than by
   marketing-level protocol checklists.
 
 ### 2. Move the client runtime to the target architecture
 
-The desired client architecture is documented in
+The core client runtime pipeline landed in 0.4.0 (see Recently Shipped); the
+desired end-state is documented in
 [`designs/client-architecture.md`](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/client-architecture.md).
-The roadmap work is to close the runtime and codegen pieces needed for that
-architecture.
-
-This work includes:
+The remaining work closes the gaps:
 
 - Continuing to harden named client interceptors and the typed per-call
   execution context.
-- Moving serialization, endpoint resolution, auth resolution, signing, transmit,
-  retry, deserialization, and completion into one orchestrated client lifecycle.
 - Adding per-operation endpoint resolution, including host labels and endpoint
   auth-scheme overrides.
 - Splitting auth into scheme resolution, identity resolution, and signing;

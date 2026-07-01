@@ -8,6 +8,8 @@ clients still need runtime auth configuration. Add auth schemes through
 `{Service}ClientConfig.AuthSchemes`:
 
 ```csharp
+using NSmithy.Client;
+
 var client = new WeatherClient(
     new Uri("https://api.example.com"),
     new()
