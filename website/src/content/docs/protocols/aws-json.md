@@ -25,7 +25,7 @@ numbers.
 ## NuGet Package
 
 ```xml
-<PackageReference Include="NSmithy.Protocols.AwsJson" Version="0.3.0" />
+<PackageReference Include="NSmithy.Protocols.AwsJson" Version="0.4.0" />
 ```
 
 ## Modeling

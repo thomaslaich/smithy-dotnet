@@ -23,7 +23,7 @@ numbers.
 ## NuGet Package
 
 ```xml
-<PackageReference Include="NSmithy.Codecs.Xml" Version="0.3.0" />
+<PackageReference Include="NSmithy.Codecs.Xml" Version="0.4.0" />
 ```
 
 ## Modeling
