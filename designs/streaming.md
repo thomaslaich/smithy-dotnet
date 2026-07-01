@@ -33,27 +33,35 @@ the protocol's normal rules.
 
 ## Event Streams
 
-Event-stream operation protocols should be named explicitly as event-stream
-protocols:
+Event-stream operations are bound through the same `IServiceProtocol` that hands
+out unary operations. Alongside `ForOperation`, it exposes three event-stream
+binding methods with default implementations that throw `NotSupportedException`,
+so a protocol opts in only to the streaming shapes it actually supports:
 
 ```csharp
-public interface IEventStreamServiceProtocol
+public interface IServiceProtocol
 {
+    IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation);
+
     IServerEventStreamOperationProtocol<TInput, TOutputEvent>
         ForServerEventStreamOperation<TInput, TOutput, TOutputEvent>(
             OperationSchema<TInput, TOutput> operation,
-            Schema<TOutputEvent> outputEvent);
+            Schema<TOutputEvent> outputEvent)
+        => throw new NotSupportedException();
 
     IClientEventStreamOperationProtocol<TInputEvent, TOutput>
         ForClientEventStreamOperation<TInput, TInputEvent, TOutput>(
             OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent);
+            Schema<TInputEvent> inputEvent)
+        => throw new NotSupportedException();
 
     IBidirectionalEventStreamOperationProtocol<TInputEvent, TOutputEvent>
         ForBidirectionalEventStreamOperation<TInput, TOutput, TInputEvent, TOutputEvent>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent,
-            Schema<TOutputEvent> outputEvent);
+            Schema<TOutputEvent> outputEvent)
+        => throw new NotSupportedException();
 }
 ```
 
