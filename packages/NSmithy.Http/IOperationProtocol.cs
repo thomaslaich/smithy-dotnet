@@ -64,9 +64,7 @@ public interface IOperationProtocol<TInput, TOutput>
     /// </summary>
     bool SupportsHttpStatusErrorFallback { get; }
 
-    TError DeserializeError<TError>(Schema<TError> errorSchema, SmithyHttpResponse response);
-
-    IReadOnlyList<IOperationErrorSchema> ModeledErrors => [];
+    IReadOnlyList<HttpOperationError> HttpErrors => [];
 
     /// <summary>
     /// Attempts to deserialize the response into one of the operation's modeled exceptions.

@@ -493,8 +493,10 @@ unary operation. That binding wraps the operation-bound protocol together with
 the service/operation names, request modifiers such as compression/checksum
 hooks, and other lifecycle metadata. The operation-bound protocol owns modeled
 error deserialization; operation schemas carry the modeled error descriptors it
-uses for dispatch. Runtime invocation receives the binding plus typed input, so
-per-call generated code stays thin.
+uses for dispatch. Protocol implementations compile those descriptors into
+protocol-specific error deserializers when the operation protocol is built, so
+per-call generated code stays thin and error codec construction stays off the
+deserialization path.
 
 ### The client runtime
 

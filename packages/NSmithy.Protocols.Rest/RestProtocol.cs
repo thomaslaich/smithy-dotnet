@@ -235,71 +235,64 @@ public static class RestProtocol
         return (TOutput)binding.OutputSchema.BuildObject(builder);
     }
 
-    /// <summary>
-    /// Deserializes an error structure (the same HTTP binding rules as an output) from a
-    /// response. Error members are partitioned per call; errors are off the hot path.
-    /// </summary>
-    public static TError DeserializeError<TError>(
-        Schema<TError> errorSchema,
-        SmithyHttpResponse response,
+    internal static HttpOperationError[] CompileErrorDeserializers(
+        IReadOnlyList<IOperationErrorSchema> errors,
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads
     )
     {
-        ArgumentNullException.ThrowIfNull(errorSchema);
-        ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(errors);
         ArgumentNullException.ThrowIfNull(codecFactory);
+        return errors
+            .Select(error =>
+                (HttpOperationError)CompileErrorDeserializer(
+                    (dynamic)error,
+                    codecFactory,
+                    rawStringPayloads
+                )
+            )
+            .ToArray();
+    }
 
-        if (errorSchema.Resolved is not IStructSchema<TError> schema)
+    private static HttpOperationError CompileErrorDeserializer<TError>(
+        OperationErrorSchema<TError> error,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads
+    )
+        where TError : Exception
+    {
+        if (error.Schema.Resolved is not IStructSchema<TError> schema)
         {
             throw new InvalidOperationException(
-                $"Error schema '{errorSchema.Id}' must be a structure schema."
+                $"Error schema '{error.Schema.Id}' must be a structure schema."
             );
         }
 
-        var builder = schema.CreateBuilder();
+        IMemberSchema<TError>? responseCodeMember = null;
+        var headerMembers = new List<HeaderMemberBinding>();
+        var prefixHeaderMembers = new List<PrefixHeaderMemberBinding>();
+        RestPayloadReader? payloadReader = null;
         var bodyMembers = new List<IMemberSchema<TError>>();
 
         foreach (var member in schema.TypedMembers)
         {
             if (member.Traits.ContainsKey(RestTraits.HttpResponseCode))
             {
-                member.SetObject(
-                    builder,
-                    ParseHttpValue(
-                        member.Target,
-                        ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture)
-                    )
-                );
+                responseCodeMember = member;
             }
             else if (member.Traits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
             {
-                var name = headerTrait.Value.AsString();
-                if (
-                    TryGetFirstHeader(response.Headers, name, out var header)
-                    || TryGetFirstHeader(response.ContentHeaders, name, out header)
-                )
-                {
-                    member.SetObject(
-                        builder,
-                        ParseHttpBindingValue(member.Target, member.Traits, header)
-                    );
-                }
+                headerMembers.Add(new HeaderMemberBinding(member, headerTrait.Value.AsString()));
             }
             else if (member.Traits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait))
             {
-                member.SetObject(
-                    builder,
-                    ReadPrefixedHeaders(member, response.Headers, prefixTrait.Value.AsString())
+                prefixHeaderMembers.Add(
+                    new PrefixHeaderMemberBinding(member, prefixTrait.Value.AsString())
                 );
             }
             else if (member.Traits.ContainsKey(RestTraits.HttpPayload))
             {
-                BuildPayloadReader(member, codecFactory, rawStringPayloads)(
-                    response.Content,
-                    response.StreamingContent,
-                    builder
-                );
+                payloadReader = BuildPayloadReader(member, codecFactory, rawStringPayloads);
             }
             else
             {
@@ -307,15 +300,62 @@ public static class RestProtocol
             }
         }
 
-        if (bodyMembers.Count > 0 && response.Content.Length > 0)
-        {
-            var projection = Schemas.Project(schema, bodyMembers);
-            codecFactory
-                .CodecFor(projection, materializeTopLevelDefaults: true)
-                .ReadInto(response.Content, builder);
-        }
+        var bodyCodec =
+            bodyMembers.Count > 0
+                ? codecFactory.CodecFor(
+                    Schemas.Project(schema, bodyMembers),
+                    materializeTopLevelDefaults: true
+                )
+                : null;
 
-        return (TError)schema.BuildObject(builder);
+        return new HttpOperationError(
+            error.Id,
+            error.HttpStatusCode,
+            response =>
+            {
+                var builder = schema.CreateBuilder();
+                if (responseCodeMember is not null)
+                {
+                    responseCodeMember.SetObject(
+                        builder,
+                        ParseHttpValue(
+                            responseCodeMember.Target,
+                            ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture)
+                        )
+                    );
+                }
+
+                foreach (var (member, headerName) in headerMembers)
+                {
+                    if (
+                        TryGetFirstHeader(response.Headers, headerName, out var header)
+                        || TryGetFirstHeader(response.ContentHeaders, headerName, out header)
+                    )
+                    {
+                        member.SetObject(
+                            builder,
+                            ParseHttpBindingValue(member.Target, member.Traits, header)
+                        );
+                    }
+                }
+
+                foreach (var (member, prefix) in prefixHeaderMembers)
+                {
+                    member.SetObject(
+                        builder,
+                        ReadPrefixedHeaders(member, response.Headers, prefix)
+                    );
+                }
+
+                payloadReader?.Invoke(response.Content, response.StreamingContent, builder);
+                if (bodyCodec is not null && response.Content.Length > 0)
+                {
+                    bodyCodec.ReadInto(response.Content, builder);
+                }
+
+                return (TError)schema.BuildObject(builder);
+            }
+        );
     }
 
     /// <summary>

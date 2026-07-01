@@ -49,6 +49,9 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
     string? errorTypeHeader
 ) : IOperationProtocol<TInput, TOutput>
 {
+    public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
+        RestProtocol.CompileErrorDeserializers(modeledErrors, codecFactory, rawStringPayloads);
+
     public SmithyHttpRequest SerializeRequest(TInput input) =>
         RestProtocol.SerializeRequest(binding, input);
 
@@ -69,13 +72,6 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
     public bool RequiresErrorDiscriminator => false;
 
     public bool SupportsHttpStatusErrorFallback => true;
-
-    public IReadOnlyList<IOperationErrorSchema> ModeledErrors { get; } = modeledErrors;
-
-    public TError DeserializeError<TError>(
-        Schema<TError> errorSchema,
-        SmithyHttpResponse response
-    ) => RestProtocol.DeserializeError(errorSchema, response, codecFactory, rawStringPayloads);
 
     public SmithyHttpResponse SerializeError<TError>(
         Schema<TError> errorSchema,
