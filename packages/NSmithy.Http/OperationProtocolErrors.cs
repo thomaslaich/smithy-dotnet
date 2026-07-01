@@ -12,7 +12,19 @@ internal static class OperationProtocolErrors
         ArgumentNullException.ThrowIfNull(protocol);
         ArgumentNullException.ThrowIfNull(response);
 
-        var errors = protocol.ModeledErrors;
+        return DeserializeModeledError(protocol, protocol.HttpErrors, response);
+    }
+
+    public static Exception? DeserializeModeledError<TInput, TOutput>(
+        IOperationProtocol<TInput, TOutput> protocol,
+        IReadOnlyList<HttpOperationError> errors,
+        SmithyHttpResponse response
+    )
+    {
+        ArgumentNullException.ThrowIfNull(protocol);
+        ArgumentNullException.ThrowIfNull(errors);
+        ArgumentNullException.ThrowIfNull(response);
+
         if (errors.Count == 0)
         {
             return null;
@@ -32,7 +44,7 @@ internal static class OperationProtocolErrors
             );
             if (matched is not null)
             {
-                return DeserializeError(protocol, matched, response);
+                return matched.Deserialize(response);
             }
         }
 
@@ -43,26 +55,13 @@ internal static class OperationProtocolErrors
             );
             if (statusMatched is not null)
             {
-                return DeserializeError(protocol, statusMatched, response);
+                return statusMatched.Deserialize(response);
             }
         }
 
         var fallback = errors[0];
         return protocol.SupportsHttpStatusErrorFallback && response.Content.Length == 0
             ? null
-            : DeserializeError(protocol, fallback, response);
+            : fallback.Deserialize(response);
     }
-
-    private static Exception DeserializeError<TInput, TOutput>(
-        IOperationProtocol<TInput, TOutput> protocol,
-        IOperationErrorSchema error,
-        SmithyHttpResponse response
-    ) => DeserializeError(protocol, (dynamic)error, response);
-
-    private static Exception DeserializeError<TInput, TOutput, TError>(
-        IOperationProtocol<TInput, TOutput> protocol,
-        OperationErrorSchema<TError> error,
-        SmithyHttpResponse response
-    )
-        where TError : Exception => protocol.DeserializeError(error.Schema, response);
 }

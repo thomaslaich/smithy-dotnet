@@ -25,6 +25,8 @@ public sealed class GrpcProtocolTests
 
     public sealed record Echo(string Message);
 
+    public sealed class TestGrpcException(string? message) : Exception(message);
+
     public abstract record ChatEvent
     {
         private ChatEvent() { }
@@ -37,11 +39,24 @@ public sealed class GrpcProtocolTests
         public string? Message { get; set; }
     }
 
+    public sealed class TestGrpcExceptionBuilder
+    {
+        public string? Message { get; set; }
+    }
+
     private static Schema<Echo> EchoSchema(string name) =>
         Schemas
             .Structure<Echo, EchoBuilder>(ShapeId.Parse($"example.greeter#{name}"))
             .Required("message", x => x.Message, (b, v) => b.Message = v, Schemas.String, Field(1))
             .Build(() => new EchoBuilder(), b => new Echo(b.Message!));
+
+    private static Schema<TestGrpcException> ErrorSchema(string name) =>
+        Schemas
+            .Structure<TestGrpcException, TestGrpcExceptionBuilder>(
+                ShapeId.Parse($"example.greeter#{name}")
+            )
+            .Required("message", x => x.Message, (b, v) => b.Message = v, Schemas.String, Field(1))
+            .Build(() => new TestGrpcExceptionBuilder(), b => new TestGrpcException(b.Message));
 
     private static Schema<ChatEvent> ChatEventSchema(string name) =>
         Schemas
@@ -62,7 +77,14 @@ public sealed class GrpcProtocolTests
         var operation = Schemas.Operation(
             ShapeId.Parse("example.greeter#SayHello"),
             EchoSchema("SayHelloInput"),
-            EchoSchema("SayHelloOutput")
+            EchoSchema("SayHelloOutput"),
+            [
+                Schemas.OperationError(
+                    ShapeId.Parse("example.greeter#ThrottlingError"),
+                    ErrorSchema("ThrottlingError"),
+                    429
+                ),
+            ]
         );
         return new GrpcProtocol().ForService(service).ForOperation(operation);
     }
@@ -130,14 +152,14 @@ public sealed class GrpcProtocolTests
     }
 
     [Fact]
-    public void SerializesAndDiscriminatesModeledErrors()
+    public async Task SerializesAndDiscriminatesModeledErrors()
     {
         var protocol = BuildProtocol();
-        var errorSchema = EchoSchema("ThrottlingError");
+        var errorSchema = ErrorSchema("ThrottlingError");
 
         var response = protocol.SerializeError(
             errorSchema,
-            new Echo("slow down"),
+            new TestGrpcException("slow down"),
             "example.greeter#ThrottlingError",
             429
         );
@@ -147,7 +169,10 @@ public sealed class GrpcProtocolTests
         string[] exhaustedStatus = ["8"];
         Assert.Equal(exhaustedStatus, response.Headers["grpc-status"]);
         Assert.Equal("example.greeter#ThrottlingError", protocol.GetErrorDiscriminator(response));
-        Assert.Equal(new Echo("slow down"), protocol.DeserializeError(errorSchema, response));
+        var error = Assert.IsType<TestGrpcException>(
+            await protocol.DeserializeErrorAsync(response)
+        );
+        Assert.Equal("slow down", error.Message);
     }
 
     [Fact]

@@ -581,11 +581,6 @@ public sealed class SmithyClientRuntimeTests
 
         public bool SupportsHttpStatusErrorFallback => true;
 
-        public TError DeserializeError<TError>(
-            Schema<TError> errorSchema,
-            SmithyHttpResponse response
-        ) => throw new NotSupportedException();
-
         public SmithyHttpResponse SerializeError<TError>(
             Schema<TError> errorSchema,
             TError value,
