@@ -24,7 +24,7 @@ public sealed class SmithyStandardRetryStrategy : ISmithyRetryStrategy
     private const int TransportFailureRetryCost = 10;
     private const int SuccessRefund = 1;
 
-    private readonly object quotaLock = new();
+    private readonly Lock quotaLock = new();
     private int quota = QuotaCapacity;
 
     private readonly Func<SmithyRetryOutcome, SmithyRetryVerdict>? classifyOutcome;

@@ -481,8 +481,11 @@ created from its operation schema via `ForOperation`:
 private static readonly IServiceProtocol ServiceProtocol =
     RpcV2CborProtocol.ForService(RpcV2ProtocolSchema.Schema);
 
-private static readonly IOperationProtocol<GreetingWithErrorsInput, GreetingWithErrorsOutput>
-    GreetingWithErrorsProtocol = ServiceProtocol.ForOperation(GreetingWithErrorsSchema.Schema);
+private static readonly SmithyOperationBinding<GreetingWithErrorsInput, GreetingWithErrorsOutput>
+    GreetingWithErrorsBinding = new(
+        "RpcV2Protocol",
+        "GreetingWithErrors",
+        ServiceProtocol.ForOperation(GreetingWithErrorsSchema.Schema));
 ```
 
 Operation methods are protocol-agnostic. They have the same shape for restJson1,
@@ -494,14 +497,7 @@ public async Task<GreetingWithErrorsOutput> GreetingWithErrorsAsync(
     CancellationToken cancellationToken = default)
 {
     ArgumentNullException.ThrowIfNull(input);
-    return await runtime.InvokeAsync(
-            "RpcV2Protocol",
-            "GreetingWithErrors",
-            GreetingWithErrorsProtocol,
-            input,
-            null,
-            DeserializeGreetingWithErrorsErrorAsync,
-            cancellationToken)
+    return await runtime.InvokeAsync(GreetingWithErrorsBinding, input, cancellationToken)
         .ConfigureAwait(false);
 }
 ```
