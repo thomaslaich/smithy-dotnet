@@ -13,8 +13,6 @@ namespace NSmithy.Client;
 /// </summary>
 public sealed class SmithyStandardRetryStrategy : ISmithyRetryStrategy
 {
-    private static readonly ContextKey<int> AcquiredQuota = new("smithy.retry.acquiredQuota");
-
     private static readonly TimeSpan DefaultBaseDelay = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan DefaultThrottlingBaseDelay = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan DefaultMaxDelay = TimeSpan.FromSeconds(20);
@@ -87,43 +85,48 @@ public sealed class SmithyStandardRetryStrategy : ISmithyRetryStrategy
 
     public TimeSpan MaxDelay { get; }
 
-    public SmithyRetryDecision Classify(SmithyRetryOutcome outcome)
+    public ISmithyRetrySession Begin() => new Session(this);
+
+    /// <summary>
+    /// One execution's session: tracks how much quota this execution acquired so an eventual
+    /// success refunds exactly that amount.
+    /// </summary>
+    private sealed class Session(SmithyStandardRetryStrategy strategy) : ISmithyRetrySession
     {
-        ArgumentNullException.ThrowIfNull(outcome);
+        private int acquired;
 
-        if (outcome.Attempt >= MaxAttempts)
+        public SmithyRetryDecision Classify(SmithyRetryOutcome outcome)
         {
-            return SmithyRetryDecision.GiveUp;
+            ArgumentNullException.ThrowIfNull(outcome);
+
+            if (outcome.Attempt >= strategy.MaxAttempts)
+            {
+                return SmithyRetryDecision.GiveUp;
+            }
+
+            var verdict = strategy.classifyOutcome?.Invoke(outcome) ?? DefaultClassify(outcome);
+            if (verdict == SmithyRetryVerdict.NotRetryable)
+            {
+                return SmithyRetryDecision.GiveUp;
+            }
+
+            var cost = outcome.IsTransportFailure ? TransportFailureRetryCost : RetryCost;
+            if (!strategy.TryAcquireQuota(cost))
+            {
+                return SmithyRetryDecision.GiveUp;
+            }
+
+            acquired += cost;
+            return SmithyRetryDecision.RetryAfter(
+                strategy.RetryAfterDelay(outcome.Response)
+                    ?? strategy.BackoffDelay(outcome.Attempt, verdict)
+            );
         }
-
-        var verdict = classifyOutcome?.Invoke(outcome) ?? DefaultClassify(outcome);
-        if (verdict == SmithyRetryVerdict.NotRetryable)
-        {
-            return SmithyRetryDecision.GiveUp;
-        }
-
-        var cost = outcome.IsTransportFailure ? TransportFailureRetryCost : RetryCost;
-        if (!TryAcquireQuota(outcome.ExecutionContext, cost))
-        {
-            return SmithyRetryDecision.GiveUp;
-        }
-
-        return SmithyRetryDecision.RetryAfter(
-            RetryAfterDelay(outcome.Response) ?? BackoffDelay(outcome.Attempt, verdict)
-        );
-    }
-
-    public void RecordSuccess(SmithyContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
 
         // Refund what this execution's retries consumed; a first-attempt success slowly
         // replenishes quota spent by other executions.
-        var refund = context.TryGet(AcquiredQuota, out var acquired) ? acquired : SuccessRefund;
-        lock (quotaLock)
-        {
-            quota = Math.Min(QuotaCapacity, quota + refund);
-        }
+        public void RecordSuccess() =>
+            strategy.ReleaseQuota(acquired == 0 ? SuccessRefund : acquired);
     }
 
     private static SmithyRetryVerdict DefaultClassify(SmithyRetryOutcome outcome)
@@ -152,7 +155,7 @@ public sealed class SmithyStandardRetryStrategy : ISmithyRetryStrategy
         };
     }
 
-    private bool TryAcquireQuota(SmithyContext context, int cost)
+    private bool TryAcquireQuota(int cost)
     {
         lock (quotaLock)
         {
@@ -162,11 +165,16 @@ public sealed class SmithyStandardRetryStrategy : ISmithyRetryStrategy
             }
 
             quota -= cost;
+            return true;
         }
+    }
 
-        var acquired = context.TryGet(AcquiredQuota, out var existing) ? existing : 0;
-        context.Set(AcquiredQuota, acquired + cost);
-        return true;
+    private void ReleaseQuota(int refund)
+    {
+        lock (quotaLock)
+        {
+            quota = Math.Min(QuotaCapacity, quota + refund);
+        }
     }
 
     private TimeSpan BackoffDelay(int attempt, SmithyRetryVerdict verdict)

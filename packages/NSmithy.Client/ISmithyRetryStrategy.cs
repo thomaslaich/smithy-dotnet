@@ -3,21 +3,32 @@ using NSmithy.Http;
 namespace NSmithy.Client;
 
 /// <summary>
-/// Decides whether the runtime retries a failed attempt. The strategy owns the whole decision:
-/// attempt budgeting, failure classification, and the backoff delay. The runtime calls
-/// <see cref="Classify"/> only for failed attempts (transport failures and error responses),
-/// never for successful ones.
+/// Decides whether the runtime retries failed attempts. A strategy is long-lived and shared by
+/// every execution of its client (it owns client-wide state such as a retry quota) and must be
+/// thread-safe. <see cref="Begin"/> is called once at the start of each operation execution and
+/// returns that execution's <see cref="ISmithyRetrySession"/>.
 /// </summary>
 public interface ISmithyRetryStrategy
+{
+    ISmithyRetrySession Begin();
+}
+
+/// <summary>
+/// One operation execution's view of a retry strategy. The runtime calls
+/// <see cref="Classify"/> after each failed attempt and <see cref="RecordSuccess"/> once if an
+/// attempt succeeds. A session is used by a single execution and does not need to be
+/// thread-safe; stateless strategies may return themselves from
+/// <see cref="ISmithyRetryStrategy.Begin"/>.
+/// </summary>
+public interface ISmithyRetrySession
 {
     SmithyRetryDecision Classify(SmithyRetryOutcome outcome);
 
     /// <summary>
-    /// Called once per execution when an attempt succeeds. Strategies that maintain a
-    /// client-shared retry quota use this to release tokens acquired by earlier retries of the
-    /// same execution.
+    /// Called when an attempt succeeds. Quota-based sessions use this to refund tokens acquired
+    /// by this execution's earlier retries.
     /// </summary>
-    void RecordSuccess(SmithyContext context) { }
+    void RecordSuccess() { }
 }
 
 /// <summary>

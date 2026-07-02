@@ -7,7 +7,7 @@ namespace NSmithy.Client;
 /// pluggable retry predicate. By default it retries transport failures, HTTP 429, and 5xx
 /// responses. For production use prefer a strategy with backoff and jitter.
 /// </summary>
-public sealed class SmithySimpleRetryStrategy : ISmithyRetryStrategy
+public sealed class SmithySimpleRetryStrategy : ISmithyRetryStrategy, ISmithyRetrySession
 {
     private readonly Func<SmithyRetryOutcome, bool> shouldRetry;
 
@@ -34,6 +34,9 @@ public sealed class SmithySimpleRetryStrategy : ISmithyRetryStrategy
     public int MaxAttempts { get; }
 
     public TimeSpan Delay { get; }
+
+    // Stateless: every execution shares this instance as its session.
+    public ISmithyRetrySession Begin() => this;
 
     public SmithyRetryDecision Classify(SmithyRetryOutcome outcome)
     {

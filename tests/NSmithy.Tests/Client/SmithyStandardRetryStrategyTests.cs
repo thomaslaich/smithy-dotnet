@@ -12,9 +12,15 @@ public sealed class SmithyStandardRetryStrategyTests
     {
         var strategy = new SmithyStandardRetryStrategy(maxAttempts: 4, random: new MaxRandom());
 
-        var first = strategy.Classify(Outcome(attempt: 1, StatusCode: HttpStatusCode.BadGateway));
-        var second = strategy.Classify(Outcome(attempt: 2, StatusCode: HttpStatusCode.BadGateway));
-        var third = strategy.Classify(Outcome(attempt: 3, StatusCode: HttpStatusCode.BadGateway));
+        var first = strategy
+            .Begin()
+            .Classify(Outcome(attempt: 1, StatusCode: HttpStatusCode.BadGateway));
+        var second = strategy
+            .Begin()
+            .Classify(Outcome(attempt: 2, StatusCode: HttpStatusCode.BadGateway));
+        var third = strategy
+            .Begin()
+            .Classify(Outcome(attempt: 3, StatusCode: HttpStatusCode.BadGateway));
 
         Assert.Equal(TimeSpan.FromMilliseconds(100), first.Delay);
         Assert.Equal(TimeSpan.FromMilliseconds(200), second.Delay);
@@ -26,9 +32,9 @@ public sealed class SmithyStandardRetryStrategyTests
     {
         var strategy = new SmithyStandardRetryStrategy(maxAttempts: 2, random: new HalfRandom());
 
-        var decision = strategy.Classify(
-            Outcome(attempt: 1, StatusCode: HttpStatusCode.BadGateway)
-        );
+        var decision = strategy
+            .Begin()
+            .Classify(Outcome(attempt: 1, StatusCode: HttpStatusCode.BadGateway));
 
         Assert.Equal(TimeSpan.FromMilliseconds(50), decision.Delay);
     }
@@ -42,9 +48,9 @@ public sealed class SmithyStandardRetryStrategyTests
             random: new MaxRandom()
         );
 
-        var decision = strategy.Classify(
-            Outcome(attempt: 20, StatusCode: HttpStatusCode.BadGateway)
-        );
+        var decision = strategy
+            .Begin()
+            .Classify(Outcome(attempt: 20, StatusCode: HttpStatusCode.BadGateway));
 
         Assert.Equal(TimeSpan.FromSeconds(1), decision.Delay);
     }
@@ -54,9 +60,9 @@ public sealed class SmithyStandardRetryStrategyTests
     {
         var strategy = new SmithyStandardRetryStrategy(maxAttempts: 2, random: new MaxRandom());
 
-        var decision = strategy.Classify(
-            Outcome(attempt: 1, StatusCode: HttpStatusCode.TooManyRequests)
-        );
+        var decision = strategy
+            .Begin()
+            .Classify(Outcome(attempt: 1, StatusCode: HttpStatusCode.TooManyRequests));
 
         Assert.Equal(TimeSpan.FromMilliseconds(500), decision.Delay);
     }
@@ -66,9 +72,11 @@ public sealed class SmithyStandardRetryStrategyTests
     {
         var strategy = new SmithyStandardRetryStrategy(maxAttempts: 2, random: new MaxRandom());
 
-        var decision = strategy.Classify(
-            Outcome(attempt: 1, StatusCode: HttpStatusCode.ServiceUnavailable, retryAfter: "7")
-        );
+        var decision = strategy
+            .Begin()
+            .Classify(
+                Outcome(attempt: 1, StatusCode: HttpStatusCode.ServiceUnavailable, retryAfter: "7")
+            );
 
         Assert.True(decision.ShouldRetry);
         Assert.Equal(TimeSpan.FromSeconds(7), decision.Delay);
@@ -83,13 +91,15 @@ public sealed class SmithyStandardRetryStrategyTests
             timeProvider: new FixedTimeProvider(now)
         );
 
-        var decision = strategy.Classify(
-            Outcome(
-                attempt: 1,
-                StatusCode: HttpStatusCode.ServiceUnavailable,
-                retryAfter: now.AddSeconds(30).ToString("R")
-            )
-        );
+        var decision = strategy
+            .Begin()
+            .Classify(
+                Outcome(
+                    attempt: 1,
+                    StatusCode: HttpStatusCode.ServiceUnavailable,
+                    retryAfter: now.AddSeconds(30).ToString("R")
+                )
+            );
 
         Assert.True(decision.ShouldRetry);
         Assert.Equal(TimeSpan.FromSeconds(30), decision.Delay);
@@ -100,9 +110,9 @@ public sealed class SmithyStandardRetryStrategyTests
     {
         var strategy = new SmithyStandardRetryStrategy(maxAttempts: 3);
 
-        var decision = strategy.Classify(
-            Outcome(attempt: 3, StatusCode: HttpStatusCode.ServiceUnavailable)
-        );
+        var decision = strategy
+            .Begin()
+            .Classify(Outcome(attempt: 3, StatusCode: HttpStatusCode.ServiceUnavailable));
 
         Assert.False(decision.ShouldRetry);
     }
@@ -112,9 +122,9 @@ public sealed class SmithyStandardRetryStrategyTests
     {
         var strategy = new SmithyStandardRetryStrategy(maxAttempts: 3);
 
-        var decision = strategy.Classify(
-            Outcome(attempt: 1, StatusCode: HttpStatusCode.BadRequest)
-        );
+        var decision = strategy
+            .Begin()
+            .Classify(Outcome(attempt: 1, StatusCode: HttpStatusCode.BadRequest));
 
         Assert.False(decision.ShouldRetry);
     }
@@ -124,14 +134,16 @@ public sealed class SmithyStandardRetryStrategyTests
     {
         var strategy = new SmithyStandardRetryStrategy(maxAttempts: 3, random: new MaxRandom());
 
-        var decision = strategy.Classify(
-            new SmithyRetryOutcome(
-                1,
-                null,
-                new HttpRequestException("connection reset"),
-                new SmithyContext()
-            )
-        );
+        var decision = strategy
+            .Begin()
+            .Classify(
+                new SmithyRetryOutcome(
+                    1,
+                    null,
+                    new HttpRequestException("connection reset"),
+                    new SmithyContext()
+                )
+            );
 
         Assert.True(decision.ShouldRetry);
     }
@@ -141,13 +153,15 @@ public sealed class SmithyStandardRetryStrategyTests
     {
         var strategy = new SmithyStandardRetryStrategy(maxAttempts: 3, random: new MaxRandom());
 
-        var decision = strategy.Classify(
-            Outcome(
-                attempt: 1,
-                StatusCode: HttpStatusCode.BadRequest,
-                error: new RetryableTestError(throttling: false)
-            )
-        );
+        var decision = strategy
+            .Begin()
+            .Classify(
+                Outcome(
+                    attempt: 1,
+                    StatusCode: HttpStatusCode.BadRequest,
+                    error: new RetryableTestError(throttling: false)
+                )
+            );
 
         Assert.True(decision.ShouldRetry);
     }
@@ -157,13 +171,15 @@ public sealed class SmithyStandardRetryStrategyTests
     {
         var strategy = new SmithyStandardRetryStrategy(maxAttempts: 3, random: new MaxRandom());
 
-        var decision = strategy.Classify(
-            Outcome(
-                attempt: 1,
-                StatusCode: HttpStatusCode.BadRequest,
-                error: new RetryableTestError(throttling: true)
-            )
-        );
+        var decision = strategy
+            .Begin()
+            .Classify(
+                Outcome(
+                    attempt: 1,
+                    StatusCode: HttpStatusCode.BadRequest,
+                    error: new RetryableTestError(throttling: true)
+                )
+            );
 
         Assert.Equal(TimeSpan.FromMilliseconds(500), decision.Delay);
     }
@@ -176,14 +192,15 @@ public sealed class SmithyStandardRetryStrategyTests
         // Capacity 500, 5 tokens per response retry: 100 retries drain the bucket.
         for (var i = 0; i < 100; i++)
         {
-            var decision = strategy.Classify(
-                Outcome(attempt: 1, StatusCode: HttpStatusCode.ServiceUnavailable)
-            );
+            var decision = strategy
+                .Begin()
+                .Classify(Outcome(attempt: 1, StatusCode: HttpStatusCode.ServiceUnavailable));
             Assert.True(decision.ShouldRetry);
         }
 
         Assert.False(
             strategy
+                .Begin()
                 .Classify(Outcome(attempt: 1, StatusCode: HttpStatusCode.ServiceUnavailable))
                 .ShouldRetry
         );
@@ -194,28 +211,24 @@ public sealed class SmithyStandardRetryStrategyTests
     {
         var strategy = new SmithyStandardRetryStrategy(maxAttempts: 3);
 
-        // Drain the bucket, remembering each execution's context.
-        List<SmithyContext> contexts = [];
+        // Drain the bucket, remembering each execution's session.
+        List<ISmithyRetrySession> sessions = [];
         for (var i = 0; i < 100; i++)
         {
-            var context = new SmithyContext();
-            var decision = strategy.Classify(
-                new SmithyRetryOutcome(
-                    1,
-                    Response(HttpStatusCode.ServiceUnavailable),
-                    new SmithyClientException(HttpStatusCode.ServiceUnavailable, null),
-                    context
-                )
+            var session = strategy.Begin();
+            var decision = session.Classify(
+                Outcome(attempt: 1, StatusCode: HttpStatusCode.ServiceUnavailable)
             );
             Assert.True(decision.ShouldRetry);
-            contexts.Add(context);
+            sessions.Add(session);
         }
 
         // A retried execution eventually succeeding refunds its tokens.
-        strategy.RecordSuccess(contexts[0]);
+        sessions[0].RecordSuccess();
 
         Assert.True(
             strategy
+                .Begin()
                 .Classify(Outcome(attempt: 1, StatusCode: HttpStatusCode.ServiceUnavailable))
                 .ShouldRetry
         );
@@ -229,9 +242,9 @@ public sealed class SmithyStandardRetryStrategyTests
             classifyOutcome: static _ => SmithyRetryVerdict.NotRetryable
         );
 
-        var decision = strategy.Classify(
-            Outcome(attempt: 1, StatusCode: HttpStatusCode.ServiceUnavailable)
-        );
+        var decision = strategy
+            .Begin()
+            .Classify(Outcome(attempt: 1, StatusCode: HttpStatusCode.ServiceUnavailable));
 
         Assert.False(decision.ShouldRetry);
     }

@@ -90,8 +90,9 @@ public sealed class SmithyClientRuntime(
         CancellationToken cancellationToken
     )
     {
+        var session = retryStrategy?.Begin();
         // Streaming request bodies cannot be replayed, so they get exactly one attempt.
-        var canRetry = retryStrategy is not null && request.Body is not SmithyHttpBody.Streaming;
+        var canRetry = session is not null && request.Body is not SmithyHttpBody.Streaming;
         for (var attempt = 1; ; attempt++)
         {
             context.Set(SmithyContextKeys.Attempt, attempt);
@@ -113,7 +114,7 @@ public sealed class SmithyClientRuntime(
             catch (Exception transportError)
                 when (canRetry && !cancellationToken.IsCancellationRequested)
             {
-                var decision = retryStrategy!.Classify(
+                var decision = session!.Classify(
                     new SmithyRetryOutcome(attempt, null, transportError, context)
                 );
                 if (!decision.ShouldRetry)
@@ -132,7 +133,7 @@ public sealed class SmithyClientRuntime(
 
             if (!isErrorResponse(response))
             {
-                retryStrategy?.RecordSuccess(context);
+                session?.RecordSuccess();
                 return response;
             }
 
@@ -142,7 +143,7 @@ public sealed class SmithyClientRuntime(
 
             if (canRetry)
             {
-                var decision = retryStrategy!.Classify(
+                var decision = session!.Classify(
                     new SmithyRetryOutcome(attempt, response, error, context)
                 );
                 if (decision.ShouldRetry)

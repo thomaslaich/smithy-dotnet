@@ -53,15 +53,21 @@ RetryStrategy = new SmithySimpleRetryStrategy(
 
 ## Custom strategies
 
-For custom behavior, implement `ISmithyRetryStrategy`. The runtime classifies
-each failed attempt — deserializing the modeled error when there is one — and
-passes the outcome to the strategy. The outcome carries the attempt number, the
-response (`null` for transport failures), and the exception that will propagate
-to the caller if the attempt is not retried:
+For custom behavior, implement `ISmithyRetryStrategy`. A strategy is long-lived
+and shared by every call on the client; `Begin()` runs once per operation
+execution and returns that execution's `ISmithyRetrySession`. The runtime
+classifies each failed attempt — deserializing the modeled error when there is
+one — and passes the outcome to the session. The outcome carries the attempt
+number, the response (`null` for transport failures), and the exception that
+will propagate to the caller if the attempt is not retried.
+
+A stateless strategy can be its own session:
 
 ```csharp
-public sealed class BackoffRetryStrategy : ISmithyRetryStrategy
+public sealed class BackoffRetryStrategy : ISmithyRetryStrategy, ISmithyRetrySession
 {
+    public ISmithyRetrySession Begin() => this;
+
     public SmithyRetryDecision Classify(SmithyRetryOutcome outcome)
     {
         if (outcome.Attempt >= 4 || !IsTransient(outcome))
@@ -79,6 +85,11 @@ public sealed class BackoffRetryStrategy : ISmithyRetryStrategy
         || (int)outcome.Response.StatusCode is >= 500 and <= 599;
 }
 ```
+
+A stateful strategy keeps client-wide state (like a retry quota) on the
+strategy and per-execution state on the session; the session's
+`RecordSuccess` hook fires when an attempt succeeds, which is how the standard
+strategy refunds quota.
 
 Because the modeled error is deserialized before the retry decision,
 `outcome.Error` lets a strategy retry on specific modeled error types (for

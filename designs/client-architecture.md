@@ -202,14 +202,26 @@ for a decision that carries the backoff delay:
 ```csharp
 public interface ISmithyRetryStrategy
 {
+    ISmithyRetrySession Begin();
+}
+
+public interface ISmithyRetrySession
+{
     SmithyRetryDecision Classify(SmithyRetryOutcome outcome);
+    void RecordSuccess();
 }
 ```
 
-`SmithyRetryOutcome` is a failed attempt: the response (null on transport
-failure) plus the exception that will propagate if the attempt is not retried.
-The strategy owns the whole decision — attempt budgeting, failure
-classification, and delay.
+A strategy is long-lived and shared by every execution of its client; it owns
+client-wide state such as the retry quota and must be thread-safe. `Begin`
+runs once per operation execution and returns that execution's session, which
+owns per-execution state (for example, how much quota this execution
+acquired). `SmithyRetryOutcome` is a failed attempt: the response (null on
+transport failure) plus the exception that will propagate if the attempt is
+not retried. The session owns the whole decision — attempt budgeting, failure
+classification, and delay — and `RecordSuccess` lets quota-based strategies
+refund what the execution's retries consumed. Stateless strategies return
+themselves as the session.
 
 The standard strategy uses:
 
