@@ -41,7 +41,7 @@ Available hooks:
 | `OnBeforeTransmitAsync` | Modify the signed request before transport sends it. |
 | `OnAfterTransmit` | Observe the raw response before deserialization. |
 | `OnAfterDeserialization` | Observe the typed output after protocol deserialization. |
-| `OnAfterExecution` | Run cleanup or final observation after the call completes. |
+| `OnAfterExecution` | Run cleanup or final observation after the call completes; receives the exception on failure (`null` on success). |
 
 Before hooks run in configured order. After hooks run in reverse order.
 

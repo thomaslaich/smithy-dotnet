@@ -24,5 +24,10 @@ public interface IClientInterceptor
 
     void OnAfterDeserialization(SmithyContext context, object? output) { }
 
-    void OnAfterExecution(SmithyContext context) { }
+    /// <summary>
+    /// Runs once per execution, after success or failure. <paramref name="exception"/> is null
+    /// when the operation succeeded; otherwise it is the exception that will propagate to the
+    /// caller (a modeled error, a <see cref="SmithyClientException"/>, or a transport failure).
+    /// </summary>
+    void OnAfterExecution(SmithyContext context, Exception? exception) { }
 }

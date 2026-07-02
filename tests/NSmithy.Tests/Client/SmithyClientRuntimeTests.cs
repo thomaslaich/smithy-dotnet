@@ -95,7 +95,7 @@ public sealed class SmithyClientRuntimeTests
                 "one:before-transmit:/input",
                 "one:after-transmit:OK",
                 "one:after-deserialization:output",
-                "one:after-execution",
+                "one:after-execution:ok",
             ],
             calls
         );
@@ -272,8 +272,8 @@ public sealed class SmithyClientRuntimeTests
                 "one:after-transmit:OK",
                 "two:after-deserialization:output",
                 "one:after-deserialization:output",
-                "two:after-execution",
-                "one:after-execution",
+                "two:after-execution:ok",
+                "one:after-execution:ok",
             ],
             calls
         );
@@ -426,6 +426,162 @@ public sealed class SmithyClientRuntimeTests
         Assert.Equal(1, transport.Attempts);
     }
 
+    [Fact]
+    public async Task RuntimeRetriesTransportFailures()
+    {
+        var transport = new FlakyTransport(
+            failures: 1,
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            retryStrategy: new SmithySimpleRetryStrategy(maxAttempts: 2)
+        );
+
+        var output = await runtime.InvokeAsync(
+            "Weather",
+            "GetForecast",
+            new TextProtocol(),
+            "input",
+            cancellationToken: CancellationToken.None
+        );
+
+        Assert.Equal("output", output);
+        Assert.Equal(2, transport.Attempts);
+    }
+
+    [Fact]
+    public async Task RuntimeThrowsTransportFailureWhenNoRetryStrategyIsConfigured()
+    {
+        var transport = new FlakyTransport(
+            failures: 1,
+            new SmithyHttpResponse(HttpStatusCode.OK, "OK", [], EmptyHeaders, EmptyHeaders)
+        );
+        var runtime = new SmithyClientRuntime(transport);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            runtime.InvokeAsync(
+                "Weather",
+                "GetForecast",
+                new TextProtocol(),
+                "input",
+                cancellationToken: CancellationToken.None
+            )
+        );
+
+        Assert.Equal(1, transport.Attempts);
+    }
+
+    [Fact]
+    public async Task RuntimeThrowsTransportFailureWhenStrategyGivesUp()
+    {
+        var transport = new FlakyTransport(
+            failures: 3,
+            new SmithyHttpResponse(HttpStatusCode.OK, "OK", [], EmptyHeaders, EmptyHeaders)
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            retryStrategy: new SmithySimpleRetryStrategy(maxAttempts: 2)
+        );
+
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            runtime.InvokeAsync(
+                "Weather",
+                "GetForecast",
+                new TextProtocol(),
+                "input",
+                cancellationToken: CancellationToken.None
+            )
+        );
+
+        Assert.Equal(2, transport.Attempts);
+    }
+
+    [Fact]
+    public async Task RetryStrategySeesDeserializedModeledError()
+    {
+        List<SmithyRetryOutcome> outcomes = [];
+        var transport = new SequenceTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.BadRequest,
+                "Bad Request",
+                Encoding.UTF8.GetBytes("""{"message":"throttled"}"""),
+                EmptyHeaders,
+                EmptyHeaders
+            ),
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            retryStrategy: new SmithySimpleRetryStrategy(
+                maxAttempts: 2,
+                shouldRetry: outcome =>
+                {
+                    outcomes.Add(outcome);
+                    return outcome.Error is InvalidOperationException;
+                }
+            )
+        );
+
+        var output = await runtime.InvokeAsync(
+            "Weather",
+            "GetForecast",
+            new TextProtocol(),
+            "input",
+            errorDeserializer: static (response, _) =>
+                ValueTask.FromResult<Exception?>(
+                    new InvalidOperationException(response.ContentText)
+                ),
+            cancellationToken: CancellationToken.None
+        );
+
+        Assert.Equal("output", output);
+        var outcome = Assert.Single(outcomes);
+        Assert.False(outcome.IsTransportFailure);
+        Assert.Equal("""{"message":"throttled"}""", outcome.Error.Message);
+        Assert.Equal(HttpStatusCode.BadRequest, outcome.Response!.StatusCode);
+    }
+
+    [Fact]
+    public async Task InterceptorsObserveExecutionFailure()
+    {
+        List<string> calls = [];
+        var transport = new RecordingTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.InternalServerError,
+                "Internal Server Error",
+                [],
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(transport, [new RecordingInterceptor("one", calls)]);
+
+        await Assert.ThrowsAsync<SmithyClientException>(() =>
+            runtime.InvokeAsync(
+                "Weather",
+                "GetForecast",
+                new TextProtocol(),
+                "input",
+                cancellationToken: CancellationToken.None
+            )
+        );
+
+        Assert.Equal("one:after-execution:SmithyClientException", calls[^1]);
+    }
+
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> EmptyHeaders { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
@@ -440,6 +596,24 @@ public sealed class SmithyClientRuntimeTests
         {
             Request = request;
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class FlakyTransport(int failures, SmithyHttpResponse response) : IHttpTransport
+    {
+        public int Attempts { get; private set; }
+
+        public Task<SmithyHttpResponse> SendAsync(
+            SmithyHttpRequest request,
+            CancellationToken cancellationToken = default
+        )
+        {
+            Attempts++;
+            return Attempts <= failures
+                ? Task.FromException<SmithyHttpResponse>(
+                    new HttpRequestException("connection reset")
+                )
+                : Task.FromResult(response);
         }
     }
 
@@ -506,9 +680,9 @@ public sealed class SmithyClientRuntimeTests
             calls.Add($"{name}:after-deserialization:{output}");
         }
 
-        public void OnAfterExecution(SmithyContext context)
+        public void OnAfterExecution(SmithyContext context, Exception? error)
         {
-            calls.Add($"{name}:after-execution");
+            calls.Add($"{name}:after-execution:{(error is null ? "ok" : error.GetType().Name)}");
         }
     }
 

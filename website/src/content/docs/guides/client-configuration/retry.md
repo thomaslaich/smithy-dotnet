@@ -15,8 +15,8 @@ var client = new WeatherClient(
     });
 ```
 
-`null` disables runtime retries. `SmithySimpleRetryStrategy` retries HTTP 429
-and 5xx responses, with an optional fixed delay:
+`null` disables runtime retries. `SmithySimpleRetryStrategy` retries transport
+failures, HTTP 429, and 5xx responses, with an optional fixed delay:
 
 ```csharp
 RetryStrategy = new SmithySimpleRetryStrategy(
@@ -24,26 +24,36 @@ RetryStrategy = new SmithySimpleRetryStrategy(
     delay: TimeSpan.FromMilliseconds(100));
 ```
 
-For custom behavior, implement `ISmithyRetryStrategy`:
+For custom behavior, implement `ISmithyRetryStrategy`. The runtime classifies
+each failed attempt — deserializing the modeled error when there is one — and
+passes the outcome to the strategy. The outcome carries the attempt number, the
+response (`null` for transport failures), and the exception that will propagate
+to the caller if the attempt is not retried:
 
 ```csharp
 public sealed class BackoffRetryStrategy : ISmithyRetryStrategy
 {
-    public int MaxAttempts => 4;
-
-    public bool ShouldRetry(SmithyRetryContext context) =>
-        context.Response.StatusCode == HttpStatusCode.TooManyRequests
-        || (int)context.Response.StatusCode is >= 500 and <= 599;
-
-    public async ValueTask DelayAsync(
-        SmithyRetryContext context,
-        CancellationToken cancellationToken = default)
+    public SmithyRetryDecision Classify(SmithyRetryOutcome outcome)
     {
-        var delay = TimeSpan.FromMilliseconds(100 * Math.Pow(2, context.Attempt - 1));
-        await Task.Delay(delay, cancellationToken);
+        if (outcome.Attempt >= 4 || !IsTransient(outcome))
+        {
+            return SmithyRetryDecision.GiveUp;
+        }
+
+        var delay = TimeSpan.FromMilliseconds(100 * Math.Pow(2, outcome.Attempt - 1));
+        return SmithyRetryDecision.RetryAfter(delay);
     }
+
+    private static bool IsTransient(SmithyRetryOutcome outcome) =>
+        outcome.IsTransportFailure
+        || outcome.Response!.StatusCode == HttpStatusCode.TooManyRequests
+        || (int)outcome.Response.StatusCode is >= 500 and <= 599;
 }
 ```
+
+Because the modeled error is deserialized before the retry decision,
+`outcome.Error` lets a strategy retry on specific modeled error types (for
+example, a service's throttling error).
 
 Retries run inside the NSmithy client runtime. Request interceptors run again for
 each retry attempt, and each attempt starts from the serialized request rather
