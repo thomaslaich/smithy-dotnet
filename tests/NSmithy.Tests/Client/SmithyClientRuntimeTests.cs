@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using NSmithy.Client;
+using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Http;
 
@@ -98,18 +99,11 @@ public sealed class SmithyClientRuntimeTests
             )
         );
         var runtime = new SmithyClientRuntime(transport);
-        var binding = new SmithyOperationBinding<string, string>(
-            "Weather",
-            "GetForecast",
-            new TextProtocol(),
-            request => request.Headers["x-test-binding"] = ["true"]
-        );
 
-        var output = await runtime.InvokeAsync(binding, "input");
+        var output = await runtime.InvokeAsync(Binding(new TextProtocol()), "input");
 
         Assert.Equal("output", output);
         Assert.Equal("/input", transport.Request.RequestUri);
-        Assert.Equal(["true"], transport.Request.Headers["x-test-binding"]);
     }
 
     [Fact]
@@ -488,7 +482,12 @@ public sealed class SmithyClientRuntimeTests
 
     private static SmithyOperationBinding<string, string> Binding(
         IOperationProtocol<string, string> protocol
-    ) => new("Weather", "GetForecast", protocol);
+    ) =>
+        new(
+            ShapeId.Parse("example.weather#Weather"),
+            ShapeId.Parse("example.weather#GetForecast"),
+            protocol
+        );
 
     private sealed class RecordingTransport(SmithyHttpResponse response) : IHttpTransport
     {

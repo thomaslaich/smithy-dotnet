@@ -198,10 +198,10 @@ public sealed class WeatherServiceClient
 }
 ```
 
-The binding carries the service and operation names, the bound operation
-protocol, and an optional request modifier. The runtime owns execution —
-interceptors, auth, retries — and modeled-error deserialization runs through the
-binding's protocol, so the generated method has no protocol-specific branches.
+The binding carries the service and operation shape ids and the bound
+operation protocol. The runtime owns execution — interceptors, auth, retries —
+and modeled-error deserialization runs through the binding's protocol, so the
+generated method has no protocol-specific branches.
 
 For a different protocol, the model types and schemas stay the same. Only the
 service protocol factory changes, for example to
@@ -483,8 +483,8 @@ private static readonly IServiceProtocol ServiceProtocol =
 
 private static readonly SmithyOperationBinding<GreetingWithErrorsInput, GreetingWithErrorsOutput>
     GreetingWithErrorsBinding = new(
-        "RpcV2Protocol",
-        "GreetingWithErrors",
+        RpcV2ProtocolSchema.Schema.Id,
+        GreetingWithErrorsSchema.Schema.Id,
         ServiceProtocol.ForOperation(GreetingWithErrorsSchema.Schema));
 ```
 
@@ -509,11 +509,12 @@ initialized and reused for every request. The hot path serializes through those
 precomputed objects instead of reanalyzing schema metadata.
 
 The generated client also precomputes a client-runtime operation binding per
-unary operation. That binding wraps the operation-bound protocol together with
-the service/operation names, request modifiers such as compression/checksum
-hooks, and other lifecycle metadata. The operation-bound protocol owns modeled
-error deserialization; operation schemas carry the modeled error descriptors it
-uses for dispatch. Protocol implementations compile those descriptors into
+unary operation. That binding pairs the service and operation shape ids with
+the operation-bound protocol. The operation-bound protocol owns modeled error
+deserialization and applies request-mutating traits (`@requestCompression`,
+`@httpChecksumRequired`) during serialization, compiled once from the
+operation schema's traits; operation schemas carry the modeled error
+descriptors it uses for dispatch. Protocol implementations compile those descriptors into
 protocol-specific error deserializers when the operation protocol is built, so
 per-call generated code stays thin and error codec construction stays off the
 deserialization path.

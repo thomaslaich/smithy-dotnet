@@ -35,7 +35,7 @@ public sealed class SmithyClientRuntime(
     )
     {
         var protocol = binding.Protocol;
-        var context = CreateContext(binding.ServiceName, binding.OperationName);
+        var context = CreateContext(binding.ServiceId.Name, binding.OperationId.Name);
         foreach (var interceptor in interceptors)
         {
             interceptor.OnBeforeExecution(context);
@@ -50,7 +50,6 @@ public sealed class SmithyClientRuntime(
             }
 
             var request = protocol.SerializeRequest(input);
-            binding.ModifyRequest?.Invoke(request);
             var response = await SendAsync(
                     context,
                     request,

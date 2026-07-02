@@ -52,9 +52,11 @@ public sealed class RpcV2CborProtocol : IProtocol
         private readonly bool outputIsUnit;
         private readonly ICborCodec<TInput> requestCodec;
         private readonly ICborCodec<TOutput> responseCodec;
+        private readonly Action<SmithyHttpRequest>? requestTransform;
 
         public OperationProtocol(ServiceSchema service, OperationSchema<TInput, TOutput> operation)
         {
+            requestTransform = SmithyRequestModifiers.Compile(operation);
             // The rpcv2Cbor path is service-derived; the protocol owns this wire detail.
             requestUri = $"/service/{service.Id.Name}/operation/{operation.Id.Name}";
             inputIsUnit = typeof(TInput) == typeof(SmithyUnit) || IsUnitSchema(operation.Input);
@@ -86,6 +88,7 @@ public sealed class RpcV2CborProtocol : IProtocol
                 request.ContentType = ContentType;
             }
 
+            requestTransform?.Invoke(request);
             return request;
         }
 
