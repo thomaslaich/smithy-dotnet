@@ -8,9 +8,9 @@ is a good place to learn the IDL before continuing.
 
 ## Prerequisites
 
-You need the [.NET SDK](https://dotnet.microsoft.com/download). That's it for
-basic builds — NSmithy bundles the Smithy CLI (including a JRE) inside the
-NuGet package, so no separate Java or Smithy CLI installation is required.
+Basic builds require only the [.NET SDK](https://dotnet.microsoft.com/download).
+NSmithy bundles the Smithy CLI (including a JRE) inside the NuGet package, so no
+separate Java or Smithy CLI installation is required.
 
 If you enable `SmithyGenerateDocs` (Sphinx HTML docs), Python 3.11+ must also
 be on your PATH.
@@ -135,8 +135,8 @@ operation SayHello {
 
 `@restJson1` is the protocol; it controls serialization and HTTP binding
 behavior. `@http` binds the operation to a route. `@httpLabel` maps `name` to
-the `{name}` path segment. This is the source of truth for everything that
-follows — change the model, rebuild, and all generated code updates automatically.
+the `{name}` path segment. All generated code derives from this model; change
+the model and rebuild to regenerate it.
 
 ### Generated Types
 
@@ -170,7 +170,7 @@ builder.Services.AddHelloServiceHandler<HelloHandler>();
 app.MapHelloServiceHttp();
 ```
 
-`HelloHandler` (also generated as a starter) simply returns a greeting:
+`HelloHandler` (also generated as a starter) returns a greeting:
 
 ```csharp
 internal sealed class HelloHandler : IHelloServiceHandler
@@ -198,7 +198,7 @@ Console.WriteLine(response.Message);
 ```
 
 The client and server share the same generated input/output types from the
-contracts project. There is no hand-written glue — the model is the contract.
+contracts project.
 
 ## Template Options
 

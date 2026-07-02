@@ -3,17 +3,16 @@ title: Roadmap
 description: Current direction and near-term priorities for NSmithy.
 ---
 
-This roadmap describes the current direction of NSmithy as it exists today.
-The architecture is no longer the open question: NSmithy uses Smithy CLI for
-model assembly and a Smithy Java plugin for generation, integrated into the
-.NET build through `NSmithy.MSBuild`. The roadmap is about hardening and
-expanding that baseline rather than revisiting it.
+The architecture is settled: NSmithy uses the Smithy CLI for model assembly
+and a Smithy Java plugin for generation, integrated into the .NET build
+through `NSmithy.MSBuild`. This roadmap covers hardening and expanding that
+baseline rather than revisiting it.
 
 ## Direction
 
 - Keep Smithy CLI as the model front end for assembly, validation, projections,
   and Maven dependency resolution.
-- Keep the generated output and runtime story natural for .NET consumers.
+- Keep the generated output and runtime idiomatic for .NET consumers.
 - Prefer explicit preview boundaries over broad compatibility claims.
 - Use protocol expansion to validate and strengthen the runtime seams that are
   already in place.
@@ -43,15 +42,15 @@ for the full list. The priorities below are what remains.
 - Expand AWS protocol coverage beyond the initial AWS JSON client support,
   especially AWS Query and EC2 Query.
 - Continue hardening `aws.protocols#restJson1`, `aws.protocols#restXml`, and
-  `smithy.protocols#rpcv2Cbor` as real preview surfaces.
+  `smithy.protocols#rpcv2Cbor` as preview surfaces.
 - Mature AWS authentication beyond the early-preview SigV4 signing — endpoint
   resolution, profile/SSO/IMDS credential chains, presigning, and golden-vector
   coverage against AWS's SigV4 test suite.
 - Grow the LocalStack integration coverage beyond the initial example into a
   broader suite that validates generated AWS clients against realistic protocol,
   signing, and endpoint behavior.
-- Keep the scope driven by conformance and real runtime behavior rather than by
-  marketing-level protocol checklists.
+- Keep the scope driven by conformance and observed runtime behavior rather
+  than by protocol checklists.
 
 ### 2. Move the client runtime to the target architecture
 
@@ -143,10 +142,9 @@ This work includes:
 
 ### 8. Support Smithy AI traits and MCP generation
 
-Smithy's AI-oriented traits open up another important integration surface for
-NSmithy. Supporting them cleanly should make it possible to generate useful
-.NET and protocol artifacts for tool-driven and agent-driven workflows rather
-than treating them as out-of-band metadata.
+Support Smithy's AI-oriented traits so that .NET and protocol artifacts can be
+generated for tool-driven and agent-driven workflows, rather than treating the
+traits as out-of-band metadata.
 
 This work includes:
 

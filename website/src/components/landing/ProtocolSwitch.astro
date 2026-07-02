@@ -1,6 +1,6 @@
 ---
 /**
- * ProtocolSwitch — "Same code. Any protocol." widget.
+ * ProtocolSwitch — "The protocol is a trait on the model" widget.
  * Ported from the Claude Design "ProtocolSwitch.dc.html". The same GetForecast
  * operation rendered across four protocols; auto-cycles every 4.2s, pauses on
  * hover. Always-dark code panel (does not follow the page theme).
@@ -19,8 +19,8 @@ const protocols: Proto[] = [
     name: 'awsJson1_1',
     sub: 'RPC · JSON',
     cap: 'JSON-RPC: every operation is a POST to a uniform endpoint, framed by an operation target.',
-    req: 'POST / HTTP/1.1\ncontent-type: application/x-amz-json-1.1\nx-amz-target: Weather.GetForecast\n\n{ "city": "Zurich" }',
-    res: 'HTTP/1.1 200 OK\ncontent-type: application/x-amz-json-1.1\n\n{ "tempC": 18.4,\n  "summary": "Clear skies over Zurich" }',
+    req: 'POST / HTTP/1.1\ncontent-type: application/x-amz-json-1.1\nx-amz-target: Weather.GetForecast\n\n{\n  "city": "Zurich"\n}',
+    res: 'HTTP/1.1 200 OK\ncontent-type: application/x-amz-json-1.1\n\n{\n  "tempC": 18.4,\n  "summary": "Clear skies over Zurich"\n}',
   },
   {
     name: 'rpcv2Cbor',
@@ -118,7 +118,7 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
     border: 1px solid #20202c;
     border-radius: 14px;
     overflow: hidden;
-    box-shadow: 0 30px 70px -24px rgba(0, 0, 0, 0.7);
+    box-shadow: 0 12px 32px -20px rgba(0, 0, 0, 0.6);
     width: 100%;
     color: #bcbccb;
   }
@@ -137,7 +137,6 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
     height: 9px;
     background: #6d4aff;
     transform: rotate(45deg);
-    box-shadow: 0 0 12px #6d4aff;
   }
   .psw__op {
     font-size: 12px;
