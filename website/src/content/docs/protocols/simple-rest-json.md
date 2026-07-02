@@ -8,8 +8,8 @@ NSmithy generates both a typed .NET client and an ASP.NET Core minimal API
 server adapter. Status: **Preview**.
 
 Use `simpleRestJson` when your consumers are primarily .NET or Scala
-(via [Smithy4s](https://disneystreaming.github.io/smithy4s/)) and you want the
-smoothest current NSmithy end-to-end path. Use
+(via [Smithy4s](https://disneystreaming.github.io/smithy4s/)); it is the most
+complete protocol in the current NSmithy preview. Use
 [`aws.protocols#restJson1`](/smithy-dotnet/protocols/aws-rest-json1/) when you
 need broader Smithy ecosystem compatibility or OpenAPI generation.
 

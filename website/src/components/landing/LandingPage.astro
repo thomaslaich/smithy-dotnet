@@ -20,7 +20,7 @@ const logo = '/smithy-dotnet/brand/nsmithy_logo_1.png';
 const features = [
   { t: 'Protocol agnostic', d: 'REST, JSON-RPC, CBOR and gRPC from one model — switch or serve several at once.' },
   { t: 'MSBuild-native', d: 'No separate codegen step. MSBuild runs <code>smithy build</code>, adds <code>.g.cs</code> files, and tracks model changes for incremental builds.' },
-  { t: 'Type-safe contracts', d: 'Generated handlers and clients are strongly typed C# records. No string URLs, no manual JSON, no runtime surprises.' },
+  { t: 'Type-safe contracts', d: 'Generated handlers and clients are strongly typed C# records, so the contract is checked at compile time.' },
   { t: 'Cross-ecosystem', d: 'The same contract powers clients in Java, Python, TypeScript, Rust, Swift and more — your .NET service stays interoperable.' },
   { t: 'Docs included', d: 'A Scalar OpenAPI explorer and Sphinx reference are generated at compile time and served as static files.' },
   { t: 'Extensible', d: 'Add protocols and generators through a plugin surface — the model stays the single source of truth.' },
@@ -94,28 +94,27 @@ const langs = [
     <div class="nsl-hero-inner">
       <div class="nsl-hero-copy">
         <a class="nsl-badge reveal" href="https://smithy.io">
-          <span class="nsl-badge-dot"></span>
-          Built on Smithy IDL&nbsp;&nbsp;·&nbsp;&nbsp;smithy.io <span aria-hidden="true">↗</span>
+          Built on the Smithy IDL&nbsp;·&nbsp;smithy.io <span aria-hidden="true">↗</span>
         </a>
-        <h1 class="nsl-h1 reveal" style="--reveal-delay: 80ms">One contract.<br />Every layer of your&nbsp;.NET&nbsp;service.</h1>
-        <p class="nsl-lead reveal" style="--reveal-delay: 160ms">
-          <span class="nsl-brandname">NSmithy</span> turns a single Smithy model into typed servers, clients, and live documentation for .NET —
-          protocol-agnostic, MSBuild-native, zero hand-written glue.
+        <h1 class="nsl-h1 reveal" style="--reveal-delay: 60ms">Smithy code generation for&nbsp;.NET</h1>
+        <p class="nsl-lead reveal" style="--reveal-delay: 120ms">
+          NSmithy generates typed servers, clients, and API documentation for .NET from a single
+          Smithy model. Code generation runs as part of <code>dotnet build</code>.
         </p>
-        <div class="nsl-hero-actions reveal" style="--reveal-delay: 240ms">
+        <div class="nsl-hero-actions reveal" style="--reveal-delay: 180ms">
           <a class="nsl-btn nsl-btn-primary" href={intro}>Get Started</a>
           <a class="nsl-btn nsl-btn-ghost" href={repo}>View on GitHub</a>
         </div>
-        <div class="nsl-chips reveal" style="--reveal-delay: 320ms">
+        <div class="nsl-chips reveal" style="--reveal-delay: 240ms">
           <span class="nsl-chip">REST</span>
           <span class="nsl-chip">JSON-RPC</span>
           <span class="nsl-chip">CBOR-RPC</span>
           <span class="nsl-chip">gRPC</span>
-          <span class="nsl-chip nsl-chip-ext">+ extensible</span>
+          <span class="nsl-chip">+extensible</span>
         </div>
       </div>
 
-      <div class="nsl-hero-art reveal" style="--reveal-delay: 220ms" aria-hidden="true">
+      <div class="nsl-hero-art reveal" style="--reveal-delay: 160ms" aria-hidden="true">
         <div class="nsl-hero-glow"></div>
         <img class="nsl-anvil" src={logo} alt="" width="340" height="340" />
       </div>
@@ -126,7 +125,7 @@ const langs = [
   <section id="workflow" class="nsl-section">
     <div class="nsl-sechead reveal">
       <div class="nsl-kicker">The workflow</div>
-      <h2 class="nsl-h2">From model to runtime in one build</h2>
+      <h2 class="nsl-h2">From model to runtime</h2>
       <p class="nsl-secp">Describe operations, shapes, and traits once. <code>dotnet&nbsp;build</code> emits the server stub, the client, and the docs.</p>
     </div>
     <div class="reveal"><Walkthrough /></div>
@@ -136,8 +135,8 @@ const langs = [
   <section id="protocols" class="nsl-section">
     <div class="nsl-sechead nsl-sechead-wide reveal">
       <div class="nsl-kicker">Protocol agnostic</div>
-      <h2 class="nsl-h2">Same code. Any protocol.</h2>
-      <p class="nsl-secp">Your handler and client never change. Annotate the service with a different protocol trait and NSmithy regenerates the wire format — REST, JSON-RPC, binary CBOR, or gRPC over HTTP/2.</p>
+      <h2 class="nsl-h2">The protocol is a trait on the model</h2>
+      <p class="nsl-secp">Handler and client code stay the same. Changing the protocol trait on the service changes the wire format — REST, JSON-RPC, binary CBOR, or gRPC over HTTP/2.</p>
     </div>
     <div class="reveal"><ProtocolSwitch /></div>
   </section>
@@ -145,9 +144,9 @@ const langs = [
   <!-- Ecosystem -->
   <section id="ecosystem" class="nsl-section nsl-eco">
     <div class="nsl-kicker reveal">Cross-ecosystem</div>
-    <h2 class="nsl-h2 reveal" style="--reveal-delay: 80ms">Same model. Any language.</h2>
-    <p class="nsl-secp nsl-eco-p reveal" style="--reveal-delay: 160ms">Smithy is the IDL behind AWS's public APIs. One model generates idiomatic clients across the ecosystem.</p>
-    <div class="nsl-langs reveal" style="--reveal-delay: 240ms">
+    <h2 class="nsl-h2 reveal" style="--reveal-delay: 60ms">Part of the Smithy ecosystem</h2>
+    <p class="nsl-secp nsl-eco-p reveal" style="--reveal-delay: 120ms">Smithy is the IDL behind AWS's public APIs. The same model works with the official Smithy code generators for other languages.</p>
+    <div class="nsl-langs reveal" style="--reveal-delay: 180ms">
       {
         langs.map((l) => (
           <a
@@ -168,7 +167,7 @@ const langs = [
     <div class="nsl-cards">
       {
         features.map((f, i) => (
-          <div class="nsl-card reveal" style={`--reveal-delay: ${(i % 3) * 80}ms`}>
+          <div class="nsl-card reveal" style={`--reveal-delay: ${(i % 3) * 60}ms`}>
             <span class="nsl-card-mark" />
             <h3 class="nsl-card-t">{f.t}</h3>
             <p class="nsl-card-d" set:html={f.d} />
@@ -183,9 +182,9 @@ const langs = [
     <div class="nsl-docs reveal">
       <div>
         <div class="nsl-kicker">Documentation</div>
-        <h2 class="nsl-h2 nsl-docs-h">Docs that build themselves</h2>
+        <h2 class="nsl-h2 nsl-docs-h">Generated API documentation</h2>
         <p class="nsl-secp nsl-docs-p">
-          No hand-authored spec. <code>app.MapSmithyOpenApi()</code> mounts an interactive Scalar explorer;
+          <code>app.MapSmithyOpenApi()</code> mounts an interactive Scalar explorer;
           <code>app.MapSmithyDocs()</code> serves the Sphinx reference — both generated straight from the model at build time.
         </p>
       </div>
@@ -213,10 +212,9 @@ const langs = [
   <!-- CTA -->
   <section class="nsl-section">
     <div class="nsl-cta reveal">
-      <div class="nsl-cta-glow" aria-hidden="true"></div>
       <div class="nsl-cta-inner">
-        <h2 class="nsl-cta-h">Forge your API.</h2>
-        <p class="nsl-cta-p">Model once. Generate the server, the clients, the docs.</p>
+        <h2 class="nsl-cta-h">Get started</h2>
+        <p class="nsl-cta-p">The quick start walks through modeling, building, and calling a small service.</p>
         <div class="nsl-hero-actions nsl-cta-actions">
           <a class="nsl-btn nsl-btn-primary" href={intro}>Get Started</a>
           <a class="nsl-btn nsl-btn-ghost" href={repo}>GitHub</a>
@@ -272,17 +270,16 @@ const langs = [
     --pill: #f1f1f5;
   }
 
-  /* ── Scroll reveal (the page's single animation language) ────────────────── */
+  /* ── Scroll reveal (deliberately subtle: short rise, gentle fade) ────────── */
   .reveal {
     transition:
-      opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
-      transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+      opacity 0.5s ease-out,
+      transform 0.5s ease-out;
     transition-delay: var(--reveal-delay, 0s);
-    will-change: opacity, transform;
   }
   html.reveal-ready .reveal {
     opacity: 0;
-    transform: translateY(18px);
+    transform: translateY(10px);
   }
   html.reveal-ready .reveal.is-visible {
     opacity: 1;
@@ -423,7 +420,7 @@ const langs = [
     font-weight: 600;
     font-size: 16px;
     padding: 14px 26px;
-    transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+    transition: background 0.16s ease, border-color 0.16s ease;
   }
   .nsl-btn-sm {
     padding: 10px 18px;
@@ -433,11 +430,10 @@ const langs = [
   .nsl-btn-primary {
     background: var(--accent);
     color: #fff;
-    box-shadow: 0 12px 30px -10px rgba(109, 74, 255, 0.7);
+    box-shadow: 0 8px 22px -12px rgba(109, 74, 255, 0.55);
   }
   .nsl-btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 16px 36px -10px rgba(109, 74, 255, 0.8);
+    background: color-mix(in oklab, var(--accent) 88%, #fff);
   }
   .nsl-btn-ghost {
     background: var(--panel);
@@ -445,7 +441,6 @@ const langs = [
     border: 1px solid var(--border);
   }
   .nsl-btn-ghost:hover {
-    transform: translateY(-2px);
     border-color: var(--accent);
   }
 
@@ -483,13 +478,6 @@ const langs = [
     border-radius: 100px;
     margin-bottom: 28px;
   }
-  .nsl-badge-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 10px var(--accent);
-  }
   .nsl-h1 {
     font-family: 'Space Grotesk', sans-serif;
     font-weight: 600;
@@ -507,10 +495,6 @@ const langs = [
     margin: 0 0 34px;
     text-wrap: pretty;
   }
-  .nsl-brandname {
-    color: var(--accentText);
-    font-weight: 600;
-  }
   .nsl-hero-actions {
     display: flex;
     gap: 14px;
@@ -525,7 +509,7 @@ const langs = [
     flex-wrap: wrap;
   }
 
-  /* Hero art: anvil + forge glow + rising sparks */
+  /* Hero art: static logo over a soft glow */
   .nsl-hero-art {
     position: relative;
     display: flex;
@@ -536,43 +520,25 @@ const langs = [
   .nsl-hero-glow {
     position: absolute;
     inset: -8%;
-    background: radial-gradient(closest-side, rgba(109, 74, 255, 0.3), transparent 70%);
+    background: radial-gradient(closest-side, rgba(109, 74, 255, 0.16), transparent 70%);
     pointer-events: none;
     z-index: -1;
   }
   .nsl-anvil {
     width: min(330px, 92%);
     height: auto;
-    filter: drop-shadow(0 22px 50px rgba(109, 74, 255, 0.45));
-    animation: nslFloat 6s ease-in-out infinite;
+    filter: drop-shadow(0 16px 36px rgba(109, 74, 255, 0.22));
   }
-  @keyframes nslFloat {
-    0%,
-    100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-10px);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .nsl-anvil {
-      animation: none;
-    }
-  }
+  /* Plain text labels, not pills — anything boxed next to the buttons reads as
+     clickable. */
   .nsl-chip {
     font-family: 'JetBrains Mono', monospace;
     font-size: 13px;
-    color: var(--dim);
-    padding: 8px 15px;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    background: var(--panel);
+    color: var(--faint);
   }
-  .nsl-chip-ext {
-    color: var(--accentText);
-    border: 1px dashed var(--border);
-    background: var(--accentSoft);
+  .nsl-chip + .nsl-chip::before {
+    content: '·';
+    margin-right: 10px;
   }
 
   /* ── Sections ────────────────────────────────────────────────────────────── */
@@ -673,11 +639,10 @@ const langs = [
     border: 1px solid var(--border);
     border-radius: 16px;
     background: var(--panel);
-    transition: transform 0.16s ease, border-color 0.16s ease;
+    transition: border-color 0.16s ease;
   }
   .nsl-card:hover {
-    transform: translateY(-3px);
-    border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
+    border-color: color-mix(in oklab, var(--accent) 35%, var(--border));
   }
   .nsl-card-mark {
     display: inline-block;
@@ -762,33 +727,16 @@ const langs = [
 
   /* CTA */
   .nsl-cta {
-    position: relative;
-    overflow: hidden;
     border-radius: 22px;
-    border: 1px solid var(--accent);
-    background: linear-gradient(180deg, var(--accentSoft), transparent);
-    padding: 72px 44px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    padding: 64px 44px;
     text-align: center;
-  }
-  .nsl-cta-glow {
-    position: absolute;
-    bottom: -180px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 720px;
-    height: 420px;
-    max-width: 100%;
-    background: radial-gradient(closest-side, rgba(109, 74, 255, 0.28), transparent 70%);
-    pointer-events: none;
-  }
-  .nsl-cta-inner {
-    position: relative;
-    z-index: 1;
   }
   .nsl-cta-h {
     font-family: 'Space Grotesk', sans-serif;
     font-weight: 600;
-    font-size: clamp(34px, 5vw, 48px);
+    font-size: clamp(30px, 4vw, 40px);
     letter-spacing: -0.03em;
     color: var(--text);
     margin: 0 0 16px;
@@ -800,6 +748,7 @@ const langs = [
   }
   .nsl-cta-actions {
     margin-bottom: 0;
+    justify-content: center;
   }
 
   /* Footer */

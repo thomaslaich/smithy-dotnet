@@ -12,8 +12,8 @@ Support is intentionally selective, and protocols are at different maturity
 levels. Each implemented protocol has a conformance suite run against the
 official Smithy / AWS protocol tests (`tests/Conformance`):
 
-- **simpleRestJson (`alloy#simpleRestJson`)** — the most complete path: client and ASP.NET Core
-  server, the best end-to-end coverage.
+- **simpleRestJson (`alloy#simpleRestJson`)** — the most complete: client and
+  ASP.NET Core server, with the broadest end-to-end coverage.
 - **AWS restJson1 (`aws.protocols#restJson1`)** — client and ASP.NET Core server. The main
   remaining corpus gap is the Glacier-specific fixture set, which needs broader
   projection support.
@@ -49,8 +49,7 @@ Streaming is still limited:
 
 gRPC is a **native** path — its own protobuf codec (`NSmithy.Codecs.Proto`) and
 gRPC transport binding (`NSmithy.Protocols.Grpc`) over HTTP/2, with no `protoc`,
-`Grpc.Tools`, or `Grpc.Net` dependency. It should still be treated as an
-early-adopter track:
+`Grpc.Tools`, or `Grpc.Net` dependency. It is still early-stage:
 
 - smaller test and example coverage than the HTTP/JSON paths
 - stricter model requirements, such as `alloy.proto#protoIndex` on members

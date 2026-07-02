@@ -17,22 +17,21 @@ it is documented as a top-level protocol rather than under this AWS section.)
 
 If your goal is to call AWS services in production with `restXml` or AWS JSON,
 you should use the **[AWS SDK for .NET](https://github.com/aws/aws-sdk-net)**
-instead. It is:
+instead:
 
-- **Officially supported** by AWS, with long-term maintenance guarantees.
-- **Battle-tested** across the full breadth of AWS services and edge cases.
-- **Feature-complete**, with built-in support for authentication (SigV4/SigV4a),
-  retries, endpoint resolution, pagination helpers, presigned URLs, and more.
-- **Actively developed**, tracking upstream service changes as they happen.
+- It is officially supported and maintained by AWS.
+- It covers the full breadth of AWS services.
+- It includes authentication (SigV4/SigV4a), retries, endpoint resolution,
+  pagination helpers, and presigned URLs.
 
 ## AWS restJson1 Is Different
 
 `aws.protocols#restJson1` is not AWS-specific in practice — it is a
-well-defined REST/JSON wire format that is perfectly sensible for any HTTP
-service, whether or not it runs on AWS. Many teams use it to define internal or
-public APIs that happen to follow the same protocol as AWS services.
+well-defined REST/JSON wire format usable by any HTTP service, whether or not
+it runs on AWS. Many teams use it to define internal or public APIs that follow
+the same protocol as AWS services.
 
-For AWS restJson1, NSmithy has genuine ambition beyond proof-of-concept:
+For AWS restJson1, NSmithy targets more than proof-of-concept use:
 
 - **Non-AWS services** — generated clients and servers work today and are a
   reasonable choice for services modelled with `restJson1` outside of AWS.
@@ -41,7 +40,7 @@ For AWS restJson1, NSmithy has genuine ambition beyond proof-of-concept:
   in early preview, but AWS SDK-style endpoint resolution, credential chains,
   retries, and pagination helpers are not there yet.
 
-Until those pieces mature, reach for the official SDK when targeting AWS directly.
+Until those pieces exist, use the official SDK when targeting AWS directly.
 
 ## AWS SigV4 Is Early Preview
 

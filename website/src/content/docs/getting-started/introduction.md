@@ -27,9 +27,9 @@ files it generates:
 - **Typed async client interfaces and implementations** per service.
 - **ASP.NET Core minimal API handler interfaces and routing adapters** per service.
 
-**No Gradle required for consumers.** Many Smithy projects use Gradle to run code
-generation. NSmithy packages the generator with the MSBuild integration, so
-application projects can stay in the .NET build system.
+Many Smithy projects use Gradle to run code generation. NSmithy packages the
+generator with the MSBuild integration instead, so application projects do not
+need Gradle and can stay in the .NET build system.
 
 NSmithy currently supports `alloy#simpleRestJson`, `aws.protocols#restJson1`,
 `aws.protocols#awsJson1_1`, `aws.protocols#awsJson1_0`,
