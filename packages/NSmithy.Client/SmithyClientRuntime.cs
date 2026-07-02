@@ -219,6 +219,7 @@ public sealed class SmithyClientRuntime(
             var isError = isErrorResponse?.Invoke(response) ?? (int)response.StatusCode >= 400;
             if (!isError)
             {
+                retryStrategy?.RecordSuccess(context);
                 return response;
             }
 

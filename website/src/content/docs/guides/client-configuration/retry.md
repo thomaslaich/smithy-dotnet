@@ -11,18 +11,47 @@ var client = new WeatherClient(
     new Uri("https://api.example.com"),
     new()
     {
-        RetryStrategy = new SmithySimpleRetryStrategy(maxAttempts: 3),
+        RetryStrategy = new SmithyStandardRetryStrategy(maxAttempts: 3),
     });
 ```
 
-`null` disables runtime retries. `SmithySimpleRetryStrategy` retries transport
-failures, HTTP 429, and 5xx responses, with an optional fixed delay:
+`null` disables runtime retries.
+
+## Standard strategy
+
+`SmithyStandardRetryStrategy` is the recommended strategy. It retries transport
+failures, modeled `@retryable` errors, and transient HTTP status codes (408,
+429, 500, 502, 503, 504), using:
+
+- exponential backoff with full jitter and a backoff cap (default base 100 ms,
+  cap 20 s; throttling outcomes back off from a 500 ms base)
+- a client-shared retry quota, so a downstream outage cannot amplify traffic
+  through unbounded retries
+- the server's `Retry-After` header (seconds or HTTP-date) when present
+
+```csharp
+RetryStrategy = new SmithyStandardRetryStrategy(
+    maxAttempts: 5,
+    maxDelay: TimeSpan.FromSeconds(10));
+```
+
+Errors modeled with `@retryable` implement `ISmithyRetryableError`, so modeled
+retryability works regardless of protocol or status code —
+`@retryable(throttling: true)` errors are treated as throttling.
+
+## Simple strategy
+
+`SmithySimpleRetryStrategy` retries transport failures, HTTP 429, and 5xx
+responses, with an optional fixed delay and no backoff, jitter, or quota —
+useful in tests:
 
 ```csharp
 RetryStrategy = new SmithySimpleRetryStrategy(
     maxAttempts: 3,
     delay: TimeSpan.FromMilliseconds(100));
 ```
+
+## Custom strategies
 
 For custom behavior, implement `ISmithyRetryStrategy`. The runtime classifies
 each failed attempt — deserializing the modeled error when there is one — and

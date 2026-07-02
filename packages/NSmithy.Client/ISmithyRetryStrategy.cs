@@ -11,6 +11,13 @@ namespace NSmithy.Client;
 public interface ISmithyRetryStrategy
 {
     SmithyRetryDecision Classify(SmithyRetryOutcome outcome);
+
+    /// <summary>
+    /// Called once per execution when an attempt succeeds. Strategies that maintain a
+    /// client-shared retry quota use this to release tokens acquired by earlier retries of the
+    /// same execution.
+    /// </summary>
+    void RecordSuccess(SmithyContext context) { }
 }
 
 /// <summary>

@@ -15,6 +15,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.StructureShape;
+import software.amazon.smithy.model.traits.RetryableTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -38,11 +39,25 @@ public final class ErrorGenerator implements Runnable {
     Optional<MemberShape> messageMember = ShapeSupport.errorMessageMember(model, shape);
     List<MemberShape> members = ShapeSupport.sortedMembers(shape);
 
-    writer.write("public sealed partial class $L : System.Exception", typeName);
+    Optional<RetryableTrait> retryable = shape.getTrait(RetryableTrait.class);
+    if (retryable.isPresent()) {
+      writer.write(
+          "public sealed partial class $L : System.Exception, NSmithy.Core.ISmithyRetryableError",
+          typeName);
+    } else {
+      writer.write("public sealed partial class $L : System.Exception", typeName);
+    }
     writer.openBlock(
         "{",
         "}",
         () -> {
+          retryable.ifPresent(
+              trait -> {
+                writer.write(
+                    "bool NSmithy.Core.ISmithyRetryableError.IsThrottlingError => $L;",
+                    trait.getThrottling() ? "true" : "false");
+                writer.write("");
+              });
           writeConstructor(typeName, messageMember.orElse(null));
           messageMember.ifPresent(
               mm -> {
