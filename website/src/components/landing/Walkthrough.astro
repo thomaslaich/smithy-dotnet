@@ -1,6 +1,6 @@
 ---
 /**
- * Walkthrough — "From model to runtime in one build" widget.
+ * Walkthrough — "From model to runtime" widget.
  * Ported from the Claude Design "Walkthrough.dc.html" (forge variant). Source
  * weather.smithy on the left forges into a tabbed Server/Client/Docs output;
  * auto-cycles the 3 outputs every 3.6s, pauses on hover. Always-dark panel.
@@ -60,7 +60,7 @@ app.MapSmithyDocs();      // Sphinx docs -> /docs`,
   {
     label: 'Client',
     file: 'Program.cs',
-    cap: 'A strongly-typed async client — no string URLs, no manual JSON, no reflection.',
+    cap: 'A strongly typed async client, generated from the same model.',
     code: `using Example.Weather; // generated
 
 IWeatherClient client = new WeatherClient(endpoint);
@@ -164,7 +164,7 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
     border: 1px solid #20202c;
     border-radius: 14px;
     overflow: hidden;
-    box-shadow: 0 30px 70px -24px rgba(0, 0, 0, 0.7);
+    box-shadow: 0 12px 32px -20px rgba(0, 0, 0, 0.6);
     width: 100%;
     color: #c9d1d9;
   }
@@ -183,7 +183,6 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
     height: 9px;
     background: #6d4aff;
     transform: rotate(45deg);
-    box-shadow: 0 0 12px #6d4aff;
   }
   .wt__title {
     font-size: 11px;
@@ -205,7 +204,6 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
     height: 6px;
     border-radius: 50%;
     background: #56c267;
-    box-shadow: 0 0 8px #56c267;
   }
 
   /* Body: source | arrow | output */
@@ -267,7 +265,6 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
     border: 1px solid #2e2547;
     color: #b8a5ff;
     font-size: 15px;
-    box-shadow: 0 0 20px rgba(109, 74, 255, 0.4);
   }
 
   .wt__out {

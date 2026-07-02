@@ -3,14 +3,13 @@ title: Client & Server Usage
 description: The generated handler and client are the same across every protocol — only the model's protocol trait and the wire format change.
 ---
 
-The point of Smithy codegen is that your **application code doesn't change when
-the protocol does**. You implement one handler and call one typed client;
-swapping the protocol trait on the service swaps the wire format underneath
-without touching either side.
+Application code does not change when the protocol does: you implement one
+handler and call one typed client, and swapping the protocol trait on the
+service swaps the wire format without touching either side.
 
-This page is the canonical unary example. Each protocol page then documents only
-what is genuinely protocol-specific: the trait to apply, any modeling
-requirements, and the bytes on the wire.
+This page is the canonical unary example. Each protocol page documents only
+what is protocol-specific: the trait to apply, any modeling requirements, and
+the bytes on the wire.
 
 ## Model
 
@@ -55,8 +54,7 @@ structure NoSuchResource {
 
 A service generates nothing until it carries exactly one protocol trait, so this
 neutral shape isn't buildable on its own — each protocol page shows the complete,
-annotated model. The point is what *doesn't* change: the shapes, and the handler
-and client below.
+annotated model.
 
 ## Server
 
@@ -111,9 +109,9 @@ The handler and client above are identical for `simpleRestJson`, `restJson1`,
 - **Server generation** exists for `simpleRestJson`, `restJson1`, and
   `rpcv2Cbor`. `awsJson1_1`/`awsJson1_0` and `restXml` are **client-only** today,
   so only the client half applies.
-- **gRPC** needs a little transport setup (HTTP/2 Kestrel, `Protocol =
-  new GrpcProtocol()`) and is the one place the code differs — see
-  [gRPC](/smithy-dotnet/protocols/grpc/). It is also where **streaming** lives.
+- **gRPC** requires transport setup (HTTP/2 Kestrel, `Protocol =
+  new GrpcProtocol()`) and is the one protocol where the code differs — see
+  [gRPC](/smithy-dotnet/protocols/grpc/). Streaming is also gRPC-specific.
 
 See [Protocol Status](/smithy-dotnet/protocols/status/) for what is generated per
 protocol.

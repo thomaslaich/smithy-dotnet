@@ -3,12 +3,13 @@ title: gRPC
 description: alloy.proto#grpc — generate native gRPC client and server surfaces from a Smithy model, with no protoc or Grpc.Tools.
 ---
 
-`alloy.proto#grpc` generates **native** gRPC client and server surfaces directly
-from a Smithy model. NSmithy speaks the gRPC wire contract itself — a schema-driven
-protobuf codec (`NSmithy.Codecs.Proto`) plus a gRPC transport binding
-(`NSmithy.Protocols.Grpc`) — so there is **no `protoc`, `Grpc.Tools`, or `Grpc.Net`
-dependency**. The generated surfaces match the same protocol-agnostic handler and
-client interfaces used by the HTTP protocols. Status: **Experimental**.
+`alloy.proto#grpc` generates native gRPC client and server surfaces directly
+from a Smithy model. NSmithy implements the gRPC wire contract itself — a
+schema-driven protobuf codec (`NSmithy.Codecs.Proto`) plus a gRPC transport
+binding (`NSmithy.Protocols.Grpc`) — so there is no `protoc`, `Grpc.Tools`, or
+`Grpc.Net` dependency. The generated surfaces match the same protocol-agnostic
+handler and client interfaces used by the HTTP protocols. Status:
+**Experimental**.
 
 Because the bytes on the wire are standard protobuf over gRPC/HTTP/2, an NSmithy
 peer interoperates with a `Grpc.Net` peer in either direction. A `.proto` file can
@@ -73,8 +74,8 @@ member that appears in a proto message — omitting it is a model error.
 
 ## On the Wire
 
-NSmithy speaks standard gRPC — length-prefixed protobuf over HTTP/2,
-interoperable with any gRPC peer. Each member's `@protoIndex` is its protobuf
+NSmithy uses standard gRPC framing — length-prefixed protobuf over HTTP/2 — and
+interoperates with any gRPC peer. Each member's `@protoIndex` is its protobuf
 field number.
 
 A unary `GetCity { cityId: "123" }` call posts to

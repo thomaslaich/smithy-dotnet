@@ -96,8 +96,7 @@ services.AddWeatherClient(
 ```
 
 The helper configures the `HttpClient` for HTTP/2 automatically when the chosen
-protocol requires it (native gRPC) — handling the one detail that is easy to get
-wrong by hand.
+protocol requires it (native gRPC).
 
 ## Manual registration
 

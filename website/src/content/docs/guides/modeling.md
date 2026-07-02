@@ -5,8 +5,8 @@ description: Beyond a single operation — resources, pagination, and HTTP bindi
 
 The [protocol pages](/smithy-dotnet/protocols/overview/) each show one small
 operation to keep the focus on the wire format. Real services model more:
-resources, pagination, and richer HTTP bindings. This guide walks through those
-patterns with a fuller model.
+resources, pagination, and additional HTTP bindings. This guide walks through
+those patterns with a fuller model.
 
 The example uses `@simpleRestJson`, but the modeling patterns — resources,
 pagination, and the HTTP binding traits — apply to any HTTP protocol

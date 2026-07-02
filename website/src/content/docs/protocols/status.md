@@ -51,9 +51,9 @@ Notes:
 
 ## Recommended Use
 
-- Prefer simpleRestJson for the smoothest end-to-end preview path, especially
-  when your consumers are primarily .NET or Scala (via
-  [Smithy4s](https://disneystreaming.github.io/smithy4s/)).
+- Prefer simpleRestJson for the most complete client and server support in the
+  current preview, especially when your consumers are primarily .NET or Scala
+  (via [Smithy4s](https://disneystreaming.github.io/smithy4s/)).
 - Use AWS restJson1 when you need generated AWS-style REST/JSON clients or
   ASP.NET Core server surfaces, broad cross-ecosystem compatibility (most
   official Smithy generators target it), or OpenAPI/Scalar generation.
@@ -61,8 +61,8 @@ Notes:
   server generation are both available.
 - Use AWS JSON or AWS restXml when you want to evaluate AWS-compatible client
   generation and are comfortable with a smaller preview slice.
-- Treat `alloy.proto#grpc` as an early adopter path for teams comfortable working
-  close to generated code and current limitations.
+- Treat `alloy.proto#grpc` as experimental: it has the smallest test surface and
+  the most explicit model requirements (see the footnote above).
 
 ## What "Early Stage" Means Here
 
