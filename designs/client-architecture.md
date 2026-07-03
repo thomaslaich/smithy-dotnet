@@ -59,10 +59,12 @@ new WeatherClient(runtime, config);       // caller owns full execution pipeline
 ```
 
 `Endpoint` lives on config internally. The endpoint convenience constructor is
-the common path and copies the supplied endpoint into config before delegating to
-the internal config-based construction path. For static endpoints, the effective
-endpoint is resolved during construction and placed into each invocation's
-`SmithyContext`.
+the common path: it copies the supplied config (shallow — strategy, interceptor,
+and auth-scheme instances are shared by reference), sets the endpoint on the
+copy, and delegates to the internal config-based construction path. Construction
+never mutates a caller's config, so one config instance can safely parameterize
+several clients. For static endpoints, the effective endpoint is resolved during
+construction and placed into each invocation's `SmithyContext`.
 
 Generated clients implement `IDisposable`. Disposal releases only resources the
 client created itself.

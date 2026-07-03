@@ -113,6 +113,23 @@ final class ClientGeneratorTest {
             "private readonly SmithyEventStreamOperationInvoker eventStreamInvoker;"));
   }
 
+  @Test
+  void endpointConstructorCopiesCallerConfig() throws Exception {
+    String generated = renderClient();
+
+    // The endpoint constructor must never mutate the caller's config instance.
+    assertTrue(
+        generated.contains(
+            "var copy = config is null ? new StreamingServiceClientConfig() : new"
+                + " StreamingServiceClientConfig(config);"),
+        generated);
+    assertTrue(
+        generated.contains(
+            "public StreamingServiceClientConfig(StreamingServiceClientConfig source) :"
+                + " base(source) { }"),
+        generated);
+  }
+
   private String renderClient() throws Exception {
     Model model =
         Model.assembler()
