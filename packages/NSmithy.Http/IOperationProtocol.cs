@@ -69,6 +69,8 @@ public interface IOperationProtocol<TInput, TOutput>
     /// <summary>
     /// Attempts to deserialize the response into one of the operation's modeled exceptions.
     /// Returns null when the protocol cannot resolve a modeled error from the response.
+    /// The client runtime disposes a streaming response body after this returns (the error path
+    /// abandons the response), so the returned exception must not retain the live stream.
     /// </summary>
     ValueTask<Exception?> DeserializeErrorAsync(
         SmithyHttpResponse response,

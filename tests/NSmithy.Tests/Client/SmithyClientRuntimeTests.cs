@@ -477,6 +477,81 @@ public sealed class SmithyClientRuntimeTests
         Assert.Equal("one:after-execution:SmithyClientException", calls[^1]);
     }
 
+    [Fact]
+    public async Task RuntimeDisposesStreamingResponseBodyWhenRetrying()
+    {
+        var abandoned = new TrackingStream();
+        var transport = new SequenceTransport(
+            StreamingResponse(HttpStatusCode.InternalServerError, abandoned),
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            retryStrategy: new SmithySimpleRetryStrategy(maxAttempts: 2)
+        );
+
+        await runtime.InvokeAsync(Binding(new TextProtocol()), "input");
+
+        Assert.True(abandoned.Disposed);
+    }
+
+    [Fact]
+    public async Task RuntimeDisposesStreamingResponseBodyWhenThrowing()
+    {
+        var abandoned = new TrackingStream();
+        var transport = new RecordingTransport(
+            StreamingResponse(HttpStatusCode.InternalServerError, abandoned)
+        );
+        var runtime = new SmithyClientRuntime(transport);
+
+        await Assert.ThrowsAsync<SmithyClientException>(() =>
+            runtime.InvokeAsync(Binding(new TextProtocol()), "input")
+        );
+
+        Assert.True(abandoned.Disposed);
+    }
+
+    [Fact]
+    public async Task RuntimeDisposesStreamingResponseBodyWhenDeserializationFails()
+    {
+        var abandoned = new TrackingStream();
+        var transport = new RecordingTransport(StreamingResponse(HttpStatusCode.OK, abandoned));
+        var runtime = new SmithyClientRuntime(transport);
+
+        await Assert.ThrowsAsync<FormatException>(() =>
+            runtime.InvokeAsync(Binding(new ThrowingDeserializationProtocol()), "input")
+        );
+
+        Assert.True(abandoned.Disposed);
+    }
+
+    [Fact]
+    public async Task RuntimeLeavesSuccessfulStreamingResponseBodyToTheCaller()
+    {
+        var stream = new TrackingStream();
+        var transport = new RecordingTransport(StreamingResponse(HttpStatusCode.OK, stream));
+        var runtime = new SmithyClientRuntime(transport);
+
+        await runtime.InvokeAsync(Binding(new TextProtocol()), "input");
+
+        Assert.False(stream.Disposed);
+    }
+
+    private static SmithyHttpResponse StreamingResponse(HttpStatusCode statusCode, Stream body) =>
+        new(
+            statusCode,
+            statusCode.ToString(),
+            new SmithyHttpBody.Streaming(body),
+            EmptyHeaders,
+            EmptyHeaders
+        );
+
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> EmptyHeaders { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
@@ -688,5 +763,24 @@ public sealed class SmithyClientRuntimeTests
             {
                 Body = new SmithyHttpBody.Streaming(new MemoryStream("hello"u8.ToArray())),
             };
+    }
+
+    private sealed class ThrowingDeserializationProtocol
+        : TextProtocol,
+            IOperationProtocol<string, string>
+    {
+        public new string DeserializeResponse(SmithyHttpResponse response) =>
+            throw new FormatException("malformed body");
+    }
+
+    private sealed class TrackingStream : MemoryStream
+    {
+        public bool Disposed { get; private set; }
+
+        protected override void Dispose(bool disposing)
+        {
+            Disposed = true;
+            base.Dispose(disposing);
+        }
     }
 }
