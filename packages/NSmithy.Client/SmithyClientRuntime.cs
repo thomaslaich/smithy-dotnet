@@ -59,7 +59,17 @@ public sealed class SmithyClientRuntime(
                 )
                 .ConfigureAwait(false);
 
-            var output = protocol.DeserializeResponse(response);
+            TOutput output;
+            try
+            {
+                output = protocol.DeserializeResponse(response);
+            }
+            catch
+            {
+                // The protocol failed before the output took ownership of a streaming body.
+                await DisposeBodyAsync(response).ConfigureAwait(false);
+                throw;
+            }
             for (var i = interceptors.Count - 1; i >= 0; i--)
             {
                 interceptors[i].OnAfterDeserialization(context, output);
@@ -140,6 +150,10 @@ public sealed class SmithyClientRuntime(
                 await deserializeError(response, cancellationToken).ConfigureAwait(false)
                 ?? new SmithyClientException(response.StatusCode, response.ReasonPhrase);
 
+            // The error path abandons the response, so a streaming body (which holds the live
+            // HTTP connection) must be released here — whether we retry or throw.
+            await DisposeBodyAsync(response).ConfigureAwait(false);
+
             if (canRetry)
             {
                 var decision = session!.Classify(
@@ -155,6 +169,11 @@ public sealed class SmithyClientRuntime(
             throw error;
         }
     }
+
+    private static ValueTask DisposeBodyAsync(SmithyHttpResponse response) =>
+        response.Body is SmithyHttpBody.Streaming streaming
+            ? streaming.Content.DisposeAsync()
+            : ValueTask.CompletedTask;
 
     private static Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken) =>
         delay > TimeSpan.Zero ? Task.Delay(delay, cancellationToken) : Task.CompletedTask;
