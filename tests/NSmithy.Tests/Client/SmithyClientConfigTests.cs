@@ -15,6 +15,7 @@ public sealed class SmithyClientConfigTests
         {
             Endpoint = new Uri("https://api.example.com"),
             RetryStrategy = strategy,
+            OperationTimeout = TimeSpan.FromSeconds(10),
             IdempotencyTokenProvider = tokenProvider,
             Interceptors = { interceptor },
             AuthSchemes = { authScheme },
@@ -23,6 +24,7 @@ public sealed class SmithyClientConfigTests
         var copy = new TestConfig(source);
 
         Assert.Equal(source.Endpoint, copy.Endpoint);
+        Assert.Equal(TimeSpan.FromSeconds(10), copy.OperationTimeout);
         // Shallow on purpose: shared strategy instances share client-wide state (retry quota).
         Assert.Same(strategy, copy.RetryStrategy);
         Assert.Same(tokenProvider, copy.IdempotencyTokenProvider);

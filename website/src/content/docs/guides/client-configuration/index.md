@@ -44,6 +44,7 @@ when you want to set client options.
 | `Protocol` | The wire protocol. Defaults to the service's primary declared [protocol](/smithy-dotnet/protocols/overview/). |
 | `AuthSchemes` | Configured auth schemes; the resolver installs the first scheme the service models. An empty list means anonymous. |
 | `RetryStrategy` | Runtime-owned retry policy. `null` disables runtime retries. |
+| `OperationTimeout` | Deadline for one operation execution, spanning all retry attempts and backoff delays. Throws `TimeoutException` when exceeded; `null` (default) means no deadline. |
 | `Interceptors` | Protocol-agnostic hooks for observing and modifying client execution. |
 | `IdempotencyTokenProvider` | Overrides the idempotency-token generator (default: a random GUID). |
 

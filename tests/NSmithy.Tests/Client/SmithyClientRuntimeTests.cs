@@ -543,6 +543,78 @@ public sealed class SmithyClientRuntimeTests
         Assert.False(stream.Disposed);
     }
 
+    [Fact]
+    public async Task OperationTimeoutThrowsTimeoutException()
+    {
+        List<string> calls = [];
+        var runtime = new SmithyClientRuntime(
+            new HangingTransport(),
+            [new RecordingInterceptor("one", calls)],
+            operationTimeout: TimeSpan.FromMilliseconds(50)
+        );
+
+        await Assert.ThrowsAsync<TimeoutException>(() =>
+            runtime.InvokeAsync(Binding(new TextProtocol()), "input")
+        );
+
+        Assert.Equal("one:after-execution:TimeoutException", calls[^1]);
+    }
+
+    [Fact]
+    public async Task CallerCancellationIsNotTranslatedToTimeout()
+    {
+        using var cts = new CancellationTokenSource();
+        var runtime = new SmithyClientRuntime(
+            new HangingTransport(),
+            operationTimeout: TimeSpan.FromSeconds(30)
+        );
+
+        var invocation = runtime.InvokeAsync(Binding(new TextProtocol()), "input", cts.Token);
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => invocation);
+    }
+
+    [Fact]
+    public async Task OperationTimeoutSpansRetryBackoff()
+    {
+        var transport = new SequenceTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.InternalServerError,
+                "Internal Server Error",
+                [],
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            retryStrategy: new SmithySimpleRetryStrategy(
+                maxAttempts: 2,
+                delay: TimeSpan.FromSeconds(30)
+            ),
+            operationTimeout: TimeSpan.FromMilliseconds(50)
+        );
+
+        await Assert.ThrowsAsync<TimeoutException>(() =>
+            runtime.InvokeAsync(Binding(new TextProtocol()), "input")
+        );
+
+        Assert.Equal(1, transport.Attempts);
+    }
+
+    private sealed class HangingTransport : IHttpTransport
+    {
+        public async Task<SmithyHttpResponse> SendAsync(
+            SmithyHttpRequest request,
+            CancellationToken cancellationToken = default
+        )
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("unreachable");
+        }
+    }
+
     private static SmithyHttpResponse StreamingResponse(HttpStatusCode statusCode, Stream body) =>
         new(
             statusCode,

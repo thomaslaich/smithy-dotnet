@@ -25,6 +25,7 @@ public class SmithyClientConfig
         Endpoint = source.Endpoint;
         Protocol = source.Protocol;
         RetryStrategy = source.RetryStrategy;
+        OperationTimeout = source.OperationTimeout;
         IdempotencyTokenProvider = source.IdempotencyTokenProvider;
         foreach (var interceptor in source.Interceptors)
         {
@@ -52,6 +53,13 @@ public class SmithyClientConfig
 
     /// <summary>Runtime-owned retry policy. Null disables runtime retries.</summary>
     public ISmithyRetryStrategy? RetryStrategy { get; set; }
+
+    /// <summary>
+    /// Deadline for one operation execution, spanning all retry attempts and backoff delays.
+    /// When exceeded the call throws <see cref="TimeoutException"/>. Null (the default) means no
+    /// runtime-imposed deadline; the caller's <see cref="CancellationToken"/> always applies.
+    /// </summary>
+    public TimeSpan? OperationTimeout { get; set; }
 
     /// <summary>
     /// Configured auth schemes. The resolver installs the first scheme the service models for which

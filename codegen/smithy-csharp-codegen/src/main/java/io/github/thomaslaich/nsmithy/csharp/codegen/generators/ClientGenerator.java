@@ -190,7 +190,8 @@ public final class ClientGenerator implements Runnable {
                           + " SmithyAuthSchemeResolver.Resolve(endpoint, $L,"
                           + " ModeledAuthSchemes, config.AuthSchemes, config.Interceptors),"
                           + " config.RetryStrategy,"
-                          + " endpoint);",
+                          + " endpoint,"
+                          + " config.OperationTimeout);",
                       serviceSchema);
                 }
                 if (wiresEventStreamOperations) {
@@ -237,7 +238,8 @@ public final class ClientGenerator implements Runnable {
                           + " SmithyAuthSchemeResolver.Resolve(endpoint, $L,"
                           + " ModeledAuthSchemes, config.AuthSchemes, config.Interceptors),"
                           + " config.RetryStrategy,"
-                          + " endpoint);",
+                          + " endpoint,"
+                          + " config.OperationTimeout);",
                       serviceSchema);
                 }
                 if (wiresEventStreamOperations) {
