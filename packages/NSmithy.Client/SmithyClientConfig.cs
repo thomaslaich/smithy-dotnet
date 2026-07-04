@@ -9,6 +9,34 @@ namespace NSmithy.Client;
 /// </summary>
 public class SmithyClientConfig
 {
+    public SmithyClientConfig() { }
+
+    /// <summary>
+    /// Copies all common options from <paramref name="source"/>. The copy is shallow on
+    /// purpose: retry strategies, interceptors, and auth schemes are shared by reference, so a
+    /// strategy instance (and client-wide state such as its retry quota) can be deliberately
+    /// shared across clients. Generated clients copy the caller's config at construction, so
+    /// constructing a client never mutates the config the caller passed in.
+    /// </summary>
+    protected SmithyClientConfig(SmithyClientConfig source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        Endpoint = source.Endpoint;
+        Protocol = source.Protocol;
+        RetryStrategy = source.RetryStrategy;
+        IdempotencyTokenProvider = source.IdempotencyTokenProvider;
+        foreach (var interceptor in source.Interceptors)
+        {
+            Interceptors.Add(interceptor);
+        }
+
+        foreach (var authScheme in source.AuthSchemes)
+        {
+            AuthSchemes.Add(authScheme);
+        }
+    }
+
     /// <summary>
     /// The service endpoint. Set by the endpoint constructor, and optional when an
     /// <c>HttpClient</c> is supplied (it then falls back to the
