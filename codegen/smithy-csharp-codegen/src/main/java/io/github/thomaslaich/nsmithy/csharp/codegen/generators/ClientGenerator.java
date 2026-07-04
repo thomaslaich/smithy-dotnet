@@ -327,6 +327,8 @@ public final class ClientGenerator implements Runnable {
             writer.write("");
           }
 
+          // Copies the caller's config before setting the endpoint, so constructing a client
+          // never mutates a config instance the caller may share with other clients.
           writer.write(
               "private static $LConfig WithEndpoint(System.Uri endpoint, $LConfig? config)",
               typeName,
@@ -336,9 +338,12 @@ public final class ClientGenerator implements Runnable {
               "}",
               () -> {
                 writer.write("System.ArgumentNullException.ThrowIfNull(endpoint);");
-                writer.write("config ??= new $LConfig();", typeName);
-                writer.write("config.Endpoint = endpoint;");
-                writer.write("return config;");
+                writer.write(
+                    "var copy = config is null ? new $LConfig() : new $LConfig(config);",
+                    typeName,
+                    typeName);
+                writer.write("copy.Endpoint = endpoint;");
+                writer.write("return copy;");
               });
           writer.write("");
 
@@ -391,11 +396,18 @@ public final class ClientGenerator implements Runnable {
    * Renders the per-service client config: a sealed subclass of the runtime's {@code
    * SmithyClientConfig}. It inherits the common knobs today; service-specific options (e.g.
    * endpoint client-context params) can be added here later without changing the client's
-   * constructor surface.
+   * constructor surface. The copy constructor backs the client's copy-at-construction semantics.
    */
   private void writeConfigClass(String typeName) {
     writer.write("public sealed class $LConfig : SmithyClientConfig", typeName);
-    writer.openBlock("{", "}", () -> {});
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write("public $LConfig() { }", typeName);
+          writer.write("");
+          writer.write("public $LConfig($LConfig source) : base(source) { }", typeName, typeName);
+        });
   }
 
   /**
