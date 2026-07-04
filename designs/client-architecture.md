@@ -130,7 +130,7 @@ public interface IClientInterceptor
 
     void OnAfterTransmit(SmithyContext context, SmithyHttpResponse response) { }
     void OnAfterDeserialization(SmithyContext context, object? output) { }
-    void OnAfterExecution(SmithyContext context) { }
+    void OnAfterExecution(SmithyContext context, Exception? exception) { }
 }
 ```
 
@@ -138,6 +138,13 @@ Every hook has a default implementation, so an interceptor overrides only the
 stages it cares about. The signing and transmit hooks are async so they can do
 I/O — fetching credentials or tokens — before the request goes out. Auth signing
 is itself modeled as an interceptor.
+
+`OnAfterExecution` runs on both success and failure; on failure it receives the
+exception that will propagate to the caller (a modeled error, a client
+exception, or a transport failure), so logging and metrics interceptors can
+observe outcomes. The signing, transmit, and after-transmit hooks run once per
+attempt — each retry is re-signed — while the remaining hooks run once per
+execution.
 
 Interceptors run in configured order before transmit and reverse order after
 transmit/completion. They are scoped to the client and must be safe for
@@ -188,7 +195,33 @@ thread-safe services that operate on a request plus context.
 
 Retries are part of the client lifecycle, not a transport wrapper. A retry
 strategy decides whether to retry after modeled errors, response metadata, or
-transport failures.
+transport failures. The runtime classifies each failed attempt first —
+deserializing the modeled error when there is one — and then asks the strategy
+for a decision that carries the backoff delay:
+
+```csharp
+public interface ISmithyRetryStrategy
+{
+    ISmithyRetrySession Begin();
+}
+
+public interface ISmithyRetrySession
+{
+    SmithyRetryDecision Classify(SmithyRetryOutcome outcome);
+    void RecordSuccess();
+}
+```
+
+A strategy is long-lived and shared by every execution of its client; it owns
+client-wide state such as the retry quota and must be thread-safe. `Begin`
+runs once per operation execution and returns that execution's session, which
+owns per-execution state (for example, how much quota this execution
+acquired). `SmithyRetryOutcome` is a failed attempt: the response (null on
+transport failure) plus the exception that will propagate if the attempt is
+not retried. The session owns the whole decision — attempt budgeting, failure
+classification, and delay — and `RecordSuccess` lets quota-based strategies
+refund what the execution's retries consumed. Stateless strategies return
+themselves as the session.
 
 The standard strategy uses:
 
@@ -215,10 +248,13 @@ Protocols own wire behavior:
 
 Generated clients should not branch on protocol-specific wire rules. They bind
 operation schemas once, select the configured protocol, and precompute
-operation bindings that contain the service name, operation name,
-operation-bound protocol, and request modifier. The operation-bound protocol
-owns modeled error deserialization. The operation method hot path then passes
-the binding and typed input into the runtime.
+operation bindings that contain the service and operation shape ids and the
+operation-bound protocol. The operation-bound protocol owns modeled error
+deserialization and applies request-mutating traits (`@requestCompression`,
+`@httpChecksumRequired`) during serialization — compression is a wire concern,
+and its meaning differs by protocol (HTTP `Content-Encoding` vs gRPC
+message-level compression). The operation method hot path then passes the
+binding and typed input into the runtime.
 
 ## Observability
 

@@ -1,16 +1,84 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
+using NSmithy.Core;
+using NSmithy.Core.Serde;
 
 namespace NSmithy.Http;
 
 /// <summary>
-/// Protocol-agnostic request mutations applied by the generated client based on operation traits
-/// (<c>@requestCompression</c>, <c>@httpChecksumRequired</c>). They operate purely on the request
-/// bytes, so they are identical across wire protocols and live here rather than being duplicated
-/// per protocol.
+/// Request mutations driven by operation traits (<c>@requestCompression</c>,
+/// <c>@httpChecksumRequired</c>). HTTP-body protocols compile them once per operation via
+/// <see cref="Compile{TInput, TOutput}"/> and apply the result at the end of request
+/// serialization; protocols with their own framing (gRPC) must handle these traits in their own
+/// wire terms instead.
 /// </summary>
 public static class SmithyRequestModifiers
 {
+    private static readonly ShapeId RequestCompressionTraitId = ShapeId.Parse(
+        "smithy.api#requestCompression"
+    );
+    private static readonly ShapeId HttpChecksumRequiredTraitId = ShapeId.Parse(
+        "smithy.api#httpChecksumRequired"
+    );
+
+    /// <summary>
+    /// Compiles the operation's request-mutating HTTP traits into a single transform, or null
+    /// when the operation has none.
+    /// </summary>
+    public static Action<SmithyHttpRequest>? Compile<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation
+    )
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+
+        var encoding = RequestCompressionEncoding(operation.GetTrait(RequestCompressionTraitId));
+        var checksumRequired = operation.HasTrait(HttpChecksumRequiredTraitId);
+        if (encoding is null && !checksumRequired)
+        {
+            return null;
+        }
+
+        return request =>
+        {
+            if (encoding is not null)
+            {
+                ApplyRequestCompression(request, encoding);
+            }
+
+            if (checksumRequired)
+            {
+                ApplyContentMd5(request);
+            }
+        };
+    }
+
+    public static bool HasRequestCompression<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation
+    )
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        return operation.HasTrait(RequestCompressionTraitId);
+    }
+
+    private static string? RequestCompressionEncoding(Trait? trait)
+    {
+        if (trait is not { } compression || compression.Value.Kind != DocumentKind.Object)
+        {
+            return null;
+        }
+
+        if (
+            !compression.Value.AsObject().TryGetValue("encodings", out var encodings)
+            || encodings.Kind != DocumentKind.Array
+        )
+        {
+            return null;
+        }
+
+        var values = encodings.AsArray();
+        return values.Count > 0 ? values[0].AsString() : null;
+    }
+
     public static void ApplyRequestCompression(SmithyHttpRequest request, string encoding)
     {
         ArgumentNullException.ThrowIfNull(request);

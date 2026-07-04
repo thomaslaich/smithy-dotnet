@@ -25,33 +25,23 @@ public sealed class SmithyClientRuntime(
     )
     {
         ArgumentNullException.ThrowIfNull(binding);
-        return InvokeTypedAsync(
-            binding.ServiceName,
-            binding.OperationName,
-            binding.Protocol,
-            input,
-            binding.ModifyRequest,
-            binding.Protocol.DeserializeErrorAsync,
-            cancellationToken
-        );
+        return InvokeCoreAsync(binding, input, cancellationToken);
     }
 
-    private async Task<TOutput> InvokeTypedAsync<TInput, TOutput>(
-        string serviceName,
-        string operationName,
-        IOperationProtocol<TInput, TOutput> protocol,
+    private async Task<TOutput> InvokeCoreAsync<TInput, TOutput>(
+        SmithyOperationBinding<TInput, TOutput> binding,
         TInput input,
-        Action<SmithyHttpRequest>? modifyRequest,
-        SmithyErrorDeserializer? errorDeserializer,
         CancellationToken cancellationToken
     )
     {
-        var context = CreateContext(serviceName, operationName);
+        var protocol = binding.Protocol;
+        var context = CreateContext(binding.ServiceId.Name, binding.OperationId.Name);
         foreach (var interceptor in interceptors)
         {
             interceptor.OnBeforeExecution(context);
         }
 
+        Exception? executionError = null;
         try
         {
             foreach (var interceptor in interceptors)
@@ -60,11 +50,10 @@ public sealed class SmithyClientRuntime(
             }
 
             var request = protocol.SerializeRequest(input);
-            modifyRequest?.Invoke(request);
             var response = await SendAsync(
                     context,
                     request,
-                    errorDeserializer,
+                    protocol.DeserializeErrorAsync,
                     protocol.IsErrorResponse,
                     cancellationToken
                 )
@@ -78,80 +67,16 @@ public sealed class SmithyClientRuntime(
 
             return output;
         }
+        catch (Exception error)
+        {
+            executionError = error;
+            throw;
+        }
         finally
         {
             for (var i = interceptors.Count - 1; i >= 0; i--)
             {
-                interceptors[i].OnAfterExecution(context);
-            }
-        }
-    }
-
-    public Task<TOutput> InvokeAsync<TInput, TOutput>(
-        string serviceName,
-        string operationName,
-        IOperationProtocol<TInput, TOutput> protocol,
-        TInput input,
-        Action<SmithyHttpRequest>? modifyRequest = null,
-        SmithyErrorDeserializer? errorDeserializer = null,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
-        ArgumentNullException.ThrowIfNull(protocol);
-
-        return InvokeTypedAsync(
-            serviceName,
-            operationName,
-            protocol,
-            input,
-            modifyRequest,
-            errorDeserializer ?? protocol.DeserializeErrorAsync,
-            cancellationToken
-        );
-    }
-
-    public Task<SmithyHttpResponse> InvokeAsync(
-        string serviceName,
-        string operationName,
-        SmithyHttpRequest request,
-        SmithyErrorDeserializer? errorDeserializer = null,
-        Func<SmithyHttpResponse, bool>? isErrorResponse = null,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(operationName);
-        ArgumentNullException.ThrowIfNull(request);
-
-        var context = CreateContext(serviceName, operationName);
-        foreach (var interceptor in interceptors)
-        {
-            interceptor.OnBeforeExecution(context);
-        }
-
-        return InvokeWithCompletionAsync();
-
-        async Task<SmithyHttpResponse> InvokeWithCompletionAsync()
-        {
-            try
-            {
-                return await SendAsync(
-                        context,
-                        request,
-                        errorDeserializer,
-                        isErrorResponse,
-                        cancellationToken
-                    )
-                    .ConfigureAwait(false);
-            }
-            finally
-            {
-                for (var i = interceptors.Count - 1; i >= 0; i--)
-                {
-                    interceptors[i].OnAfterExecution(context);
-                }
+                interceptors[i].OnAfterExecution(context, executionError);
             }
         }
     }
@@ -159,11 +84,14 @@ public sealed class SmithyClientRuntime(
     private async Task<SmithyHttpResponse> SendAsync(
         SmithyContext context,
         SmithyHttpRequest request,
-        SmithyErrorDeserializer? errorDeserializer,
-        Func<SmithyHttpResponse, bool>? isErrorResponse,
+        Func<SmithyHttpResponse, CancellationToken, ValueTask<Exception?>> deserializeError,
+        Func<SmithyHttpResponse, bool> isErrorResponse,
         CancellationToken cancellationToken
     )
     {
+        var session = retryStrategy?.Begin();
+        // Streaming request bodies cannot be replayed, so they get exactly one attempt.
+        var canRetry = session is not null && request.Body is not SmithyHttpBody.Streaming;
         for (var attempt = 1; ; attempt++)
         {
             context.Set(SmithyContextKeys.Attempt, attempt);
@@ -175,48 +103,61 @@ public sealed class SmithyClientRuntime(
                 )
                 .ConfigureAwait(false);
 
-            var response = await transport
-                .SendAsync(attemptRequest, cancellationToken)
-                .ConfigureAwait(false);
+            SmithyHttpResponse response;
+            try
+            {
+                response = await transport
+                    .SendAsync(attemptRequest, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception transportError)
+                when (canRetry && !cancellationToken.IsCancellationRequested)
+            {
+                var decision = session!.Classify(
+                    new SmithyRetryOutcome(attempt, null, transportError, context)
+                );
+                if (!decision.ShouldRetry)
+                {
+                    throw;
+                }
+
+                await DelayAsync(decision.Delay, cancellationToken).ConfigureAwait(false);
+                continue;
+            }
 
             for (var i = interceptors.Count - 1; i >= 0; i--)
             {
                 interceptors[i].OnAfterTransmit(context, response);
             }
 
-            var retryContext = new SmithyRetryContext(attempt, response, context);
-            if (
-                retryStrategy is not null
-                && attempt < retryStrategy.MaxAttempts
-                && request.Body is not SmithyHttpBody.Streaming
-                && retryStrategy.ShouldRetry(retryContext)
-            )
+            if (!isErrorResponse(response))
             {
-                await retryStrategy
-                    .DelayAsync(retryContext, cancellationToken)
-                    .ConfigureAwait(false);
-                continue;
-            }
-
-            var isError = isErrorResponse?.Invoke(response) ?? (int)response.StatusCode >= 400;
-            if (!isError)
-            {
+                session?.RecordSuccess();
                 return response;
             }
 
-            if (errorDeserializer is not null)
+            var error =
+                await deserializeError(response, cancellationToken).ConfigureAwait(false)
+                ?? new SmithyClientException(response.StatusCode, response.ReasonPhrase);
+
+            if (canRetry)
             {
-                var error = await errorDeserializer(response, cancellationToken)
-                    .ConfigureAwait(false);
-                if (error is not null)
+                var decision = session!.Classify(
+                    new SmithyRetryOutcome(attempt, response, error, context)
+                );
+                if (decision.ShouldRetry)
                 {
-                    throw error;
+                    await DelayAsync(decision.Delay, cancellationToken).ConfigureAwait(false);
+                    continue;
                 }
             }
 
-            throw new SmithyClientException(response.StatusCode, response.ReasonPhrase);
+            throw error;
         }
     }
+
+    private static Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken) =>
+        delay > TimeSpan.Zero ? Task.Delay(delay, cancellationToken) : Task.CompletedTask;
 
     private async Task<SmithyHttpRequest> ApplyRequestInterceptorsAsync(
         SmithyContext context,

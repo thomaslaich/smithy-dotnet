@@ -9,12 +9,10 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport.Kind;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -22,7 +20,6 @@ import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.ServiceIndex;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
-import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
@@ -460,16 +457,16 @@ public final class ClientGenerator implements Runnable {
         }
         continue;
       }
+      String operationSchema = SchemaGenerator.operationSchemaAccessor(context, op);
       writer.write(
-          "this.$LBinding = new SmithyOperationBinding<$L, $L>($L, $L,"
-              + " serviceProtocol.ForOperation($L), $L);",
+          "this.$LBinding = new SmithyOperationBinding<$L, $L>($L.Id, $L.Id,"
+              + " serviceProtocol.ForOperation($L));",
           CSharpNaming.typeName(op.getId().getName()),
           SchemaGenerator.operationShapeType(context, op.getInputShape()),
           SchemaGenerator.operationShapeType(context, op.getOutputShape()),
-          CSharpNaming.formatString(service.getId().getName()),
-          CSharpNaming.formatString(op.getId().getName()),
-          SchemaGenerator.operationSchemaAccessor(context, op),
-          requestModifier(op));
+          SchemaGenerator.serviceSchemaAccessor(context, service),
+          operationSchema,
+          operationSchema);
     }
   }
 
@@ -671,45 +668,6 @@ public final class ClientGenerator implements Runnable {
             writer.write("$L = input.$L ?? this.idempotencyTokenProvider(),", prop, prop);
           }
         });
-  }
-
-  private String requestCompressionEncoding(OperationShape op) {
-    return op.findTrait(TraitIds.REQUEST_COMPRESSION)
-        .map(t -> (Node) t.toNode())
-        .flatMap(
-            node ->
-                node.expectObjectNode()
-                    .getArrayMember("encodings")
-                    .flatMap(array -> array.getElements().stream().findFirst())
-                    .map(Node::expectStringNode)
-                    .map(s -> s.getValue()))
-        .map(CSharpNaming::formatString)
-        .orElseThrow(
-            () ->
-                new IllegalStateException(
-                    "@requestCompression on "
-                        + op.getId()
-                        + " has no encodings — trait requires at least one"));
-  }
-
-  private String requestModifier(OperationShape op) {
-    boolean hasCompression = op.findTrait(TraitIds.REQUEST_COMPRESSION).isPresent();
-    boolean hasMd5 = op.findTrait(TraitIds.HTTP_CHECKSUM_REQUIRED).isPresent();
-    if (!hasCompression && !hasMd5) {
-      return "null";
-    }
-
-    List<String> statements = new ArrayList<>();
-    if (hasCompression) {
-      statements.add(
-          "SmithyRequestModifiers.ApplyRequestCompression(request, "
-              + requestCompressionEncoding(op)
-              + ")");
-    }
-    if (hasMd5) {
-      statements.add("SmithyRequestModifiers.ApplyContentMd5(request)");
-    }
-    return "request => { " + String.join("; ", statements) + "; }";
   }
 
   // =====================================================================

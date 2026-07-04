@@ -53,6 +53,18 @@ public sealed class GrpcProtocol : IProtocol
         )
         {
             ArgumentNullException.ThrowIfNull(operation);
+            if (SmithyRequestModifiers.HasRequestCompression(operation))
+            {
+                // gRPC compresses per message inside the length-prefixed framing
+                // (grpc-encoding), not via Content-Encoding on the HTTP body; applying the
+                // HTTP-style transform would produce broken requests. Fail at bind time until
+                // message-level compression is implemented.
+                throw new NotSupportedException(
+                    $"@requestCompression on '{operation.Id}' is not supported by the gRPC "
+                        + "protocol yet."
+                );
+            }
+
             return new OperationProtocol<TInput, TOutput>(service, operation);
         }
 
