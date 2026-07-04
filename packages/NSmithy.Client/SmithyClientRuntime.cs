@@ -6,7 +6,8 @@ public sealed class SmithyClientRuntime(
     IHttpTransport transport,
     IEnumerable<IClientInterceptor>? interceptors = null,
     ISmithyRetryStrategy? retryStrategy = null,
-    Uri? endpoint = null
+    Uri? endpoint = null,
+    TimeSpan? operationTimeout = null
 )
 {
     private readonly IHttpTransport transport =
@@ -17,6 +18,14 @@ public sealed class SmithyClientRuntime(
         endpoint is null || endpoint.IsAbsoluteUri
             ? endpoint
             : throw new ArgumentException("Endpoint must be an absolute URI.", nameof(endpoint));
+    private readonly TimeSpan? operationTimeout =
+        operationTimeout is null || operationTimeout > TimeSpan.Zero
+            ? operationTimeout
+            : throw new ArgumentOutOfRangeException(
+                nameof(operationTimeout),
+                operationTimeout,
+                "Operation timeout must be positive."
+            );
 
     public Task<TOutput> InvokeAsync<TInput, TOutput>(
         SmithyOperationBinding<TInput, TOutput> binding,
@@ -31,9 +40,18 @@ public sealed class SmithyClientRuntime(
     private async Task<TOutput> InvokeCoreAsync<TInput, TOutput>(
         SmithyOperationBinding<TInput, TOutput> binding,
         TInput input,
-        CancellationToken cancellationToken
+        CancellationToken callerToken
     )
     {
+        // The operation timeout is a deadline over the whole execution — serialization, every
+        // retry attempt, and backoff delays — enforced through a linked token so in-flight
+        // transport work is cancelled promptly.
+        using var timeoutSource = operationTimeout is null
+            ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(callerToken);
+        timeoutSource?.CancelAfter(operationTimeout!.Value);
+        var cancellationToken = timeoutSource?.Token ?? callerToken;
+
         var protocol = binding.Protocol;
         var context = CreateContext(binding.ServiceId.Name, binding.OperationId.Name);
         foreach (var interceptor in interceptors)
@@ -76,6 +94,19 @@ public sealed class SmithyClientRuntime(
             }
 
             return output;
+        }
+        catch (OperationCanceledException)
+            when (timeoutSource?.IsCancellationRequested == true
+                && !callerToken.IsCancellationRequested
+            )
+        {
+            // The deadline fired, not the caller: surface a TimeoutException so the two are
+            // distinguishable. Interceptors observe the translated exception.
+            var timeoutError = new TimeoutException(
+                $"The operation did not complete within {operationTimeout!.Value}."
+            );
+            executionError = timeoutError;
+            throw timeoutError;
         }
         catch (Exception error)
         {
