@@ -59,6 +59,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         private readonly Schema<TOutput> outputSchema;
         private readonly IJsonCodec<TInput> requestCodec;
         private readonly IJsonCodec<TOutput> responseCodec;
+        private readonly Action<SmithyHttpRequest>? requestTransform;
 
         public OperationProtocol(
             ServiceSchema service,
@@ -73,6 +74,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             outputSchema = operation.Output;
             requestCodec = JsonCodec.FromSchema(operation.Input);
             responseCodec = JsonCodec.FromSchema(operation.Output);
+            requestTransform = SmithyRequestModifiers.Compile(operation);
             HttpErrors = CompileErrors(operation.Errors);
         }
 
@@ -91,6 +93,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             };
             request.Headers["Accept"] = [contentType];
             request.Headers["X-Amz-Target"] = [target];
+            requestTransform?.Invoke(request);
             return request;
         }
 

@@ -30,7 +30,8 @@ public sealed class RestServiceProtocol(
             codecFactory,
             errorDiscriminator,
             rawStringPayloads,
-            errorTypeHeader
+            errorTypeHeader,
+            SmithyRequestModifiers.Compile(operation)
         );
     }
 }
@@ -46,14 +47,19 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
     IRestBodyCodecFactory codecFactory,
     Func<SmithyHttpResponse, string?> errorDiscriminator,
     bool rawStringPayloads,
-    string? errorTypeHeader
+    string? errorTypeHeader,
+    Action<SmithyHttpRequest>? requestTransform = null
 ) : IOperationProtocol<TInput, TOutput>
 {
     public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
         RestProtocol.CompileErrorDeserializers(modeledErrors, codecFactory, rawStringPayloads);
 
-    public SmithyHttpRequest SerializeRequest(TInput input) =>
-        RestProtocol.SerializeRequest(binding, input);
+    public SmithyHttpRequest SerializeRequest(TInput input)
+    {
+        var request = RestProtocol.SerializeRequest(binding, input);
+        requestTransform?.Invoke(request);
+        return request;
+    }
 
     public TOutput DeserializeResponse(SmithyHttpResponse response) =>
         RestProtocol.DeserializeResponse(binding, response);

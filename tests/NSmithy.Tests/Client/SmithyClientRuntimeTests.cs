@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using NSmithy.Client;
+using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Http;
 
@@ -23,15 +24,7 @@ public sealed class SmithyClientRuntimeTests
         var runtime = new SmithyClientRuntime(transport);
 
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            runtime.InvokeAsync(
-                "Weather",
-                "GetForecast",
-                new SmithyHttpRequest(HttpMethod.Get, "/forecast"),
-                static (response, _) =>
-                    ValueTask.FromResult<Exception?>(
-                        new InvalidOperationException(response.ContentText)
-                    )
-            )
+            runtime.InvokeAsync(Binding(new ContentTextErrorProtocol()), "input")
         );
 
         Assert.Equal("""{"message":"bad city"}""", error.Message);
@@ -52,11 +45,7 @@ public sealed class SmithyClientRuntimeTests
         var runtime = new SmithyClientRuntime(transport);
 
         var error = await Assert.ThrowsAsync<SmithyClientException>(() =>
-            runtime.InvokeAsync(
-                "Weather",
-                "GetForecast",
-                new SmithyHttpRequest(HttpMethod.Get, "/forecast")
-            )
+            runtime.InvokeAsync(Binding(new TextProtocol()), "input")
         );
 
         Assert.Equal(HttpStatusCode.InternalServerError, error.StatusCode);
@@ -78,13 +67,7 @@ public sealed class SmithyClientRuntimeTests
         );
         var runtime = new SmithyClientRuntime(transport, [interceptor]);
 
-        var output = await runtime.InvokeAsync(
-            "Weather",
-            "GetForecast",
-            new TextProtocol(),
-            "input",
-            cancellationToken: CancellationToken.None
-        );
+        var output = await runtime.InvokeAsync(Binding(new TextProtocol()), "input");
 
         Assert.Equal("output", output);
         Assert.Equal(
@@ -95,7 +78,7 @@ public sealed class SmithyClientRuntimeTests
                 "one:before-transmit:/input",
                 "one:after-transmit:OK",
                 "one:after-deserialization:output",
-                "one:after-execution",
+                "one:after-execution:ok",
             ],
             calls
         );
@@ -116,18 +99,11 @@ public sealed class SmithyClientRuntimeTests
             )
         );
         var runtime = new SmithyClientRuntime(transport);
-        var binding = new SmithyOperationBinding<string, string>(
-            "Weather",
-            "GetForecast",
-            new TextProtocol(),
-            request => request.Headers["x-test-binding"] = ["true"]
-        );
 
-        var output = await runtime.InvokeAsync(binding, "input");
+        var output = await runtime.InvokeAsync(Binding(new TextProtocol()), "input");
 
         Assert.Equal("output", output);
         Assert.Equal("/input", transport.Request.RequestUri);
-        Assert.Equal(["true"], transport.Request.Headers["x-test-binding"]);
     }
 
     [Fact]
@@ -150,13 +126,7 @@ public sealed class SmithyClientRuntimeTests
             endpoint: endpoint
         );
 
-        await runtime.InvokeAsync(
-            "Weather",
-            "GetForecast",
-            new TextProtocol(),
-            "input",
-            cancellationToken: CancellationToken.None
-        );
+        await runtime.InvokeAsync(Binding(new TextProtocol()), "input");
 
         Assert.Equal([endpoint], endpoints);
     }
@@ -178,13 +148,7 @@ public sealed class SmithyClientRuntimeTests
             endpoint: new Uri("https://api.example.com/base")
         );
 
-        await runtime.InvokeAsync(
-            "Weather",
-            "GetForecast",
-            new TextProtocol(),
-            "input",
-            cancellationToken: CancellationToken.None
-        );
+        await runtime.InvokeAsync(Binding(new TextProtocol()), "input");
 
         Assert.Equal("https://api.example.com/base/input", transport.Request.RequestUri);
     }
@@ -206,13 +170,7 @@ public sealed class SmithyClientRuntimeTests
             endpoint: new Uri("https://api.example.com")
         );
 
-        await runtime.InvokeAsync(
-            "Weather",
-            "GetForecast",
-            new AbsoluteUriProtocol(),
-            "input",
-            cancellationToken: CancellationToken.None
-        );
+        await runtime.InvokeAsync(Binding(new AbsoluteUriProtocol()), "input");
 
         Assert.Equal("https://override.example/input", transport.Request.RequestUri);
     }
@@ -250,13 +208,7 @@ public sealed class SmithyClientRuntimeTests
             [new RecordingInterceptor("one", calls), new RecordingInterceptor("two", calls)]
         );
 
-        await runtime.InvokeAsync(
-            "Weather",
-            "GetForecast",
-            new TextProtocol(),
-            "input",
-            cancellationToken: CancellationToken.None
-        );
+        await runtime.InvokeAsync(Binding(new TextProtocol()), "input");
 
         Assert.Equal(
             [
@@ -272,8 +224,8 @@ public sealed class SmithyClientRuntimeTests
                 "one:after-transmit:OK",
                 "two:after-deserialization:output",
                 "one:after-deserialization:output",
-                "two:after-execution",
-                "one:after-execution",
+                "two:after-execution:ok",
+                "one:after-execution:ok",
             ],
             calls
         );
@@ -303,13 +255,7 @@ public sealed class SmithyClientRuntimeTests
             retryStrategy: new SmithySimpleRetryStrategy(maxAttempts: 2)
         );
 
-        var output = await runtime.InvokeAsync(
-            "Weather",
-            "GetForecast",
-            new TextProtocol(),
-            "input",
-            cancellationToken: CancellationToken.None
-        );
+        var output = await runtime.InvokeAsync(Binding(new TextProtocol()), "input");
 
         Assert.Equal("output", output);
         Assert.Equal(2, transport.Attempts);
@@ -341,13 +287,7 @@ public sealed class SmithyClientRuntimeTests
             retryStrategy: new SmithySimpleRetryStrategy(maxAttempts: 2)
         );
 
-        await runtime.InvokeAsync(
-            "Weather",
-            "GetForecast",
-            new TextProtocol(),
-            "input",
-            cancellationToken: CancellationToken.None
-        );
+        await runtime.InvokeAsync(Binding(new TextProtocol()), "input");
 
         Assert.Equal([1, 2], attempts);
     }
@@ -377,13 +317,7 @@ public sealed class SmithyClientRuntimeTests
             retryStrategy: new SmithySimpleRetryStrategy(maxAttempts: 2)
         );
 
-        await runtime.InvokeAsync(
-            "Weather",
-            "GetForecast",
-            new TextProtocol(),
-            "input",
-            cancellationToken: CancellationToken.None
-        );
+        await runtime.InvokeAsync(Binding(new TextProtocol()), "input");
 
         Assert.Equal(
             ["/input?attempt=1", "/input?attempt=2"],
@@ -414,20 +348,146 @@ public sealed class SmithyClientRuntimeTests
             transport,
             retryStrategy: new SmithySimpleRetryStrategy(maxAttempts: 2)
         );
-        var request = new SmithyHttpRequest(HttpMethod.Post, "/upload")
-        {
-            Body = new SmithyHttpBody.Streaming(new MemoryStream("hello"u8.ToArray())),
-        };
-
         await Assert.ThrowsAsync<SmithyClientException>(() =>
-            runtime.InvokeAsync("Weather", "Upload", request)
+            runtime.InvokeAsync(Binding(new StreamingRequestProtocol()), "input")
         );
 
         Assert.Equal(1, transport.Attempts);
     }
 
+    [Fact]
+    public async Task RuntimeRetriesTransportFailures()
+    {
+        var transport = new FlakyTransport(
+            failures: 1,
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            retryStrategy: new SmithySimpleRetryStrategy(maxAttempts: 2)
+        );
+
+        var output = await runtime.InvokeAsync(Binding(new TextProtocol()), "input");
+
+        Assert.Equal("output", output);
+        Assert.Equal(2, transport.Attempts);
+    }
+
+    [Fact]
+    public async Task RuntimeThrowsTransportFailureWhenNoRetryStrategyIsConfigured()
+    {
+        var transport = new FlakyTransport(
+            failures: 1,
+            new SmithyHttpResponse(HttpStatusCode.OK, "OK", [], EmptyHeaders, EmptyHeaders)
+        );
+        var runtime = new SmithyClientRuntime(transport);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            runtime.InvokeAsync(Binding(new TextProtocol()), "input")
+        );
+
+        Assert.Equal(1, transport.Attempts);
+    }
+
+    [Fact]
+    public async Task RuntimeThrowsTransportFailureWhenStrategyGivesUp()
+    {
+        var transport = new FlakyTransport(
+            failures: 3,
+            new SmithyHttpResponse(HttpStatusCode.OK, "OK", [], EmptyHeaders, EmptyHeaders)
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            retryStrategy: new SmithySimpleRetryStrategy(maxAttempts: 2)
+        );
+
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            runtime.InvokeAsync(Binding(new TextProtocol()), "input")
+        );
+
+        Assert.Equal(2, transport.Attempts);
+    }
+
+    [Fact]
+    public async Task RetryStrategySeesDeserializedModeledError()
+    {
+        List<SmithyRetryOutcome> outcomes = [];
+        var transport = new SequenceTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.BadRequest,
+                "Bad Request",
+                Encoding.UTF8.GetBytes("""{"message":"throttled"}"""),
+                EmptyHeaders,
+                EmptyHeaders
+            ),
+            new SmithyHttpResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Encoding.UTF8.GetBytes("serialized output"),
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            retryStrategy: new SmithySimpleRetryStrategy(
+                maxAttempts: 2,
+                shouldRetry: outcome =>
+                {
+                    outcomes.Add(outcome);
+                    return outcome.Error is InvalidOperationException;
+                }
+            )
+        );
+
+        var output = await runtime.InvokeAsync(Binding(new ContentTextErrorProtocol()), "input");
+
+        Assert.Equal("output", output);
+        var outcome = Assert.Single(outcomes);
+        Assert.False(outcome.IsTransportFailure);
+        Assert.Equal("""{"message":"throttled"}""", outcome.Error.Message);
+        Assert.Equal(HttpStatusCode.BadRequest, outcome.Response!.StatusCode);
+    }
+
+    [Fact]
+    public async Task InterceptorsObserveExecutionFailure()
+    {
+        List<string> calls = [];
+        var transport = new RecordingTransport(
+            new SmithyHttpResponse(
+                HttpStatusCode.InternalServerError,
+                "Internal Server Error",
+                [],
+                EmptyHeaders,
+                EmptyHeaders
+            )
+        );
+        var runtime = new SmithyClientRuntime(transport, [new RecordingInterceptor("one", calls)]);
+
+        await Assert.ThrowsAsync<SmithyClientException>(() =>
+            runtime.InvokeAsync(Binding(new TextProtocol()), "input")
+        );
+
+        Assert.Equal("one:after-execution:SmithyClientException", calls[^1]);
+    }
+
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> EmptyHeaders { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+
+    private static SmithyOperationBinding<string, string> Binding(
+        IOperationProtocol<string, string> protocol
+    ) =>
+        new(
+            ShapeId.Parse("example.weather#Weather"),
+            ShapeId.Parse("example.weather#GetForecast"),
+            protocol
+        );
 
     private sealed class RecordingTransport(SmithyHttpResponse response) : IHttpTransport
     {
@@ -440,6 +500,24 @@ public sealed class SmithyClientRuntimeTests
         {
             Request = request;
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class FlakyTransport(int failures, SmithyHttpResponse response) : IHttpTransport
+    {
+        public int Attempts { get; private set; }
+
+        public Task<SmithyHttpResponse> SendAsync(
+            SmithyHttpRequest request,
+            CancellationToken cancellationToken = default
+        )
+        {
+            Attempts++;
+            return Attempts <= failures
+                ? Task.FromException<SmithyHttpResponse>(
+                    new HttpRequestException("connection reset")
+                )
+                : Task.FromResult(response);
         }
     }
 
@@ -506,9 +584,9 @@ public sealed class SmithyClientRuntimeTests
             calls.Add($"{name}:after-deserialization:{output}");
         }
 
-        public void OnAfterExecution(SmithyContext context)
+        public void OnAfterExecution(SmithyContext context, Exception? error)
         {
-            calls.Add($"{name}:after-execution");
+            calls.Add($"{name}:after-execution:{(error is null ? "ok" : error.GetType().Name)}");
         }
     }
 
@@ -593,5 +671,22 @@ public sealed class SmithyClientRuntimeTests
     {
         public override SmithyHttpRequest SerializeRequest(string input) =>
             new(HttpMethod.Post, $"https://override.example/{input}");
+    }
+
+    private sealed class ContentTextErrorProtocol : TextProtocol, IOperationProtocol<string, string>
+    {
+        public ValueTask<Exception?> DeserializeErrorAsync(
+            SmithyHttpResponse response,
+            CancellationToken cancellationToken = default
+        ) => ValueTask.FromResult<Exception?>(new InvalidOperationException(response.ContentText));
+    }
+
+    private sealed class StreamingRequestProtocol : TextProtocol
+    {
+        public override SmithyHttpRequest SerializeRequest(string input) =>
+            new(HttpMethod.Post, "/upload")
+            {
+                Body = new SmithyHttpBody.Streaming(new MemoryStream("hello"u8.ToArray())),
+            };
     }
 }
