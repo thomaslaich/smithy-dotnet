@@ -116,6 +116,13 @@ export default defineConfig({
 							],
 						},
 						{ label: 'gRPC', slug: 'protocols/grpc' },
+						{
+							label: 'bote Protocols',
+							items: [
+								{ label: 'Overview', slug: 'protocols/bote-overview' },
+								{ label: 'kafkaJson', slug: 'protocols/bote-kafka-json' },
+							],
+						},
 						{ label: 'Protocol Status', slug: 'protocols/status' },
 					],
 				},

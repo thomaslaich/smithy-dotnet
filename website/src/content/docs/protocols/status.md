@@ -20,6 +20,7 @@ test totals.
 | [`smithy.protocols#rpcv2Cbor`](../rpc-v2-cbor/) | Client and server | Preview | Requests 29/29 (100%), responses 43/43 (100%) | Requests 37/37 (100%), responses 27/27 (100%) |
 | [`alloy#simpleRestJson`](../rest-json/) | Client and server | Preview | Requests 23/23 (100%), responses 20/20 (100%) | Requests 23/23 (100%), responses 20/20 (100%) |
 | [`alloy.proto#grpc`](../grpc/) | Client and server | Experimental | End-to-end examples | End-to-end examples |
+| [`bote#kafkaJson`](../bote-kafka-json/) | Producer and consumers | Experimental | End-to-end examples | N/A |
 
 ## How the numbers are counted
 
@@ -60,6 +61,9 @@ count as official conformance.
   documents, errors, trailers, and all three streaming modes. Grpc.Net
   interoperability is demonstrated by runnable examples but is not yet an
   automated cross-implementation test matrix.
+- kafkaJson is a messaging protocol without a client/server split or applicable
+  Smithy HTTP conformance suite. The generated producer and consumers are
+  validated by the end-to-end `examples/kafka` project against a real broker.
 
 See [Validation](/smithy-dotnet/servers/validation/) for malformed request
 behavior.

@@ -3,9 +3,11 @@ title: Protocols
 description: Choose a Smithy protocol and understand what it changes in generated .NET clients and servers.
 ---
 
-A protocol defines the HTTP route, headers, body encoding, error format, and
-streaming transport for a Smithy service. NSmithy reads the protocol trait and
-generates the matching .NET runtime bindings.
+A protocol defines the transport bindings, body encoding, error format, and
+streaming behavior for a Smithy service. For HTTP protocols that includes routes,
+methods, and headers; for messaging protocols it includes topics, keys, and
+message headers. NSmithy reads the protocol trait and generates the matching .NET
+runtime bindings.
 
 The protocol does not change your application model. Generated clients expose
 typed operations, and generated servers expose typed handler interfaces,
@@ -24,11 +26,14 @@ regardless of the wire format.
 | [`aws.protocols#restXml`](../rest-xml/) | Client | Existing AWS XML services such as S3 |
 | [`alloy#simpleRestJson`](../rest-json/) | Client and server | Alloy and Smithy4s interoperability |
 | [`alloy.proto#grpc`](../grpc/) | Client and server | Standard gRPC and protobuf interoperability |
+| [`bote#kafkaJson`](../bote-kafka-json/) | Kafka producer and consumers | Typed asynchronous messaging over Kafka |
 
 For most new HTTP APIs, start with `restJson1`. Use `rpcv2Cbor` for compact
 binary Smithy RPC between compatible peers. Use gRPC when standard protobuf and
 gRPC interoperability matter. The AWS Query, AWS JSON, and restXml protocols
-are primarily for existing AWS services and emulators.
+are primarily for existing AWS services and emulators. Use `kafkaJson` only when
+you specifically need Kafka messaging; its generated surface is a producer and
+consumers rather than the HTTP client/server pair.
 
 See [Protocol Status](../status/) for maturity and current conformance numbers.
 
