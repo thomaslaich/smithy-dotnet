@@ -207,6 +207,39 @@ Consumer group membership, offsets, and delivery semantics are runtime
 concerns configured through Confluent's `ConsumerConfig` (`GroupId`,
 `AutoOffsetReset`, and so on); they are not part of the model.
 
+## Dependency Injection
+
+Setting `SmithyGenerateDependencyInjection` to `true` additionally generates
+`{Service}Kafka.DependencyInjection.g.cs` with Microsoft.Extensions hosting
+registrations (the file requires the `Microsoft.Extensions.Hosting` package):
+
+- `Add{Service}Producer(ProducerConfig)` registers the producer as a
+  singleton. Confluent producers are thread-safe and meant to be shared.
+- `Add{Service}CommandConsumer(ConsumerConfig)` and
+  `Add{Service}EventConsumer(ConsumerConfig)` each register a
+  `BackgroundService` that runs the consumer for the host lifetime.
+
+Register your handler implementation with any lifetime; it is resolved in a
+new service scope per message, so it can take scoped dependencies such as a
+`DbContext`:
+
+```csharp
+using Confluent.Kafka;
+using Examples.Kafka.Streetlights;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+var builder = Host.CreateApplicationBuilder(args);
+builder.Services.AddStreetlightDeviceProducer(producerConfig);
+builder.Services.AddStreetlightDeviceCommandConsumer(consumerConfig);
+builder.Services.AddScoped<IStreetlightDeviceCommandHandler, DimLightHandler>();
+await builder.Build().RunAsync();
+```
+
+A handler exception propagates out of the consume loop and stops the hosted
+service; by default the .NET host then shuts down. Retry and dead-lettering
+are left to the handler.
+
 ## AsyncAPI Documentation
 
 Set `SmithyGenerateAsyncApi` in a project referencing the contracts to run
@@ -238,8 +271,6 @@ project for the full setup, including a Docker Compose Kafka broker.
   Kafka header; the protocol specifies headers only.
 - `eventDiscrimination` `HEADER` and `NONE` are implemented in the generator
   but only `ENVELOPE` is exercised by the example.
-- No dependency-injection or hosted-service registration; consumers are driven
-  manually via `RunAsync`, and handlers are constructed by the caller.
 - The consume loop swallows non-fatal `ConsumeException`s; there is no retry,
   dead-letter, or error callback mechanism.
 - `bote#kafkaAvro` and `bote#kafkaProtobuf` are defined by bote but have no

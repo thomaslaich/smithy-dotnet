@@ -46,6 +46,14 @@ topic can carry several event types, distinguished by the union member name;
 the bare payload on single-event channels. `@kafkaKey` members become the
 Confluent.Kafka message key; `@kafkaHeader` members become headers.
 
+With `SmithyGenerateDependencyInjection=true` (the device project), NSmithy also
+generates **Microsoft.Extensions hosting registrations**:
+`AddStreetlightDeviceProducer(config)` registers the producer as a singleton, and
+`AddStreetlightDeviceCommandConsumer(config)` / `AddStreetlightDeviceEventConsumer(config)`
+run the consumers as `BackgroundService`s. The registered handler is resolved in
+a new service scope per message. The device runs as a generic host this way;
+the controller drives the same SDK manually to show both usages.
+
 ## Model overview
 
 ```

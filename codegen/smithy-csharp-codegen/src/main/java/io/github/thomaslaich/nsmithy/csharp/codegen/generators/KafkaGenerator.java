@@ -47,26 +47,21 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.KafkaBindings;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
-import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.shapes.MemberShape;
-import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
-import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.shapes.StructureShape;
-import software.amazon.smithy.model.shapes.UnionShape;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -82,36 +77,6 @@ public final class KafkaGenerator implements Runnable {
   /** The Kafka header that carries the union member name in HEADER mode. */
   private static final String TYPE_HEADER = "bote-type";
 
-  /** A @kafkaProduce operation: a command payload written to a topic. */
-  private static final class ProduceInfo {
-    final String opName; // C# PascalCase operation name
-    final String topic;
-    final StructureShape command; // the (dedicated) command input structure
-    final String commandType; // qualified C# type
-
-    ProduceInfo(String opName, String topic, StructureShape command, String commandType) {
-      this.opName = opName;
-      this.topic = topic;
-      this.command = command;
-      this.commandType = commandType;
-    }
-  }
-
-  /** A @kafkaConsume operation: a @streaming union of @event payloads on a topic. */
-  private static final class ConsumeInfo {
-    final String topic;
-    final UnionShape union;
-    final String unionType; // qualified C# type
-    final List<MemberShape> members; // sorted union members
-
-    ConsumeInfo(String topic, UnionShape union, String unionType, List<MemberShape> members) {
-      this.topic = topic;
-      this.union = union;
-      this.unionType = unionType;
-      this.members = members;
-    }
-  }
-
   private final GenerationContext context;
   private final CSharpWriter writer;
   private final ServiceShape service;
@@ -125,23 +90,11 @@ public final class KafkaGenerator implements Runnable {
   @Override
   public void run() {
     Model model = context.model();
-    SymbolProvider sp = context.symbolProvider();
-    TopDownIndex idx = TopDownIndex.of(model);
 
-    List<OperationShape> ops =
-        idx.getContainedOperations(service).stream()
-            .sorted(Comparator.comparing(op -> op.getId().toString()))
-            .collect(Collectors.toList());
-
-    List<ProduceInfo> produces = new ArrayList<>();
-    List<ConsumeInfo> consumes = new ArrayList<>();
-    for (OperationShape op : ops) {
-      if (op.hasTrait(TraitIds.KAFKA_PRODUCE)) {
-        produces.add(buildProduce(model, sp, op));
-      } else if (op.hasTrait(TraitIds.KAFKA_CONSUME)) {
-        consumes.add(buildConsume(model, sp, op));
-      }
-    }
+    List<KafkaBindings.Produce> produces =
+        KafkaBindings.produces(model, context.symbolProvider(), service);
+    List<KafkaBindings.Consume> consumes =
+        KafkaBindings.consumes(model, context.symbolProvider(), service);
 
     if (produces.isEmpty() && consumes.isEmpty()) return;
 
@@ -173,52 +126,13 @@ public final class KafkaGenerator implements Runnable {
   }
 
   // ===========================================================================
-  // Model -> info builders
-  // ===========================================================================
-
-  private ProduceInfo buildProduce(Model model, SymbolProvider sp, OperationShape op) {
-    if (isUnit(op.getInputShape())) {
-      throw new IllegalStateException(
-          "@kafkaProduce operation " + op.getId() + " must have a @command input");
-    }
-    StructureShape command = model.expectShape(op.getInputShape(), StructureShape.class);
-    String commandType = CSharpSymbolProvider.qualified(sp.toSymbol(command));
-    return new ProduceInfo(
-        CSharpNaming.typeName(op.getId().getName()),
-        kafkaTopicName(op, TraitIds.KAFKA_PRODUCE),
-        command,
-        commandType);
-  }
-
-  private ConsumeInfo buildConsume(Model model, SymbolProvider sp, OperationShape op) {
-    StructureShape output = model.expectShape(op.getOutputShape(), StructureShape.class);
-    MemberShape streamingMember =
-        output.members().stream()
-            .filter(m -> model.expectShape(m.getTarget()).hasTrait(TraitIds.STREAMING))
-            .findFirst()
-            .orElseThrow(
-                () ->
-                    new IllegalStateException(
-                        "@kafkaConsume operation "
-                            + op.getId()
-                            + " output has no member targeting a @streaming union"));
-    UnionShape union = model.expectShape(streamingMember.getTarget(), UnionShape.class);
-    List<MemberShape> members =
-        union.members().stream()
-            .sorted(Comparator.comparing(MemberShape::getMemberName))
-            .collect(Collectors.toList());
-    String unionType = CSharpSymbolProvider.qualified(sp.toSymbol(union));
-    return new ConsumeInfo(kafkaTopicName(op, TraitIds.KAFKA_CONSUME), union, unionType, members);
-  }
-
-  // ===========================================================================
   // Producer
   // ===========================================================================
 
   private void writeProducer(
       String svc,
-      List<ProduceInfo> produces,
-      List<ConsumeInfo> consumes,
+      List<KafkaBindings.Produce> produces,
+      List<KafkaBindings.Consume> consumes,
       Model model,
       EventDiscrimination discrimination) {
     String typeName = svc + "Producer";
@@ -228,8 +142,8 @@ public final class KafkaGenerator implements Runnable {
         "}",
         () -> {
           Set<Shape> codecShapes = new LinkedHashSet<>();
-          for (ProduceInfo produce : produces) {
-            codecShapes.add(produce.command);
+          for (KafkaBindings.Produce produce : produces) {
+            codecShapes.add(produce.command());
           }
           codecShapes.addAll(eventCodecShapes(consumes, model, discrimination));
           codecShapes.forEach(this::writeCodecField);
@@ -244,13 +158,13 @@ public final class KafkaGenerator implements Runnable {
                       "_producer = new ProducerBuilder<string?, byte[]>(config ?? throw new"
                           + " System.ArgumentNullException(nameof(config))).Build();"));
 
-          for (ProduceInfo produce : produces) {
+          for (KafkaBindings.Produce produce : produces) {
             writer.write("");
             writeProduceMethod(produce, model);
           }
 
-          for (ConsumeInfo consume : consumes) {
-            for (MemberShape member : consume.members) {
+          for (KafkaBindings.Consume consume : consumes) {
+            for (MemberShape member : consume.members()) {
               writer.write("");
               writePublishMethod(consume, member, model, discrimination);
             }
@@ -269,26 +183,30 @@ public final class KafkaGenerator implements Runnable {
   }
 
   /** A client invoking a capability: serialize the bare command and write it to the topic. */
-  private void writeProduceMethod(ProduceInfo produce, Model model) {
+  private void writeProduceMethod(KafkaBindings.Produce produce, Model model) {
     writer.write(
         "public System.Threading.Tasks.Task $LAsync($L command,"
             + " System.Threading.CancellationToken cancellationToken = default)",
-        produce.opName,
-        produce.commandType);
+        produce.opName(),
+        produce.commandType());
     writer.openBlock(
         "{",
         "}",
         () -> {
           writer.write("System.ArgumentNullException.ThrowIfNull(command);");
           writer.write("");
-          writer.write("var value = $L.Serialize(command);", codecFieldName(produce.commandType));
-          writeKeyHeadersAndProduce(model, produce.command, "command", produce.topic, null);
+          writer.write(
+              "var value = $L.Serialize(command);", codecFieldName(produce.commandType()));
+          writeKeyHeadersAndProduce(model, produce.command(), "command", produce.topic(), null);
         });
   }
 
   /** The contract owner emitting an event: encode it per eventDiscrimination and write it. */
   private void writePublishMethod(
-      ConsumeInfo consume, MemberShape member, Model model, EventDiscrimination discrimination) {
+      KafkaBindings.Consume consume,
+      MemberShape member,
+      Model model,
+      EventDiscrimination discrimination) {
     StructureShape event = model.expectShape(member.getTarget(), StructureShape.class);
     String eventType = qualified(model, member);
     String variant = CSharpNaming.typeName(member.getMemberName());
@@ -305,19 +223,19 @@ public final class KafkaGenerator implements Runnable {
           writer.write("");
           switch (discrimination) {
             case ENVELOPE -> {
-              writer.write("var wrapped = $L.From$L(message);", consume.unionType, variant);
+              writer.write("var wrapped = $L.From$L(message);", consume.unionType(), variant);
               writer.write(
-                  "var value = $L.Serialize(wrapped);", codecFieldName(consume.unionType));
-              writeKeyHeadersAndProduce(model, event, "message", consume.topic, null);
+                  "var value = $L.Serialize(wrapped);", codecFieldName(consume.unionType()));
+              writeKeyHeadersAndProduce(model, event, "message", consume.topic(), null);
             }
             case HEADER -> {
               writer.write("var value = $L.Serialize(message);", codecFieldName(eventType));
               writeKeyHeadersAndProduce(
-                  model, event, "message", consume.topic, member.getMemberName());
+                  model, event, "message", consume.topic(), member.getMemberName());
             }
             case NONE -> {
               writer.write("var value = $L.Serialize(message);", codecFieldName(eventType));
-              writeKeyHeadersAndProduce(model, event, "message", consume.topic, null);
+              writeKeyHeadersAndProduce(model, event, "message", consume.topic(), null);
             }
           }
         });
@@ -390,33 +308,37 @@ public final class KafkaGenerator implements Runnable {
   // Command handling (@kafkaProduce)
   // ===========================================================================
 
-  private void writeCommandHandlerInterface(String svc, List<ProduceInfo> produces) {
+  private void writeCommandHandlerInterface(String svc, List<KafkaBindings.Produce> produces) {
     writer.write("public interface I$LCommandHandler", svc);
     writer.openBlock(
         "{",
         "}",
         () -> {
           boolean first = true;
-          for (ProduceInfo produce : produces) {
+          for (KafkaBindings.Produce produce : produces) {
             if (!first) writer.write("");
             first = false;
             writer.write(
                 "System.Threading.Tasks.Task Handle$LAsync($L command,"
                     + " System.Threading.CancellationToken cancellationToken = default);",
-                produce.opName,
-                produce.commandType);
+                produce.opName(),
+                produce.commandType());
           }
         });
   }
 
-  private void writeCommandConsumer(String svc, List<ProduceInfo> produces, Model model) {
+  private void writeCommandConsumer(String svc, List<KafkaBindings.Produce> produces, Model model) {
     String typeName = svc + "CommandConsumer";
     String ifaceName = "I" + svc + "CommandHandler";
     List<String> topics =
-        produces.stream().map(i -> i.topic).distinct().sorted().collect(Collectors.toList());
+        produces.stream()
+            .map(KafkaBindings.Produce::topic)
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
     Set<Shape> codecShapes = new LinkedHashSet<>();
-    for (ProduceInfo produce : produces) {
-      codecShapes.add(produce.command);
+    for (KafkaBindings.Produce produce : produces) {
+      codecShapes.add(produce.command());
     }
     writeConsumerScaffold(
         typeName,
@@ -425,19 +347,19 @@ public final class KafkaGenerator implements Runnable {
         () -> codecShapes.forEach(this::writeCodecField),
         () -> {
           for (int i = 0; i < produces.size(); i++) {
-            ProduceInfo produce = produces.get(i);
+            KafkaBindings.Produce produce = produces.get(i);
             writer.write(
                 "$L (result.Topic == $L)",
                 i == 0 ? "if" : "else if",
-                CSharpNaming.formatString(produce.topic));
+                CSharpNaming.formatString(produce.topic()));
             writer.openBlock(
                 "{",
                 "}",
                 () -> {
                   writer.write(
                       "var command = $L.Deserialize(result.Message.Value);",
-                      codecFieldName(produce.commandType));
-                  writer.write("await _handler.Handle$LAsync(command, ct);", produce.opName);
+                      codecFieldName(produce.commandType()));
+                  writer.write("await _handler.Handle$LAsync(command, ct);", produce.opName());
                 });
           }
         });
@@ -447,15 +369,16 @@ public final class KafkaGenerator implements Runnable {
   // Event handling (@kafkaConsume)
   // ===========================================================================
 
-  private void writeEventHandlerInterface(String svc, List<ConsumeInfo> consumes, Model model) {
+  private void writeEventHandlerInterface(
+      String svc, List<KafkaBindings.Consume> consumes, Model model) {
     writer.write("public interface I$LEventHandler", svc);
     writer.openBlock(
         "{",
         "}",
         () -> {
           boolean first = true;
-          for (ConsumeInfo consume : consumes) {
-            for (MemberShape member : consume.members) {
+          for (KafkaBindings.Consume consume : consumes) {
+            for (MemberShape member : consume.members()) {
               if (!first) writer.write("");
               first = false;
               writer.write(
@@ -469,11 +392,18 @@ public final class KafkaGenerator implements Runnable {
   }
 
   private void writeEventConsumer(
-      String svc, List<ConsumeInfo> consumes, Model model, EventDiscrimination discrimination) {
+      String svc,
+      List<KafkaBindings.Consume> consumes,
+      Model model,
+      EventDiscrimination discrimination) {
     String typeName = svc + "EventConsumer";
     String ifaceName = "I" + svc + "EventHandler";
     List<String> topics =
-        consumes.stream().map(s -> s.topic).distinct().sorted().collect(Collectors.toList());
+        consumes.stream()
+            .map(KafkaBindings.Consume::topic)
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
     Set<Shape> codecShapes = eventCodecShapes(consumes, model, discrimination);
     writeConsumerScaffold(
         typeName,
@@ -482,29 +412,28 @@ public final class KafkaGenerator implements Runnable {
         () -> codecShapes.forEach(this::writeCodecField),
         () -> {
           for (int i = 0; i < consumes.size(); i++) {
-            ConsumeInfo consume = consumes.get(i);
+            KafkaBindings.Consume consume = consumes.get(i);
             writer.write(
                 "$L (result.Topic == $L)",
                 i == 0 ? "if" : "else if",
-                CSharpNaming.formatString(consume.topic));
-            writer.openBlock(
-                "{", "}", () -> writeEventDispatch(consume, model, discrimination));
+                CSharpNaming.formatString(consume.topic()));
+            writer.openBlock("{", "}", () -> writeEventDispatch(consume, model, discrimination));
           }
         });
   }
 
   /** Emits the per-topic event decode + dispatch body for the given discrimination mode. */
   private void writeEventDispatch(
-      ConsumeInfo consume, Model model, EventDiscrimination discrimination) {
+      KafkaBindings.Consume consume, Model model, EventDiscrimination discrimination) {
     switch (discrimination) {
       case ENVELOPE -> {
         writer.write(
             "var union = $L.Deserialize(result.Message.Value);",
-            codecFieldName(consume.unionType));
-        for (MemberShape member : consume.members) {
+            codecFieldName(consume.unionType()));
+        for (MemberShape member : consume.members()) {
           String variant = CSharpNaming.typeName(member.getMemberName());
           String local = CSharpNaming.parameterName(member.getMemberName());
-          writer.write("if (union is $L.$L $L)", consume.unionType, variant, local);
+          writer.write("if (union is $L.$L $L)", consume.unionType(), variant, local);
           writer.write("    await _handler.Handle$LAsync($L.Value, ct);", variant, local);
         }
       }
@@ -518,8 +447,8 @@ public final class KafkaGenerator implements Runnable {
             "}",
             () -> {
               writer.write("var eventType = Encoding.UTF8.GetString(typeBytes);");
-              for (int i = 0; i < consume.members.size(); i++) {
-                MemberShape member = consume.members.get(i);
+              for (int i = 0; i < consume.members().size(); i++) {
+                MemberShape member = consume.members().get(i);
                 String variant = CSharpNaming.typeName(member.getMemberName());
                 writer.write(
                     "$L (eventType == $L)",
@@ -540,7 +469,7 @@ public final class KafkaGenerator implements Runnable {
       case NONE -> {
         // NONE requires a single-member union (validator-enforced): the channel is
         // unambiguous by construction.
-        MemberShape member = consume.members.get(0);
+        MemberShape member = consume.members().get(0);
         String variant = CSharpNaming.typeName(member.getMemberName());
         writer.write(
             "var message = $L.Deserialize(result.Message.Value);",
@@ -664,13 +593,13 @@ public final class KafkaGenerator implements Runnable {
 
   /** The payload shapes an event-side participant needs codecs for, per discrimination. */
   private Set<Shape> eventCodecShapes(
-      List<ConsumeInfo> consumes, Model model, EventDiscrimination discrimination) {
+      List<KafkaBindings.Consume> consumes, Model model, EventDiscrimination discrimination) {
     Set<Shape> shapes = new LinkedHashSet<>();
-    for (ConsumeInfo consume : consumes) {
+    for (KafkaBindings.Consume consume : consumes) {
       if (discrimination == EventDiscrimination.ENVELOPE) {
-        shapes.add(consume.union);
+        shapes.add(consume.union());
       } else {
-        for (MemberShape member : consume.members) {
+        for (MemberShape member : consume.members()) {
           shapes.add(model.expectShape(member.getTarget()));
         }
       }
@@ -686,17 +615,6 @@ public final class KafkaGenerator implements Runnable {
         .flatMap(node -> node.getStringMember("eventDiscrimination"))
         .map(s -> EventDiscrimination.valueOf(s.getValue()))
         .orElse(EventDiscrimination.ENVELOPE);
-  }
-
-  private String kafkaTopicName(OperationShape op, ShapeId capabilityTrait) {
-    return op.findTrait(capabilityTrait)
-        .map(t -> t.toNode().expectObjectNode())
-        .flatMap(node -> node.getStringMember("topic"))
-        .map(s -> s.getValue())
-        .orElseThrow(
-            () ->
-                new IllegalStateException(
-                    "@" + capabilityTrait.getName() + " missing topic on operation " + op.getId()));
   }
 
   private String kafkaHeaderName(MemberShape member) {
@@ -728,11 +646,5 @@ public final class KafkaGenerator implements Runnable {
       case ENUM -> valueExpr + ".Value";
       default -> valueExpr + ".ToString()";
     };
-  }
-
-  private static final ShapeId UNIT = ShapeId.from("smithy.api#Unit");
-
-  private static boolean isUnit(ShapeId id) {
-    return UNIT.equals(id);
   }
 }
