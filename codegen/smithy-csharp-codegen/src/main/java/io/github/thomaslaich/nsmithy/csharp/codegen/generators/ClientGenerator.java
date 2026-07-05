@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
+import software.amazon.smithy.model.knowledge.PaginatedIndex;
+import software.amazon.smithy.model.knowledge.PaginationInfo;
 import software.amazon.smithy.model.knowledge.ServiceIndex;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.shapes.MemberShape;
@@ -65,6 +67,13 @@ public final class ClientGenerator implements Runnable {
           writer.write("");
           for (OperationShape op : operations) {
             writer.write("$L;", operationSignature(sp, op));
+            paginationInfo(op)
+                .ifPresent(
+                    info -> {
+                      writer.write("$L;", paginatorPagesSignature(sp, op));
+                      paginatorItemsSignature(sp, info)
+                          .ifPresent(signature -> writer.write("$L;", signature));
+                    });
           }
         });
     writer.write("");
@@ -392,7 +401,10 @@ public final class ClientGenerator implements Runnable {
           }
           writer.write("");
 
-          for (OperationShape op : operations) writeOperationMethod(sp, model, op);
+          for (OperationShape op : operations) {
+            writeOperationMethod(sp, model, op);
+            paginationInfo(op).ifPresent(info -> writePaginatorMethods(sp, op, info));
+          }
         });
     writer.write("");
     writeConfigClass(typeName);
@@ -706,6 +718,154 @@ public final class ClientGenerator implements Runnable {
             writer.write("$L = input.$L ?? this.idempotencyTokenProvider(),", prop, prop);
           }
         });
+  }
+
+  // ---------------- paginators ----------------
+
+  /**
+   * Resolved pagination for an operation: present when the operation carries {@code @paginated}
+   * (merged with the service-level defaults). Event-stream operations are never paginated.
+   */
+  private java.util.Optional<PaginationInfo> paginationInfo(OperationShape op) {
+    if (isEventStreamOperation(context.model(), op)) {
+      return java.util.Optional.empty();
+    }
+    return PaginatedIndex.of(context.model()).getPaginationInfo(service, op);
+  }
+
+  private String paginatorPagesSignature(SymbolProvider sp, OperationShape op) {
+    Model model = context.model();
+    String inputType =
+        CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())));
+    String outputType =
+        CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getOutputShape())));
+    return "System.Collections.Generic.IAsyncEnumerable<"
+        + outputType
+        + "> "
+        + CSharpNaming.typeName(op.getId().getName())
+        + "PagesAsync("
+        + inputType
+        + " input, System.Threading.CancellationToken cancellationToken = default)";
+  }
+
+  /**
+   * The items-level paginator signature, present when {@code @paginated} names an {@code items}
+   * member that resolves to a list. Map-valued items are rare and not generated yet — the pages
+   * paginator still covers them.
+   */
+  private java.util.Optional<String> paginatorItemsSignature(
+      SymbolProvider sp, PaginationInfo info) {
+    return paginatorItemElementType(sp, info)
+        .map(
+            elementType ->
+                "System.Collections.Generic.IAsyncEnumerable<"
+                    + elementType
+                    + "> "
+                    + CSharpNaming.typeName(info.getOperation().getId().getName())
+                    + "ItemsAsync("
+                    + CSharpSymbolProvider.qualified(
+                        sp.toSymbol(
+                            context.model().expectShape(info.getOperation().getInputShape())))
+                    + " input, System.Threading.CancellationToken cancellationToken = default)");
+  }
+
+  private java.util.Optional<String> paginatorItemElementType(
+      SymbolProvider sp, PaginationInfo info) {
+    List<MemberShape> path = info.getItemsMemberPath();
+    if (path.isEmpty()) {
+      return java.util.Optional.empty();
+    }
+    var target = context.model().expectShape(path.get(path.size() - 1).getTarget());
+    if (!target.isListShape()) {
+      return java.util.Optional.empty();
+    }
+    var element = context.model().expectShape(target.asListShape().get().getMember().getTarget());
+    return java.util.Optional.of(CSharpSymbolProvider.qualified(sp.toSymbol(element)));
+  }
+
+  /** Renders a null-safe property access chain for a member path, e.g. {@code output.A?.B}. */
+  private static String memberPathExpr(String root, List<MemberShape> path) {
+    StringBuilder expr = new StringBuilder(root);
+    for (int i = 0; i < path.size(); i++) {
+      expr.append(i == 0 ? "." : "?.")
+          .append(CSharpNaming.propertyName(path.get(i).getMemberName()));
+    }
+    return expr.toString();
+  }
+
+  /**
+   * Renders the paginator methods for one {@code @paginated} operation. Pages repeat the unary call
+   * while the response carries a continuation token, so every page flows through the normal client
+   * lifecycle (auth, retries, endpoint resolution, telemetry).
+   */
+  private void writePaginatorMethods(SymbolProvider sp, OperationShape op, PaginationInfo info) {
+    String opName = CSharpNaming.typeName(op.getId().getName());
+    String tokenProperty = CSharpNaming.propertyName(info.getInputTokenMember().getMemberName());
+    String outputTokenExpr = memberPathExpr("output", info.getOutputTokenMemberPath());
+
+    writer.write(
+        "public async $L",
+        paginatorPagesSignature(sp, op)
+            .replace(
+                "System.Threading.CancellationToken cancellationToken",
+                "[System.Runtime.CompilerServices.EnumeratorCancellation]"
+                    + " System.Threading.CancellationToken cancellationToken"));
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write("System.ArgumentNullException.ThrowIfNull(input);");
+          writer.write(
+              "var output = await $LAsync(input, cancellationToken).ConfigureAwait(false);",
+              opName);
+          writer.write("yield return output;");
+          writer.write("var token = $L;", outputTokenExpr);
+          writer.write("while (token is not null)");
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                writer.write("input = input with { $L = token };", tokenProperty);
+                writer.write(
+                    "output = await $LAsync(input, cancellationToken).ConfigureAwait(false);",
+                    opName);
+                writer.write("yield return output;");
+                writer.write("token = $L;", outputTokenExpr);
+              });
+        });
+    writer.write("");
+
+    paginatorItemsSignature(sp, info)
+        .ifPresent(
+            signature -> {
+              String itemsExpr = memberPathExpr("page", info.getItemsMemberPath());
+              writer.write(
+                  "public async $L",
+                  signature.replace(
+                      "System.Threading.CancellationToken cancellationToken",
+                      "[System.Runtime.CompilerServices.EnumeratorCancellation]"
+                          + " System.Threading.CancellationToken cancellationToken"));
+              writer.openBlock(
+                  "{",
+                  "}",
+                  () -> {
+                    writer.write(
+                        "await foreach (var page in $LPagesAsync(input,"
+                            + " cancellationToken).ConfigureAwait(false))",
+                        opName);
+                    writer.openBlock(
+                        "{",
+                        "}",
+                        () -> {
+                          writer.write("var items = $L;", itemsExpr);
+                          writer.write("if (items is null)");
+                          writer.openBlock("{", "}", () -> writer.write("continue;"));
+                          writer.write("foreach (var item in items.Values)");
+                          writer.openBlock("{", "}", () -> writer.write("yield return item;"));
+                        });
+                  });
+              writer.write("");
+            });
   }
 
   // =====================================================================

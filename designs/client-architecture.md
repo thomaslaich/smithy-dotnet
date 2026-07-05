@@ -296,9 +296,12 @@ dimensions.
 ## Pagination
 
 Operations with `@paginated` generate paginator helpers that return
-`IAsyncEnumerable<T>`. Paginators use the normal client lifecycle for each page,
-so auth, retries, endpoint resolution, and telemetry behave like any other
-operation call.
+`IAsyncEnumerable<T>`: `{Operation}PagesAsync` yields each response page while
+the response carries a continuation token, and — when the trait names an
+`items` list member — `{Operation}ItemsAsync` flattens the pages into their
+items. Paginators use the normal client lifecycle for each page, so auth,
+retries, endpoint resolution, and telemetry behave like any other operation
+call.
 
 ## Streaming
 
