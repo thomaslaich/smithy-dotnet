@@ -17,6 +17,9 @@
   <ItemGroup>
     <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.4.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="0.4.0-SNAPSHOT" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.16.0" />
     <ProjectReference Include="../contracts/NSmithy.Examples.RestJson1.Contracts.csproj" />
   </ItemGroup>
 </Project>
