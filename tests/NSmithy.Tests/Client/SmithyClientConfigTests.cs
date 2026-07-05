@@ -10,10 +10,12 @@ public sealed class SmithyClientConfigTests
         var interceptor = new NoopInterceptor();
         var strategy = new SmithySimpleRetryStrategy();
         var authScheme = new HttpBearerAuthScheme("token");
+        var endpointResolver = new StaticEndpointResolver(new Uri("https://api.example.com"));
         Func<string> tokenProvider = static () => "token-1";
         var source = new TestConfig
         {
             Endpoint = new Uri("https://api.example.com"),
+            EndpointResolver = endpointResolver,
             RetryStrategy = strategy,
             OperationTimeout = TimeSpan.FromSeconds(10),
             IdempotencyTokenProvider = tokenProvider,
@@ -24,6 +26,7 @@ public sealed class SmithyClientConfigTests
         var copy = new TestConfig(source);
 
         Assert.Equal(source.Endpoint, copy.Endpoint);
+        Assert.Same(endpointResolver, copy.EndpointResolver);
         Assert.Equal(TimeSpan.FromSeconds(10), copy.OperationTimeout);
         // Shallow on purpose: shared strategy instances share client-wide state (retry quota).
         Assert.Same(strategy, copy.RetryStrategy);

@@ -18,10 +18,14 @@ var client = new WeatherClient(
     });
 ```
 
-At construction time, NSmithy compares your configured schemes with the auth
-schemes modeled by the service. It installs the first modeled scheme for which
-you supplied runtime configuration. If `AuthSchemes` is empty, requests are sent
-anonymously.
+At construction time, NSmithy validates your configured schemes against the
+auth schemes modeled by the service and prepares one signer per configured
+scheme. On each call it selects the first of the *operation's* effective
+modeled schemes (a per-operation `@auth` trait overrides the service default)
+for which you supplied configuration; operations modeled as anonymous send no
+credentials, and an [endpoint resolver](/smithy-dotnet/guides/client-configuration/)
+can narrow the candidate schemes per endpoint. If `AuthSchemes` is empty,
+requests are sent anonymously.
 
 The generated client sends credentials. Server-side authorization is still
 application code in this preview: generated ASP.NET Core handlers can read

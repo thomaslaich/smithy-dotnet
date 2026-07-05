@@ -24,6 +24,7 @@ public class SmithyClientConfig
 
         Endpoint = source.Endpoint;
         Protocol = source.Protocol;
+        EndpointResolver = source.EndpointResolver;
         RetryStrategy = source.RetryStrategy;
         OperationTimeout = source.OperationTimeout;
         IdempotencyTokenProvider = source.IdempotencyTokenProvider;
@@ -47,6 +48,14 @@ public class SmithyClientConfig
 
     /// <summary>The wire protocol; defaults to the service's primary declared protocol.</summary>
     public IProtocol? Protocol { get; set; }
+
+    /// <summary>
+    /// Per-operation endpoint resolution. When set it overrides the static
+    /// <see cref="Endpoint"/> for request routing (an endpoint is still required at
+    /// construction); the resolver runs once per invocation and can vary the endpoint by
+    /// operation, add endpoint headers, and narrow auth schemes.
+    /// </summary>
+    public IEndpointResolver? EndpointResolver { get; set; }
 
     /// <summary>Protocol-agnostic hooks for observing and modifying client execution.</summary>
     public IList<IClientInterceptor> Interceptors { get; } = [];

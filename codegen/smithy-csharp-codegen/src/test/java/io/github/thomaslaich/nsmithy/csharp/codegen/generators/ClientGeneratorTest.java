@@ -113,6 +113,69 @@ final class ClientGeneratorTest {
             "private readonly SmithyEventStreamOperationInvoker eventStreamInvoker;"));
   }
 
+  private static final String REST_PROTOCOL_TRAITS =
+      """
+      $version: "2"
+
+      namespace aws.protocols
+
+      use smithy.api#protocolDefinition
+      use smithy.api#trait
+
+      @trait(selector: "service")
+      @protocolDefinition
+      structure restJson1 {}
+      """;
+
+  private static final String AUTH_MODEL =
+      """
+      $version: "2"
+
+      namespace example.auth
+
+      use aws.protocols#restJson1
+
+      @restJson1
+      @httpBearerAuth
+      @httpApiKeyAuth(name: "x-api-key", in: "header")
+      service Secured {
+          version: "1"
+          operations: [ReadThing, AdminThing]
+      }
+
+      @http(method: "GET", uri: "/thing")
+      operation ReadThing {
+          input := {}
+          output := {}
+      }
+
+      @auth([httpApiKeyAuth])
+      @http(method: "GET", uri: "/admin")
+      operation AdminThing {
+          input := {}
+          output := {}
+      }
+      """;
+
+  @Test
+  void operationBindingsCarryEffectiveAuthSchemes() throws Exception {
+    String generated =
+        renderClient(REST_PROTOCOL_TRAITS, AUTH_MODEL, "example.auth#Secured", "Example.Auth");
+
+    // ReadThing inherits the service's effective schemes (alphabetical by shape id).
+    assertTrue(
+        generated.contains(
+            "serviceProtocol.ForOperation(Example.Example.Auth.ReadThingSchema.Schema), new"
+                + " string[] { \"smithy.api#httpApiKeyAuth\", \"smithy.api#httpBearerAuth\" });"),
+        generated);
+    // AdminThing's @auth trait overrides the service default.
+    assertTrue(
+        generated.contains(
+            "serviceProtocol.ForOperation(Example.Example.Auth.AdminThingSchema.Schema), new"
+                + " string[] { \"smithy.api#httpApiKeyAuth\" });"),
+        generated);
+  }
+
   @Test
   void endpointConstructorCopiesCallerConfig() throws Exception {
     String generated = renderClient();
@@ -131,20 +194,29 @@ final class ClientGeneratorTest {
   }
 
   private String renderClient() throws Exception {
+    return renderClient(
+        PROTOCOL_TRAITS, MODEL, "example.streaming#StreamingService", "Example.Streaming");
+  }
+
+  private String renderClient(
+      String protocolTraits, String serviceModel, String serviceId, String writerNamespace)
+      throws Exception {
     Model model =
         Model.assembler()
-            .addUnparsedModel("protocol-traits.smithy", PROTOCOL_TRAITS)
-            .addUnparsedModel("model.smithy", MODEL)
+            .addUnparsedModel("protocol-traits.smithy", protocolTraits)
+            .addUnparsedModel("model.smithy", serviceModel)
             .assemble()
             .unwrap();
     CSharpSettings settings =
         CSharpSettings.fromNode(
             ObjectNode.builder()
-                .withMember("service", Node.from("example.streaming#StreamingService"))
+                .withMember("service", Node.from(serviceId))
                 .withMember("baseNamespace", Node.from("Example"))
                 .build());
     var symbolProvider = new CSharpSymbolProvider(model, settings);
-    var manifest = FileManifest.create(Files.createDirectory(tempDir.resolve("manifest")));
+    var manifest =
+        FileManifest.create(
+            Files.createDirectory(tempDir.resolve("manifest-" + serviceId.replace('#', '-'))));
     var context =
         GenerationContext.builder()
             .model(model)
@@ -153,9 +225,8 @@ final class ClientGeneratorTest {
             .fileManifest(manifest)
             .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
             .build();
-    var writer = new CSharpWriter("Example.Streaming");
-    var service =
-        model.expectShape(ShapeId.from("example.streaming#StreamingService"), ServiceShape.class);
+    var writer = new CSharpWriter(writerNamespace);
+    var service = model.expectShape(ShapeId.from(serviceId), ServiceShape.class);
 
     new ClientGenerator(context, writer, service).run();
 

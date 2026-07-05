@@ -14,9 +14,9 @@ The desired shape is:
 ```text
 start execution
   -> create execution context
+  -> resolve endpoint and select auth scheme
   -> run before-execution interceptors
   -> prepare typed input
-  -> resolve endpoint
   -> serialize request
   -> resolve auth identity and signer
   -> sign request
@@ -25,6 +25,9 @@ start execution
   -> run completion interceptors
   -> return typed output
 ```
+
+Endpoint resolution and auth scheme selection run before the before-execution
+interceptors so every hook observes the effective endpoint in the context.
 
 Retries wrap the attempt portion of the lifecycle. Telemetry observes both the
 overall execution and individual attempts.
@@ -154,28 +157,42 @@ concurrent calls unless explicitly documented otherwise.
 
 ## Endpoint Resolution
 
-Endpoint resolution can be per operation. The resolver sees operation metadata,
-client config, and typed input:
+Endpoint resolution can be per operation. The resolver sees the operation's
+Smithy identifiers, the statically configured endpoint, and the typed input;
+it is async so discovery-style resolvers can do I/O:
 
 ```csharp
 public interface IEndpointResolver
 {
-    Endpoint ResolveEndpoint(EndpointParameters parameters);
+    ValueTask<SmithyEndpoint> ResolveEndpointAsync(
+        SmithyEndpointParameters parameters,
+        CancellationToken cancellationToken = default);
 }
 
-public sealed record Endpoint(
+public sealed record SmithyEndpoint(
     Uri Uri,
-    IReadOnlyDictionary<string, string> Headers,
+    IReadOnlyDictionary<string, string>? Headers = null,
     IReadOnlyList<string>? AuthSchemes = null);
+
+public sealed record SmithyEndpointParameters(
+    ShapeId ServiceId,
+    ShapeId OperationId,
+    Uri? ConfiguredEndpoint,
+    object? Input);
 ```
 
-A static `Config.Endpoint` is the simplest resolver and takes precedence when
-set explicitly. Static endpoints are resolved once at construction. Protocols
-and generated code apply host labels and operation endpoint traits through the
-same resolution path when an endpoint depends on operation metadata or input.
+A static `Config.Endpoint` is the simplest resolver (`StaticEndpointResolver`)
+and is used when no resolver is configured; `Config.EndpointResolver` overrides
+it for request routing. Resolution runs once per invocation, before
+serialization. Resolved endpoint headers are added to every request sent to
+that endpoint. Protocols and generated code apply host labels and operation
+endpoint traits through the same resolution path when an endpoint depends on
+operation metadata or input.
 
-Resolved endpoints may narrow auth schemes. That lets endpoint rules and auth
-selection compose without protocol-specific branches in generated clients.
+Resolved endpoints may narrow auth schemes: when `SmithyEndpoint.AuthSchemes`
+is non-null, only modeled schemes also present there are considered by auth
+selection. That lets endpoint rules and auth selection compose without
+protocol-specific branches in generated clients.
 
 ## Auth
 
@@ -188,7 +205,13 @@ Auth has three separable concepts:
 
 Auth schemes are keyed by Smithy auth trait shape id. Per-operation `@auth`
 overrides, endpoint-driven auth overrides, and anonymous operations all feed the
-same resolver.
+same resolver: each operation binding carries the operation's effective modeled
+scheme ids (the service default, overridden by `@auth`), the resolved endpoint
+may narrow that list, and the runtime selects the first scheme with a
+configured interceptor per invocation. Configured schemes create their
+interceptors once at client construction; selection is per call. The selected
+auth interceptor runs after user interceptors in each request phase, so signing
+sees the final request.
 
 Identity providers own caching and refresh. Signers are stateless or explicitly
 thread-safe services that operate on a request plus context.
