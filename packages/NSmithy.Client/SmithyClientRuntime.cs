@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using NSmithy.Http;
 
 namespace NSmithy.Client;
@@ -54,6 +55,27 @@ public sealed class SmithyClientRuntime(
 
         var protocol = binding.Protocol;
         var context = CreateContext(binding.ServiceId.Name, binding.OperationId.Name);
+
+        var tags = new TagList
+        {
+            { "rpc.system", "smithy" },
+            { "rpc.service", binding.ServiceId.ToString() },
+            { "rpc.method", binding.OperationId.Name },
+        };
+        using var activity = SmithyClientTelemetry.ActivitySource.StartActivity(
+            $"{binding.ServiceId.Name}.{binding.OperationId.Name}",
+            ActivityKind.Client
+        );
+        if (activity is not null)
+        {
+            foreach (var tag in tags)
+            {
+                activity.SetTag(tag.Key, tag.Value);
+            }
+        }
+
+        var startTimestamp = Stopwatch.GetTimestamp();
+
         foreach (var interceptor in interceptors)
         {
             interceptor.OnBeforeExecution(context);
@@ -73,6 +95,7 @@ public sealed class SmithyClientRuntime(
                     request,
                     protocol.DeserializeErrorAsync,
                     protocol.IsErrorResponse,
+                    tags,
                     cancellationToken
                 )
                 .ConfigureAwait(false);
@@ -119,6 +142,20 @@ public sealed class SmithyClientRuntime(
             {
                 interceptors[i].OnAfterExecution(context, executionError);
             }
+
+            if (executionError is not null)
+            {
+                activity?.SetStatus(ActivityStatusCode.Error, executionError.Message);
+                activity?.SetTag("error.type", executionError.GetType().FullName);
+                var errorTags = tags;
+                errorTags.Add("error.type", executionError.GetType().FullName);
+                SmithyClientTelemetry.Errors.Add(1, errorTags);
+            }
+
+            SmithyClientTelemetry.OperationDuration.Record(
+                Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
+                tags
+            );
         }
     }
 
@@ -127,6 +164,7 @@ public sealed class SmithyClientRuntime(
         SmithyHttpRequest request,
         Func<SmithyHttpResponse, CancellationToken, ValueTask<Exception?>> deserializeError,
         Func<SmithyHttpResponse, bool> isErrorResponse,
+        TagList tags,
         CancellationToken cancellationToken
     )
     {
@@ -136,6 +174,13 @@ public sealed class SmithyClientRuntime(
         for (var attempt = 1; ; attempt++)
         {
             context.Set(SmithyContextKeys.Attempt, attempt);
+            using var attemptActivity = SmithyClientTelemetry.ActivitySource.StartActivity(
+                "attempt",
+                ActivityKind.Internal
+            );
+            attemptActivity?.SetTag("smithy.attempt", attempt);
+            SmithyClientTelemetry.Attempts.Add(1, tags);
+
             var resolvedRequest = ApplyEndpoint(CloneRequest(request));
             var attemptRequest = await ApplyRequestInterceptorsAsync(
                     context,
@@ -154,6 +199,8 @@ public sealed class SmithyClientRuntime(
             catch (Exception transportError)
                 when (canRetry && !cancellationToken.IsCancellationRequested)
             {
+                attemptActivity?.SetStatus(ActivityStatusCode.Error, transportError.Message);
+                attemptActivity?.SetTag("error.type", transportError.GetType().FullName);
                 var decision = session!.Classify(
                     new SmithyRetryOutcome(attempt, null, transportError, context)
                 );
@@ -180,6 +227,9 @@ public sealed class SmithyClientRuntime(
             var error =
                 await deserializeError(response, cancellationToken).ConfigureAwait(false)
                 ?? new SmithyClientException(response.StatusCode, response.ReasonPhrase);
+
+            attemptActivity?.SetStatus(ActivityStatusCode.Error, error.Message);
+            attemptActivity?.SetTag("error.type", error.GetType().FullName);
 
             // The error path abandons the response, so a streaming body (which holds the live
             // HTTP connection) must be released here — whether we retry or throw.
