@@ -394,6 +394,8 @@
       GenerateDependencyInjection="$(SmithyGenerateDependencyInjection)"
       GenerateFakes="$(SmithyGenerateFakes)"
       OpenApiProtocol="$(SmithyOpenApiProtocol)"
+      GenerateAsyncApi="$(SmithyGenerateAsyncApi)"
+      AsyncApiPluginVersion="$(SmithyAsyncApiPluginVersion)"
       Grpc="$(SmithyGrpc)"
       ProtoPlugin="$(SmithyProtoPlugin)"
       OutputFile="$(_SmithySynthesizedBuildFile)"
@@ -568,6 +570,33 @@
       SourceFiles="@(_OpenApiJson)"
       DestinationFiles="$(MSBuildProjectDirectory)/wwwroot/openapi.json"
       Condition="'@(_OpenApiJson)' != ''"
+      OverwriteReadOnlyFiles="true"
+      SkipUnchangedFiles="true"
+    />
+  </Target>
+
+  <!--
+    Copy the bote AsyncAPI output to wwwroot/asyncapi.json so that ASP.NET Core's
+    static file middleware can serve it at /asyncapi.json.
+    Only runs when SmithyGenerateAsyncApi is true. Assumes a single service document
+    (the common case); for multiple services, host the files under their own names.
+  -->
+  <Target
+    Name="_CopyAsyncApiToWwwroot"
+    AfterTargets="GenerateSmithyCode"
+    Condition="'$(SmithyGenerateAsyncApi)' == 'true'"
+  >
+    <PropertyGroup>
+      <_SmithyOutputDir>$([MSBuild]::EnsureTrailingSlash('$(MSBuildProjectDirectory)'))$(SmithyBuildOutputPath)</_SmithyOutputDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_AsyncApiJson Include="$(_SmithyOutputDir)**/asyncapi/*.json" />
+    </ItemGroup>
+    <MakeDir Directories="$(MSBuildProjectDirectory)/wwwroot" Condition="'@(_AsyncApiJson)' != ''" />
+    <Copy
+      SourceFiles="@(_AsyncApiJson)"
+      DestinationFiles="$(MSBuildProjectDirectory)/wwwroot/asyncapi.json"
+      Condition="'@(_AsyncApiJson)' != ''"
       OverwriteReadOnlyFiles="true"
       SkipUnchangedFiles="true"
     />

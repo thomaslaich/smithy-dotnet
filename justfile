@@ -65,12 +65,14 @@ refresh-examples:
     # NuGet and MSBuild rather than project references, which is a path nothing else covers.
     find examples -type d -name obj -prune -exec rm -rf {} +
     dotnet restore examples/examples.slnx --no-cache --force
+    dotnet restore examples/kafka/kafka.slnx --no-cache --force
     # gRPC examples need two build passes: the first generates the .proto file via the
     # smithy build, the second picks it up via the static <Protobuf> glob and compiles
     # it with Grpc.Tools. (MSBuild evaluates Protobuf_Compile's item condition at
     # graph-build time, before dynamic items added inside target bodies are visible.)
     dotnet build examples/examples.slnx --verbosity minimal >/dev/null 2>&1 || true
     dotnet build examples/examples.slnx --verbosity minimal
+    dotnet build examples/kafka/kafka.slnx --verbosity minimal
 
 # Scaffold and build every `dotnet new` template combination against the packed packages.
 smoke-templates:

@@ -1,0 +1,166 @@
+{
+    "asyncapi": "3.1.0",
+    "info": {
+        "title": "Streetlight Device API",
+        "version": "1.0.0",
+        "description": "The streetlight device API: clients consume lighting events and produce dim commands."
+    },
+    "defaultContentType": "application/json",
+    "channels": {
+        "smartylighting.streetlights.lighting.measured": {
+            "address": "smartylighting.streetlights.lighting.measured",
+            "messages": {
+                "LightMeasured": {
+                    "$ref": "#/components/messages/LightMeasured"
+                }
+            },
+            "bindings": {
+                "kafka": {
+                    "topic": "smartylighting.streetlights.lighting.measured",
+                    "bindingVersion": "0.5.0",
+                    "partitions": 3,
+                    "replicas": 1,
+                    "topicConfiguration": {
+                        "retention.ms": 604800000
+                    }
+                }
+            }
+        },
+        "smartylighting.streetlights.action.dim": {
+            "address": "smartylighting.streetlights.action.dim",
+            "messages": {
+                "DimLightCommand": {
+                    "$ref": "#/components/messages/DimLightCommand"
+                }
+            },
+            "bindings": {
+                "kafka": {
+                    "topic": "smartylighting.streetlights.action.dim",
+                    "bindingVersion": "0.5.0"
+                }
+            }
+        }
+    },
+    "operations": {
+        "ConsumeLightingEvents": {
+            "action": "send",
+            "channel": {
+                "$ref": "#/channels/smartylighting.streetlights.lighting.measured"
+            },
+            "messages": [
+                {
+                    "$ref": "#/channels/smartylighting.streetlights.lighting.measured/messages/LightMeasured"
+                }
+            ],
+            "summary": "Consume environmental lighting events reported by streetlights."
+        },
+        "DimLight": {
+            "action": "receive",
+            "channel": {
+                "$ref": "#/channels/smartylighting.streetlights.action.dim"
+            },
+            "messages": [
+                {
+                    "$ref": "#/channels/smartylighting.streetlights.action.dim/messages/DimLightCommand"
+                }
+            ],
+            "summary": "Dim a streetlight."
+        }
+    },
+    "components": {
+        "messages": {
+            "LightMeasured": {
+                "name": "LightMeasured",
+                "title": "LightMeasured",
+                "contentType": "application/json",
+                "payload": {
+                    "type": "object",
+                    "properties": {
+                        "lightMeasured": {
+                            "$ref": "#/components/schemas/LightMeasured"
+                        }
+                    },
+                    "required": [
+                        "lightMeasured"
+                    ]
+                },
+                "summary": "Light intensity reported by a streetlight.",
+                "bindings": {
+                    "kafka": {
+                        "key": {
+                            "type": "string"
+                        },
+                        "bindingVersion": "0.5.0"
+                    }
+                },
+                "headers": {
+                    "type": "object",
+                    "properties": {
+                        "my-app-id": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "DimLightCommand": {
+                "name": "DimLightCommand",
+                "title": "DimLightCommand",
+                "contentType": "application/json",
+                "payload": {
+                    "$ref": "#/components/schemas/DimLightCommand"
+                },
+                "summary": "Command a particular streetlight to dim the lights.",
+                "bindings": {
+                    "kafka": {
+                        "key": {
+                            "type": "string"
+                        },
+                        "bindingVersion": "0.5.0"
+                    }
+                }
+            }
+        },
+        "schemas": {
+            "LightMeasured": {
+                "type": "object",
+                "description": "Light intensity reported by a streetlight.",
+                "properties": {
+                    "streetlightId": {
+                        "type": "string",
+                        "description": "Routes all measurements for one streetlight to the same partition."
+                    },
+                    "lumens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "Light intensity measured in lumens."
+                    },
+                    "sentAt": {
+                        "type": "string",
+                        "description": "Date and time when the message was sent.",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "DimLightCommand": {
+                "type": "object",
+                "description": "Command a particular streetlight to dim the lights.",
+                "properties": {
+                    "streetlightId": {
+                        "type": "string"
+                    },
+                    "percentage": {
+                        "type": "integer",
+                        "maximum": 100,
+                        "minimum": 0,
+                        "description": "Percentage to which the light should be dimmed to."
+                    },
+                    "sentAt": {
+                        "type": "string",
+                        "description": "Date and time when the message was sent.",
+                        "format": "date-time"
+                    }
+                }
+            }
+        }
+    }
+}

@@ -75,6 +75,15 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
     public string OpenApiProtocol { get; set; } = "";
 
     /// <summary>
+    /// When true, injects bote's smithy-asyncapi Maven dep and asyncapi plugin entry
+    /// so an AsyncAPI 3.1 document is generated for bote messaging services.
+    /// </summary>
+    public bool GenerateAsyncApi { get; set; }
+
+    /// <summary>Version of the io.github.thomaslaich.bote:smithy-asyncapi plugin.</summary>
+    public string AsyncApiPluginVersion { get; set; } = "";
+
+    /// <summary>
     /// When true, injects the smithy-proto-codegen Maven dep and the proto-codegen
     /// plugin entry so a .proto file is generated for gRPC services.
     /// </summary>
@@ -149,6 +158,9 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
 
         if (!string.IsNullOrEmpty(OpenApiProtocol))
             deps.Add($"software.amazon.smithy:smithy-openapi:{SmithyVersion}");
+
+        if (GenerateAsyncApi)
+            deps.Add($"io.github.thomaslaich.bote:smithy-asyncapi:{AsyncApiPluginVersion}");
 
         // smithy-proto-codegen is released in lockstep with smithy-csharp-codegen,
         // so it shares the same version. Skip if the contracts already declare it.
@@ -256,6 +268,14 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
             writer.WriteStartObject();
             writer.WriteString("service", Service);
             writer.WriteString("protocol", OpenApiProtocol);
+            writer.WriteEndObject();
+        }
+
+        if (GenerateAsyncApi)
+        {
+            writer.WritePropertyName("asyncapi");
+            writer.WriteStartObject();
+            writer.WriteString("service", Service);
             writer.WriteEndObject();
         }
 

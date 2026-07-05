@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/device.contracts/">
+    <Project Path="device.contracts/NSmithy.Examples.Kafka.Device.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/device/">
+    <Project Path="device/NSmithy.Examples.Kafka.Device.csproj" />
+  </Folder>
+  <Folder Name="/controller/">
+    <Project Path="controller/NSmithy.Examples.Kafka.Controller.csproj" />
+  </Folder>
+  <Folder Name="/device.docs/">
+    <Project Path="device.docs/NSmithy.Examples.Kafka.Device.Docs.csproj" />
+  </Folder>
+</Solution>
