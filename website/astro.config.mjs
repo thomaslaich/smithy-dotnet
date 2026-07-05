@@ -113,6 +113,7 @@ export default defineConfig({
 						{ label: 'Overview', slug: 'protocols/overview' },
 						{ label: 'REST JSON', slug: 'protocols/rest-json' },
 						{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor' },
+						{ label: 'gRPC', slug: 'protocols/grpc' },
 						{
 							label: 'AWS protocols',
 							items: [
@@ -123,7 +124,14 @@ export default defineConfig({
 								{ label: 'AWS restXml', slug: 'protocols/rest-xml' },
 							],
 						},
-						{ label: 'gRPC', slug: 'protocols/grpc' },
+						{
+							label: 'bote protocols',
+							items: [
+								{ label: 'Overview', slug: 'protocols/bote-overview' },
+								{ label: 'Kafka JSON', slug: 'protocols/bote-kafka-json' },
+								{ label: 'Redis JSON', slug: 'protocols/bote-redis-json' },
+							],
+						},
 						{ label: 'Protocol status', slug: 'protocols/status' },
 					],
 				},
