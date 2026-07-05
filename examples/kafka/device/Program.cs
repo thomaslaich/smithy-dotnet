@@ -1,61 +1,40 @@
 using Confluent.Kafka;
 using Examples.Kafka.Streetlights;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 // The device owns the StreetlightDevice contract: it EMITS LightMeasured events
 // and HANDLES DimLight commands sent by controllers.
+//
+// It runs as a generic host using the generated hosting extensions
+// (SmithyGenerateDependencyInjection=true): AddStreetlightDeviceProducer registers
+// the producer as a singleton, AddStreetlightDeviceCommandConsumer runs the command
+// consumer for the host lifetime, and the registered IStreetlightDeviceCommandHandler
+// is resolved in a new service scope per message.
 var bootstrap = args.Length > 0 ? args[0] : "localhost:9092";
-const string streetlightId = "streetlight-001";
 
-using var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (_, e) =>
-{
-    e.Cancel = true;
-    cts.Cancel();
-};
+var builder = Host.CreateApplicationBuilder(args);
 
-var producerConfig = new ProducerConfig
-{
-    BootstrapServers = bootstrap,
-    BrokerAddressFamily = BrokerAddressFamily.V4,
-};
-var consumerConfig = new ConsumerConfig
-{
-    BootstrapServers = bootstrap,
-    GroupId = "streetlight-device",
-    AutoOffsetReset = AutoOffsetReset.Earliest,
-    BrokerAddressFamily = BrokerAddressFamily.V4,
-};
-
-await using var producer = new StreetlightDeviceProducer(producerConfig);
-await using var commands = new StreetlightDeviceCommandConsumer(consumerConfig, new DimLightHandler());
+builder.Services.AddStreetlightDeviceProducer(
+    new ProducerConfig { BootstrapServers = bootstrap, BrokerAddressFamily = BrokerAddressFamily.V4 }
+);
+builder.Services.AddStreetlightDeviceCommandConsumer(
+    new ConsumerConfig
+    {
+        BootstrapServers = bootstrap,
+        GroupId = "streetlight-device",
+        AutoOffsetReset = AutoOffsetReset.Earliest,
+        BrokerAddressFamily = BrokerAddressFamily.V4,
+    }
+);
+builder.Services.AddScoped<IStreetlightDeviceCommandHandler, DimLightHandler>();
+builder.Services.AddHostedService<LightMeasuredEmitter>();
 
 Console.WriteLine(
     "[device] online — handling DimLight commands and emitting LightMeasured events. Ctrl+C to stop."
 );
 
-// Handle incoming dim commands in the background.
-var handling = commands.RunAsync(cts.Token);
-
-// Emit a lighting measurement every few seconds.
-var rng = new Random();
-try
-{
-    while (!cts.Token.IsCancellationRequested)
-    {
-        var measured = new LightMeasured(
-            AppId: "device-firmware",
-            Lumens: rng.Next(0, 1000),
-            SentAt: DateTimeOffset.UtcNow,
-            StreetlightId: streetlightId
-        );
-        await producer.PublishLightMeasuredAsync(measured, cts.Token);
-        Console.WriteLine($"[device] emitted LightMeasured  lumens={measured.Lumens}");
-        await Task.Delay(TimeSpan.FromSeconds(3), cts.Token);
-    }
-}
-catch (OperationCanceledException) { }
-
-await handling;
+await builder.Build().RunAsync();
 Console.WriteLine("[device] stopped.");
 
 sealed class DimLightHandler : IStreetlightDeviceCommandHandler
@@ -69,5 +48,32 @@ sealed class DimLightHandler : IStreetlightDeviceCommandHandler
             $"[device] DimLight received  streetlight={command.StreetlightId} -> {command.Percentage}%"
         );
         return Task.CompletedTask;
+    }
+}
+
+/// <summary>Emits a lighting measurement every few seconds via the singleton producer.</summary>
+sealed class LightMeasuredEmitter(StreetlightDeviceProducer producer) : BackgroundService
+{
+    private const string StreetlightId = "streetlight-001";
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var rng = new Random();
+        try
+        {
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                var measured = new LightMeasured(
+                    AppId: "device-firmware",
+                    Lumens: rng.Next(0, 1000),
+                    SentAt: DateTimeOffset.UtcNow,
+                    StreetlightId: StreetlightId
+                );
+                await producer.PublishLightMeasuredAsync(measured, stoppingToken);
+                Console.WriteLine($"[device] emitted LightMeasured  lumens={measured.Lumens}");
+                await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
     }
 }

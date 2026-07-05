@@ -6,6 +6,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ErrorGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeClientGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeHandlerGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.IntEnumGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.generators.KafkaDependencyInjectionGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.KafkaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ListGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.MapGenerator;
@@ -147,6 +148,17 @@ final class DirectedCSharpCodegen
               dir + "/" + typeName + "Kafka.g.cs",
               csNamespace,
               writer -> new KafkaGenerator(ctx, writer, directive.shape()).run());
+
+      // Opt-in Microsoft.Extensions hosting registrations for the Kafka SDK, gated the same
+      // way as the HTTP client DI file (the file pulls in Microsoft.Extensions.*).
+      if (ctx.settings().generateDependencyInjection()) {
+        ctx.writerDelegator()
+            .useFileWriter(
+                dir + "/" + typeName + "Kafka.DependencyInjection.g.cs",
+                csNamespace,
+                writer ->
+                    new KafkaDependencyInjectionGenerator(ctx, writer, directive.shape()).run());
+      }
     }
   }
 
