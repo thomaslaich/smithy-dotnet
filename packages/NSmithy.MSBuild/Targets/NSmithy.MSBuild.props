@@ -27,5 +27,15 @@
       Example: <SmithyOpenApiProtocol>aws.protocols#restJson1</SmithyOpenApiProtocol>
     -->
     <SmithyOpenApiProtocol Condition="'$(SmithyOpenApiProtocol)' == ''"></SmithyOpenApiProtocol>
+    <!--
+      Set to 'true' to add bote's AsyncAPI generator (io.github.thomaslaich.bote:smithy-asyncapi) to the
+      synthesized smithy-build.json and copy the generated AsyncAPI document to
+      wwwroot/asyncapi.json. Only meaningful for bote messaging services
+      (e.g. @kafkaJson).
+      Example: <SmithyGenerateAsyncApi>true</SmithyGenerateAsyncApi>
+    -->
+    <SmithyGenerateAsyncApi Condition="'$(SmithyGenerateAsyncApi)' == ''">false</SmithyGenerateAsyncApi>
+    <!-- Maven version of the io.github.thomaslaich.bote:smithy-asyncapi plugin injected when SmithyGenerateAsyncApi=true. -->
+    <SmithyAsyncApiPluginVersion Condition="'$(SmithyAsyncApiPluginVersion)' == ''">0.1.0-SNAPSHOT</SmithyAsyncApiPluginVersion>
   </PropertyGroup>
 </Project>

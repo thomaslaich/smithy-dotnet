@@ -1,0 +1,7 @@
+example/orders.smithy
+bote.infra/kafka-topic-config.smithy
+bote/messaging-traits.smithy
+bote/kafka-traits.smithy
+bote/kafka-avro.smithy
+bote/kafka-protobuf.smithy
+bote/kafka-json.smithy

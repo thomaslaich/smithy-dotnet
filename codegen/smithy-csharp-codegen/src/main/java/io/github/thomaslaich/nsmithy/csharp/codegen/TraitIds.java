@@ -25,6 +25,21 @@ public final class TraitIds {
   public static final ShapeId PROTO_INDEX = ShapeId.from("alloy.proto#protoIndex");
   public static final ShapeId XML_NAME = ShapeId.from("smithy.api#xmlName");
   public static final ShapeId PROMPTS = ShapeId.from("smithy.ai#prompts");
+  public static final ShapeId STREAMING = ShapeId.from("smithy.api#streaming");
+
+  // bote protocol + messaging traits
+  public static final ShapeId KAFKA_JSON = ShapeId.from("bote#kafkaJson");
+  // Kafka capability traits: they carry the topic on the operation.
+  public static final ShapeId KAFKA_PRODUCE = ShapeId.from("bote#kafkaProduce");
+  public static final ShapeId KAFKA_CONSUME = ShapeId.from("bote#kafkaConsume");
+  // Message-kind traits classifying payload structures.
+  public static final ShapeId EVENT = ShapeId.from("bote#event");
+  public static final ShapeId COMMAND = ShapeId.from("bote#command");
+  public static final ShapeId REPLY = ShapeId.from("bote#reply");
+  // Kafka decoration traits.
+  public static final ShapeId KAFKA_TOPIC_CONFIG = ShapeId.from("bote.infra#kafkaTopicConfig");
+  public static final ShapeId KAFKA_KEY = ShapeId.from("bote#kafkaKey");
+  public static final ShapeId KAFKA_HEADER = ShapeId.from("bote#kafkaHeader");
 
   private TraitIds() {}
 }

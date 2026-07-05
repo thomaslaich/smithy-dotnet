@@ -6,6 +6,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ErrorGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeClientGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeHandlerGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.IntEnumGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.generators.KafkaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ListGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.MapGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.OperationSchemaGenerator;
@@ -15,6 +16,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StringEnumGenerat
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StructureGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.UnionGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;
 import software.amazon.smithy.codegen.core.CodegenException;
@@ -67,72 +69,84 @@ final class DirectedCSharpCodegen
     String typeName = CSharpNaming.typeName(directive.shape().getId().getName());
     String dir = csNamespace.replace('.', '/');
 
-    // The service schema is consumed by both client and server, so it has no ".Client"/".Server"
-    // suffix and is always compiled.
-    ctx.writerDelegator()
-        .useFileWriter(
-            dir + "/" + typeName + ".Schema.g.cs",
-            csNamespace,
-            writer -> new ServiceSchemaGenerator(writer, directive.shape()).run());
-
-    // Service-level files use a dotted ".Client"/".Server" suffix so the MSBuild
-    // include/exclude globs (*.Client.g.cs / *.Server.g.cs) can distinguish them from
-    // shape files for operations whose names happen to end in "Client" or "Server". Each half is
-    // gated by settings so a client- or server-only project never writes the half it discards —
-    // the MSBuild compile-time exclusion is then belt-and-suspenders.
-    if (ctx.settings().generateClient()) {
+    // Kafka services get their own SDK (producer + consumers) below; the schema,
+    // HTTP client, and ASP.NET Core server files only make sense for HTTP/gRPC services.
+    if (!ProtocolSupport.isKafkaJsonService(directive.shape())) {
+      // The service schema is consumed by both client and server, so it has no ".Client"/".Server"
+      // suffix and is always compiled.
       ctx.writerDelegator()
           .useFileWriter(
-              dir + "/" + typeName + ".Client.g.cs",
+              dir + "/" + typeName + ".Schema.g.cs",
               csNamespace,
-              writer -> new ClientGenerator(ctx, writer, directive.shape()).run());
-    }
+              writer -> new ServiceSchemaGenerator(writer, directive.shape()).run());
 
-    if (ctx.settings().generateServer()) {
-      ctx.writerDelegator()
-          .useFileWriter(
-              dir + "/" + typeName + ".Server.g.cs",
-              csNamespace,
-              writer -> new ServerGenerator(ctx, writer, directive.shape()).run());
-    }
-
-    // Opt-in fakes, one per generated surface: the fake handler implements the ".Server" half's
-    // handler interfaces and the fake client the ".Client" half's client interface, so each fake
-    // exists only alongside its surface. The ".Fakes.Server"/".Fakes.Client" suffixes keep the
-    // files inside the MSBuild *.Server.g.cs / *.Client.g.cs include/exclude globs.
-    if (ctx.settings().generateFakes()) {
-      if (!ctx.settings().generateServer() && !ctx.settings().generateClient()) {
-        throw new CodegenException(
-            "generateFakes requires generateServer or generateClient: the fakes implement the"
-                + " generated server handler and client interfaces.");
-      }
-      if (ctx.settings().generateServer()) {
-        ctx.writerDelegator()
-            .useFileWriter(
-                dir + "/" + typeName + ".Fakes.Server.g.cs",
-                csNamespace,
-                writer -> new FakeHandlerGenerator(ctx, writer, directive.shape()).run());
-      }
+      // Service-level files use a dotted ".Client"/".Server" suffix so the MSBuild
+      // include/exclude globs (*.Client.g.cs / *.Server.g.cs) can distinguish them from
+      // shape files for operations whose names happen to end in "Client" or "Server". Each half is
+      // gated by settings so a client- or server-only project never writes the half it discards —
+      // the MSBuild compile-time exclusion is then belt-and-suspenders.
       if (ctx.settings().generateClient()) {
         ctx.writerDelegator()
             .useFileWriter(
-                dir + "/" + typeName + ".Fakes.Client.g.cs",
+                dir + "/" + typeName + ".Client.g.cs",
                 csNamespace,
-                writer -> new FakeClientGenerator(ctx, writer, directive.shape()).run());
+                writer -> new ClientGenerator(ctx, writer, directive.shape()).run());
+      }
+
+      if (ctx.settings().generateServer()) {
+        ctx.writerDelegator()
+            .useFileWriter(
+                dir + "/" + typeName + ".Server.g.cs",
+                csNamespace,
+                writer -> new ServerGenerator(ctx, writer, directive.shape()).run());
+      }
+
+      // Opt-in fakes, one per generated surface: the fake handler implements the ".Server" half's
+      // handler interfaces and the fake client the ".Client" half's client interface, so each fake
+      // exists only alongside its surface. The ".Fakes.Server"/".Fakes.Client" suffixes keep the
+      // files inside the MSBuild *.Server.g.cs / *.Client.g.cs include/exclude globs.
+      if (ctx.settings().generateFakes()) {
+        if (!ctx.settings().generateServer() && !ctx.settings().generateClient()) {
+          throw new CodegenException(
+              "generateFakes requires generateServer or generateClient: the fakes implement the"
+                  + " generated server handler and client interfaces.");
+        }
+        if (ctx.settings().generateServer()) {
+          ctx.writerDelegator()
+              .useFileWriter(
+                  dir + "/" + typeName + ".Fakes.Server.g.cs",
+                  csNamespace,
+                  writer -> new FakeHandlerGenerator(ctx, writer, directive.shape()).run());
+        }
+        if (ctx.settings().generateClient()) {
+          ctx.writerDelegator()
+              .useFileWriter(
+                  dir + "/" + typeName + ".Fakes.Client.g.cs",
+                  csNamespace,
+                  writer -> new FakeClientGenerator(ctx, writer, directive.shape()).run());
+        }
+      }
+
+      // Opt-in IHttpClientFactory registration. Generated only when requested
+      // (generateDependencyInjection), because the file pulls in Microsoft.Extensions.Http — a
+      // dependency plain clients must not be forced to carry. Gating generation (rather than
+      // compilation) means the file simply does not exist unless asked for.
+      if (ctx.settings().generateDependencyInjection()) {
+        ctx.writerDelegator()
+            .useFileWriter(
+                dir + "/" + typeName + ".DependencyInjection.g.cs",
+                csNamespace,
+                writer ->
+                    new ClientDependencyInjectionGenerator(ctx, writer, directive.shape()).run());
       }
     }
 
-    // Opt-in IHttpClientFactory registration. Generated only when requested
-    // (generateDependencyInjection), because the file pulls in Microsoft.Extensions.Http — a
-    // dependency plain clients must not be forced to carry. Gating generation (rather than
-    // compilation) means the file simply does not exist unless asked for.
-    if (ctx.settings().generateDependencyInjection()) {
+    if (ProtocolSupport.emitsKafka(directive.shape())) {
       ctx.writerDelegator()
           .useFileWriter(
-              dir + "/" + typeName + ".DependencyInjection.g.cs",
+              dir + "/" + typeName + "Kafka.g.cs",
               csNamespace,
-              writer ->
-                  new ClientDependencyInjectionGenerator(ctx, writer, directive.shape()).run());
+              writer -> new KafkaGenerator(ctx, writer, directive.shape()).run());
     }
   }
 

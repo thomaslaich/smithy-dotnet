@@ -78,12 +78,20 @@ public final class ProtocolSupport {
     return s.findTrait(TraitIds.GRPC).isPresent();
   }
 
+  public static boolean isKafkaJsonService(ServiceShape s) {
+    return s.findTrait(TraitIds.KAFKA_JSON).isPresent();
+  }
+
   public static boolean emitsAspNetCoreServer(ServiceShape s) {
     return emitsHttpAspNetCoreServer(s) || isGrpcService(s);
   }
 
   public static boolean emitsHttpAspNetCoreServer(ServiceShape s) {
     return isSimpleRestJsonService(s) || isRestJson1Service(s) || isRpcV2CborService(s);
+  }
+
+  public static boolean emitsKafka(ServiceShape s) {
+    return isKafkaJsonService(s);
   }
 
   public static Kind kindOf(ServiceShape s) {
