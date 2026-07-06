@@ -1,8 +1,20 @@
 using Example.Weather;
 using NSmithy.Server.AspNetCore.Docs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddWeatherServiceHandler<WeatherHandler>();
+
+// Export server telemetry over OTLP (defaults to http://localhost:4317, where
+// grafana/otel-lgtm listens). Incoming requests carry the client's trace
+// context, so server spans join the client runtime's operation traces.
+builder
+    .Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService("weather-server"))
+    .WithTracing(tracing => tracing.AddAspNetCoreInstrumentation().AddOtlpExporter())
+    .WithMetrics(metrics => metrics.AddAspNetCoreInstrumentation().AddOtlpExporter());
 
 var app = builder.Build();
 app.MapSmithyOpenApi();
@@ -82,4 +94,19 @@ internal sealed class WeatherHandler : IWeatherServiceHandler
         GetForecastInput input,
         CancellationToken cancellationToken = default
     ) => Task.FromResult(new GetForecastOutput(ChanceOfRain: 0.4f));
+
+    private int flakyCalls;
+
+    public Task<GetFlakyForecastOutput> GetFlakyForecastAsync(
+        GetFlakyForecastInput input,
+        CancellationToken cancellationToken = default
+    )
+    {
+        // Fail two of every three calls with the retryable modeled error, so a client with a
+        // retry strategy succeeds after visible retries (see the attempt spans in Grafana).
+        if (Interlocked.Increment(ref flakyCalls) % 3 != 0)
+            throw new ServiceUnavailable("The forecast backend is overloaded; try again.");
+
+        return Task.FromResult(new GetFlakyForecastOutput(ChanceOfRain: 0.4f));
+    }
 }

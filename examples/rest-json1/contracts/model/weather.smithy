@@ -13,7 +13,7 @@ use aws.protocols#restJson1
 service Weather {
     version: "2006-03-01"
     resources: [City]
-    operations: [GetCurrentTime]
+    operations: [GetCurrentTime, GetFlakyForecast]
 }
 
 /// A city with a geographic location and an associated weather forecast.
@@ -127,10 +127,41 @@ structure CitySummary {
     name: String
 }
 
+/// Returns the weather forecast for a city from an unreliable backend.
+///
+/// The server fails transiently on a schedule, returning the retryable
+/// `ServiceUnavailable` error. With a retry strategy configured, the generated
+/// client retries these failures automatically — this operation exists to
+/// demonstrate retries and per-attempt telemetry.
+@readonly
+@http(method: "GET", uri: "/cities/{cityId}/flaky-forecast")
+operation GetFlakyForecast {
+    input := {
+        @required
+        @httpLabel
+        cityId: CityId
+    }
+    output := {
+        /// Probability of rain, between 0.0 (no rain) and 1.0 (certain rain).
+        chanceOfRain: Float
+    }
+    errors: [ServiceUnavailable]
+}
+
 /// Returned when a requested resource does not exist.
 @error("client")
 structure NoSuchResource {
     /// The type of resource that was not found (e.g. `"City"`).
     @required
     resourceType: String
+}
+
+/// Returned when the service is temporarily unable to serve the request.
+/// Marked `@retryable`, so retry strategies treat it as transient regardless
+/// of protocol or status code.
+@error("server")
+@httpError(503)
+@retryable
+structure ServiceUnavailable {
+    message: String
 }
