@@ -226,30 +226,18 @@ public sealed class SmithyClientTelemetryTests : IDisposable
         }
     }
 
-    private sealed class TextProtocol : IOperationProtocol<string, string>
+    private sealed class TextProtocol : IClientOperationProtocol<string, string>
     {
         public SmithyHttpRequest SerializeRequest(string input) =>
             new(HttpMethod.Post, $"/{input}");
 
         public string DeserializeResponse(SmithyHttpResponse response) => "output";
 
-        public string DeserializeRequest(SmithyHttpRequest request) => request.RequestUri;
-
-        public SmithyHttpResponse SerializeResponse(string output) => Ok();
-
         public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
 
-        public string? GetErrorDiscriminator(SmithyHttpResponse response) => null;
-
-        public bool RequiresErrorDiscriminator => false;
-
-        public bool SupportsHttpStatusErrorFallback => true;
-
-        public SmithyHttpResponse SerializeError<TError>(
-            NSmithy.Core.Serde.Schema<TError> errorSchema,
-            TError value,
-            string errorShapeId,
-            int statusCode
-        ) => throw new NotSupportedException();
+        public ValueTask<Exception?> DeserializeErrorAsync(
+            SmithyHttpResponse response,
+            CancellationToken cancellationToken = default
+        ) => ValueTask.FromResult<Exception?>(null);
     }
 }

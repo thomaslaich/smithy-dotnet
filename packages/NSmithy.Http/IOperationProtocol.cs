@@ -22,22 +22,15 @@ public interface IProtocol
 }
 
 /// <summary>
-/// A protocol bound to a single (service, operation) pair. The generated client and server call
-/// these methods uniformly; every protocol-specific wire detail (URI scheme, framing, error
-/// discrimination) lives behind the implementation. This is the <em>unary</em> shape — a streaming
-/// sibling would be a separate interface.
+/// The client half of a protocol bound to a single (service, operation) pair: request
+/// serialization, response deserialization, and error handling. Every protocol-specific wire
+/// detail — URI scheme, framing, error discrimination — lives behind the implementation.
 /// </summary>
-public interface IOperationProtocol<TInput, TOutput>
+public interface IClientOperationProtocol<TInput, TOutput>
 {
-    // ---- client ----
     SmithyHttpRequest SerializeRequest(TInput input);
+
     TOutput DeserializeResponse(SmithyHttpResponse response);
-
-    // ---- server ----
-    TInput DeserializeRequest(SmithyHttpRequest request);
-    SmithyHttpResponse SerializeResponse(TOutput output);
-
-    // ---- errors ----
 
     /// <summary>
     /// Decides whether a response represents an error, by the protocol's own rules — HTTP status
@@ -46,36 +39,29 @@ public interface IOperationProtocol<TInput, TOutput>
     /// </summary>
     bool IsErrorResponse(SmithyHttpResponse response);
 
-    /// <summary>Returns the error type discriminator, or null when the response is not an error.</summary>
-    string? GetErrorDiscriminator(SmithyHttpResponse response);
-
-    /// <summary>
-    /// When true, a response whose <see cref="GetErrorDiscriminator"/> yields <c>null</c> is treated
-    /// as carrying no modeled error (the client returns no exception). True for rpc-style protocols
-    /// (rpcv2Cbor, gRPC) whose errors always carry an explicit discriminator; false for REST, which
-    /// can still resolve an error from the HTTP status code.
-    /// </summary>
-    bool RequiresErrorDiscriminator { get; }
-
-    /// <summary>
-    /// When true, the client may fall back to the HTTP status code to identify a modeled error when
-    /// the discriminator did not resolve. True for REST; false for rpc-style protocols where the
-    /// HTTP status does not map to a specific error shape (gRPC always returns HTTP 200).
-    /// </summary>
-    bool SupportsHttpStatusErrorFallback { get; }
-
-    IReadOnlyList<HttpOperationError> HttpErrors => [];
-
     /// <summary>
     /// Attempts to deserialize the response into one of the operation's modeled exceptions.
     /// Returns null when the protocol cannot resolve a modeled error from the response.
     /// The client runtime disposes a streaming response body after this returns (the error path
     /// abandons the response), so the returned exception must not retain the live stream.
+    /// Implementations typically compose <see cref="OperationProtocolErrors"/> with their own
+    /// discrimination rules.
     /// </summary>
     ValueTask<Exception?> DeserializeErrorAsync(
         SmithyHttpResponse response,
         CancellationToken cancellationToken = default
-    ) => ValueTask.FromResult(OperationProtocolErrors.DeserializeModeledError(this, response));
+    );
+}
+
+/// <summary>
+/// The server half of a protocol bound to a single (service, operation) pair: request
+/// deserialization and response/error serialization. Generated ASP.NET Core handlers call these.
+/// </summary>
+public interface IServerOperationProtocol<TInput, TOutput>
+{
+    TInput DeserializeRequest(SmithyHttpRequest request);
+
+    SmithyHttpResponse SerializeResponse(TOutput output);
 
     SmithyHttpResponse SerializeError<TError>(
         Schema<TError> errorSchema,
@@ -84,3 +70,14 @@ public interface IOperationProtocol<TInput, TOutput>
         int statusCode
     );
 }
+
+/// <summary>
+/// A protocol bound to a single (service, operation) pair, usable from both call sides. Protocol
+/// implementations implement this combined interface; client-side code (operation bindings, the
+/// client runtime) depends only on <see cref="IClientOperationProtocol{TInput, TOutput}"/> and
+/// server-side code only on <see cref="IServerOperationProtocol{TInput, TOutput}"/>. This is the
+/// <em>unary</em> shape — streaming variants are separate interfaces.
+/// </summary>
+public interface IOperationProtocol<TInput, TOutput>
+    : IClientOperationProtocol<TInput, TOutput>,
+        IServerOperationProtocol<TInput, TOutput>;

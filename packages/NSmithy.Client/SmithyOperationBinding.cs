@@ -15,7 +15,7 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
     public SmithyOperationBinding(
         ShapeId serviceId,
         ShapeId operationId,
-        IOperationProtocol<TInput, TOutput> protocol,
+        IClientOperationProtocol<TInput, TOutput> protocol,
         IReadOnlyList<string>? authSchemeIds = null
     )
     {
@@ -33,7 +33,7 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
 
     public ShapeId OperationId { get; }
 
-    public IOperationProtocol<TInput, TOutput> Protocol { get; }
+    public IClientOperationProtocol<TInput, TOutput> Protocol { get; }
 
     /// <summary>
     /// The operation's effective modeled auth scheme ids in Smithy priority order — the

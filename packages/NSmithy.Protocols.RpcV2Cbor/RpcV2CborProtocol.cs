@@ -156,12 +156,21 @@ public sealed class RpcV2CborProtocol : IProtocol
 
         public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
 
-        public string? GetErrorDiscriminator(SmithyHttpResponse response) =>
-            HasResponse(response) ? DeserializeErrorType(response) : null;
-
-        public bool RequiresErrorDiscriminator => true;
-
-        public bool SupportsHttpStatusErrorFallback => false;
+        // rpcv2Cbor errors always carry an explicit __type discriminator; without one the
+        // response carries no modeled error, and the HTTP status maps to no error shape.
+        public ValueTask<Exception?> DeserializeErrorAsync(
+            SmithyHttpResponse response,
+            CancellationToken cancellationToken = default
+        ) =>
+            ValueTask.FromResult(
+                OperationProtocolErrors.DeserializeModeledError(
+                    HttpErrors,
+                    response,
+                    r => HasResponse(r) ? DeserializeErrorType(r) : null,
+                    requiresErrorDiscriminator: true,
+                    supportsHttpStatusErrorFallback: false
+                )
+            );
 
         public SmithyHttpResponse SerializeError<TError>(
             Schema<TError> errorSchema,

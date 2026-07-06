@@ -51,7 +51,7 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
     Action<SmithyHttpRequest>? requestTransform = null
 ) : IOperationProtocol<TInput, TOutput>
 {
-    public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
+    private readonly IReadOnlyList<HttpOperationError> httpErrors =
         RestProtocol.CompileErrorDeserializers(modeledErrors, codecFactory, rawStringPayloads);
 
     public SmithyHttpRequest SerializeRequest(TInput input)
@@ -72,12 +72,21 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
 
     public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
 
-    public string? GetErrorDiscriminator(SmithyHttpResponse response) =>
-        errorDiscriminator(response);
-
-    public bool RequiresErrorDiscriminator => false;
-
-    public bool SupportsHttpStatusErrorFallback => true;
+    // REST errors may carry a discriminator header, but a response without one can still resolve
+    // via the HTTP status code.
+    public ValueTask<Exception?> DeserializeErrorAsync(
+        SmithyHttpResponse response,
+        CancellationToken cancellationToken = default
+    ) =>
+        ValueTask.FromResult(
+            OperationProtocolErrors.DeserializeModeledError(
+                httpErrors,
+                response,
+                errorDiscriminator,
+                requiresErrorDiscriminator: false,
+                supportsHttpStatusErrorFallback: true
+            )
+        );
 
     public SmithyHttpResponse SerializeError<TError>(
         Schema<TError> errorSchema,

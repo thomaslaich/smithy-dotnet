@@ -169,7 +169,6 @@ public sealed class GrpcProtocolTests
         // HTTP 429 → gRPC RESOURCE_EXHAUSTED (8)
         string[] exhaustedStatus = ["8"];
         Assert.Equal(exhaustedStatus, response.Headers["grpc-status"]);
-        Assert.Equal("example.greeter#ThrottlingError", protocol.GetErrorDiscriminator(response));
         var error = Assert.IsType<TestGrpcException>(
             await protocol.DeserializeErrorAsync(response)
         );

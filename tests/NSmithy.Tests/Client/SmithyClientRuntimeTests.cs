@@ -628,7 +628,7 @@ public sealed class SmithyClientRuntimeTests
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
     private static SmithyOperationBinding<string, string> Binding(
-        IOperationProtocol<string, string> protocol
+        IClientOperationProtocol<string, string> protocol
     ) =>
         new(
             ShapeId.Parse("example.weather#Weather"),
@@ -780,38 +780,21 @@ public sealed class SmithyClientRuntimeTests
         }
     }
 
-    private class TextProtocol : IOperationProtocol<string, string>
+    // The runtime depends only on the client half of the protocol contract, so test protocols
+    // implement IClientOperationProtocol and skip the server members entirely.
+    private class TextProtocol : IClientOperationProtocol<string, string>
     {
         public virtual SmithyHttpRequest SerializeRequest(string input) =>
             new(HttpMethod.Post, $"/{input}");
 
-        public string DeserializeResponse(SmithyHttpResponse response) => "output";
-
-        public string DeserializeRequest(SmithyHttpRequest request) => request.RequestUri;
-
-        public SmithyHttpResponse SerializeResponse(string output) =>
-            new(
-                HttpStatusCode.OK,
-                "OK",
-                Encoding.UTF8.GetBytes(output),
-                EmptyHeaders,
-                EmptyHeaders
-            );
+        public virtual string DeserializeResponse(SmithyHttpResponse response) => "output";
 
         public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
 
-        public string? GetErrorDiscriminator(SmithyHttpResponse response) => null;
-
-        public bool RequiresErrorDiscriminator => false;
-
-        public bool SupportsHttpStatusErrorFallback => true;
-
-        public SmithyHttpResponse SerializeError<TError>(
-            Schema<TError> errorSchema,
-            TError value,
-            string errorShapeId,
-            int statusCode
-        ) => throw new NotSupportedException();
+        public virtual ValueTask<Exception?> DeserializeErrorAsync(
+            SmithyHttpResponse response,
+            CancellationToken cancellationToken = default
+        ) => ValueTask.FromResult<Exception?>(null);
     }
 
     private sealed class AbsoluteUriProtocol : TextProtocol
@@ -820,9 +803,9 @@ public sealed class SmithyClientRuntimeTests
             new(HttpMethod.Post, $"https://override.example/{input}");
     }
 
-    private sealed class ContentTextErrorProtocol : TextProtocol, IOperationProtocol<string, string>
+    private sealed class ContentTextErrorProtocol : TextProtocol
     {
-        public ValueTask<Exception?> DeserializeErrorAsync(
+        public override ValueTask<Exception?> DeserializeErrorAsync(
             SmithyHttpResponse response,
             CancellationToken cancellationToken = default
         ) => ValueTask.FromResult<Exception?>(new InvalidOperationException(response.ContentText));
@@ -837,11 +820,9 @@ public sealed class SmithyClientRuntimeTests
             };
     }
 
-    private sealed class ThrowingDeserializationProtocol
-        : TextProtocol,
-            IOperationProtocol<string, string>
+    private sealed class ThrowingDeserializationProtocol : TextProtocol
     {
-        public new string DeserializeResponse(SmithyHttpResponse response) =>
+        public override string DeserializeResponse(SmithyHttpResponse response) =>
             throw new FormatException("malformed body");
     }
 

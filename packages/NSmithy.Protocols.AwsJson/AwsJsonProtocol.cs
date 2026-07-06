@@ -131,12 +131,21 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
 
         public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
 
-        public string? GetErrorDiscriminator(SmithyHttpResponse response) =>
-            DeserializeErrorType(response);
-
-        public bool RequiresErrorDiscriminator => false;
-
-        public bool SupportsHttpStatusErrorFallback => true;
+        // AWS JSON errors carry a __type/code discriminator in the body, but a response without
+        // one can still resolve via the HTTP status code.
+        public ValueTask<Exception?> DeserializeErrorAsync(
+            SmithyHttpResponse response,
+            CancellationToken cancellationToken = default
+        ) =>
+            ValueTask.FromResult(
+                OperationProtocolErrors.DeserializeModeledError(
+                    HttpErrors,
+                    response,
+                    DeserializeErrorType,
+                    requiresErrorDiscriminator: false,
+                    supportsHttpStatusErrorFallback: true
+                )
+            );
 
         public SmithyHttpResponse SerializeError<TError>(
             Schema<TError> errorSchema,

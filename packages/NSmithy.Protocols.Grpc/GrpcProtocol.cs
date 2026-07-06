@@ -212,20 +212,32 @@ public sealed class GrpcProtocol : IProtocol
         public bool IsErrorResponse(SmithyHttpResponse response) =>
             GrpcProtocol.IsErrorResponse(response);
 
-        public string? GetErrorDiscriminator(SmithyHttpResponse response)
+        // gRPC errors are discriminated by the error-shape trailer; the HTTP status is always
+        // 200 and maps to no error shape.
+        public ValueTask<Exception?> DeserializeErrorAsync(
+            SmithyHttpResponse response,
+            CancellationToken cancellationToken = default
+        ) =>
+            ValueTask.FromResult(
+                OperationProtocolErrors.DeserializeModeledError(
+                    HttpErrors,
+                    response,
+                    ErrorDiscriminator,
+                    requiresErrorDiscriminator: true,
+                    supportsHttpStatusErrorFallback: false
+                )
+            );
+
+        private static string? ErrorDiscriminator(SmithyHttpResponse response)
         {
             ArgumentNullException.ThrowIfNull(response);
             return
-                IsErrorResponse(response)
+                GrpcProtocol.IsErrorResponse(response)
                 && response.Headers.TryGetValue(ErrorShapeHeader, out var values)
                 && values.Count > 0
                 ? values[0]
                 : null;
         }
-
-        public bool RequiresErrorDiscriminator => true;
-
-        public bool SupportsHttpStatusErrorFallback => false;
 
         public SmithyHttpResponse SerializeError<TError>(
             Schema<TError> errorSchema,
