@@ -10,89 +10,145 @@ public sealed class SmithyAuthSchemeResolverTests
     private static readonly ServiceSchema Service = Schemas.Service(new ShapeId("example", "Svc"));
 
     [Fact]
-    public void ResolveWithoutAuthSchemesReturnsInterceptorsOnly()
+    public void ResolveInterceptorsWithoutAuthSchemesReturnsEmptyMap()
     {
-        var existing = new MarkerInterceptor("existing");
-
-        var resolved = SmithyAuthSchemeResolver.Resolve(
+        var resolved = SmithyAuthSchemeResolver.ResolveInterceptors(
             Endpoint,
             Service,
             ["aws.auth#sigv4"],
-            authSchemes: null,
-            interceptors: [existing]
+            authSchemes: null
         );
 
-        Assert.Equal([existing], resolved);
+        Assert.Empty(resolved);
     }
 
     [Fact]
-    public void ResolvePicksFirstModeledSchemeRegardlessOfConfiguredOrder()
+    public void ResolveInterceptorsCreatesOneInterceptorPerConfiguredScheme()
     {
-        // Configured in B, A order; modeled prefers A — modeled order wins.
-        var schemeA = new FakeScheme("scheme#a", new MarkerInterceptor("a"));
-        var schemeB = new FakeScheme("scheme#b", new MarkerInterceptor("b"));
+        var a = new MarkerInterceptor("a");
+        var b = new MarkerInterceptor("b");
 
-        var resolved = SmithyAuthSchemeResolver.Resolve(
+        var resolved = SmithyAuthSchemeResolver.ResolveInterceptors(
             Endpoint,
             Service,
             ["scheme#a", "scheme#b"],
-            authSchemes: [schemeB, schemeA]
+            authSchemes: [new FakeScheme("scheme#a", a), new FakeScheme("scheme#b", b)]
         );
 
-        Assert.Equal("a", Assert.IsType<MarkerInterceptor>(Assert.Single(resolved)).Tag);
+        Assert.Same(a, resolved["scheme#a"]);
+        Assert.Same(b, resolved["scheme#b"]);
     }
 
     [Fact]
-    public void ResolveSkipsModeledSchemesWithoutAConfiguredMatch()
+    public void ResolveInterceptorsThrowsWhenNoConfiguredSchemeMatchesServiceSchemes()
     {
-        var schemeB = new FakeScheme("scheme#b", new MarkerInterceptor("b"));
-
-        var resolved = SmithyAuthSchemeResolver.Resolve(
-            Endpoint,
-            Service,
-            ["scheme#a", "scheme#b"],
-            authSchemes: [schemeB]
-        );
-
-        Assert.Equal("b", Assert.IsType<MarkerInterceptor>(Assert.Single(resolved)).Tag);
-    }
-
-    [Fact]
-    public void ResolveAppendsAuthAfterUserInterceptors()
-    {
-        var existing = new MarkerInterceptor("existing");
-        var auth = new MarkerInterceptor("auth");
-        var scheme = new FakeScheme("scheme#a", auth);
-
-        var resolved = SmithyAuthSchemeResolver.Resolve(
-            Endpoint,
-            Service,
-            ["scheme#a"],
-            authSchemes: [scheme],
-            interceptors: [existing]
-        );
-
-        Assert.Equal(2, resolved.Count);
-        Assert.Equal("existing", Assert.IsType<MarkerInterceptor>(resolved[0]).Tag);
-        Assert.Equal("auth", Assert.IsType<MarkerInterceptor>(resolved[1]).Tag);
-    }
-
-    [Fact]
-    public void ResolveThrowsWhenNoConfiguredSchemeMatchesModeledSchemes()
-    {
-        var scheme = new FakeScheme("scheme#c", new MarkerInterceptor("c"));
-
         var error = Assert.Throws<InvalidOperationException>(() =>
-            SmithyAuthSchemeResolver.Resolve(
+            SmithyAuthSchemeResolver.ResolveInterceptors(
                 Endpoint,
                 Service,
                 ["scheme#a", "scheme#b"],
-                authSchemes: [scheme]
+                authSchemes: [new FakeScheme("scheme#c", new MarkerInterceptor("c"))]
             )
         );
 
         Assert.Contains("scheme#c", error.Message, StringComparison.Ordinal);
         Assert.Contains("scheme#a", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SelectPicksFirstModeledSchemeRegardlessOfConfiguredOrder()
+    {
+        var interceptors = Map(("scheme#b", "b"), ("scheme#a", "a"));
+
+        var selected = SmithyAuthSchemeResolver.SelectInterceptor(
+            ["scheme#a", "scheme#b"],
+            endpointAuthSchemes: null,
+            interceptors
+        );
+
+        Assert.Equal("a", Assert.IsType<MarkerInterceptor>(selected).Tag);
+    }
+
+    [Fact]
+    public void SelectSkipsModeledSchemesWithoutAConfiguredMatch()
+    {
+        var interceptors = Map(("scheme#b", "b"));
+
+        var selected = SmithyAuthSchemeResolver.SelectInterceptor(
+            ["scheme#a", "scheme#b"],
+            endpointAuthSchemes: null,
+            interceptors
+        );
+
+        Assert.Equal("b", Assert.IsType<MarkerInterceptor>(selected).Tag);
+    }
+
+    [Fact]
+    public void SelectReturnsNullForAnonymousOperations()
+    {
+        var interceptors = Map(("scheme#a", "a"));
+
+        Assert.Null(
+            SmithyAuthSchemeResolver.SelectInterceptor([], endpointAuthSchemes: null, interceptors)
+        );
+    }
+
+    [Fact]
+    public void SelectHonorsEndpointNarrowing()
+    {
+        var interceptors = Map(("scheme#a", "a"), ("scheme#b", "b"));
+
+        var selected = SmithyAuthSchemeResolver.SelectInterceptor(
+            ["scheme#a", "scheme#b"],
+            endpointAuthSchemes: ["scheme#b"],
+            interceptors
+        );
+
+        Assert.Equal("b", Assert.IsType<MarkerInterceptor>(selected).Tag);
+    }
+
+    [Fact]
+    public void SelectTreatsFullyNarrowedEndpointAsAnonymous()
+    {
+        var interceptors = Map(("scheme#a", "a"));
+
+        Assert.Null(
+            SmithyAuthSchemeResolver.SelectInterceptor(
+                ["scheme#a"],
+                endpointAuthSchemes: ["scheme#other"],
+                interceptors
+            )
+        );
+    }
+
+    [Fact]
+    public void SelectThrowsWhenOperationSchemesHaveNoConfiguredMatch()
+    {
+        var interceptors = Map(("scheme#c", "c"));
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            SmithyAuthSchemeResolver.SelectInterceptor(
+                ["scheme#a"],
+                endpointAuthSchemes: null,
+                interceptors
+            )
+        );
+
+        Assert.Contains("scheme#a", error.Message, StringComparison.Ordinal);
+        Assert.Contains("scheme#c", error.Message, StringComparison.Ordinal);
+    }
+
+    private static Dictionary<string, IClientInterceptor> Map(
+        params (string SchemeId, string Tag)[] schemes
+    )
+    {
+        var map = new Dictionary<string, IClientInterceptor>(StringComparer.Ordinal);
+        foreach (var (schemeId, tag) in schemes)
+        {
+            map[schemeId] = new MarkerInterceptor(tag);
+        }
+
+        return map;
     }
 
     private sealed class FakeScheme(string schemeId, IClientInterceptor interceptor)

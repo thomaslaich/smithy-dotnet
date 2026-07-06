@@ -15,7 +15,8 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
     public SmithyOperationBinding(
         ShapeId serviceId,
         ShapeId operationId,
-        IOperationProtocol<TInput, TOutput> protocol
+        IOperationProtocol<TInput, TOutput> protocol,
+        IReadOnlyList<string>? authSchemeIds = null
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceId.Name, nameof(serviceId));
@@ -25,6 +26,7 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
         ServiceId = serviceId;
         OperationId = operationId;
         Protocol = protocol;
+        AuthSchemeIds = authSchemeIds ?? [];
     }
 
     public ShapeId ServiceId { get; }
@@ -32,4 +34,11 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
     public ShapeId OperationId { get; }
 
     public IOperationProtocol<TInput, TOutput> Protocol { get; }
+
+    /// <summary>
+    /// The operation's effective modeled auth scheme ids in Smithy priority order — the
+    /// service's effective schemes, overridden by a per-operation <c>@auth</c> trait. Empty for
+    /// anonymous operations.
+    /// </summary>
+    public IReadOnlyList<string> AuthSchemeIds { get; }
 }
