@@ -195,8 +195,7 @@ public final class KafkaGenerator implements Runnable {
         () -> {
           writer.write("System.ArgumentNullException.ThrowIfNull(command);");
           writer.write("");
-          writer.write(
-              "var value = $L.Serialize(command);", codecFieldName(produce.commandType()));
+          writer.write("var value = $L.Serialize(command);", codecFieldName(produce.commandType()));
           writeKeyHeadersAndProduce(model, produce.command(), "command", produce.topic(), null);
         });
   }

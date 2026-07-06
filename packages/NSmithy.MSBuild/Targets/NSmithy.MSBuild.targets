@@ -592,7 +592,10 @@
     <ItemGroup>
       <_AsyncApiJson Include="$(_SmithyOutputDir)**/asyncapi/*.json" />
     </ItemGroup>
-    <MakeDir Directories="$(MSBuildProjectDirectory)/wwwroot" Condition="'@(_AsyncApiJson)' != ''" />
+    <MakeDir
+      Directories="$(MSBuildProjectDirectory)/wwwroot"
+      Condition="'@(_AsyncApiJson)' != ''"
+    />
     <Copy
       SourceFiles="@(_AsyncApiJson)"
       DestinationFiles="$(MSBuildProjectDirectory)/wwwroot/asyncapi.json"

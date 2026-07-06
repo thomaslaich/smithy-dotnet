@@ -29,6 +29,10 @@ public final class TraitIds {
 
   // bote protocol + messaging traits
   public static final ShapeId KAFKA_JSON = ShapeId.from("bote#kafkaJson");
+  public static final ShapeId KAFKA_AVRO = ShapeId.from("bote#kafkaAvro");
+  public static final ShapeId KAFKA_PROTOBUF = ShapeId.from("bote#kafkaProtobuf");
+  public static final ShapeId REDIS_STREAMS_JSON = ShapeId.from("bote#redisStreamsJson");
+  public static final ShapeId REDIS_PUB_SUB_JSON = ShapeId.from("bote#redisPubSubJson");
   // Kafka capability traits: they carry the topic on the operation.
   public static final ShapeId KAFKA_PRODUCE = ShapeId.from("bote#kafkaProduce");
   public static final ShapeId KAFKA_CONSUME = ShapeId.from("bote#kafkaConsume");

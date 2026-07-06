@@ -27,7 +27,10 @@ var consumerConfig = new ConsumerConfig
 };
 
 await using var producer = new StreetlightDeviceProducer(producerConfig);
-await using var events = new StreetlightDeviceEventConsumer(consumerConfig, new LightMeasuredHandler());
+await using var events = new StreetlightDeviceEventConsumer(
+    consumerConfig,
+    new LightMeasuredHandler()
+);
 
 Console.WriteLine(
     "[controller] watching LightMeasured events and dimming the light. Ctrl+C to stop."
