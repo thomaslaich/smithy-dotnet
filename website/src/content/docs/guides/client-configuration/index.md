@@ -96,6 +96,9 @@ For a long-lived application, prefer registering the client once with
   covers client execution hooks.
 - [Observability](/smithy-dotnet/guides/client-configuration/observability/)
   covers OpenTelemetry tracing and metrics.
+- [Pagination](/smithy-dotnet/guides/client-configuration/pagination/)
+  covers the generated `IAsyncEnumerable` paginators for `@paginated`
+  operations.
 - [Transport](/smithy-dotnet/guides/client-configuration/transport/) covers
   endpoint, `HttpClient`, and low-level runtime ownership.
 - [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/)
