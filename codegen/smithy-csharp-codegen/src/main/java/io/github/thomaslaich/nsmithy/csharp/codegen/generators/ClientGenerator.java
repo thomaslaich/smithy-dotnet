@@ -15,6 +15,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
@@ -726,9 +727,9 @@ public final class ClientGenerator implements Runnable {
    * Resolved pagination for an operation: present when the operation carries {@code @paginated}
    * (merged with the service-level defaults). Event-stream operations are never paginated.
    */
-  private java.util.Optional<PaginationInfo> paginationInfo(OperationShape op) {
+  private Optional<PaginationInfo> paginationInfo(OperationShape op) {
     if (isEventStreamOperation(context.model(), op)) {
-      return java.util.Optional.empty();
+      return Optional.empty();
     }
     return PaginatedIndex.of(context.model()).getPaginationInfo(service, op);
   }
@@ -753,8 +754,7 @@ public final class ClientGenerator implements Runnable {
    * member that resolves to a list. Map-valued items are rare and not generated yet — the pages
    * paginator still covers them.
    */
-  private java.util.Optional<String> paginatorItemsSignature(
-      SymbolProvider sp, PaginationInfo info) {
+  private Optional<String> paginatorItemsSignature(SymbolProvider sp, PaginationInfo info) {
     return paginatorItemElementType(sp, info)
         .map(
             elementType ->
@@ -769,18 +769,17 @@ public final class ClientGenerator implements Runnable {
                     + " input, System.Threading.CancellationToken cancellationToken = default)");
   }
 
-  private java.util.Optional<String> paginatorItemElementType(
-      SymbolProvider sp, PaginationInfo info) {
+  private Optional<String> paginatorItemElementType(SymbolProvider sp, PaginationInfo info) {
     List<MemberShape> path = info.getItemsMemberPath();
     if (path.isEmpty()) {
-      return java.util.Optional.empty();
+      return Optional.empty();
     }
     var target = context.model().expectShape(path.get(path.size() - 1).getTarget());
     if (!target.isListShape()) {
-      return java.util.Optional.empty();
+      return Optional.empty();
     }
     var element = context.model().expectShape(target.asListShape().get().getMember().getTarget());
-    return java.util.Optional.of(CSharpSymbolProvider.qualified(sp.toSymbol(element)));
+    return Optional.of(CSharpSymbolProvider.qualified(sp.toSymbol(element)));
   }
 
   /** Renders a null-safe property access chain for a member path, e.g. {@code output.A?.B}. */
