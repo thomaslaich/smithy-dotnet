@@ -187,11 +187,13 @@ public final class ClientGenerator implements Runnable {
                   writer.write(
                       "this.runtime = new SmithyClientRuntime(new"
                           + " HttpClientTransport(httpClient),"
-                          + " SmithyAuthSchemeResolver.Resolve(endpoint, $L,"
-                          + " ModeledAuthSchemes, config.AuthSchemes, config.Interceptors),"
+                          + " config.Interceptors,"
                           + " config.RetryStrategy,"
                           + " endpoint,"
-                          + " config.OperationTimeout);",
+                          + " config.OperationTimeout,"
+                          + " config.EndpointResolver,"
+                          + " SmithyAuthSchemeResolver.ResolveInterceptors(endpoint, $L,"
+                          + " ModeledAuthSchemes, config.AuthSchemes));",
                       serviceSchema);
                 }
                 if (wiresEventStreamOperations) {
@@ -235,11 +237,13 @@ public final class ClientGenerator implements Runnable {
                   writer.write(
                       "this.runtime = new SmithyClientRuntime(new"
                           + " HttpClientTransport(httpClient),"
-                          + " SmithyAuthSchemeResolver.Resolve(endpoint, $L,"
-                          + " ModeledAuthSchemes, config.AuthSchemes, config.Interceptors),"
+                          + " config.Interceptors,"
                           + " config.RetryStrategy,"
                           + " endpoint,"
-                          + " config.OperationTimeout);",
+                          + " config.OperationTimeout,"
+                          + " config.EndpointResolver,"
+                          + " SmithyAuthSchemeResolver.ResolveInterceptors(endpoint, $L,"
+                          + " ModeledAuthSchemes, config.AuthSchemes));",
                       serviceSchema);
                 }
                 if (wiresEventStreamOperations) {
@@ -474,14 +478,34 @@ public final class ClientGenerator implements Runnable {
       String operationSchema = SchemaGenerator.operationSchemaAccessor(context, op);
       writer.write(
           "this.$LBinding = new SmithyOperationBinding<$L, $L>($L.Id, $L.Id,"
-              + " serviceProtocol.ForOperation($L));",
+              + " serviceProtocol.ForOperation($L), $L);",
           CSharpNaming.typeName(op.getId().getName()),
           SchemaGenerator.operationShapeType(context, op.getInputShape()),
           SchemaGenerator.operationShapeType(context, op.getOutputShape()),
           SchemaGenerator.serviceSchemaAccessor(context, service),
           operationSchema,
-          operationSchema);
+          operationSchema,
+          operationAuthSchemesLiteral(op));
     }
+  }
+
+  /**
+   * The operation's effective auth schemes in Smithy priority order: the service's effective
+   * schemes, overridden by a per-operation {@code @auth} trait. Rendered as a C# array literal of
+   * shape-id strings for the operation binding; the runtime selects the configured interceptor per
+   * invocation from this list.
+   */
+  private String operationAuthSchemesLiteral(OperationShape op) {
+    List<String> ids =
+        ServiceIndex.of(context.model()).getEffectiveAuthSchemes(service, op).keySet().stream()
+            .map(ShapeId::toString)
+            .collect(Collectors.toList());
+    if (ids.isEmpty()) {
+      return "System.Array.Empty<string>()";
+    }
+    return "new string[] { "
+        + ids.stream().map(CSharpNaming::formatString).collect(Collectors.joining(", "))
+        + " }";
   }
 
   private void writeEventStreamProtocolField(SymbolProvider sp, Model model, OperationShape op) {

@@ -8,9 +8,14 @@ public sealed class SmithyClientRuntime(
     IEnumerable<IClientInterceptor>? interceptors = null,
     ISmithyRetryStrategy? retryStrategy = null,
     Uri? endpoint = null,
-    TimeSpan? operationTimeout = null
+    TimeSpan? operationTimeout = null,
+    IEndpointResolver? endpointResolver = null,
+    IReadOnlyDictionary<string, IClientInterceptor>? authSchemes = null
 )
 {
+    private static readonly IReadOnlyDictionary<string, IClientInterceptor> NoAuthSchemes =
+        new Dictionary<string, IClientInterceptor>(StringComparer.Ordinal);
+
     private readonly IHttpTransport transport =
         transport ?? throw new ArgumentNullException(nameof(transport));
     private readonly IReadOnlyList<IClientInterceptor> interceptors = [.. interceptors ?? []];
@@ -19,6 +24,11 @@ public sealed class SmithyClientRuntime(
         endpoint is null || endpoint.IsAbsoluteUri
             ? endpoint
             : throw new ArgumentException("Endpoint must be an absolute URI.", nameof(endpoint));
+    private readonly IEndpointResolver? endpointResolver =
+        endpointResolver
+        ?? (endpoint is { IsAbsoluteUri: true } ? new StaticEndpointResolver(endpoint) : null);
+    private readonly IReadOnlyDictionary<string, IClientInterceptor> authSchemes =
+        authSchemes ?? NoAuthSchemes;
     private readonly TimeSpan? operationTimeout =
         operationTimeout is null || operationTimeout > TimeSpan.Zero
             ? operationTimeout
@@ -55,6 +65,32 @@ public sealed class SmithyClientRuntime(
 
         var protocol = binding.Protocol;
         var context = CreateContext(binding.ServiceId.Name, binding.OperationId.Name);
+
+        // Endpoint resolution runs once per invocation, before any lifecycle hooks, so
+        // interceptors observe the effective endpoint from OnBeforeExecution on. A static
+        // endpoint resolves via StaticEndpointResolver at effectively zero cost.
+        SmithyEndpoint? resolvedEndpoint = null;
+        if (endpointResolver is not null)
+        {
+            resolvedEndpoint = await endpointResolver
+                .ResolveEndpointAsync(
+                    new SmithyEndpointParameters(
+                        binding.ServiceId,
+                        binding.OperationId,
+                        endpoint,
+                        input
+                    ),
+                    callerToken
+                )
+                .ConfigureAwait(false);
+            context.Set(SmithyContextKeys.Endpoint, resolvedEndpoint.Uri);
+        }
+
+        var authInterceptor = SmithyAuthSchemeResolver.SelectInterceptor(
+            binding.AuthSchemeIds,
+            resolvedEndpoint?.AuthSchemes,
+            authSchemes
+        );
 
         var tags = new TagList
         {
@@ -96,6 +132,8 @@ public sealed class SmithyClientRuntime(
                     protocol.DeserializeErrorAsync,
                     protocol.IsErrorResponse,
                     tags,
+                    resolvedEndpoint,
+                    authInterceptor,
                     cancellationToken
                 )
                 .ConfigureAwait(false);
@@ -165,6 +203,8 @@ public sealed class SmithyClientRuntime(
         Func<SmithyHttpResponse, CancellationToken, ValueTask<Exception?>> deserializeError,
         Func<SmithyHttpResponse, bool> isErrorResponse,
         TagList tags,
+        SmithyEndpoint? resolvedEndpoint,
+        IClientInterceptor? authInterceptor,
         CancellationToken cancellationToken
     )
     {
@@ -181,10 +221,11 @@ public sealed class SmithyClientRuntime(
             attemptActivity?.SetTag("smithy.attempt", attempt);
             SmithyClientTelemetry.Attempts.Add(1, tags);
 
-            var resolvedRequest = ApplyEndpoint(CloneRequest(request));
+            var resolvedRequest = ApplyEndpoint(CloneRequest(request), resolvedEndpoint);
             var attemptRequest = await ApplyRequestInterceptorsAsync(
                     context,
                     resolvedRequest,
+                    authInterceptor,
                     cancellationToken
                 )
                 .ConfigureAwait(false);
@@ -262,12 +303,22 @@ public sealed class SmithyClientRuntime(
     private async Task<SmithyHttpRequest> ApplyRequestInterceptorsAsync(
         SmithyContext context,
         SmithyHttpRequest request,
+        IClientInterceptor? authInterceptor,
         CancellationToken cancellationToken
     )
     {
+        // The selected auth interceptor runs after user interceptors in each request phase, so
+        // signing sees the final request and nothing mutates it afterwards.
         foreach (var interceptor in interceptors)
         {
             request = await interceptor
+                .OnBeforeSigningAsync(context, request, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (authInterceptor is not null)
+        {
+            request = await authInterceptor
                 .OnBeforeSigningAsync(context, request, cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -279,17 +330,39 @@ public sealed class SmithyClientRuntime(
                 .ConfigureAwait(false);
         }
 
+        if (authInterceptor is not null)
+        {
+            request = await authInterceptor
+                .OnBeforeTransmitAsync(context, request, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         return request;
     }
 
-    private SmithyHttpRequest ApplyEndpoint(SmithyHttpRequest request)
+    private static SmithyHttpRequest ApplyEndpoint(
+        SmithyHttpRequest request,
+        SmithyEndpoint? resolvedEndpoint
+    )
     {
-        if (endpoint is null || IsHttpAbsoluteUri(request.RequestUri))
+        if (resolvedEndpoint is null)
         {
             return request;
         }
 
-        return CloneRequest(request, ResolveRequestUri(endpoint, request.RequestUri));
+        var resolved = IsHttpAbsoluteUri(request.RequestUri)
+            ? request
+            : CloneRequest(request, ResolveRequestUri(resolvedEndpoint.Uri, request.RequestUri));
+
+        if (resolvedEndpoint.Headers is not null)
+        {
+            foreach (var header in resolvedEndpoint.Headers)
+            {
+                resolved.Headers[header.Key] = [header.Value];
+            }
+        }
+
+        return resolved;
     }
 
     private static SmithyHttpRequest CloneRequest(SmithyHttpRequest request) =>
