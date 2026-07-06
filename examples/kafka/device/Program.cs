@@ -16,7 +16,11 @@ var bootstrap = args.Length > 0 ? args[0] : "localhost:9092";
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddStreetlightDeviceProducer(
-    new ProducerConfig { BootstrapServers = bootstrap, BrokerAddressFamily = BrokerAddressFamily.V4 }
+    new ProducerConfig
+    {
+        BootstrapServers = bootstrap,
+        BrokerAddressFamily = BrokerAddressFamily.V4,
+    }
 );
 builder.Services.AddStreetlightDeviceCommandConsumer(
     new ConsumerConfig

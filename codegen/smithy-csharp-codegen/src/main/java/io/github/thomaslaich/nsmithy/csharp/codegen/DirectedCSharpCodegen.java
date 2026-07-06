@@ -70,9 +70,9 @@ final class DirectedCSharpCodegen
     String typeName = CSharpNaming.typeName(directive.shape().getId().getName());
     String dir = csNamespace.replace('.', '/');
 
-    // Kafka services get their own SDK (producer + consumers) below; the schema,
+    // bote messaging services get their own SDK (producer + consumers) below; the schema,
     // HTTP client, and ASP.NET Core server files only make sense for HTTP/gRPC services.
-    if (!ProtocolSupport.isKafkaJsonService(directive.shape())) {
+    if (!ProtocolSupport.isBoteService(directive.shape())) {
       // The service schema is consumed by both client and server, so it has no ".Client"/".Server"
       // suffix and is always compiled.
       ctx.writerDelegator()
@@ -142,7 +142,9 @@ final class DirectedCSharpCodegen
       }
     }
 
-    if (ProtocolSupport.emitsKafka(directive.shape())) {
+    // Of the bote protocols, only kafkaJson has a generator so far; the Kafka SDK below
+    // emits JSON codecs, so it must not run for kafkaAvro/kafkaProtobuf/redis services.
+    if (directive.shape().hasTrait(TraitIds.KAFKA_JSON)) {
       ctx.writerDelegator()
           .useFileWriter(
               dir + "/" + typeName + "Kafka.g.cs",
