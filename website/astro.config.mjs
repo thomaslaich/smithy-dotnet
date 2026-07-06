@@ -80,6 +80,7 @@ export default defineConfig({
 								{ label: 'Retry', slug: 'guides/client-configuration/retry' },
 								{ label: 'Interceptors', slug: 'guides/client-configuration/interceptors' },
 								{ label: 'Observability', slug: 'guides/client-configuration/observability' },
+								{ label: 'Pagination', slug: 'guides/client-configuration/pagination' },
 								{ label: 'Transport', slug: 'guides/client-configuration/transport' },
 								{ label: 'Dependency Injection', slug: 'guides/client-configuration/dependency-injection' },
 							],

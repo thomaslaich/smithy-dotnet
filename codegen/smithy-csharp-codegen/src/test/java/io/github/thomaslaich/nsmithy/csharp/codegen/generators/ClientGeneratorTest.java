@@ -176,6 +176,92 @@ final class ClientGeneratorTest {
         generated);
   }
 
+  private static final String PAGINATED_MODEL =
+      """
+      $version: "2"
+
+      namespace example.pages
+
+      use aws.protocols#restJson1
+
+      @restJson1
+      @paginated(inputToken: "nextToken", outputToken: "nextToken", pageSize: "pageSize")
+      service Catalog {
+          version: "1"
+          operations: [ListThings, GetThing]
+      }
+
+      @readonly
+      @paginated(items: "items")
+      @http(method: "GET", uri: "/things")
+      operation ListThings {
+          input := {
+              @httpQuery("nextToken")
+              nextToken: String
+
+              @httpQuery("pageSize")
+              pageSize: Integer
+          }
+          output := {
+              nextToken: String
+
+              @required
+              items: Things
+          }
+      }
+
+      @readonly
+      @http(method: "GET", uri: "/things/{id}")
+      operation GetThing {
+          input := {
+              @required
+              @httpLabel
+              id: String
+          }
+          output := {
+              name: String
+          }
+      }
+
+      list Things {
+          member: Thing
+      }
+
+      structure Thing {
+          @required
+          name: String
+      }
+      """;
+
+  @Test
+  void paginatedOperationsGeneratePagesAndItemsPaginators() throws Exception {
+    String generated =
+        renderClient(
+            REST_PROTOCOL_TRAITS, PAGINATED_MODEL, "example.pages#Catalog", "Example.Pages");
+
+    // Pages paginator: repeats the call while the response carries a token.
+    assertTrue(
+        generated.contains(
+            "System.Collections.Generic.IAsyncEnumerable<Example.Example.Pages.ListThingsOutput>"
+                + " ListThingsPagesAsync(Example.Example.Pages.ListThingsInput input,"
+                + " System.Threading.CancellationToken cancellationToken = default);"),
+        generated);
+    assertTrue(generated.contains("input = input with { NextToken = token };"), generated);
+    assertTrue(generated.contains("while (token is not null)"), generated);
+
+    // Items paginator: flattens the pages' list member.
+    assertTrue(
+        generated.contains(
+            "System.Collections.Generic.IAsyncEnumerable<Example.Example.Pages.Thing>"
+                + " ListThingsItemsAsync(Example.Example.Pages.ListThingsInput input,"
+                + " System.Threading.CancellationToken cancellationToken = default);"),
+        generated);
+    assertTrue(generated.contains("foreach (var item in items.Values)"), generated);
+
+    // Unpaginated operations get no paginators.
+    assertFalse(generated.contains("GetThingPagesAsync"), generated);
+  }
+
   @Test
   void endpointConstructorCopiesCallerConfig() throws Exception {
     String generated = renderClient();
