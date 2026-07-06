@@ -15,6 +15,8 @@
     <PackageReference Include="NSmithy.Client" Version="0.4.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Codecs.Json" Version="0.4.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.4.0-SNAPSHOT" />
+    <PackageReference Include="OpenTelemetry" Version="1.16.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
     <ProjectReference Include="../contracts/NSmithy.Examples.RestJson1.Contracts.csproj" />
   </ItemGroup>
 </Project>
