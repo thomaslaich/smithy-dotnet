@@ -29,5 +29,5 @@ build/
 # LLM things
 .claude/
 
-# macOS
+# macOS Finder metadata
 .DS_Store
