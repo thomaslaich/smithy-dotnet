@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
-using NSmithy.Http;
 
 namespace NSmithy.Protocols.Grpc;
 
@@ -76,7 +75,7 @@ public static class GrpcMessageFraming
         }
     }
 
-    public static async IAsyncEnumerable<SmithyEventFrame> ReadAllAsync(
+    public static async IAsyncEnumerable<byte[]> ReadAllAsync(
         Stream stream,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
@@ -103,7 +102,7 @@ public static class GrpcMessageFraming
                 throw new InvalidOperationException("Truncated gRPC frame payload.");
             }
 
-            yield return new SmithyEventFrame(payload);
+            yield return payload;
         }
     }
 

@@ -243,9 +243,9 @@ public final class ServerGenerator implements Runnable {
     String operationSchema = SchemaGenerator.operationSchemaAccessor(context, op);
     if (isInputStreaming(model, op) && isOutputStreaming(model, op)) {
       writer.write(
-          "private static readonly IBidirectionalEventStreamOperationProtocol<$L, $L>"
+          "private static readonly IDuplexEventStreamOperationProtocol<$L, $L>"
               + " $LGrpcProtocol ="
-              + " GrpcServiceProtocol.ForBidirectionalEventStreamOperation($L, $L, $L);",
+              + " GrpcServiceProtocol.ForDuplexEventStreamOperation($L, $L, $L);",
           streamingEventType(sp, model, op.getInputShape()),
           streamingEventType(sp, model, op.getOutputShape()),
           opName,
@@ -254,8 +254,8 @@ public final class ServerGenerator implements Runnable {
           streamingEventSchema(model, op.getOutputShape()));
     } else if (isOutputStreaming(model, op)) {
       writer.write(
-          "private static readonly IServerEventStreamOperationProtocol<$L, $L> $LGrpcProtocol ="
-              + " GrpcServiceProtocol.ForServerEventStreamOperation($L, $L);",
+          "private static readonly IOutputEventStreamOperationProtocol<$L, $L> $LGrpcProtocol ="
+              + " GrpcServiceProtocol.ForOutputEventStreamOperation($L, $L);",
           inputType,
           streamingEventType(sp, model, op.getOutputShape()),
           opName,
@@ -263,8 +263,8 @@ public final class ServerGenerator implements Runnable {
           streamingEventSchema(model, op.getOutputShape()));
     } else {
       writer.write(
-          "private static readonly IClientEventStreamOperationProtocol<$L, $L> $LGrpcProtocol ="
-              + " GrpcServiceProtocol.ForClientEventStreamOperation($L, $L);",
+          "private static readonly IInputEventStreamOperationProtocol<$L, $L> $LGrpcProtocol ="
+              + " GrpcServiceProtocol.ForInputEventStreamOperation($L, $L);",
           streamingEventType(sp, model, op.getInputShape()),
           outputType,
           opName,
@@ -280,10 +280,10 @@ public final class ServerGenerator implements Runnable {
 
     if (isInputStreaming(model, op) && isOutputStreaming(model, op)) {
       writer.write(
-          "var smithyRequest = SmithyAspNetCoreProtocol.CreateSmithyGrpcEventStreamRequest("
-              + "httpContext, cancellationToken);");
+          "var smithyRequestBody = SmithyAspNetCoreProtocol.GetEventStreamRequestBody("
+              + "httpContext);");
       writer.write(
-          "var input = $L.DeserializeRequestEventsAsync(smithyRequest, cancellationToken);",
+          "var input = $L.DeserializeRequestEventsAsync(smithyRequestBody, cancellationToken);",
           opProtocol);
       writer.write("var output = handler.$L(input, cancellationToken);", methodName);
       writer.write(
@@ -311,10 +311,10 @@ public final class ServerGenerator implements Runnable {
               + " responseEvents, cancellationToken).ConfigureAwait(false);");
     } else {
       writer.write(
-          "var smithyRequest = SmithyAspNetCoreProtocol.CreateSmithyGrpcEventStreamRequest("
-              + "httpContext, cancellationToken);");
+          "var smithyRequestBody = SmithyAspNetCoreProtocol.GetEventStreamRequestBody("
+              + "httpContext);");
       writer.write(
-          "var input = $L.DeserializeRequestEventsAsync(smithyRequest, cancellationToken);",
+          "var input = $L.DeserializeRequestEventsAsync(smithyRequestBody, cancellationToken);",
           opProtocol);
       writer.write(
           "var output = await handler.$L(input, cancellationToken).ConfigureAwait(false);",

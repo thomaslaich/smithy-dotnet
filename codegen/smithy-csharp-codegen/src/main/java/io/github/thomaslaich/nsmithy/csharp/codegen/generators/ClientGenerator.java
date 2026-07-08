@@ -209,7 +209,7 @@ public final class ClientGenerator implements Runnable {
                 if (wiresEventStreamOperations) {
                   writer.write(
                       "this.eventStreamInvoker = new SmithyEventStreamOperationInvoker(new"
-                          + " GrpcEventStreamHttpClientTransport(httpClient, endpoint));");
+                          + " DuplexHttpClientTransport(httpClient, endpoint));");
                 }
                 writeIdempotencyAssignment(needsIdempotency);
                 if (needsHttpClient) {
@@ -259,7 +259,7 @@ public final class ClientGenerator implements Runnable {
                 if (wiresEventStreamOperations) {
                   writer.write(
                       "this.eventStreamInvoker = new SmithyEventStreamOperationInvoker(new"
-                          + " GrpcEventStreamHttpClientTransport(httpClient, endpoint));");
+                          + " DuplexHttpClientTransport(httpClient, endpoint));");
                 }
                 writeIdempotencyAssignment(needsIdempotency);
                 if (needsHttpClient) {
@@ -527,19 +527,19 @@ public final class ClientGenerator implements Runnable {
     String outputType = SchemaGenerator.operationShapeType(context, op.getOutputShape());
     if (isInputStreaming(model, op) && isOutputStreaming(model, op)) {
       writer.write(
-          "private readonly IBidirectionalEventStreamOperationProtocol<$L, $L> $LProtocol;",
+          "private readonly IDuplexEventStreamOperationProtocol<$L, $L> $LProtocol;",
           streamingEventType(sp, model, op.getInputShape()),
           streamingEventType(sp, model, op.getOutputShape()),
           opName);
     } else if (isOutputStreaming(model, op)) {
       writer.write(
-          "private readonly IServerEventStreamOperationProtocol<$L, $L> $LProtocol;",
+          "private readonly IOutputEventStreamOperationProtocol<$L, $L> $LProtocol;",
           inputType,
           streamingEventType(sp, model, op.getOutputShape()),
           opName);
     } else {
       writer.write(
-          "private readonly IClientEventStreamOperationProtocol<$L, $L> $LProtocol;",
+          "private readonly IInputEventStreamOperationProtocol<$L, $L> $LProtocol;",
           streamingEventType(sp, model, op.getInputShape()),
           outputType,
           opName);
@@ -551,21 +551,20 @@ public final class ClientGenerator implements Runnable {
     String operationSchema = SchemaGenerator.operationSchemaAccessor(context, op);
     if (isInputStreaming(model, op) && isOutputStreaming(model, op)) {
       writer.write(
-          "this.$LProtocol = serviceProtocol.ForBidirectionalEventStreamOperation($L,"
-              + " $L, $L);",
+          "this.$LProtocol = serviceProtocol.ForDuplexEventStreamOperation($L," + " $L, $L);",
           opName,
           operationSchema,
           streamingEventSchema(model, op.getInputShape()),
           streamingEventSchema(model, op.getOutputShape()));
     } else if (isOutputStreaming(model, op)) {
       writer.write(
-          "this.$LProtocol = serviceProtocol.ForServerEventStreamOperation($L, $L);",
+          "this.$LProtocol = serviceProtocol.ForOutputEventStreamOperation($L, $L);",
           opName,
           operationSchema,
           streamingEventSchema(model, op.getOutputShape()));
     } else {
       writer.write(
-          "this.$LProtocol = serviceProtocol.ForClientEventStreamOperation($L, $L);",
+          "this.$LProtocol = serviceProtocol.ForInputEventStreamOperation($L, $L);",
           opName,
           operationSchema,
           streamingEventSchema(model, op.getInputShape()));

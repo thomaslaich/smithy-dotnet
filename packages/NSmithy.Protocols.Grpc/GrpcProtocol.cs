@@ -68,44 +68,44 @@ public sealed class GrpcProtocol : IProtocol
             return new OperationProtocol<TInput, TOutput>(service, operation);
         }
 
-        public IServerEventStreamOperationProtocol<
+        public IOutputEventStreamOperationProtocol<
             TInput,
             TOutputEvent
-        > ForServerEventStreamOperation<TInput, TOutput, TOutputEvent>(
+        > ForOutputEventStreamOperation<TInput, TOutput, TOutputEvent>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TOutputEvent> outputEvent
         )
         {
             ArgumentNullException.ThrowIfNull(operation);
             ArgumentNullException.ThrowIfNull(outputEvent);
-            return new ServerEventStreamOperationProtocol<TInput, TOutput, TOutputEvent>(
+            return new OutputEventStreamOperationProtocol<TInput, TOutput, TOutputEvent>(
                 service,
                 operation,
                 outputEvent
             );
         }
 
-        public IClientEventStreamOperationProtocol<
+        public IInputEventStreamOperationProtocol<
             TInputEvent,
             TOutput
-        > ForClientEventStreamOperation<TInput, TInputEvent, TOutput>(
+        > ForInputEventStreamOperation<TInput, TInputEvent, TOutput>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent
         )
         {
             ArgumentNullException.ThrowIfNull(operation);
             ArgumentNullException.ThrowIfNull(inputEvent);
-            return new ClientEventStreamOperationProtocol<TInput, TInputEvent, TOutput>(
+            return new InputEventStreamOperationProtocol<TInput, TInputEvent, TOutput>(
                 service,
                 operation,
                 inputEvent
             );
         }
 
-        public IBidirectionalEventStreamOperationProtocol<
+        public IDuplexEventStreamOperationProtocol<
             TInputEvent,
             TOutputEvent
-        > ForBidirectionalEventStreamOperation<TInput, TOutput, TInputEvent, TOutputEvent>(
+        > ForDuplexEventStreamOperation<TInput, TOutput, TInputEvent, TOutputEvent>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent,
             Schema<TOutputEvent> outputEvent
@@ -114,7 +114,7 @@ public sealed class GrpcProtocol : IProtocol
             ArgumentNullException.ThrowIfNull(operation);
             ArgumentNullException.ThrowIfNull(inputEvent);
             ArgumentNullException.ThrowIfNull(outputEvent);
-            return new BidirectionalEventStreamOperationProtocol<
+            return new DuplexEventStreamOperationProtocol<
                 TInput,
                 TOutput,
                 TInputEvent,
@@ -290,15 +290,15 @@ public sealed class GrpcProtocol : IProtocol
         }
     }
 
-    private sealed class ServerEventStreamOperationProtocol<TInput, TOutput, TOutputEvent>
-        : IServerEventStreamOperationProtocol<TInput, TOutputEvent>
+    private sealed class OutputEventStreamOperationProtocol<TInput, TOutput, TOutputEvent>
+        : IOutputEventStreamOperationProtocol<TInput, TOutputEvent>
     {
         private readonly string methodPath;
         private readonly bool inputIsUnit;
         private readonly IProtoCodec<TInput>? requestCodec;
         private readonly IProtoCodec<TOutputEvent> responseCodec;
 
-        public ServerEventStreamOperationProtocol(
+        public OutputEventStreamOperationProtocol(
             ServiceSchema service,
             OperationSchema<TInput, TOutput> operation,
             Schema<TOutputEvent> outputEvent
@@ -310,11 +310,13 @@ public sealed class GrpcProtocol : IProtocol
             responseCodec = ProtoCodec.FromSchema(outputEvent);
         }
 
-        public SmithyEventStreamHttpRequest SerializeRequest(TInput input)
+        public SmithyDuplexHttpRequest SerializeRequest(TInput input)
         {
-            var request = new SmithyEventStreamHttpRequest(HttpMethod.Post, methodPath)
+            var request = new SmithyDuplexHttpRequest(HttpMethod.Post, methodPath)
             {
-                Events = SingleEvent(inputIsUnit ? [] : requestCodec!.Serialize(input)),
+                Body = SingleChunk(
+                    GrpcMessageFraming.Frame(inputIsUnit ? [] : requestCodec!.Serialize(input))
+                ),
                 ContentType = ContentType,
             };
             request.Headers["te"] = ["trailers"];
@@ -334,34 +336,34 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-            SmithyEventStreamHttpResponse response,
+            SmithyDuplexHttpResponse response,
             CancellationToken cancellationToken = default
         )
         {
             ArgumentNullException.ThrowIfNull(response);
             EnsureGrpcResponse(response);
-            return DeserializeEventsAsync(response.Events, responseCodec, cancellationToken);
+            return ReadResponseEventsAsync(response, responseCodec, cancellationToken);
         }
 
-        public IAsyncEnumerable<SmithyEventFrame> SerializeResponseEventsAsync(
+        public IAsyncEnumerable<ReadOnlyMemory<byte>> SerializeResponseEventsAsync(
             IAsyncEnumerable<TOutputEvent> output,
             CancellationToken cancellationToken = default
         )
         {
             ArgumentNullException.ThrowIfNull(output);
-            return SerializeEventsAsync(output, responseCodec, cancellationToken);
+            return FrameEventsAsync(output, responseCodec, cancellationToken);
         }
     }
 
-    private sealed class ClientEventStreamOperationProtocol<TInput, TInputEvent, TOutput>
-        : IClientEventStreamOperationProtocol<TInputEvent, TOutput>
+    private sealed class InputEventStreamOperationProtocol<TInput, TInputEvent, TOutput>
+        : IInputEventStreamOperationProtocol<TInputEvent, TOutput>
     {
         private readonly string methodPath;
         private readonly bool outputIsUnit;
         private readonly IProtoCodec<TInputEvent> requestCodec;
         private readonly IProtoCodec<TOutput>? responseCodec;
 
-        public ClientEventStreamOperationProtocol(
+        public InputEventStreamOperationProtocol(
             ServiceSchema service,
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent
@@ -373,15 +375,15 @@ public sealed class GrpcProtocol : IProtocol
             responseCodec = outputIsUnit ? null : ProtoCodec.FromSchema(operation.Output);
         }
 
-        public SmithyEventStreamHttpRequest SerializeRequest(
+        public SmithyDuplexHttpRequest SerializeRequest(
             IAsyncEnumerable<TInputEvent> input,
             CancellationToken cancellationToken = default
         )
         {
             ArgumentNullException.ThrowIfNull(input);
-            var request = new SmithyEventStreamHttpRequest(HttpMethod.Post, methodPath)
+            var request = new SmithyDuplexHttpRequest(HttpMethod.Post, methodPath)
             {
-                Events = SerializeEventsAsync(input, requestCodec, cancellationToken),
+                Body = FrameEventsAsync(input, requestCodec, cancellationToken),
                 ContentType = ContentType,
             };
             request.Headers["te"] = ["trailers"];
@@ -389,16 +391,16 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public IAsyncEnumerable<TInputEvent> DeserializeRequestEventsAsync(
-            SmithyEventStreamHttpRequest request,
+            Stream body,
             CancellationToken cancellationToken = default
         )
         {
-            ArgumentNullException.ThrowIfNull(request);
-            return DeserializeEventsAsync(request.Events, requestCodec, cancellationToken);
+            ArgumentNullException.ThrowIfNull(body);
+            return ReadRequestEventsAsync(body, requestCodec, cancellationToken);
         }
 
         public ValueTask<TOutput> DeserializeResponseAsync(
-            SmithyEventStreamHttpResponse response,
+            SmithyDuplexHttpResponse response,
             CancellationToken cancellationToken = default
         )
         {
@@ -406,23 +408,18 @@ public sealed class GrpcProtocol : IProtocol
             EnsureGrpcResponse(response);
             if (outputIsUnit)
             {
+                response.Body.Dispose();
                 return ValueTask.FromResult((TOutput)(object)SmithyUnit.Value);
             }
 
-            return DeserializeSingleResponseAsync(
-                response.Events,
-                responseCodec!,
-                cancellationToken
-            );
+            return DeserializeSingleResponseAsync(response, responseCodec!, cancellationToken);
         }
 
-        public SmithyEventFrame SerializeResponse(TOutput output)
-        {
-            return new SmithyEventFrame(outputIsUnit ? [] : responseCodec!.Serialize(output));
-        }
+        public ReadOnlyMemory<byte> SerializeResponse(TOutput output) =>
+            GrpcMessageFraming.Frame(outputIsUnit ? [] : responseCodec!.Serialize(output));
     }
 
-    private sealed class BidirectionalEventStreamOperationProtocol<
+    private sealed class DuplexEventStreamOperationProtocol<
         TInput,
         TOutput,
         TInputEvent,
@@ -432,7 +429,7 @@ public sealed class GrpcProtocol : IProtocol
         OperationSchema<TInput, TOutput> operation,
         Schema<TInputEvent> inputEvent,
         Schema<TOutputEvent> outputEvent
-    ) : IBidirectionalEventStreamOperationProtocol<TInputEvent, TOutputEvent>
+    ) : IDuplexEventStreamOperationProtocol<TInputEvent, TOutputEvent>
     {
         private readonly string methodPath = MethodPath(service, operation.Id.Name);
         private readonly IProtoCodec<TInputEvent> requestCodec = ProtoCodec.FromSchema(inputEvent);
@@ -440,15 +437,15 @@ public sealed class GrpcProtocol : IProtocol
             outputEvent
         );
 
-        public SmithyEventStreamHttpRequest SerializeRequest(
+        public SmithyDuplexHttpRequest SerializeRequest(
             IAsyncEnumerable<TInputEvent> input,
             CancellationToken cancellationToken = default
         )
         {
             ArgumentNullException.ThrowIfNull(input);
-            var request = new SmithyEventStreamHttpRequest(HttpMethod.Post, methodPath)
+            var request = new SmithyDuplexHttpRequest(HttpMethod.Post, methodPath)
             {
-                Events = SerializeEventsAsync(input, requestCodec, cancellationToken),
+                Body = FrameEventsAsync(input, requestCodec, cancellationToken),
                 ContentType = ContentType,
             };
             request.Headers["te"] = ["trailers"];
@@ -456,31 +453,31 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public IAsyncEnumerable<TInputEvent> DeserializeRequestEventsAsync(
-            SmithyEventStreamHttpRequest request,
+            Stream body,
             CancellationToken cancellationToken = default
         )
         {
-            ArgumentNullException.ThrowIfNull(request);
-            return DeserializeEventsAsync(request.Events, requestCodec, cancellationToken);
+            ArgumentNullException.ThrowIfNull(body);
+            return ReadRequestEventsAsync(body, requestCodec, cancellationToken);
         }
 
         public IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-            SmithyEventStreamHttpResponse response,
+            SmithyDuplexHttpResponse response,
             CancellationToken cancellationToken = default
         )
         {
             ArgumentNullException.ThrowIfNull(response);
             EnsureGrpcResponse(response);
-            return DeserializeEventsAsync(response.Events, responseCodec, cancellationToken);
+            return ReadResponseEventsAsync(response, responseCodec, cancellationToken);
         }
 
-        public IAsyncEnumerable<SmithyEventFrame> SerializeResponseEventsAsync(
+        public IAsyncEnumerable<ReadOnlyMemory<byte>> SerializeResponseEventsAsync(
             IAsyncEnumerable<TOutputEvent> output,
             CancellationToken cancellationToken = default
         )
         {
             ArgumentNullException.ThrowIfNull(output);
-            return SerializeEventsAsync(output, responseCodec, cancellationToken);
+            return FrameEventsAsync(output, responseCodec, cancellationToken);
         }
     }
 
@@ -503,14 +500,16 @@ public sealed class GrpcProtocol : IProtocol
         return response.StatusCode != System.Net.HttpStatusCode.OK || !IsGrpcContentType(response);
     }
 
-    private static void EnsureGrpcResponse(SmithyEventStreamHttpResponse response)
+    private static void EnsureGrpcResponse(SmithyDuplexHttpResponse response)
     {
-        ArgumentNullException.ThrowIfNull(response);
-        if (response.StatusCode == HttpStatusCode.OK && IsGrpcContentType(response))
+        if (response.StatusCode == HttpStatusCode.OK && IsGrpcContentType(response.ContentHeaders))
         {
             return;
         }
 
+        // Transport-level failure (a 404, a 500 page, an HTTP/1.1 downgrade, ...). Release the
+        // connection eagerly; the informative error comes from the captured status/headers.
+        response.Body.Dispose();
         var message =
             response.Headers.TryGetValue(GrpcMessageHeader, out var values) && values.Count > 0
                 ? values[0]
@@ -520,16 +519,51 @@ public sealed class GrpcProtocol : IProtocol
         );
     }
 
+    /// <summary>
+    /// gRPC signals stream success in the grpc-status trailer, which only materializes after the
+    /// body is fully read. A non-zero (or missing) status means the server-side call failed.
+    /// </summary>
+    private static void ThrowIfGrpcError(Func<string, string?>? trailer)
+    {
+        var status = trailer?.Invoke(GrpcStatusHeader);
+        if (status is null)
+        {
+            throw new InvalidOperationException(
+                "gRPC stream ended without a grpc-status trailer; treating it as an incomplete, failed response."
+            );
+        }
+
+        if (string.Equals(status, "0", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var message = trailer!.Invoke(GrpcMessageHeader);
+        var name =
+            int.TryParse(
+                status,
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var code
+            ) && Enum.IsDefined(typeof(GrpcStatus), code)
+                ? ((GrpcStatus)code).ToString()
+                : "Unknown";
+        throw new InvalidOperationException(
+            $"gRPC stream failed with status {status} ({name})"
+                + (string.IsNullOrEmpty(message) ? "." : $": {message}")
+        );
+    }
+
     private static string MethodPath(ServiceSchema service, string operationName) =>
         $"/{service.Id.Namespace}.{service.Id.Name}/{operationName}";
 
-    private static async IAsyncEnumerable<SmithyEventFrame> SingleEvent(byte[] payload)
+    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> SingleChunk(byte[] framed)
     {
         await Task.CompletedTask.ConfigureAwait(false);
-        yield return new SmithyEventFrame(payload);
+        yield return framed;
     }
 
-    private static async IAsyncEnumerable<SmithyEventFrame> SerializeEventsAsync<T>(
+    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> FrameEventsAsync<T>(
         IAsyncEnumerable<T> events,
         IProtoCodec<T> codec,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
@@ -539,25 +573,27 @@ public sealed class GrpcProtocol : IProtocol
             var value in events.WithCancellation(cancellationToken).ConfigureAwait(false)
         )
         {
-            yield return new SmithyEventFrame(codec.Serialize(value));
+            yield return GrpcMessageFraming.Frame(codec.Serialize(value));
         }
     }
 
-    private static async IAsyncEnumerable<T> DeserializeEventsAsync<T>(
-        IAsyncEnumerable<SmithyEventFrame> events,
+    private static async IAsyncEnumerable<T> ReadRequestEventsAsync<T>(
+        Stream body,
         IProtoCodec<T> codec,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
         await foreach (
-            var frame in events.WithCancellation(cancellationToken).ConfigureAwait(false)
+            var payload in GrpcMessageFraming
+                .ReadAllAsync(body, cancellationToken)
+                .ConfigureAwait(false)
         )
         {
             // An all-default message proto-encodes to zero bytes; deserialize it to an empty
             // instance rather than null. A frame the codec cannot map to a known case (e.g. a newer
             // peer's unknown union case) deserializes to null — skip it for forward-compatibility
             // instead of surfacing a null event.
-            var value = codec.Deserialize(frame.Payload);
+            var value = codec.Deserialize(payload);
             if (value is not null)
             {
                 yield return value;
@@ -565,26 +601,55 @@ public sealed class GrpcProtocol : IProtocol
         }
     }
 
+    private static async IAsyncEnumerable<T> ReadResponseEventsAsync<T>(
+        SmithyDuplexHttpResponse response,
+        IProtoCodec<T> codec,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        var body = response.Body;
+        await using (body.ConfigureAwait(false))
+        {
+            await foreach (
+                var payload in GrpcMessageFraming
+                    .ReadAllAsync(body, cancellationToken)
+                    .ConfigureAwait(false)
+            )
+            {
+                var value = codec.Deserialize(payload);
+                if (value is not null)
+                {
+                    yield return value;
+                }
+            }
+        }
+
+        ThrowIfGrpcError(response.Trailer);
+    }
+
     private static async ValueTask<T> DeserializeSingleResponseAsync<T>(
-        IAsyncEnumerable<SmithyEventFrame> events,
+        SmithyDuplexHttpResponse response,
         IProtoCodec<T> codec,
         CancellationToken cancellationToken
     )
     {
-        await foreach (
-            var frame in events.WithCancellation(cancellationToken).ConfigureAwait(false)
-        )
+        var body = response.Body;
+        await using (body.ConfigureAwait(false))
         {
-            return codec.Deserialize(frame.Payload);
+            await foreach (
+                var payload in GrpcMessageFraming
+                    .ReadAllAsync(body, cancellationToken)
+                    .ConfigureAwait(false)
+            )
+            {
+                return codec.Deserialize(payload);
+            }
         }
 
         return default!;
     }
 
     private static bool IsGrpcContentType(SmithyHttpResponse response) =>
-        IsGrpcContentType(response.ContentHeaders);
-
-    private static bool IsGrpcContentType(SmithyEventStreamHttpResponse response) =>
         IsGrpcContentType(response.ContentHeaders);
 
     private static bool IsGrpcContentType(

@@ -167,10 +167,11 @@ public static class SmithyAspNetCoreProtocol
         }
     }
 
-    public static SmithyEventStreamHttpRequest CreateSmithyGrpcEventStreamRequest(
-        HttpContext httpContext,
-        CancellationToken cancellationToken = default
-    )
+    /// <summary>
+    /// Prepares the request for event-stream reads and returns its raw body stream. The bound
+    /// server protocol deframes and decodes the events itself.
+    /// </summary>
+    public static Stream GetEventStreamRequestBody(HttpContext httpContext)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
 
@@ -181,30 +182,17 @@ public static class SmithyAspNetCoreProtocol
             minRequestBodyDataRateFeature.MinDataRate = null;
         }
 
-        var request = new SmithyEventStreamHttpRequest(
-            new HttpMethod(httpContext.Request.Method),
-            httpContext.Request.PathBase.ToString() + httpContext.Request.Path.ToString()
-        )
-        {
-            ContentType = httpContext.Request.ContentType,
-            Events = GrpcMessageFraming.ReadAllAsync(httpContext.Request.Body, cancellationToken),
-        };
-        foreach (var header in httpContext.Request.Headers)
-        {
-            request.Headers[header.Key] = [.. header.Value.Select(value => value ?? string.Empty)];
-        }
-
-        return request;
+        return httpContext.Request.Body;
     }
 
     public static async Task WriteSmithyGrpcEventStreamResponseAsync(
         HttpContext httpContext,
-        IAsyncEnumerable<SmithyEventFrame> events,
+        IAsyncEnumerable<ReadOnlyMemory<byte>> chunks,
         CancellationToken cancellationToken = default
     )
     {
         ArgumentNullException.ThrowIfNull(httpContext);
-        ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(chunks);
 
         httpContext.Response.StatusCode = StatusCodes.Status200OK;
         httpContext.Response.Headers.ContentType = "application/grpc+proto";
@@ -232,11 +220,11 @@ public static class SmithyAspNetCoreProtocol
         try
         {
             await foreach (
-                var frame in events.WithCancellation(cancellationToken).ConfigureAwait(false)
+                var chunk in chunks.WithCancellation(cancellationToken).ConfigureAwait(false)
             )
             {
-                await GrpcMessageFraming
-                    .WriteAsync(httpContext.Response.Body, frame.Payload, cancellationToken)
+                await httpContext
+                    .Response.Body.WriteAsync(chunk, cancellationToken)
                     .ConfigureAwait(false);
                 await httpContext.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
@@ -276,14 +264,13 @@ public static class SmithyAspNetCoreProtocol
 
     public static Task WriteSmithyGrpcEventStreamResponseAsync(
         HttpContext httpContext,
-        SmithyEventFrame eventFrame,
+        ReadOnlyMemory<byte> framedMessage,
         CancellationToken cancellationToken = default
     )
     {
-        ArgumentNullException.ThrowIfNull(eventFrame);
         return WriteSmithyGrpcEventStreamResponseAsync(
             httpContext,
-            SingleEvent(eventFrame),
+            SingleChunk(framedMessage),
             cancellationToken
         );
     }
@@ -327,10 +314,12 @@ public static class SmithyAspNetCoreProtocol
         return content;
     }
 
-    private static async IAsyncEnumerable<SmithyEventFrame> SingleEvent(SmithyEventFrame eventFrame)
+    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> SingleChunk(
+        ReadOnlyMemory<byte> framedMessage
+    )
     {
         await Task.CompletedTask.ConfigureAwait(false);
-        yield return eventFrame;
+        yield return framedMessage;
     }
 
     private static SmithyHttpBody ToHttpBody(byte[] content) =>

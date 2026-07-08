@@ -44,20 +44,20 @@ public interface IServiceProtocol
     IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation);
 
-    IServerEventStreamOperationProtocol<TInput, TOutputEvent>
-        ForServerEventStreamOperation<TInput, TOutput, TOutputEvent>(
+    IOutputEventStreamOperationProtocol<TInput, TOutputEvent>
+        ForOutputEventStreamOperation<TInput, TOutput, TOutputEvent>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TOutputEvent> outputEvent)
         => throw new NotSupportedException();
 
-    IClientEventStreamOperationProtocol<TInputEvent, TOutput>
-        ForClientEventStreamOperation<TInput, TInputEvent, TOutput>(
+    IInputEventStreamOperationProtocol<TInputEvent, TOutput>
+        ForInputEventStreamOperation<TInput, TInputEvent, TOutput>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent)
         => throw new NotSupportedException();
 
-    IBidirectionalEventStreamOperationProtocol<TInputEvent, TOutputEvent>
-        ForBidirectionalEventStreamOperation<TInput, TOutput, TInputEvent, TOutputEvent>(
+    IDuplexEventStreamOperationProtocol<TInputEvent, TOutputEvent>
+        ForDuplexEventStreamOperation<TInput, TOutput, TInputEvent, TOutputEvent>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent,
             Schema<TOutputEvent> outputEvent)
@@ -65,9 +65,13 @@ public interface IServiceProtocol
 }
 ```
 
-The three operation interfaces stay separate. Their method signatures are
-different in meaningful ways, and merging them into one generic interface would
-force nullable or unused members into at least two cases.
+Operation interfaces are named by stream direction (output / input / duplex —
+where the `@streaming` member sits in the model) and split by call side, the
+same client/server split the unary `IOperationProtocol` uses: each direction
+has a `…ClientProtocol` and a `…ServerProtocol` half, and the combined
+interface protocol implementations implement. The three directions stay
+separate interfaces — their signatures differ in meaningful ways, and merging
+them would force nullable or unused members into at least two cases.
 
 ### Generated API
 
@@ -99,25 +103,38 @@ Output streams are cold. The transport call starts when the caller enumerates
 the returned `IAsyncEnumerable<TEvent>`, and enumeration cancellation is the
 primary cancellation path for the stream.
 
-### Event Frame Model
+### Framing and the Duplex Transport
 
-The protocol-neutral event-stream transport shape is a sequence of logical event
-frames:
+The protocol owns all wire framing; there is no shared frame type at the
+transport boundary. Client halves emit fully framed request bodies as
+`IAsyncEnumerable<ReadOnlyMemory<byte>>` chunks and deframe raw response
+streams themselves; server halves deframe the raw request body `Stream` and
+emit framed response chunks:
 
-```csharp
-public sealed record SmithyEventFrame(byte[] Payload);
-```
-
-The event-stream request/response types carry
-`IAsyncEnumerable<SmithyEventFrame>`. Protocol implementations serialize typed
-events into frame payloads and deserialize frame payloads back into typed events.
-Wire-specific framing remains protocol-owned:
-
-- gRPC owns the 5-byte message prefix and HTTP/2 trailers.
-- AWS event stream protocols own Smithy event-stream message framing and
-  per-message headers.
+- gRPC owns the 5-byte message prefix and validates the `grpc-status` HTTP/2
+  trailer after the response stream ends.
+- AWS event stream protocols own `vnd.amazon.eventstream` message framing,
+  typed per-message headers, and CRC validation.
 - Other event-stream protocols can provide their own frame encoding without
   changing generated client signatures.
+
+The transport underneath is protocol-neutral duplex HTTP:
+
+```csharp
+public interface IDuplexHttpTransport
+{
+    Task<SmithyDuplexHttpResponse> SendAsync(
+        SmithyDuplexHttpRequest request,
+        CancellationToken cancellationToken = default);
+}
+```
+
+`SmithyDuplexHttpRequest.Body` carries the protocol-framed chunks (each is
+written and flushed as one unit); `SmithyDuplexHttpResponse.Body` is the raw
+response stream, `Trailer` resolves HTTP trailing headers once the body has
+been read to its end, and disposing the body releases the connection. One
+`HttpClient`-backed implementation (`DuplexHttpClientTransport`) serves every
+streaming protocol.
 
 ## Streaming Blob Payloads
 
