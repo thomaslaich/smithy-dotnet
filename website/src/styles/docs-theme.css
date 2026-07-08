@@ -3,10 +3,10 @@
  * near-black dark mode so moving between them feels seamless.
  */
 
-/* Fonts — match the landing (IBM Plex Sans body, JetBrains Mono code). */
+/* Fonts — Geist body + Geist Mono code for the docs. */
 :root {
-  --sl-font: 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  --sl-font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+  --sl-font: 'Geist', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --sl-font-mono: 'Geist Mono', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
 }
 
 /* Big headings echo the landing's display face; smaller ones stay in the body
