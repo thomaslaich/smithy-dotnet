@@ -92,7 +92,8 @@
     </ParameterGroup>
     <Task>
       <Using Namespace="System.IO" />
-      <Code Type="Fragment" Language="cs"><![CDATA[
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
         var text = File.ReadAllText(InputFile);
         if (!text.Contains(Find))
         {
@@ -106,7 +107,8 @@
             Directory.CreateDirectory(Path.GetDirectoryName(OutputFile));
             File.WriteAllText(OutputFile, text.Replace(Find, ReplaceWith));
         }
-      ]]></Code>
+      ]]>
+      </Code>
     </Task>
   </UsingTask>
 
