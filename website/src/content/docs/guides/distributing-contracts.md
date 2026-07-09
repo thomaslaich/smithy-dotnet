@@ -128,7 +128,7 @@ dependencies automatically:
 </PropertyGroup>
 
 <ItemGroup>
-  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.4.0" />
+  <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.5.0" />
   <PackageReference Include="MyService.Contracts" Version="1.0.0" />
 </ItemGroup>
 ```
