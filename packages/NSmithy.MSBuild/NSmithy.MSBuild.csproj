@@ -7,6 +7,7 @@
     <BuildOutputTargetFolder>tasks</BuildOutputTargetFolder>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_NSmithyPackVersionedBuildFiles</TargetsForTfmSpecificContentInPackage>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,27 +19,6 @@
     -->
     <PackageReference Include="Microsoft.Build.Framework" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" PrivateAssets="all" />
-
-    <!--
-      build/ props: auto-imported for direct consumers only (projects that explicitly
-      reference NSmithy.MSBuild). Sets SmithySources default and other opt-in defaults.
-    -->
-    <None
-      Include="Targets/NSmithy.MSBuild.props"
-      Pack="true"
-      PackagePath="build/NSmithy.MSBuild.props"
-    />
-
-    <!--
-      buildTransitive/ targets: auto-imported for every project that has NSmithy.MSBuild
-      anywhere in its NuGet dependency tree — including server/client projects that get
-      it transitively via NSmithy.Server or NSmithy.Client.
-    -->
-    <None
-      Include="Targets/NSmithy.MSBuild.targets"
-      Pack="true"
-      PackagePath="buildTransitive/NSmithy.MSBuild.targets"
-    />
 
     <!--
       Bundled Smithy CLI — populated by tools/download-smithy-cli.sh.
@@ -79,4 +59,82 @@
       Condition="Exists('tools/smithy-cli/windows-x64/bin/smithy.bat')"
     />
   </ItemGroup>
+
+  <!--
+    build/ props and buildTransitive/ targets:
+      - build/ props are auto-imported for direct consumers only (projects that
+        explicitly reference NSmithy.MSBuild). Sets SmithySources default and
+        other opt-in defaults.
+      - buildTransitive/ targets are auto-imported for every project that has
+        NSmithy.MSBuild anywhere in its NuGet dependency tree — including
+        server/client projects that get it transitively via NSmithy.Server or
+        NSmithy.Client.
+
+    Both files default SmithyCSharpCodegenVersion to the -SNAPSHOT dev version so
+    that in-repo consumers (conformance tests import Targets/ directly) resolve the
+    codegen JAR that `just codegen` publishes to ~/.m2. The published package must
+    instead reference the JAR version released to Maven Central, which matches the
+    package version. So the files are packed via copies under obj/ with the dev
+    version substituted by $(Version) — a no-op for local `just pack` (where
+    $(Version) IS the dev version) and the release version on tag builds (where
+    the workflow passes -p:Version).
+  -->
+  <UsingTask
+    TaskName="_NSmithySubstituteInFile"
+    TaskFactory="RoslynCodeTaskFactory"
+    AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll"
+  >
+    <ParameterGroup>
+      <InputFile ParameterType="System.String" Required="true" />
+      <OutputFile ParameterType="System.String" Required="true" />
+      <Find ParameterType="System.String" Required="true" />
+      <ReplaceWith ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        var text = File.ReadAllText(InputFile);
+        if (!text.Contains(Find))
+        {
+            Log.LogError(
+                "NSmithy: '" + InputFile + "' does not contain '" + Find + "'. "
+                + "The SmithyCSharpCodegenVersion default must equal "
+                + "$(VersionPrefix)-SNAPSHOT (see Directory.Build.props); bump both together.");
+        }
+        else
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(OutputFile));
+            File.WriteAllText(OutputFile, text.Replace(Find, ReplaceWith));
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="_NSmithyPackVersionedBuildFiles">
+    <PropertyGroup>
+      <_NSmithyPackObjDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'nupkg'))</_NSmithyPackObjDir>
+    </PropertyGroup>
+    <_NSmithySubstituteInFile
+      InputFile="$(MSBuildProjectDirectory)/Targets/NSmithy.MSBuild.props"
+      OutputFile="$(_NSmithyPackObjDir)NSmithy.MSBuild.props"
+      Find="$(VersionPrefix)-SNAPSHOT"
+      ReplaceWith="$(Version)"
+    />
+    <_NSmithySubstituteInFile
+      InputFile="$(MSBuildProjectDirectory)/Targets/NSmithy.MSBuild.targets"
+      OutputFile="$(_NSmithyPackObjDir)NSmithy.MSBuild.targets"
+      Find="$(VersionPrefix)-SNAPSHOT"
+      ReplaceWith="$(Version)"
+    />
+    <ItemGroup>
+      <TfmSpecificPackageFile
+        Include="$(_NSmithyPackObjDir)NSmithy.MSBuild.props"
+        PackagePath="build/NSmithy.MSBuild.props"
+      />
+      <TfmSpecificPackageFile
+        Include="$(_NSmithyPackObjDir)NSmithy.MSBuild.targets"
+        PackagePath="buildTransitive/NSmithy.MSBuild.targets"
+      />
+    </ItemGroup>
+  </Target>
 </Project>
