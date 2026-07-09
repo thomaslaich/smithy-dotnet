@@ -11,6 +11,52 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.5.0]
+
+This release adds observability to the client runtime, generated paginators,
+per-operation endpoint and auth-scheme resolution, and a reworked retry
+strategy. It also fixes the release packaging bug that made previous releases
+unusable on machines without a locally built codegen JAR.
+
+### Added
+
+- **OpenTelemetry instrumentation.** The client runtime emits spans and metrics
+  for operation execution, and the rest-json1 example wires up an end-to-end
+  observability stack. (#86, #90)
+- **Generated paginators.** `@paginated` operations get `IAsyncEnumerable`
+  paginator methods on the generated client. (#89)
+- **Per-operation endpoint resolution and auth scheme selection.** Endpoint and
+  auth-scheme resolution now run per operation instead of per client. (#87)
+- **Operation timeout.** `OperationTimeout` applies a deadline over the whole
+  operation execution, including retries. (#85)
+- **Explicit HTTP body model.** Request and response bodies are represented by
+  an explicit model in the HTTP layer. (#79)
+
+### Changed
+
+- **Retry overhaul.** The retry strategy was reworked. (#82)
+- **Docs reworked.** Protocol pages share a single usage example, design and
+  protocol docs were updated for 0.4.0 accuracy, and the landing page and docs
+  copy were toned down. (#78, #80, #81, #92)
+
+### Fixed
+
+- **Released packages referenced an unpublished codegen JAR.** The packed
+  `NSmithy.MSBuild` build files shipped the `-SNAPSHOT` dev default for
+  `SmithyCSharpCodegenVersion`, so released packages injected a Maven dependency
+  on a codegen version that only exists in a dev `~/.m2` — code generation
+  failed on any clean machine following the quickstart. The release version is
+  now substituted into the packed files, and packing fails if the default
+  drifts. (#95)
+- **Streaming response bodies.** Abandoned streaming response bodies are now
+  disposed by the client runtime. (#84)
+- **Client configuration.** Caller-supplied config is copied at client
+  construction instead of being referenced. (#83)
+
+### Packages
+
+All packages are published to NuGet at `0.5.0`.
+
 ## [0.4.0]
 
 This release expands protocol and authentication coverage, adds generated
@@ -216,7 +262,8 @@ All published to NuGet at `0.1.0`:
 - **Protocols:** `NSmithy.Protocols.Rest`, `NSmithy.Protocols.RestJson`, `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`
 - **Tooling:** `NSmithy.Templates` (project templates), `dotnet-nsmithy` (CLI tool)
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.1.0...v0.2.0
