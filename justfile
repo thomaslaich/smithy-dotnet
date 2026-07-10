@@ -39,64 +39,14 @@ pack:
     dotnet pack NSmithy.slnx --configuration Release --no-build --output artifacts/packages ${VERSION:+-p:Version=$VERSION}
 
 refresh-examples:
-    rm -rf examples/simple-rest-json/contracts/obj
-    rm -rf examples/simple-rest-json/server/obj
-    rm -rf examples/simple-rest-json/client/obj
-    rm -rf examples/rest-json1/contracts/obj
-    rm -rf examples/rest-json1/server/obj
-    rm -rf examples/rest-json1/client/obj
-    rm -rf examples/rpcv2cbor/contracts/obj
-    rm -rf examples/rpcv2cbor/server/obj
-    rm -rf examples/rpcv2cbor/client/obj
-    rm -rf examples/aws-localstack/client/obj
-    rm -rf examples/grpc/contracts/obj
-    rm -rf examples/grpc/server/obj
-    rm -rf examples/grpc/client/obj
-    rm -rf examples/grpc-streaming/contracts/obj
-    rm -rf examples/grpc-streaming/server/obj
-    rm -rf examples/grpc-streaming/client/obj
-    rm -rf examples/grpc-streaming/grpcnet-server/obj
-    rm -rf examples/grpc-streaming/grpcnet-client/obj
-    rm -rf examples/polyglot/dotnet/obj
-    dotnet clean examples/simple-rest-json/server/NSmithy.Examples.SimpleRestJson.Server.csproj --verbosity minimal
-    dotnet clean examples/simple-rest-json/client/NSmithy.Examples.SimpleRestJson.Client.csproj --verbosity minimal
-    dotnet clean examples/rest-json1/server/NSmithy.Examples.RestJson1.Server.csproj --verbosity minimal
-    dotnet clean examples/rest-json1/client/NSmithy.Examples.RestJson1.Client.csproj --verbosity minimal
-    dotnet clean examples/rpcv2cbor/server/NSmithy.Examples.RpcV2Cbor.Server.csproj --verbosity minimal
-    dotnet clean examples/rpcv2cbor/client/NSmithy.Examples.RpcV2Cbor.Client.csproj --verbosity minimal
-    dotnet clean examples/aws-localstack/client/NSmithy.Examples.AwsLocalStack.Client.csproj --verbosity minimal
-    dotnet clean examples/grpc/server/NSmithy.Examples.Grpc.Server.csproj --verbosity minimal
-    dotnet clean examples/grpc/client/NSmithy.Examples.Grpc.Client.csproj --verbosity minimal
-    dotnet clean examples/grpc-streaming/server/NSmithy.Examples.GrpcStreaming.Server.csproj --verbosity minimal
-    dotnet clean examples/grpc-streaming/client/NSmithy.Examples.GrpcStreaming.Client.csproj --verbosity minimal
-    dotnet clean examples/polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj --verbosity minimal
-    dotnet restore examples/simple-rest-json/contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj --no-cache --force
-    dotnet restore examples/simple-rest-json/server/NSmithy.Examples.SimpleRestJson.Server.csproj --no-cache --force
-    dotnet restore examples/simple-rest-json/client/NSmithy.Examples.SimpleRestJson.Client.csproj --no-cache --force
-    dotnet restore examples/rest-json1/contracts/NSmithy.Examples.RestJson1.Contracts.csproj --no-cache --force
-    dotnet restore examples/rest-json1/server/NSmithy.Examples.RestJson1.Server.csproj --no-cache --force
-    dotnet restore examples/rest-json1/client/NSmithy.Examples.RestJson1.Client.csproj --no-cache --force
-    dotnet restore examples/rpcv2cbor/contracts/NSmithy.Examples.RpcV2Cbor.Contracts.csproj --no-cache --force
-    dotnet restore examples/rpcv2cbor/server/NSmithy.Examples.RpcV2Cbor.Server.csproj --no-cache --force
-    dotnet restore examples/rpcv2cbor/client/NSmithy.Examples.RpcV2Cbor.Client.csproj --no-cache --force
-    dotnet restore examples/aws-localstack/client/NSmithy.Examples.AwsLocalStack.Client.csproj --no-cache --force
-    dotnet restore examples/grpc/contracts/Library.Contracts.csproj --no-cache --force
-    dotnet restore examples/grpc/server/NSmithy.Examples.Grpc.Server.csproj --no-cache --force
-    dotnet restore examples/grpc/client/NSmithy.Examples.Grpc.Client.csproj --no-cache --force
-    dotnet restore examples/grpc-streaming/contracts/Streaming.Contracts.csproj --no-cache --force
-    dotnet restore examples/grpc-streaming/server/NSmithy.Examples.GrpcStreaming.Server.csproj --no-cache --force
-    dotnet restore examples/grpc-streaming/client/NSmithy.Examples.GrpcStreaming.Client.csproj --no-cache --force
-    dotnet restore examples/grpc-streaming/grpcnet-server/NSmithy.Examples.GrpcStreaming.GrpcNetServer.csproj --no-cache --force
-    dotnet restore examples/grpc-streaming/grpcnet-client/NSmithy.Examples.GrpcStreaming.GrpcNetClient.csproj --no-cache --force
-    dotnet restore examples/polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj --no-cache --force
+    find examples -type d -name obj -prune -exec rm -rf {} +
+    dotnet restore examples/examples.slnx --no-cache --force
     # gRPC examples need two build passes: the first generates the .proto file via the
     # smithy build, the second picks it up via the static <Protobuf> glob and compiles
     # it with Grpc.Tools. (MSBuild evaluates Protobuf_Compile's item condition at
     # graph-build time, before dynamic items added inside target bodies are visible.)
-    dotnet build examples/grpc/server/NSmithy.Examples.Grpc.Server.csproj --verbosity minimal >/dev/null 2>&1 || true
-    dotnet build examples/grpc/client/NSmithy.Examples.Grpc.Client.csproj --verbosity minimal >/dev/null 2>&1 || true
-    dotnet build examples/grpc-streaming/grpc-streaming.slnx --verbosity minimal >/dev/null 2>&1 || true
-    dotnet build examples/grpc-streaming/grpc-streaming.slnx --verbosity minimal
+    dotnet build examples/examples.slnx --verbosity minimal >/dev/null 2>&1 || true
+    dotnet build examples/examples.slnx --verbosity minimal
 
 ci: check-format build test pack
 

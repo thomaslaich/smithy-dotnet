@@ -9,32 +9,8 @@
       "path": "codegen"
     },
     {
-      "name": "Example: SimpleRestJson",
-      "path": "examples/simple-rest-json"
-    },
-    {
-      "name": "Example: RestJson1",
-      "path": "examples/rest-json1"
-    },
-    {
-      "name": "Example: RPC v2 CBOR",
-      "path": "examples/rpcv2cbor"
-    },
-    {
-      "name": "Example: gRPC",
-      "path": "examples/grpc"
-    },
-    {
-      "name": "Example: gRPC streaming",
-      "path": "examples/grpc-streaming"
-    },
-    {
-      "name": "Example: Polyglot",
-      "path": "examples/polyglot"
-    },
-    {
-      "name": "Example: AWS Localstack",
-      "path": "examples/aws-localstack"
+      "name": "Examples",
+      "path": "examples"
     },
   ],
   "settings": {

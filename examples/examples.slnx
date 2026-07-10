@@ -1,0 +1,35 @@
+<Solution>
+  <Folder Name="/rest-json1/">
+    <Project Path="rest-json1/contracts/NSmithy.Examples.RestJson1.Contracts.csproj" />
+    <Project Path="rest-json1/server/NSmithy.Examples.RestJson1.Server.csproj" />
+    <Project Path="rest-json1/client/NSmithy.Examples.RestJson1.Client.csproj" />
+  </Folder>
+  <Folder Name="/simple-rest-json/">
+    <Project Path="simple-rest-json/contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj" />
+    <Project Path="simple-rest-json/server/NSmithy.Examples.SimpleRestJson.Server.csproj" />
+    <Project Path="simple-rest-json/client/NSmithy.Examples.SimpleRestJson.Client.csproj" />
+  </Folder>
+  <Folder Name="/rpcv2cbor/">
+    <Project Path="rpcv2cbor/contracts/NSmithy.Examples.RpcV2Cbor.Contracts.csproj" />
+    <Project Path="rpcv2cbor/server/NSmithy.Examples.RpcV2Cbor.Server.csproj" />
+    <Project Path="rpcv2cbor/client/NSmithy.Examples.RpcV2Cbor.Client.csproj" />
+  </Folder>
+  <Folder Name="/grpc/">
+    <Project Path="grpc/contracts/Library.Contracts.csproj" />
+    <Project Path="grpc/server/NSmithy.Examples.Grpc.Server.csproj" />
+    <Project Path="grpc/client/NSmithy.Examples.Grpc.Client.csproj" />
+  </Folder>
+  <Folder Name="/grpc-streaming/">
+    <Project Path="grpc-streaming/contracts/Streaming.Contracts.csproj" />
+    <Project Path="grpc-streaming/server/NSmithy.Examples.GrpcStreaming.Server.csproj" />
+    <Project Path="grpc-streaming/client/NSmithy.Examples.GrpcStreaming.Client.csproj" />
+    <Project Path="grpc-streaming/grpcnet-server/NSmithy.Examples.GrpcStreaming.GrpcNetServer.csproj" />
+    <Project Path="grpc-streaming/grpcnet-client/NSmithy.Examples.GrpcStreaming.GrpcNetClient.csproj" />
+  </Folder>
+  <Folder Name="/aws-localstack/">
+    <Project Path="aws-localstack/client/NSmithy.Examples.AwsLocalStack.Client.csproj" />
+  </Folder>
+  <Folder Name="/polyglot/">
+    <Project Path="polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj" />
+  </Folder>
+</Solution>
