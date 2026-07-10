@@ -10,8 +10,8 @@ All .NET projects are collected in a single solution, [`examples.slnx`](examples
 | --- | --- | --- |
 | [rest-json1](rest-json1/) | `aws.protocols#restJson1` | Weather service: resources, pagination, errors, retries, OpenTelemetry |
 | [simple-rest-json](simple-rest-json/) | `alloy#simpleRestJson` | Pizza Admin service: unions, enums, maps, errors, API-key auth |
-| [rpcv2cbor](rpcv2cbor/) | `smithy.protocols#rpcv2Cbor` | Minimal greeting service over CBOR |
-| [grpc](grpc/) | `alloy.proto#grpc` + `restJson1` | One service exposed over both HTTP and gRPC |
+| [rpcv2cbor](rpcv2cbor/) | `smithy.protocols#rpcv2Cbor` | The rest-json1 Weather service over CBOR: resources, pagination, errors, retries |
+| [grpc](grpc/) | `alloy.proto#grpc` | Library service over native gRPC (no protoc): proto codec features like sparse maps, oneOf unions, enums |
 | [grpc-streaming](grpc-streaming/) | `alloy.proto#grpc` | Bidirectional gRPC event streaming (chat service), with a `Grpc.Net` interop comparison |
 | [aws-localstack](aws-localstack/) | AWS JSON, restXml, restJson1 | Generated AWS clients with SigV4 signing against LocalStack |
 | [polyglot](polyglot/) | `aws.protocols#restJson1` | .NET client calling a Smithy Java server, via docker-compose |

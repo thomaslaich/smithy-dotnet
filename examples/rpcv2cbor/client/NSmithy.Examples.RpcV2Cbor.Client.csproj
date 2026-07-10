@@ -4,8 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <SmithyService>example.hello#HelloService</SmithyService>
-    <SmithyGeneratedNamespaces>example.hello</SmithyGeneratedNamespaces>
+    <SmithyService>example.weather#Weather</SmithyService>
+    <SmithyGeneratedNamespaces>example.weather</SmithyGeneratedNamespaces>
     <SmithyGenerateServer>false</SmithyGenerateServer>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
