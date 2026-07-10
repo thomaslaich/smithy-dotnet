@@ -3,7 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
-    <VersionPrefix>0.5.0</VersionPrefix>
+    <VersionPrefix>0.6.0</VersionPrefix>
     <VersionSuffix>SNAPSHOT</VersionSuffix>
     <SmithyPublish>true</SmithyPublish>
     <SmithyMavenGroupId>io.github.thomaslaich.nsmithy.examples</SmithyMavenGroupId>
@@ -11,6 +11,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSmithy.MSBuild" Version="0.5.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.6.0-SNAPSHOT" />
   </ItemGroup>
 </Project>
