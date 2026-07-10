@@ -18,9 +18,9 @@
     <!--#if (WithDocs)-->
     <PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="0.5.0" />
     <!--#endif-->
-    <!--#if (IsGrpc)-->
-    <PackageReference Include="Grpc.AspNetCore" Version="2.71.0" />
-    <PackageReference Include="Grpc.Tools" Version="2.71.0" PrivateAssets="all" />
+    <!--#if (IsRpcv2Cbor)-->
+    <PackageReference Include="NSmithy.Codecs.Cbor" Version="0.5.0" />
+    <PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="0.5.0" />
     <!--#endif-->
     <!--#if (WithContracts)-->
     <ProjectReference Include="../ContractsName/ContractsName.csproj" />

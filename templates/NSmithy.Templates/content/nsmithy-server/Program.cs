@@ -10,12 +10,13 @@ using NSmithy.Server.AspNetCore.Docs;
 var builder = WebApplication.CreateBuilder(args);
 
 //#if (IsGrpc)
+// Native gRPC: the generated server speaks the gRPC wire format itself via
+// NSmithy.Protocols.Grpc — no Grpc.AspNetCore / Grpc.Tools / protoc needed.
 builder.WebHost.ConfigureKestrel(options =>
 {
     options.ListenLocalhost(5000, o => o.Protocols = HttpProtocols.Http1);
     options.ListenLocalhost(5001, o => o.Protocols = HttpProtocols.Http2);
 });
-builder.Services.AddGrpc();
 
 //#endif
 builder.Services.AddHelloServiceHandler<HelloHandler>();
@@ -30,12 +31,11 @@ app.MapSmithyDocs();
 app.MapSmithyDocs();
 
 //#endif
-//#if (IsHttp)
-app.MapHelloServiceHttp();
-
-//#endif
 //#if (IsGrpc)
 app.MapHelloServiceGrpc();
+
+//#else
+app.MapHelloServiceHttp();
 
 //#endif
 app.Run();
