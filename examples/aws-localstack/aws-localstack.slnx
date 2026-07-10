@@ -1,5 +1,0 @@
-<Solution>
-  <Folder Name="/client/">
-    <Project Path="client/NSmithy.Examples.AwsLocalStack.Client.csproj" />
-  </Folder>
-</Solution>
