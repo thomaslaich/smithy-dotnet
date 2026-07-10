@@ -28,3 +28,6 @@ build/
 
 # LLM things
 .claude/
+
+# macOS
+.DS_Store
