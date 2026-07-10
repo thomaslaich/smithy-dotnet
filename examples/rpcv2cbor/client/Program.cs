@@ -1,12 +1,21 @@
 using Example.Weather;
 using NSmithy.Client;
 
-var endpoint = args.Length > 0 ? args[0] : "http://localhost:5001";
+var endpoint =
+    args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal))
+    ?? "http://localhost:5001";
 
-using var client = new WeatherClient(
-    new Uri(endpoint),
-    new() { RetryStrategy = new SmithyStandardRetryStrategy(maxAttempts: 4) }
-);
+var config = new WeatherClientConfig
+{
+    RetryStrategy = new SmithyStandardRetryStrategy(maxAttempts: 4),
+};
+
+// With --debug, log every request and response, including a hex dump of the
+// CBOR wire bytes.
+if (args.Contains("--debug"))
+    config.Interceptors.Add(new DebugInterceptor());
+
+using var client = new WeatherClient(new Uri(endpoint), config);
 
 var time = await client.GetCurrentTimeAsync(new GetCurrentTimeInput());
 Console.WriteLine($"Current time: {time.Time:u}");
