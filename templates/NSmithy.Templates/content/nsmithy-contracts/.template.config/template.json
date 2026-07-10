@@ -18,6 +18,7 @@
       "choices": [
         { "choice": "restJson1",     "description": "aws.protocols#restJson1 — AWS REST/JSON protocol" },
         { "choice": "simpleRestJson","description": "alloy#simpleRestJson — Alloy REST/JSON protocol" },
+        { "choice": "rpcv2Cbor",     "description": "smithy.protocols#rpcv2Cbor — Smithy RPC v2 CBOR protocol" },
         { "choice": "grpc",          "description": "alloy.proto#grpc — gRPC protocol (experimental)" }
       ],
       "defaultValue": "restJson1",
@@ -25,6 +26,7 @@
     },
     "IsRestJson1":    { "type": "computed", "value": "(Protocol == \"restJson1\")" },
     "IsSimpleRestJson":{ "type": "computed", "value": "(Protocol == \"simpleRestJson\")" },
+    "IsRpcv2Cbor":    { "type": "computed", "value": "(Protocol == \"rpcv2Cbor\")" },
     "IsGrpc":         { "type": "computed", "value": "(Protocol == \"grpc\")" }
   },
   "specialCustomOperations": {

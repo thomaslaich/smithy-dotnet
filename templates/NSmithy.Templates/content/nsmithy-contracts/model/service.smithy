@@ -6,6 +6,8 @@ namespace example.hello
 use aws.protocols#restJson1
 //#elseif (IsSimpleRestJson)
 use alloy#simpleRestJson
+//#elseif (IsRpcv2Cbor)
+use smithy.protocols#rpcv2Cbor
 //#elseif (IsGrpc)
 use alloy.proto#grpc
 use alloy.proto#protoIndex
@@ -16,6 +18,8 @@ use alloy.proto#protoIndex
 @restJson1
 //#elseif (IsSimpleRestJson)
 @simpleRestJson
+//#elseif (IsRpcv2Cbor)
+@rpcv2Cbor
 //#elseif (IsGrpc)
 @grpc
 //#endif

@@ -81,16 +81,22 @@ dotnet new nsmithy-client -n HelloWorld.Client
 dotnet sln add HelloWorld.Client
 ```
 
-The client template defaults to a Maven contracts reference for production use.
-For local development, open `HelloWorld.Client/HelloWorld.Client.csproj` and
-replace the `SmithyMavenDependency` placeholder with a `ProjectReference`:
+The client template defaults to a Maven contracts reference for production use:
+it ships a `smithy-build.json` that pulls the contracts model from a Maven JAR.
+For local development, switch to the sibling contracts project instead. Delete
+the client's `smithy-build.json` — when no `smithy-build.json` exists at the
+project root, NSmithy synthesizes one from the contracts `ProjectReference`:
+
+```shell
+rm HelloWorld.Client/smithy-build.json
+```
+
+Then add a `ProjectReference` to `HelloWorld.Client/HelloWorld.Client.csproj`:
 
 ```xml
-<!-- remove this -->
-<SmithyMavenDependency Include="io.github.YOUR_ORG:your-service-contracts:1.0.0" />
-
-<!-- add this instead -->
-<ProjectReference Include="../HelloWorld.Contracts/HelloWorld.Contracts.csproj" />
+<ItemGroup>
+  <ProjectReference Include="../HelloWorld.Contracts/HelloWorld.Contracts.csproj" />
+</ItemGroup>
 ```
 
 Then run the client with the server still running:
@@ -208,6 +214,7 @@ All three templates accept `--protocol`:
 | --- | --- |
 | `restJson1` | `aws.protocols#restJson1` (default) |
 | `simpleRestJson` | `alloy#simpleRestJson` |
+| `rpcv2Cbor` | `smithy.protocols#rpcv2Cbor` |
 | `grpc` | `alloy.proto#grpc` (experimental) |
 
 Additional options:
