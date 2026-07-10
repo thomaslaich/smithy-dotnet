@@ -1,51 +1,52 @@
-# NSmithy Dual-Protocol Walking Skeleton
+# NSmithy Native gRPC Example
 
-For the full walkthrough, see `docs/multi-protocol.md`.
+A library management service built with `alloy.proto#grpc` and served over
+NSmithy's native gRPC stack. There is no protoc, `Grpc.Tools`, `Grpc.Net`, or
+`Google.Protobuf` in this example: the generated client and server speak the
+gRPC wire protocol (HTTP/2 + protobuf) through NSmithy's schema-driven proto
+codec, the same way the other examples speak JSON or CBOR. See
+[designs/native-grpc.md](../../designs/native-grpc.md) for the design.
 
-This example shows one Smithy service exposed over both HTTP and gRPC in the
-current NSmithy preview.
+The model exercises the proto codec's feature surface: `@protoIndex` field
+numbers, `@protoNumType` (`uint32`, `fixed64`), `@sparse` maps,
+`@protoInlinedOneOf` unions, `intEnum`, and string enums.
 
-The model carries both `alloy#simpleRestJson` and `alloy.proto#grpc` on the same
-service:
-
-- `simpleRestJson` generates the current HTTP client/server surfaces.
-- `grpc` produces `.proto` files that flow into `Grpc.Tools` and generate the
-  gRPC client/server base types.
-- both transports share the same generated Smithy shapes, descriptors, and
-  `IHelloServiceHandler` implementation.
-
-The server registers one handler and maps both generated transport entry points:
-
-- `app.MapHelloServiceHttp()`
-- `app.MapHelloServiceGrpc()`
-
-The example uses separate cleartext ports because HTTP/1.1 REST and cleartext
-gRPC HTTP/2 cannot reliably share the same endpoint without TLS/ALPN:
-
-- HTTP: `http://localhost:5000`
-- gRPC: `http://localhost:5001`
-
-The client example exercises both the generated HTTP client and the generated
-gRPC client against the same running server.
+- `contracts`: the Smithy model, packaged as a contracts project.
+- `server`: ASP.NET Core server on Kestrel HTTP/2 that maps the generated gRPC
+  endpoints via `MapLibraryServiceGrpc()`.
+- `client`: generated typed client that selects gRPC with
+  `Protocol = new GrpcProtocol()`.
 
 ## Run
 
-This example assumes you already have the local NSmithy packages available,
-either from a repository checkout or from published NuGet packages.
-
-Start the dual-protocol server:
+From the repository root, build and pack local packages:
 
 ```bash
-cd examples/grpc/dotnet/server
-dotnet run
+just build
+just pack
+just refresh-examples
 ```
 
-In another shell, run the example client, which calls both transports:
+Start the server (listens on `http://localhost:5001`, HTTP/2 cleartext):
 
 ```bash
-cd examples/grpc/dotnet/client
-dotnet run -- http://localhost:5000 http://localhost:5001 world
+cd examples/grpc
+dotnet run --project server
 ```
 
-Current preview note: this is still a walking skeleton. The service is modeled
-once, implemented once, and consumed through two transport-specific clients.
+In another shell, run the client:
+
+```bash
+cd examples/grpc
+dotnet run --project client -- http://localhost:5001
+```
+
+The client exercises every operation: get, create, list with a
+`@protoInlinedOneOf` filter, search, batch upload, and delete.
+
+## Interop
+
+NSmithy peers speak standard gRPC, so either side can be swapped for a
+conventional `Grpc.Net` implementation generated from the emitted `.proto`
+file. The [grpc-streaming](../grpc-streaming/) example does exactly that,
+running NSmithy and `Grpc.Net` peers against each other over the same wire.
