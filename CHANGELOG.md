@@ -11,12 +11,37 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.6.0]
+
+This release adds a debug-logging interceptor to the client runtime, fixes the
+quick-start template setup, and reworks the examples: one solution with an
+index README, and a full-featured rpcv2Cbor example.
+
 ### Added
 
 - **`DebugInterceptor`.** A built-in client interceptor that logs the typed
   input and output, each transport attempt's request and response, and a hex
   dump of the body bytes. Useful for inspecting what a protocol puts on the
-  wire. (#100)
+  wire. The rpcv2cbor example client enables it with `--debug`. (#100)
+- **`rpcv2Cbor` template option.** The `dotnet new` templates accept
+  `--protocol rpcv2Cbor`. (#97)
+
+### Changed
+
+- **Examples reworked.** All examples live in a single solution with an index
+  README; the rpcv2cbor example is now the same Weather service as the
+  rest-json1 example (resources, pagination, errors, retries) served over
+  CBOR, and the grpc example README describes the actual native-gRPC
+  LibraryService. (#98, #99)
+
+### Fixed
+
+- **Quick-start template setup.** The client template's project setup was
+  corrected and stale template references were removed. (#97)
+
+### Packages
+
+All packages are published to NuGet at `0.6.0`.
 
 ## [0.5.0]
 
@@ -269,7 +294,8 @@ All published to NuGet at `0.1.0`:
 - **Protocols:** `NSmithy.Protocols.Rest`, `NSmithy.Protocols.RestJson`, `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`
 - **Tooling:** `NSmithy.Templates` (project templates), `dotnet-nsmithy` (CLI tool)
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.2.0...v0.3.0

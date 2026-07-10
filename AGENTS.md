@@ -60,7 +60,7 @@ the conformance projects resolve
 ## Conventions and gotchas
 
 - **Versioning is tag-driven.** Local builds use the `VersionPrefix` /
-  `VersionSuffix` in `Directory.Build.props` (currently `0.5.0` + `SNAPSHOT`); the
+  `VersionSuffix` in `Directory.Build.props` (currently `0.6.0` + `SNAPSHOT`); the
   release workflow overrides the version from the GitHub release tag. When bumping
   the version, update `Directory.Build.props`, `codegen/build.gradle.kts`, the
   `NSmithy.MSBuild` targets, templates, examples, conformance `smithy-build.json`,
