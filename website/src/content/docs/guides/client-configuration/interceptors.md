@@ -50,3 +50,24 @@ The per-call `SmithyContext` is a typed value bag read through
 The runtime populates `ServiceName` and `OperationName` (`string`), `Attempt`
 (`int`), and — for clients constructed with an endpoint or `HttpClient` —
 `Endpoint` (`Uri`).
+
+## Debug Logging
+
+`DebugInterceptor` is a built-in interceptor that logs every execution stage:
+the typed input and output, each transport attempt's request and response, and
+a hex dump of the body bytes. It shows exactly what a protocol puts on the
+wire, which is especially handy for binary protocols like rpcv2Cbor and gRPC,
+and makes retries visible as separate attempts.
+
+```csharp
+var client = new WeatherClient(
+    new Uri("http://localhost:5001"),
+    new() { Interceptors = { new DebugInterceptor() } });
+```
+
+Output goes to standard output by default; set `Output` to any `TextWriter` to
+redirect it. `MaxBodyBytes` caps each hex dump (1024 bytes by default), and
+`RedactedHeaders` controls which header values are masked (`Authorization`,
+`Proxy-Authorization`, and `X-Api-Key` by default). It is a debugging aid, not
+a production logging solution; for production telemetry see
+[Observability](/smithy-dotnet/guides/client-configuration/observability/).

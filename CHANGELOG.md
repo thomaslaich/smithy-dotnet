@@ -11,6 +11,13 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- **`DebugInterceptor`.** A built-in client interceptor that logs the typed
+  input and output, each transport attempt's request and response, and a hex
+  dump of the body bytes. Useful for inspecting what a protocol puts on the
+  wire. (#100)
+
 ## [0.5.0]
 
 This release adds observability to the client runtime, generated paginators,
