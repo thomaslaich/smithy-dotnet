@@ -1,16 +1,56 @@
-using Example.Hello;
+using Example.Weather;
+using NSmithy.Client;
 
-var endpoint = args.Length > 0 ? new Uri(args[0]) : new Uri("http://localhost:5001");
-var name = args.Length > 1 ? args[1] : "world";
+var endpoint = args.Length > 0 ? args[0] : "http://localhost:5001";
 
-var client = new HelloServiceClient(endpoint);
+using var client = new WeatherClient(
+    new Uri(endpoint),
+    new() { RetryStrategy = new SmithyStandardRetryStrategy(maxAttempts: 4) }
+);
 
+var time = await client.GetCurrentTimeAsync(new GetCurrentTimeInput());
+Console.WriteLine($"Current time: {time.Time:u}");
+
+// Paginate through all cities, 3 per page. The generated pages paginator repeats the call
+// while the response carries a continuation token; each page goes through the normal client
+// lifecycle (auth, retries, telemetry).
+Console.WriteLine("All cities (paginated, page size 3):");
+var page = 1;
+await foreach (var result in client.ListCitiesPagesAsync(new ListCitiesInput(PageSize: 3)))
+{
+    Console.WriteLine($"  Page {page++}:");
+    foreach (var city in result.Items.Values)
+        Console.WriteLine($"    {city.CityId}: {city.Name}");
+}
+
+// Or flatten the pages with the items paginator.
+var names = new List<string>();
+await foreach (var city in client.ListCitiesItemsAsync(new ListCitiesInput(PageSize: 4)))
+    names.Add(city.Name);
+Console.WriteLine($"All {names.Count} cities, flattened: {string.Join(", ", names)}");
+
+var seattle = await client.GetCityAsync(new GetCityInput("SEA"));
+Console.WriteLine($"Seattle: ({seattle.Coordinates.Latitude}, {seattle.Coordinates.Longitude})");
+
+var forecast = await client.GetForecastAsync(new GetForecastInput("SEA"));
+Console.WriteLine($"Forecast for SEA: {forecast.ChanceOfRain:P0} chance of rain");
+
+// Modeled errors surface as typed exceptions on the client.
 try
 {
-    var response = await client.SayHelloAsync(new SayHelloInput(name));
-    Console.WriteLine($"Hello response from {response.From}: {response.Message}");
+    await client.GetCityAsync(new GetCityInput("Atlantis"));
 }
-catch (InvalidName error)
+catch (NoSuchResource error)
 {
-    Console.WriteLine($"Server rejected name: {error.Message}");
+    Console.WriteLine($"No such {error.ResourceType}: Atlantis");
+}
+
+// The flaky endpoint fails two of every three calls with the retryable modeled error; the
+// standard retry strategy retries with backoff, so each call below succeeds after
+// transparent retries.
+Console.WriteLine("Flaky forecasts (each call succeeds after transparent retries):");
+for (var i = 0; i < 3; i++)
+{
+    var flaky = await client.GetFlakyForecastAsync(new GetFlakyForecastInput("SEA"));
+    Console.WriteLine($"  Attempt group {i + 1}: {flaky.ChanceOfRain:P0} chance of rain");
 }

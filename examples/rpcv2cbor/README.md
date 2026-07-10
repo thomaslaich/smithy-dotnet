@@ -1,12 +1,21 @@
 # NSmithy rpcv2Cbor Example
 
-A minimal greeting service built with `smithy.protocols#rpcv2Cbor`. Demonstrates a
-generated ASP.NET Core server and a generated typed client communicating over CBOR.
+The Weather service from the [rest-json1 example](../rest-json1/), served over
+`smithy.protocols#rpcv2Cbor` instead of REST. The model demonstrates resources,
+pagination, typed errors, and retries (`@retryable`); the protocol swap shows
+that neither the handler implementation nor the client call sites depend on the
+wire format.
+
+rpcv2Cbor is an RPC protocol: every operation is a `POST` to
+`/service/Weather/operation/{OperationName}` with CBOR request and response
+bodies, so the model carries no HTTP binding traits.
 
 - `contracts`: the Smithy model, packaged as a contracts project.
-- `server`: generated ASP.NET Core endpoint with a handwritten `IHelloServiceHandler`
-  implementation.
-- `client`: generated typed client that connects to the server.
+- `server`: generated ASP.NET Core endpoints with a handwritten
+  `IWeatherServiceHandler` implementation that supports real server-side
+  pagination.
+- `client`: generated typed client that pages through cities with the generated
+  paginators and retries the flaky operation.
 
 ## Run
 
@@ -18,32 +27,33 @@ just pack
 just refresh-examples
 ```
 
-Start the server in one terminal:
+Start the server:
 
 ```bash
-cd examples/rpcv2cbor/server
-dotnet run --urls http://localhost:5001
+cd examples/rpcv2cbor
+dotnet run --project server --urls http://localhost:5001
 ```
 
-Run the client in another terminal:
+In another shell, run the client:
 
 ```bash
-cd examples/rpcv2cbor/client
-dotnet run -- http://localhost:5001 world
+cd examples/rpcv2cbor
+dotnet run --project client -- http://localhost:5001
 ```
 
-You should see:
+The client walks the full surface: current time, paginated city listing (pages
+and flattened items), city lookup, forecast, a modeled `NoSuchResource` error,
+and three flaky forecast calls that succeed after transparent retries.
 
-```
-Hello response from rpcv2cbor-server: Hello, world!
-```
+## On the Wire
 
-To exercise the error path:
+There is nothing to explore in a browser; requests and responses are CBOR over
+POST. To peek at a raw response:
 
 ```bash
-dotnet run -- http://localhost:5001 error
-```
-
-```
-Server rejected name: name must not be 'error'
+curl -s -X POST http://localhost:5001/service/Weather/operation/GetCurrentTime \
+  -H 'smithy-protocol: rpc-v2-cbor' \
+  -H 'Content-Type: application/cbor' \
+  -H 'Accept: application/cbor' \
+  --data-binary '' | xxd
 ```
