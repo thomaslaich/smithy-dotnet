@@ -48,7 +48,34 @@ and three flaky forecast calls that succeed after transparent retries.
 ## On the Wire
 
 There is nothing to explore in a browser; requests and responses are CBOR over
-POST. To peek at a raw response:
+POST. Pass `--debug` to the client to log every request and response with a hex
+dump of the CBOR bytes, using the client runtime's built-in `DebugInterceptor`:
+
+```bash
+dotnet run --project client -- http://localhost:5001 --debug
+```
+
+```
+[Weather.ListCities] request (attempt 1): POST http://localhost:5001/service/Weather/operation/ListCities
+  Smithy-Protocol: rpc-v2-cbor
+  Accept: application/cbor
+  content-type: application/cbor
+  body: 12 bytes
+    00000000  bf 68 70 61 67 65 53 69 7a 65 03 ff              .hpageSize..
+[Weather.ListCities] response (attempt 1): 200 OK
+  Smithy-Protocol: rpc-v2-cbor
+  Content-Type: application/cbor
+  body: 106 bytes
+    00000000  bf 69 6e 65 78 74 54 6f 6b 65 6e 63 4c 41 58 65  .inextTokencLAXe
+    00000010  69 74 65 6d 73 83 bf 66 63 69 74 79 49 64 63 53  items..fcityIdcS
+    00000020  45 41 64 6e 61 6d 65 67 53 65 61 74 74 6c 65 ff  EAdnamegSeattle.
+    ...
+```
+
+Retries are visible as separate attempts: the flaky forecast calls log the
+failed 500 responses that precede each success.
+
+To peek at a raw response without the client:
 
 ```bash
 curl -s -X POST http://localhost:5001/service/Weather/operation/GetCurrentTime \
