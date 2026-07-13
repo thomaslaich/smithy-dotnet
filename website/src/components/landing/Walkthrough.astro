@@ -2,8 +2,8 @@
 /**
  * Walkthrough — "From model to runtime" widget.
  * Ported from the Claude Design "Walkthrough.dc.html" (forge variant). Source
- * weather.smithy on the left forges into a tabbed Server/Client/Docs output;
- * auto-cycles the 3 outputs every 3.6s, pauses on hover. Always-dark panel.
+ * weather.smithy on the left forges into a tabbed Server/Client output;
+ * click the tabs to switch. Always-dark panel.
  */
 const model = `$version: "2"
 namespace example.weather
@@ -101,7 +101,7 @@ const modelHtml = hl(model, 'smithy');
 const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
 ---
 
-<div class="wt" data-cycle="3600">
+<div class="wt">
   <div class="wt__bar">
     <span class="wt__diamond"></span>
     <span class="wt__title">smithy&nbsp;build</span>
@@ -144,9 +144,6 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
   </div>
 
   <div class="wt__foot">
-    <div class="wt__dots">
-      {tabs.map((_, i) => <button type="button" class={`wt__dot${i === 0 ? ' is-active' : ''}`} data-idx={i} aria-label={`Step ${i + 1}`} />)}
-    </div>
     {
       tabs.map((t, i) => (
         <span class={`wt__cap${i === 0 ? ' is-active' : ''}`} data-idx={i} hidden={i !== 0}>
@@ -298,9 +295,9 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
   }
 
   /* Output code panels — all stacked in one grid cell so the widget height is
-     fixed to the tallest tab (Server) and never jumps as it auto-cycles or the
-     visitor switches between Server and Client. On mobile the auto-cycle is
-     disabled and this stacking is dropped (see the stacked media query below). */
+     fixed to the tallest tab (Server) and never jumps as the visitor switches
+     between Server and Client. On mobile this stacking is dropped (see the
+     stacked media query below). */
   .wt__panels {
     display: grid;
   }
@@ -334,7 +331,7 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
     border-radius: 4px;
   }
 
-  /* Footer: dots + caption */
+  /* Footer: caption for the active tab */
   .wt__foot {
     display: flex;
     align-items: center;
@@ -342,26 +339,6 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
     padding: 11px 15px;
     border-top: 1px solid #1b1b25;
     background: #0e0e15;
-  }
-  .wt__dots {
-    display: flex;
-    gap: 7px;
-    align-items: center;
-    flex: none;
-  }
-  .wt__dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 4px;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    background: #2c2c3a;
-    transition: all 0.35s ease;
-  }
-  .wt__dot.is-active {
-    width: 22px;
-    background: #6d4aff;
   }
   .wt__cap {
     font-size: 11.5px;
@@ -396,8 +373,8 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
       border-left: none;
       border-top: 1px solid #17171f;
     }
-    /* Stacked: auto-cycle is off (see script), so the output follows the active
-       tab's natural height instead of reserving the tallest tab's height. */
+    /* Stacked: the output follows the active tab's natural height instead of
+       reserving the tallest tab's height. */
     .wt__outcode:not(.is-active) {
       display: none;
     }
@@ -408,18 +385,9 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
   document.querySelectorAll<HTMLElement>('.wt').forEach((root) => {
     const tabs = Array.from(root.querySelectorAll<HTMLElement>('.wt__tab'));
     const outs = Array.from(root.querySelectorAll<HTMLElement>('.wt__outcode'));
-    const dots = Array.from(root.querySelectorAll<HTMLElement>('.wt__dot'));
     const caps = Array.from(root.querySelectorAll<HTMLElement>('.wt__cap'));
-    const interval = Number(root.dataset.cycle || '3600');
-    // On mobile the source/output sections stack vertically; the panels then
-    // take their natural height, so auto-cycling would make the page jump. Skip
-    // the auto-advance while stacked (manual tab/dot taps still work).
-    const stacked = window.matchMedia?.('(max-width: 52rem)');
-    let idx = 0;
-    let paused = false;
 
     function show(n: number) {
-      idx = n;
       const toggle = (els: HTMLElement[], hideAttr: boolean) =>
         els.forEach((el, i) => {
           const on = i === n;
@@ -432,23 +400,9 @@ const tabsHtml = tabs.map((t) => ({ ...t, codeHtml: hl(t.code, 'csharp') }));
       tabs.forEach((t, i) => t.setAttribute('aria-selected', i === n ? 'true' : 'false'));
       toggle(tabs, false);
       toggle(outs, false);
-      toggle(dots, false);
       toggle(caps, true);
     }
 
-    [...tabs, ...dots].forEach((el) =>
-      el.addEventListener('click', () => {
-        paused = true;
-        show(Number(el.dataset.idx));
-      })
-    );
-    root.addEventListener('mouseenter', () => (paused = true));
-    root.addEventListener('mouseleave', () => (paused = false));
-
-    if (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setInterval(() => {
-        if (!paused && !stacked?.matches) show((idx + 1) % tabs.length);
-      }, interval);
-    }
+    tabs.forEach((el) => el.addEventListener('click', () => show(Number(el.dataset.idx))));
   });
 </script>

@@ -11,16 +11,16 @@
 
 **[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Examples](examples/README.md)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
 
-NSmithy is a .NET toolkit that turns a [Smithy](https://smithy.io) model into idiomatic C# at build time. From a single contract you get typed clients, server scaffolding, and shared model types, fully integrated into your MSBuild workflow.
+NSmithy is a .NET toolkit that turns a [Smithy](https://smithy.io) model into idiomatic C# at build time.
 
 ## Features
 
-- **Contract-first**: The Smithy model is the source of truth. NSmithy generates C# model types, typed clients, and ASP.NET Core server handlers from it.
-- **Protocol-agnostic**: The same model can target multiple protocols and wire formats; switching protocols requires no changes to client or server code.
+- **Contract-first**: The Smithy model is the source of truth. NSmithy generates C# model types, clients, and ASP.NET Core server stubs from it.
+- **Protocol-agnostic**: The same model can target multiple protocols; switching protocols requires no changes to client or server code.
 - **Part of the Smithy ecosystem**: A .NET service built with NSmithy can be called from clients generated for Java, TypeScript, Python, Go, Rust, Swift, and more, and vice versa.
-- **Smithy-native architecture**: Follows Smithy's official [code generator guidance](https://smithy.io/2.0/guides/building-codegen/index.html), with a clear boundary between generated code and runtime libraries.
 - **Protocol support**: REST JSON, REST XML, AWS JSON, RPC v2 CBOR, and native gRPC.
 - **Streaming support**: Event streaming, bidirectional streaming, and streaming blob payloads.
+- **Smithy-native architecture**: Follows Smithy's official [code generator guidance](https://smithy.io/2.0/guides/building-codegen/index.html).
 - **Conformance-tested**: Tested against official Smithy, AWS, and alloy conformance suites.
 
 ## Development

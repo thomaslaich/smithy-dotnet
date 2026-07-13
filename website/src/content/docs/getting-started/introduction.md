@@ -8,7 +8,7 @@ by AWS for describing services. A Smithy model defines an API's operations,
 input and output shapes, errors, and traits. Tooling can then use that model to
 generate clients, servers, documentation, and protocol-specific bindings. Smithy
 is used for AWS public APIs and has generators for Java, Kotlin, TypeScript,
-Python, Rust, Swift, Go, Scala, Ruby, C#, and more.
+Python, Rust, Swift, Go, Scala, Ruby, and now C#.
 
 ## Why Smithy?
 
@@ -23,7 +23,7 @@ NSmithy brings Smithy code generation into .NET projects. It integrates with
 MSBuild, so `dotnet build` also runs Smithy codegen. From your `.smithy` model
 files it generates:
 
-- **Typed C# records** for all shapes (structures, unions, enums).
+- **C# records** for all shapes (structures, unions, enums).
 - **Typed async client interfaces and implementations** per service.
 - **ASP.NET Core minimal API handler interfaces and routing adapters** per service.
 
