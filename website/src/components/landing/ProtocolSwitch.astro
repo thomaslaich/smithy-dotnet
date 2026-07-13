@@ -2,8 +2,8 @@
 /**
  * ProtocolSwitch — "The protocol is a trait on the model" widget.
  * Ported from the Claude Design "ProtocolSwitch.dc.html". The same GetForecast
- * operation rendered across four protocols; auto-cycles every 4.2s, pauses on
- * hover. Always-dark code panel (does not follow the page theme).
+ * operation rendered across four protocols; click the tabs to switch.
+ * Always-dark code panel (does not follow the page theme).
  */
 type Proto = { name: string; sub: string; cap: string; req: string; res: string };
 
@@ -54,7 +54,7 @@ function hl(code: string): string {
 const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.res) }));
 ---
 
-<div class="psw" data-cycle="4200">
+<div class="psw">
   <div class="psw__bar">
     <span class="psw__diamond"></span>
     <span class="psw__op">GetForecast</span>
@@ -98,9 +98,6 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
   </div>
 
   <div class="psw__foot">
-    <div class="psw__dots">
-      {panels.map((_, i) => <button type="button" class={`psw__dot${i === 0 ? ' is-active' : ''}`} data-idx={i} aria-label={`Protocol ${i + 1}`} />)}
-    </div>
     {
       panels.map((p, i) => (
         <span class={`psw__cap${i === 0 ? ' is-active' : ''}`} data-idx={i} hidden={i !== 0}>
@@ -196,8 +193,8 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
   }
 
   /* Panels — all stacked in one grid cell so the widget height is fixed to the
-     tallest protocol and never jumps as it auto-cycles. On mobile the auto-cycle
-     is disabled and this stacking is dropped (see the stacked media query). */
+     tallest protocol and never jumps as the visitor switches. On mobile this
+     stacking is dropped (see the stacked media query). */
   .psw__panels {
     display: grid;
   }
@@ -209,7 +206,7 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
     visibility: hidden;
     pointer-events: none;
   }
-  /* Footer: carousel dots + caption (matches the Walkthrough widget) */
+  /* Footer: caption for the active protocol (matches the Walkthrough widget) */
   .psw__foot {
     display: flex;
     align-items: center;
@@ -217,26 +214,6 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
     padding: 11px 15px;
     border-top: 1px solid #1b1b25;
     background: #0e0e15;
-  }
-  .psw__dots {
-    display: flex;
-    gap: 7px;
-    align-items: center;
-    flex: none;
-  }
-  .psw__dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 4px;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    background: #2c2c3a;
-    transition: all 0.35s ease;
-  }
-  .psw__dot.is-active {
-    width: 22px;
-    background: #6d4aff;
   }
   .psw__cap {
     margin: 0;
@@ -302,8 +279,8 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
       border-left: none;
       border-top: 1px solid #17171f;
     }
-    /* Stacked: auto-cycle is off (see script), so the panel follows the active
-       protocol's natural height instead of reserving the tallest one's. */
+    /* Stacked: the panel follows the active protocol's natural height instead
+       of reserving the tallest one's. */
     .psw__panel:not(.is-active) {
       display: none;
     }
@@ -314,25 +291,15 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
   document.querySelectorAll<HTMLElement>('.psw').forEach((root) => {
     const tabs = Array.from(root.querySelectorAll<HTMLElement>('.psw__tab'));
     const panels = Array.from(root.querySelectorAll<HTMLElement>('.psw__panel'));
-    const dots = Array.from(root.querySelectorAll<HTMLElement>('.psw__dot'));
     const caps = Array.from(root.querySelectorAll<HTMLElement>('.psw__cap'));
-    const interval = Number(root.dataset.cycle || '4200');
-    // On mobile the request/response columns stack vertically; the panels then
-    // take their natural height, so auto-cycling would make the page jump. Skip
-    // the auto-advance while stacked (manual tab/dot taps still work).
-    const stacked = window.matchMedia?.('(max-width: 40rem)');
-    let idx = 0;
-    let paused = false;
 
     function show(n: number) {
-      idx = n;
       tabs.forEach((t, i) => {
         const on = i === n;
         t.classList.toggle('is-active', on);
         t.setAttribute('aria-selected', on ? 'true' : 'false');
       });
       panels.forEach((p, i) => p.classList.toggle('is-active', i === n));
-      dots.forEach((d, i) => d.classList.toggle('is-active', i === n));
       caps.forEach((c, i) => {
         const on = i === n;
         c.classList.toggle('is-active', on);
@@ -341,19 +308,6 @@ const panels = protocols.map((p) => ({ ...p, reqHtml: hl(p.req), resHtml: hl(p.r
       });
     }
 
-    [...tabs, ...dots].forEach((el, i) =>
-      el.addEventListener('click', () => {
-        paused = true;
-        show(i % tabs.length);
-      })
-    );
-    root.addEventListener('mouseenter', () => (paused = true));
-    root.addEventListener('mouseleave', () => (paused = false));
-
-    if (!window.matchMedia || !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setInterval(() => {
-        if (!paused && !stacked?.matches) show((idx + 1) % tabs.length);
-      }, interval);
-    }
+    tabs.forEach((el, i) => el.addEventListener('click', () => show(i)));
   });
 </script>
