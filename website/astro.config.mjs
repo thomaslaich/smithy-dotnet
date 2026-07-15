@@ -39,11 +39,6 @@ export default defineConfig({
 						'NSmithy generates C# models, typed HTTP clients, and ASP.NET Core minimal-API servers from Smithy models at build time — no separate codegen step and no JRE required by consumers.',
 				}),
 			],
-			logo: {
-				src: './src/assets/brand/nsmithy_logo_1.png',
-				alt: 'NSmithy logo',
-				replacesTitle: false,
-			},
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/thomaslaich/smithy-dotnet' },
 			],

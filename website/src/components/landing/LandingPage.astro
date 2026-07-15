@@ -15,7 +15,6 @@ import ProtocolSwitch from './ProtocolSwitch.astro';
 // (the GitHub Pages base is /smithy-dotnet). `repo` stays absolute — it's external.
 const intro = '/smithy-dotnet/getting-started/introduction/';
 const repo = 'https://github.com/thomaslaich/smithy-dotnet';
-const logo = '/smithy-dotnet/brand/nsmithy_logo_1.png';
 
 const features = [
   { t: 'Protocol agnostic', d: 'REST, JSON-RPC, CBOR and gRPC from one model — switch or serve several at once.' },
@@ -46,7 +45,6 @@ const langs = [
   <!-- Header -->
   <header class="nsl-header">
     <a class="nsl-brand" href="/smithy-dotnet/">
-      <img src={logo} alt="NSmithy" width="30" height="30" />
       <span>NSmithy</span>
     </a>
     <nav class="nsl-nav">
@@ -192,7 +190,6 @@ const langs = [
   <footer class="nsl-footer">
     <div class="nsl-footer-inner">
       <a class="nsl-brand" href="/smithy-dotnet/">
-        <img src={logo} alt="NSmithy" width="22" height="22" />
         <span>NSmithy</span>
       </a>
       <div class="nsl-footer-links">
@@ -297,11 +294,6 @@ const langs = [
   .nsl-brand {
     display: flex;
     align-items: center;
-    gap: 11px;
-  }
-  .nsl-brand img {
-    display: block;
-    border-radius: 7px;
   }
   .nsl-brand span {
     font-family: 'Space Grotesk', sans-serif;

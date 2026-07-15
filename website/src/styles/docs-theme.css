@@ -18,20 +18,14 @@ html:not(.nsmithy-landing) .content-panel h1 {
 }
 
 /* Site title: match the landing header (LandingPage.astro `.nsl-brand`) so the
-   brand looks the same moving between the two — Space Grotesk at a fixed 19px, a
-   tighter logo/text gap, and a 30px rounded logo. Starlight's SiteTitle styles
-   are component-scoped, so these need `!important` to win. */
+   brand looks the same moving between the two — Space Grotesk at a fixed 19px.
+   Starlight's SiteTitle styles are component-scoped, so these need `!important`
+   to win. */
 .site-title {
-  gap: 11px !important;
   font-family: 'Space Grotesk', var(--sl-font) !important;
   font-size: 19px !important;
   font-weight: 600 !important;
   letter-spacing: -0.01em !important;
-}
-.site-title img {
-  height: 30px !important;
-  width: auto !important;
-  border-radius: 7px !important;
 }
 
 /* Dark mode: a cool, comfortable reading dark — clearly lifted off the
