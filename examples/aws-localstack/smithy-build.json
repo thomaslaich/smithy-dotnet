@@ -8,7 +8,7 @@
     ],
     "dependencies": [
       "software.amazon.smithy:smithy-aws-traits:1.71.0",
-      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.6.0-SNAPSHOT"
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT"
     ]
   },
   "projections": {

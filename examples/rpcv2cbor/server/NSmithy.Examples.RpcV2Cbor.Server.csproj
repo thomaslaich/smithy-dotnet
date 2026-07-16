@@ -11,9 +11,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSmithy.Codecs.Cbor" Version="0.6.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="0.6.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.6.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Codecs.Cbor" Version="0.0.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="0.0.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.0.0-SNAPSHOT" />
     <ProjectReference Include="../contracts/NSmithy.Examples.RpcV2Cbor.Contracts.csproj" />
   </ItemGroup>
 </Project>

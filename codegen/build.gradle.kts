@@ -18,11 +18,9 @@ plugins {
 
 allprojects {
     group = "io.github.thomaslaich.nsmithy"
-    // Default to a SNAPSHOT version for local dev (`gradle :smithy-csharp-codegen:publishToMavenLocal`).
-    // The release pipeline overrides this with `-Pversion=<x.y.z>` so the published
-    // Maven Central artifact carries the matching release version.
+    // Dev placeholder; the release pipeline overrides it with -Pversion.
     version = (findProperty("version") as String?).takeUnless { it.isNullOrBlank() || it == "unspecified" }
-        ?: "0.6.0-SNAPSHOT"
+        ?: "0.0.0-SNAPSHOT"
 }
 
 subprojects {

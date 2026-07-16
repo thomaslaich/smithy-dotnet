@@ -4,6 +4,7 @@ import starlight from '@astrojs/starlight';
 import starlightLlmsTxt from 'starlight-llms-txt';
 import mermaid from 'astro-mermaid';
 import { readFileSync } from 'node:fs';
+import { remarkNSmithyVersion } from './remark-nsmithy-version.mjs';
 
 const smithyGrammar = JSON.parse(
 	readFileSync(new URL('./src/smithy.tmLanguage.json', import.meta.url), 'utf-8')
@@ -13,6 +14,10 @@ const smithyGrammar = JSON.parse(
 export default defineConfig({
 	site: 'https://thomaslaich.github.io',
 	base: '/smithy-dotnet',
+	// Substitute the NSMITHY_VERSION placeholder in docs with the repo-root VERSION.
+	markdown: {
+		remarkPlugins: [remarkNSmithyVersion],
+	},
 	integrations: [
 		mermaid({ autoTheme: true }),
 		starlight({

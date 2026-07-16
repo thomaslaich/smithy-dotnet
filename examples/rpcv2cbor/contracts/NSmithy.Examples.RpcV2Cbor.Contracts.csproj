@@ -11,6 +11,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSmithy.MSBuild" Version="0.6.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.0.0-SNAPSHOT" />
   </ItemGroup>
 </Project>

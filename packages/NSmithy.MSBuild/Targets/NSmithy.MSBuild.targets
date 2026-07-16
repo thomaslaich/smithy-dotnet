@@ -37,7 +37,7 @@
   <PropertyGroup>
     <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.71.0</SmithyVersion>
     <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''"
-      >0.6.0-SNAPSHOT</SmithyCSharpCodegenVersion
+      >0.0.0-SNAPSHOT</SmithyCSharpCodegenVersion
     >
     <SmithyGenerateDocs Condition="'$(SmithyGenerateDocs)' == ''">false</SmithyGenerateDocs>
     <SmithyOpenApiProtocol Condition="'$(SmithyOpenApiProtocol)' == ''"></SmithyOpenApiProtocol>

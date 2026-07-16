@@ -32,7 +32,7 @@ ASP.NET Core's static file middleware can serve it.
 Add `NSmithy.Server.AspNetCore.Docs` to your server project:
 
 ```xml
-<PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="0.6.0" />
+<PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="NSMITHY_VERSION" />
 ```
 
 This package provides the `MapSmithyOpenApi()` and `MapSmithyDocs()` extension

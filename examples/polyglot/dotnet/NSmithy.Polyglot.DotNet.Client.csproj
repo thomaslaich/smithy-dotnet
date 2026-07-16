@@ -12,10 +12,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSmithy.Client" Version="0.6.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.6.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Core" Version="0.6.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.Http" Version="0.6.0-SNAPSHOT" />
-    <PackageReference Include="NSmithy.MSBuild" Version="0.6.0-SNAPSHOT" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Client" Version="0.0.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.0.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Core" Version="0.0.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Http" Version="0.0.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.MSBuild" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
   </ItemGroup>
 </Project>
