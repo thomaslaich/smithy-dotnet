@@ -5,16 +5,118 @@
     <Title>NSmithy Templates</Title>
     <Description>dotnet new templates for scaffolding NSmithy server, contracts, and client projects.</Description>
     <TargetFramework>net10.0</TargetFramework>
-    <IncludeContentInPack>true</IncludeContentInPack>
     <IncludeBuildOutput>false</IncludeBuildOutput>
-    <ContentTargetFolders>content</ContentTargetFolders>
     <NoDefaultExcludes>true</NoDefaultExcludes>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <!--
+      Pack the template content ourselves (see _NSmithyPackTemplateContent): the
+      scaffolded .csproj/smithy-build.json files carry an NSMITHY_VERSION placeholder,
+      which is replaced at pack time with the real version from the repo-root VERSION
+      file. (Template content is never built in-repo, so the placeholder needs no valid
+      literal.) All Content items are removed below, so nothing is auto-packed; the root
+      README (a None item from Directory.Build.props) still packs normally.
+    -->
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_NSmithyPackTemplateContent</TargetsForTfmSpecificContentInPackage>
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- content/ holds template source, not compilation units for this project. -->
     <Compile Remove="content/**" />
-    <Content Include="content\**\*" Exclude="**\bin\**;**\obj\**" />
   </ItemGroup>
+
+  <!--
+    Copies content/ into obj with the placeholder substituted, skipping bin/obj and
+    copying non-text assets byte-for-byte. Errors if the placeholder is absent from
+    every file — a guard against someone removing it and shipping an unversioned ref.
+  -->
+  <UsingTask
+    TaskName="_NSmithyStageTemplateContent"
+    TaskFactory="RoslynCodeTaskFactory"
+    AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll"
+  >
+    <ParameterGroup>
+      <SourceDir ParameterType="System.String" Required="true" />
+      <StageDir ParameterType="System.String" Required="true" />
+      <Find ParameterType="System.String" Required="true" />
+      <ReplaceWith ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.Collections.Generic" />
+      <Using Namespace="System.IO" />
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+        var textExt = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { ".cs", ".csproj", ".json", ".smithy", ".props", ".targets", ".md", ".txt" };
+        var srcFull = Path.GetFullPath(SourceDir);
+        if (Directory.Exists(StageDir))
+        {
+            Directory.Delete(StageDir, true);
+        }
+        int replacements = 0;
+        foreach (var file in Directory.EnumerateFiles(srcFull, "*", SearchOption.AllDirectories))
+        {
+            var rel = file.Substring(srcFull.Length)
+                .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var skip = false;
+            foreach (var seg in rel.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            {
+                if (seg == "bin" || seg == "obj") { skip = true; break; }
+            }
+            if (skip) { continue; }
+
+            var dest = Path.Combine(StageDir, rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(dest));
+            if (textExt.Contains(Path.GetExtension(file)))
+            {
+                var text = File.ReadAllText(file);
+                if (text.Contains(Find))
+                {
+                    text = text.Replace(Find, ReplaceWith);
+                    replacements++;
+                }
+                File.WriteAllText(dest, text);
+            }
+            else
+            {
+                File.Copy(file, dest, true);
+            }
+        }
+        if (replacements == 0)
+        {
+            Log.LogError(
+                "NSmithy.Templates: no template file under '" + SourceDir + "' contained the "
+                + "'" + Find + "' placeholder. Template NSmithy package references must use it "
+                + "so the version can be substituted at pack time.");
+        }
+      ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="_NSmithyPackTemplateContent">
+    <PropertyGroup>
+      <_TemplateStageDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'nupkg-content'))</_TemplateStageDir>
+      <_NSmithyReleaseVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../VERSION').Trim())</_NSmithyReleaseVersion>
+    </PropertyGroup>
+    <!-- On a release build (Version has no -SNAPSHOT), the VERSION file must match the
+         tag, or templates would scaffold references to a version that isn't published. -->
+    <Error
+      Condition="!$(Version.Contains('SNAPSHOT')) and '$(_NSmithyReleaseVersion)' != '$(Version)'"
+      Text="VERSION file ($(_NSmithyReleaseVersion)) does not match the release version ($(Version)). Bump the VERSION file to match the release tag."
+    />
+    <_NSmithyStageTemplateContent
+      SourceDir="$(MSBuildProjectDirectory)/content"
+      StageDir="$(_TemplateStageDir)"
+      Find="NSMITHY_VERSION"
+      ReplaceWith="$(_NSmithyReleaseVersion)"
+    />
+    <ItemGroup>
+      <_StagedTemplateFile Include="$(_TemplateStageDir)**/*" />
+      <TfmSpecificPackageFile
+        Include="@(_StagedTemplateFile)"
+        PackagePath="content/%(RecursiveDir)%(Filename)%(Extension)"
+      />
+    </ItemGroup>
+  </Target>
 </Project>

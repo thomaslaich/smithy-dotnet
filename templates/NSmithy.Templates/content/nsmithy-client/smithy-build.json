@@ -10,7 +10,7 @@
       //#elseif (IsSimpleRestJson || IsGrpc)
       "com.disneystreaming.alloy:alloy-core:0.3.38",
       //#endif
-      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.6.0"
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:NSMITHY_VERSION"
     ]
   },
   "plugins": {
