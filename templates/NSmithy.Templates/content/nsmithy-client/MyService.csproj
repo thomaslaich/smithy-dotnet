@@ -10,20 +10,20 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSmithy.Client" Version="0.6.0" />
-    <PackageReference Include="NSmithy.Core" Version="0.6.0" />
-    <PackageReference Include="NSmithy.Http" Version="0.6.0" />
-    <PackageReference Include="NSmithy.MSBuild" Version="0.6.0" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Client" Version="NSMITHY_VERSION" />
+    <PackageReference Include="NSmithy.Core" Version="NSMITHY_VERSION" />
+    <PackageReference Include="NSmithy.Http" Version="NSMITHY_VERSION" />
+    <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" PrivateAssets="all" />
     <!-- Runtime packages for the protocol the contracts model declares. -->
     <!--#if (IsGrpc)-->
     <!-- Native gRPC: no Grpc.Net.Client / Google.Protobuf / protoc needed. -->
-    <PackageReference Include="NSmithy.Protocols.Grpc" Version="0.6.0" />
+    <PackageReference Include="NSmithy.Protocols.Grpc" Version="NSMITHY_VERSION" />
     <!--#elif (IsRpcv2Cbor)-->
-    <PackageReference Include="NSmithy.Codecs.Cbor" Version="0.6.0" />
-    <PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="0.6.0" />
+    <PackageReference Include="NSmithy.Codecs.Cbor" Version="NSMITHY_VERSION" />
+    <PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="NSMITHY_VERSION" />
     <!--#else-->
-    <PackageReference Include="NSmithy.Codecs.Json" Version="0.6.0" />
-    <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.6.0" />
+    <PackageReference Include="NSmithy.Codecs.Json" Version="NSMITHY_VERSION" />
+    <PackageReference Include="NSmithy.Protocols.RestJson" Version="NSMITHY_VERSION" />
     <!--#endif-->
     <!--#if (IsNuget)-->
     <!-- Replace with your actual contracts package name and version -->

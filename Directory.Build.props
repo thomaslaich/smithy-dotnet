@@ -11,7 +11,9 @@
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <VersionPrefix>0.6.0</VersionPrefix>
+    <!-- Dev placeholder; the release workflow overrides it with -p:Version. Real
+         user-facing version lives in the repo-root VERSION file. -->
+    <VersionPrefix>0.0.0</VersionPrefix>
     <VersionSuffix>SNAPSHOT</VersionSuffix>
     <Authors>Thomas Laich</Authors>
     <Description>NSmithy — C# code generation and runtime toolkit for Smithy models.</Description>

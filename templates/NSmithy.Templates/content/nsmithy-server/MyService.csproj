@@ -14,13 +14,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NSmithy.Server.AspNetCore" Version="0.6.0" />
+    <PackageReference Include="NSmithy.Server.AspNetCore" Version="NSMITHY_VERSION" />
     <!--#if (WithDocs)-->
-    <PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="0.6.0" />
+    <PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="NSMITHY_VERSION" />
     <!--#endif-->
     <!--#if (IsRpcv2Cbor)-->
-    <PackageReference Include="NSmithy.Codecs.Cbor" Version="0.6.0" />
-    <PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="0.6.0" />
+    <PackageReference Include="NSmithy.Codecs.Cbor" Version="NSMITHY_VERSION" />
+    <PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="NSMITHY_VERSION" />
     <!--#endif-->
     <!--#if (WithContracts)-->
     <ProjectReference Include="../ContractsName/ContractsName.csproj" />
