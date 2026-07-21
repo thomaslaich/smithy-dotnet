@@ -6,6 +6,7 @@
     <Project Path="packages/NSmithy.Client/NSmithy.Client.csproj" />
     <Project Path="packages/NSmithy.Core/NSmithy.Core.csproj" />
     <Project Path="packages/NSmithy.Http/NSmithy.Http.csproj" />
+    <Project Path="packages/NSmithy.EventStream/NSmithy.EventStream.csproj" />
     <Project Path="packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <Project Path="packages/NSmithy.Protocols.AwsJson/NSmithy.Protocols.AwsJson.csproj" />
     <Project Path="packages/NSmithy.Protocols.Rest/NSmithy.Protocols.Rest.csproj" />
