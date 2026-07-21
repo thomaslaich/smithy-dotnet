@@ -58,6 +58,20 @@
       PackagePath="tools/smithy-cli/windows-x64/"
       Condition="Exists('tools/smithy-cli/windows-x64/bin/smithy.bat')"
     />
+
+    <!--
+      Bundled Maven repo — populated by `gradle :bundleMavenRepo` (run from `just pack`).
+      The codegen plugin + first-party trait packages + their runtime closure, in Maven
+      layout (JARs and POMs). The targets file points `smithy build` at it via
+      SMITHY_MAVEN_REPOS so codegen resolves from local files instead of the network.
+      Platform-independent, so bundled once (unlike the per-platform CLI).
+    -->
+    <None
+      Include="tools/maven-repo/**/*"
+      Exclude="tools/maven-repo/.gitignore"
+      Pack="true"
+      PackagePath="tools/maven-repo/"
+    />
   </ItemGroup>
 
   <!--
@@ -138,5 +152,16 @@
         PackagePath="buildTransitive/NSmithy.MSBuild.targets"
       />
     </ItemGroup>
+  </Target>
+
+  <Target Name="_NSmithyValidateBundledMavenRepo" BeforeTargets="Pack">
+    <ItemGroup>
+      <_NSmithyBundledMavenRepoJar Include="$(MSBuildProjectDirectory)/tools/maven-repo/**/*.jar" />
+      <_NSmithyBundledMavenRepoPom Include="$(MSBuildProjectDirectory)/tools/maven-repo/**/*.pom" />
+    </ItemGroup>
+    <Error
+      Text="NSmithy: tools/maven-repo is empty. Run `just pack` or `cd codegen &amp;&amp; gradle bundleMavenRepo` and copy codegen/build/maven-bundle into packages/NSmithy.MSBuild/tools/maven-repo before packing NSmithy.MSBuild."
+      Condition="'@(_NSmithyBundledMavenRepoJar)' == '' or '@(_NSmithyBundledMavenRepoPom)' == ''"
+    />
   </Target>
 </Project>

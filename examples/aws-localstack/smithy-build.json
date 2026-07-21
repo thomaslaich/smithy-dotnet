@@ -3,7 +3,6 @@
   "sources": ["model"],
   "maven": {
     "repositories": [
-      { "url": "file://~/.m2/repository" },
       { "url": "https://repo.maven.apache.org/maven2/" }
     ],
     "dependencies": [

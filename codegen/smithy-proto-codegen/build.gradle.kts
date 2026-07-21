@@ -42,7 +42,7 @@ mavenPublishing {
     coordinates(group.toString(), "smithy-proto-codegen", version.toString())
 
     pom {
-        name.set("NSmithy smithy-proto-codegen Smithy plugin")
+        name.set("NSmithy Proto Codegen Plugin")
         description.set("Smithy build plugin that generates proto3 .proto files for services annotated with alloy's @grpc trait.")
         url.set("https://github.com/thomaslaich/smithy-dotnet")
         inceptionYear.set("2026")
