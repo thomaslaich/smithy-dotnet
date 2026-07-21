@@ -25,7 +25,7 @@ with the .NET toolchain.
 | `SmithyBuildOutputPath` | `$(IntermediateOutputPath)Smithy/` | Root directory for all Smithy build output. |
 | `SmithyStampFile` | `$(SmithyBuildOutputPath)NSmithy.Generated.stamp` | Incremental build stamp file. Smithy codegen is skipped when inputs have not changed since this file was last written. |
 | `SmithyEmitGeneratedFiles` | `false` | Show generated `.g.cs` files in IDE project views when `true`. |
-| `SmithyCliPath` | `smithy` | Smithy CLI executable. Resolved from `PATH` by default. |
+| `SmithyCliPath` | bundled CLI | Smithy CLI executable. Set this to override the bundled executable. |
 
 ### gRPC / Protobuf
 
@@ -79,6 +79,12 @@ NSmithy bundles the Smithy CLI (version 1.71.0) inside `NSmithy.MSBuild` and
 selects the correct platform binary automatically. No separate installation is
 required. The bundle is self-contained and includes a JRE, so Java does not
 need to be installed either.
+
+NSmithy.MSBuild also bundles the NSmithy Smithy codegen plugins plus the common
+Smithy and alloy trait/doc/openapi dependencies used by the templates and
+examples. Additional Maven dependencies declared in `smithy-build.json` are not
+mirrored into the package; they remain the consuming project's responsibility
+and may require access to the configured Maven repositories.
 
 Set `SmithyCliPath` to override the bundled binary with a specific executable,
 for example when testing against a different CLI version:

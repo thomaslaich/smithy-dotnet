@@ -12,12 +12,15 @@ fmt:
 check-format:
     treefmt --ci
 
-# Build & publish the Smithy → C# codegen JAR to the local Maven cache so that
-# `smithy build` (invoked from each .csproj via NSmithy.MSBuild) can resolve
-
-# `io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.1.0-SNAPSHOT` from ~/.m2.
+# Stage the bundled Maven repo consumed by NSmithy.MSBuild during `dotnet build`.
 codegen:
-    cd codegen && gradle :smithy-csharp-codegen:clean :smithy-csharp-codegen:publishToMavenLocal :smithy-proto-codegen:clean :smithy-proto-codegen:publishToMavenLocal
+    # bundleMavenRepo builds the plugins and assembles the offline Maven bundle
+    # (it depends on publishToMavenLocal). Staging it into tools/maven-repo means
+    # in-repo builds (conformance/examples) resolve NSmithy codegen from the bundle
+    # too, so no smithy-build.json needs a ~/.m2 repository entry.
+    cd codegen && gradle bundleMavenRepo
+    find packages/NSmithy.MSBuild/tools/maven-repo -mindepth 1 -not -name .gitignore -delete
+    cp -R codegen/build/maven-bundle/. packages/NSmithy.MSBuild/tools/maven-repo/
 
 # Publish the codegen JARs to Maven Central via the Sonatype Central Portal.
 # Used by the release workflow; expects MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD
@@ -35,6 +38,9 @@ test:
     dotnet test NSmithy.slnx --configuration Release --no-build --disable-build-servers
 
 pack:
+    cd codegen && gradle bundleMavenRepo ${VERSION:+-Pversion=$VERSION}
+    find packages/NSmithy.MSBuild/tools/maven-repo -mindepth 1 -not -name .gitignore -delete
+    cp -R codegen/build/maven-bundle/. packages/NSmithy.MSBuild/tools/maven-repo/
     bash packages/NSmithy.MSBuild/tools/download-smithy-cli.sh
     dotnet pack NSmithy.slnx --configuration Release --no-build --output artifacts/packages ${VERSION:+-p:Version=$VERSION}
 

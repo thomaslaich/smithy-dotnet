@@ -273,6 +273,17 @@
     <SmithyCliPath>smithy</SmithyCliPath>
   </PropertyGroup>
 
+  <!-- ================================================================
+       Bundled Maven repo (populated by `gradle :bundleMavenRepo`, packed into
+       tools/maven-repo/). When present, codegen resolves the plugin + first-party
+       trait packages from it via SMITHY_MAVEN_REPOS against an isolated cache —
+       Smithy's own offline mechanism. Absent (e.g. falling back to `smithy` on PATH
+       in-repo), resolution uses the config's maven block as before.
+       ================================================================ -->
+  <PropertyGroup>
+    <_SmithyBundledMavenRepo>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/maven-repo'))</_SmithyBundledMavenRepo>
+  </PropertyGroup>
+
   <PropertyGroup>
     <SmithyGenerateServer Condition="'$(SmithyGenerateServer)' == ''">true</SmithyGenerateServer>
     <SmithyEmitGeneratedFiles Condition="'$(SmithyEmitGeneratedFiles)' == ''"
@@ -281,16 +292,6 @@
     <SmithyStampFile Condition="'$(SmithyStampFile)' == ''"
       >$(SmithyBuildOutputPath)NSmithy.Generated.stamp</SmithyStampFile
     >
-    <SmithyMavenLocalRepository
-      Condition="'$(SmithyMavenLocalRepository)' == '' and '$(USERPROFILE)' != ''"
-      >$(USERPROFILE)/.m2/repository</SmithyMavenLocalRepository
-    >
-    <SmithyMavenLocalRepository
-      Condition="'$(SmithyMavenLocalRepository)' == '' and '$(HOME)' != ''"
-      >$(HOME)/.m2/repository</SmithyMavenLocalRepository
-    >
-    <_SmithyCSharpCodegenJar>$(SmithyMavenLocalRepository)/io/github/thomaslaich/nsmithy/smithy-csharp-codegen/$(SmithyCSharpCodegenVersion)/smithy-csharp-codegen-$(SmithyCSharpCodegenVersion).jar</_SmithyCSharpCodegenJar>
-    <_SmithyProtoCodegenJar>$(SmithyMavenLocalRepository)/io/github/thomaslaich/nsmithy/smithy-proto-codegen/$(SmithyCSharpCodegenVersion)/smithy-proto-codegen-$(SmithyCSharpCodegenVersion).jar</_SmithyProtoCodegenJar>
     <SmithyBaseNamespace Condition="'$(SmithyBaseNamespace)' == ''"></SmithyBaseNamespace>
   </PropertyGroup>
 
@@ -300,13 +301,10 @@
       Exclude="$(MSBuildProjectDirectory)/obj/**;$(MSBuildProjectDirectory)/bin/**;$(SmithyBuildOutputPath)**"
     />
     <_SmithyGeneratorInput Include="$(SmithyBuildFile)" Condition="Exists('$(SmithyBuildFile)')" />
+    <!-- Rebuild when the bundled codegen plugin/traits change (e.g. package upgrade). -->
     <_SmithyGeneratorInput
-      Include="$(_SmithyCSharpCodegenJar)"
-      Condition="Exists('$(_SmithyCSharpCodegenJar)')"
-    />
-    <_SmithyGeneratorInput
-      Include="$(_SmithyProtoCodegenJar)"
-      Condition="'$(SmithyGrpc)' == 'true' and Exists('$(_SmithyProtoCodegenJar)')"
+      Include="$(_SmithyBundledMavenRepo)/**/*.jar"
+      Condition="Exists('$(_SmithyBundledMavenRepo)')"
     />
     <Watch Include="$(SmithyBuildFile)" Condition="Exists('$(SmithyBuildFile)')" />
     <Watch Include="@(_SmithyGeneratorInput)" />
@@ -416,8 +414,19 @@
     Outputs="$(SmithyStampFile)"
   >
     <MakeDir Directories="$(SmithyBuildOutputPath)" />
+    <!-- Point the CLI at the bundled Maven repo with an isolated cache so codegen
+         resolves the plugin + traits from local files. Only when the repo actually
+         holds jars (the dir itself is committed just to carry a .gitignore); otherwise
+         leave the CLI's default (network) resolution in place. -->
+    <ItemGroup>
+      <_SmithyBundleJar Include="$(_SmithyBundledMavenRepo)/**/*.jar" />
+    </ItemGroup>
+    <PropertyGroup Condition="'@(_SmithyBundleJar)' != ''">
+      <_SmithyMavenEnv>SMITHY_MAVEN_REPOS=$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri);SMITHY_MAVEN_CACHE=$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(IntermediateOutputPath)smithy-maven-cache'))</_SmithyMavenEnv>
+    </PropertyGroup>
     <Exec
       Command="&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\\'))&quot; $(SmithyExtraArgs)"
+      EnvironmentVariables="$(_SmithyMavenEnv)"
       WorkingDirectory="$(MSBuildProjectDirectory)"
     />
     <Touch Files="$(SmithyStampFile)" AlwaysCreate="true" />
