@@ -107,7 +107,7 @@ final class ServerGeneratorTest {
                 + " input, System.Threading.CancellationToken cancellationToken = default);"),
         generated);
     assertFalse(generated.contains("IEventStreamServiceProtocol"));
-    assertTrue(generated.contains("CreateSmithyGrpcEventStreamRequest"));
+    assertTrue(generated.contains("GetEventStreamRequestBody"));
     assertTrue(generated.contains("WriteSmithyGrpcEventStreamResponseAsync"));
   }
 
