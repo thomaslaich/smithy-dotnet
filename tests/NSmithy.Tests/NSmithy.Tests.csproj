@@ -25,6 +25,7 @@
     <ProjectReference Include="../../packages/NSmithy.Protocols.Grpc/NSmithy.Protocols.Grpc.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Client/NSmithy.Client.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Core/NSmithy.Core.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.EventStream/NSmithy.EventStream.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Http/NSmithy.Http.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <ProjectReference Include="../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
