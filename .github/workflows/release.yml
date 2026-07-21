@@ -40,10 +40,9 @@ jobs:
         run: devenv shell -- just publish-codegen "${{ steps.version.outputs.version }}"
       - name: Build, test, and pack
         # NSmithy.* .nupkg version comes from the release tag (overrides
-        # VersionPrefix/VersionSuffix in Directory.Build.props). Tests still
-        # build against the local SNAPSHOT codegen JAR published to ~/.m2 by
-        # `just codegen` so test smithy-build.json files don't need to be
-        # rewritten at release time.
+        # VersionPrefix/VersionSuffix in Directory.Build.props). `just codegen`
+        # stages the bundled Maven repo used by in-repo builds; conformance-only
+        # Smithy protocol-test artifacts are still resolved from Maven Central.
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: devenv shell -- just ci

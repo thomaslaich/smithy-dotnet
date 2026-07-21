@@ -86,6 +86,17 @@ Generated constructors do not implement full Smithy validation semantics.
 Generated C# nullability is authoritative, but external request binding and
 deserialization still need more protocol-aware runtime validation.
 
+## Extra Smithy Maven Dependencies Are External
+
+`NSmithy.MSBuild` bundles the Smithy CLI, the NSmithy codegen plugins, and the
+common Smithy/alloy trait dependencies used by the templates and examples. A
+project that declares additional `maven.dependencies` in `smithy-build.json`
+must make those artifacts available through its configured Maven repositories.
+
+The repository's conformance projects intentionally use official Smithy/AWS and
+alloy protocol-test artifacts from Maven Central; those test fixtures are not
+bundled into the consumer MSBuild package.
+
 ## Codec Performance And AOT Are Still Maturing
 
 The codecs (`NSmithy.Codecs.Json`, `Cbor`, `Xml`, `Proto`) are schema-driven —

@@ -1,0 +1,4 @@
+# Bundled Maven repo — run `gradle :bundleMavenRepo` (via `just pack`) to populate.
+# Included in the NuGet package but not committed to git.
+*
+!.gitignore
