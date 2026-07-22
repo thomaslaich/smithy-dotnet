@@ -6,6 +6,8 @@
  *     "service": "example.hello#HelloService",
  *     "baseNamespace": "MyOrg",         // optional; prepended to PascalCase(smithyNamespace)
  *     "packageVersion": "0.1.0",          // optional
+ *     "generateClient": true,             // optional; emit the client surface (default true)
+ *     "generateServer": true,             // optional; emit the server surface (default true)
  *     "generateDependencyInjection": true // optional; emit the IHttpClientFactory extension
  *   }
  *
@@ -24,33 +26,55 @@ public final class CSharpSettings {
   private static final String SERVICE = "service";
   private static final String BASE_NAMESPACE = "baseNamespace";
   private static final String PACKAGE_VERSION = "packageVersion";
+  private static final String GENERATE_CLIENT = "generateClient";
+  private static final String GENERATE_SERVER = "generateServer";
   private static final String GENERATE_DEPENDENCY_INJECTION = "generateDependencyInjection";
 
   private final ShapeId service;
   private final String baseNamespace;
   private final String packageVersion;
+  private final boolean generateClient;
+  private final boolean generateServer;
   private final boolean generateDependencyInjection;
 
   private CSharpSettings(
       ShapeId service,
       String baseNamespace,
       String packageVersion,
+      boolean generateClient,
+      boolean generateServer,
       boolean generateDependencyInjection) {
     this.service = service;
     this.baseNamespace = baseNamespace;
     this.packageVersion = packageVersion;
+    this.generateClient = generateClient;
+    this.generateServer = generateServer;
     this.generateDependencyInjection = generateDependencyInjection;
   }
 
   public static CSharpSettings fromNode(ObjectNode config) {
     config.warnIfAdditionalProperties(
-        java.util.List.of(SERVICE, BASE_NAMESPACE, PACKAGE_VERSION, GENERATE_DEPENDENCY_INJECTION));
+        java.util.List.of(
+            SERVICE,
+            BASE_NAMESPACE,
+            PACKAGE_VERSION,
+            GENERATE_CLIENT,
+            GENERATE_SERVER,
+            GENERATE_DEPENDENCY_INJECTION));
     ShapeId service = config.expectStringMember(SERVICE).expectShapeId();
     String baseNamespace = config.getStringMemberOrDefault(BASE_NAMESPACE, "");
     String packageVersion = config.getStringMemberOrDefault(PACKAGE_VERSION, "0.0.1");
+    boolean generateClient = config.getBooleanMemberOrDefault(GENERATE_CLIENT, true);
+    boolean generateServer = config.getBooleanMemberOrDefault(GENERATE_SERVER, true);
     boolean generateDependencyInjection =
         config.getBooleanMemberOrDefault(GENERATE_DEPENDENCY_INJECTION, false);
-    return new CSharpSettings(service, baseNamespace, packageVersion, generateDependencyInjection);
+    return new CSharpSettings(
+        service,
+        baseNamespace,
+        packageVersion,
+        generateClient,
+        generateServer,
+        generateDependencyInjection);
   }
 
   public ShapeId service() {
@@ -64,6 +88,16 @@ public final class CSharpSettings {
 
   public String packageVersion() {
     return packageVersion;
+  }
+
+  /** Whether to emit the client surface (client, operation bindings). Default true. */
+  public boolean generateClient() {
+    return generateClient;
+  }
+
+  /** Whether to emit the server surface (handlers, endpoint extensions). Default true. */
+  public boolean generateServer() {
+    return generateServer;
   }
 
   /** Whether to emit the opt-in IHttpClientFactory registration extension. */

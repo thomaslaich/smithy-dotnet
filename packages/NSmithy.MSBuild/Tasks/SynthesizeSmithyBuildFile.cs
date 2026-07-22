@@ -43,6 +43,19 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
     public bool GenerateDocs { get; set; }
 
     /// <summary>
+    /// Whether the csharp-codegen plugin emits the client surface. When false, sets
+    /// generateClient:false so the plugin never writes the client half (rather than writing it and
+    /// excluding it from compilation). Default true.
+    /// </summary>
+    public bool GenerateClient { get; set; } = true;
+
+    /// <summary>
+    /// Whether the csharp-codegen plugin emits the server surface. When false, sets
+    /// generateServer:false so the plugin never writes the server half. Default true.
+    /// </summary>
+    public bool GenerateServer { get; set; } = true;
+
+    /// <summary>
     /// When true, sets generateDependencyInjection on the csharp-codegen plugin so the
     /// IHttpClientFactory registration extension is generated.
     /// </summary>
@@ -211,6 +224,11 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
         writer.WriteString("service", Service);
         if (!string.IsNullOrEmpty(BaseNamespace))
             writer.WriteString("baseNamespace", BaseNamespace);
+        // The plugin defaults both halves to true, so only the opt-outs are written.
+        if (!GenerateClient)
+            writer.WriteBoolean("generateClient", false);
+        if (!GenerateServer)
+            writer.WriteBoolean("generateServer", false);
         if (GenerateDependencyInjection)
             writer.WriteBoolean("generateDependencyInjection", true);
         writer.WriteEndObject();

@@ -380,6 +380,8 @@
       CSharpCodegenVersion="$(SmithyCSharpCodegenVersion)"
       SmithyVersion="$(SmithyVersion)"
       GenerateDocs="$(SmithyGenerateDocs)"
+      GenerateClient="$(SmithyGenerateClient)"
+      GenerateServer="$(SmithyGenerateServer)"
       GenerateDependencyInjection="$(SmithyGenerateDependencyInjection)"
       OpenApiProtocol="$(SmithyOpenApiProtocol)"
       Grpc="$(SmithyGrpc)"
