@@ -20,7 +20,7 @@ public sealed class SmithyServerRuntime
     public async Task<SmithyServerResponse> DispatchAsync<TInput, TOutput>(
         IServerOperationProtocol<TInput, TOutput> protocol,
         SmithyHttpRequest request,
-        Func<TInput, CancellationToken, ValueTask<TOutput>> handler,
+        Func<TInput, CancellationToken, Task<TOutput>> handler,
         CancellationToken cancellationToken = default
     )
     {
@@ -61,7 +61,7 @@ public sealed class SmithyServerRuntime
     public async Task<SmithyServerResponse> DispatchInputStreamAsync<TInputEvent, TOutput>(
         IInputEventStreamServerProtocol<TInputEvent, TOutput> protocol,
         SmithyHttpRequest request,
-        Func<IAsyncEnumerable<TInputEvent>, CancellationToken, ValueTask<TOutput>> handler,
+        Func<IAsyncEnumerable<TInputEvent>, CancellationToken, Task<TOutput>> handler,
         CancellationToken cancellationToken = default
     )
     {

@@ -146,7 +146,7 @@ public sealed class SmithyServerRuntime
     public async Task<SmithyServerResponse> DispatchAsync<TInput, TOutput>(
         IServerOperationProtocol<TInput, TOutput> protocol,
         SmithyHttpRequest request,
-        Func<TInput, CancellationToken, ValueTask<TOutput>> handler,
+        Func<TInput, CancellationToken, Task<TOutput>> handler,
         CancellationToken cancellationToken)
     {
         var input = protocol.DeserializeRequest(request);
@@ -197,7 +197,7 @@ public static class SmithyAspNetCoreHost
     public static async Task DispatchAsync<TInput, TOutput>(
         HttpContext context,
         IServerOperationProtocol<TInput, TOutput> protocol,
-        Func<TInput, CancellationToken, ValueTask<TOutput>> handler,
+        Func<TInput, CancellationToken, Task<TOutput>> handler,
         CancellationToken cancellationToken)
     {
         var request = await ToSmithyRequestAsync(context, cancellationToken).ConfigureAwait(false);
@@ -261,8 +261,7 @@ protocol, delegating to the host adapter:
 
 ```csharp
 endpoints.MapMethods("/foo", ["POST"], (HttpContext context, IFooHandler handler, CancellationToken ct) =>
-    SmithyAspNetCoreHost.DispatchAsync(context, FooProtocol,
-        (input, c) => new ValueTask<FooOutput>(handler.FooAsync(input, c)), ct));
+    SmithyAspNetCoreHost.DispatchAsync(context, FooProtocol, handler.FooAsync, ct));
 ```
 
 The only per-operation variation in codegen is the handler-adapter lambda (by

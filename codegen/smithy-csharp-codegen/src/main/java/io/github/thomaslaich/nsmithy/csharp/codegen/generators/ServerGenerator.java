@@ -324,54 +324,54 @@ public final class ServerGenerator implements Runnable {
 
   // ---------------- handler adapters ----------------
 
+  // Handler methods return Task<TOutput> / IAsyncEnumerable<TEvent> — the delegate shape the
+  // runtime
+  // expects — so the adapter is a bare method group whenever arity and return type line up. A
+  // lambda
+  // is emitted only for the mismatches: a unit input (the handler method takes no input) or a unit
+  // output (the handler returns Task, but the runtime expects Task<SmithyUnit>).
+
   private String unaryAdapter(OperationShape op) {
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
-    String method = "handler." + CSharpNaming.typeName(op.getId().getName()) + "Async";
+    String method = handlerMethod(op);
+    if (hasInput && hasOutput) {
+      return method;
+    }
+
     String call = hasInput ? method + "(input, ct)" : method + "(ct)";
     String param = hasInput ? "input" : "_";
-    if (hasOutput) {
-      String outType = SchemaGenerator.operationShapeType(context, op.getOutputShape());
-      return "("
-          + param
-          + ", ct) => new System.Threading.Tasks.ValueTask<"
-          + outType
-          + ">("
-          + call
-          + ")";
-    }
-    return "async ("
-        + param
-        + ", ct) => { await "
-        + call
-        + ".ConfigureAwait(false); return SmithyUnit.Value; }";
+    return hasOutput
+        ? "(" + param + ", ct) => " + call
+        : "async ("
+            + param
+            + ", ct) => { await "
+            + call
+            + ".ConfigureAwait(false); return SmithyUnit.Value; }";
   }
 
   private String outputStreamAdapter(OperationShape op) {
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
-    String method = "handler." + CSharpNaming.typeName(op.getId().getName()) + "Async";
-    return hasInput ? "(input, ct) => " + method + "(input, ct)" : "(_, ct) => " + method + "(ct)";
+    String method = handlerMethod(op);
+    return hasInput ? method : "(_, ct) => " + method + "(ct)";
   }
 
   private String inputStreamAdapter(OperationShape op) {
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
-    String method = "handler." + CSharpNaming.typeName(op.getId().getName()) + "Async";
-    if (hasOutput) {
-      String outType = SchemaGenerator.operationShapeType(context, op.getOutputShape());
-      return "(input, ct) => new System.Threading.Tasks.ValueTask<"
-          + outType
-          + ">("
-          + method
-          + "(input, ct))";
-    }
-    return "async (input, ct) => { await "
-        + method
-        + "(input, ct).ConfigureAwait(false); return SmithyUnit.Value; }";
+    String method = handlerMethod(op);
+    return hasOutput
+        ? method
+        : "async (input, ct) => { await "
+            + method
+            + "(input, ct).ConfigureAwait(false); return SmithyUnit.Value; }";
   }
 
   private String duplexAdapter(OperationShape op) {
-    String method = "handler." + CSharpNaming.typeName(op.getId().getName()) + "Async";
-    return "(input, ct) => " + method + "(input, ct)";
+    return handlerMethod(op);
+  }
+
+  private String handlerMethod(OperationShape op) {
+    return "handler." + CSharpNaming.typeName(op.getId().getName()) + "Async";
   }
 
   // ---------------- routing helpers ----------------

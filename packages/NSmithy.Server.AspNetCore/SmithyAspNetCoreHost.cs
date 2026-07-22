@@ -28,7 +28,7 @@ public static class SmithyAspNetCoreHost
     public static async Task DispatchAsync<TInput, TOutput>(
         HttpContext httpContext,
         IServerOperationProtocol<TInput, TOutput> protocol,
-        Func<TInput, CancellationToken, ValueTask<TOutput>> handler,
+        Func<TInput, CancellationToken, Task<TOutput>> handler,
         bool streamRequestBody = false,
         CancellationToken cancellationToken = default
     )
@@ -61,7 +61,7 @@ public static class SmithyAspNetCoreHost
     public static async Task DispatchInputStreamAsync<TInputEvent, TOutput>(
         HttpContext httpContext,
         IInputEventStreamServerProtocol<TInputEvent, TOutput> protocol,
-        Func<IAsyncEnumerable<TInputEvent>, CancellationToken, ValueTask<TOutput>> handler,
+        Func<IAsyncEnumerable<TInputEvent>, CancellationToken, Task<TOutput>> handler,
         CancellationToken cancellationToken = default
     )
     {
