@@ -12,10 +12,9 @@ public abstract record SmithyHttpBody
             Content ?? throw new ArgumentNullException(nameof(Content));
     }
 
-    public sealed record Streaming(System.IO.Stream Content, long? ContentLength = null)
-        : SmithyHttpBody
+    public sealed record Streaming(Stream Content, long? ContentLength = null) : SmithyHttpBody
     {
-        public System.IO.Stream Content { get; } =
+        public Stream Content { get; } =
             Content ?? throw new ArgumentNullException(nameof(Content));
     }
 
