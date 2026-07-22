@@ -107,7 +107,7 @@ internal sealed class RpcV2CborServerHost : IAsyncDisposable
             .Single(m =>
             {
                 var parameters = m.GetParameters();
-                return m.Name == $"Map{serviceName}Http"
+                return m.Name == $"Map{serviceName}RpcV2Cbor"
                     && parameters.Length == 1
                     && parameters[0].ParameterType.FullName
                         == "Microsoft.AspNetCore.Routing.IEndpointRouteBuilder";

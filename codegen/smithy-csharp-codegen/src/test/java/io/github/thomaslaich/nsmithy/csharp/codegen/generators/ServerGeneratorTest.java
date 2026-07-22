@@ -107,8 +107,12 @@ final class ServerGeneratorTest {
                 + " input, System.Threading.CancellationToken cancellationToken = default);"),
         generated);
     assertFalse(generated.contains("IEventStreamServiceProtocol"));
-    assertTrue(generated.contains("GetEventStreamRequestBody"));
-    assertTrue(generated.contains("WriteSmithyGrpcEventStreamResponseAsync"));
+    // Streaming endpoints delegate to the shared runtime via the host adapter, one dispatch call
+    // per stream direction — no inline framing or per-operation write logic is generated.
+    assertTrue(generated.contains("SmithyAspNetCoreHost.DispatchOutputStreamAsync"), generated);
+    assertTrue(generated.contains("SmithyAspNetCoreHost.DispatchInputStreamAsync"), generated);
+    assertTrue(generated.contains("SmithyAspNetCoreHost.DispatchDuplexStreamAsync"), generated);
+    assertTrue(generated.contains("MapStreamingServiceGrpc"), generated);
   }
 
   private String renderServer() throws Exception {

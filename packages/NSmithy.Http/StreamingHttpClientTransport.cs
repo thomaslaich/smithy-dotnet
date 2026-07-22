@@ -4,18 +4,20 @@ using System.Net.Http.Headers;
 namespace NSmithy.Http;
 
 /// <summary>
-/// The <see cref="HttpClient"/>-backed duplex transport. Writes the request's protocol-framed
-/// body chunks (flushing after each), and returns the raw response stream for the protocol to
-/// deframe. Protocol-neutral: it never inspects or produces framing, and it surfaces HTTP
-/// trailers through <see cref="SmithyDuplexHttpResponse.Trailer"/> once the body is read to end.
-/// Disposing the response body releases the underlying connection.
+/// The <see cref="HttpClient"/>-backed streaming transport. Writes the request body — a
+/// <see cref="SmithyHttpBody.EventStreaming"/>'s protocol-framed chunks (flushing after each), a
+/// <see cref="SmithyHttpBody.Streaming"/> blob, or buffered <see cref="SmithyHttpBody.Bytes"/> —
+/// and returns the raw response stream for the protocol to deframe. Protocol-neutral: it never
+/// inspects or produces framing, and it surfaces HTTP trailers through
+/// <see cref="SmithyStreamingHttpResponse.Trailer"/> once the body is read to end. Disposing the
+/// response body releases the underlying connection.
 /// </summary>
-public sealed class DuplexHttpClientTransport : IDuplexHttpTransport
+public sealed class StreamingHttpClientTransport : IStreamingHttpTransport
 {
     private readonly HttpClient httpClient;
     private readonly Uri? endpoint;
 
-    public DuplexHttpClientTransport(HttpClient httpClient, Uri? endpoint = null)
+    public StreamingHttpClientTransport(HttpClient httpClient, Uri? endpoint = null)
     {
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         if (endpoint is not null && !endpoint.IsAbsoluteUri)
@@ -26,8 +28,8 @@ public sealed class DuplexHttpClientTransport : IDuplexHttpTransport
         this.endpoint = endpoint;
     }
 
-    public async Task<SmithyDuplexHttpResponse> SendAsync(
-        SmithyDuplexHttpRequest request,
+    public async Task<SmithyStreamingHttpResponse> SendAsync(
+        SmithyHttpRequest request,
         CancellationToken cancellationToken = default
     )
     {
@@ -37,16 +39,19 @@ public sealed class DuplexHttpClientTransport : IDuplexHttpTransport
         {
             Version = httpClient.DefaultRequestVersion,
             VersionPolicy = httpClient.DefaultVersionPolicy,
-            Content = new ChunkedBodyContent(request.Body, request.ContentType),
+            Content = CreateContent(request.Body, request.ContentType),
         };
         foreach (var header in request.Headers)
         {
             message.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }
 
-        foreach (var header in request.ContentHeaders)
+        if (message.Content is not null)
         {
-            message.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            foreach (var header in request.ContentHeaders)
+            {
+                message.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
         }
 
         var response = await httpClient
@@ -62,7 +67,7 @@ public sealed class DuplexHttpClientTransport : IDuplexHttpTransport
             ? Stream.Null
             : await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
 
-        return new SmithyDuplexHttpResponse(
+        return new SmithyStreamingHttpResponse(
             response.StatusCode,
             response.ReasonPhrase,
             new ResponseOwningStream(response, bodyStream),
@@ -70,6 +75,34 @@ public sealed class DuplexHttpClientTransport : IDuplexHttpTransport
             contentHeaders,
             name => GetTrailerOrHeader(response, name)
         );
+    }
+
+    private static HttpContent? CreateContent(SmithyHttpBody body, string? contentType) =>
+        body switch
+        {
+            SmithyHttpBody.EventStreaming eventStream => new ChunkedBodyContent(
+                eventStream.Content,
+                contentType
+            ),
+            SmithyHttpBody.Streaming streaming => WithContentType(
+                new StreamContent(streaming.Content),
+                contentType
+            ),
+            SmithyHttpBody.Bytes bytes => WithContentType(
+                new ByteArrayContent(bytes.Content),
+                contentType
+            ),
+            _ => null,
+        };
+
+    private static HttpContent WithContentType(HttpContent content, string? contentType)
+    {
+        if (!string.IsNullOrWhiteSpace(contentType))
+        {
+            content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        }
+
+        return content;
     }
 
     private string ResolveRequestUri(string requestUri)

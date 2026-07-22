@@ -54,6 +54,16 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
     private readonly IReadOnlyList<HttpOperationError> httpErrors =
         RestProtocol.CompileErrorDeserializers(modeledErrors, codecFactory, rawStringPayloads);
 
+    // restXml has no error discriminator header and does not serialize modeled errors server-side;
+    // an empty matcher leaves such exceptions to propagate (surfaced as a 500 by the host).
+    private readonly ModeledErrorSerializer serverErrors = errorTypeHeader is null
+        ? ModeledErrorSerializer.Compile([], _ => throw new InvalidOperationException())
+        : ModeledErrorSerializer.Compile(
+            modeledErrors,
+            error =>
+                CompileServerError((dynamic)error, codecFactory, rawStringPayloads, errorTypeHeader)
+        );
+
     public SmithyHttpRequest SerializeRequest(TInput input)
     {
         var request = RestProtocol.SerializeRequest(binding, input);
@@ -67,8 +77,8 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
     public TInput DeserializeRequest(SmithyHttpRequest request) =>
         RestProtocol.DeserializeRequest(binding, request);
 
-    public SmithyHttpResponse SerializeResponse(TOutput output) =>
-        RestProtocol.SerializeResponse(binding, output);
+    public SmithyServerResponse SerializeResponse(TOutput output) =>
+        SmithyServerResponse.FromHttp(RestProtocol.SerializeResponse(binding, output));
 
     public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
 
@@ -88,23 +98,29 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
             )
         );
 
-    public SmithyHttpResponse SerializeError<TError>(
-        Schema<TError> errorSchema,
-        TError value,
-        string errorShapeId,
-        int statusCode
-    ) =>
-        errorTypeHeader is null
-            ? throw new NotSupportedException(
-                "This REST protocol does not support server-side error serialization."
-            )
-            : RestProtocol.SerializeError(
-                errorSchema,
-                value,
-                errorShapeId,
-                statusCode,
-                codecFactory,
-                rawStringPayloads,
-                errorTypeHeader
-            );
+    public bool TrySerializeError(Exception exception, out SmithyServerResponse response) =>
+        serverErrors.TrySerialize(exception, out response);
+
+    private static (Type, Func<Exception, SmithyServerResponse>) CompileServerError<TError>(
+        OperationErrorSchema<TError> error,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads,
+        string errorTypeHeader
+    )
+        where TError : Exception =>
+        (
+            typeof(TError),
+            exception =>
+                SmithyServerResponse.FromHttp(
+                    RestProtocol.SerializeError(
+                        error.Schema,
+                        (TError)exception,
+                        error.Id.ToString(),
+                        error.HttpStatusCode,
+                        codecFactory,
+                        rawStringPayloads,
+                        errorTypeHeader
+                    )
+                )
+        );
 }

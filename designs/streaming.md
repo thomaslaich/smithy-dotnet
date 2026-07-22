@@ -103,12 +103,11 @@ Output streams are cold. The transport call starts when the caller enumerates
 the returned `IAsyncEnumerable<TEvent>`, and enumeration cancellation is the
 primary cancellation path for the stream.
 
-### Framing and the Duplex Transport
+### Framing and the Streaming Transport
 
 The protocol owns all wire framing; there is no shared frame type at the
-transport boundary. Client halves emit fully framed request bodies as
-`IAsyncEnumerable<ReadOnlyMemory<byte>>` chunks and deframe raw response
-streams themselves; server halves deframe the raw request body `Stream` and
+transport boundary. Client halves emit fully framed request bodies and deframe
+raw response streams themselves; server halves deframe the raw request body and
 emit framed response chunks:
 
 - gRPC owns the 5-byte message prefix and validates the `grpc-status` HTTP/2
@@ -118,23 +117,32 @@ emit framed response chunks:
 - Other event-stream protocols can provide their own frame encoding without
   changing generated client signatures.
 
-The transport underneath is protocol-neutral duplex HTTP:
+The request and response streaming axes are independent, so the transport types
+are named for what actually streams. A streaming request body is a variant of
+the `SmithyHttpBody` union, `EventStreaming` (`IAsyncEnumerable<ReadOnlyMemory<byte>>`,
+each chunk written and flushed as one unit), so every client request is a
+`SmithyHttpRequest`: output-stream requests carry a `Bytes` body (unary),
+input-stream and duplex requests carry an `EventStreaming` body. The response keeps
+a dedicated streaming type because incremental read, connection-hold-until-
+dispose, and trailer-after-EOF are behavioral properties a buffered unary
+response does not have:
 
 ```csharp
-public interface IDuplexHttpTransport
+public interface IStreamingHttpTransport
 {
-    Task<SmithyDuplexHttpResponse> SendAsync(
-        SmithyDuplexHttpRequest request,
+    Task<SmithyStreamingHttpResponse> SendAsync(
+        SmithyHttpRequest request,
         CancellationToken cancellationToken = default);
 }
 ```
 
-`SmithyDuplexHttpRequest.Body` carries the protocol-framed chunks (each is
-written and flushed as one unit); `SmithyDuplexHttpResponse.Body` is the raw
-response stream, `Trailer` resolves HTTP trailing headers once the body has
-been read to its end, and disposing the body releases the connection. One
-`HttpClient`-backed implementation (`DuplexHttpClientTransport`) serves every
-streaming protocol.
+`SmithyStreamingHttpResponse.Body` is the raw response stream, `Trailer`
+resolves HTTP trailing headers once the body has been read to its end, and
+disposing the body releases the connection. One `HttpClient`-backed
+implementation (`StreamingHttpClientTransport`) serves every streaming protocol.
+The server side of this architecture — a shared `SmithyServerRuntime` and a
+protocol-neutral host adapter — is covered in
+[server-architecture.md](server-architecture.md).
 
 ## Streaming Blob Payloads
 

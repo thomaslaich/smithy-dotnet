@@ -209,7 +209,7 @@ public final class ClientGenerator implements Runnable {
                 if (wiresEventStreamOperations) {
                   writer.write(
                       "this.eventStreamInvoker = new SmithyEventStreamOperationInvoker(new"
-                          + " DuplexHttpClientTransport(httpClient, endpoint));");
+                          + " StreamingHttpClientTransport(httpClient, endpoint));");
                 }
                 writeIdempotencyAssignment(needsIdempotency);
                 if (needsHttpClient) {
@@ -259,7 +259,7 @@ public final class ClientGenerator implements Runnable {
                 if (wiresEventStreamOperations) {
                   writer.write(
                       "this.eventStreamInvoker = new SmithyEventStreamOperationInvoker(new"
-                          + " DuplexHttpClientTransport(httpClient, endpoint));");
+                          + " StreamingHttpClientTransport(httpClient, endpoint));");
                 }
                 writeIdempotencyAssignment(needsIdempotency);
                 if (needsHttpClient) {

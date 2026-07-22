@@ -16,10 +16,9 @@ namespace NSmithy.Protocols.Grpc;
 /// REST and rpcv2Cbor protocols use, so the generated client/server glue is protocol-agnostic.
 /// </summary>
 /// <remarks>
-/// This is the unary shape. Streaming RPCs (the <c>stream</c> keyword in the proto) would be a
-/// separate streaming protocol interface. The <c>grpc-status</c>/<c>grpc-message</c> trailers are
-/// modeled on the <see cref="SmithyHttpResponse.Headers"/> dictionary; the transport renders them as
-/// HTTP/2 trailers.
+/// The <c>grpc-status</c>/<c>grpc-message</c> trailers are protocol-owned content: server halves
+/// attach them through <see cref="SmithyServerResponse.Trailers"/>, and the host adapter renders
+/// them as HTTP/2 trailers (or leading headers when the connection cannot carry trailers).
 /// </remarks>
 public sealed class GrpcProtocol : IProtocol
 {
@@ -130,18 +129,23 @@ public sealed class GrpcProtocol : IProtocol
         private readonly bool outputIsUnit;
         private readonly IProtoCodec<TInput>? requestCodec;
         private readonly IProtoCodec<TOutput>? responseCodec;
+        private readonly ModeledErrorSerializer serverErrors;
 
         public OperationProtocol(ServiceSchema service, OperationSchema<TInput, TOutput> operation)
         {
             // gRPC full method name: "/{package}.{Service}/{Method}". The proto package mirrors the
             // Smithy namespace, matching what smithy-proto-codegen emits.
-            methodPath = $"/{service.Id.Namespace}.{service.Id.Name}/{operation.Id.Name}";
+            methodPath = MethodPath(service, operation.Id.Name);
 
             inputIsUnit = IsUnit<TInput>(operation.Input);
             outputIsUnit = IsUnit<TOutput>(operation.Output);
             requestCodec = inputIsUnit ? null : ProtoCodec.FromSchema(operation.Input);
             responseCodec = outputIsUnit ? null : ProtoCodec.FromSchema(operation.Output);
             HttpErrors = CompileErrors(operation.Errors);
+            serverErrors = ModeledErrorSerializer.Compile(
+                operation.Errors,
+                error => CompileServerError((dynamic)error)
+            );
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
@@ -186,28 +190,11 @@ public sealed class GrpcProtocol : IProtocol
             return requestCodec!.Deserialize(payload);
         }
 
-        public SmithyHttpResponse SerializeResponse(TOutput output)
-        {
-            var body = GrpcMessageFraming.Frame(
-                outputIsUnit ? [] : responseCodec!.Serialize(output)
+        public SmithyServerResponse SerializeResponse(TOutput output) =>
+            UnaryGrpcResponse(
+                GrpcMessageFraming.Frame(outputIsUnit ? [] : responseCodec!.Serialize(output)),
+                OkTrailers
             );
-            return new SmithyHttpResponse(
-                HttpStatusCode.OK,
-                null,
-                body,
-                new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
-                {
-                    [GrpcStatusHeader] =
-                    [
-                        ((int)GrpcStatus.Ok).ToString(CultureInfo.InvariantCulture),
-                    ],
-                },
-                new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["Content-Type"] = [ContentType],
-                }
-            );
-        }
 
         public bool IsErrorResponse(SmithyHttpResponse response) =>
             GrpcProtocol.IsErrorResponse(response);
@@ -239,34 +226,43 @@ public sealed class GrpcProtocol : IProtocol
                 : null;
         }
 
-        public SmithyHttpResponse SerializeError<TError>(
+        public bool TrySerializeError(Exception exception, out SmithyServerResponse response) =>
+            serverErrors.TrySerialize(exception, out response);
+
+        private static (Type, Func<Exception, SmithyServerResponse>) CompileServerError<TError>(
+            OperationErrorSchema<TError> error
+        )
+            where TError : Exception =>
+            (
+                typeof(TError),
+                exception =>
+                    SerializeGrpcError(
+                        error.Schema,
+                        (TError)exception,
+                        error.Id.ToString(),
+                        error.HttpStatusCode
+                    )
+            );
+
+        private static SmithyServerResponse SerializeGrpcError<TError>(
             Schema<TError> errorSchema,
             TError value,
             string errorShapeId,
             int statusCode
         )
         {
-            ArgumentNullException.ThrowIfNull(errorSchema);
-            ArgumentNullException.ThrowIfNull(errorShapeId);
-
             var status = GrpcStatusMapping.FromHttpStatus(statusCode);
             var body = GrpcMessageFraming.Frame(
                 ProtoCodec.FromSchema(errorSchema).Serialize(value)
             );
-            return new SmithyHttpResponse(
-                HttpStatusCode.OK,
-                null,
+            return UnaryGrpcResponse(
                 body,
-                new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
-                {
-                    [GrpcStatusHeader] = [((int)status).ToString(CultureInfo.InvariantCulture)],
-                    [GrpcMessageHeader] = [errorShapeId],
-                    [ErrorShapeHeader] = [errorShapeId],
-                },
-                new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["Content-Type"] = [ContentType],
-                }
+                _ =>
+                    [
+                        new(GrpcStatusHeader, ((int)status).ToString(CultureInfo.InvariantCulture)),
+                        new(GrpcMessageHeader, errorShapeId),
+                        new(ErrorShapeHeader, errorShapeId),
+                    ]
             );
         }
 
@@ -310,11 +306,12 @@ public sealed class GrpcProtocol : IProtocol
             responseCodec = ProtoCodec.FromSchema(outputEvent);
         }
 
-        public SmithyDuplexHttpRequest SerializeRequest(TInput input)
+        // An output stream's request is unary — one framed message, so an ordinary Bytes body.
+        public SmithyHttpRequest SerializeRequest(TInput input)
         {
-            var request = new SmithyDuplexHttpRequest(HttpMethod.Post, methodPath)
+            var request = new SmithyHttpRequest(HttpMethod.Post, methodPath)
             {
-                Body = SingleChunk(
+                Body = new SmithyHttpBody.Bytes(
                     GrpcMessageFraming.Frame(inputIsUnit ? [] : requestCodec!.Serialize(input))
                 ),
                 ContentType = ContentType,
@@ -336,7 +333,7 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-            SmithyDuplexHttpResponse response,
+            SmithyStreamingHttpResponse response,
             CancellationToken cancellationToken = default
         )
         {
@@ -345,13 +342,16 @@ public sealed class GrpcProtocol : IProtocol
             return ReadResponseEventsAsync(response, responseCodec, cancellationToken);
         }
 
-        public IAsyncEnumerable<ReadOnlyMemory<byte>> SerializeResponseEventsAsync(
+        public SmithyServerResponse SerializeResponse(
             IAsyncEnumerable<TOutputEvent> output,
             CancellationToken cancellationToken = default
         )
         {
             ArgumentNullException.ThrowIfNull(output);
-            return FrameEventsAsync(output, responseCodec, cancellationToken);
+            return StreamingGrpcResponse(
+                FrameEventsAsync(output, responseCodec, cancellationToken),
+                StreamTrailers
+            );
         }
     }
 
@@ -375,15 +375,17 @@ public sealed class GrpcProtocol : IProtocol
             responseCodec = outputIsUnit ? null : ProtoCodec.FromSchema(operation.Output);
         }
 
-        public SmithyDuplexHttpRequest SerializeRequest(
+        public SmithyHttpRequest SerializeRequest(
             IAsyncEnumerable<TInputEvent> input,
             CancellationToken cancellationToken = default
         )
         {
             ArgumentNullException.ThrowIfNull(input);
-            var request = new SmithyDuplexHttpRequest(HttpMethod.Post, methodPath)
+            var request = new SmithyHttpRequest(HttpMethod.Post, methodPath)
             {
-                Body = FrameEventsAsync(input, requestCodec, cancellationToken),
+                Body = new SmithyHttpBody.EventStreaming(
+                    FrameEventsAsync(input, requestCodec, cancellationToken)
+                ),
                 ContentType = ContentType,
             };
             request.Headers["te"] = ["trailers"];
@@ -391,16 +393,16 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public IAsyncEnumerable<TInputEvent> DeserializeRequestEventsAsync(
-            Stream body,
+            SmithyHttpRequest request,
             CancellationToken cancellationToken = default
         )
         {
-            ArgumentNullException.ThrowIfNull(body);
-            return ReadRequestEventsAsync(body, requestCodec, cancellationToken);
+            ArgumentNullException.ThrowIfNull(request);
+            return ReadRequestEventsAsync(RequestStream(request), requestCodec, cancellationToken);
         }
 
         public ValueTask<TOutput> DeserializeResponseAsync(
-            SmithyDuplexHttpResponse response,
+            SmithyStreamingHttpResponse response,
             CancellationToken cancellationToken = default
         )
         {
@@ -415,8 +417,11 @@ public sealed class GrpcProtocol : IProtocol
             return DeserializeSingleResponseAsync(response, responseCodec!, cancellationToken);
         }
 
-        public ReadOnlyMemory<byte> SerializeResponse(TOutput output) =>
-            GrpcMessageFraming.Frame(outputIsUnit ? [] : responseCodec!.Serialize(output));
+        public SmithyServerResponse SerializeResponse(TOutput output) =>
+            UnaryGrpcResponse(
+                GrpcMessageFraming.Frame(outputIsUnit ? [] : responseCodec!.Serialize(output)),
+                OkTrailers
+            );
     }
 
     private sealed class DuplexEventStreamOperationProtocol<
@@ -437,15 +442,17 @@ public sealed class GrpcProtocol : IProtocol
             outputEvent
         );
 
-        public SmithyDuplexHttpRequest SerializeRequest(
+        public SmithyHttpRequest SerializeRequest(
             IAsyncEnumerable<TInputEvent> input,
             CancellationToken cancellationToken = default
         )
         {
             ArgumentNullException.ThrowIfNull(input);
-            var request = new SmithyDuplexHttpRequest(HttpMethod.Post, methodPath)
+            var request = new SmithyHttpRequest(HttpMethod.Post, methodPath)
             {
-                Body = FrameEventsAsync(input, requestCodec, cancellationToken),
+                Body = new SmithyHttpBody.EventStreaming(
+                    FrameEventsAsync(input, requestCodec, cancellationToken)
+                ),
                 ContentType = ContentType,
             };
             request.Headers["te"] = ["trailers"];
@@ -453,16 +460,16 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public IAsyncEnumerable<TInputEvent> DeserializeRequestEventsAsync(
-            Stream body,
+            SmithyHttpRequest request,
             CancellationToken cancellationToken = default
         )
         {
-            ArgumentNullException.ThrowIfNull(body);
-            return ReadRequestEventsAsync(body, requestCodec, cancellationToken);
+            ArgumentNullException.ThrowIfNull(request);
+            return ReadRequestEventsAsync(RequestStream(request), requestCodec, cancellationToken);
         }
 
         public IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-            SmithyDuplexHttpResponse response,
+            SmithyStreamingHttpResponse response,
             CancellationToken cancellationToken = default
         )
         {
@@ -471,15 +478,77 @@ public sealed class GrpcProtocol : IProtocol
             return ReadResponseEventsAsync(response, responseCodec, cancellationToken);
         }
 
-        public IAsyncEnumerable<ReadOnlyMemory<byte>> SerializeResponseEventsAsync(
+        public SmithyServerResponse SerializeResponse(
             IAsyncEnumerable<TOutputEvent> output,
             CancellationToken cancellationToken = default
         )
         {
             ArgumentNullException.ThrowIfNull(output);
-            return FrameEventsAsync(output, responseCodec, cancellationToken);
+            return StreamingGrpcResponse(
+                FrameEventsAsync(output, responseCodec, cancellationToken),
+                StreamTrailers
+            );
         }
     }
+
+    // ---------------- server response construction ----------------
+
+    private static SmithyServerResponse UnaryGrpcResponse(
+        byte[] framedBody,
+        Func<Exception?, IReadOnlyList<KeyValuePair<string, string>>> trailers
+    )
+    {
+        var response = new SmithyServerResponse
+        {
+            StatusCode = (int)HttpStatusCode.OK,
+            Body = SingleChunk(framedBody),
+            ContentLength = framedBody.Length,
+            Trailers = trailers,
+        };
+        response.Headers["Content-Type"] = [ContentType];
+        return response;
+    }
+
+    private static SmithyServerResponse StreamingGrpcResponse(
+        IAsyncEnumerable<ReadOnlyMemory<byte>> body,
+        Func<Exception?, IReadOnlyList<KeyValuePair<string, string>>> trailers
+    )
+    {
+        var response = new SmithyServerResponse
+        {
+            StatusCode = (int)HttpStatusCode.OK,
+            Body = body,
+            Trailers = trailers,
+        };
+        response.Headers["Content-Type"] = [ContentType];
+        return response;
+    }
+
+    private static IReadOnlyList<KeyValuePair<string, string>> OkTrailers(Exception? _) =>
+        [new(GrpcStatusHeader, "0")];
+
+    // A stream that completes cleanly reports OK; a mid-stream failure becomes grpc-status INTERNAL.
+    private static IReadOnlyList<KeyValuePair<string, string>> StreamTrailers(Exception? error) =>
+        error is null
+            ? [new(GrpcStatusHeader, "0")]
+            :
+            [
+                new(
+                    GrpcStatusHeader,
+                    ((int)GrpcStatus.Internal).ToString(CultureInfo.InvariantCulture)
+                ),
+                new(GrpcMessageHeader, error.Message),
+            ];
+
+    private static Stream RequestStream(SmithyHttpRequest request) =>
+        request.Body switch
+        {
+            SmithyHttpBody.Streaming streaming => streaming.Content,
+            SmithyHttpBody.Bytes bytes => new MemoryStream(bytes.Content, writable: false),
+            _ => Stream.Null,
+        };
+
+    // ---------------- shared wire helpers ----------------
 
     private static bool IsErrorResponse(SmithyHttpResponse response)
     {
@@ -497,10 +566,10 @@ public sealed class GrpcProtocol : IProtocol
         // Anything that is not a 200 application/grpc response is a transport-level failure (a 404,
         // a 500 HTML page, an HTTP/1.1 downgrade, …) — treat it as an error so the client surfaces
         // it instead of trying to parse a non-gRPC body as a frame.
-        return response.StatusCode != System.Net.HttpStatusCode.OK || !IsGrpcContentType(response);
+        return response.StatusCode != HttpStatusCode.OK || !IsGrpcContentType(response);
     }
 
-    private static void EnsureGrpcResponse(SmithyDuplexHttpResponse response)
+    private static void EnsureGrpcResponse(SmithyStreamingHttpResponse response)
     {
         if (response.StatusCode == HttpStatusCode.OK && IsGrpcContentType(response.ContentHeaders))
         {
@@ -540,12 +609,8 @@ public sealed class GrpcProtocol : IProtocol
 
         var message = trailer!.Invoke(GrpcMessageHeader);
         var name =
-            int.TryParse(
-                status,
-                System.Globalization.NumberStyles.Integer,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out var code
-            ) && Enum.IsDefined(typeof(GrpcStatus), code)
+            int.TryParse(status, NumberStyles.Integer, CultureInfo.InvariantCulture, out var code)
+            && Enum.IsDefined(typeof(GrpcStatus), code)
                 ? ((GrpcStatus)code).ToString()
                 : "Unknown";
         throw new InvalidOperationException(
@@ -602,7 +667,7 @@ public sealed class GrpcProtocol : IProtocol
     }
 
     private static async IAsyncEnumerable<T> ReadResponseEventsAsync<T>(
-        SmithyDuplexHttpResponse response,
+        SmithyStreamingHttpResponse response,
         IProtoCodec<T> codec,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
@@ -628,7 +693,7 @@ public sealed class GrpcProtocol : IProtocol
     }
 
     private static async ValueTask<T> DeserializeSingleResponseAsync<T>(
-        SmithyDuplexHttpResponse response,
+        SmithyStreamingHttpResponse response,
         IProtoCodec<T> codec,
         CancellationToken cancellationToken
     )
@@ -665,7 +730,7 @@ public sealed class GrpcProtocol : IProtocol
 
     private static void EnsureGrpcResponse(SmithyHttpResponse response)
     {
-        if (response.StatusCode == System.Net.HttpStatusCode.OK && IsGrpcContentType(response))
+        if (response.StatusCode == HttpStatusCode.OK && IsGrpcContentType(response))
         {
             return;
         }

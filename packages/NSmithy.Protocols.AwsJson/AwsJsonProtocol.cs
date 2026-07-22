@@ -126,7 +126,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             return content.Length == 0 ? default! : requestCodec.Deserialize(content);
         }
 
-        public SmithyHttpResponse SerializeResponse(TOutput output) =>
+        public SmithyServerResponse SerializeResponse(TOutput output) =>
             throw new NotSupportedException("AWS JSON server-side serialization is not supported.");
 
         public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
@@ -147,12 +147,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
                 )
             );
 
-        public SmithyHttpResponse SerializeError<TError>(
-            Schema<TError> errorSchema,
-            TError value,
-            string errorShapeId,
-            int statusCode
-        ) =>
+        public bool TrySerializeError(Exception exception, out SmithyServerResponse response) =>
             throw new NotSupportedException("AWS JSON server-side serialization is not supported.");
 
         private static TOutput CreateEmptyOutput(Schema<TOutput> schema)

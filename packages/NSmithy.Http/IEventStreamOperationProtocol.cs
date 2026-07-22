@@ -8,21 +8,22 @@ namespace NSmithy.Http;
 //   - Duplex: both.
 //
 // Each direction has a client half and a server half; protocol implementations implement the
-// combined interface. The protocol owns all wire framing — client halves emit fully framed
-// request bodies and deframe raw response streams; server halves deframe raw request bodies and
-// emit fully framed response chunks. Transports stay protocol-neutral.
+// combined interface. The protocol owns all wire framing: client halves emit a fully framed
+// request body (a SmithyHttpBody.EventStreaming, or Bytes for a unary output-stream request) and
+// deframe the streaming response; server halves deframe the raw request body and emit a
+// SmithyServerResponse whose body is framed chunks. Transports and hosts stay protocol-neutral.
 
 /// <summary>Client half of an output-stream operation: unary request in, events out.</summary>
 public interface IOutputEventStreamClientProtocol<TInput, TOutputEvent>
 {
-    SmithyDuplexHttpRequest SerializeRequest(TInput input);
+    SmithyHttpRequest SerializeRequest(TInput input);
 
     /// <summary>
     /// Deframes and decodes the response events. Implementations own <paramref name="response"/>'s
     /// body stream and must dispose it when enumeration completes or is abandoned.
     /// </summary>
     IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-        SmithyDuplexHttpResponse response,
+        SmithyStreamingHttpResponse response,
         CancellationToken cancellationToken = default
     );
 }
@@ -32,8 +33,8 @@ public interface IOutputEventStreamServerProtocol<TInput, TOutputEvent>
 {
     TInput DeserializeRequest(SmithyHttpRequest request);
 
-    /// <summary>Encodes and frames the response events into write-ready body chunks.</summary>
-    IAsyncEnumerable<ReadOnlyMemory<byte>> SerializeResponseEventsAsync(
+    /// <summary>Encodes and frames the response events into a streamed server response.</summary>
+    SmithyServerResponse SerializeResponse(
         IAsyncEnumerable<TOutputEvent> output,
         CancellationToken cancellationToken = default
     );
@@ -47,7 +48,7 @@ public interface IOutputEventStreamOperationProtocol<TInput, TOutputEvent>
 /// <summary>Client half of an input-stream operation: events in, unary response out.</summary>
 public interface IInputEventStreamClientProtocol<TInputEvent, TOutput>
 {
-    SmithyDuplexHttpRequest SerializeRequest(
+    SmithyHttpRequest SerializeRequest(
         IAsyncEnumerable<TInputEvent> input,
         CancellationToken cancellationToken = default
     );
@@ -57,7 +58,7 @@ public interface IInputEventStreamClientProtocol<TInputEvent, TOutput>
     /// and must dispose it before returning.
     /// </summary>
     ValueTask<TOutput> DeserializeResponseAsync(
-        SmithyDuplexHttpResponse response,
+        SmithyStreamingHttpResponse response,
         CancellationToken cancellationToken = default
     );
 }
@@ -67,12 +68,12 @@ public interface IInputEventStreamServerProtocol<TInputEvent, TOutput>
 {
     /// <summary>Deframes and decodes the request events from the raw request body.</summary>
     IAsyncEnumerable<TInputEvent> DeserializeRequestEventsAsync(
-        Stream body,
+        SmithyHttpRequest request,
         CancellationToken cancellationToken = default
     );
 
-    /// <summary>Encodes and frames the unary response as one write-ready body chunk.</summary>
-    ReadOnlyMemory<byte> SerializeResponse(TOutput output);
+    /// <summary>Encodes and frames the unary response into a server response.</summary>
+    SmithyServerResponse SerializeResponse(TOutput output);
 }
 
 /// <summary>An input-stream operation protocol usable from both call sides.</summary>
@@ -83,7 +84,7 @@ public interface IInputEventStreamOperationProtocol<TInputEvent, TOutput>
 /// <summary>Client half of a duplex-stream operation: events in both directions.</summary>
 public interface IDuplexEventStreamClientProtocol<TInputEvent, TOutputEvent>
 {
-    SmithyDuplexHttpRequest SerializeRequest(
+    SmithyHttpRequest SerializeRequest(
         IAsyncEnumerable<TInputEvent> input,
         CancellationToken cancellationToken = default
     );
@@ -93,7 +94,7 @@ public interface IDuplexEventStreamClientProtocol<TInputEvent, TOutputEvent>
     /// body stream and must dispose it when enumeration completes or is abandoned.
     /// </summary>
     IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-        SmithyDuplexHttpResponse response,
+        SmithyStreamingHttpResponse response,
         CancellationToken cancellationToken = default
     );
 }
@@ -103,12 +104,12 @@ public interface IDuplexEventStreamServerProtocol<TInputEvent, TOutputEvent>
 {
     /// <summary>Deframes and decodes the request events from the raw request body.</summary>
     IAsyncEnumerable<TInputEvent> DeserializeRequestEventsAsync(
-        Stream body,
+        SmithyHttpRequest request,
         CancellationToken cancellationToken = default
     );
 
-    /// <summary>Encodes and frames the response events into write-ready body chunks.</summary>
-    IAsyncEnumerable<ReadOnlyMemory<byte>> SerializeResponseEventsAsync(
+    /// <summary>Encodes and frames the response events into a streamed server response.</summary>
+    SmithyServerResponse SerializeResponse(
         IAsyncEnumerable<TOutputEvent> output,
         CancellationToken cancellationToken = default
     );

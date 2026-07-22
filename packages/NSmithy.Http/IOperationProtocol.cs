@@ -55,20 +55,22 @@ public interface IClientOperationProtocol<TInput, TOutput>
 
 /// <summary>
 /// The server half of a protocol bound to a single (service, operation) pair: request
-/// deserialization and response/error serialization. Generated ASP.NET Core handlers call these.
+/// deserialization and response/error serialization. The shared server runtime calls these; a host
+/// adapter writes the returned <see cref="SmithyServerResponse"/>.
 /// </summary>
 public interface IServerOperationProtocol<TInput, TOutput>
 {
     TInput DeserializeRequest(SmithyHttpRequest request);
 
-    SmithyHttpResponse SerializeResponse(TOutput output);
+    SmithyServerResponse SerializeResponse(TOutput output);
 
-    SmithyHttpResponse SerializeError<TError>(
-        Schema<TError> errorSchema,
-        TError value,
-        string errorShapeId,
-        int statusCode
-    );
+    /// <summary>
+    /// Serializes a modeled error to a protocol error response. The operation's modeled errors and
+    /// their status codes come from the schema the protocol already holds, so the caller supplies
+    /// only the thrown exception. Returns false for an exception that is not one of the operation's
+    /// modeled errors, which the runtime rethrows (surfaced as a 500 by the host).
+    /// </summary>
+    bool TrySerializeError(Exception exception, out SmithyServerResponse response);
 }
 
 /// <summary>

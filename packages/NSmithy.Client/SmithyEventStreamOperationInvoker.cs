@@ -3,18 +3,18 @@ using NSmithy.Http;
 namespace NSmithy.Client;
 
 /// <summary>
-/// Sends event-stream operation requests over a duplex transport. The protocol produces the
+/// Sends event-stream operation requests over a streaming transport. The protocol produces the
 /// framed request body and deframes the response stream; this invoker owns only the send.
 /// </summary>
-public sealed class SmithyEventStreamOperationInvoker(IDuplexHttpTransport transport)
+public sealed class SmithyEventStreamOperationInvoker(IStreamingHttpTransport transport)
 {
-    private readonly IDuplexHttpTransport transport =
+    private readonly IStreamingHttpTransport transport =
         transport ?? throw new ArgumentNullException(nameof(transport));
 
-    public Task<SmithyDuplexHttpResponse> InvokeAsync(
+    public Task<SmithyStreamingHttpResponse> InvokeAsync(
         string serviceName,
         string operationName,
-        SmithyDuplexHttpRequest request,
+        SmithyHttpRequest request,
         CancellationToken cancellationToken = default
     )
     {

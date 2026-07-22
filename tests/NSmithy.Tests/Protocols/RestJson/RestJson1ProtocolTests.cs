@@ -862,7 +862,7 @@ public sealed class RestJson1ProtocolTests
     }
 
     [Fact]
-    public void RestJson1ProtocolSerializesStreamingBlobResponseWithoutBuffering()
+    public async Task RestJson1ProtocolSerializesStreamingBlobResponseWithoutBuffering()
     {
         var inputSchema = Schemas
             .Structure<GetUserOutput, GetUserOutputBuilder>(new ShapeId("example", "GetUserInput"))
@@ -879,17 +879,26 @@ public sealed class RestJson1ProtocolTests
 
         var response = Protocol(operation).SerializeResponse(output);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal((int)HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("etag-1", response.Headers["ETag"].Single());
-        Assert.Equal("application/octet-stream", response.ContentHeaders["Content-Type"].Single());
-        Assert.Empty(response.Content);
-        var body = Assert.IsType<SmithyHttpBody.Streaming>(response.Body);
-        Assert.Same(payload, body.Content);
-        Assert.Equal(payload.Length, body.ContentLength);
+        Assert.Equal("application/octet-stream", response.Headers["Content-Type"].Single());
+        Assert.Equal(payload.Length, response.ContentLength);
+        Assert.Equal("avatar bytes", Encoding.UTF8.GetString(await DrainAsync(response)));
+    }
+
+    private static async Task<byte[]> DrainAsync(SmithyServerResponse response)
+    {
+        var buffer = new MemoryStream();
+        await foreach (var chunk in response.Body)
+        {
+            buffer.Write(chunk.Span);
+        }
+
+        return buffer.ToArray();
     }
 
     [Fact]
-    public async Task AspNetCoreProtocolWritesStreamingBlobResponseLength()
+    public async Task ServerResponseFromHttpPreservesStreamingBlobLength()
     {
         var payload = new MemoryStream("avatar bytes"u8.ToArray());
         var response = new SmithyHttpResponse(
@@ -902,17 +911,18 @@ public sealed class RestJson1ProtocolTests
                 ["Content-Type"] = ["application/octet-stream"],
             }
         );
-        var httpContext = new DefaultHttpContext();
-        httpContext.Response.Body = new MemoryStream();
 
-        await NSmithy.Server.AspNetCore.SmithyAspNetCoreProtocol.WriteSmithyHttpResponseAsync(
-            httpContext,
-            response
-        );
+        var serverResponse = SmithyServerResponse.FromHttp(response);
 
-        Assert.Equal(payload.Length, httpContext.Response.ContentLength);
-        httpContext.Response.Body.Position = 0;
-        using var reader = new StreamReader(httpContext.Response.Body, Encoding.UTF8);
+        Assert.Equal(payload.Length, serverResponse.ContentLength);
+        var buffer = new MemoryStream();
+        await foreach (var chunk in serverResponse.Body)
+        {
+            buffer.Write(chunk.Span);
+        }
+
+        buffer.Position = 0;
+        using var reader = new StreamReader(buffer, Encoding.UTF8);
         Assert.Equal("avatar bytes", await reader.ReadToEndAsync());
     }
 
@@ -1010,7 +1020,7 @@ public sealed class RestJson1ProtocolTests
     }
 
     [Fact]
-    public void RestJson1ProtocolSerializesResponseBindingsAndBody()
+    public async Task RestJson1ProtocolSerializesResponseBindingsAndBody()
     {
         var inputSchema = Schemas
             .Structure<GetUserOutput, GetUserOutputBuilder>(new ShapeId("example", "GetUserInput"))
@@ -1071,11 +1081,14 @@ public sealed class RestJson1ProtocolTests
 
         var response = Protocol(operation).SerializeResponse(output);
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal((int)HttpStatusCode.Created, response.StatusCode);
         Assert.Equal("etag-1", response.Headers["ETag"].Single());
         Assert.Equal("abc", response.Headers["X-Extra-Trace"].Single());
-        Assert.Equal("application/json", response.ContentHeaders["Content-Type"].Single());
-        Assert.Equal("{\"displayName\":\"Ada\"}", response.ContentText);
+        Assert.Equal("application/json", response.Headers["Content-Type"].Single());
+        Assert.Equal(
+            "{\"displayName\":\"Ada\"}",
+            Encoding.UTF8.GetString(await DrainAsync(response))
+        );
     }
 
     [Fact]
@@ -1305,10 +1318,9 @@ public sealed class RestJson1ProtocolTests
             "?pageSize=3&nextToken=LAX"
         );
 
-        var request =
-            await NSmithy.Server.AspNetCore.SmithyAspNetCoreProtocol.CreateSmithyHttpRequestAsync(
-                httpContext
-            );
+        var request = await NSmithy.Server.AspNetCore.SmithyAspNetCoreHost.ToSmithyRequestAsync(
+            httpContext
+        );
 
         Assert.Equal("/cities?pageSize=3&nextToken=LAX", request.RequestUri);
     }
