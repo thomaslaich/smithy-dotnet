@@ -2,8 +2,7 @@
  * Server-side code generator. Emits:
  *   - one `I{Operation}Handler` per operation (streaming surface derived from the model)
  *   - aggregate `I{Service}ServiceHandler`
- *   - `{Service}ServiceServerExtensions` with AddXxxHandler<THandler>(IServiceCollection),
- *     which also registers the shared SmithyServerRuntime
+ *   - `{Service}ServiceServerExtensions` with AddXxxHandler<THandler>(IServiceCollection)
  *   - one `{Service}Service{Protocol}Extensions` per declared server protocol, each with a
  *     `Map{Service}Service{Protocol}(IEndpointRouteBuilder)` that binds routes to the shared handler
  *
