@@ -51,7 +51,7 @@ The runtime is already factored exactly the way this needs:
 - **Protocols are pluggable.** `RpcV2CborProtocol.ForService(serviceSchema)`
   returns an `IServiceProtocol`; the generated client/server glue calls only the
   protocol interface. The interface doc comment in
-  `packages/NSmithy.Http/IOperationProtocol.cs` *already* anticipates gRPC:
+  `packages/NSmithy.Http/OperationProtocols.cs` *already* anticipates gRPC:
   > "the `grpc-status` trailer for gRPC".
 
 So a native gRPC stack is two new packages slotted beside the CBOR ones, with no
@@ -99,7 +99,7 @@ rich nested/map/enum/timestamp round trip.
   `IServiceProtocol`/`IOperationProtocol`. Method path `/{namespace}.{Service}/{Method}`,
   content-type `application/grpc+proto`, `te: trailers`, framed proto bodies, and
   the `grpc-status`/`grpc-message` trailer error model (carried on
-  `SmithyHttpResponse.Headers`, which the transport renders as HTTP/2 trailers).
+  `SmithyHttpClientResponse.Headers`, which the transport renders as HTTP/2 trailers).
 
 Tests (`tests/.../GrpcProtocolTests.cs`) round-trip client→server→client through
 the protocol interface and cover framing + the modeled-error path. No
@@ -131,9 +131,9 @@ The full unary `alloy.proto#grpc` surface now works, verified end-to-end by the
 
 ## What landed in codegen + runtime
 
-- **Runtime trailer support.** `HttpClientTransport` folds HTTP/2 trailing
-  headers into the response header dictionary (so the client sees `grpc-status`),
-  and `SmithyAspNetCoreProtocol.WriteSmithyGrpcResponseAsync` emits
+- **Runtime trailer support.** `HttpClientTransport` exposes HTTP/2 trailing
+  headers through `SmithyHttpClientResponse.Trailer`, and
+  `SmithyAspNetCoreProtocol.WriteSmithyGrpcResponseAsync` emits
   `grpc-status`/`grpc-message` as real HTTP/2 trailers (falling back to headers
   when trailers are unsupported).
 - **Native server codegen.** `ServerGenerator` emits `Map{Service}Grpc` using

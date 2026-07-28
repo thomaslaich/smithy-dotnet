@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using NSmithy.Http;
 
 namespace NSmithy.Client;
@@ -46,6 +47,38 @@ public sealed class SmithyClientRuntime(
     {
         ArgumentNullException.ThrowIfNull(binding);
         return InvokeCoreAsync(binding, input, cancellationToken);
+    }
+
+    public IAsyncEnumerable<TOutputEvent> InvokeOutputStreamAsync<TInput, TOutputEvent>(
+        SmithyOutputEventStreamOperationBinding<TInput, TOutputEvent> binding,
+        TInput input,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        return InvokeOutputStreamCoreAsync(binding, input, cancellationToken);
+    }
+
+    public Task<TOutput> InvokeInputStreamAsync<TInputEvent, TOutput>(
+        SmithyInputEventStreamOperationBinding<TInputEvent, TOutput> binding,
+        IAsyncEnumerable<TInputEvent> input,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(input);
+        return InvokeInputStreamCoreAsync(binding, input, cancellationToken);
+    }
+
+    public IAsyncEnumerable<TOutputEvent> InvokeDuplexStreamAsync<TInputEvent, TOutputEvent>(
+        SmithyDuplexEventStreamOperationBinding<TInputEvent, TOutputEvent> binding,
+        IAsyncEnumerable<TInputEvent> input,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(input);
+        return InvokeDuplexStreamCoreAsync(binding, input, cancellationToken);
     }
 
     private async Task<TOutput> InvokeCoreAsync<TInput, TOutput>(
@@ -126,7 +159,7 @@ public sealed class SmithyClientRuntime(
             }
 
             var request = protocol.SerializeRequest(input);
-            var response = await SendAsync(
+            var response = await SendUnaryAsync(
                     context,
                     request,
                     protocol.DeserializeErrorAsync,
@@ -197,11 +230,11 @@ public sealed class SmithyClientRuntime(
         }
     }
 
-    private async Task<SmithyHttpResponse> SendAsync(
+    private async Task<SmithyHttpClientResponse> SendUnaryAsync(
         SmithyContext context,
         SmithyHttpRequest request,
-        Func<SmithyHttpResponse, CancellationToken, ValueTask<Exception?>> deserializeError,
-        Func<SmithyHttpResponse, bool> isErrorResponse,
+        Func<SmithyHttpClientResponse, CancellationToken, ValueTask<Exception?>> deserializeError,
+        Func<SmithyHttpClientResponse, bool> isErrorResponse,
         TagList tags,
         SmithyEndpoint? resolvedEndpoint,
         IClientInterceptor? authInterceptor,
@@ -210,7 +243,7 @@ public sealed class SmithyClientRuntime(
     {
         var session = retryStrategy?.Begin();
         // Streaming request bodies cannot be replayed, so they get exactly one attempt.
-        var canRetry = session is not null && request.Body is not SmithyHttpBody.Streaming;
+        var canRetry = session is not null && IsReplayable(request.Body);
         for (var attempt = 1; ; attempt++)
         {
             context.Set(SmithyContextKeys.Attempt, attempt);
@@ -230,11 +263,17 @@ public sealed class SmithyClientRuntime(
                 )
                 .ConfigureAwait(false);
 
-            SmithyHttpResponse response;
+            SmithyHttpClientResponse response;
             try
             {
                 response = await transport
-                    .SendAsync(attemptRequest, cancellationToken)
+                    .SendAsync(
+                        attemptRequest,
+                        attemptRequest.ExpectStreamingResponse
+                            ? SmithyHttpClientResponseMode.Stream
+                            : SmithyHttpClientResponseMode.Buffer,
+                        cancellationToken
+                    )
                     .ConfigureAwait(false);
             }
             catch (Exception transportError)
@@ -292,13 +331,489 @@ public sealed class SmithyClientRuntime(
         }
     }
 
-    private static ValueTask DisposeBodyAsync(SmithyHttpResponse response) =>
+    private static ValueTask DisposeBodyAsync(SmithyHttpClientResponse response) =>
         response.Body is SmithyHttpBody.Streaming streaming
             ? streaming.Content.DisposeAsync()
             : ValueTask.CompletedTask;
 
+    private async Task<SmithyHttpClientResponse> SendStreamingAsync(
+        SmithyContext context,
+        SmithyHttpRequest request,
+        TagList tags,
+        SmithyEndpoint? resolvedEndpoint,
+        IClientInterceptor? authInterceptor,
+        CancellationToken cancellationToken
+    )
+    {
+        context.Set(SmithyContextKeys.Attempt, 1);
+        using var attemptActivity = SmithyClientTelemetry.ActivitySource.StartActivity(
+            "attempt",
+            ActivityKind.Internal
+        );
+        attemptActivity?.SetTag("smithy.attempt", 1);
+        SmithyClientTelemetry.Attempts.Add(1, tags);
+
+        var resolvedRequest = ApplyEndpoint(CloneRequest(request), resolvedEndpoint);
+        var attemptRequest = await ApplyRequestInterceptorsAsync(
+                context,
+                resolvedRequest,
+                authInterceptor,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        var response = await transport
+            .SendAsync(attemptRequest, SmithyHttpClientResponseMode.Stream, cancellationToken)
+            .ConfigureAwait(false);
+
+        for (var i = interceptors.Count - 1; i >= 0; i--)
+        {
+            interceptors[i].OnAfterTransmit(context, response);
+        }
+
+        return response;
+    }
+
+    private async IAsyncEnumerable<TOutputEvent> InvokeOutputStreamCoreAsync<TInput, TOutputEvent>(
+        SmithyOutputEventStreamOperationBinding<TInput, TOutputEvent> binding,
+        TInput input,
+        [EnumeratorCancellation] CancellationToken callerToken
+    )
+    {
+        using var timeoutSource = operationTimeout is null
+            ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(callerToken);
+        timeoutSource?.CancelAfter(operationTimeout!.Value);
+        var cancellationToken = timeoutSource?.Token ?? callerToken;
+
+        var protocol = binding.Protocol;
+        var context = CreateContext(binding.ServiceId.Name, binding.OperationId.Name);
+        var (resolvedEndpoint, authInterceptor) = await ResolveEndpointAndAuthAsync(
+                binding.ServiceId,
+                binding.OperationId,
+                binding.AuthSchemeIds,
+                input,
+                context,
+                callerToken
+            )
+            .ConfigureAwait(false);
+        var tags = CreateTags(binding.ServiceId.ToString(), binding.OperationId.Name);
+        using var activity = StartOperationActivity(
+            binding.ServiceId.Name,
+            binding.OperationId.Name,
+            tags
+        );
+        var startTimestamp = Stopwatch.GetTimestamp();
+        Exception? executionError = null;
+
+        foreach (var interceptor in interceptors)
+        {
+            interceptor.OnBeforeExecution(context);
+        }
+
+        IAsyncEnumerator<TOutputEvent>? events = null;
+        try
+        {
+            foreach (var interceptor in interceptors)
+            {
+                interceptor.OnBeforeSerialization(context, input);
+            }
+
+            var request = protocol.SerializeRequest(input);
+            var response = await SendStreamingAsync(
+                    context,
+                    request,
+                    tags,
+                    resolvedEndpoint,
+                    authInterceptor,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+            events = protocol
+                .DeserializeResponseEventsAsync(response, cancellationToken)
+                .GetAsyncEnumerator(cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (timeoutSource?.IsCancellationRequested == true
+                && !callerToken.IsCancellationRequested
+            )
+        {
+            var timeoutError = new TimeoutException(
+                $"The operation did not complete within {operationTimeout!.Value}."
+            );
+            executionError = timeoutError;
+            CompleteExecution(context, executionError, activity, startTimestamp, tags);
+            throw timeoutError;
+        }
+        catch (Exception error)
+        {
+            executionError = error;
+            CompleteExecution(context, executionError, activity, startTimestamp, tags);
+            throw;
+        }
+
+        try
+        {
+            while (true)
+            {
+                TOutputEvent item;
+                try
+                {
+                    if (!await events.MoveNextAsync().ConfigureAwait(false))
+                    {
+                        break;
+                    }
+
+                    item = events.Current;
+                }
+                catch (OperationCanceledException)
+                    when (timeoutSource?.IsCancellationRequested == true
+                        && !callerToken.IsCancellationRequested
+                    )
+                {
+                    var timeoutError = new TimeoutException(
+                        $"The operation did not complete within {operationTimeout!.Value}."
+                    );
+                    executionError = timeoutError;
+                    throw timeoutError;
+                }
+                catch (Exception error)
+                {
+                    executionError = error;
+                    throw;
+                }
+
+                for (var i = interceptors.Count - 1; i >= 0; i--)
+                {
+                    interceptors[i].OnAfterDeserialization(context, item);
+                }
+
+                yield return item;
+            }
+        }
+        finally
+        {
+            if (events is not null)
+            {
+                await events.DisposeAsync().ConfigureAwait(false);
+            }
+
+            CompleteExecution(context, executionError, activity, startTimestamp, tags);
+        }
+    }
+
+    private async Task<TOutput> InvokeInputStreamCoreAsync<TInputEvent, TOutput>(
+        SmithyInputEventStreamOperationBinding<TInputEvent, TOutput> binding,
+        IAsyncEnumerable<TInputEvent> input,
+        CancellationToken callerToken
+    )
+    {
+        using var timeoutSource = operationTimeout is null
+            ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(callerToken);
+        timeoutSource?.CancelAfter(operationTimeout!.Value);
+        var cancellationToken = timeoutSource?.Token ?? callerToken;
+
+        var protocol = binding.Protocol;
+        var context = CreateContext(binding.ServiceId.Name, binding.OperationId.Name);
+        var (resolvedEndpoint, authInterceptor) = await ResolveEndpointAndAuthAsync(
+                binding.ServiceId,
+                binding.OperationId,
+                binding.AuthSchemeIds,
+                input,
+                context,
+                callerToken
+            )
+            .ConfigureAwait(false);
+        var tags = CreateTags(binding.ServiceId.ToString(), binding.OperationId.Name);
+        using var activity = StartOperationActivity(
+            binding.ServiceId.Name,
+            binding.OperationId.Name,
+            tags
+        );
+        var startTimestamp = Stopwatch.GetTimestamp();
+
+        foreach (var interceptor in interceptors)
+        {
+            interceptor.OnBeforeExecution(context);
+        }
+
+        Exception? executionError = null;
+        try
+        {
+            foreach (var interceptor in interceptors)
+            {
+                interceptor.OnBeforeSerialization(context, input);
+            }
+
+            var request = protocol.SerializeRequest(input, cancellationToken);
+            var response = await SendStreamingAsync(
+                    context,
+                    request,
+                    tags,
+                    resolvedEndpoint,
+                    authInterceptor,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+            var output = await protocol
+                .DeserializeResponseAsync(response, cancellationToken)
+                .ConfigureAwait(false);
+
+            for (var i = interceptors.Count - 1; i >= 0; i--)
+            {
+                interceptors[i].OnAfterDeserialization(context, output);
+            }
+
+            return output;
+        }
+        catch (OperationCanceledException)
+            when (timeoutSource?.IsCancellationRequested == true
+                && !callerToken.IsCancellationRequested
+            )
+        {
+            var timeoutError = new TimeoutException(
+                $"The operation did not complete within {operationTimeout!.Value}."
+            );
+            executionError = timeoutError;
+            throw timeoutError;
+        }
+        catch (Exception error)
+        {
+            executionError = error;
+            throw;
+        }
+        finally
+        {
+            CompleteExecution(context, executionError, activity, startTimestamp, tags);
+        }
+    }
+
+    private async IAsyncEnumerable<TOutputEvent> InvokeDuplexStreamCoreAsync<
+        TInputEvent,
+        TOutputEvent
+    >(
+        SmithyDuplexEventStreamOperationBinding<TInputEvent, TOutputEvent> binding,
+        IAsyncEnumerable<TInputEvent> input,
+        [EnumeratorCancellation] CancellationToken callerToken
+    )
+    {
+        using var timeoutSource = operationTimeout is null
+            ? null
+            : CancellationTokenSource.CreateLinkedTokenSource(callerToken);
+        timeoutSource?.CancelAfter(operationTimeout!.Value);
+        var cancellationToken = timeoutSource?.Token ?? callerToken;
+
+        var protocol = binding.Protocol;
+        var context = CreateContext(binding.ServiceId.Name, binding.OperationId.Name);
+        var (resolvedEndpoint, authInterceptor) = await ResolveEndpointAndAuthAsync(
+                binding.ServiceId,
+                binding.OperationId,
+                binding.AuthSchemeIds,
+                input,
+                context,
+                callerToken
+            )
+            .ConfigureAwait(false);
+        var tags = CreateTags(binding.ServiceId.ToString(), binding.OperationId.Name);
+        using var activity = StartOperationActivity(
+            binding.ServiceId.Name,
+            binding.OperationId.Name,
+            tags
+        );
+        var startTimestamp = Stopwatch.GetTimestamp();
+        Exception? executionError = null;
+
+        foreach (var interceptor in interceptors)
+        {
+            interceptor.OnBeforeExecution(context);
+        }
+
+        IAsyncEnumerator<TOutputEvent>? events = null;
+        try
+        {
+            foreach (var interceptor in interceptors)
+            {
+                interceptor.OnBeforeSerialization(context, input);
+            }
+
+            var request = protocol.SerializeRequest(input, cancellationToken);
+            var response = await SendStreamingAsync(
+                    context,
+                    request,
+                    tags,
+                    resolvedEndpoint,
+                    authInterceptor,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+            events = protocol
+                .DeserializeResponseEventsAsync(response, cancellationToken)
+                .GetAsyncEnumerator(cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (timeoutSource?.IsCancellationRequested == true
+                && !callerToken.IsCancellationRequested
+            )
+        {
+            var timeoutError = new TimeoutException(
+                $"The operation did not complete within {operationTimeout!.Value}."
+            );
+            executionError = timeoutError;
+            CompleteExecution(context, executionError, activity, startTimestamp, tags);
+            throw timeoutError;
+        }
+        catch (Exception error)
+        {
+            executionError = error;
+            CompleteExecution(context, executionError, activity, startTimestamp, tags);
+            throw;
+        }
+
+        try
+        {
+            while (true)
+            {
+                TOutputEvent item;
+                try
+                {
+                    if (!await events.MoveNextAsync().ConfigureAwait(false))
+                    {
+                        break;
+                    }
+
+                    item = events.Current;
+                }
+                catch (OperationCanceledException)
+                    when (timeoutSource?.IsCancellationRequested == true
+                        && !callerToken.IsCancellationRequested
+                    )
+                {
+                    var timeoutError = new TimeoutException(
+                        $"The operation did not complete within {operationTimeout!.Value}."
+                    );
+                    executionError = timeoutError;
+                    throw timeoutError;
+                }
+                catch (Exception error)
+                {
+                    executionError = error;
+                    throw;
+                }
+
+                for (var i = interceptors.Count - 1; i >= 0; i--)
+                {
+                    interceptors[i].OnAfterDeserialization(context, item);
+                }
+
+                yield return item;
+            }
+        }
+        finally
+        {
+            if (events is not null)
+            {
+                await events.DisposeAsync().ConfigureAwait(false);
+            }
+
+            CompleteExecution(context, executionError, activity, startTimestamp, tags);
+        }
+    }
+
     private static Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken) =>
         delay > TimeSpan.Zero ? Task.Delay(delay, cancellationToken) : Task.CompletedTask;
+
+    private async Task<(
+        SmithyEndpoint? Endpoint,
+        IClientInterceptor? AuthInterceptor
+    )> ResolveEndpointAndAuthAsync(
+        NSmithy.Core.ShapeId serviceId,
+        NSmithy.Core.ShapeId operationId,
+        IReadOnlyList<string> authSchemeIds,
+        object? input,
+        SmithyContext context,
+        CancellationToken cancellationToken
+    )
+    {
+        SmithyEndpoint? resolvedEndpoint = null;
+        if (endpointResolver is not null)
+        {
+            resolvedEndpoint = await endpointResolver
+                .ResolveEndpointAsync(
+                    new SmithyEndpointParameters(serviceId, operationId, endpoint, input),
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+            context.Set(SmithyContextKeys.Endpoint, resolvedEndpoint.Uri);
+        }
+
+        var authInterceptor = SmithyAuthSchemeResolver.SelectInterceptor(
+            authSchemeIds,
+            resolvedEndpoint?.AuthSchemes,
+            authSchemes
+        );
+        return (resolvedEndpoint, authInterceptor);
+    }
+
+    private static TagList CreateTags(string serviceId, string operationName) =>
+        new()
+        {
+            { "rpc.system", "smithy" },
+            { "rpc.service", serviceId },
+            { "rpc.method", operationName },
+        };
+
+    private static Activity? StartOperationActivity(
+        string serviceName,
+        string operationName,
+        TagList tags
+    )
+    {
+        var activity = SmithyClientTelemetry.ActivitySource.StartActivity(
+            $"{serviceName}.{operationName}",
+            ActivityKind.Client
+        );
+        if (activity is not null)
+        {
+            foreach (var tag in tags)
+            {
+                activity.SetTag(tag.Key, tag.Value);
+            }
+        }
+
+        return activity;
+    }
+
+    private void CompleteExecution(
+        SmithyContext context,
+        Exception? executionError,
+        Activity? activity,
+        long startTimestamp,
+        TagList tags
+    )
+    {
+        for (var i = interceptors.Count - 1; i >= 0; i--)
+        {
+            interceptors[i].OnAfterExecution(context, executionError);
+        }
+
+        if (executionError is not null)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, executionError.Message);
+            activity?.SetTag("error.type", executionError.GetType().FullName);
+            var errorTags = tags;
+            errorTags.Add("error.type", executionError.GetType().FullName);
+            SmithyClientTelemetry.Errors.Add(1, errorTags);
+        }
+
+        SmithyClientTelemetry.OperationDuration.Record(
+            Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
+            tags
+        );
+    }
+
+    private static bool IsReplayable(SmithyHttpBody body) =>
+        body is not SmithyHttpBody.Streaming and not SmithyHttpBody.EventStreaming;
 
     private async Task<SmithyHttpRequest> ApplyRequestInterceptorsAsync(
         SmithyContext context,

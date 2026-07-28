@@ -44,20 +44,20 @@ public interface IServiceProtocol
     IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation);
 
-    IServerEventStreamOperationProtocol<TInput, TOutputEvent>
-        ForServerEventStreamOperation<TInput, TOutput, TOutputEvent>(
+    IOutputEventStreamOperationProtocol<TInput, TOutputEvent>
+        ForOutputEventStreamOperation<TInput, TOutput, TOutputEvent>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TOutputEvent> outputEvent)
         => throw new NotSupportedException();
 
-    IClientEventStreamOperationProtocol<TInputEvent, TOutput>
-        ForClientEventStreamOperation<TInput, TInputEvent, TOutput>(
+    IInputEventStreamOperationProtocol<TInputEvent, TOutput>
+        ForInputEventStreamOperation<TInput, TInputEvent, TOutput>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent)
         => throw new NotSupportedException();
 
-    IBidirectionalEventStreamOperationProtocol<TInputEvent, TOutputEvent>
-        ForBidirectionalEventStreamOperation<TInput, TOutput, TInputEvent, TOutputEvent>(
+    IDuplexEventStreamOperationProtocol<TInputEvent, TOutputEvent>
+        ForDuplexEventStreamOperation<TInput, TOutput, TInputEvent, TOutputEvent>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent,
             Schema<TOutputEvent> outputEvent)
@@ -65,9 +65,13 @@ public interface IServiceProtocol
 }
 ```
 
-The three operation interfaces stay separate. Their method signatures are
-different in meaningful ways, and merging them into one generic interface would
-force nullable or unused members into at least two cases.
+Operation interfaces are named by stream direction (output / input / duplex —
+where the `@streaming` member sits in the model) and split by call side, the
+same client/server split the unary `IOperationProtocol` uses: each direction
+has a `…ClientProtocol` and a `…ServerProtocol` half, and the combined
+interface protocol implementations implement. The three directions stay
+separate interfaces — their signatures differ in meaningful ways, and merging
+them would force nullable or unused members into at least two cases.
 
 ### Generated API
 
@@ -99,25 +103,48 @@ Output streams are cold. The transport call starts when the caller enumerates
 the returned `IAsyncEnumerable<TEvent>`, and enumeration cancellation is the
 primary cancellation path for the stream.
 
-### Event Frame Model
+### Framing and the Streaming Transport
 
-The protocol-neutral event-stream transport shape is a sequence of logical event
-frames:
+The protocol owns all wire framing; there is no shared frame type at the
+transport boundary. Client halves emit fully framed request bodies and deframe
+raw response streams themselves; server halves deframe the raw request body and
+emit framed response chunks:
 
-```csharp
-public sealed record SmithyEventFrame(byte[] Payload);
-```
-
-The event-stream request/response types carry
-`IAsyncEnumerable<SmithyEventFrame>`. Protocol implementations serialize typed
-events into frame payloads and deserialize frame payloads back into typed events.
-Wire-specific framing remains protocol-owned:
-
-- gRPC owns the 5-byte message prefix and HTTP/2 trailers.
-- AWS event stream protocols own Smithy event-stream message framing and
-  per-message headers.
+- gRPC owns the 5-byte message prefix and validates the `grpc-status` HTTP/2
+  trailer after the response stream ends.
+- AWS event stream protocols own `vnd.amazon.eventstream` message framing,
+  typed per-message headers, and CRC validation.
 - Other event-stream protocols can provide their own frame encoding without
   changing generated client signatures.
+
+The request and response streaming axes are independent, so the transport types
+are named for what actually streams. A streaming request body is a variant of
+the `SmithyHttpBody` union, `EventStreaming` (`IAsyncEnumerable<ReadOnlyMemory<byte>>`,
+each chunk written and flushed as one unit), so every client request is a
+`SmithyHttpRequest`: output-stream requests carry a `Bytes` body (unary),
+	input-stream and duplex requests carry an `EventStreaming` body. The response is
+	a single `SmithyHttpClientResponse`; the runtime asks the transport for either a
+	buffered body or a live body:
+
+```csharp
+public interface IHttpTransport
+{
+    Task<SmithyHttpClientResponse> SendAsync(
+        SmithyHttpRequest request,
+        SmithyHttpClientResponseMode responseMode,
+        CancellationToken cancellationToken = default);
+}
+```
+
+In `Buffer` mode, `SmithyHttpClientResponse.Body` is `Bytes` or `Empty`, and trailers
+are available through `Trailer` because the body has already been read. In
+`Stream` mode, `Body` is `SmithyHttpBody.Streaming`, `Trailer` resolves HTTP
+trailing headers once the stream is read to its end, and disposing the stream
+releases the connection. The same `HttpClient`-backed transport serves unary,
+blob-streaming, and event-streaming protocols.
+The server side of this architecture — a shared `SmithyServerRuntime` and a
+protocol-neutral host adapter — is covered in
+[server-architecture.md](server-architecture.md).
 
 ## Streaming Blob Payloads
 
@@ -142,7 +169,7 @@ public abstract record SmithyHttpBody
 }
 ```
 
-`SmithyHttpRequest` and `SmithyHttpResponse` carry a non-nullable
+`SmithyHttpRequest` and `SmithyHttpClientResponse` carry a non-nullable
 `SmithyHttpBody` that defaults to `SmithyHttpBody.Empty`. Protocols that buffer
 payloads use `SmithyHttpBody.Bytes`; protocols that bind a streaming blob payload
 use `SmithyHttpBody.Streaming`.

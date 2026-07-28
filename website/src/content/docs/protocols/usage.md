@@ -58,35 +58,14 @@ annotated model.
 
 ## Server
 
-NSmithy generates one `IWeatherServiceHandler` interface with a method per
-operation. Implement it once; the generated ASP.NET Core adapter handles
-routing, serialization, and error dispatch.
-
-```csharp
-using Example.Weather;
-
-var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddWeatherServiceHandler<WeatherHandler>();
-
-var app = builder.Build();
-app.MapWeatherServiceHttp();
-app.Run();
-
-internal sealed class WeatherHandler : IWeatherServiceHandler
-{
-    public Task<GetCityOutput> GetCityAsync(
-        GetCityInput input, CancellationToken ct = default)
-    {
-        if (input.CityId == "unknown")
-            throw new NoSuchResource(null, "City");
-
-        return Task.FromResult(new GetCityOutput("Seattle"));
-    }
-}
-```
-
-Throwing a generated error type serializes it with the correct status code and
-body for whichever protocol the service declares.
+You implement one generated handler interface (`IWeatherServiceHandler`, a
+method per operation); the generated ASP.NET Core adapter registers it with
+`AddWeatherServiceHandler<T>()` and maps its routes with
+`MapWeatherService{Protocol}()`. Throwing a generated error type serializes it
+with the correct status code and body for whichever protocol the service
+declares. See [Servers](/smithy-dotnet/servers/) for the full walkthrough and
+[Hosting &amp; Multiple Protocols](/smithy-dotnet/servers/hosting/) for exposing
+one service over several protocols.
 
 ## Client
 

@@ -233,12 +233,16 @@ project for all three.
 Streaming payload blobs are not implemented yet. The streaming support here is
 for event streams, matching the common gRPC shape.
 
-## Generating a `.proto` for external peers
+## Interoperating with `Grpc.Net`
 
-Setting `SmithyGrpc` (or running `smithy-proto-codegen`) still emits a `.proto`
-from the model. Feed it to `protoc`/`Grpc.Tools` to build a `Grpc.Net` peer when
-you need to interoperate with a non-NSmithy client or server — the native NSmithy
-surfaces speak the same wire format.
+NSmithy needs no `Grpc.Net` — but because it speaks the standard gRPC HTTP/2 wire
+contract, a `Grpc.Net` client or server interoperates with an NSmithy peer, and
+you can use `Grpc.Net` on one side if you prefer.
+
+You never hand-author a `.proto`. Setting `SmithyGrpc` (or running
+`smithy-proto-codegen`) generates the `.proto` **from the Smithy model**; feed
+that generated file to `protoc`/`Grpc.Tools` to build the `Grpc.Net` peer. The
+model stays the single source of truth for both sides.
 
 ## Current Limitations
 

@@ -22,9 +22,12 @@ public final class RuntimeTypes {
   public static final String NSMITHY_CODECS_XML = "NSmithy.Codecs.Xml";
   public static final String NSMITHY_CODECS_CBOR = "NSmithy.Codecs.Cbor";
   public static final String NSMITHY_CODECS_PROTO = "NSmithy.Codecs.Proto";
+  public static final String NSMITHY_SERVER = "NSmithy.Server";
   public static final String NSMITHY_SERVER_ASPNETCORE = "NSmithy.Server.AspNetCore";
 
   public static final String MS_EXT_DI = "Microsoft.Extensions.DependencyInjection";
+  public static final String MS_EXT_DI_EXTENSIONS =
+      "Microsoft.Extensions.DependencyInjection.Extensions";
   public static final String MS_ASPNETCORE_BUILDER = "Microsoft.AspNetCore.Builder";
   public static final String MS_ASPNETCORE_HTTP = "Microsoft.AspNetCore.Http";
   public static final String MS_ASPNETCORE_ROUTING = "Microsoft.AspNetCore.Routing";

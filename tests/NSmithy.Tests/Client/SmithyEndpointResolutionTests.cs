@@ -185,14 +185,15 @@ public sealed class SmithyEndpointResolutionTests
     {
         public SmithyHttpRequest? Request { get; private set; }
 
-        public Task<SmithyHttpResponse> SendAsync(
+        public Task<SmithyHttpClientResponse> SendAsync(
             SmithyHttpRequest request,
+            SmithyHttpClientResponseMode responseMode,
             CancellationToken cancellationToken = default
         )
         {
             Request = request;
             return Task.FromResult(
-                new SmithyHttpResponse(
+                new SmithyHttpClientResponse(
                     HttpStatusCode.OK,
                     "OK",
                     Encoding.UTF8.GetBytes("serialized output"),
@@ -251,31 +252,19 @@ public sealed class SmithyEndpointResolutionTests
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> EmptyHeaders { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
-    private sealed class TextProtocol : IOperationProtocol<string, string>
+    private sealed class TextProtocol : IClientOperationProtocol<string, string>
     {
         public SmithyHttpRequest SerializeRequest(string input) =>
             new(HttpMethod.Post, $"/{input}");
 
-        public string DeserializeResponse(SmithyHttpResponse response) => "output";
+        public string DeserializeResponse(SmithyHttpClientResponse response) => "output";
 
-        public string DeserializeRequest(SmithyHttpRequest request) => request.RequestUri;
+        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
+            (int)response.StatusCode >= 400;
 
-        public SmithyHttpResponse SerializeResponse(string output) =>
-            new(HttpStatusCode.OK, "OK", [], EmptyHeaders, EmptyHeaders);
-
-        public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
-
-        public string? GetErrorDiscriminator(SmithyHttpResponse response) => null;
-
-        public bool RequiresErrorDiscriminator => false;
-
-        public bool SupportsHttpStatusErrorFallback => true;
-
-        public SmithyHttpResponse SerializeError<TError>(
-            Schema<TError> errorSchema,
-            TError value,
-            string errorShapeId,
-            int statusCode
-        ) => throw new NotSupportedException();
+        public ValueTask<Exception?> DeserializeErrorAsync(
+            SmithyHttpClientResponse response,
+            CancellationToken cancellationToken = default
+        ) => ValueTask.FromResult<Exception?>(null);
     }
 }

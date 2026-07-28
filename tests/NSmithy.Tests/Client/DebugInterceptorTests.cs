@@ -98,7 +98,7 @@ public sealed class DebugInterceptorTests
     {
         using var output = new StringWriter();
         var interceptor = new DebugInterceptor { Output = output };
-        var response = new SmithyHttpResponse(
+        var response = new SmithyHttpClientResponse(
             HttpStatusCode.OK,
             "OK",
             "{}"u8.ToArray(),
@@ -118,7 +118,7 @@ public sealed class DebugInterceptorTests
     {
         using var output = new StringWriter();
         var interceptor = new DebugInterceptor { Output = output };
-        var response = new SmithyHttpResponse(
+        var response = new SmithyHttpClientResponse(
             HttpStatusCode.NoContent,
             "No Content",
             [],

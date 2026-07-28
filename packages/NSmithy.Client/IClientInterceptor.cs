@@ -20,7 +20,7 @@ public interface IClientInterceptor
         CancellationToken cancellationToken = default
     ) => ValueTask.FromResult(request);
 
-    void OnAfterTransmit(SmithyContext context, SmithyHttpResponse response) { }
+    void OnAfterTransmit(SmithyContext context, SmithyHttpClientResponse response) { }
 
     void OnAfterDeserialization(SmithyContext context, object? output) { }
 

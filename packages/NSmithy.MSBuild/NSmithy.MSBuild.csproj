@@ -86,12 +86,12 @@
 
     Both files default SmithyCSharpCodegenVersion to the -SNAPSHOT dev version so
     that in-repo consumers (conformance tests import Targets/ directly) resolve the
-    codegen JAR that `just codegen` publishes to ~/.m2. The published package must
-    instead reference the JAR version released to Maven Central, which matches the
-    package version. So the files are packed via copies under obj/ with the dev
+    codegen JAR staged by `just codegen` in tools/maven-repo. The published package
+    must instead reference the JAR version released to Maven Central, which matches
+    the package version. So the files are packed via copies under obj/ with the dev
     version substituted by $(Version) — a no-op for local `just pack` (where
-    $(Version) IS the dev version) and the release version on tag builds (where
-    the workflow passes -p:Version).
+    $(Version) IS the dev version) and the release version on tag builds (where the
+    workflow passes -p:Version).
   -->
   <UsingTask
     TaskName="_NSmithySubstituteInFile"

@@ -13,29 +13,28 @@ public interface IServiceProtocol
         OperationSchema<TInput, TOutput> operation
     );
 
-    IServerEventStreamOperationProtocol<TInput, TOutputEvent> ForServerEventStreamOperation<
+    IOutputEventStreamOperationProtocol<TInput, TOutputEvent> ForOutputEventStreamOperation<
         TInput,
         TOutput,
         TOutputEvent
     >(OperationSchema<TInput, TOutput> operation, Schema<TOutputEvent> outputEvent) =>
-        throw new NotSupportedException("This protocol does not support server event streaming.");
+        throw new NotSupportedException("This protocol does not support output event streaming.");
 
-    IClientEventStreamOperationProtocol<TInputEvent, TOutput> ForClientEventStreamOperation<
+    IInputEventStreamOperationProtocol<TInputEvent, TOutput> ForInputEventStreamOperation<
         TInput,
         TInputEvent,
         TOutput
     >(OperationSchema<TInput, TOutput> operation, Schema<TInputEvent> inputEvent) =>
-        throw new NotSupportedException("This protocol does not support client event streaming.");
+        throw new NotSupportedException("This protocol does not support input event streaming.");
 
-    IBidirectionalEventStreamOperationProtocol<
+    IDuplexEventStreamOperationProtocol<TInputEvent, TOutputEvent> ForDuplexEventStreamOperation<
+        TInput,
+        TOutput,
         TInputEvent,
         TOutputEvent
-    > ForBidirectionalEventStreamOperation<TInput, TOutput, TInputEvent, TOutputEvent>(
+    >(
         OperationSchema<TInput, TOutput> operation,
         Schema<TInputEvent> inputEvent,
         Schema<TOutputEvent> outputEvent
-    ) =>
-        throw new NotSupportedException(
-            "This protocol does not support bidirectional event streaming."
-        );
+    ) => throw new NotSupportedException("This protocol does not support duplex event streaming.");
 }

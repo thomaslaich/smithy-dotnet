@@ -63,7 +63,7 @@ public sealed class DebugInterceptor : IClientInterceptor
         return ValueTask.FromResult(request);
     }
 
-    public void OnAfterTransmit(SmithyContext context, SmithyHttpResponse response)
+    public void OnAfterTransmit(SmithyContext context, SmithyHttpClientResponse response)
     {
         var text = new StringBuilder();
         text.AppendLine(

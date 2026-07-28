@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../NSmithy.Server/NSmithy.Server.csproj" />
     <ProjectReference Include="../NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <ProjectReference Include="../NSmithy.Protocols.Grpc/NSmithy.Protocols.Grpc.csproj" />
     <ProjectReference Include="../NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />

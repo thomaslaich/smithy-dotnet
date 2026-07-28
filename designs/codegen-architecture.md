@@ -160,7 +160,7 @@ segments capitalised to PascalCase).
 Generated code depends on .NET packages published to NuGet:
 
 - `NSmithy.Core` — `Schema`, `ShapeId`, `Trait`, codec interfaces
-- `NSmithy.Http` — `IHttpTransport`, `SmithyHttpRequest`, `SmithyHttpResponse`
+- `NSmithy.Http` — `IHttpTransport`, `SmithyHttpRequest`, `SmithyHttpClientResponse`
 - `NSmithy.Client` — `SmithyClientRuntime`, `IClientInterceptor`
 - `NSmithy.Server` / `NSmithy.Server.AspNetCore` — server framework
 - `NSmithy.Codecs.Json/Xml/Cbor` — schema-bound body codec implementations

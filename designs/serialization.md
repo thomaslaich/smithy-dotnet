@@ -398,36 +398,40 @@ public interface IServiceProtocol
         OperationSchema<TInput, TOutput> operation);
 }
 
-public interface IOperationProtocol<TInput, TOutput>
+public interface IClientOperationProtocol<TInput, TOutput>
 {
-    SmithyHttpRequest  SerializeRequest(TInput input);          // client
-    TOutput            DeserializeResponse(SmithyHttpResponse response);
-    TInput             DeserializeRequest(SmithyHttpRequest request);   // server
-    SmithyHttpResponse SerializeResponse(TOutput output);
+    SmithyHttpRequest SerializeRequest(TInput input);
+    TOutput           DeserializeResponse(SmithyHttpClientResponse response);
 
-    // errors
-    bool    IsErrorResponse(SmithyHttpResponse response);
-    string? GetErrorDiscriminator(SmithyHttpResponse response);
-    bool    RequiresErrorDiscriminator { get; }
-    bool    SupportsHttpStatusErrorFallback { get; }
-    IReadOnlyList<HttpOperationError> HttpErrors => [];
-
+    bool IsErrorResponse(SmithyHttpClientResponse response);
     ValueTask<Exception?> DeserializeErrorAsync(
-        SmithyHttpResponse response,
+        SmithyHttpClientResponse response,
         CancellationToken cancellationToken = default);
-
-    SmithyHttpResponse SerializeError<TError>(
-        Schema<TError> errorSchema, TError value, string errorShapeId, int statusCode);
 }
+
+public interface IServerOperationProtocol<TInput, TOutput>
+{
+    TInput DeserializeRequest(SmithyHttpRequest request);
+    SmithyHttpServerResponse SerializeResponse(TOutput output);
+    bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response);
+}
+
+// Protocol implementations implement the combined interface; client-side code
+// (operation bindings, the client runtime) depends only on the client half and
+// server-side code only on the server half.
+public interface IOperationProtocol<TInput, TOutput>
+    : IClientOperationProtocol<TInput, TOutput>,
+      IServerOperationProtocol<TInput, TOutput>;
 ```
 
-Modeled-error handling is precomputed: each protocol exposes its operation's
-modeled errors as `HttpErrors`, and the default `DeserializeErrorAsync`
-dispatches on the discriminator — falling back to the HTTP status code when
-`SupportsHttpStatusErrorFallback` is set — to build the typed exception.
-`RequiresErrorDiscriminator` and `SupportsHttpStatusErrorFallback` capture each
-protocol's error-detection rules (rpc-style protocols always carry a
-discriminator; REST can resolve an error from status alone).
+Modeled-error handling is precomputed: each protocol compiles its operation's
+modeled errors into `HttpOperationError` deserializers and implements
+`DeserializeErrorAsync` by composing the shared
+`OperationProtocolErrors.DeserializeModeledError` resolver with its own
+discrimination rules — the discriminator extractor, whether a discriminator is
+required (rpc-style protocols always carry one), and whether the HTTP status
+code may resolve an error when the discriminator does not (REST). Those rules
+are per-protocol internals, not interface members.
 
 Each protocol provides a `ForService(ServiceSchema)` factory that returns an
 `IServiceProtocol`, which in turn hands out an `IOperationProtocol` per

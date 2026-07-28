@@ -26,7 +26,7 @@ public sealed class RestXmlProtocol : IProtocol
             errorTypeHeader: null
         );
 
-    public static string? DeserializeErrorType(SmithyHttpResponse response)
+    public static string? DeserializeErrorType(SmithyHttpClientResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
         if (response.Content.Length == 0)
