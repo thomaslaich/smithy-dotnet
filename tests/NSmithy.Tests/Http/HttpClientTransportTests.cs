@@ -12,12 +12,16 @@ public sealed class HttpClientTransportTests
         var transport = new HttpClientTransport(httpClient);
 
         await transport.SendAsync(
-            new SmithyHttpRequest(HttpMethod.Get, "https://example.test/base/forecast?units=metric")
+            new SmithyHttpRequest(
+                HttpMethod.Get,
+                "https://example.test/base/forecast?units=metric"
+            ),
+            SmithyHttpResponseMode.Buffer
         );
     }
 
     [Fact]
-    public async Task SendAsyncFoldsTrailingHeadersIntoResponseHeaders()
+    public async Task SendAsyncExposesTrailingHeadersThroughTrailerAccessor()
     {
         using var httpClient = new HttpClient(new TrailerHandler());
         var transport = new HttpClientTransport(httpClient);
@@ -26,12 +30,13 @@ public sealed class HttpClientTransportTests
             new SmithyHttpRequest(
                 HttpMethod.Post,
                 "https://example.test/example.greeter.Greeter/SayHello"
-            )
+            ),
+            SmithyHttpResponseMode.Buffer
         );
 
-        // grpc-status arrives as an HTTP/2 trailer; the transport surfaces it as a header.
-        Assert.True(response.Headers.TryGetValue("grpc-status", out var status));
-        Assert.Equal("0", status[0]);
+        // grpc-status arrives as an HTTP/2 trailer; the transport keeps it out of headers.
+        Assert.False(response.Headers.ContainsKey("grpc-status"));
+        Assert.Equal("0", response.Trailer?.Invoke("grpc-status"));
     }
 
     private sealed class Handler : HttpMessageHandler

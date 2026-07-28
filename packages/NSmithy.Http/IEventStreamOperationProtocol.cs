@@ -23,7 +23,7 @@ public interface IOutputEventStreamClientProtocol<TInput, TOutputEvent>
     /// body stream and must dispose it when enumeration completes or is abandoned.
     /// </summary>
     IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-        SmithyStreamingHttpResponse response,
+        SmithyHttpResponse response,
         CancellationToken cancellationToken = default
     );
 }
@@ -58,7 +58,7 @@ public interface IInputEventStreamClientProtocol<TInputEvent, TOutput>
     /// and must dispose it before returning.
     /// </summary>
     ValueTask<TOutput> DeserializeResponseAsync(
-        SmithyStreamingHttpResponse response,
+        SmithyHttpResponse response,
         CancellationToken cancellationToken = default
     );
 }
@@ -94,7 +94,7 @@ public interface IDuplexEventStreamClientProtocol<TInputEvent, TOutputEvent>
     /// body stream and must dispose it when enumeration completes or is abandoned.
     /// </summary>
     IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-        SmithyStreamingHttpResponse response,
+        SmithyHttpResponse response,
         CancellationToken cancellationToken = default
     );
 }

@@ -131,9 +131,9 @@ The full unary `alloy.proto#grpc` surface now works, verified end-to-end by the
 
 ## What landed in codegen + runtime
 
-- **Runtime trailer support.** `HttpClientTransport` folds HTTP/2 trailing
-  headers into the response header dictionary (so the client sees `grpc-status`),
-  and `SmithyAspNetCoreProtocol.WriteSmithyGrpcResponseAsync` emits
+- **Runtime trailer support.** `HttpClientTransport` exposes HTTP/2 trailing
+  headers through `SmithyHttpResponse.Trailer`, and
+  `SmithyAspNetCoreProtocol.WriteSmithyGrpcResponseAsync` emits
   `grpc-status`/`grpc-message` as real HTTP/2 trailers (falling back to headers
   when trailers are unsupported).
 - **Native server codegen.** `ServerGenerator` emits `Map{Service}Grpc` using

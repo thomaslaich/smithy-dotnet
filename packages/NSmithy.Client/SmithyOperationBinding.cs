@@ -42,3 +42,87 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
     /// </summary>
     public IReadOnlyList<string> AuthSchemeIds { get; }
 }
+
+public sealed class SmithyOutputEventStreamOperationBinding<TInput, TOutputEvent>
+{
+    public SmithyOutputEventStreamOperationBinding(
+        ShapeId serviceId,
+        ShapeId operationId,
+        IOutputEventStreamClientProtocol<TInput, TOutputEvent> protocol,
+        IReadOnlyList<string>? authSchemeIds = null
+    )
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceId.Name, nameof(serviceId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationId.Name, nameof(operationId));
+        ArgumentNullException.ThrowIfNull(protocol);
+
+        ServiceId = serviceId;
+        OperationId = operationId;
+        Protocol = protocol;
+        AuthSchemeIds = authSchemeIds ?? [];
+    }
+
+    public ShapeId ServiceId { get; }
+
+    public ShapeId OperationId { get; }
+
+    public IOutputEventStreamClientProtocol<TInput, TOutputEvent> Protocol { get; }
+
+    public IReadOnlyList<string> AuthSchemeIds { get; }
+}
+
+public sealed class SmithyInputEventStreamOperationBinding<TInputEvent, TOutput>
+{
+    public SmithyInputEventStreamOperationBinding(
+        ShapeId serviceId,
+        ShapeId operationId,
+        IInputEventStreamClientProtocol<TInputEvent, TOutput> protocol,
+        IReadOnlyList<string>? authSchemeIds = null
+    )
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceId.Name, nameof(serviceId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationId.Name, nameof(operationId));
+        ArgumentNullException.ThrowIfNull(protocol);
+
+        ServiceId = serviceId;
+        OperationId = operationId;
+        Protocol = protocol;
+        AuthSchemeIds = authSchemeIds ?? [];
+    }
+
+    public ShapeId ServiceId { get; }
+
+    public ShapeId OperationId { get; }
+
+    public IInputEventStreamClientProtocol<TInputEvent, TOutput> Protocol { get; }
+
+    public IReadOnlyList<string> AuthSchemeIds { get; }
+}
+
+public sealed class SmithyDuplexEventStreamOperationBinding<TInputEvent, TOutputEvent>
+{
+    public SmithyDuplexEventStreamOperationBinding(
+        ShapeId serviceId,
+        ShapeId operationId,
+        IDuplexEventStreamClientProtocol<TInputEvent, TOutputEvent> protocol,
+        IReadOnlyList<string>? authSchemeIds = null
+    )
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceId.Name, nameof(serviceId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationId.Name, nameof(operationId));
+        ArgumentNullException.ThrowIfNull(protocol);
+
+        ServiceId = serviceId;
+        OperationId = operationId;
+        Protocol = protocol;
+        AuthSchemeIds = authSchemeIds ?? [];
+    }
+
+    public ShapeId ServiceId { get; }
+
+    public ShapeId OperationId { get; }
+
+    public IDuplexEventStreamClientProtocol<TInputEvent, TOutputEvent> Protocol { get; }
+
+    public IReadOnlyList<string> AuthSchemeIds { get; }
+}

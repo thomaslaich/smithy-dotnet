@@ -8,7 +8,8 @@ public sealed record SmithyHttpResponse(
     string? ReasonPhrase,
     SmithyHttpBody Body,
     IReadOnlyDictionary<string, IReadOnlyList<string>> Headers,
-    IReadOnlyDictionary<string, IReadOnlyList<string>> ContentHeaders
+    IReadOnlyDictionary<string, IReadOnlyList<string>> ContentHeaders,
+    Func<string, string?>? Trailer = null
 )
 {
     public SmithyHttpResponse(
@@ -23,7 +24,26 @@ public sealed record SmithyHttpResponse(
             reasonPhrase,
             content.Length == 0 ? SmithyHttpBody.Empty : new SmithyHttpBody.Bytes(content),
             headers,
-            contentHeaders
+            contentHeaders,
+            null
+        ) { }
+
+    public SmithyHttpResponse(
+        HttpStatusCode statusCode,
+        string? reasonPhrase,
+        Stream content,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> contentHeaders,
+        Func<string, string?>? trailer = null,
+        long? contentLength = null
+    )
+        : this(
+            statusCode,
+            reasonPhrase,
+            new SmithyHttpBody.Streaming(content, contentLength),
+            headers,
+            contentHeaders,
+            trailer
         ) { }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage(

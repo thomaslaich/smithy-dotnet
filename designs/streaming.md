@@ -122,24 +122,26 @@ are named for what actually streams. A streaming request body is a variant of
 the `SmithyHttpBody` union, `EventStreaming` (`IAsyncEnumerable<ReadOnlyMemory<byte>>`,
 each chunk written and flushed as one unit), so every client request is a
 `SmithyHttpRequest`: output-stream requests carry a `Bytes` body (unary),
-input-stream and duplex requests carry an `EventStreaming` body. The response keeps
-a dedicated streaming type because incremental read, connection-hold-until-
-dispose, and trailer-after-EOF are behavioral properties a buffered unary
-response does not have:
+	input-stream and duplex requests carry an `EventStreaming` body. The response is
+	a single `SmithyHttpResponse`; the runtime asks the transport for either a
+	buffered body or a live body:
 
 ```csharp
-public interface IStreamingHttpTransport
+public interface IHttpTransport
 {
-    Task<SmithyStreamingHttpResponse> SendAsync(
+    Task<SmithyHttpResponse> SendAsync(
         SmithyHttpRequest request,
+        SmithyHttpResponseMode responseMode,
         CancellationToken cancellationToken = default);
 }
 ```
 
-`SmithyStreamingHttpResponse.Body` is the raw response stream, `Trailer`
-resolves HTTP trailing headers once the body has been read to its end, and
-disposing the body releases the connection. One `HttpClient`-backed
-implementation (`StreamingHttpClientTransport`) serves every streaming protocol.
+In `Buffer` mode, `SmithyHttpResponse.Body` is `Bytes` or `Empty`, and trailers
+are available through `Trailer` because the body has already been read. In
+`Stream` mode, `Body` is `SmithyHttpBody.Streaming`, `Trailer` resolves HTTP
+trailing headers once the stream is read to its end, and disposing the stream
+releases the connection. The same `HttpClient`-backed transport serves unary,
+blob-streaming, and event-streaming protocols.
 The server side of this architecture — a shared `SmithyServerRuntime` and a
 protocol-neutral host adapter — is covered in
 [server-architecture.md](server-architecture.md).

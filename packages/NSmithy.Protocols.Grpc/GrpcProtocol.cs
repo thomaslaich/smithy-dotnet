@@ -166,7 +166,7 @@ public sealed class GrpcProtocol : IProtocol
         public TOutput DeserializeResponse(SmithyHttpResponse response)
         {
             ArgumentNullException.ThrowIfNull(response);
-            EnsureGrpcResponse(response);
+            EnsureGrpcStreamingResponse(response);
             if (outputIsUnit)
             {
                 return (TOutput)(object)SmithyUnit.Value;
@@ -218,11 +218,8 @@ public sealed class GrpcProtocol : IProtocol
         private static string? ErrorDiscriminator(SmithyHttpResponse response)
         {
             ArgumentNullException.ThrowIfNull(response);
-            return
-                GrpcProtocol.IsErrorResponse(response)
-                && response.Headers.TryGetValue(ErrorShapeHeader, out var values)
-                && values.Count > 0
-                ? values[0]
+            return GrpcProtocol.IsErrorResponse(response)
+                ? response.Trailer?.Invoke(ErrorShapeHeader)
                 : null;
         }
 
@@ -333,12 +330,12 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-            SmithyStreamingHttpResponse response,
+            SmithyHttpResponse response,
             CancellationToken cancellationToken = default
         )
         {
             ArgumentNullException.ThrowIfNull(response);
-            EnsureGrpcResponse(response);
+            EnsureGrpcStreamingResponse(response);
             return ReadResponseEventsAsync(response, responseCodec, cancellationToken);
         }
 
@@ -402,15 +399,15 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public ValueTask<TOutput> DeserializeResponseAsync(
-            SmithyStreamingHttpResponse response,
+            SmithyHttpResponse response,
             CancellationToken cancellationToken = default
         )
         {
             ArgumentNullException.ThrowIfNull(response);
-            EnsureGrpcResponse(response);
+            EnsureGrpcStreamingResponse(response);
             if (outputIsUnit)
             {
-                response.Body.Dispose();
+                DisposeResponseBody(response);
                 return ValueTask.FromResult((TOutput)(object)SmithyUnit.Value);
             }
 
@@ -469,7 +466,7 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-            SmithyStreamingHttpResponse response,
+            SmithyHttpResponse response,
             CancellationToken cancellationToken = default
         )
         {
@@ -554,11 +551,8 @@ public sealed class GrpcProtocol : IProtocol
     {
         ArgumentNullException.ThrowIfNull(response);
         // A non-zero grpc-status is a modeled/runtime gRPC error.
-        if (
-            response.Headers.TryGetValue(GrpcStatusHeader, out var values)
-            && values.Count > 0
-            && !string.Equals(values[0], "0", StringComparison.Ordinal)
-        )
+        var status = response.Trailer?.Invoke(GrpcStatusHeader);
+        if (status is not null && !string.Equals(status, "0", StringComparison.Ordinal))
         {
             return true;
         }
@@ -569,7 +563,7 @@ public sealed class GrpcProtocol : IProtocol
         return response.StatusCode != HttpStatusCode.OK || !IsGrpcContentType(response);
     }
 
-    private static void EnsureGrpcResponse(SmithyStreamingHttpResponse response)
+    private static void EnsureGrpcStreamingResponse(SmithyHttpResponse response)
     {
         if (response.StatusCode == HttpStatusCode.OK && IsGrpcContentType(response.ContentHeaders))
         {
@@ -578,7 +572,7 @@ public sealed class GrpcProtocol : IProtocol
 
         // Transport-level failure (a 404, a 500 page, an HTTP/1.1 downgrade, ...). Release the
         // connection eagerly; the informative error comes from the captured status/headers.
-        response.Body.Dispose();
+        DisposeResponseBody(response);
         var message =
             response.Headers.TryGetValue(GrpcMessageHeader, out var values) && values.Count > 0
                 ? values[0]
@@ -667,12 +661,12 @@ public sealed class GrpcProtocol : IProtocol
     }
 
     private static async IAsyncEnumerable<T> ReadResponseEventsAsync<T>(
-        SmithyStreamingHttpResponse response,
+        SmithyHttpResponse response,
         IProtoCodec<T> codec,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
-        var body = response.Body;
+        var body = ResponseStream(response);
         await using (body.ConfigureAwait(false))
         {
             await foreach (
@@ -693,12 +687,12 @@ public sealed class GrpcProtocol : IProtocol
     }
 
     private static async ValueTask<T> DeserializeSingleResponseAsync<T>(
-        SmithyStreamingHttpResponse response,
+        SmithyHttpResponse response,
         IProtoCodec<T> codec,
         CancellationToken cancellationToken
     )
     {
-        var body = response.Body;
+        var body = ResponseStream(response);
         await using (body.ConfigureAwait(false))
         {
             await foreach (
@@ -716,6 +710,22 @@ public sealed class GrpcProtocol : IProtocol
 
     private static bool IsGrpcContentType(SmithyHttpResponse response) =>
         IsGrpcContentType(response.ContentHeaders);
+
+    private static Stream ResponseStream(SmithyHttpResponse response) =>
+        response.Body switch
+        {
+            SmithyHttpBody.Streaming streaming => streaming.Content,
+            SmithyHttpBody.Bytes bytes => new MemoryStream(bytes.Content, writable: false),
+            _ => Stream.Null,
+        };
+
+    private static void DisposeResponseBody(SmithyHttpResponse response)
+    {
+        if (response.Body is SmithyHttpBody.Streaming streaming)
+        {
+            streaming.Content.Dispose();
+        }
+    }
 
     private static bool IsGrpcContentType(
         IReadOnlyDictionary<string, IReadOnlyList<string>> contentHeaders

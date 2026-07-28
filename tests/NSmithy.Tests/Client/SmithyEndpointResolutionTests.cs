@@ -187,6 +187,7 @@ public sealed class SmithyEndpointResolutionTests
 
         public Task<SmithyHttpResponse> SendAsync(
             SmithyHttpRequest request,
+            SmithyHttpResponseMode responseMode,
             CancellationToken cancellationToken = default
         )
         {

@@ -107,6 +107,45 @@ public sealed class SmithyClientRuntimeTests
     }
 
     [Fact]
+    public async Task RuntimeInvokesOutputEventStreamThroughStreamingTransport()
+    {
+        List<string> calls = [];
+        var transport = new RecordingStreamingTransport(
+            new SmithyHttpResponse(HttpStatusCode.OK, "OK", Stream.Null, EmptyHeaders, EmptyHeaders)
+        );
+        var runtime = new SmithyClientRuntime(
+            transport,
+            [new RecordingInterceptor("one", calls)],
+            endpoint: new Uri("https://api.example.com/base")
+        );
+        var binding = new SmithyOutputEventStreamOperationBinding<string, string>(
+            ShapeId.Parse("example.weather#Weather"),
+            ShapeId.Parse("example.weather#Watch"),
+            new OutputStreamProtocol()
+        );
+
+        var output = await CollectAsync(runtime.InvokeOutputStreamAsync(binding, "input"));
+
+        Assert.Equal(["first", "second"], output);
+        Assert.Equal(
+            [
+                "one:before-execution:Weather.Watch",
+                "one:before-serialization:input",
+                "one:before-signing:https://api.example.com/base/input",
+                "one:before-transmit:https://api.example.com/base/input",
+                "one:after-transmit:OK",
+                "one:after-deserialization:first",
+                "one:after-deserialization:second",
+                "one:after-execution:ok",
+            ],
+            calls
+        );
+        Assert.Equal("https://api.example.com/base/input", transport.Request.RequestUri);
+        Assert.Equal(["signed"], transport.Request.Headers["x-smithy-test"]);
+        Assert.Equal(1, transport.StreamingAttempts);
+    }
+
+    [Fact]
     public async Task RuntimeExposesConstructorEndpointInContext()
     {
         List<Uri> endpoints = [];
@@ -607,6 +646,7 @@ public sealed class SmithyClientRuntimeTests
     {
         public async Task<SmithyHttpResponse> SendAsync(
             SmithyHttpRequest request,
+            SmithyHttpResponseMode responseMode,
             CancellationToken cancellationToken = default
         )
         {
@@ -627,6 +667,17 @@ public sealed class SmithyClientRuntimeTests
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> EmptyHeaders { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
+    private static async Task<List<T>> CollectAsync<T>(IAsyncEnumerable<T> values)
+    {
+        List<T> result = [];
+        await foreach (var value in values)
+        {
+            result.Add(value);
+        }
+
+        return result;
+    }
+
     private static SmithyOperationBinding<string, string> Binding(
         IClientOperationProtocol<string, string> protocol
     ) =>
@@ -642,9 +693,29 @@ public sealed class SmithyClientRuntimeTests
 
         public Task<SmithyHttpResponse> SendAsync(
             SmithyHttpRequest request,
+            SmithyHttpResponseMode responseMode,
             CancellationToken cancellationToken = default
         )
         {
+            Request = request;
+            return Task.FromResult(response);
+        }
+    }
+
+    private sealed class RecordingStreamingTransport(SmithyHttpResponse response) : IHttpTransport
+    {
+        public SmithyHttpRequest Request { get; private set; } = null!;
+
+        public int StreamingAttempts { get; private set; }
+
+        public Task<SmithyHttpResponse> SendAsync(
+            SmithyHttpRequest request,
+            SmithyHttpResponseMode responseMode,
+            CancellationToken cancellationToken = default
+        )
+        {
+            Assert.Equal(SmithyHttpResponseMode.Stream, responseMode);
+            StreamingAttempts++;
             Request = request;
             return Task.FromResult(response);
         }
@@ -656,6 +727,7 @@ public sealed class SmithyClientRuntimeTests
 
         public Task<SmithyHttpResponse> SendAsync(
             SmithyHttpRequest request,
+            SmithyHttpResponseMode responseMode,
             CancellationToken cancellationToken = default
         )
         {
@@ -676,6 +748,7 @@ public sealed class SmithyClientRuntimeTests
 
         public Task<SmithyHttpResponse> SendAsync(
             SmithyHttpRequest request,
+            SmithyHttpResponseMode responseMode,
             CancellationToken cancellationToken = default
         )
         {
@@ -795,6 +868,23 @@ public sealed class SmithyClientRuntimeTests
             SmithyHttpResponse response,
             CancellationToken cancellationToken = default
         ) => ValueTask.FromResult<Exception?>(null);
+    }
+
+    private sealed class OutputStreamProtocol : IOutputEventStreamClientProtocol<string, string>
+    {
+        public SmithyHttpRequest SerializeRequest(string input) =>
+            new(HttpMethod.Post, $"/{input}");
+
+        public async IAsyncEnumerable<string> DeserializeResponseEventsAsync(
+            SmithyHttpResponse response,
+            [System.Runtime.CompilerServices.EnumeratorCancellation]
+                CancellationToken cancellationToken = default
+        )
+        {
+            await Task.CompletedTask.ConfigureAwait(false);
+            yield return "first";
+            yield return "second";
+        }
     }
 
     private sealed class AbsoluteUriProtocol : TextProtocol

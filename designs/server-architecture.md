@@ -351,26 +351,27 @@ Every client request is a `SmithyHttpRequest`; the body says whether it streams:
 - output-stream request = `SmithyHttpRequest { Body = Bytes }` — a unary request.
 - input-stream and duplex request = `SmithyHttpRequest { Body = EventStreaming }`.
 
-The response keeps a dedicated streaming type, `SmithyStreamingHttpResponse`,
-because incremental read, connection-hold-until-dispose, and trailer-after-EOF
-are behavioral properties a buffered unary response does not have. The streaming
-transport is:
+The response is a single `SmithyHttpResponse`. The client transport requires the
+runtime to state whether the response body should be buffered or streamed:
 
 ```csharp
-public interface IStreamingHttpTransport
+public interface IHttpTransport
 {
-    Task<SmithyStreamingHttpResponse> SendAsync(
+    Task<SmithyHttpResponse> SendAsync(
         SmithyHttpRequest request,
+        SmithyHttpResponseMode responseMode,
         CancellationToken cancellationToken = default);
 }
 ```
 
-`SmithyStreamingHttpResponse.Body` is the raw response stream, `Trailer` resolves
-HTTP trailing headers once the body is read to end, and disposing the body
-releases the connection. Every client streaming half has a uniform signature: a
-`SmithyHttpRequest` in, a `SmithyStreamingHttpResponse` out. The response type
-reflects the streaming channel; the deserialize method's return type (`TOutput`
-versus `IAsyncEnumerable<TOutputEvent>`) reflects the payload shape.
+In `Buffer` mode, `SmithyHttpResponse.Body` is `Bytes` or `Empty`, and trailers
+are available through `Trailer` because the body has already been read. In
+`Stream` mode, `Body` is `SmithyHttpBody.Streaming`, `Trailer` resolves HTTP
+trailing headers once the body is read to end, and disposing the stream releases
+the connection. Every client streaming half has a uniform signature: a
+`SmithyHttpRequest` in, a `SmithyHttpResponse` out. The deserialize method's
+return type (`TOutput` versus `IAsyncEnumerable<TOutputEvent>`) reflects the
+payload shape.
 
 ## Non-goals
 

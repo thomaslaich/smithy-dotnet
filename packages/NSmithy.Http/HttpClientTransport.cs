@@ -1,3 +1,6 @@
+using System.Net;
+using System.Net.Http.Headers;
+
 namespace NSmithy.Http;
 
 public sealed class HttpClientTransport : IHttpTransport
@@ -11,62 +14,25 @@ public sealed class HttpClientTransport : IHttpTransport
 
     public Task<SmithyHttpResponse> SendAsync(
         SmithyHttpRequest request,
+        SmithyHttpResponseMode responseMode,
         CancellationToken cancellationToken = default
     )
     {
         ArgumentNullException.ThrowIfNull(request);
-        return SendCoreAsync(request, cancellationToken);
+        return SendCoreAsync(request, responseMode, cancellationToken);
     }
 
     private async Task<SmithyHttpResponse> SendCoreAsync(
         SmithyHttpRequest request,
+        SmithyHttpResponseMode responseMode,
         CancellationToken cancellationToken
     )
     {
-        using var message = new HttpRequestMessage(request.Method, request.RequestUri)
-        {
-            // Honor the HttpClient's configured HTTP version/policy. A new HttpRequestMessage
-            // defaults to HTTP/1.1, which would silently downgrade gRPC (HTTP/2) requests even when
-            // the caller configured the client for HTTP/2.
-            Version = httpClient.DefaultRequestVersion,
-            VersionPolicy = httpClient.DefaultVersionPolicy,
-        };
-        foreach (var header in request.Headers)
-        {
-            message.Headers.TryAddWithoutValidation(header.Key, header.Value);
-        }
-
-        if (request.Body is SmithyHttpBody.Streaming streamBody)
-        {
-            message.Content = new StreamContent(streamBody.Content);
-            if (streamBody.ContentLength is { } contentLength)
-            {
-                message.Content.Headers.ContentLength = contentLength;
-            }
-        }
-        else if (request.Body is SmithyHttpBody.Bytes bytesBody)
-        {
-            message.Content = new ByteArrayContent(bytesBody.Content);
-        }
-
-        if (message.Content is not null)
-        {
-            if (!string.IsNullOrWhiteSpace(request.ContentType))
-            {
-                message.Content.Headers.ContentType =
-                    new System.Net.Http.Headers.MediaTypeHeaderValue(request.ContentType);
-            }
-
-            foreach (var header in request.ContentHeaders)
-            {
-                message.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
-            }
-        }
-
+        using var message = CreateMessage(request);
         var response = await httpClient
             .SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
-        if (request.ExpectStreamingResponse)
+        if (responseMode == SmithyHttpResponseMode.Stream)
         {
             var contentHeaders = response.Content is null
                 ? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
@@ -75,7 +41,7 @@ public sealed class HttpClientTransport : IHttpTransport
                 response.StatusCode,
                 response.ReasonPhrase,
                 new SmithyHttpBody.Streaming(
-                    new ResponseContentStream(
+                    new ResponseOwningStream(
                         response,
                         response.Content is null
                             ? Stream.Null
@@ -86,7 +52,8 @@ public sealed class HttpClientTransport : IHttpTransport
                     response.Content?.Headers.ContentLength
                 ),
                 ToHeaderDictionary(response.Headers),
-                contentHeaders
+                contentHeaders,
+                name => GetTrailer(response, name)
             );
         }
 
@@ -95,31 +62,95 @@ public sealed class HttpClientTransport : IHttpTransport
             ? []
             : await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
 
-        // gRPC carries grpc-status / grpc-message in HTTP/2 trailers, which only become available
-        // after the body has been read. Fold them into the header dictionary so protocols that look
-        // for trailers (GrpcProtocol) see them uniformly with regular headers.
-        var headers = ToHeaderDictionary(response.Headers);
-        MergeTrailingHeaders(headers, response);
         return new SmithyHttpResponse(
             response.StatusCode,
             response.ReasonPhrase,
             content.Length == 0 ? SmithyHttpBody.Empty : new SmithyHttpBody.Bytes(content),
-            headers,
+            ToHeaderDictionary(response.Headers),
             response.Content is null
                 ? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
-                : ToHeaderDictionary(response.Content.Headers)
+                : ToHeaderDictionary(response.Content.Headers),
+            name => GetTrailer(response, name)
         );
     }
 
-    private static void MergeTrailingHeaders(
-        Dictionary<string, IReadOnlyList<string>> headers,
-        HttpResponseMessage response
-    )
+    private HttpRequestMessage CreateMessage(SmithyHttpRequest request)
     {
-        foreach (var trailer in response.TrailingHeaders)
+        var message = new HttpRequestMessage(request.Method, request.RequestUri)
         {
-            headers[trailer.Key] = trailer.Value.ToArray();
+            // Honor the HttpClient's configured HTTP version/policy. A new HttpRequestMessage
+            // defaults to HTTP/1.1, which would silently downgrade gRPC (HTTP/2) requests even when
+            // the caller configured the client for HTTP/2.
+            Version = httpClient.DefaultRequestVersion,
+            VersionPolicy = httpClient.DefaultVersionPolicy,
+            Content = CreateContent(request.Body, request.ContentType),
+        };
+        foreach (var header in request.Headers)
+        {
+            message.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }
+
+        if (message.Content is not null)
+        {
+            foreach (var header in request.ContentHeaders)
+            {
+                message.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+        }
+
+        return message;
+    }
+
+    private static HttpContent? CreateContent(SmithyHttpBody body, string? contentType) =>
+        body switch
+        {
+            SmithyHttpBody.EventStreaming eventStream => new ChunkedBodyContent(
+                eventStream.Content,
+                contentType
+            ),
+            SmithyHttpBody.Streaming streaming => WithContentType(
+                CreateStreamContent(streaming),
+                contentType
+            ),
+            SmithyHttpBody.Bytes bytes => WithContentType(
+                new ByteArrayContent(bytes.Content),
+                contentType
+            ),
+            _ => null,
+        };
+
+    private static StreamContent CreateStreamContent(SmithyHttpBody.Streaming streaming)
+    {
+        var content = new StreamContent(streaming.Content);
+        if (streaming.ContentLength is { } contentLength)
+        {
+            content.Headers.ContentLength = contentLength;
+        }
+
+        return content;
+    }
+
+    private static HttpContent WithContentType(HttpContent content, string? contentType)
+    {
+        if (!string.IsNullOrWhiteSpace(contentType))
+        {
+            content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        }
+
+        return content;
+    }
+
+    private static string? GetTrailer(HttpResponseMessage response, string name)
+    {
+        if (response.TrailingHeaders.TryGetValues(name, out var trailers))
+        {
+            return trailers.FirstOrDefault();
+        }
+
+        // Some HTTP stacks surface a trailers-only gRPC response as an initial header block.
+        return response.Headers.TryGetValues(name, out var headers)
+            ? headers.FirstOrDefault()
+            : null;
     }
 
     private static Dictionary<string, IReadOnlyList<string>> ToHeaderDictionary(
@@ -133,7 +164,48 @@ public sealed class HttpClientTransport : IHttpTransport
         );
     }
 
-    private sealed class ResponseContentStream(HttpResponseMessage response, Stream inner) : Stream
+    private sealed class ChunkedBodyContent : HttpContent
+    {
+        private readonly IAsyncEnumerable<ReadOnlyMemory<byte>> chunks;
+
+        public ChunkedBodyContent(
+            IAsyncEnumerable<ReadOnlyMemory<byte>> chunks,
+            string? contentType
+        )
+        {
+            this.chunks = chunks ?? throw new ArgumentNullException(nameof(chunks));
+            if (!string.IsNullOrWhiteSpace(contentType))
+            {
+                Headers.ContentType = new MediaTypeHeaderValue(contentType);
+            }
+        }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            SerializeToStreamAsync(stream, context, CancellationToken.None);
+
+        protected override async Task SerializeToStreamAsync(
+            Stream stream,
+            TransportContext? context,
+            CancellationToken cancellationToken
+        )
+        {
+            await foreach (
+                var chunk in chunks.WithCancellation(cancellationToken).ConfigureAwait(false)
+            )
+            {
+                await stream.WriteAsync(chunk, cancellationToken).ConfigureAwait(false);
+                await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
+
+    private sealed class ResponseOwningStream(HttpResponseMessage response, Stream inner) : Stream
     {
         public override bool CanRead => inner.CanRead;
 

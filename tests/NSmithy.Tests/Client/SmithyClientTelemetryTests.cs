@@ -207,6 +207,7 @@ public sealed class SmithyClientTelemetryTests : IDisposable
     {
         public Task<SmithyHttpResponse> SendAsync(
             SmithyHttpRequest request,
+            SmithyHttpResponseMode responseMode,
             CancellationToken cancellationToken = default
         ) => Task.FromResult(response);
     }
@@ -217,6 +218,7 @@ public sealed class SmithyClientTelemetryTests : IDisposable
 
         public Task<SmithyHttpResponse> SendAsync(
             SmithyHttpRequest request,
+            SmithyHttpResponseMode responseMode,
             CancellationToken cancellationToken = default
         )
         {
