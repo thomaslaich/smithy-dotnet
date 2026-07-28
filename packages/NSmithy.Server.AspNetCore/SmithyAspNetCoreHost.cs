@@ -10,7 +10,7 @@ namespace NSmithy.Server.AspNetCore;
 /// Binds ASP.NET Core to the shared <see cref="SmithyServerRuntime"/>. Generated endpoints call one
 /// of the <c>Dispatch…</c> methods; this adapter owns the only two host-specific conversions —
 /// building a neutral <see cref="SmithyHttpRequest"/> from an <see cref="HttpContext"/> and writing
-/// a <see cref="SmithyServerResponse"/> back — and holds the framework dependency. It carries no
+/// a <see cref="SmithyHttpServerResponse"/> back — and holds the framework dependency. It carries no
 /// wire knowledge of any protocol: trailer values come from the response, and the adapter only
 /// decides whether the connection can carry trailers.
 /// </summary>
@@ -174,7 +174,7 @@ public static class SmithyAspNetCoreHost
 
     private static async Task WriteAsync(
         HttpContext httpContext,
-        SmithyServerResponse response,
+        SmithyHttpServerResponse response,
         CancellationToken cancellationToken
     )
     {

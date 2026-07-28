@@ -62,14 +62,14 @@ stream) for event-stream operations. Streaming server protocol halves read the
 body as a stream and deframe it; unary halves read the buffered bytes. One
 request type serves every operation shape.
 
-### Response — `SmithyServerResponse`
+### Response — `SmithyHttpServerResponse`
 
 Responses are directional: the server produces them and the host writes them.
 One neutral type carries every response shape — unary bodies, streamed event
 bodies, and protocol trailers:
 
 ```csharp
-public sealed class SmithyServerResponse
+public sealed class SmithyHttpServerResponse
 {
     public int StatusCode { get; init; } = 200;
 
@@ -104,22 +104,22 @@ public interface IServerOperationProtocol<TInput, TOutput>
 {
     TInput DeserializeRequest(SmithyHttpRequest request);
 
-    SmithyServerResponse SerializeResponse(TOutput output);
+    SmithyHttpServerResponse SerializeResponse(TOutput output);
 
     // Serializes a modeled error to a protocol error response. Returns false for an
     // unmodeled exception, which the runtime rethrows (surfaced as a 500 by the host).
-    bool TrySerializeError(Exception exception, out SmithyServerResponse response);
+    bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response);
 }
 ```
 
-Streaming server halves return the same `SmithyServerResponse`, building the
+Streaming server halves return the same `SmithyHttpServerResponse`, building the
 `Body` from framed chunks and attaching their `Trailers` provider:
 
 ```csharp
 public interface IOutputEventStreamServerProtocol<TInput, TOutputEvent>
 {
     TInput DeserializeRequest(SmithyHttpRequest request);
-    SmithyServerResponse SerializeResponse(
+    SmithyHttpServerResponse SerializeResponse(
         IAsyncEnumerable<TOutputEvent> events,
         CancellationToken cancellationToken = default);
 }
@@ -129,7 +129,7 @@ public interface IInputEventStreamServerProtocol<TInputEvent, TOutput>
     IAsyncEnumerable<TInputEvent> DeserializeRequestEventsAsync(
         SmithyHttpRequest request,
         CancellationToken cancellationToken = default);
-    SmithyServerResponse SerializeResponse(TOutput output);
+    SmithyHttpServerResponse SerializeResponse(TOutput output);
 }
 ```
 
@@ -143,7 +143,7 @@ telemetry attach to it the way they attach to `SmithyClientRuntime`.
 public sealed class SmithyServerRuntime
 {
     // Unary: deserialize, invoke, serialize — with modeled errors caught once, for every protocol.
-    public async Task<SmithyServerResponse> DispatchAsync<TInput, TOutput>(
+    public async Task<SmithyHttpServerResponse> DispatchAsync<TInput, TOutput>(
         IServerOperationProtocol<TInput, TOutput> protocol,
         SmithyHttpRequest request,
         Func<TInput, CancellationToken, Task<TOutput>> handler,
@@ -162,7 +162,7 @@ public sealed class SmithyServerRuntime
     }
 
     // Output stream: unary in, events out. Body and Trailers both come from the protocol.
-    public SmithyServerResponse DispatchOutputStream<TInput, TOutputEvent>(
+    public SmithyHttpServerResponse DispatchOutputStream<TInput, TOutputEvent>(
         IOutputEventStreamServerProtocol<TInput, TOutputEvent> protocol,
         SmithyHttpRequest request,
         Func<TInput, CancellationToken, IAsyncEnumerable<TOutputEvent>> handler,
@@ -183,7 +183,7 @@ handling is a single `catch` filtered by `TrySerializeError`, not a generated
 ## Host Adapter
 
 A host adapter binds a host framework to the runtime. It owns two conversions —
-the host request into a `SmithyHttpRequest`, and a `SmithyServerResponse` onto
+the host request into a `SmithyHttpRequest`, and a `SmithyHttpServerResponse` onto
 the host response — and one dispatch entry point that generated endpoints call:
 
 The runtime is currently stateless, so the host adapter owns a shared default
@@ -207,7 +207,7 @@ public static class SmithyAspNetCoreHost
 
     // One writer for every protocol. Trailer values come from the response; the host only
     // decides whether the connection can carry trailers and writes whatever the response holds.
-    private static async Task WriteAsync(HttpContext context, SmithyServerResponse response, CancellationToken ct)
+    private static async Task WriteAsync(HttpContext context, SmithyHttpServerResponse response, CancellationToken ct)
     {
         context.Response.StatusCode = response.StatusCode;
         foreach (var header in response.Headers)
@@ -351,25 +351,25 @@ Every client request is a `SmithyHttpRequest`; the body says whether it streams:
 - output-stream request = `SmithyHttpRequest { Body = Bytes }` — a unary request.
 - input-stream and duplex request = `SmithyHttpRequest { Body = EventStreaming }`.
 
-The response is a single `SmithyHttpResponse`. The client transport requires the
+The response is a single `SmithyHttpClientResponse`. The client transport requires the
 runtime to state whether the response body should be buffered or streamed:
 
 ```csharp
 public interface IHttpTransport
 {
-    Task<SmithyHttpResponse> SendAsync(
+    Task<SmithyHttpClientResponse> SendAsync(
         SmithyHttpRequest request,
-        SmithyHttpResponseMode responseMode,
+        SmithyHttpClientResponseMode responseMode,
         CancellationToken cancellationToken = default);
 }
 ```
 
-In `Buffer` mode, `SmithyHttpResponse.Body` is `Bytes` or `Empty`, and trailers
+In `Buffer` mode, `SmithyHttpClientResponse.Body` is `Bytes` or `Empty`, and trailers
 are available through `Trailer` because the body has already been read. In
 `Stream` mode, `Body` is `SmithyHttpBody.Streaming`, `Trailer` resolves HTTP
 trailing headers once the body is read to end, and disposing the stream releases
 the connection. Every client streaming half has a uniform signature: a
-`SmithyHttpRequest` in, a `SmithyHttpResponse` out. The deserialize method's
+`SmithyHttpRequest` in, a `SmithyHttpClientResponse` out. The deserialize method's
 return type (`TOutput` versus `IAsyncEnumerable<TOutputEvent>`) reflects the
 payload shape.
 

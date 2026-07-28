@@ -20,7 +20,7 @@ How NSmithy abstracts the HTTP transport layer.
 ```csharp
 public interface IHttpTransport
 {
-    Task<SmithyHttpResponse> SendAsync(
+    Task<SmithyHttpClientResponse> SendAsync(
         SmithyHttpRequest request,
         CancellationToken cancellationToken = default
     );
@@ -38,7 +38,7 @@ public interface IHttpTransport
 - `IDictionary<string, IReadOnlyList<string>> Headers` (multi-value)
 - `byte[]? Content`, `string? ContentType`, and a separate `ContentHeaders`
 
-`SmithyHttpResponse` carries:
+`SmithyHttpClientResponse` carries:
 
 - `HttpStatusCode StatusCode` and `string? ReasonPhrase`
 - `byte[] Content` (with a `ContentText` convenience accessor)
@@ -152,7 +152,7 @@ carries them.
 
 gRPC is just another `IProtocol` (`GrpcProtocol`) over this same transport: it needs
 HTTP/2 (`IProtocol.RequiresHttp2`) but otherwise uses `HttpClientTransport` like the
-REST and rpcv2Cbor protocols, with trailers exposed through `SmithyHttpResponse.Trailer`.
+REST and rpcv2Cbor protocols, with trailers exposed through `SmithyHttpClientResponse.Trailer`.
 The wire format, framing, proto codec, and error model are covered in
 [native-grpc.md](native-grpc.md).
 

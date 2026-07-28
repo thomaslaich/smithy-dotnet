@@ -230,11 +230,11 @@ public sealed class SmithyClientRuntime(
         }
     }
 
-    private async Task<SmithyHttpResponse> SendUnaryAsync(
+    private async Task<SmithyHttpClientResponse> SendUnaryAsync(
         SmithyContext context,
         SmithyHttpRequest request,
-        Func<SmithyHttpResponse, CancellationToken, ValueTask<Exception?>> deserializeError,
-        Func<SmithyHttpResponse, bool> isErrorResponse,
+        Func<SmithyHttpClientResponse, CancellationToken, ValueTask<Exception?>> deserializeError,
+        Func<SmithyHttpClientResponse, bool> isErrorResponse,
         TagList tags,
         SmithyEndpoint? resolvedEndpoint,
         IClientInterceptor? authInterceptor,
@@ -263,15 +263,15 @@ public sealed class SmithyClientRuntime(
                 )
                 .ConfigureAwait(false);
 
-            SmithyHttpResponse response;
+            SmithyHttpClientResponse response;
             try
             {
                 response = await transport
                     .SendAsync(
                         attemptRequest,
                         attemptRequest.ExpectStreamingResponse
-                            ? SmithyHttpResponseMode.Stream
-                            : SmithyHttpResponseMode.Buffer,
+                            ? SmithyHttpClientResponseMode.Stream
+                            : SmithyHttpClientResponseMode.Buffer,
                         cancellationToken
                     )
                     .ConfigureAwait(false);
@@ -331,12 +331,12 @@ public sealed class SmithyClientRuntime(
         }
     }
 
-    private static ValueTask DisposeBodyAsync(SmithyHttpResponse response) =>
+    private static ValueTask DisposeBodyAsync(SmithyHttpClientResponse response) =>
         response.Body is SmithyHttpBody.Streaming streaming
             ? streaming.Content.DisposeAsync()
             : ValueTask.CompletedTask;
 
-    private async Task<SmithyHttpResponse> SendStreamingAsync(
+    private async Task<SmithyHttpClientResponse> SendStreamingAsync(
         SmithyContext context,
         SmithyHttpRequest request,
         TagList tags,
@@ -363,7 +363,7 @@ public sealed class SmithyClientRuntime(
             .ConfigureAwait(false);
 
         var response = await transport
-            .SendAsync(attemptRequest, SmithyHttpResponseMode.Stream, cancellationToken)
+            .SendAsync(attemptRequest, SmithyHttpClientResponseMode.Stream, cancellationToken)
             .ConfigureAwait(false);
 
         for (var i = interceptors.Count - 1; i >= 0; i--)

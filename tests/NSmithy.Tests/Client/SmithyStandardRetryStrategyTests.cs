@@ -265,7 +265,10 @@ public sealed class SmithyStandardRetryStrategyTests
         );
     }
 
-    private static SmithyHttpResponse Response(HttpStatusCode statusCode, string? retryAfter = null)
+    private static SmithyHttpClientResponse Response(
+        HttpStatusCode statusCode,
+        string? retryAfter = null
+    )
     {
         var headers = new Dictionary<string, IReadOnlyList<string>>(
             StringComparer.OrdinalIgnoreCase
@@ -275,7 +278,7 @@ public sealed class SmithyStandardRetryStrategyTests
             headers["Retry-After"] = [retryAfter];
         }
 
-        return new SmithyHttpResponse(
+        return new SmithyHttpClientResponse(
             statusCode,
             statusCode.ToString(),
             [],

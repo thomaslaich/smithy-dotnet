@@ -97,7 +97,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             return request;
         }
 
-        public TOutput DeserializeResponse(SmithyHttpResponse response)
+        public TOutput DeserializeResponse(SmithyHttpClientResponse response)
         {
             ArgumentNullException.ThrowIfNull(response);
             if (outputIsSmithyUnit)
@@ -126,15 +126,16 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             return content.Length == 0 ? default! : requestCodec.Deserialize(content);
         }
 
-        public SmithyServerResponse SerializeResponse(TOutput output) =>
+        public SmithyHttpServerResponse SerializeResponse(TOutput output) =>
             throw new NotSupportedException("AWS JSON server-side serialization is not supported.");
 
-        public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
+        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
+            (int)response.StatusCode >= 400;
 
         // AWS JSON errors carry a __type/code discriminator in the body, but a response without
         // one can still resolve via the HTTP status code.
         public ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpResponse response,
+            SmithyHttpClientResponse response,
             CancellationToken cancellationToken = default
         ) =>
             ValueTask.FromResult(
@@ -147,7 +148,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
                 )
             );
 
-        public bool TrySerializeError(Exception exception, out SmithyServerResponse response) =>
+        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
             throw new NotSupportedException("AWS JSON server-side serialization is not supported.");
 
         private static TOutput CreateEmptyOutput(Schema<TOutput> schema)
@@ -182,7 +183,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         }
     }
 
-    public static string? DeserializeErrorType(SmithyHttpResponse response)
+    public static string? DeserializeErrorType(SmithyHttpClientResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
 

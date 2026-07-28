@@ -13,7 +13,7 @@ public sealed class SmithyClientRuntimeTests
     public async Task InvokeAsyncThrowsDeserializedErrorForNonSuccessResponse()
     {
         var transport = new RecordingTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.BadRequest,
                 "Bad Request",
                 Encoding.UTF8.GetBytes("""{"message":"bad city"}"""),
@@ -34,7 +34,7 @@ public sealed class SmithyClientRuntimeTests
     public async Task InvokeAsyncThrowsGenericClientExceptionWhenErrorCannotBeDeserialized()
     {
         var transport = new RecordingTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.InternalServerError,
                 "Internal Server Error",
                 [],
@@ -57,7 +57,7 @@ public sealed class SmithyClientRuntimeTests
         List<string> calls = [];
         var interceptor = new RecordingInterceptor("one", calls);
         var transport = new RecordingTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.OK,
                 "OK",
                 Encoding.UTF8.GetBytes("serialized output"),
@@ -90,7 +90,7 @@ public sealed class SmithyClientRuntimeTests
     public async Task RuntimeInvokesOperationBinding()
     {
         var transport = new RecordingTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.OK,
                 "OK",
                 Encoding.UTF8.GetBytes("serialized output"),
@@ -111,7 +111,13 @@ public sealed class SmithyClientRuntimeTests
     {
         List<string> calls = [];
         var transport = new RecordingStreamingTransport(
-            new SmithyHttpResponse(HttpStatusCode.OK, "OK", Stream.Null, EmptyHeaders, EmptyHeaders)
+            new SmithyHttpClientResponse(
+                HttpStatusCode.OK,
+                "OK",
+                Stream.Null,
+                EmptyHeaders,
+                EmptyHeaders
+            )
         );
         var runtime = new SmithyClientRuntime(
             transport,
@@ -150,7 +156,7 @@ public sealed class SmithyClientRuntimeTests
     {
         List<Uri> endpoints = [];
         var transport = new RecordingTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.OK,
                 "OK",
                 Encoding.UTF8.GetBytes("serialized output"),
@@ -174,7 +180,7 @@ public sealed class SmithyClientRuntimeTests
     public async Task RuntimeResolvesRelativeRequestUriAgainstEndpointBeforeTransmit()
     {
         var transport = new RecordingTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.OK,
                 "OK",
                 Encoding.UTF8.GetBytes("serialized output"),
@@ -196,7 +202,7 @@ public sealed class SmithyClientRuntimeTests
     public async Task RuntimeLeavesAbsoluteRequestUriUnchanged()
     {
         var transport = new RecordingTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.OK,
                 "OK",
                 Encoding.UTF8.GetBytes("serialized output"),
@@ -220,7 +226,13 @@ public sealed class SmithyClientRuntimeTests
         var error = Assert.Throws<ArgumentException>(() =>
             new SmithyClientRuntime(
                 new RecordingTransport(
-                    new SmithyHttpResponse(HttpStatusCode.OK, "OK", [], EmptyHeaders, EmptyHeaders)
+                    new SmithyHttpClientResponse(
+                        HttpStatusCode.OK,
+                        "OK",
+                        [],
+                        EmptyHeaders,
+                        EmptyHeaders
+                    )
                 ),
                 endpoint: new Uri("/relative", UriKind.Relative)
             )
@@ -234,7 +246,7 @@ public sealed class SmithyClientRuntimeTests
     {
         List<string> calls = [];
         var transport = new RecordingTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.OK,
                 "OK",
                 Encoding.UTF8.GetBytes("serialized output"),
@@ -274,14 +286,14 @@ public sealed class SmithyClientRuntimeTests
     public async Task RuntimeCanRetryTransientResponses()
     {
         var transport = new SequenceTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.InternalServerError,
                 "Internal Server Error",
                 [],
                 EmptyHeaders,
                 EmptyHeaders
             ),
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.OK,
                 "OK",
                 Encoding.UTF8.GetBytes("serialized output"),
@@ -305,14 +317,14 @@ public sealed class SmithyClientRuntimeTests
     {
         List<int> attempts = [];
         var transport = new SequenceTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.InternalServerError,
                 "Internal Server Error",
                 [],
                 EmptyHeaders,
                 EmptyHeaders
             ),
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.OK,
                 "OK",
                 Encoding.UTF8.GetBytes("serialized output"),
@@ -335,14 +347,14 @@ public sealed class SmithyClientRuntimeTests
     public async Task RuntimeStartsEachRetryAttemptFromSerializedRequest()
     {
         var transport = new SequenceTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.InternalServerError,
                 "Internal Server Error",
                 [],
                 EmptyHeaders,
                 EmptyHeaders
             ),
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.OK,
                 "OK",
                 Encoding.UTF8.GetBytes("serialized output"),
@@ -368,14 +380,14 @@ public sealed class SmithyClientRuntimeTests
     public async Task RuntimeDoesNotRetryStreamingRequestBodies()
     {
         var transport = new SequenceTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.InternalServerError,
                 "Internal Server Error",
                 [],
                 EmptyHeaders,
                 EmptyHeaders
             ),
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.OK,
                 "OK",
                 Encoding.UTF8.GetBytes("serialized output"),
@@ -399,7 +411,7 @@ public sealed class SmithyClientRuntimeTests
     {
         var transport = new FlakyTransport(
             failures: 1,
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.OK,
                 "OK",
                 Encoding.UTF8.GetBytes("serialized output"),
@@ -423,7 +435,7 @@ public sealed class SmithyClientRuntimeTests
     {
         var transport = new FlakyTransport(
             failures: 1,
-            new SmithyHttpResponse(HttpStatusCode.OK, "OK", [], EmptyHeaders, EmptyHeaders)
+            new SmithyHttpClientResponse(HttpStatusCode.OK, "OK", [], EmptyHeaders, EmptyHeaders)
         );
         var runtime = new SmithyClientRuntime(transport);
 
@@ -439,7 +451,7 @@ public sealed class SmithyClientRuntimeTests
     {
         var transport = new FlakyTransport(
             failures: 3,
-            new SmithyHttpResponse(HttpStatusCode.OK, "OK", [], EmptyHeaders, EmptyHeaders)
+            new SmithyHttpClientResponse(HttpStatusCode.OK, "OK", [], EmptyHeaders, EmptyHeaders)
         );
         var runtime = new SmithyClientRuntime(
             transport,
@@ -458,14 +470,14 @@ public sealed class SmithyClientRuntimeTests
     {
         List<SmithyRetryOutcome> outcomes = [];
         var transport = new SequenceTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.BadRequest,
                 "Bad Request",
                 Encoding.UTF8.GetBytes("""{"message":"throttled"}"""),
                 EmptyHeaders,
                 EmptyHeaders
             ),
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.OK,
                 "OK",
                 Encoding.UTF8.GetBytes("serialized output"),
@@ -499,7 +511,7 @@ public sealed class SmithyClientRuntimeTests
     {
         List<string> calls = [];
         var transport = new RecordingTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.InternalServerError,
                 "Internal Server Error",
                 [],
@@ -522,7 +534,7 @@ public sealed class SmithyClientRuntimeTests
         var abandoned = new TrackingStream();
         var transport = new SequenceTransport(
             StreamingResponse(HttpStatusCode.InternalServerError, abandoned),
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.OK,
                 "OK",
                 Encoding.UTF8.GetBytes("serialized output"),
@@ -618,7 +630,7 @@ public sealed class SmithyClientRuntimeTests
     public async Task OperationTimeoutSpansRetryBackoff()
     {
         var transport = new SequenceTransport(
-            new SmithyHttpResponse(
+            new SmithyHttpClientResponse(
                 HttpStatusCode.InternalServerError,
                 "Internal Server Error",
                 [],
@@ -644,9 +656,9 @@ public sealed class SmithyClientRuntimeTests
 
     private sealed class HangingTransport : IHttpTransport
     {
-        public async Task<SmithyHttpResponse> SendAsync(
+        public async Task<SmithyHttpClientResponse> SendAsync(
             SmithyHttpRequest request,
-            SmithyHttpResponseMode responseMode,
+            SmithyHttpClientResponseMode responseMode,
             CancellationToken cancellationToken = default
         )
         {
@@ -655,7 +667,10 @@ public sealed class SmithyClientRuntimeTests
         }
     }
 
-    private static SmithyHttpResponse StreamingResponse(HttpStatusCode statusCode, Stream body) =>
+    private static SmithyHttpClientResponse StreamingResponse(
+        HttpStatusCode statusCode,
+        Stream body
+    ) =>
         new(
             statusCode,
             statusCode.ToString(),
@@ -687,13 +702,13 @@ public sealed class SmithyClientRuntimeTests
             protocol
         );
 
-    private sealed class RecordingTransport(SmithyHttpResponse response) : IHttpTransport
+    private sealed class RecordingTransport(SmithyHttpClientResponse response) : IHttpTransport
     {
         public SmithyHttpRequest Request { get; private set; } = null!;
 
-        public Task<SmithyHttpResponse> SendAsync(
+        public Task<SmithyHttpClientResponse> SendAsync(
             SmithyHttpRequest request,
-            SmithyHttpResponseMode responseMode,
+            SmithyHttpClientResponseMode responseMode,
             CancellationToken cancellationToken = default
         )
         {
@@ -702,53 +717,56 @@ public sealed class SmithyClientRuntimeTests
         }
     }
 
-    private sealed class RecordingStreamingTransport(SmithyHttpResponse response) : IHttpTransport
+    private sealed class RecordingStreamingTransport(SmithyHttpClientResponse response)
+        : IHttpTransport
     {
         public SmithyHttpRequest Request { get; private set; } = null!;
 
         public int StreamingAttempts { get; private set; }
 
-        public Task<SmithyHttpResponse> SendAsync(
+        public Task<SmithyHttpClientResponse> SendAsync(
             SmithyHttpRequest request,
-            SmithyHttpResponseMode responseMode,
+            SmithyHttpClientResponseMode responseMode,
             CancellationToken cancellationToken = default
         )
         {
-            Assert.Equal(SmithyHttpResponseMode.Stream, responseMode);
+            Assert.Equal(SmithyHttpClientResponseMode.Stream, responseMode);
             StreamingAttempts++;
             Request = request;
             return Task.FromResult(response);
         }
     }
 
-    private sealed class FlakyTransport(int failures, SmithyHttpResponse response) : IHttpTransport
+    private sealed class FlakyTransport(int failures, SmithyHttpClientResponse response)
+        : IHttpTransport
     {
         public int Attempts { get; private set; }
 
-        public Task<SmithyHttpResponse> SendAsync(
+        public Task<SmithyHttpClientResponse> SendAsync(
             SmithyHttpRequest request,
-            SmithyHttpResponseMode responseMode,
+            SmithyHttpClientResponseMode responseMode,
             CancellationToken cancellationToken = default
         )
         {
             Attempts++;
             return Attempts <= failures
-                ? Task.FromException<SmithyHttpResponse>(
+                ? Task.FromException<SmithyHttpClientResponse>(
                     new HttpRequestException("connection reset")
                 )
                 : Task.FromResult(response);
         }
     }
 
-    private sealed class SequenceTransport(params SmithyHttpResponse[] responses) : IHttpTransport
+    private sealed class SequenceTransport(params SmithyHttpClientResponse[] responses)
+        : IHttpTransport
     {
         public int Attempts { get; private set; }
 
         public List<SmithyHttpRequest> Requests { get; } = [];
 
-        public Task<SmithyHttpResponse> SendAsync(
+        public Task<SmithyHttpClientResponse> SendAsync(
             SmithyHttpRequest request,
-            SmithyHttpResponseMode responseMode,
+            SmithyHttpClientResponseMode responseMode,
             CancellationToken cancellationToken = default
         )
         {
@@ -794,7 +812,7 @@ public sealed class SmithyClientRuntimeTests
             return ValueTask.FromResult(request);
         }
 
-        public void OnAfterTransmit(SmithyContext context, SmithyHttpResponse response)
+        public void OnAfterTransmit(SmithyContext context, SmithyHttpClientResponse response)
         {
             calls.Add($"{name}:after-transmit:{response.ReasonPhrase}");
         }
@@ -860,12 +878,13 @@ public sealed class SmithyClientRuntimeTests
         public virtual SmithyHttpRequest SerializeRequest(string input) =>
             new(HttpMethod.Post, $"/{input}");
 
-        public virtual string DeserializeResponse(SmithyHttpResponse response) => "output";
+        public virtual string DeserializeResponse(SmithyHttpClientResponse response) => "output";
 
-        public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
+        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
+            (int)response.StatusCode >= 400;
 
         public virtual ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpResponse response,
+            SmithyHttpClientResponse response,
             CancellationToken cancellationToken = default
         ) => ValueTask.FromResult<Exception?>(null);
     }
@@ -876,7 +895,7 @@ public sealed class SmithyClientRuntimeTests
             new(HttpMethod.Post, $"/{input}");
 
         public async IAsyncEnumerable<string> DeserializeResponseEventsAsync(
-            SmithyHttpResponse response,
+            SmithyHttpClientResponse response,
             [System.Runtime.CompilerServices.EnumeratorCancellation]
                 CancellationToken cancellationToken = default
         )
@@ -896,7 +915,7 @@ public sealed class SmithyClientRuntimeTests
     private sealed class ContentTextErrorProtocol : TextProtocol
     {
         public override ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpResponse response,
+            SmithyHttpClientResponse response,
             CancellationToken cancellationToken = default
         ) => ValueTask.FromResult<Exception?>(new InvalidOperationException(response.ContentText));
     }
@@ -912,7 +931,7 @@ public sealed class SmithyClientRuntimeTests
 
     private sealed class ThrowingDeserializationProtocol : TextProtocol
     {
-        public override string DeserializeResponse(SmithyHttpResponse response) =>
+        public override string DeserializeResponse(SmithyHttpClientResponse response) =>
             throw new FormatException("malformed body");
     }
 

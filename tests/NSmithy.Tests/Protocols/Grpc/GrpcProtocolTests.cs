@@ -293,7 +293,7 @@ public sealed class GrpcProtocolTests
             ),
         };
 
-        var response = await transport.SendAsync(request, SmithyHttpResponseMode.Stream);
+        var response = await transport.SendAsync(request, SmithyHttpClientResponseMode.Stream);
 
         Assert.NotNull(requestBody);
         Assert.Equal([new Echo("request")], await DecodeBody(new MemoryStream(requestBody!)));
@@ -309,7 +309,10 @@ public sealed class GrpcProtocolTests
         var protocol = BuildEventStreamServiceProtocol()
             .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
 
-        var response = await transport.SendAsync(StreamRequest(), SmithyHttpResponseMode.Stream);
+        var response = await transport.SendAsync(
+            StreamRequest(),
+            SmithyHttpClientResponseMode.Stream
+        );
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             CollectAsync(protocol.DeserializeResponseEventsAsync(response))
@@ -329,7 +332,10 @@ public sealed class GrpcProtocolTests
         var protocol = BuildEventStreamServiceProtocol()
             .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
 
-        var response = await transport.SendAsync(StreamRequest(), SmithyHttpResponseMode.Stream);
+        var response = await transport.SendAsync(
+            StreamRequest(),
+            SmithyHttpClientResponseMode.Stream
+        );
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             CollectAsync(protocol.DeserializeResponseEventsAsync(response))
@@ -342,7 +348,7 @@ public sealed class GrpcProtocolTests
     {
         var protocol = BuildEventStreamServiceProtocol()
             .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
-        var response = new SmithyHttpResponse(
+        var response = new SmithyHttpClientResponse(
             System.Net.HttpStatusCode.ServiceUnavailable,
             "Service Unavailable",
             Stream.Null,
@@ -432,7 +438,7 @@ public sealed class GrpcProtocolTests
         Assert.Contains(new KeyValuePair<string, string>("grpc-message", "kaboom"), trailers);
     }
 
-    private static SmithyHttpResponse EventStreamResponse(IEnumerable<byte[]> payloads) =>
+    private static SmithyHttpClientResponse EventStreamResponse(IEnumerable<byte[]> payloads) =>
         new(
             System.Net.HttpStatusCode.OK,
             null,
@@ -582,8 +588,8 @@ public sealed class GrpcProtocolTests
 
     // Simulates the unary wire: the server response's body is drained to bytes and its trailers are
     // available through the response trailer accessor.
-    private static async Task<SmithyHttpResponse> ToClientResponseAsync(
-        SmithyServerResponse response
+    private static async Task<SmithyHttpClientResponse> ToClientResponseAsync(
+        SmithyHttpServerResponse response
     )
     {
         var buffer = new MemoryStream();
@@ -620,7 +626,7 @@ public sealed class GrpcProtocolTests
                 )
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        return new SmithyHttpResponse(
+        return new SmithyHttpClientResponse(
             (System.Net.HttpStatusCode)response.StatusCode,
             null,
             new SmithyHttpBody.Bytes(buffer.ToArray()),

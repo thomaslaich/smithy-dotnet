@@ -841,7 +841,7 @@ public sealed class RestJson1ProtocolTests
             traits: [RestTraits.HttpTrait("GET", "/users/{userId}/avatar")]
         );
         var payload = new MemoryStream("avatar bytes"u8.ToArray());
-        var response = new SmithyHttpResponse(
+        var response = new SmithyHttpClientResponse(
             HttpStatusCode.OK,
             null,
             new SmithyHttpBody.Streaming(payload),
@@ -886,7 +886,7 @@ public sealed class RestJson1ProtocolTests
         Assert.Equal("avatar bytes", Encoding.UTF8.GetString(await DrainAsync(response)));
     }
 
-    private static async Task<byte[]> DrainAsync(SmithyServerResponse response)
+    private static async Task<byte[]> DrainAsync(SmithyHttpServerResponse response)
     {
         var buffer = new MemoryStream();
         await foreach (var chunk in response.Body)
@@ -901,7 +901,7 @@ public sealed class RestJson1ProtocolTests
     public async Task ServerResponseFromHttpPreservesStreamingBlobLength()
     {
         var payload = new MemoryStream("avatar bytes"u8.ToArray());
-        var response = new SmithyHttpResponse(
+        var response = new SmithyHttpClientResponse(
             HttpStatusCode.OK,
             null,
             new SmithyHttpBody.Streaming(payload, payload.Length),
@@ -912,7 +912,7 @@ public sealed class RestJson1ProtocolTests
             }
         );
 
-        var serverResponse = SmithyServerResponse.FromHttp(response);
+        var serverResponse = SmithyHttpServerResponse.FromHttp(response);
 
         Assert.Equal(payload.Length, serverResponse.ContentLength);
         var buffer = new MemoryStream();
@@ -1144,7 +1144,7 @@ public sealed class RestJson1ProtocolTests
             outputSchema,
             traits: [RestTraits.HttpTrait("GET", "/users/{userId}")]
         );
-        var response = new SmithyHttpResponse(
+        var response = new SmithyHttpClientResponse(
             HttpStatusCode.Created,
             null,
             Encoding.UTF8.GetBytes("{\"displayName\":\"Ada\"}"),

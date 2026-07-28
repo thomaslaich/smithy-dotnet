@@ -97,7 +97,7 @@ public sealed class RpcV2CborProtocol : IProtocol
             return request;
         }
 
-        public TOutput DeserializeResponse(SmithyHttpResponse response)
+        public TOutput DeserializeResponse(SmithyHttpClientResponse response)
         {
             ArgumentNullException.ThrowIfNull(response);
             if (outputIsSmithyUnit)
@@ -123,18 +123,18 @@ public sealed class RpcV2CborProtocol : IProtocol
             return content.Length == 0 ? default! : requestCodec.Deserialize(content);
         }
 
-        public SmithyServerResponse SerializeResponse(TOutput output)
+        public SmithyHttpServerResponse SerializeResponse(TOutput output)
         {
             if (outputIsUnit)
             {
-                return SmithyServerResponse.Unary(
+                return SmithyHttpServerResponse.Unary(
                     200,
                     ReadOnlyMemory<byte>.Empty,
                     headers => headers["Smithy-Protocol"] = ["rpc-v2-cbor"]
                 );
             }
 
-            return SmithyServerResponse.Unary(
+            return SmithyHttpServerResponse.Unary(
                 200,
                 responseCodec.Serialize(output),
                 headers =>
@@ -145,12 +145,13 @@ public sealed class RpcV2CborProtocol : IProtocol
             );
         }
 
-        public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
+        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
+            (int)response.StatusCode >= 400;
 
         // rpcv2Cbor errors always carry an explicit __type discriminator; without one the
         // response carries no modeled error, and the HTTP status maps to no error shape.
         public ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpResponse response,
+            SmithyHttpClientResponse response,
             CancellationToken cancellationToken = default
         ) =>
             ValueTask.FromResult(
@@ -163,10 +164,10 @@ public sealed class RpcV2CborProtocol : IProtocol
                 )
             );
 
-        public bool TrySerializeError(Exception exception, out SmithyServerResponse response) =>
+        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
             serverErrors.TrySerialize(exception, out response);
 
-        private static (Type, Func<Exception, SmithyServerResponse>) CompileServerError<TError>(
+        private static (Type, Func<Exception, SmithyHttpServerResponse>) CompileServerError<TError>(
             OperationErrorSchema<TError> error
         )
             where TError : Exception =>
@@ -205,7 +206,7 @@ public sealed class RpcV2CborProtocol : IProtocol
     /// <c>__type</c> discriminator (the absolute shape id) plus the error's members, with the
     /// supplied HTTP status code and the protocol header.
     /// </summary>
-    public static SmithyServerResponse SerializeError<TError>(
+    public static SmithyHttpServerResponse SerializeError<TError>(
         Schema<TError> errorSchema,
         TError error,
         string errorShapeId,
@@ -215,7 +216,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         ArgumentNullException.ThrowIfNull(errorSchema);
         ArgumentNullException.ThrowIfNull(errorShapeId);
 
-        return SmithyServerResponse.Unary(
+        return SmithyHttpServerResponse.Unary(
             statusCode,
             CborCodec.SerializeError(errorSchema, error, errorShapeId),
             headers =>
@@ -237,14 +238,14 @@ public sealed class RpcV2CborProtocol : IProtocol
         return codec.Deserialize(content);
     }
 
-    public static bool HasResponse(SmithyHttpResponse response)
+    public static bool HasResponse(SmithyHttpClientResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
         return response.Headers.TryGetValue("Smithy-Protocol", out var values)
             && values.Any(value => string.Equals(value, "rpc-v2-cbor", StringComparison.Ordinal));
     }
 
-    public static void EnsureResponse(SmithyHttpResponse response)
+    public static void EnsureResponse(SmithyHttpClientResponse response)
     {
         if (!HasResponse(response))
         {
@@ -254,7 +255,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         }
     }
 
-    public static string? DeserializeErrorType(SmithyHttpResponse response)
+    public static string? DeserializeErrorType(SmithyHttpClientResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
         return DeserializeErrorType(response.Content);

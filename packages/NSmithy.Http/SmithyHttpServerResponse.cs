@@ -8,7 +8,7 @@ namespace NSmithy.Http;
 /// protocol trailers — behind one type, so the host writes them uniformly and holds no wire
 /// knowledge of any protocol.
 /// </summary>
-public sealed class SmithyServerResponse
+public sealed class SmithyHttpServerResponse
 {
     public int StatusCode { get; init; } = 200;
 
@@ -37,13 +37,13 @@ public sealed class SmithyServerResponse
     public Func<Exception?, IReadOnlyList<KeyValuePair<string, string>>>? Trailers { get; init; }
 
     /// <summary>Creates a unary response from a single buffered body chunk.</summary>
-    public static SmithyServerResponse Unary(
+    public static SmithyHttpServerResponse Unary(
         int statusCode,
         ReadOnlyMemory<byte> body,
         Action<IDictionary<string, IReadOnlyList<string>>>? headers = null
     )
     {
-        var response = new SmithyServerResponse
+        var response = new SmithyHttpServerResponse
         {
             StatusCode = statusCode,
             Body = SingleChunk(body),
@@ -54,17 +54,17 @@ public sealed class SmithyServerResponse
     }
 
     /// <summary>
-    /// Adapts a <see cref="SmithyHttpResponse"/> into a server response. A protocol whose unary
-    /// serialization already produces a <see cref="SmithyHttpResponse"/> converts at the boundary:
+    /// Adapts a <see cref="SmithyHttpClientResponse"/> into a server response. A protocol whose unary
+    /// serialization already produces a <see cref="SmithyHttpClientResponse"/> converts at the boundary:
     /// the two header collections merge (a response is written to one header set), and the body
     /// becomes write-ready chunks with a known length for buffered bodies.
     /// </summary>
-    public static SmithyServerResponse FromHttp(SmithyHttpResponse response)
+    public static SmithyHttpServerResponse FromHttp(SmithyHttpClientResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
 
         var (body, length) = ToChunks(response.Body);
-        var result = new SmithyServerResponse
+        var result = new SmithyHttpServerResponse
         {
             StatusCode = (int)response.StatusCode,
             Body = body,

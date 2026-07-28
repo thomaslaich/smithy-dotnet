@@ -1,6 +1,6 @@
 namespace NSmithy.Http;
 
-public enum SmithyHttpResponseMode
+public enum SmithyHttpClientResponseMode
 {
     Buffer,
     Stream,
@@ -8,9 +8,9 @@ public enum SmithyHttpResponseMode
 
 public interface IHttpTransport
 {
-    Task<SmithyHttpResponse> SendAsync(
+    Task<SmithyHttpClientResponse> SendAsync(
         SmithyHttpRequest request,
-        SmithyHttpResponseMode responseMode,
+        SmithyHttpClientResponseMode responseMode,
         CancellationToken cancellationToken = default
     );
 }

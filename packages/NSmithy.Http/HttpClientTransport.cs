@@ -12,9 +12,9 @@ public sealed class HttpClientTransport : IHttpTransport
         this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
     }
 
-    public Task<SmithyHttpResponse> SendAsync(
+    public Task<SmithyHttpClientResponse> SendAsync(
         SmithyHttpRequest request,
-        SmithyHttpResponseMode responseMode,
+        SmithyHttpClientResponseMode responseMode,
         CancellationToken cancellationToken = default
     )
     {
@@ -22,9 +22,9 @@ public sealed class HttpClientTransport : IHttpTransport
         return SendCoreAsync(request, responseMode, cancellationToken);
     }
 
-    private async Task<SmithyHttpResponse> SendCoreAsync(
+    private async Task<SmithyHttpClientResponse> SendCoreAsync(
         SmithyHttpRequest request,
-        SmithyHttpResponseMode responseMode,
+        SmithyHttpClientResponseMode responseMode,
         CancellationToken cancellationToken
     )
     {
@@ -32,12 +32,12 @@ public sealed class HttpClientTransport : IHttpTransport
         var response = await httpClient
             .SendAsync(message, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
             .ConfigureAwait(false);
-        if (responseMode == SmithyHttpResponseMode.Stream)
+        if (responseMode == SmithyHttpClientResponseMode.Stream)
         {
             var contentHeaders = response.Content is null
                 ? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
                 : ToHeaderDictionary(response.Content.Headers);
-            return new SmithyHttpResponse(
+            return new SmithyHttpClientResponse(
                 response.StatusCode,
                 response.ReasonPhrase,
                 new SmithyHttpBody.Streaming(
@@ -62,7 +62,7 @@ public sealed class HttpClientTransport : IHttpTransport
             ? []
             : await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
 
-        return new SmithyHttpResponse(
+        return new SmithyHttpClientResponse(
             response.StatusCode,
             response.ReasonPhrase,
             content.Length == 0 ? SmithyHttpBody.Empty : new SmithyHttpBody.Bytes(content),

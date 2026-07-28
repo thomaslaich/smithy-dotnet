@@ -7,7 +7,7 @@ namespace NSmithy.Server;
 /// owns the dispatch algorithm — deserialize the request, invoke the handler, serialize the
 /// response or a modeled error — for every protocol and operation shape, so generated code and host
 /// adapters carry none of it. It takes a neutral <see cref="SmithyHttpRequest"/> and returns a
-/// neutral <see cref="SmithyServerResponse"/>; a host adapter owns conversion to and from the host
+/// neutral <see cref="SmithyHttpServerResponse"/>; a host adapter owns conversion to and from the host
 /// framework's types. Instance-based so server interceptors and telemetry can attach here later, as
 /// they do on <c>SmithyClientRuntime</c>.
 /// </summary>
@@ -17,7 +17,7 @@ public sealed class SmithyServerRuntime
     /// Unary dispatch: deserialize, invoke, serialize — with the operation's modeled errors caught
     /// once, for every protocol. An unmodeled exception rethrows (surfaced as a 500 by the host).
     /// </summary>
-    public async Task<SmithyServerResponse> DispatchAsync<TInput, TOutput>(
+    public async Task<SmithyHttpServerResponse> DispatchAsync<TInput, TOutput>(
         IServerOperationProtocol<TInput, TOutput> protocol,
         SmithyHttpRequest request,
         Func<TInput, CancellationToken, Task<TOutput>> handler,
@@ -42,7 +42,7 @@ public sealed class SmithyServerRuntime
     }
 
     /// <summary>Output-stream dispatch: unary request in, events out.</summary>
-    public SmithyServerResponse DispatchOutputStream<TInput, TOutputEvent>(
+    public SmithyHttpServerResponse DispatchOutputStream<TInput, TOutputEvent>(
         IOutputEventStreamServerProtocol<TInput, TOutputEvent> protocol,
         SmithyHttpRequest request,
         Func<TInput, CancellationToken, IAsyncEnumerable<TOutputEvent>> handler,
@@ -58,7 +58,7 @@ public sealed class SmithyServerRuntime
     }
 
     /// <summary>Input-stream dispatch: events in, unary response out.</summary>
-    public async Task<SmithyServerResponse> DispatchInputStreamAsync<TInputEvent, TOutput>(
+    public async Task<SmithyHttpServerResponse> DispatchInputStreamAsync<TInputEvent, TOutput>(
         IInputEventStreamServerProtocol<TInputEvent, TOutput> protocol,
         SmithyHttpRequest request,
         Func<IAsyncEnumerable<TInputEvent>, CancellationToken, Task<TOutput>> handler,
@@ -75,7 +75,7 @@ public sealed class SmithyServerRuntime
     }
 
     /// <summary>Duplex-stream dispatch: events in both directions.</summary>
-    public SmithyServerResponse DispatchDuplexStream<TInputEvent, TOutputEvent>(
+    public SmithyHttpServerResponse DispatchDuplexStream<TInputEvent, TOutputEvent>(
         IDuplexEventStreamServerProtocol<TInputEvent, TOutputEvent> protocol,
         SmithyHttpRequest request,
         Func<

@@ -401,19 +401,19 @@ public interface IServiceProtocol
 public interface IClientOperationProtocol<TInput, TOutput>
 {
     SmithyHttpRequest SerializeRequest(TInput input);
-    TOutput           DeserializeResponse(SmithyHttpResponse response);
+    TOutput           DeserializeResponse(SmithyHttpClientResponse response);
 
-    bool IsErrorResponse(SmithyHttpResponse response);
+    bool IsErrorResponse(SmithyHttpClientResponse response);
     ValueTask<Exception?> DeserializeErrorAsync(
-        SmithyHttpResponse response,
+        SmithyHttpClientResponse response,
         CancellationToken cancellationToken = default);
 }
 
 public interface IServerOperationProtocol<TInput, TOutput>
 {
     TInput             DeserializeRequest(SmithyHttpRequest request);
-    SmithyHttpResponse SerializeResponse(TOutput output);
-    SmithyHttpResponse SerializeError<TError>(
+    SmithyHttpClientResponse SerializeResponse(TOutput output);
+    SmithyHttpClientResponse SerializeError<TError>(
         Schema<TError> errorSchema, TError value, string errorShapeId, int statusCode);
 }
 

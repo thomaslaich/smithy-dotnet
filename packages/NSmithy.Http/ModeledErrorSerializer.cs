@@ -4,16 +4,16 @@ namespace NSmithy.Http;
 
 /// <summary>
 /// Matches a thrown exception against an operation's modeled errors and serializes it to a
-/// <see cref="SmithyServerResponse"/>. Built once per operation from the operation schema, so a
+/// <see cref="SmithyHttpServerResponse"/>. Built once per operation from the operation schema, so a
 /// protocol's <c>TrySerializeError</c> is entirely schema-driven — the shape id and status code
 /// come from each <see cref="OperationErrorSchema{TError}"/>, never from generated literals.
 /// </summary>
 public sealed class ModeledErrorSerializer
 {
-    private readonly (Type ClrType, Func<Exception, SmithyServerResponse> Serialize)[] handlers;
+    private readonly (Type ClrType, Func<Exception, SmithyHttpServerResponse> Serialize)[] handlers;
 
     private ModeledErrorSerializer(
-        (Type ClrType, Func<Exception, SmithyServerResponse> Serialize)[] handlers
+        (Type ClrType, Func<Exception, SmithyHttpServerResponse> Serialize)[] handlers
     )
     {
         this.handlers = handlers;
@@ -29,7 +29,7 @@ public sealed class ModeledErrorSerializer
         IReadOnlyList<IOperationErrorSchema> errors,
         Func<
             IOperationErrorSchema,
-            (Type ClrType, Func<Exception, SmithyServerResponse> Serialize)
+            (Type ClrType, Func<Exception, SmithyHttpServerResponse> Serialize)
         > compile
     )
     {
@@ -42,7 +42,7 @@ public sealed class ModeledErrorSerializer
     /// Serializes <paramref name="exception"/> when it is one of the operation's modeled errors.
     /// Returns false otherwise, leaving the runtime to rethrow (surfaced as a 500 by the host).
     /// </summary>
-    public bool TrySerialize(Exception exception, out SmithyServerResponse response)
+    public bool TrySerialize(Exception exception, out SmithyHttpServerResponse response)
     {
         ArgumentNullException.ThrowIfNull(exception);
         foreach (var (clrType, serialize) in handlers)

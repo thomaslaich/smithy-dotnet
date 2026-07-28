@@ -14,7 +14,7 @@ namespace NSmithy.Protocols.Rest;
 /// </summary>
 public sealed class RestServiceProtocol(
     IRestBodyCodecFactory codecFactory,
-    Func<SmithyHttpResponse, string?> errorDiscriminator,
+    Func<SmithyHttpClientResponse, string?> errorDiscriminator,
     bool rawStringPayloads,
     string? errorTypeHeader
 ) : IServiceProtocol
@@ -45,7 +45,7 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
     RestOperationBinding<TInput, TOutput> binding,
     IReadOnlyList<IOperationErrorSchema> modeledErrors,
     IRestBodyCodecFactory codecFactory,
-    Func<SmithyHttpResponse, string?> errorDiscriminator,
+    Func<SmithyHttpClientResponse, string?> errorDiscriminator,
     bool rawStringPayloads,
     string? errorTypeHeader,
     Action<SmithyHttpRequest>? requestTransform = null
@@ -71,21 +71,22 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
         return request;
     }
 
-    public TOutput DeserializeResponse(SmithyHttpResponse response) =>
+    public TOutput DeserializeResponse(SmithyHttpClientResponse response) =>
         RestProtocol.DeserializeResponse(binding, response);
 
     public TInput DeserializeRequest(SmithyHttpRequest request) =>
         RestProtocol.DeserializeRequest(binding, request);
 
-    public SmithyServerResponse SerializeResponse(TOutput output) =>
-        SmithyServerResponse.FromHttp(RestProtocol.SerializeResponse(binding, output));
+    public SmithyHttpServerResponse SerializeResponse(TOutput output) =>
+        SmithyHttpServerResponse.FromHttp(RestProtocol.SerializeResponse(binding, output));
 
-    public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
+    public bool IsErrorResponse(SmithyHttpClientResponse response) =>
+        (int)response.StatusCode >= 400;
 
     // REST errors may carry a discriminator header, but a response without one can still resolve
     // via the HTTP status code.
     public ValueTask<Exception?> DeserializeErrorAsync(
-        SmithyHttpResponse response,
+        SmithyHttpClientResponse response,
         CancellationToken cancellationToken = default
     ) =>
         ValueTask.FromResult(
@@ -98,10 +99,10 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
             )
         );
 
-    public bool TrySerializeError(Exception exception, out SmithyServerResponse response) =>
+    public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
         serverErrors.TrySerialize(exception, out response);
 
-    private static (Type, Func<Exception, SmithyServerResponse>) CompileServerError<TError>(
+    private static (Type, Func<Exception, SmithyHttpServerResponse>) CompileServerError<TError>(
         OperationErrorSchema<TError> error,
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads,
@@ -111,7 +112,7 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
         (
             typeof(TError),
             exception =>
-                SmithyServerResponse.FromHttp(
+                SmithyHttpServerResponse.FromHttp(
                     RestProtocol.SerializeError(
                         error.Schema,
                         (TError)exception,

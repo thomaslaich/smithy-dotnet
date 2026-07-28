@@ -16,7 +16,7 @@ public sealed class HttpClientTransportTests
                 HttpMethod.Get,
                 "https://example.test/base/forecast?units=metric"
             ),
-            SmithyHttpResponseMode.Buffer
+            SmithyHttpClientResponseMode.Buffer
         );
     }
 
@@ -31,7 +31,7 @@ public sealed class HttpClientTransportTests
                 HttpMethod.Post,
                 "https://example.test/example.greeter.Greeter/SayHello"
             ),
-            SmithyHttpResponseMode.Buffer
+            SmithyHttpClientResponseMode.Buffer
         );
 
         // grpc-status arrives as an HTTP/2 trailer; the transport keeps it out of headers.

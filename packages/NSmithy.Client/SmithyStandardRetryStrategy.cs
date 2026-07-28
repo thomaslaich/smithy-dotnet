@@ -191,7 +191,7 @@ public sealed class SmithyStandardRetryStrategy : ISmithyRetryStrategy
         return TimeSpan.FromMilliseconds(cappedMs * sample);
     }
 
-    private TimeSpan? RetryAfterDelay(SmithyHttpResponse? response)
+    private TimeSpan? RetryAfterDelay(SmithyHttpClientResponse? response)
     {
         if (
             response is null

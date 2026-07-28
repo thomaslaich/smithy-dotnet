@@ -22,8 +22,8 @@ public static class OperationProtocolErrors
     /// </param>
     public static Exception? DeserializeModeledError(
         IReadOnlyList<HttpOperationError> errors,
-        SmithyHttpResponse response,
-        Func<SmithyHttpResponse, string?> errorDiscriminator,
+        SmithyHttpClientResponse response,
+        Func<SmithyHttpClientResponse, string?> errorDiscriminator,
         bool requiresErrorDiscriminator,
         bool supportsHttpStatusErrorFallback
     )

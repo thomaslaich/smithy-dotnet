@@ -123,20 +123,20 @@ the `SmithyHttpBody` union, `EventStreaming` (`IAsyncEnumerable<ReadOnlyMemory<b
 each chunk written and flushed as one unit), so every client request is a
 `SmithyHttpRequest`: output-stream requests carry a `Bytes` body (unary),
 	input-stream and duplex requests carry an `EventStreaming` body. The response is
-	a single `SmithyHttpResponse`; the runtime asks the transport for either a
+	a single `SmithyHttpClientResponse`; the runtime asks the transport for either a
 	buffered body or a live body:
 
 ```csharp
 public interface IHttpTransport
 {
-    Task<SmithyHttpResponse> SendAsync(
+    Task<SmithyHttpClientResponse> SendAsync(
         SmithyHttpRequest request,
-        SmithyHttpResponseMode responseMode,
+        SmithyHttpClientResponseMode responseMode,
         CancellationToken cancellationToken = default);
 }
 ```
 
-In `Buffer` mode, `SmithyHttpResponse.Body` is `Bytes` or `Empty`, and trailers
+In `Buffer` mode, `SmithyHttpClientResponse.Body` is `Bytes` or `Empty`, and trailers
 are available through `Trailer` because the body has already been read. In
 `Stream` mode, `Body` is `SmithyHttpBody.Streaming`, `Trailer` resolves HTTP
 trailing headers once the stream is read to its end, and disposing the stream
@@ -169,7 +169,7 @@ public abstract record SmithyHttpBody
 }
 ```
 
-`SmithyHttpRequest` and `SmithyHttpResponse` carry a non-nullable
+`SmithyHttpRequest` and `SmithyHttpClientResponse` carry a non-nullable
 `SmithyHttpBody` that defaults to `SmithyHttpBody.Empty`. Protocols that buffer
 payloads use `SmithyHttpBody.Bytes`; protocols that bind a streaming blob payload
 use `SmithyHttpBody.Streaming`.

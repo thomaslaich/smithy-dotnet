@@ -189,9 +189,9 @@ public sealed class SmithyClientTelemetryTests : IDisposable
             new TextProtocol()
         );
 
-    private static SmithyHttpResponse Ok() => Response(HttpStatusCode.OK);
+    private static SmithyHttpClientResponse Ok() => Response(HttpStatusCode.OK);
 
-    private static SmithyHttpResponse Response(HttpStatusCode statusCode) =>
+    private static SmithyHttpClientResponse Response(HttpStatusCode statusCode) =>
         new(
             statusCode,
             statusCode.ToString(),
@@ -203,22 +203,23 @@ public sealed class SmithyClientTelemetryTests : IDisposable
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> EmptyHeaders { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
-    private sealed class StaticTransport(SmithyHttpResponse response) : IHttpTransport
+    private sealed class StaticTransport(SmithyHttpClientResponse response) : IHttpTransport
     {
-        public Task<SmithyHttpResponse> SendAsync(
+        public Task<SmithyHttpClientResponse> SendAsync(
             SmithyHttpRequest request,
-            SmithyHttpResponseMode responseMode,
+            SmithyHttpClientResponseMode responseMode,
             CancellationToken cancellationToken = default
         ) => Task.FromResult(response);
     }
 
-    private sealed class SequenceTransport(params SmithyHttpResponse[] responses) : IHttpTransport
+    private sealed class SequenceTransport(params SmithyHttpClientResponse[] responses)
+        : IHttpTransport
     {
         private int attempts;
 
-        public Task<SmithyHttpResponse> SendAsync(
+        public Task<SmithyHttpClientResponse> SendAsync(
             SmithyHttpRequest request,
-            SmithyHttpResponseMode responseMode,
+            SmithyHttpClientResponseMode responseMode,
             CancellationToken cancellationToken = default
         )
         {
@@ -233,12 +234,13 @@ public sealed class SmithyClientTelemetryTests : IDisposable
         public SmithyHttpRequest SerializeRequest(string input) =>
             new(HttpMethod.Post, $"/{input}");
 
-        public string DeserializeResponse(SmithyHttpResponse response) => "output";
+        public string DeserializeResponse(SmithyHttpClientResponse response) => "output";
 
-        public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
+        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
+            (int)response.StatusCode >= 400;
 
         public ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpResponse response,
+            SmithyHttpClientResponse response,
             CancellationToken cancellationToken = default
         ) => ValueTask.FromResult<Exception?>(null);
     }

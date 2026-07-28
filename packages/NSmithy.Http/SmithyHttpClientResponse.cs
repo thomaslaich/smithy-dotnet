@@ -3,7 +3,7 @@ using System.Text;
 
 namespace NSmithy.Http;
 
-public sealed record SmithyHttpResponse(
+public sealed record SmithyHttpClientResponse(
     HttpStatusCode StatusCode,
     string? ReasonPhrase,
     SmithyHttpBody Body,
@@ -12,7 +12,7 @@ public sealed record SmithyHttpResponse(
     Func<string, string?>? Trailer = null
 )
 {
-    public SmithyHttpResponse(
+    public SmithyHttpClientResponse(
         HttpStatusCode statusCode,
         string? reasonPhrase,
         byte[] content,
@@ -28,7 +28,7 @@ public sealed record SmithyHttpResponse(
             null
         ) { }
 
-    public SmithyHttpResponse(
+    public SmithyHttpClientResponse(
         HttpStatusCode statusCode,
         string? reasonPhrase,
         Stream content,
@@ -49,7 +49,7 @@ public sealed record SmithyHttpResponse(
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Performance",
         "CA1819:Properties should not return arrays",
-        Justification = "SmithyHttpResponse exposes buffered wire bytes for protocol codecs."
+        Justification = "SmithyHttpClientResponse exposes buffered wire bytes for protocol codecs."
     )]
     public byte[] Content => Body is SmithyHttpBody.Bytes bytes ? bytes.Content : [];
 

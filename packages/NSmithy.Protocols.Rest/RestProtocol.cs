@@ -143,7 +143,7 @@ public static class RestProtocol
         return (TInput)binding.InputSchema.BuildObject(builder);
     }
 
-    public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
+    public static SmithyHttpClientResponse SerializeResponse<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
         TOutput output
     )
@@ -184,12 +184,18 @@ public static class RestProtocol
             contentHeaders["Content-Type"] = [binding.BodyContentType];
         }
 
-        return new SmithyHttpResponse(statusCode, null, responseBody, headers, contentHeaders);
+        return new SmithyHttpClientResponse(
+            statusCode,
+            null,
+            responseBody,
+            headers,
+            contentHeaders
+        );
     }
 
     public static TOutput DeserializeResponse<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
-        SmithyHttpResponse response
+        SmithyHttpClientResponse response
     )
     {
         ArgumentNullException.ThrowIfNull(binding);
@@ -363,7 +369,7 @@ public static class RestProtocol
     /// <c>X-Amzn-Errortype</c> discriminator carrying the error's shape name, the error's HTTP
     /// header/payload bindings, and a body holding the remaining members (at minimum <c>{}</c>).
     /// </summary>
-    public static SmithyHttpResponse SerializeError<TError>(
+    public static SmithyHttpClientResponse SerializeError<TError>(
         Schema<TError> errorSchema,
         TError value,
         string errorShapeId,
@@ -442,7 +448,7 @@ public static class RestProtocol
             contentHeaders["Content-Type"] = [codecFactory.ContentType];
         }
 
-        return new SmithyHttpResponse(
+        return new SmithyHttpClientResponse(
             (HttpStatusCode)statusCode,
             null,
             ToHttpBody(content),

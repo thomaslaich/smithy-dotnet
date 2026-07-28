@@ -17,7 +17,7 @@ namespace NSmithy.Protocols.Grpc;
 /// </summary>
 /// <remarks>
 /// The <c>grpc-status</c>/<c>grpc-message</c> trailers are protocol-owned content: server halves
-/// attach them through <see cref="SmithyServerResponse.Trailers"/>, and the host adapter renders
+/// attach them through <see cref="SmithyHttpServerResponse.Trailers"/>, and the host adapter renders
 /// them as HTTP/2 trailers (or leading headers when the connection cannot carry trailers).
 /// </remarks>
 public sealed class GrpcProtocol : IProtocol
@@ -163,7 +163,7 @@ public sealed class GrpcProtocol : IProtocol
             return request;
         }
 
-        public TOutput DeserializeResponse(SmithyHttpResponse response)
+        public TOutput DeserializeResponse(SmithyHttpClientResponse response)
         {
             ArgumentNullException.ThrowIfNull(response);
             EnsureGrpcStreamingResponse(response);
@@ -190,19 +190,19 @@ public sealed class GrpcProtocol : IProtocol
             return requestCodec!.Deserialize(payload);
         }
 
-        public SmithyServerResponse SerializeResponse(TOutput output) =>
+        public SmithyHttpServerResponse SerializeResponse(TOutput output) =>
             UnaryGrpcResponse(
                 GrpcMessageFraming.Frame(outputIsUnit ? [] : responseCodec!.Serialize(output)),
                 OkTrailers
             );
 
-        public bool IsErrorResponse(SmithyHttpResponse response) =>
+        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
             GrpcProtocol.IsErrorResponse(response);
 
         // gRPC errors are discriminated by the error-shape trailer; the HTTP status is always
         // 200 and maps to no error shape.
         public ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpResponse response,
+            SmithyHttpClientResponse response,
             CancellationToken cancellationToken = default
         ) =>
             ValueTask.FromResult(
@@ -215,7 +215,7 @@ public sealed class GrpcProtocol : IProtocol
                 )
             );
 
-        private static string? ErrorDiscriminator(SmithyHttpResponse response)
+        private static string? ErrorDiscriminator(SmithyHttpClientResponse response)
         {
             ArgumentNullException.ThrowIfNull(response);
             return GrpcProtocol.IsErrorResponse(response)
@@ -223,10 +223,10 @@ public sealed class GrpcProtocol : IProtocol
                 : null;
         }
 
-        public bool TrySerializeError(Exception exception, out SmithyServerResponse response) =>
+        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
             serverErrors.TrySerialize(exception, out response);
 
-        private static (Type, Func<Exception, SmithyServerResponse>) CompileServerError<TError>(
+        private static (Type, Func<Exception, SmithyHttpServerResponse>) CompileServerError<TError>(
             OperationErrorSchema<TError> error
         )
             where TError : Exception =>
@@ -241,7 +241,7 @@ public sealed class GrpcProtocol : IProtocol
                     )
             );
 
-        private static SmithyServerResponse SerializeGrpcError<TError>(
+        private static SmithyHttpServerResponse SerializeGrpcError<TError>(
             Schema<TError> errorSchema,
             TError value,
             string errorShapeId,
@@ -330,7 +330,7 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-            SmithyHttpResponse response,
+            SmithyHttpClientResponse response,
             CancellationToken cancellationToken = default
         )
         {
@@ -339,7 +339,7 @@ public sealed class GrpcProtocol : IProtocol
             return ReadResponseEventsAsync(response, responseCodec, cancellationToken);
         }
 
-        public SmithyServerResponse SerializeResponse(
+        public SmithyHttpServerResponse SerializeResponse(
             IAsyncEnumerable<TOutputEvent> output,
             CancellationToken cancellationToken = default
         )
@@ -399,7 +399,7 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public ValueTask<TOutput> DeserializeResponseAsync(
-            SmithyHttpResponse response,
+            SmithyHttpClientResponse response,
             CancellationToken cancellationToken = default
         )
         {
@@ -414,7 +414,7 @@ public sealed class GrpcProtocol : IProtocol
             return DeserializeSingleResponseAsync(response, responseCodec!, cancellationToken);
         }
 
-        public SmithyServerResponse SerializeResponse(TOutput output) =>
+        public SmithyHttpServerResponse SerializeResponse(TOutput output) =>
             UnaryGrpcResponse(
                 GrpcMessageFraming.Frame(outputIsUnit ? [] : responseCodec!.Serialize(output)),
                 OkTrailers
@@ -466,7 +466,7 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-            SmithyHttpResponse response,
+            SmithyHttpClientResponse response,
             CancellationToken cancellationToken = default
         )
         {
@@ -475,7 +475,7 @@ public sealed class GrpcProtocol : IProtocol
             return ReadResponseEventsAsync(response, responseCodec, cancellationToken);
         }
 
-        public SmithyServerResponse SerializeResponse(
+        public SmithyHttpServerResponse SerializeResponse(
             IAsyncEnumerable<TOutputEvent> output,
             CancellationToken cancellationToken = default
         )
@@ -490,12 +490,12 @@ public sealed class GrpcProtocol : IProtocol
 
     // ---------------- server response construction ----------------
 
-    private static SmithyServerResponse UnaryGrpcResponse(
+    private static SmithyHttpServerResponse UnaryGrpcResponse(
         byte[] framedBody,
         Func<Exception?, IReadOnlyList<KeyValuePair<string, string>>> trailers
     )
     {
-        var response = new SmithyServerResponse
+        var response = new SmithyHttpServerResponse
         {
             StatusCode = (int)HttpStatusCode.OK,
             Body = SingleChunk(framedBody),
@@ -506,12 +506,12 @@ public sealed class GrpcProtocol : IProtocol
         return response;
     }
 
-    private static SmithyServerResponse StreamingGrpcResponse(
+    private static SmithyHttpServerResponse StreamingGrpcResponse(
         IAsyncEnumerable<ReadOnlyMemory<byte>> body,
         Func<Exception?, IReadOnlyList<KeyValuePair<string, string>>> trailers
     )
     {
-        var response = new SmithyServerResponse
+        var response = new SmithyHttpServerResponse
         {
             StatusCode = (int)HttpStatusCode.OK,
             Body = body,
@@ -547,7 +547,7 @@ public sealed class GrpcProtocol : IProtocol
 
     // ---------------- shared wire helpers ----------------
 
-    private static bool IsErrorResponse(SmithyHttpResponse response)
+    private static bool IsErrorResponse(SmithyHttpClientResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
         // A non-zero grpc-status is a modeled/runtime gRPC error.
@@ -563,7 +563,7 @@ public sealed class GrpcProtocol : IProtocol
         return response.StatusCode != HttpStatusCode.OK || !IsGrpcContentType(response);
     }
 
-    private static void EnsureGrpcStreamingResponse(SmithyHttpResponse response)
+    private static void EnsureGrpcStreamingResponse(SmithyHttpClientResponse response)
     {
         if (response.StatusCode == HttpStatusCode.OK && IsGrpcContentType(response.ContentHeaders))
         {
@@ -661,7 +661,7 @@ public sealed class GrpcProtocol : IProtocol
     }
 
     private static async IAsyncEnumerable<T> ReadResponseEventsAsync<T>(
-        SmithyHttpResponse response,
+        SmithyHttpClientResponse response,
         IProtoCodec<T> codec,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
@@ -687,7 +687,7 @@ public sealed class GrpcProtocol : IProtocol
     }
 
     private static async ValueTask<T> DeserializeSingleResponseAsync<T>(
-        SmithyHttpResponse response,
+        SmithyHttpClientResponse response,
         IProtoCodec<T> codec,
         CancellationToken cancellationToken
     )
@@ -708,10 +708,10 @@ public sealed class GrpcProtocol : IProtocol
         return default!;
     }
 
-    private static bool IsGrpcContentType(SmithyHttpResponse response) =>
+    private static bool IsGrpcContentType(SmithyHttpClientResponse response) =>
         IsGrpcContentType(response.ContentHeaders);
 
-    private static Stream ResponseStream(SmithyHttpResponse response) =>
+    private static Stream ResponseStream(SmithyHttpClientResponse response) =>
         response.Body switch
         {
             SmithyHttpBody.Streaming streaming => streaming.Content,
@@ -719,7 +719,7 @@ public sealed class GrpcProtocol : IProtocol
             _ => Stream.Null,
         };
 
-    private static void DisposeResponseBody(SmithyHttpResponse response)
+    private static void DisposeResponseBody(SmithyHttpClientResponse response)
     {
         if (response.Body is SmithyHttpBody.Streaming streaming)
         {
@@ -738,7 +738,7 @@ public sealed class GrpcProtocol : IProtocol
     private static byte[] BodyBytes(SmithyHttpBody body) =>
         body is SmithyHttpBody.Bytes bytes ? bytes.Content : [];
 
-    private static void EnsureGrpcResponse(SmithyHttpResponse response)
+    private static void EnsureGrpcResponse(SmithyHttpClientResponse response)
     {
         if (response.StatusCode == HttpStatusCode.OK && IsGrpcContentType(response))
         {
