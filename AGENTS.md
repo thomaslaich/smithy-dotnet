@@ -28,7 +28,7 @@ list recipes. Key ones:
 | --- | --- |
 | `just build` | `codegen` + `restore` + `dotnet build` (Release). Run this first. |
 | `just test` | `gradle test` (codegen) then `dotnet test` (runtime + conformance). |
-| `just codegen` | Build the codegen JARs and publish to the local Maven cache (`~/.m2`). |
+| `just codegen` | Build the codegen JARs and stage the bundled Maven repo used by `NSmithy.MSBuild`. |
 | `just fmt` / `just check-format` | Run / verify `treefmt` formatting. |
 | `just pack` | Pack NuGet packages to `artifacts/packages` (used by examples). |
 | `just refresh-examples` | Re-restore/rebuild the `examples/` against freshly packed packages. |
@@ -38,7 +38,8 @@ list recipes. Key ones:
 You generally **must `just codegen` (or `just build`) before `dotnet test`**:
 the conformance projects resolve
 `io.github.thomaslaich.nsmithy:smithy-csharp-codegen:<version>-SNAPSHOT` from
-`~/.m2`, so a stale or missing JAR produces confusing codegen errors.
+the bundled Maven repo under `packages/NSmithy.MSBuild/tools/maven-repo`, so a
+stale or missing staged JAR produces confusing codegen errors.
 
 ## Repository layout
 
@@ -50,8 +51,9 @@ the conformance projects resolve
 - `tests/` — `NSmithy.Tests` (unit) and `tests/Conformance/*` (one project per
   protocol, run against the official Smithy/AWS protocol-test fixtures).
 - `examples/` — runnable end-to-end samples (`simple-rest-json`, `rest-json1`,
-  `rpcv2cbor`, `aws`, `grpc`, `polyglot`). These consume **packed** packages from
-  `artifacts/packages`, not project references — see the gotcha below.
+  `rpcv2cbor`, `aws-localstack`, `grpc`, `grpc-streaming`, `polyglot`). These
+  consume **packed** packages from `artifacts/packages`, not project references —
+  see the gotcha below.
 - `templates/NSmithy.Templates` — `dotnet new` project templates.
 - `website/` — Astro/Starlight documentation site.
 - `designs/` — design docs and architecture rationale.
@@ -59,13 +61,15 @@ the conformance projects resolve
 
 ## Conventions and gotchas
 
-- **Versioning is tag-driven.** Local builds use the `VersionPrefix` /
-  `VersionSuffix` in `Directory.Build.props` (currently `0.6.0` + `SNAPSHOT`); the
-  release workflow overrides the version from the GitHub release tag. When bumping
-  the version, update `Directory.Build.props`, `codegen/build.gradle.kts`, the
-  `NSmithy.MSBuild` targets, templates, examples, conformance `smithy-build.json`,
-  and the website docs together. Do **not** touch the unrelated `path-data-parser`
-  entry in `website/package-lock.json`.
+- **Versioning is tag-driven.** Local builds use the dev placeholder
+  `0.0.0-SNAPSHOT` from `Directory.Build.props` and the default Gradle version;
+  the user-facing version lives in the repo-root `VERSION` file, and release
+  builds override .NET/Gradle versions from the GitHub release tag. When preparing
+  a release, update `VERSION` and any docs/templates/examples that intentionally
+  mention the released version together. Keep the dev placeholders in
+  `Directory.Build.props`, `codegen/build.gradle.kts`,
+  `NSmithy.MSBuild` targets, examples, and conformance `smithy-build.json`
+  aligned at `0.0.0-SNAPSHOT`.
 - **Warnings are errors.** `Directory.Build.props` sets
   `TreatWarningsAsErrors=true` with `Recommended` analysis; keep the build clean.
 - **Formatting is enforced** via `treefmt` (csharpier for C#, etc.). Run
