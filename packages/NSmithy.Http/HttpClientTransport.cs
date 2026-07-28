@@ -62,17 +62,37 @@ public sealed class HttpClientTransport : IHttpTransport
             ? []
             : await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
 
+        // The body is fully read, so any HTTP/2 trailers have arrived. Capture the leading and
+        // trailing headers now: the returned Trailer closure must not read them off `response`,
+        // which is disposed the moment this method returns.
+        var headers = ToHeaderDictionary(response.Headers);
+        var trailers = ToHeaderDictionary(response.TrailingHeaders);
+
         return new SmithyHttpClientResponse(
             response.StatusCode,
             response.ReasonPhrase,
             content.Length == 0 ? SmithyHttpBody.Empty : new SmithyHttpBody.Bytes(content),
-            ToHeaderDictionary(response.Headers),
+            headers,
             response.Content is null
                 ? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
                 : ToHeaderDictionary(response.Content.Headers),
-            name => GetTrailer(response, name)
+            name => GetCapturedTrailer(trailers, headers, name)
         );
     }
+
+    // Buffered responses capture their trailers eagerly (the source HttpResponseMessage is disposed
+    // before the closure runs). Trailer first, then a leading header — some HTTP stacks surface a
+    // trailers-only gRPC response as an initial header block.
+    private static string? GetCapturedTrailer(
+        Dictionary<string, IReadOnlyList<string>> trailers,
+        Dictionary<string, IReadOnlyList<string>> headers,
+        string name
+    ) =>
+        trailers.TryGetValue(name, out var trailerValues) && trailerValues.Count > 0
+            ? trailerValues[0]
+        : headers.TryGetValue(name, out var headerValues) && headerValues.Count > 0
+            ? headerValues[0]
+        : null;
 
     private HttpRequestMessage CreateMessage(SmithyHttpRequest request)
     {

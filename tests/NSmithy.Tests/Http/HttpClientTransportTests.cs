@@ -54,6 +54,32 @@ public sealed class HttpClientTransportTests
         }
     }
 
+    [Fact]
+    public async Task BufferedTrailerSurvivesResponseDisposal()
+    {
+        // The transport disposes the underlying HttpResponseMessage before returning a buffered
+        // response, so the Trailer accessor must read from an eagerly captured copy — not the live
+        // (disposed) message. The handler clears its trailing headers on dispose to make a
+        // read-from-disposed-message regression observable: without the eager capture this returns
+        // null instead of the trailer value.
+        var handler = new DisposeClearingTrailerHandler();
+        using var httpClient = new HttpClient(handler);
+        var transport = new HttpClientTransport(httpClient);
+
+        var response = await transport.SendAsync(
+            new SmithyHttpRequest(
+                HttpMethod.Post,
+                "https://example.test/example.greeter.Greeter/SayHello"
+            ),
+            SmithyHttpClientResponseMode.Buffer
+        );
+
+        // The transport must have disposed the underlying message (otherwise this test proves
+        // nothing), yet the trailer must still read from the eager capture.
+        Assert.True(handler.ResponseDisposed);
+        Assert.Equal("13", response.Trailer?.Invoke("grpc-status"));
+    }
+
     private sealed class TrailerHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
@@ -67,6 +93,40 @@ public sealed class HttpClientTransportTests
             };
             response.TrailingHeaders.TryAddWithoutValidation("grpc-status", "0");
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class DisposeClearingTrailerHandler : HttpMessageHandler
+    {
+        public bool ResponseDisposed { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        )
+        {
+            var response = new DisposeClearingResponse(() => ResponseDisposed = true)
+            {
+                Content = new ByteArrayContent([]),
+            };
+            response.TrailingHeaders.TryAddWithoutValidation("grpc-status", "13");
+            return Task.FromResult<HttpResponseMessage>(response);
+        }
+
+        // Drops its trailing headers on dispose, standing in for an HTTP stack that does not keep
+        // trailers readable after the message is disposed.
+        private sealed class DisposeClearingResponse(Action onDispose) : HttpResponseMessage
+        {
+            protected override void Dispose(bool disposing)
+            {
+                if (disposing)
+                {
+                    TrailingHeaders.Clear();
+                    onDispose();
+                }
+
+                base.Dispose(disposing);
+            }
         }
     }
 }
