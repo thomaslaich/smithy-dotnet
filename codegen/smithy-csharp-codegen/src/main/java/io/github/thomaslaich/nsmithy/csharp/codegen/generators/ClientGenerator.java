@@ -92,7 +92,7 @@ public final class ClientGenerator implements Runnable {
     // callers selecting another declared protocol reference its namespace from their own code.
     writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kinds.get(0)));
     if (operations.stream().anyMatch(op -> isEventStreamOperation(model, op))
-        && supportsEventStreamOperations()) {
+        && ProtocolSupport.declaredKinds(service).contains(Kind.GRPC)) {
       writer.addImport(RuntimeTypes.NSMITHY_PROTOCOLS_GRPC);
     }
 
@@ -857,7 +857,8 @@ public final class ClientGenerator implements Runnable {
   }
 
   private boolean supportsEventStreamOperations() {
-    return ProtocolSupport.declaredKinds(service).contains(Kind.GRPC);
+    return ProtocolSupport.declaredKinds(service).stream()
+        .anyMatch(kind -> kind == Kind.GRPC || kind == Kind.RPC_V2_CBOR);
   }
 
   private boolean isInputStreaming(Model model, OperationShape op) {
