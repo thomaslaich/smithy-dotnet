@@ -127,14 +127,14 @@ public sealed class RpcV2CborProtocol : IProtocol
         {
             if (outputIsUnit)
             {
-                return SmithyHttpServerResponse.Unary(
+                return BufferedResponse(
                     200,
                     ReadOnlyMemory<byte>.Empty,
                     headers => headers["Smithy-Protocol"] = ["rpc-v2-cbor"]
                 );
             }
 
-            return SmithyHttpServerResponse.Unary(
+            return BufferedResponse(
                 200,
                 responseCodec.Serialize(output),
                 headers =>
@@ -216,7 +216,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         ArgumentNullException.ThrowIfNull(errorSchema);
         ArgumentNullException.ThrowIfNull(errorShapeId);
 
-        return SmithyHttpServerResponse.Unary(
+        return BufferedResponse(
             statusCode,
             CborCodec.SerializeError(errorSchema, error, errorShapeId),
             headers =>
@@ -225,6 +225,30 @@ public sealed class RpcV2CborProtocol : IProtocol
                 headers["Content-Type"] = [ContentType];
             }
         );
+    }
+
+    private static SmithyHttpServerResponse BufferedResponse(
+        int statusCode,
+        ReadOnlyMemory<byte> body,
+        Action<IDictionary<string, IReadOnlyList<string>>>? headers = null
+    )
+    {
+        var response = new SmithyHttpServerResponse
+        {
+            StatusCode = statusCode,
+            Body = SingleChunk(body),
+            ContentLength = body.Length,
+        };
+        headers?.Invoke(response.Headers);
+        return response;
+    }
+
+    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> SingleChunk(
+        ReadOnlyMemory<byte> chunk
+    )
+    {
+        await Task.CompletedTask.ConfigureAwait(false);
+        yield return chunk;
     }
 
     private static T DeserializeRequiredBody<T>(ICodec<T> codec, byte[] content)

@@ -33,29 +33,4 @@ public sealed class SmithyHttpServerResponse
     /// connection can carry trailers at all is the host's decision, not the protocol's.
     /// </summary>
     public Func<Exception?, IReadOnlyList<KeyValuePair<string, string>>>? Trailers { get; init; }
-
-    /// <summary>Creates a unary response from a single buffered body chunk.</summary>
-    public static SmithyHttpServerResponse Unary(
-        int statusCode,
-        ReadOnlyMemory<byte> body,
-        Action<IDictionary<string, IReadOnlyList<string>>>? headers = null
-    )
-    {
-        var response = new SmithyHttpServerResponse
-        {
-            StatusCode = statusCode,
-            Body = SingleChunk(body),
-            ContentLength = body.Length,
-        };
-        headers?.Invoke(response.Headers);
-        return response;
-    }
-
-    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> SingleChunk(
-        ReadOnlyMemory<byte> chunk
-    )
-    {
-        await Task.CompletedTask.ConfigureAwait(false);
-        yield return chunk;
-    }
 }
