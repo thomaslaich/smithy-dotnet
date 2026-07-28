@@ -110,7 +110,12 @@ final class ClientGeneratorTest {
     assertFalse(generated.contains("Streaming operations are not wired"), generated);
     assertTrue(
         generated.contains(
-            "private readonly SmithyEventStreamOperationInvoker eventStreamInvoker;"));
+            "private readonly"
+                + " SmithyOutputEventStreamOperationBinding<Example.Example.Streaming.WatchInput,"
+                + " Example.Example.Streaming.ChatEvent> WatchBinding;"));
+    assertTrue(generated.contains("return InvokeAsync();"), generated);
+    assertTrue(generated.contains("runtime.InvokeOutputStreamAsync(WatchBinding"), generated);
+    assertFalse(generated.contains("SmithyEventStreamOperationInvoker"), generated);
   }
 
   private static final String REST_PROTOCOL_TRAITS =

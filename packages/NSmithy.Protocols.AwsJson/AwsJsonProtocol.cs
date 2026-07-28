@@ -97,7 +97,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             return request;
         }
 
-        public TOutput DeserializeResponse(SmithyHttpResponse response)
+        public TOutput DeserializeResponse(SmithyHttpClientResponse response)
         {
             ArgumentNullException.ThrowIfNull(response);
             if (outputIsSmithyUnit)
@@ -126,24 +126,29 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             return content.Length == 0 ? default! : requestCodec.Deserialize(content);
         }
 
-        public SmithyHttpResponse SerializeResponse(TOutput output) =>
+        public SmithyHttpServerResponse SerializeResponse(TOutput output) =>
             throw new NotSupportedException("AWS JSON server-side serialization is not supported.");
 
-        public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
+        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
+            (int)response.StatusCode >= 400;
 
-        public string? GetErrorDiscriminator(SmithyHttpResponse response) =>
-            DeserializeErrorType(response);
-
-        public bool RequiresErrorDiscriminator => false;
-
-        public bool SupportsHttpStatusErrorFallback => true;
-
-        public SmithyHttpResponse SerializeError<TError>(
-            Schema<TError> errorSchema,
-            TError value,
-            string errorShapeId,
-            int statusCode
+        // AWS JSON errors carry a __type/code discriminator in the body, but a response without
+        // one can still resolve via the HTTP status code.
+        public ValueTask<Exception?> DeserializeErrorAsync(
+            SmithyHttpClientResponse response,
+            CancellationToken cancellationToken = default
         ) =>
+            ValueTask.FromResult(
+                OperationProtocolErrors.DeserializeModeledError(
+                    HttpErrors,
+                    response,
+                    DeserializeErrorType,
+                    requiresErrorDiscriminator: false,
+                    supportsHttpStatusErrorFallback: true
+                )
+            );
+
+        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
             throw new NotSupportedException("AWS JSON server-side serialization is not supported.");
 
         private static TOutput CreateEmptyOutput(Schema<TOutput> schema)
@@ -178,7 +183,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         }
     }
 
-    public static string? DeserializeErrorType(SmithyHttpResponse response)
+    public static string? DeserializeErrorType(SmithyHttpClientResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
 

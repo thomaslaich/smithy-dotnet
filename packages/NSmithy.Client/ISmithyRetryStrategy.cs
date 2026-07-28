@@ -46,7 +46,7 @@ public interface ISmithyRetrySession
 /// <param name="ExecutionContext">The invocation's execution context.</param>
 public sealed record SmithyRetryOutcome(
     int Attempt,
-    SmithyHttpResponse? Response,
+    SmithyHttpClientResponse? Response,
     Exception Error,
     SmithyContext ExecutionContext
 )

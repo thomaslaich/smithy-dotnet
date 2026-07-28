@@ -74,18 +74,24 @@ final class DirectedCSharpCodegen
 
     // Service-level files use a dotted ".Client"/".Server" suffix so the MSBuild
     // include/exclude globs (*.Client.g.cs / *.Server.g.cs) can distinguish them from
-    // shape files for operations whose names happen to end in "Client" or "Server".
-    ctx.writerDelegator()
-        .useFileWriter(
-            dir + "/" + typeName + ".Client.g.cs",
-            csNamespace,
-            writer -> new ClientGenerator(ctx, writer, directive.shape()).run());
+    // shape files for operations whose names happen to end in "Client" or "Server". Each half is
+    // gated by settings so a client- or server-only project never writes the half it discards —
+    // the MSBuild compile-time exclusion is then belt-and-suspenders.
+    if (ctx.settings().generateClient()) {
+      ctx.writerDelegator()
+          .useFileWriter(
+              dir + "/" + typeName + ".Client.g.cs",
+              csNamespace,
+              writer -> new ClientGenerator(ctx, writer, directive.shape()).run());
+    }
 
-    ctx.writerDelegator()
-        .useFileWriter(
-            dir + "/" + typeName + ".Server.g.cs",
-            csNamespace,
-            writer -> new ServerGenerator(ctx, writer, directive.shape()).run());
+    if (ctx.settings().generateServer()) {
+      ctx.writerDelegator()
+          .useFileWriter(
+              dir + "/" + typeName + ".Server.g.cs",
+              csNamespace,
+              writer -> new ServerGenerator(ctx, writer, directive.shape()).run());
+    }
 
     // Opt-in IHttpClientFactory registration. Generated only when requested
     // (generateDependencyInjection), because the file pulls in Microsoft.Extensions.Http — a

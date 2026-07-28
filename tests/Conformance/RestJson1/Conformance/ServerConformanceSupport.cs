@@ -131,7 +131,7 @@ internal sealed class RestJsonServerHost : IAsyncDisposable
             .Single(m =>
             {
                 var parameters = m.GetParameters();
-                return m.Name == $"Map{serviceName}Http"
+                return m.Name == $"Map{serviceName}RestJson1"
                     && parameters.Length == 1
                     && parameters[0].ParameterType.FullName
                         == "Microsoft.AspNetCore.Routing.IEndpointRouteBuilder";

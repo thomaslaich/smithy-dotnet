@@ -14,7 +14,7 @@ namespace NSmithy.Protocols.Rest;
 /// </summary>
 public sealed class RestServiceProtocol(
     IRestBodyCodecFactory codecFactory,
-    Func<SmithyHttpResponse, string?> errorDiscriminator,
+    Func<SmithyHttpClientResponse, string?> errorDiscriminator,
     bool rawStringPayloads,
     string? errorTypeHeader
 ) : IServiceProtocol
@@ -45,14 +45,24 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
     RestOperationBinding<TInput, TOutput> binding,
     IReadOnlyList<IOperationErrorSchema> modeledErrors,
     IRestBodyCodecFactory codecFactory,
-    Func<SmithyHttpResponse, string?> errorDiscriminator,
+    Func<SmithyHttpClientResponse, string?> errorDiscriminator,
     bool rawStringPayloads,
     string? errorTypeHeader,
     Action<SmithyHttpRequest>? requestTransform = null
 ) : IOperationProtocol<TInput, TOutput>
 {
-    public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
+    private readonly IReadOnlyList<HttpOperationError> httpErrors =
         RestProtocol.CompileErrorDeserializers(modeledErrors, codecFactory, rawStringPayloads);
+
+    // restXml has no error discriminator header and does not serialize modeled errors server-side;
+    // an empty matcher leaves such exceptions to propagate (surfaced as a 500 by the host).
+    private readonly ModeledErrorSerializer serverErrors = errorTypeHeader is null
+        ? ModeledErrorSerializer.Compile([], _ => throw new InvalidOperationException())
+        : ModeledErrorSerializer.Compile(
+            modeledErrors,
+            error =>
+                CompileServerError((dynamic)error, codecFactory, rawStringPayloads, errorTypeHeader)
+        );
 
     public SmithyHttpRequest SerializeRequest(TInput input)
     {
@@ -61,41 +71,55 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
         return request;
     }
 
-    public TOutput DeserializeResponse(SmithyHttpResponse response) =>
+    public TOutput DeserializeResponse(SmithyHttpClientResponse response) =>
         RestProtocol.DeserializeResponse(binding, response);
 
     public TInput DeserializeRequest(SmithyHttpRequest request) =>
         RestProtocol.DeserializeRequest(binding, request);
 
-    public SmithyHttpResponse SerializeResponse(TOutput output) =>
+    public SmithyHttpServerResponse SerializeResponse(TOutput output) =>
         RestProtocol.SerializeResponse(binding, output);
 
-    public bool IsErrorResponse(SmithyHttpResponse response) => (int)response.StatusCode >= 400;
+    public bool IsErrorResponse(SmithyHttpClientResponse response) =>
+        (int)response.StatusCode >= 400;
 
-    public string? GetErrorDiscriminator(SmithyHttpResponse response) =>
-        errorDiscriminator(response);
-
-    public bool RequiresErrorDiscriminator => false;
-
-    public bool SupportsHttpStatusErrorFallback => true;
-
-    public SmithyHttpResponse SerializeError<TError>(
-        Schema<TError> errorSchema,
-        TError value,
-        string errorShapeId,
-        int statusCode
+    // REST errors may carry a discriminator header, but a response without one can still resolve
+    // via the HTTP status code.
+    public ValueTask<Exception?> DeserializeErrorAsync(
+        SmithyHttpClientResponse response,
+        CancellationToken cancellationToken = default
     ) =>
-        errorTypeHeader is null
-            ? throw new NotSupportedException(
-                "This REST protocol does not support server-side error serialization."
+        ValueTask.FromResult(
+            OperationProtocolErrors.DeserializeModeledError(
+                httpErrors,
+                response,
+                errorDiscriminator,
+                requiresErrorDiscriminator: false,
+                supportsHttpStatusErrorFallback: true
             )
-            : RestProtocol.SerializeError(
-                errorSchema,
-                value,
-                errorShapeId,
-                statusCode,
-                codecFactory,
-                rawStringPayloads,
-                errorTypeHeader
-            );
+        );
+
+    public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
+        serverErrors.TrySerialize(exception, out response);
+
+    private static (Type, Func<Exception, SmithyHttpServerResponse>) CompileServerError<TError>(
+        OperationErrorSchema<TError> error,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads,
+        string errorTypeHeader
+    )
+        where TError : Exception =>
+        (
+            typeof(TError),
+            exception =>
+                RestProtocol.SerializeError(
+                    error.Schema,
+                    (TError)exception,
+                    error.Id.ToString(),
+                    error.HttpStatusCode,
+                    codecFactory,
+                    rawStringPayloads,
+                    errorTypeHeader
+                )
+        );
 }

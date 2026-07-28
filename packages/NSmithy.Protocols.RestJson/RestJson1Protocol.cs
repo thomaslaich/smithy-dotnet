@@ -21,7 +21,7 @@ public sealed class RestJson1Protocol : IProtocol
             errorTypeHeader: "X-Amzn-Errortype"
         );
 
-    public static string? DeserializeErrorType(SmithyHttpResponse response)
+    public static string? DeserializeErrorType(SmithyHttpClientResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
 

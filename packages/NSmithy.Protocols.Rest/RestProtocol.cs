@@ -143,7 +143,7 @@ public static class RestProtocol
         return (TInput)binding.InputSchema.BuildObject(builder);
     }
 
-    public static SmithyHttpResponse SerializeResponse<TInput, TOutput>(
+    public static SmithyHttpServerResponse SerializeResponse<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
         TOutput output
     )
@@ -156,14 +156,13 @@ public static class RestProtocol
         var contentHeaders = new Dictionary<string, IReadOnlyList<string>>(
             StringComparer.OrdinalIgnoreCase
         );
-        var statusCode = (HttpStatusCode)binding.SuccessStatusCode;
+        var statusCode = binding.SuccessStatusCode;
 
         if (binding.ResponseCodeMember is { } codeMember)
         {
             var value = codeMember.GetObject(output!);
             if (value is not null)
-                statusCode = (HttpStatusCode)
-                    (int)ParseHttpValue(Schemas.Integer, value.ToString()!)!;
+                statusCode = (int)ParseHttpValue(Schemas.Integer, value.ToString()!)!;
         }
         foreach (var (member, headerName) in binding.ResponseHeaderMembers)
             AddHeader(headers, headerName, member, output!);
@@ -184,12 +183,12 @@ public static class RestProtocol
             contentHeaders["Content-Type"] = [binding.BodyContentType];
         }
 
-        return new SmithyHttpResponse(statusCode, null, responseBody, headers, contentHeaders);
+        return ToServerResponse(statusCode, responseBody, headers, contentHeaders);
     }
 
     public static TOutput DeserializeResponse<TInput, TOutput>(
         RestOperationBinding<TInput, TOutput> binding,
-        SmithyHttpResponse response
+        SmithyHttpClientResponse response
     )
     {
         ArgumentNullException.ThrowIfNull(binding);
@@ -363,7 +362,7 @@ public static class RestProtocol
     /// <c>X-Amzn-Errortype</c> discriminator carrying the error's shape name, the error's HTTP
     /// header/payload bindings, and a body holding the remaining members (at minimum <c>{}</c>).
     /// </summary>
-    public static SmithyHttpResponse SerializeError<TError>(
+    public static SmithyHttpServerResponse SerializeError<TError>(
         Schema<TError> errorSchema,
         TError value,
         string errorShapeId,
@@ -442,13 +441,73 @@ public static class RestProtocol
             contentHeaders["Content-Type"] = [codecFactory.ContentType];
         }
 
-        return new SmithyHttpResponse(
-            (HttpStatusCode)statusCode,
-            null,
-            ToHttpBody(content),
-            headers,
-            contentHeaders
-        );
+        return ToServerResponse(statusCode, ToHttpBody(content), headers, contentHeaders);
+    }
+
+    private static SmithyHttpServerResponse ToServerResponse(
+        int statusCode,
+        SmithyHttpBody body,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> contentHeaders
+    )
+    {
+        var response = new SmithyHttpServerResponse
+        {
+            StatusCode = statusCode,
+            Body = ToChunks(body),
+            ContentLength = ContentLength(body),
+        };
+        foreach (var header in headers)
+        {
+            response.Headers[header.Key] = header.Value;
+        }
+
+        foreach (var header in contentHeaders)
+        {
+            response.Headers[header.Key] = header.Value;
+        }
+
+        return response;
+    }
+
+    private static IAsyncEnumerable<ReadOnlyMemory<byte>> ToChunks(SmithyHttpBody body) =>
+        body switch
+        {
+            SmithyHttpBody.Bytes bytes => SingleChunk(bytes.Content),
+            SmithyHttpBody.Streaming streaming => ReadStream(streaming.Content),
+            _ => AsyncEnumerable.Empty<ReadOnlyMemory<byte>>(),
+        };
+
+    private static long? ContentLength(SmithyHttpBody body) =>
+        body switch
+        {
+            SmithyHttpBody.Bytes bytes => bytes.Content.Length,
+            SmithyHttpBody.Streaming streaming => streaming.ContentLength,
+            _ => 0L,
+        };
+
+    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> SingleChunk(
+        ReadOnlyMemory<byte> chunk
+    )
+    {
+        await Task.CompletedTask.ConfigureAwait(false);
+        yield return chunk;
+    }
+
+    // The buffer is reused across iterations: valid because the host writer consumes each chunk
+    // before pulling the next.
+    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> ReadStream(
+        Stream stream,
+        [System.Runtime.CompilerServices.EnumeratorCancellation]
+            CancellationToken cancellationToken = default
+    )
+    {
+        var buffer = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            yield return buffer.AsMemory(0, read);
+        }
     }
 
     private static SmithyHttpBody ToHttpBody(RestBody body) =>

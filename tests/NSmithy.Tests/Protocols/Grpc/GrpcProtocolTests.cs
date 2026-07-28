@@ -1,12 +1,9 @@
 using System.Buffers.Binary;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Features;
 using NSmithy.Codecs.Proto;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Http;
 using NSmithy.Protocols.Grpc;
-using NSmithy.Server.AspNetCore;
 
 namespace NSmithy.Tests.Protocols.Grpc;
 
@@ -132,7 +129,7 @@ public sealed class GrpcProtocolTests
     }
 
     [Fact]
-    public void RoundTripsClientToServerToClient()
+    public async Task RoundTripsClientToServerToClient()
     {
         var protocol = BuildProtocol();
 
@@ -142,12 +139,15 @@ public sealed class GrpcProtocolTests
         // server side
         var serverInput = protocol.DeserializeRequest(request);
         Assert.Equal(new Echo("ping"), serverInput);
-        var response = protocol.SerializeResponse(new Echo("pong"));
-        Assert.False(protocol.IsErrorResponse(response));
-        string[] okStatus = ["0"];
-        Assert.Equal(okStatus, response.Headers["grpc-status"]);
+        var serverResponse = protocol.SerializeResponse(new Echo("pong"));
+        Assert.Contains(
+            new KeyValuePair<string, string>("grpc-status", "0"),
+            serverResponse.Trailers!(null)
+        );
 
         // client side
+        var response = await ToClientResponseAsync(serverResponse);
+        Assert.False(protocol.IsErrorResponse(response));
         var clientOutput = protocol.DeserializeResponse(response);
         Assert.Equal(new Echo("pong"), clientOutput);
     }
@@ -156,20 +156,18 @@ public sealed class GrpcProtocolTests
     public async Task SerializesAndDiscriminatesModeledErrors()
     {
         var protocol = BuildProtocol();
-        var errorSchema = ErrorSchema("ThrottlingError");
 
-        var response = protocol.SerializeError(
-            errorSchema,
-            new TestGrpcException("slow down"),
-            "example.greeter#ThrottlingError",
-            429
+        Assert.True(
+            protocol.TrySerializeError(new TestGrpcException("slow down"), out var serverResponse)
+        );
+        // HTTP 429 → gRPC RESOURCE_EXHAUSTED (8)
+        Assert.Contains(
+            new KeyValuePair<string, string>("grpc-status", "8"),
+            serverResponse.Trailers!(null)
         );
 
+        var response = await ToClientResponseAsync(serverResponse);
         Assert.True(protocol.IsErrorResponse(response));
-        // HTTP 429 → gRPC RESOURCE_EXHAUSTED (8)
-        string[] exhaustedStatus = ["8"];
-        Assert.Equal(exhaustedStatus, response.Headers["grpc-status"]);
-        Assert.Equal("example.greeter#ThrottlingError", protocol.GetErrorDiscriminator(response));
         var error = Assert.IsType<TestGrpcException>(
             await protocol.DeserializeErrorAsync(response)
         );
@@ -180,18 +178,18 @@ public sealed class GrpcProtocolTests
     public async Task ServerStreamingSerializesUnaryRequestAndReadsEvents()
     {
         var protocol = BuildEventStreamServiceProtocol()
-            .ForServerEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
+            .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
 
         var request = protocol.SerializeRequest(new Echo("start"));
 
         Assert.Equal(HttpMethod.Post, request.Method);
         Assert.Equal("/example.greeter.Greeter/Watch", request.RequestUri);
         Assert.Equal("application/grpc+proto", request.ContentType);
-        Assert.Equal([new Echo("start")], await DecodeEvents(request.Events));
+        Assert.Equal([new Echo("start")], await DecodeChunks(BodyChunks(request.Body)));
 
         var response = EventStreamResponse([
-            new SmithyEventFrame(EchoSchema("WatchOutput").SerializeForTest(new Echo("one"))),
-            new SmithyEventFrame(EchoSchema("WatchOutput").SerializeForTest(new Echo("two"))),
+            EchoSchema("WatchOutput").SerializeForTest(new Echo("one")),
+            EchoSchema("WatchOutput").SerializeForTest(new Echo("two")),
         ]);
 
         Assert.Equal(
@@ -204,19 +202,22 @@ public sealed class GrpcProtocolTests
     public async Task ClientStreamingSerializesEvents()
     {
         var protocol = BuildEventStreamServiceProtocol()
-            .ForClientEventStreamOperation(EchoOperation("Upload"), EchoSchema("UploadEvent"));
+            .ForInputEventStreamOperation(EchoOperation("Upload"), EchoSchema("UploadEvent"));
 
         var request = protocol.SerializeRequest(ToAsync([new Echo("one"), new Echo("two")]));
 
         Assert.Equal("/example.greeter.Greeter/Upload", request.RequestUri);
-        Assert.Equal([new Echo("one"), new Echo("two")], await DecodeEvents(request.Events));
+        Assert.Equal(
+            [new Echo("one"), new Echo("two")],
+            await DecodeChunks(BodyChunks(request.Body))
+        );
     }
 
     [Fact]
     public async Task BidirectionalStreamingSerializesAndReadsEvents()
     {
         var protocol = BuildEventStreamServiceProtocol()
-            .ForBidirectionalEventStreamOperation(
+            .ForDuplexEventStreamOperation(
                 EchoOperation("Chat"),
                 EchoSchema("ChatInputEvent"),
                 EchoSchema("ChatOutputEvent")
@@ -225,10 +226,10 @@ public sealed class GrpcProtocolTests
         var request = protocol.SerializeRequest(ToAsync([new Echo("client")]));
 
         Assert.Equal("/example.greeter.Greeter/Chat", request.RequestUri);
-        Assert.Equal([new Echo("client")], await DecodeEvents(request.Events));
+        Assert.Equal([new Echo("client")], await DecodeChunks(BodyChunks(request.Body)));
 
         var response = EventStreamResponse([
-            new SmithyEventFrame(EchoSchema("ChatOutput").SerializeForTest(new Echo("server"))),
+            EchoSchema("ChatOutput").SerializeForTest(new Echo("server")),
         ]);
 
         Assert.Equal(
@@ -279,34 +280,42 @@ public sealed class GrpcProtocolTests
         {
             BaseAddress = new Uri("http://localhost"),
         };
-        var transport = new GrpcEventStreamHttpClientTransport(httpClient);
-        var request = new SmithyEventStreamHttpRequest(HttpMethod.Post, "/example.Service/Stream")
+        var transport = new HttpClientTransport(httpClient);
+        var request = new SmithyHttpRequest(HttpMethod.Post, "/example.Service/Stream")
         {
             ContentType = "application/grpc+proto",
-            Events = ToAsync([
-                new SmithyEventFrame(
-                    EchoSchema("TransportInput").SerializeForTest(new Echo("request"))
-                ),
-            ]),
+            Body = new SmithyHttpBody.EventStreaming(
+                ToAsync<ReadOnlyMemory<byte>>([
+                    GrpcMessageFraming.Frame(
+                        EchoSchema("TransportInput").SerializeForTest(new Echo("request"))
+                    ),
+                ])
+            ),
         };
 
-        var response = await transport.SendAsync(request);
+        var response = await transport.SendAsync(request, SmithyHttpClientResponseMode.Stream);
 
         Assert.NotNull(requestBody);
-        Assert.Equal([new Echo("request")], await DecodeEvents(FramesFromBytes(requestBody!)));
-        Assert.Equal([new Echo("response")], await DecodeEvents(response.Events));
+        Assert.Equal([new Echo("request")], await DecodeBody(new MemoryStream(requestBody!)));
+        var responseBody = Assert.IsType<SmithyHttpBody.Streaming>(response.Body);
+        Assert.Equal([new Echo("response")], await DecodeBody(responseBody.Content));
     }
 
     [Fact]
     public async Task StreamingClientThrowsOnNonZeroGrpcStatusTrailer()
     {
         using var httpClient = GrpcStreamClient(grpcStatus: "13", grpcMessage: "handler blew up");
-        var transport = new GrpcEventStreamHttpClientTransport(httpClient);
+        var transport = new HttpClientTransport(httpClient);
+        var protocol = BuildEventStreamServiceProtocol()
+            .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
 
-        var response = await transport.SendAsync(StreamRequest());
+        var response = await transport.SendAsync(
+            StreamRequest(),
+            SmithyHttpClientResponseMode.Stream
+        );
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            CollectAsync(response.Events)
+            CollectAsync(protocol.DeserializeResponseEventsAsync(response))
         );
         Assert.Contains("13", ex.Message);
         Assert.Contains("Internal", ex.Message); // grpc-status 13 → Internal
@@ -319,12 +328,17 @@ public sealed class GrpcProtocolTests
         // A stream that ends with no grpc-status (a truncated or non-compliant response) must surface
         // as an error rather than a clean, successful completion.
         using var httpClient = GrpcStreamClient(grpcStatus: null);
-        var transport = new GrpcEventStreamHttpClientTransport(httpClient);
+        var transport = new HttpClientTransport(httpClient);
+        var protocol = BuildEventStreamServiceProtocol()
+            .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
 
-        var response = await transport.SendAsync(StreamRequest());
+        var response = await transport.SendAsync(
+            StreamRequest(),
+            SmithyHttpClientResponseMode.Stream
+        );
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            CollectAsync(response.Events)
+            CollectAsync(protocol.DeserializeResponseEventsAsync(response))
         );
         Assert.Contains("without a grpc-status", ex.Message);
     }
@@ -333,11 +347,11 @@ public sealed class GrpcProtocolTests
     public void StreamingDeserializeThrowsDetailedErrorOnTransportFailure()
     {
         var protocol = BuildEventStreamServiceProtocol()
-            .ForServerEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
-        var response = new SmithyEventStreamHttpResponse(
+            .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
+        var response = new SmithyHttpClientResponse(
             System.Net.HttpStatusCode.ServiceUnavailable,
             "Service Unavailable",
-            ToAsync(Array.Empty<SmithyEventFrame>()),
+            Stream.Null,
             new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
             {
                 ["grpc-message"] = ["upstream is down"],
@@ -353,12 +367,12 @@ public sealed class GrpcProtocolTests
     }
 
     [Fact]
-    public void DeserializesAllDefaultMessageAsEmptyInstanceNotNull()
+    public async Task DeserializesAllDefaultMessageAsEmptyInstanceNotNull()
     {
         // An all-default message proto-encodes to zero bytes; the framed body is then a header with a
         // zero-length payload. Deserialization must yield an (empty) instance, not null.
         var protocol = BuildProtocol();
-        var response = protocol.SerializeResponse(new Echo(null!));
+        var response = await ToClientResponseAsync(protocol.SerializeResponse(new Echo(null!)));
 
         var output = protocol.DeserializeResponse(response);
 
@@ -382,15 +396,11 @@ public sealed class GrpcProtocolTests
     public async Task ServerStreamingSkipsUnrecognizedUnionEvents()
     {
         var protocol = BuildEventStreamServiceProtocol()
-            .ForServerEventStreamOperation(EchoOperation("Watch"), ChatEventSchema("WatchEvent"));
+            .ForOutputEventStreamOperation(EchoOperation("Watch"), ChatEventSchema("WatchEvent"));
         var response = EventStreamResponse([
-            new SmithyEventFrame(
-                ChatEventSchema("WatchEvent")
-                    .SerializeForTest(new ChatEvent.Message(new Echo("known")))
-            ),
-            new SmithyEventFrame(
-                FutureChatEventSchema().SerializeForTest(new ChatEvent.Message(new Echo("unknown")))
-            ),
+            ChatEventSchema("WatchEvent")
+                .SerializeForTest(new ChatEvent.Message(new Echo("known"))),
+            FutureChatEventSchema().SerializeForTest(new ChatEvent.Message(new Echo("unknown"))),
         ]);
 
         var events = await CollectAsync(protocol.DeserializeResponseEventsAsync(response));
@@ -400,54 +410,89 @@ public sealed class GrpcProtocolTests
     }
 
     [Fact]
-    public async Task ServerStreamWritesOkTrailerOnSuccess()
+    public void ServerStreamTrailersReportOkOnCleanCompletion()
     {
-        var (httpContext, trailers) = NewGrpcResponseContext();
+        var protocol = BuildEventStreamServiceProtocol()
+            .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
 
-        await SmithyAspNetCoreProtocol.WriteSmithyGrpcEventStreamResponseAsync(
-            httpContext,
-            ToAsync([new SmithyEventFrame(EchoSchema("Out").SerializeForTest(new Echo("one")))])
+        var response = protocol.SerializeResponse(ToAsync([new Echo("one")]));
+
+        Assert.Contains(
+            new KeyValuePair<string, string>("grpc-status", "0"),
+            response.Trailers!(null)
         );
-
-        Assert.Equal("0", trailers.Trailers["grpc-status"].ToString());
     }
 
     [Fact]
-    public async Task ServerStreamWritesErrorTrailerWhenHandlerThrows()
+    public void ServerStreamTrailersReportInternalOnMidStreamFailure()
     {
-        var (httpContext, trailers) = NewGrpcResponseContext();
+        var protocol = BuildEventStreamServiceProtocol()
+            .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
 
-        await SmithyAspNetCoreProtocol.WriteSmithyGrpcEventStreamResponseAsync(
-            httpContext,
-            ThrowingEvents()
-        );
+        var response = protocol.SerializeResponse(ToAsync([new Echo("one")]));
 
-        // Internal (13) + message, instead of silently truncating the stream with no status.
-        Assert.Equal("13", trailers.Trailers["grpc-status"].ToString());
-        Assert.Equal("kaboom", trailers.Trailers["grpc-message"].ToString());
+        // A mid-stream failure the host observes maps to Internal (13) + message, instead of
+        // silently truncating the stream with no status.
+        var trailers = response.Trailers!(new InvalidOperationException("kaboom"));
+        Assert.Contains(new KeyValuePair<string, string>("grpc-status", "13"), trailers);
+        Assert.Contains(new KeyValuePair<string, string>("grpc-message", "kaboom"), trailers);
     }
 
-    private static SmithyEventStreamHttpResponse EventStreamResponse(
-        IEnumerable<SmithyEventFrame> frames
-    ) =>
+    private static SmithyHttpClientResponse EventStreamResponse(IEnumerable<byte[]> payloads) =>
         new(
             System.Net.HttpStatusCode.OK,
             null,
-            ToAsync(frames),
+            FramedBodyStream(payloads),
             new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase),
             new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
             {
                 ["Content-Type"] = ["application/grpc+proto"],
-            }
+            },
+            static name => name == "grpc-status" ? "0" : null
         );
 
-    private static async Task<List<Echo>> DecodeEvents(IAsyncEnumerable<SmithyEventFrame> events)
+    private static MemoryStream FramedBodyStream(IEnumerable<byte[]> payloads)
+    {
+        var stream = new MemoryStream();
+        foreach (var payload in payloads)
+        {
+            var framed = GrpcMessageFraming.Frame(payload);
+            stream.Write(framed, 0, framed.Length);
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
+
+    private static IAsyncEnumerable<ReadOnlyMemory<byte>> BodyChunks(SmithyHttpBody body) =>
+        body switch
+        {
+            SmithyHttpBody.EventStreaming eventStreaming => eventStreaming.Content,
+            SmithyHttpBody.Bytes bytes => ToAsync<ReadOnlyMemory<byte>>([bytes.Content]),
+            _ => ToAsync<ReadOnlyMemory<byte>>([]),
+        };
+
+    private static async Task<List<Echo>> DecodeChunks(
+        IAsyncEnumerable<ReadOnlyMemory<byte>> chunks
+    )
+    {
+        var stream = new MemoryStream();
+        await foreach (var chunk in chunks)
+        {
+            stream.Write(chunk.Span);
+        }
+
+        stream.Position = 0;
+        return await DecodeBody(stream);
+    }
+
+    private static async Task<List<Echo>> DecodeBody(Stream framedBody)
     {
         var codec = NSmithy.Codecs.Proto.ProtoCodec.FromSchema(EchoSchema("Decoded"));
         var values = new List<Echo>();
-        await foreach (var frame in events)
+        await foreach (var payload in GrpcMessageFraming.ReadAllAsync(framedBody))
         {
-            values.Add(codec.Deserialize(frame.Payload));
+            values.Add(codec.Deserialize(payload));
         }
 
         return values;
@@ -473,9 +518,6 @@ public sealed class GrpcProtocolTests
         }
     }
 
-    private static IAsyncEnumerable<SmithyEventFrame> FramesFromBytes(byte[] body) =>
-        GrpcMessageFraming.ReadAllAsync(new MemoryStream(body));
-
     // A union schema that carries the ChatEvent.Message case at a proto field number (99) the normal
     // ChatEventSchema (field 1) does not recognize — stands in for a newer peer's added oneof case.
     private static Schema<ChatEvent> FutureChatEventSchema() =>
@@ -491,13 +533,17 @@ public sealed class GrpcProtocolTests
             )
             .Build();
 
-    private static SmithyEventStreamHttpRequest StreamRequest() =>
+    private static SmithyHttpRequest StreamRequest() =>
         new(HttpMethod.Post, "/example.greeter.Greeter/Stream")
         {
             ContentType = "application/grpc+proto",
-            Events = ToAsync([
-                new SmithyEventFrame(EchoSchema("StreamInput").SerializeForTest(new Echo("req"))),
-            ]),
+            Body = new SmithyHttpBody.EventStreaming(
+                ToAsync<ReadOnlyMemory<byte>>([
+                    GrpcMessageFraming.Frame(
+                        EchoSchema("StreamInput").SerializeForTest(new Echo("req"))
+                    ),
+                ])
+            ),
         };
 
     private static HttpClient GrpcStreamClient(
@@ -540,28 +586,54 @@ public sealed class GrpcProtocolTests
             BaseAddress = new Uri("http://localhost"),
         };
 
-    private static async IAsyncEnumerable<SmithyEventFrame> ThrowingEvents()
+    // Simulates the unary wire: the server response's body is drained to bytes and its trailers are
+    // available through the response trailer accessor.
+    private static async Task<SmithyHttpClientResponse> ToClientResponseAsync(
+        SmithyHttpServerResponse response
+    )
     {
-        await Task.CompletedTask;
-        yield return new SmithyEventFrame(EchoSchema("Out").SerializeForTest(new Echo("partial")));
-        throw new InvalidOperationException("kaboom");
-    }
+        var buffer = new MemoryStream();
+        await foreach (var chunk in response.Body)
+        {
+            buffer.Write(chunk.Span);
+        }
 
-    private static (
-        DefaultHttpContext Context,
-        FakeResponseTrailersFeature Trailers
-    ) NewGrpcResponseContext()
-    {
-        var context = new DefaultHttpContext();
-        context.Response.Body = new MemoryStream();
-        var trailers = new FakeResponseTrailersFeature();
-        context.Features.Set<IHttpResponseTrailersFeature>(trailers);
-        return (context, trailers);
-    }
+        var headers = new Dictionary<string, IReadOnlyList<string>>(
+            StringComparer.OrdinalIgnoreCase
+        );
+        var contentHeaders = new Dictionary<string, IReadOnlyList<string>>(
+            StringComparer.OrdinalIgnoreCase
+        );
+        foreach (var header in response.Headers)
+        {
+            var target = string.Equals(
+                header.Key,
+                "Content-Type",
+                StringComparison.OrdinalIgnoreCase
+            )
+                ? contentHeaders
+                : headers;
+            target[header.Key] = header.Value;
+        }
 
-    private sealed class FakeResponseTrailersFeature : IHttpResponseTrailersFeature
-    {
-        public IHeaderDictionary Trailers { get; set; } = new HeaderDictionary();
+        var trailers =
+            response
+                .Trailers?.Invoke(null)
+                .ToDictionary(
+                    trailer => trailer.Key,
+                    trailer => trailer.Value,
+                    StringComparer.OrdinalIgnoreCase
+                )
+            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        return new SmithyHttpClientResponse(
+            (System.Net.HttpStatusCode)response.StatusCode,
+            null,
+            new SmithyHttpBody.Bytes(buffer.ToArray()),
+            headers,
+            contentHeaders,
+            name => trailers.TryGetValue(name, out var value) ? value : null
+        );
     }
 
     private sealed class DelegateHandler(

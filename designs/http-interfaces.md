@@ -20,7 +20,7 @@ How NSmithy abstracts the HTTP transport layer.
 ```csharp
 public interface IHttpTransport
 {
-    Task<SmithyHttpResponse> SendAsync(
+    Task<SmithyHttpClientResponse> SendAsync(
         SmithyHttpRequest request,
         CancellationToken cancellationToken = default
     );
@@ -38,16 +38,16 @@ public interface IHttpTransport
 - `IDictionary<string, IReadOnlyList<string>> Headers` (multi-value)
 - `byte[]? Content`, `string? ContentType`, and a separate `ContentHeaders`
 
-`SmithyHttpResponse` carries:
+`SmithyHttpClientResponse` carries:
 
 - `HttpStatusCode StatusCode` and `string? ReasonPhrase`
 - `byte[] Content` (with a `ContentText` convenience accessor)
 - `IReadOnlyDictionary<string, IReadOnlyList<string>> Headers` and `ContentHeaders`
+- `Func<string, string?>? Trailer` for trailing response headers
 
 These types are deliberately flat. HTTP/2 trailers (e.g. gRPC's `grpc-status`) are
-folded into `Headers` by `HttpClientTransport` rather than modeled separately, so
-protocols read them uniformly alongside regular headers. Bindings that need the
-status (e.g. `@httpResponseCode`) read `StatusCode` directly.
+kept separate from upfront response headers and exposed through `Trailer`. Bindings
+that need the status (e.g. `@httpResponseCode`) read `StatusCode` directly.
 
 ## Client Construction
 
@@ -152,7 +152,7 @@ carries them.
 
 gRPC is just another `IProtocol` (`GrpcProtocol`) over this same transport: it needs
 HTTP/2 (`IProtocol.RequiresHttp2`) but otherwise uses `HttpClientTransport` like the
-REST and rpcv2Cbor protocols, with trailers folded into `Headers` as described above.
+REST and rpcv2Cbor protocols, with trailers exposed through `SmithyHttpClientResponse.Trailer`.
 The wire format, framing, proto codec, and error model are covered in
 [native-grpc.md](native-grpc.md).
 

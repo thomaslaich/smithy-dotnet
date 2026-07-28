@@ -23,7 +23,7 @@ public sealed class SimpleRestJsonProtocol : IProtocol
             errorTypeHeader: ErrorTypeHeader
         );
 
-    public static string? DeserializeErrorType(SmithyHttpResponse response)
+    public static string? DeserializeErrorType(SmithyHttpClientResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
 

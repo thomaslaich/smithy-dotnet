@@ -15,6 +15,7 @@
     <Project Path="packages/NSmithy.Protocols.RpcV2Cbor/NSmithy.Protocols.RpcV2Cbor.csproj" />
     <Project Path="packages/NSmithy.Protocols.Grpc/NSmithy.Protocols.Grpc.csproj" />
     <Project Path="packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+    <Project Path="packages/NSmithy.Server/NSmithy.Server.csproj" />
     <Project Path="packages/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
     <Project Path="packages/NSmithy.Server.AspNetCore.Docs/NSmithy.Server.AspNetCore.Docs.csproj" />
     <Project Path="packages/NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />

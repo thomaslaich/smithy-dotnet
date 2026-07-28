@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!--
+      The dispatch methods are instance members with no instance state yet: the runtime is the
+      seam where server interceptors and telemetry attach later, mirroring SmithyClientRuntime.
+      Keeping them instance-based avoids a later breaking change from static to instance.
+    -->
+    <NoWarn>$(NoWarn);CA1822</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../NSmithy.Http/NSmithy.Http.csproj" />
+  </ItemGroup>
+</Project>

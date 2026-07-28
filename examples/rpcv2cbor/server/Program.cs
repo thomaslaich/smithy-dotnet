@@ -4,7 +4,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddWeatherServiceHandler<WeatherHandler>();
 
 var app = builder.Build();
-app.MapWeatherServiceHttp();
+app.MapWeatherServiceRpcV2Cbor();
 app.Run();
 
 internal sealed class WeatherHandler : IWeatherServiceHandler
