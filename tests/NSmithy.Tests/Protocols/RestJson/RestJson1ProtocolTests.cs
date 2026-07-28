@@ -897,35 +897,6 @@ public sealed class RestJson1ProtocolTests
         return buffer.ToArray();
     }
 
-    [Fact]
-    public async Task ServerResponseFromHttpPreservesStreamingBlobLength()
-    {
-        var payload = new MemoryStream("avatar bytes"u8.ToArray());
-        var response = new SmithyHttpClientResponse(
-            HttpStatusCode.OK,
-            null,
-            new SmithyHttpBody.Streaming(payload, payload.Length),
-            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase),
-            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["Content-Type"] = ["application/octet-stream"],
-            }
-        );
-
-        var serverResponse = SmithyHttpServerResponse.FromHttp(response);
-
-        Assert.Equal(payload.Length, serverResponse.ContentLength);
-        var buffer = new MemoryStream();
-        await foreach (var chunk in serverResponse.Body)
-        {
-            buffer.Write(chunk.Span);
-        }
-
-        buffer.Position = 0;
-        using var reader = new StreamReader(buffer, Encoding.UTF8);
-        Assert.Equal("avatar bytes", await reader.ReadToEndAsync());
-    }
-
     private static StructSchema<
         UploadUserAvatarStreamInput,
         UploadUserAvatarStreamInputBuilder

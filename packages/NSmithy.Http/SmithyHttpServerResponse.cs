@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 namespace NSmithy.Http;
 
 /// <summary>
@@ -53,69 +51,11 @@ public sealed class SmithyHttpServerResponse
         return response;
     }
 
-    /// <summary>
-    /// Adapts a <see cref="SmithyHttpClientResponse"/> into a server response. A protocol whose unary
-    /// serialization already produces a <see cref="SmithyHttpClientResponse"/> converts at the boundary:
-    /// the two header collections merge (a response is written to one header set), and the body
-    /// becomes write-ready chunks with a known length for buffered bodies.
-    /// </summary>
-    public static SmithyHttpServerResponse FromHttp(SmithyHttpClientResponse response)
-    {
-        ArgumentNullException.ThrowIfNull(response);
-
-        var (body, length) = ToChunks(response.Body);
-        var result = new SmithyHttpServerResponse
-        {
-            StatusCode = (int)response.StatusCode,
-            Body = body,
-            ContentLength = length,
-        };
-        foreach (var header in response.Headers)
-        {
-            result.Headers[header.Key] = header.Value;
-        }
-
-        foreach (var header in response.ContentHeaders)
-        {
-            result.Headers[header.Key] = header.Value;
-        }
-
-        return result;
-    }
-
-    private static (IAsyncEnumerable<ReadOnlyMemory<byte>> Body, long? Length) ToChunks(
-        SmithyHttpBody body
-    ) =>
-        body switch
-        {
-            SmithyHttpBody.Bytes bytes => (SingleChunk(bytes.Content), bytes.Content.Length),
-            SmithyHttpBody.Streaming streaming => (
-                ReadStream(streaming.Content),
-                streaming.ContentLength
-            ),
-            _ => (AsyncEnumerable.Empty<ReadOnlyMemory<byte>>(), 0L),
-        };
-
     private static async IAsyncEnumerable<ReadOnlyMemory<byte>> SingleChunk(
         ReadOnlyMemory<byte> chunk
     )
     {
         await Task.CompletedTask.ConfigureAwait(false);
         yield return chunk;
-    }
-
-    // The buffer is reused across iterations: valid because the host writer consumes each chunk
-    // (writes and flushes it) before pulling the next, exactly like Stream.CopyToAsync.
-    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> ReadStream(
-        Stream stream,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default
-    )
-    {
-        var buffer = new byte[81920];
-        int read;
-        while ((read = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
-        {
-            yield return buffer.AsMemory(0, read);
-        }
     }
 }

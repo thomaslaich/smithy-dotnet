@@ -78,7 +78,7 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
         RestProtocol.DeserializeRequest(binding, request);
 
     public SmithyHttpServerResponse SerializeResponse(TOutput output) =>
-        SmithyHttpServerResponse.FromHttp(RestProtocol.SerializeResponse(binding, output));
+        RestProtocol.SerializeResponse(binding, output);
 
     public bool IsErrorResponse(SmithyHttpClientResponse response) =>
         (int)response.StatusCode >= 400;
@@ -112,16 +112,14 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
         (
             typeof(TError),
             exception =>
-                SmithyHttpServerResponse.FromHttp(
-                    RestProtocol.SerializeError(
-                        error.Schema,
-                        (TError)exception,
-                        error.Id.ToString(),
-                        error.HttpStatusCode,
-                        codecFactory,
-                        rawStringPayloads,
-                        errorTypeHeader
-                    )
+                RestProtocol.SerializeError(
+                    error.Schema,
+                    (TError)exception,
+                    error.Id.ToString(),
+                    error.HttpStatusCode,
+                    codecFactory,
+                    rawStringPayloads,
+                    errorTypeHeader
                 )
         );
 }

@@ -411,10 +411,9 @@ public interface IClientOperationProtocol<TInput, TOutput>
 
 public interface IServerOperationProtocol<TInput, TOutput>
 {
-    TInput             DeserializeRequest(SmithyHttpRequest request);
-    SmithyHttpClientResponse SerializeResponse(TOutput output);
-    SmithyHttpClientResponse SerializeError<TError>(
-        Schema<TError> errorSchema, TError value, string errorShapeId, int statusCode);
+    TInput DeserializeRequest(SmithyHttpRequest request);
+    SmithyHttpServerResponse SerializeResponse(TOutput output);
+    bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response);
 }
 
 // Protocol implementations implement the combined interface; client-side code
