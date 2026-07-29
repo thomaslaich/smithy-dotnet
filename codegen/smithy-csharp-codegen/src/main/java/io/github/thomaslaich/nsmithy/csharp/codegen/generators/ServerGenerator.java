@@ -162,7 +162,7 @@ public final class ServerGenerator implements Runnable {
               SchemaGenerator.serviceSchemaAccessor(context, service));
           for (OperationShape op : ops) {
             if (isEventStreamOperation(context.model(), op)) {
-              if (kind == Kind.GRPC) {
+              if (supportsEventStreamOperations(kind)) {
                 writeEventStreamProtocolField(sp, op);
               }
               continue;
@@ -188,8 +188,8 @@ public final class ServerGenerator implements Runnable {
                 writer.write("System.ArgumentNullException.ThrowIfNull(endpoints);");
                 writer.write("");
                 for (OperationShape op : ops) {
-                  if (isEventStreamOperation(context.model(), op) && kind != Kind.GRPC) {
-                    // Event streams are only served over gRPC today; other protocols skip them.
+                  if (isEventStreamOperation(context.model(), op)
+                      && !supportsEventStreamOperations(kind)) {
                     continue;
                   }
                   writeOperationMap(kind, op);
@@ -429,6 +429,10 @@ public final class ServerGenerator implements Runnable {
 
   private static String serviceContractName(String serviceTypeName) {
     return serviceTypeName.endsWith("Service") ? serviceTypeName : serviceTypeName + "Service";
+  }
+
+  private static boolean supportsEventStreamOperations(Kind kind) {
+    return kind == Kind.GRPC || kind == Kind.RPC_V2_CBOR;
   }
 
   private String opHandlerName(OperationShape op) {
