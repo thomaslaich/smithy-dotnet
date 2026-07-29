@@ -14,6 +14,11 @@
     <Project Path="rpcv2cbor/server/NSmithy.Examples.RpcV2Cbor.Server.csproj" />
     <Project Path="rpcv2cbor/client/NSmithy.Examples.RpcV2Cbor.Client.csproj" />
   </Folder>
+  <Folder Name="/rpcv2cbor-streaming/">
+    <Project Path="rpcv2cbor-streaming/contracts/RpcV2CborStreaming.Contracts.csproj" />
+    <Project Path="rpcv2cbor-streaming/server/NSmithy.Examples.RpcV2CborStreaming.Server.csproj" />
+    <Project Path="rpcv2cbor-streaming/client/NSmithy.Examples.RpcV2CborStreaming.Client.csproj" />
+  </Folder>
   <Folder Name="/grpc/">
     <Project Path="grpc/contracts/Library.Contracts.csproj" />
     <Project Path="grpc/server/NSmithy.Examples.Grpc.Server.csproj" />
