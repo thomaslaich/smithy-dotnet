@@ -108,7 +108,7 @@ non-zero `grpc-status`; NSmithy carries the Smithy error shape id in the
 ## Server
 
 gRPC is the one protocol where the hosting and client code differs from the
-[shared usage example](/smithy-dotnet/protocols/usage/): it needs HTTP/2
+[shared example](/smithy-dotnet/protocols/overview/): it needs HTTP/2
 transport and a gRPC-specific client protocol. The generated handler interface
 itself works the same way — you implement one method per operation.
 

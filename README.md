@@ -23,6 +23,44 @@ NSmithy is a .NET toolkit that turns a [Smithy](https://smithy.io) model into id
 - **Smithy-native architecture**: Follows Smithy's official [code generator guidance](https://smithy.io/2.0/guides/building-codegen/index.html).
 - **Conformance-tested**: Tested against official Smithy, AWS, and alloy conformance suites.
 
+## Quick Start
+
+Install the templates and scaffold a contracts project, a server, and a client:
+
+```bash
+dotnet new install NSmithy.Templates
+
+# A contracts project owns the Smithy model
+dotnet new nsmithy-contracts -n HelloWorld.Contracts
+
+# A server that implements the model's handler…
+dotnet new nsmithy-server -n HelloWorld.Server --contracts HelloWorld.Contracts
+
+# …and a typed client that calls it
+dotnet new nsmithy-client -n HelloWorld.Client
+```
+
+The starter model is a single `restJson1` operation; `dotnet build` runs codegen
+and produces the model types, `IHelloServiceHandler` interface, and typed
+`HelloServiceClient`. Implement the handler, and call the client:
+
+```csharp
+// Server: implement the generated handler
+internal sealed class HelloHandler : IHelloServiceHandler
+{
+    public Task<SayHelloOutput> SayHelloAsync(SayHelloInput input, CancellationToken ct = default) =>
+        Task.FromResult(new SayHelloOutput($"Hello, {input.Name}!"));
+}
+
+// Client: call the typed client
+var client = new HelloServiceClient(new Uri("http://localhost:5000"));
+var response = await client.SayHelloAsync(new SayHelloInput("world"));
+Console.WriteLine(response.Message); // Hello, world!
+```
+
+See the [Quick Start guide](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/)
+for the full walkthrough.
+
 ## Development
 
 The recommended way to work on this repo is with [Nix](https://nixos.org/) and [devenv](https://devenv.sh/).
