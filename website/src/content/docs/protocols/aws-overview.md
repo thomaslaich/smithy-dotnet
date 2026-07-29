@@ -29,7 +29,10 @@ instead:
 `aws.protocols#restJson1` is not AWS-specific in practice — it is a
 well-defined REST/JSON wire format usable by any HTTP service, whether or not
 it runs on AWS. Many teams use it to define internal or public APIs that follow
-the same protocol as AWS services.
+the same protocol as AWS services. For that reason it is documented as a
+top-level protocol, alongside `simpleRestJson`, on the [REST
+JSON](/smithy-dotnet/protocols/rest-json/) page rather than under this AWS
+section.
 
 For AWS restJson1, NSmithy targets more than proof-of-concept use:
 

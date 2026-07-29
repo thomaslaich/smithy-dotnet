@@ -94,8 +94,8 @@ Content-Type: application/x-amz-json-1.1
 ## Usage
 
 The generated client selects the declared protocol by default and is used
-exactly like every other NSmithy client — see [Client & Server
-Usage](/smithy-dotnet/protocols/usage/) for the client code. Only the
+exactly like every other NSmithy client — see the [Protocols
+Overview](/smithy-dotnet/protocols/overview/) for the client code. Only the
 `@awsJson1_1` (or `@awsJson1_0`) trait is specific to this protocol.
 
 AWS JSON support is client-only. NSmithy does not generate AWS JSON servers and

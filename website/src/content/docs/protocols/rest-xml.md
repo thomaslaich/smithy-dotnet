@@ -74,9 +74,8 @@ structure NoSuchResource {
 member name is used as-is.
 
 HTTP binding traits (`@httpLabel`, `@httpQuery`, `@httpHeader`, `@httpPayload`)
-work the same way as in `simpleRestJson` — members without an explicit binding go
-into the XML body. See the [Modeling guide](/smithy-dotnet/guides/modeling/) for
-the full set.
+work the same way as in the [REST JSON](/smithy-dotnet/protocols/rest-json/)
+protocols — members without an explicit binding go into the XML body.
 
 ## On the Wire
 
@@ -99,9 +98,9 @@ Members without an HTTP binding are carried in the XML body.
 ## Usage
 
 The XML codec is wired up automatically by the generated client, which is used
-exactly like every other NSmithy client — see [Client & Server
-Usage](/smithy-dotnet/protocols/usage/). Only the `@restXml` trait and the XML
-wire format are specific to this protocol. NSmithy does not generate restXml
+exactly like every other NSmithy client — see the [Protocols
+Overview](/smithy-dotnet/protocols/overview/). Only the `@restXml` trait and the
+XML wire format are specific to this protocol. NSmithy does not generate restXml
 servers.
 
 Explicit SigV4 signing exists in early preview; see

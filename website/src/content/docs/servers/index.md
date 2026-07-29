@@ -7,16 +7,33 @@ NSmithy generates one handler interface per service — a method per operation,
 in plain model types. You implement it once. The generated ASP.NET Core adapter
 converts each request, the shared server runtime dispatches it (deserialize →
 invoke → serialize, or serialize a modeled error), and the response goes back on
-the wire. None of that machinery is generated per operation, and none of it
-depends on which protocol the service declares.
+the wire. None of that request-handling machinery depends on which protocol the
+service declares.
 
-The model and the handler are the same across every protocol — see
-[Client &amp; Server Usage](/smithy-dotnet/protocols/usage/) for the shared model.
+The service handler interface (`IWeatherServiceHandler`) is composed from one
+**per-operation interface** for each operation — `IGetCityHandler`,
+`IListCitiesHandler`, and so on — which it inherits:
+
+```csharp
+public interface IGetCityHandler
+{
+    Task<GetCityOutput> GetCityAsync(GetCityInput input, CancellationToken ct = default);
+}
+
+public interface IWeatherServiceHandler : IGetCityHandler, IListCitiesHandler { }
+```
+
+Registration wires up both the aggregate interface and each per-operation
+interface to your single implementation, so a component can depend on just the
+one operation it needs (`IGetCityHandler`) instead of the whole service. The
+model and the handler are the same across every protocol — see the [Protocols
+Overview](/smithy-dotnet/protocols/overview/) for the shared model.
 
 ## Register the handler
 
-`Add{Service}Handler<THandler>` registers your implementation (and its
-per-operation interfaces) in DI:
+`Add{Service}Handler<THandler>` registers one implementation of the whole
+service against both the aggregate interface and each per-operation interface in
+DI:
 
 ```csharp
 using Example.Weather;
@@ -24,6 +41,24 @@ using Example.Weather;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddWeatherServiceHandler<WeatherHandler>();
 ```
+
+### Registering operation handlers separately
+
+The generated endpoints resolve the **per-operation interface** from DI — never
+the aggregate — so a single class implementing the whole service is a
+convenience, not a requirement. If you'd rather split operations across classes
+(or across teams), register each per-operation interface yourself and skip
+`AddWeatherServiceHandler`:
+
+```csharp
+builder.Services.AddSingleton<IGetCityHandler, GetCityHandler>();
+builder.Services.AddSingleton<IListCitiesHandler, ListCitiesHandler>();
+// …one registration per operation the mapped protocol serves
+```
+
+Each mapped route picks up its operation's handler independently. As long as
+every operation the protocol maps has a registration, the service is fully
+served.
 
 ## Map the endpoints
 
@@ -64,6 +99,28 @@ internal sealed class WeatherHandler : IWeatherServiceHandler
 
 Error identity and status come from the model, so the same thrown exception
 serializes correctly for every protocol the service exposes.
+
+A handler that implements a single per-operation interface looks the same, minus
+the other operations — implement just the one method:
+
+```csharp
+internal sealed class GetCityHandler : IGetCityHandler
+{
+    public Task<GetCityOutput> GetCityAsync(
+        GetCityInput input, CancellationToken ct = default)
+    {
+        if (input.CityId == "unknown")
+            throw new NoSuchResource(null, "City");
+
+        return Task.FromResult(new GetCityOutput("Seattle"));
+    }
+}
+```
+
+Register it with `AddSingleton<IGetCityHandler, GetCityHandler>()` (see
+[Registering operation handlers separately](#registering-operation-handlers-separately)).
+The endpoint that maps `GetCity` resolves this handler directly, so it serves that
+operation whether or not the rest of the service is implemented by the same class.
 
 ## Which protocols generate a server
 
