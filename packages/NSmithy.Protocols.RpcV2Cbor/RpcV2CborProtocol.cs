@@ -283,7 +283,7 @@ public sealed class RpcV2CborProtocol : IProtocol
                 ?? throw new InvalidOperationException(
                     "rpcv2Cbor event streams must target a union schema."
                 );
-            EnsureNoInitialResponseMembers<TOutput>(operation.Output);
+            EnsureNoInitialResponseMembers(operation.Output);
         }
 
         public SmithyHttpRequest SerializeRequest(TInput input)
@@ -348,7 +348,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         )
         {
             requestUri = RequestUri(service, operation);
-            EnsureNoInitialRequestMembers<TInput>(operation.Input);
+            EnsureNoInitialRequestMembers(operation.Input);
             outputIsUnit = IsUnit<TOutput>(operation.Output);
             requestCodec = CborCodec.FromSchema(inputEvent);
             requestEvent =
@@ -452,8 +452,8 @@ public sealed class RpcV2CborProtocol : IProtocol
         )
         {
             ArgumentNullException.ThrowIfNull(input);
-            EnsureNoInitialRequestMembers<TInput>(operation.Input);
-            EnsureNoInitialResponseMembers<TOutput>(operation.Output);
+            EnsureNoInitialRequestMembers(operation.Input);
+            EnsureNoInitialResponseMembers(operation.Output);
             return BaseStreamingRequest(
                 requestUri,
                 EventStreamContentType,
