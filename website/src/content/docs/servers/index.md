@@ -7,11 +7,27 @@ NSmithy generates one handler interface per service — a method per operation,
 in plain model types. You implement it once. The generated ASP.NET Core adapter
 converts each request, the shared server runtime dispatches it (deserialize →
 invoke → serialize, or serialize a modeled error), and the response goes back on
-the wire. None of that machinery is generated per operation, and none of it
-depends on which protocol the service declares.
+the wire. None of that request-handling machinery depends on which protocol the
+service declares.
 
-The model and the handler are the same across every protocol — see
-[Client &amp; Server Usage](/smithy-dotnet/protocols/usage/) for the shared model.
+The service handler interface (`IWeatherServiceHandler`) is composed from one
+**per-operation interface** for each operation — `IGetCityHandler`,
+`IListCitiesHandler`, and so on — which it inherits:
+
+```csharp
+public interface IGetCityHandler
+{
+    Task<GetCityOutput> GetCityAsync(GetCityInput input, CancellationToken ct = default);
+}
+
+public interface IWeatherServiceHandler : IGetCityHandler, IListCitiesHandler { }
+```
+
+Registration wires up both the aggregate interface and each per-operation
+interface to your single implementation, so a component can depend on just the
+one operation it needs (`IGetCityHandler`) instead of the whole service. The
+model and the handler are the same across every protocol — see the [Protocols
+Overview](/smithy-dotnet/protocols/overview/) for the shared model.
 
 ## Register the handler
 

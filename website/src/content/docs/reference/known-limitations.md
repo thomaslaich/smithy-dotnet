@@ -12,8 +12,7 @@ Support is intentionally selective, and protocols are at different maturity
 levels. Each implemented protocol has a conformance suite run against the
 official Smithy / AWS protocol tests (`tests/Conformance`):
 
-- **simpleRestJson (`alloy#simpleRestJson`)** — the most complete: client and
-  ASP.NET Core server, with the broadest end-to-end coverage.
+- **simpleRestJson (`alloy#simpleRestJson`)** — client and ASP.NET Core server.
 - **AWS restJson1 (`aws.protocols#restJson1`)** — client and ASP.NET Core server. The main
   remaining corpus gap is the Glacier-specific fixture set, which needs broader
   projection support.

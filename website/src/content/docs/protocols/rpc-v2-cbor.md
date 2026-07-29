@@ -87,10 +87,11 @@ no `@http` traits. Errors carry a `__type` discriminator in the CBOR body.
 
 ## Usage
 
-The generated handler and client are identical to every other HTTP-JSON/CBOR
-protocol — see [Client & Server Usage](/smithy-dotnet/protocols/usage/). The CBOR
-codec is wired up automatically; the only thing specific to this protocol is the
-`@rpcv2Cbor` trait and the binary wire format on the fixed operation path.
+The generated handler and client are identical to every other protocol — see the
+[Protocols Overview](/smithy-dotnet/protocols/overview/) for the canonical
+example. The CBOR codec is wired up automatically; the only thing specific to
+this protocol is the `@rpcv2Cbor` trait and the binary wire format on the fixed
+operation path.
 
 ## Example
 

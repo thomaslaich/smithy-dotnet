@@ -16,7 +16,7 @@ server is never counted toward client coverage and vice versa.
 
 | Protocol | Surfaces | Stage | Client | Server |
 | --- | --- | --- | --- | --- |
-| `alloy#simpleRestJson` | both | Preview (most complete) | 43/43 (100%) | 43/43 (100%) |
+| `alloy#simpleRestJson` | both | Preview | 43/43 (100%) | 43/43 (100%) |
 | `aws.protocols#restJson1` | both | Preview | 243/247 (98.4%) | 224/227 (98.7%) |
 | `aws.protocols#awsJson1_1` | client | Early preview | requests 6/57 (10.5%), responses 19/61 (31.1%) | — |
 | `aws.protocols#awsJson1_0` | client | Early preview | runtime support; no conformance project yet | — |
@@ -51,12 +51,12 @@ Notes:
 
 ## Recommended Use
 
-- Prefer simpleRestJson for the most complete client and server support in the
-  current preview, especially when your consumers are primarily .NET or Scala
+- Use simpleRestJson when your consumers are primarily .NET or Scala
   (via [Smithy4s](https://disneystreaming.github.io/smithy4s/)).
 - Use AWS restJson1 when you need generated AWS-style REST/JSON clients or
   ASP.NET Core server surfaces, broad cross-ecosystem compatibility (most
-  official Smithy generators target it), or OpenAPI/Scalar generation.
+  official Smithy generators target it), OpenAPI/Scalar generation, or
+  capabilities simpleRestJson lacks such as event streaming.
 - Use `smithy.protocols#rpcv2Cbor` for binary CBOR-encoded services; client and
   server generation are both available.
 - Use AWS JSON or AWS restXml when you want to evaluate AWS-compatible client
