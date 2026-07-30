@@ -1,6 +1,9 @@
 using Example.Weather;
 
+var port = args.Length > 0 && int.TryParse(args[0], out var parsedPort) ? parsedPort : 5001;
+
 var builder = WebApplication.CreateBuilder(args);
+builder.WebHost.UseUrls($"http://localhost:{port}");
 builder.Services.AddWeatherServiceHandler<WeatherHandler>();
 
 var app = builder.Build();

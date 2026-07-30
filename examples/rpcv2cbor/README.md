@@ -31,7 +31,7 @@ Start the server:
 
 ```bash
 cd examples/rpcv2cbor
-dotnet run --project server --urls http://localhost:5001
+dotnet run --project server
 ```
 
 In another shell, run the client:
