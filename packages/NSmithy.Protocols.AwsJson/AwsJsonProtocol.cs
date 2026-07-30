@@ -80,7 +80,10 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
 
-        public SmithyHttpRequest SerializeRequest(TInput input)
+        public SmithyHttpRequest SerializeRequest(
+            TInput input,
+            CancellationToken cancellationToken = default
+        )
         {
             var request = new SmithyHttpRequest(HttpMethod.Post, "/")
             {
@@ -97,36 +100,47 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             return request;
         }
 
-        public TOutput DeserializeResponse(SmithyHttpClientResponse response)
+        public ValueTask<TOutput> DeserializeResponseAsync(
+            SmithyHttpClientResponse response,
+            CancellationToken cancellationToken = default
+        )
         {
             ArgumentNullException.ThrowIfNull(response);
             if (outputIsSmithyUnit)
             {
-                return (TOutput)(object)SmithyUnit.Value;
+                return ValueTask.FromResult((TOutput)(object)SmithyUnit.Value);
             }
 
             if (outputIsUnit)
             {
-                return CreateEmptyOutput(outputSchema);
+                return ValueTask.FromResult(CreateEmptyOutput(outputSchema));
             }
 
             if (response.Content.Length == 0)
             {
-                return CreateEmptyOutput(outputSchema);
+                return ValueTask.FromResult(CreateEmptyOutput(outputSchema));
             }
 
             var output = responseCodec.Deserialize(response.Content);
-            return output is null ? CreateEmptyOutput(outputSchema) : output;
+            return ValueTask.FromResult(output is null ? CreateEmptyOutput(outputSchema) : output);
         }
 
-        public TInput DeserializeRequest(SmithyHttpRequest request)
+        public ValueTask<TInput> DeserializeRequestAsync(
+            SmithyHttpRequest request,
+            CancellationToken cancellationToken = default
+        )
         {
             ArgumentNullException.ThrowIfNull(request);
             var content = BodyBytes(request.Body);
-            return content.Length == 0 ? default! : requestCodec.Deserialize(content);
+            return ValueTask.FromResult(
+                content.Length == 0 ? default! : requestCodec.Deserialize(content)
+            );
         }
 
-        public SmithyHttpServerResponse SerializeResponse(TOutput output) =>
+        public SmithyHttpServerResponse SerializeResponse(
+            TOutput output,
+            CancellationToken cancellationToken = default
+        ) =>
             throw new NotSupportedException("AWS JSON server-side serialization is not supported.");
 
         public bool IsErrorResponse(SmithyHttpClientResponse response) =>

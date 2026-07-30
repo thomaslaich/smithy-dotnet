@@ -254,10 +254,15 @@ public sealed class SmithyEndpointResolutionTests
 
     private sealed class TextProtocol : IClientOperationProtocol<string, string>
     {
-        public SmithyHttpRequest SerializeRequest(string input) =>
-            new(HttpMethod.Post, $"/{input}");
+        public SmithyHttpRequest SerializeRequest(
+            string input,
+            CancellationToken cancellationToken = default
+        ) => new(HttpMethod.Post, $"/{input}");
 
-        public string DeserializeResponse(SmithyHttpClientResponse response) => "output";
+        public ValueTask<string> DeserializeResponseAsync(
+            SmithyHttpClientResponse response,
+            CancellationToken cancellationToken = default
+        ) => ValueTask.FromResult("output");
 
         public bool IsErrorResponse(SmithyHttpClientResponse response) =>
             (int)response.StatusCode >= 400;

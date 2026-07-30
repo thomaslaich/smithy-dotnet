@@ -36,6 +36,20 @@ public sealed class GrpcProtocolTests
         public string? Message { get; set; }
     }
 
+    public sealed record EchoEvents(IAsyncEnumerable<Echo> Events);
+
+    public sealed class EchoEventsBuilder
+    {
+        public IAsyncEnumerable<Echo>? Events { get; set; }
+    }
+
+    public sealed record ChatEvents(IAsyncEnumerable<ChatEvent> Events);
+
+    public sealed class ChatEventsBuilder
+    {
+        public IAsyncEnumerable<ChatEvent>? Events { get; set; }
+    }
+
     public sealed class TestGrpcExceptionBuilder
     {
         public string? Message { get; set; }
@@ -68,6 +82,28 @@ public sealed class GrpcProtocolTests
             )
             .Build();
 
+    private static Schema<EchoEvents> EchoEventsSchema(string name) =>
+        Schemas
+            .Structure<EchoEvents, EchoEventsBuilder>(ShapeId.Parse($"example.greeter#{name}"))
+            .Required(
+                "events",
+                x => x.Events,
+                (b, v) => b.Events = v,
+                Schemas.EventStream(EchoSchema($"{name}Event"))
+            )
+            .Build(() => new EchoEventsBuilder(), b => new EchoEvents(b.Events!));
+
+    private static Schema<ChatEvents> ChatEventsSchema(string name) =>
+        Schemas
+            .Structure<ChatEvents, ChatEventsBuilder>(ShapeId.Parse($"example.greeter#{name}"))
+            .Required(
+                "events",
+                x => x.Events,
+                (b, v) => b.Events = v,
+                Schemas.EventStream(ChatEventSchema($"{name}Event"))
+            )
+            .Build(() => new ChatEventsBuilder(), b => new ChatEvents(b.Events!));
+
     private static IOperationProtocol<Echo, Echo> BuildProtocol()
     {
         var service = Schemas.Service(ShapeId.Parse("example.greeter#Greeter"));
@@ -94,6 +130,34 @@ public sealed class GrpcProtocolTests
             ShapeId.Parse($"example.greeter#{name}"),
             EchoSchema($"{name}Input"),
             EchoSchema($"{name}Output")
+        );
+
+    private static OperationSchema<Echo, EchoEvents> OutputStreamOperation(string name) =>
+        Schemas.Operation(
+            ShapeId.Parse($"example.greeter#{name}"),
+            EchoSchema($"{name}Input"),
+            EchoEventsSchema($"{name}Output")
+        );
+
+    private static OperationSchema<EchoEvents, Echo> InputStreamOperation(string name) =>
+        Schemas.Operation(
+            ShapeId.Parse($"example.greeter#{name}"),
+            EchoEventsSchema($"{name}Input"),
+            EchoSchema($"{name}Output")
+        );
+
+    private static OperationSchema<EchoEvents, EchoEvents> DuplexStreamOperation(string name) =>
+        Schemas.Operation(
+            ShapeId.Parse($"example.greeter#{name}"),
+            EchoEventsSchema($"{name}Input"),
+            EchoEventsSchema($"{name}Output")
+        );
+
+    private static OperationSchema<Echo, ChatEvents> ChatOutputStreamOperation(string name) =>
+        Schemas.Operation(
+            ShapeId.Parse($"example.greeter#{name}"),
+            EchoSchema($"{name}Input"),
+            ChatEventsSchema($"{name}Output")
         );
 
     [Fact]
@@ -178,7 +242,10 @@ public sealed class GrpcProtocolTests
     public async Task ServerStreamingSerializesUnaryRequestAndReadsEvents()
     {
         var protocol = BuildEventStreamServiceProtocol()
-            .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
+            .ForOutputEventStreamOperation(
+                OutputStreamOperation("Watch"),
+                EchoSchema("WatchEvent")
+            );
 
         var request = protocol.SerializeRequest(new Echo("start"));
 
@@ -194,7 +261,7 @@ public sealed class GrpcProtocolTests
 
         Assert.Equal(
             [new Echo("one"), new Echo("two")],
-            await CollectAsync(protocol.DeserializeResponseEventsAsync(response))
+            await CollectAsync((await protocol.DeserializeResponseAsync(response)).Events)
         );
     }
 
@@ -202,9 +269,14 @@ public sealed class GrpcProtocolTests
     public async Task ClientStreamingSerializesEvents()
     {
         var protocol = BuildEventStreamServiceProtocol()
-            .ForInputEventStreamOperation(EchoOperation("Upload"), EchoSchema("UploadEvent"));
+            .ForInputEventStreamOperation(
+                InputStreamOperation("Upload"),
+                EchoSchema("UploadEvent")
+            );
 
-        var request = protocol.SerializeRequest(ToAsync([new Echo("one"), new Echo("two")]));
+        var request = protocol.SerializeRequest(
+            new EchoEvents(ToAsync([new Echo("one"), new Echo("two")]))
+        );
 
         Assert.Equal("/example.greeter.Greeter/Upload", request.RequestUri);
         Assert.Equal(
@@ -218,12 +290,12 @@ public sealed class GrpcProtocolTests
     {
         var protocol = BuildEventStreamServiceProtocol()
             .ForDuplexEventStreamOperation(
-                EchoOperation("Chat"),
+                DuplexStreamOperation("Chat"),
                 EchoSchema("ChatInputEvent"),
                 EchoSchema("ChatOutputEvent")
             );
 
-        var request = protocol.SerializeRequest(ToAsync([new Echo("client")]));
+        var request = protocol.SerializeRequest(new EchoEvents(ToAsync([new Echo("client")])));
 
         Assert.Equal("/example.greeter.Greeter/Chat", request.RequestUri);
         Assert.Equal([new Echo("client")], await DecodeChunks(BodyChunks(request.Body)));
@@ -234,7 +306,7 @@ public sealed class GrpcProtocolTests
 
         Assert.Equal(
             [new Echo("server")],
-            await CollectAsync(protocol.DeserializeResponseEventsAsync(response))
+            await CollectAsync((await protocol.DeserializeResponseAsync(response)).Events)
         );
     }
 
@@ -307,15 +379,18 @@ public sealed class GrpcProtocolTests
         using var httpClient = GrpcStreamClient(grpcStatus: "13", grpcMessage: "handler blew up");
         var transport = new HttpClientTransport(httpClient);
         var protocol = BuildEventStreamServiceProtocol()
-            .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
+            .ForOutputEventStreamOperation(
+                OutputStreamOperation("Watch"),
+                EchoSchema("WatchEvent")
+            );
 
         var response = await transport.SendAsync(
             StreamRequest(),
             SmithyHttpClientResponseMode.Stream
         );
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            CollectAsync(protocol.DeserializeResponseEventsAsync(response))
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await CollectAsync((await protocol.DeserializeResponseAsync(response)).Events)
         );
         Assert.Contains("13", ex.Message);
         Assert.Contains("Internal", ex.Message); // grpc-status 13 → Internal
@@ -330,15 +405,18 @@ public sealed class GrpcProtocolTests
         using var httpClient = GrpcStreamClient(grpcStatus: null);
         var transport = new HttpClientTransport(httpClient);
         var protocol = BuildEventStreamServiceProtocol()
-            .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
+            .ForOutputEventStreamOperation(
+                OutputStreamOperation("Watch"),
+                EchoSchema("WatchEvent")
+            );
 
         var response = await transport.SendAsync(
             StreamRequest(),
             SmithyHttpClientResponseMode.Stream
         );
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            CollectAsync(protocol.DeserializeResponseEventsAsync(response))
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await CollectAsync((await protocol.DeserializeResponseAsync(response)).Events)
         );
         Assert.Contains("without a grpc-status", ex.Message);
     }
@@ -347,7 +425,10 @@ public sealed class GrpcProtocolTests
     public void StreamingDeserializeThrowsDetailedErrorOnTransportFailure()
     {
         var protocol = BuildEventStreamServiceProtocol()
-            .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
+            .ForOutputEventStreamOperation(
+                OutputStreamOperation("Watch"),
+                EchoSchema("WatchEvent")
+            );
         var response = new SmithyHttpClientResponse(
             System.Net.HttpStatusCode.ServiceUnavailable,
             "Service Unavailable",
@@ -360,7 +441,7 @@ public sealed class GrpcProtocolTests
         );
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
-            protocol.DeserializeResponseEventsAsync(response)
+            protocol.DeserializeResponseAsync(response).AsTask().GetAwaiter().GetResult()
         );
         Assert.Contains("503", ex.Message);
         Assert.Contains("upstream is down", ex.Message);
@@ -396,14 +477,17 @@ public sealed class GrpcProtocolTests
     public async Task ServerStreamingSkipsUnrecognizedUnionEvents()
     {
         var protocol = BuildEventStreamServiceProtocol()
-            .ForOutputEventStreamOperation(EchoOperation("Watch"), ChatEventSchema("WatchEvent"));
+            .ForOutputEventStreamOperation(
+                ChatOutputStreamOperation("Watch"),
+                ChatEventSchema("WatchEvent")
+            );
         var response = EventStreamResponse([
             ChatEventSchema("WatchEvent")
                 .SerializeForTest(new ChatEvent.Message(new Echo("known"))),
             FutureChatEventSchema().SerializeForTest(new ChatEvent.Message(new Echo("unknown"))),
         ]);
 
-        var events = await CollectAsync(protocol.DeserializeResponseEventsAsync(response));
+        var events = await CollectAsync((await protocol.DeserializeResponseAsync(response)).Events);
 
         var only = Assert.Single(events);
         Assert.Equal(new Echo("known"), Assert.IsType<ChatEvent.Message>(only).Value);
@@ -413,9 +497,12 @@ public sealed class GrpcProtocolTests
     public void ServerStreamTrailersReportOkOnCleanCompletion()
     {
         var protocol = BuildEventStreamServiceProtocol()
-            .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
+            .ForOutputEventStreamOperation(
+                OutputStreamOperation("Watch"),
+                EchoSchema("WatchEvent")
+            );
 
-        var response = protocol.SerializeResponse(ToAsync([new Echo("one")]));
+        var response = protocol.SerializeResponse(new EchoEvents(ToAsync([new Echo("one")])));
 
         Assert.Contains(
             new KeyValuePair<string, string>("grpc-status", "0"),
@@ -427,9 +514,12 @@ public sealed class GrpcProtocolTests
     public void ServerStreamTrailersReportInternalOnMidStreamFailure()
     {
         var protocol = BuildEventStreamServiceProtocol()
-            .ForOutputEventStreamOperation(EchoOperation("Watch"), EchoSchema("WatchEvent"));
+            .ForOutputEventStreamOperation(
+                OutputStreamOperation("Watch"),
+                EchoSchema("WatchEvent")
+            );
 
-        var response = protocol.SerializeResponse(ToAsync([new Echo("one")]));
+        var response = protocol.SerializeResponse(new EchoEvents(ToAsync([new Echo("one")])));
 
         // A mid-stream failure the host observes maps to Internal (13) + message, instead of
         // silently truncating the stream with no status.

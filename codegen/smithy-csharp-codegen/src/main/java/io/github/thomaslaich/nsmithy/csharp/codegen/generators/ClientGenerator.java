@@ -53,6 +53,10 @@ public final class ClientGenerator implements Runnable {
         idx.getContainedOperations(service).stream()
             .sorted(Comparator.comparing(o -> o.getId().toString()))
             .collect(Collectors.toList());
+    List<Kind> kinds = ProtocolSupport.declaredKinds(service);
+    if (kinds.contains(Kind.GRPC)) {
+      operations.forEach(op -> ShapeSupport.requireGrpcEventStreamWrapperIsFlattenable(model, op));
+    }
 
     writer.addImport(RuntimeTypes.NSMITHY_CORE);
 
@@ -80,7 +84,6 @@ public final class ClientGenerator implements Runnable {
     writer.write("");
 
     // Services with no supported protocol get the interface only; there is nothing to wire.
-    List<Kind> kinds = ProtocolSupport.declaredKinds(service);
     if (kinds.isEmpty()) {
       return;
     }
@@ -115,13 +118,7 @@ public final class ClientGenerator implements Runnable {
     // The idempotency-token provider is only stored/used when an operation has a nullable
     // @idempotencyToken member; emitting the field unconditionally would be an unused private
     // field.
-    boolean hasUnaryOperations =
-        operations.stream().anyMatch(op -> !isEventStreamOperation(model, op));
-    boolean hasEventStreamOperations =
-        operations.stream().anyMatch(op -> isEventStreamOperation(model, op));
-    boolean wiresEventStreamOperations =
-        hasEventStreamOperations && supportsEventStreamOperations();
-    boolean needsRuntime = hasUnaryOperations || wiresEventStreamOperations;
+    boolean needsRuntime = operations.stream().anyMatch(op -> canBindOperation(op));
     boolean needsIdempotency =
         operations.stream().anyMatch(op -> operationCanDefaultIdempotencyToken(model, op));
     writer.write("public sealed class $L : $L", typeName, interfaceName);
@@ -139,17 +136,14 @@ public final class ClientGenerator implements Runnable {
           }
           // The protocol is bound at construction; per-operation protocols are built once from it.
           for (OperationShape op : operations) {
-            if (isEventStreamOperation(model, op)) {
-              if (wiresEventStreamOperations) {
-                writeEventStreamProtocolField(sp, model, op);
-              }
-            } else {
-              writer.write(
-                  "private readonly SmithyOperationBinding<$L, $L> $LBinding;",
-                  SchemaGenerator.operationShapeType(context, op.getInputShape()),
-                  SchemaGenerator.operationShapeType(context, op.getOutputShape()),
-                  CSharpNaming.typeName(op.getId().getName()));
+            if (!canBindOperation(op)) {
+              continue;
             }
+            writer.write(
+                "private readonly SmithyOperationBinding<$L, $L> $LBinding;",
+                SchemaGenerator.operationShapeType(context, op.getInputShape()),
+                SchemaGenerator.operationShapeType(context, op.getOutputShape()),
+                CSharpNaming.typeName(op.getId().getName()));
           }
           writer.write("");
 
@@ -400,10 +394,7 @@ public final class ClientGenerator implements Runnable {
   }
 
   private boolean operationCanDefaultIdempotencyToken(Model model, OperationShape op) {
-    // Client/bidirectional event streams take the input event sequence as the generated method
-    // parameter, so there is no modeled input container to rewrite with a default token. Unary,
-    // blob-streaming, and server-event-streaming operations keep a normal input container.
-    return !isInputStreaming(model, op) && operationNeedsIdempotencyToken(model, op);
+    return operationNeedsIdempotencyToken(model, op);
   }
 
   // ---------------- operation bindings ----------------
@@ -413,10 +404,7 @@ public final class ClientGenerator implements Runnable {
    */
   private void writeOperationBindings(List<OperationShape> operations) {
     for (OperationShape op : operations) {
-      if (isEventStreamOperation(context.model(), op)) {
-        if (supportsEventStreamOperations()) {
-          writeEventStreamOperationBinding(context.model(), op);
-        }
+      if (!canBindOperation(op)) {
         continue;
       }
       String operationSchema = SchemaGenerator.operationSchemaAccessor(context, op);
@@ -452,79 +440,19 @@ public final class ClientGenerator implements Runnable {
         + " }";
   }
 
-  private void writeEventStreamProtocolField(SymbolProvider sp, Model model, OperationShape op) {
-    String opName = CSharpNaming.typeName(op.getId().getName());
-    String inputType = SchemaGenerator.operationShapeType(context, op.getInputShape());
-    String outputType = SchemaGenerator.operationShapeType(context, op.getOutputShape());
-    if (isInputStreaming(model, op) && isOutputStreaming(model, op)) {
-      writer.write(
-          "private readonly SmithyDuplexEventStreamOperationBinding<$L, $L> $LBinding;",
-          streamingEventType(sp, model, op.getInputShape()),
-          streamingEventType(sp, model, op.getOutputShape()),
-          opName);
-    } else if (isOutputStreaming(model, op)) {
-      writer.write(
-          "private readonly SmithyOutputEventStreamOperationBinding<$L, $L> $LBinding;",
-          inputType,
-          streamingEventType(sp, model, op.getOutputShape()),
-          opName);
-    } else {
-      writer.write(
-          "private readonly SmithyInputEventStreamOperationBinding<$L, $L> $LBinding;",
-          streamingEventType(sp, model, op.getInputShape()),
-          outputType,
-          opName);
-    }
-  }
-
-  private void writeEventStreamOperationBinding(Model model, OperationShape op) {
-    String opName = CSharpNaming.typeName(op.getId().getName());
-    String operationSchema = SchemaGenerator.operationSchemaAccessor(context, op);
-    if (isInputStreaming(model, op) && isOutputStreaming(model, op)) {
-      writer.write(
-          "this.$LBinding = new SmithyDuplexEventStreamOperationBinding<$L, $L>($L.Id, $L.Id,"
-              + " serviceProtocol.ForDuplexEventStreamOperation($L, $L, $L), $L);",
-          opName,
-          streamingEventType(context.symbolProvider(), model, op.getInputShape()),
-          streamingEventType(context.symbolProvider(), model, op.getOutputShape()),
-          SchemaGenerator.serviceSchemaAccessor(context, service),
-          operationSchema,
-          operationSchema,
-          streamingEventSchema(model, op.getInputShape()),
-          streamingEventSchema(model, op.getOutputShape()),
-          operationAuthSchemesLiteral(op));
-    } else if (isOutputStreaming(model, op)) {
-      writer.write(
-          "this.$LBinding = new SmithyOutputEventStreamOperationBinding<$L, $L>($L.Id, $L.Id,"
-              + " serviceProtocol.ForOutputEventStreamOperation($L, $L), $L);",
-          opName,
-          SchemaGenerator.operationShapeType(context, op.getInputShape()),
-          streamingEventType(context.symbolProvider(), model, op.getOutputShape()),
-          SchemaGenerator.serviceSchemaAccessor(context, service),
-          operationSchema,
-          operationSchema,
-          streamingEventSchema(model, op.getOutputShape()),
-          operationAuthSchemesLiteral(op));
-    } else {
-      writer.write(
-          "this.$LBinding = new SmithyInputEventStreamOperationBinding<$L, $L>($L.Id, $L.Id,"
-              + " serviceProtocol.ForInputEventStreamOperation($L, $L), $L);",
-          opName,
-          streamingEventType(context.symbolProvider(), model, op.getInputShape()),
-          SchemaGenerator.operationShapeType(context, op.getOutputShape()),
-          SchemaGenerator.serviceSchemaAccessor(context, service),
-          operationSchema,
-          operationSchema,
-          streamingEventSchema(model, op.getInputShape()),
-          operationAuthSchemesLiteral(op));
-    }
-  }
-
   // ---------------- per-operation method ----------------
 
   private void writeOperationMethod(SymbolProvider sp, Model model, OperationShape op) {
-    if (isEventStreamOperation(model, op)) {
-      writeEventStreamOperationMethod(sp, model, op);
+    if (!canBindOperation(op)) {
+      writer.write("public $L", operationSignature(sp, op));
+      writer.openBlock(
+          "{",
+          "}",
+          () ->
+              writer.write(
+                  "throw new System.NotSupportedException(\"Streaming operations are only wired"
+                      + " for native gRPC clients today.\");"));
+      writer.write("");
       return;
     }
 
@@ -557,76 +485,6 @@ public final class ClientGenerator implements Runnable {
                 opName,
                 inputArg);
             writer.write("return;");
-          }
-        });
-    writer.write("");
-  }
-
-  private void writeEventStreamOperationMethod(SymbolProvider sp, Model model, OperationShape op) {
-    if (!supportsEventStreamOperations()) {
-      writer.write("public $L", operationSignature(sp, op));
-      writer.openBlock(
-          "{",
-          "}",
-          () ->
-              writer.write(
-                  "throw new System.NotSupportedException(\"Streaming operations are only wired"
-                      + " for native gRPC clients today.\");"));
-      writer.write("");
-      return;
-    }
-
-    boolean inputStreaming = isInputStreaming(model, op);
-    boolean outputStreaming = isOutputStreaming(model, op);
-    boolean hasContainerInput = !ShapeSupport.isUnit(op.getInputShape()) && !inputStreaming;
-    boolean hasContainerOutput = !ShapeSupport.isUnit(op.getOutputShape()) && !outputStreaming;
-    String opName = CSharpNaming.typeName(op.getId().getName());
-    String inputArg = hasContainerInput ? "input" : "SmithyUnit.Value";
-
-    writer.write(outputStreaming ? "public $L" : "public async $L", operationSignature(sp, op));
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          if (inputStreaming || hasContainerInput) {
-            writer.write("System.ArgumentNullException.ThrowIfNull(input);");
-          }
-
-          if (outputStreaming) {
-            if (hasContainerInput) {
-              writeIdempotencyTokenDefaults(
-                  model.expectShape(op.getInputShape(), StructureShape.class));
-            }
-            writer.write("return InvokeAsync();");
-            writer.write("");
-            writer.write(
-                "async System.Collections.Generic.IAsyncEnumerable<$L> InvokeAsync()",
-                streamingEventType(sp, model, op.getOutputShape()));
-            writer.openBlock(
-                "{",
-                "}",
-                () -> {
-                  writer.write(
-                      "await foreach (var item in runtime.$L($LBinding, $L,"
-                          + " cancellationToken).ConfigureAwait(false))",
-                      inputStreaming ? "InvokeDuplexStreamAsync" : "InvokeOutputStreamAsync",
-                      opName,
-                      inputStreaming ? "input" : inputArg);
-                  writer.openBlock("{", "}", () -> writer.write("yield return item;"));
-                });
-          } else {
-            if (hasContainerOutput) {
-              writer.write(
-                  "return await runtime.InvokeInputStreamAsync($LBinding, input,"
-                      + " cancellationToken).ConfigureAwait(false);",
-                  opName);
-            } else {
-              writer.write(
-                  "await runtime.InvokeInputStreamAsync($LBinding, input,"
-                      + " cancellationToken).ConfigureAwait(false);",
-                  opName);
-              writer.write("return;");
-            }
           }
         });
     writer.write("");
@@ -817,33 +675,22 @@ public final class ClientGenerator implements Runnable {
 
   private String operationSignature(SymbolProvider sp, OperationShape op) {
     Model model = context.model();
-    boolean inputStreaming = isInputStreaming(model, op);
-    boolean outputStreaming = isOutputStreaming(model, op);
-    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape()) && !inputStreaming;
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape()) && !outputStreaming;
+    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
+    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
     String inputType =
-        inputStreaming
-            ? "System.Collections.Generic.IAsyncEnumerable<"
-                + streamingEventType(sp, model, op.getInputShape())
-                + ">"
-            : hasInput
-                ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())))
-                : null;
+        hasInput
+            ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())))
+            : null;
     String outputType =
-        outputStreaming
-            ? streamingEventType(sp, model, op.getOutputShape())
-            : hasOutput
-                ? CSharpSymbolProvider.qualified(
-                    sp.toSymbol(model.expectShape(op.getOutputShape())))
-                : null;
+        hasOutput
+            ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getOutputShape())))
+            : null;
     String returnType =
-        outputStreaming
-            ? "System.Collections.Generic.IAsyncEnumerable<" + outputType + ">"
-            : hasOutput
-                ? "System.Threading.Tasks.Task<" + outputType + ">"
-                : "System.Threading.Tasks.Task";
-    String params = inputStreaming || hasInput ? inputType + " input, " : "";
+        hasOutput
+            ? "System.Threading.Tasks.Task<" + outputType + ">"
+            : "System.Threading.Tasks.Task";
+    String params = hasInput ? inputType + " input, " : "";
     return returnType
         + " "
         + name
@@ -856,7 +703,10 @@ public final class ClientGenerator implements Runnable {
     return isInputStreaming(model, op) || isOutputStreaming(model, op);
   }
 
-  private boolean supportsEventStreamOperations() {
+  private boolean canBindOperation(OperationShape op) {
+    if (!isEventStreamOperation(context.model(), op)) {
+      return true;
+    }
     return ProtocolSupport.declaredKinds(service).stream()
         .anyMatch(kind -> kind == Kind.GRPC || kind == Kind.RPC_V2_CBOR);
   }
@@ -867,19 +717,5 @@ public final class ClientGenerator implements Runnable {
 
   private boolean isOutputStreaming(Model model, OperationShape op) {
     return ShapeSupport.isEventStreamShape(model, op.getOutputShape());
-  }
-
-  private String streamingEventType(SymbolProvider sp, Model model, ShapeId shapeId) {
-    ShapeId target =
-        ShapeSupport.streamingMemberTarget(model, shapeId)
-            .orElseThrow(() -> new IllegalStateException("Expected streaming shape: " + shapeId));
-    return CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(target)));
-  }
-
-  private String streamingEventSchema(Model model, ShapeId shapeId) {
-    ShapeId target =
-        ShapeSupport.streamingMemberTarget(model, shapeId)
-            .orElseThrow(() -> new IllegalStateException("Expected streaming shape: " + shapeId));
-    return SchemaGenerator.shapeSchemaAccessor(context, model.expectShape(target));
   }
 }

@@ -124,15 +124,15 @@ public sealed class SmithyClientRuntimeTests
             [new RecordingInterceptor("one", calls)],
             endpoint: new Uri("https://api.example.com/base")
         );
-        var binding = new SmithyOutputEventStreamOperationBinding<string, string>(
+        var binding = new SmithyOperationBinding<string, string>(
             ShapeId.Parse("example.weather#Weather"),
             ShapeId.Parse("example.weather#Watch"),
             new OutputStreamProtocol()
         );
 
-        var output = await CollectAsync(runtime.InvokeOutputStreamAsync(binding, "input"));
+        var output = await runtime.InvokeAsync(binding, "input");
 
-        Assert.Equal(["first", "second"], output);
+        Assert.Equal("stream-output", output);
         Assert.Equal(
             [
                 "one:before-execution:Weather.Watch",
@@ -140,8 +140,7 @@ public sealed class SmithyClientRuntimeTests
                 "one:before-signing:https://api.example.com/base/input",
                 "one:before-transmit:https://api.example.com/base/input",
                 "one:after-transmit:OK",
-                "one:after-deserialization:first",
-                "one:after-deserialization:second",
+                "one:after-deserialization:stream-output",
                 "one:after-execution:ok",
             ],
             calls
@@ -875,10 +874,15 @@ public sealed class SmithyClientRuntimeTests
     // implement IClientOperationProtocol and skip the server members entirely.
     private class TextProtocol : IClientOperationProtocol<string, string>
     {
-        public virtual SmithyHttpRequest SerializeRequest(string input) =>
-            new(HttpMethod.Post, $"/{input}");
+        public virtual SmithyHttpRequest SerializeRequest(
+            string input,
+            CancellationToken cancellationToken = default
+        ) => new(HttpMethod.Post, $"/{input}");
 
-        public virtual string DeserializeResponse(SmithyHttpClientResponse response) => "output";
+        public virtual ValueTask<string> DeserializeResponseAsync(
+            SmithyHttpClientResponse response,
+            CancellationToken cancellationToken = default
+        ) => ValueTask.FromResult("output");
 
         public bool IsErrorResponse(SmithyHttpClientResponse response) =>
             (int)response.StatusCode >= 400;
@@ -889,27 +893,25 @@ public sealed class SmithyClientRuntimeTests
         ) => ValueTask.FromResult<Exception?>(null);
     }
 
-    private sealed class OutputStreamProtocol : IOutputEventStreamClientProtocol<string, string>
+    private sealed class OutputStreamProtocol : TextProtocol
     {
-        public SmithyHttpRequest SerializeRequest(string input) =>
-            new(HttpMethod.Post, $"/{input}");
+        public override SmithyHttpRequest SerializeRequest(
+            string input,
+            CancellationToken cancellationToken = default
+        ) => new(HttpMethod.Post, $"/{input}") { ExpectStreamingResponse = true };
 
-        public async IAsyncEnumerable<string> DeserializeResponseEventsAsync(
+        public override ValueTask<string> DeserializeResponseAsync(
             SmithyHttpClientResponse response,
-            [System.Runtime.CompilerServices.EnumeratorCancellation]
-                CancellationToken cancellationToken = default
-        )
-        {
-            await Task.CompletedTask.ConfigureAwait(false);
-            yield return "first";
-            yield return "second";
-        }
+            CancellationToken cancellationToken = default
+        ) => ValueTask.FromResult("stream-output");
     }
 
     private sealed class AbsoluteUriProtocol : TextProtocol
     {
-        public override SmithyHttpRequest SerializeRequest(string input) =>
-            new(HttpMethod.Post, $"https://override.example/{input}");
+        public override SmithyHttpRequest SerializeRequest(
+            string input,
+            CancellationToken cancellationToken = default
+        ) => new(HttpMethod.Post, $"https://override.example/{input}");
     }
 
     private sealed class ContentTextErrorProtocol : TextProtocol
@@ -922,7 +924,10 @@ public sealed class SmithyClientRuntimeTests
 
     private sealed class StreamingRequestProtocol : TextProtocol
     {
-        public override SmithyHttpRequest SerializeRequest(string input) =>
+        public override SmithyHttpRequest SerializeRequest(
+            string input,
+            CancellationToken cancellationToken = default
+        ) =>
             new(HttpMethod.Post, "/upload")
             {
                 Body = new SmithyHttpBody.Streaming(new MemoryStream("hello"u8.ToArray())),
@@ -931,8 +936,10 @@ public sealed class SmithyClientRuntimeTests
 
     private sealed class ThrowingDeserializationProtocol : TextProtocol
     {
-        public override string DeserializeResponse(SmithyHttpClientResponse response) =>
-            throw new FormatException("malformed body");
+        public override ValueTask<string> DeserializeResponseAsync(
+            SmithyHttpClientResponse response,
+            CancellationToken cancellationToken = default
+        ) => throw new FormatException("malformed body");
     }
 
     private sealed class TrackingStream : MemoryStream

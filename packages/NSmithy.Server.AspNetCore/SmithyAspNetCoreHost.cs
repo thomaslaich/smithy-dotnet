@@ -24,7 +24,7 @@ public static class SmithyAspNetCoreHost
     // the seam that becomes configurable.
     private static readonly SmithyServerRuntime Runtime = new();
 
-    /// <summary>Unary dispatch. Set <paramref name="streamRequestBody"/> for streaming blob input.</summary>
+    /// <summary>Dispatch. Set <paramref name="streamRequestBody"/> for streaming request bodies.</summary>
     public static async Task DispatchAsync<TInput, TOutput>(
         HttpContext httpContext,
         IServerOperationProtocol<TInput, TOutput> protocol,
@@ -39,61 +39,6 @@ public static class SmithyAspNetCoreHost
         var response = await Runtime
             .DispatchAsync(protocol, request, handler, cancellationToken)
             .ConfigureAwait(false);
-        await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>Output-stream dispatch: a unary request in, events out.</summary>
-    public static async Task DispatchOutputStreamAsync<TInput, TOutputEvent>(
-        HttpContext httpContext,
-        IOutputEventStreamServerProtocol<TInput, TOutputEvent> protocol,
-        Func<TInput, CancellationToken, IAsyncEnumerable<TOutputEvent>> handler,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(httpContext);
-        var request = await ToSmithyRequestAsync(httpContext, streamBody: false, cancellationToken)
-            .ConfigureAwait(false);
-        var response = Runtime.DispatchOutputStream(protocol, request, handler, cancellationToken);
-        await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>Input-stream dispatch: events in, a unary response out.</summary>
-    public static async Task DispatchInputStreamAsync<TInputEvent, TOutput>(
-        HttpContext httpContext,
-        IInputEventStreamServerProtocol<TInputEvent, TOutput> protocol,
-        Func<IAsyncEnumerable<TInputEvent>, CancellationToken, Task<TOutput>> handler,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(httpContext);
-
-        RelaxRequestBodyRate(httpContext);
-        var request = await ToSmithyRequestAsync(httpContext, streamBody: true, cancellationToken)
-            .ConfigureAwait(false);
-        var response = await Runtime
-            .DispatchInputStreamAsync(protocol, request, handler, cancellationToken)
-            .ConfigureAwait(false);
-        await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>Duplex-stream dispatch: events in both directions.</summary>
-    public static async Task DispatchDuplexStreamAsync<TInputEvent, TOutputEvent>(
-        HttpContext httpContext,
-        IDuplexEventStreamServerProtocol<TInputEvent, TOutputEvent> protocol,
-        Func<
-            IAsyncEnumerable<TInputEvent>,
-            CancellationToken,
-            IAsyncEnumerable<TOutputEvent>
-        > handler,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(httpContext);
-
-        RelaxRequestBodyRate(httpContext);
-        var request = await ToSmithyRequestAsync(httpContext, streamBody: true, cancellationToken)
-            .ConfigureAwait(false);
-        var response = Runtime.DispatchDuplexStream(protocol, request, handler, cancellationToken);
         await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
     }
 

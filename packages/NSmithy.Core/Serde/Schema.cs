@@ -218,6 +218,25 @@ public sealed class LazySchema<T> : Schema<T>
     public override Schema Resolved => TargetSchema.Resolved;
 }
 
+public interface IEventStreamSchema
+{
+    Schema EventSchema { get; }
+}
+
+public sealed class EventStreamSchema<TEvent> : Schema<IAsyncEnumerable<TEvent>>, IEventStreamSchema
+{
+    internal EventStreamSchema(Schema<TEvent> eventSchema)
+        : base(eventSchema.Id, eventSchema.Kind, eventSchema.Traits.Values)
+    {
+        ArgumentNullException.ThrowIfNull(eventSchema);
+        TypedEventSchema = eventSchema;
+    }
+
+    public Schema<TEvent> TypedEventSchema { get; }
+
+    public Schema EventSchema => TypedEventSchema;
+}
+
 public interface IStructSchema
 {
     IReadOnlyList<IMemberSchema> Members { get; }
@@ -1231,6 +1250,9 @@ public static class Schemas
 
     public static Schema<T?> NullableReference<T>(Schema<T> target)
         where T : class => (Schema<T?>)(object)target;
+
+    public static EventStreamSchema<TEvent> EventStream<TEvent>(Schema<TEvent> eventSchema) =>
+        new(eventSchema);
 
     public static StringEnumSchema<T> StringEnum<T>(ShapeId id, IEnumerable<Trait>? traits = null)
         where T : IStringEnumValue<T> => new(id, traits);

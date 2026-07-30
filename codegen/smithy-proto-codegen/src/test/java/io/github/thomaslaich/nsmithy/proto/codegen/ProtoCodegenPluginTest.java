@@ -93,7 +93,6 @@ final class ProtoCodegenPluginTest {
       }
 
       structure WatchInput {
-          @protoIndex(1)
           events: WatchInputEvent
       }
 
@@ -110,7 +109,6 @@ final class ProtoCodegenPluginTest {
       }
 
       structure WatchOutput {
-          @protoIndex(1)
           events: WatchOutputEvent
       }
 
@@ -246,6 +244,51 @@ final class ProtoCodegenPluginTest {
 
           @protoIndex(1)
           second: Integer
+      }
+      """;
+
+  private static final String STREAMING_SIBLING_MODEL =
+      """
+      $version: "2"
+
+      namespace example.invalidstream
+
+      use alloy.proto#grpc
+      use alloy.proto#protoIndex
+
+      @grpc
+      service InvalidStreamingService {
+          version: "1"
+          operations: [Chat]
+      }
+
+      operation Chat {
+          input: ChatInput
+          output: ChatOutput
+      }
+
+      structure ChatInput {
+          @protoIndex(1)
+          room: String
+
+          @protoIndex(2)
+          events: ChatEvent
+      }
+
+      structure ChatOutput {
+          @protoIndex(1)
+          events: ChatEvent
+      }
+
+      @streaming
+      union ChatEvent {
+          @protoIndex(1)
+          message: MessageEvent
+      }
+
+      structure MessageEvent {
+          @protoIndex(1)
+          text: String
       }
       """;
 
@@ -399,6 +442,43 @@ final class ProtoCodegenPluginTest {
     assertTrue(
         proto.contains("  rpc Watch (stream WatchInputEvent) returns (stream WatchOutputEvent);"),
         proto);
+    assertFalse(proto.contains("message WatchInput {"), proto);
+    assertFalse(proto.contains("message WatchOutput {"), proto);
+  }
+
+  @Test
+  void executeFailsWhenStreamingWrapperHasSiblingMembers() {
+    Model model =
+        Model.assembler()
+            .addUnparsedModel("alloy-proto-traits.smithy", ALLOY_PROTO_TRAITS)
+            .addUnparsedModel("model.smithy", STREAMING_SIBLING_MODEL)
+            .assemble()
+            .unwrap();
+    FileManifest manifest = FileManifest.create(tempDir);
+
+    CodegenException ex =
+        assertThrows(
+            CodegenException.class,
+            () ->
+                new ProtoCodegenPlugin()
+                    .execute(
+                        PluginContext.builder()
+                            .model(model)
+                            .fileManifest(manifest)
+                            .settings(
+                                ObjectNode.builder()
+                                    .withMember(
+                                        "service",
+                                        Node.from("example.invalidstream#InvalidStreamingService"))
+                                    .build())
+                            .build()));
+
+    assertTrue(
+        ex.getMessage()
+            .contains(
+                "gRPC event-stream operation example.invalidstream#Chat input shape"
+                    + " example.invalidstream#ChatInput must contain exactly one streaming member"),
+        ex.getMessage());
   }
 
   @Test
