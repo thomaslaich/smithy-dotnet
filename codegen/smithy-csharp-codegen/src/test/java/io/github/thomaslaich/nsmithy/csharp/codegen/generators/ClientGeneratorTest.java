@@ -1,6 +1,7 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
@@ -12,6 +13,7 @@ import java.nio.file.Files;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import software.amazon.smithy.build.FileManifest;
+import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
@@ -70,6 +72,41 @@ final class ClientGeneratorTest {
       }
       """;
 
+  private static final String STREAMING_SIBLING_MODEL =
+      """
+      $version: "2"
+
+      namespace example.streaming
+
+      use alloy.proto#grpc
+      use smithy.api#streaming
+
+      @grpc
+      service StreamingService {
+          version: "1"
+          operations: [Chat]
+      }
+
+      operation Chat {
+          input := {
+              room: String
+              events: ChatEvent
+          }
+          output := {
+              events: ChatEvent
+          }
+      }
+
+      @streaming
+      union ChatEvent {
+          message: MessageEvent
+      }
+
+      structure MessageEvent {
+          text: String
+      }
+      """;
+
   private static final String PROTOCOL_TRAITS =
       """
       $version: "2"
@@ -90,32 +127,51 @@ final class ClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "System.Collections.Generic.IAsyncEnumerable<Example.Example.Streaming.ChatEvent>"
+            "System.Threading.Tasks.Task<Example.Example.Streaming.WatchOutput>"
                 + " WatchAsync(Example.Example.Streaming.WatchInput input,"
                 + " System.Threading.CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(
         generated.contains(
             "System.Threading.Tasks.Task<Example.Example.Streaming.UploadOutput>"
-                + " UploadAsync(System.Collections.Generic.IAsyncEnumerable<Example.Example.Streaming.ChatEvent>"
-                + " input, System.Threading.CancellationToken cancellationToken = default);"),
+                + " UploadAsync(Example.Example.Streaming.UploadInput input,"
+                + " System.Threading.CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(
         generated.contains(
-            "System.Collections.Generic.IAsyncEnumerable<Example.Example.Streaming.ChatEvent>"
-                + " ChatAsync(System.Collections.Generic.IAsyncEnumerable<Example.Example.Streaming.ChatEvent>"
-                + " input, System.Threading.CancellationToken cancellationToken = default);"),
+            "System.Threading.Tasks.Task<Example.Example.Streaming.ChatOutput>"
+                + " ChatAsync(Example.Example.Streaming.ChatInput input,"
+                + " System.Threading.CancellationToken cancellationToken = default);"),
         generated);
-    assertFalse(generated.contains("WatchProtocol = serviceProtocol.ForOperation"), generated);
+    assertFalse(generated.contains("ForOutputEventStreamOperation"), generated);
     assertFalse(generated.contains("Streaming operations are not wired"), generated);
     assertTrue(
         generated.contains(
             "private readonly"
-                + " SmithyOutputEventStreamOperationBinding<Example.Example.Streaming.WatchInput,"
-                + " Example.Example.Streaming.ChatEvent> WatchBinding;"));
-    assertTrue(generated.contains("return InvokeAsync();"), generated);
-    assertTrue(generated.contains("runtime.InvokeOutputStreamAsync(WatchBinding"), generated);
+                + " SmithyOperationBinding<Example.Example.Streaming.WatchInput,"
+                + " Example.Example.Streaming.WatchOutput> WatchBinding;"));
+    assertTrue(generated.contains("runtime.InvokeAsync(WatchBinding"), generated);
     assertFalse(generated.contains("SmithyEventStreamOperationInvoker"), generated);
+  }
+
+  @Test
+  void grpcStreamingOperationsRejectSiblingMembers() {
+    CodegenException ex =
+        assertThrows(
+            CodegenException.class,
+            () ->
+                renderClient(
+                    PROTOCOL_TRAITS,
+                    STREAMING_SIBLING_MODEL,
+                    "example.streaming#StreamingService",
+                    "Example.Streaming"));
+
+    assertTrue(
+        ex.getMessage()
+            .contains(
+                "gRPC event-stream operation example.streaming#Chat input shape"
+                    + " example.streaming#ChatInput must contain exactly one event-stream member"),
+        ex.getMessage());
   }
 
   private static final String REST_PROTOCOL_TRAITS =

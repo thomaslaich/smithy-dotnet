@@ -25,7 +25,12 @@ app.Run();
 
 internal sealed class ChatHandler(ChatRooms rooms) : IChatServiceHandler
 {
-    public async IAsyncEnumerable<ChatEvent> WatchRoomAsync(
+    public Task<WatchRoomOutput> WatchRoomAsync(
+        WatchRoomInput input,
+        CancellationToken cancellationToken = default
+    ) => Task.FromResult(new WatchRoomOutput(WatchRoomEventsAsync(input, cancellationToken)));
+
+    private static async IAsyncEnumerable<ChatEvent> WatchRoomEventsAsync(
         WatchRoomInput input,
         [System.Runtime.CompilerServices.EnumeratorCancellation]
             CancellationToken cancellationToken = default
@@ -42,12 +47,16 @@ internal sealed class ChatHandler(ChatRooms rooms) : IChatServiceHandler
     }
 
     public async Task<UploadTranscriptOutput> UploadTranscriptAsync(
-        IAsyncEnumerable<ChatEvent> input,
+        UploadTranscriptInput input,
         CancellationToken cancellationToken = default
     )
     {
         var accepted = 0;
-        await foreach (var item in input.WithCancellation(cancellationToken))
+        await foreach (
+            var item in (input.Events ?? EmptyEvents(cancellationToken)).WithCancellation(
+                cancellationToken
+            )
+        )
         {
             if (item is ChatEvent.Message)
                 accepted++;
@@ -56,8 +65,27 @@ internal sealed class ChatHandler(ChatRooms rooms) : IChatServiceHandler
         return new UploadTranscriptOutput(accepted);
     }
 
-    public async IAsyncEnumerable<ChatEvent> ChatAsync(
-        IAsyncEnumerable<ChatEvent> input,
+    public Task<ChatOutput> ChatAsync(
+        ChatInput input,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(
+            new ChatOutput(
+                ChatEventsAsync(input.Events ?? EmptyEvents(cancellationToken), cancellationToken)
+            )
+        );
+
+    private static async IAsyncEnumerable<ChatEvent> EmptyEvents(
+        [System.Runtime.CompilerServices.EnumeratorCancellation]
+            CancellationToken cancellationToken = default
+    )
+    {
+        await Task.CompletedTask.ConfigureAwait(false);
+        yield break;
+    }
+
+    private async IAsyncEnumerable<ChatEvent> ChatEventsAsync(
+        IAsyncEnumerable<ChatEvent> events,
         [System.Runtime.CompilerServices.EnumeratorCancellation]
             CancellationToken cancellationToken = default
     )
@@ -65,7 +93,7 @@ internal sealed class ChatHandler(ChatRooms rooms) : IChatServiceHandler
         var fallbackUser = $"user-{Guid.NewGuid():N}"[..13];
         var room = rooms.Join("general");
         var inbound = Task.Run(
-            () => PublishIncomingMessagesAsync(input, room, fallbackUser, cancellationToken),
+            () => PublishIncomingMessagesAsync(events, room, fallbackUser, cancellationToken),
             cancellationToken
         );
 

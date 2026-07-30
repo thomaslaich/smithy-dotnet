@@ -33,52 +33,45 @@ the protocol's normal rules.
 
 ## Event Streams
 
-Event-stream operations are bound through the same `IServiceProtocol` that hands
-out unary operations. Alongside `ForOperation`, it exposes three event-stream
-binding methods with default implementations that throw `NotSupportedException`,
-so a protocol opts in only to the streaming shapes it actually supports:
+Event-stream operations are bound through the same `IServiceProtocol` operation
+factory as unary operations. `ForOperation` receives the modeled input/output
+schemas, detects event-stream members from those schemas, and returns the same
+operation protocol interface for every operation shape:
 
 ```csharp
 public interface IServiceProtocol
 {
     IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation);
-
-    IOutputEventStreamOperationProtocol<TInput, TOutputEvent>
-        ForOutputEventStreamOperation<TInput, TOutput, TOutputEvent>(
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TOutputEvent> outputEvent)
-        => throw new NotSupportedException();
-
-    IInputEventStreamOperationProtocol<TInputEvent, TOutput>
-        ForInputEventStreamOperation<TInput, TInputEvent, TOutput>(
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent)
-        => throw new NotSupportedException();
-
-    IDuplexEventStreamOperationProtocol<TInputEvent, TOutputEvent>
-        ForDuplexEventStreamOperation<TInput, TOutput, TInputEvent, TOutputEvent>(
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent,
-            Schema<TOutputEvent> outputEvent)
-        => throw new NotSupportedException();
 }
 ```
 
-Operation interfaces are named by stream direction (output / input / duplex —
-where the `@streaming` member sits in the model) and split by call side, the
-same client/server split the unary `IOperationProtocol` uses: each direction
-has a `…ClientProtocol` and a `…ServerProtocol` half, and the combined
-interface protocol implementations implement. The three directions stay
-separate interfaces — their signatures differ in meaningful ways, and merging
-them would force nullable or unused members into at least two cases.
+The protocol interface is async-capable even when a particular protocol path can
+complete synchronously:
+
+```csharp
+public interface IClientOperationProtocol<TInput, TOutput>
+{
+    ValueTask<SmithyHttpRequest> SerializeRequestAsync(
+        TInput input,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<TOutput> DeserializeResponseAsync(
+        SmithyHttpClientResponse response,
+        CancellationToken cancellationToken = default);
+}
+```
+
+Stream direction is a property of the modeled shapes, not a separate protocol
+type: input streams have an `IAsyncEnumerable<TEvent>` member on `TInput`,
+output streams have one on `TOutput`, and duplex streams have both.
 
 ### Generated API
 
 Server streaming:
 
 ```csharp
-IAsyncEnumerable<ChatEvent> WatchRoomAsync(
+Task<WatchRoomOutput> WatchRoomAsync(
     WatchRoomInput input,
     CancellationToken cancellationToken = default);
 ```
@@ -87,21 +80,21 @@ Client streaming:
 
 ```csharp
 Task<UploadTranscriptOutput> UploadTranscriptAsync(
-    IAsyncEnumerable<ChatEvent> input,
+    UploadTranscriptInput input,
     CancellationToken cancellationToken = default);
 ```
 
 Bidirectional streaming:
 
 ```csharp
-IAsyncEnumerable<ChatEvent> ChatAsync(
-    IAsyncEnumerable<ChatEvent> input,
+Task<ChatOutput> ChatAsync(
+    ChatInput input,
     CancellationToken cancellationToken = default);
 ```
 
-Output streams are cold. The transport call starts when the caller enumerates
-the returned `IAsyncEnumerable<TEvent>`, and enumeration cancellation is the
-primary cancellation path for the stream.
+The operation returns once the response headers and modeled initial data are
+available. Event sequence enumeration is still lazy: the `IAsyncEnumerable<TEvent>`
+member owns the live response/request body stream.
 
 ### Framing and the Streaming Transport
 
@@ -205,8 +198,8 @@ stream in an explicit response body type that owns disposal.
 ## Protocol Responsibilities
 
 Generated clients should not branch on protocol-specific streaming behavior.
-They should bind operation schemas once, then call the selected protocol's unary
-or event-stream operation protocol.
+They should bind operation schemas once, then call the selected operation
+protocol.
 
 Protocols own:
 

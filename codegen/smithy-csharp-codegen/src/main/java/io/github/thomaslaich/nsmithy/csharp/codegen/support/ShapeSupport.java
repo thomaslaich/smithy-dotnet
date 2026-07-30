@@ -6,10 +6,12 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.MemberShape;
+import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeType;
@@ -310,10 +312,17 @@ public final class ShapeSupport {
 
   public static String memberTypeExpr(
       Model model, SymbolProvider sp, MemberShape member, boolean nullable) {
-    String base =
-        isStreamingBlobMember(model, member)
-            ? "System.IO.Stream"
-            : CSharpSymbolProvider.qualified(sp.toSymbol(member));
+    String base;
+    if (isStreamingBlobMember(model, member)) {
+      base = "System.IO.Stream";
+    } else if (isEventStreamMember(model, member)) {
+      base =
+          "System.Collections.Generic.IAsyncEnumerable<"
+              + CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(member.getTarget())))
+              + ">";
+    } else {
+      base = CSharpSymbolProvider.qualified(sp.toSymbol(member));
+    }
     return nullable ? base + "?" : base;
   }
 
@@ -412,9 +421,45 @@ public final class ShapeSupport {
         .findFirst();
   }
 
+  public static void requireGrpcEventStreamWrapperIsFlattenable(Model model, OperationShape op) {
+    requireGrpcEventStreamWrapperIsFlattenable(model, op, op.getInputShape(), "input");
+    requireGrpcEventStreamWrapperIsFlattenable(model, op, op.getOutputShape(), "output");
+  }
+
+  private static void requireGrpcEventStreamWrapperIsFlattenable(
+      Model model, OperationShape op, ShapeId shapeId, String direction) {
+    Shape shape = model.expectShape(shapeId);
+    if (!(shape instanceof StructureShape structure) || !isEventStreamShape(model, shapeId)) {
+      return;
+    }
+
+    long streamingMemberCount =
+        structure.members().stream().filter(member -> isEventStreamMember(model, member)).count();
+    if (streamingMemberCount == 1 && structure.members().size() == 1) {
+      return;
+    }
+
+    throw new CodegenException(
+        "gRPC event-stream operation "
+            + op.getId()
+            + " "
+            + direction
+            + " shape "
+            + shapeId
+            + " must contain exactly one event-stream member. Native gRPC flattens the Smithy "
+            + direction
+            + " wrapper to 'stream <Event>', so sibling members cannot be represented.");
+  }
+
   public static boolean isStreamingBlobMember(Model model, MemberShape member) {
     Shape target = model.expectShape(member.getTarget());
     return target.getType() == ShapeType.BLOB
+        && (member.hasTrait(StreamingTrait.class) || target.hasTrait(StreamingTrait.class));
+  }
+
+  public static boolean isEventStreamMember(Model model, MemberShape member) {
+    Shape target = model.expectShape(member.getTarget());
+    return target.getType() == ShapeType.UNION
         && (member.hasTrait(StreamingTrait.class) || target.hasTrait(StreamingTrait.class));
   }
 

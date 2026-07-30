@@ -27,7 +27,7 @@ public sealed class RpcV2CborStreamingProtocolTests
     {
         public string? Name { get; set; }
 
-        public ChatEvent? Events { get; set; }
+        public IAsyncEnumerable<ChatEvent>? Events { get; set; }
     }
 
     private static IServiceProtocol BuildServiceProtocol() =>
@@ -56,14 +56,24 @@ public sealed class RpcV2CborStreamingProtocolTests
     private static Schema<EnvelopeBuilder> StreamEnvelopeSchema(string name) =>
         Schemas
             .Structure<EnvelopeBuilder, EnvelopeBuilder>(ShapeId.Parse($"example.greeter#{name}"))
-            .Required("events", x => x.Events!, (b, v) => b.Events = v, ChatEventSchema("Events"))
+            .Required(
+                "events",
+                x => x.Events!,
+                (b, v) => b.Events = v,
+                Schemas.EventStream(ChatEventSchema("Events"))
+            )
             .Build(() => new EnvelopeBuilder(), b => b);
 
     private static Schema<EnvelopeBuilder> InitialEnvelopeSchema(string name) =>
         Schemas
             .Structure<EnvelopeBuilder, EnvelopeBuilder>(ShapeId.Parse($"example.greeter#{name}"))
             .Required("name", x => x.Name!, (b, v) => b.Name = v, Schemas.String)
-            .Required("events", x => x.Events!, (b, v) => b.Events = v, ChatEventSchema("Events"))
+            .Required(
+                "events",
+                x => x.Events!,
+                (b, v) => b.Events = v,
+                Schemas.EventStream(ChatEventSchema("Events"))
+            )
             .Build(() => new EnvelopeBuilder(), b => b);
 
     private static OperationSchema<Echo, EnvelopeBuilder> OutputOperation(string name) =>
@@ -78,6 +88,13 @@ public sealed class RpcV2CborStreamingProtocolTests
             ShapeId.Parse($"example.greeter#{name}"),
             StreamEnvelopeSchema($"{name}Input"),
             EchoSchema($"{name}Output")
+        );
+
+    private static OperationSchema<EnvelopeBuilder, EnvelopeBuilder> DuplexOperation(string name) =>
+        Schemas.Operation(
+            ShapeId.Parse($"example.greeter#{name}"),
+            StreamEnvelopeSchema($"{name}Input"),
+            StreamEnvelopeSchema($"{name}Output")
         );
 
     private static OperationSchema<Echo, EnvelopeBuilder> OutputOperationWithInitial(string name) =>
@@ -99,12 +116,17 @@ public sealed class RpcV2CborStreamingProtocolTests
         Assert.Equal("/service/Greeter/operation/Watch", request.RequestUri);
         Assert.Equal("application/cbor", request.ContentType);
         Assert.Equal(["application/vnd.amazon.eventstream"], request.Headers["Accept"]);
+        // The response is a live event stream, so the runtime must read it in Stream mode.
+        Assert.True(request.ExpectStreamingResponse);
 
         var response = await ToClientResponseAsync(
-            protocol.SerializeResponse(ToAsync([new ChatEvent.Message(new Echo("one"))]))
+            protocol.SerializeResponse(
+                new EnvelopeBuilder { Events = ToAsync([new ChatEvent.Message(new Echo("one"))]) }
+            )
         );
 
-        var events = await CollectAsync(protocol.DeserializeResponseEventsAsync(response));
+        var output = await protocol.DeserializeResponseAsync(response);
+        var events = await CollectAsync(output.Events!);
         var message = Assert.IsType<ChatEvent.Message>(Assert.Single(events));
         Assert.Equal(new Echo("one"), message.Value);
     }
@@ -115,11 +137,15 @@ public sealed class RpcV2CborStreamingProtocolTests
         var protocol = BuildServiceProtocol()
             .ForInputEventStreamOperation(InputOperation("Upload"), ChatEventSchema("UploadEvent"));
 
-        var request = protocol.SerializeRequest(ToAsync([new ChatEvent.Message(new Echo("one"))]));
+        var request = protocol.SerializeRequest(
+            new EnvelopeBuilder { Events = ToAsync([new ChatEvent.Message(new Echo("one"))]) }
+        );
 
         Assert.Equal("/service/Greeter/operation/Upload", request.RequestUri);
         Assert.Equal("application/vnd.amazon.eventstream", request.ContentType);
         Assert.Equal(["application/cbor"], request.Headers["Accept"]);
+        // Client streaming has a unary response, so it stays in Buffer mode.
+        Assert.False(request.ExpectStreamingResponse);
 
         var framed = await BodyBytesAsync(request.Body);
         var message = Assert.Single(await ReadMessagesAsync(framed));
@@ -139,38 +165,58 @@ public sealed class RpcV2CborStreamingProtocolTests
     {
         var protocol = BuildServiceProtocol()
             .ForDuplexEventStreamOperation(
-                InputOperation("Chat"),
+                DuplexOperation("Chat"),
                 ChatEventSchema("ChatInputEvent"),
                 ChatEventSchema("ChatOutputEvent")
             );
 
-        var request = protocol.SerializeRequest(ToAsync([new ChatEvent.Message(new Echo("in"))]));
+        var request = protocol.SerializeRequest(
+            new EnvelopeBuilder { Events = ToAsync([new ChatEvent.Message(new Echo("in"))]) }
+        );
 
         Assert.Equal("application/vnd.amazon.eventstream", request.ContentType);
         Assert.Equal(["application/vnd.amazon.eventstream"], request.Headers["Accept"]);
+        // Duplex streams the response too, so the runtime must read it in Stream mode.
+        Assert.True(request.ExpectStreamingResponse);
         Assert.Single(await ReadMessagesAsync(await BodyBytesAsync(request.Body)));
 
         var response = await ToClientResponseAsync(
-            protocol.SerializeResponse(ToAsync([new ChatEvent.Message(new Echo("out"))]))
+            protocol.SerializeResponse(
+                new EnvelopeBuilder { Events = ToAsync([new ChatEvent.Message(new Echo("out"))]) }
+            )
         );
 
-        var events = await CollectAsync(protocol.DeserializeResponseEventsAsync(response));
+        var output = await protocol.DeserializeResponseAsync(response);
+        var events = await CollectAsync(output.Events!);
         var message = Assert.IsType<ChatEvent.Message>(Assert.Single(events));
         Assert.Equal(new Echo("out"), message.Value);
     }
 
     [Fact]
-    public void StreamingOperationsRejectUnsupportedInitialMembers()
+    public async Task ServerStreamingRoundTripsInitialResponseMembers()
     {
-        var ex = Assert.Throws<NotSupportedException>(() =>
-            BuildServiceProtocol()
-                .ForOutputEventStreamOperation(
-                    OutputOperationWithInitial("WatchWithInitial"),
-                    ChatEventSchema("WatchEvent")
-                )
+        var protocol = BuildServiceProtocol()
+            .ForOutputEventStreamOperation(
+                OutputOperationWithInitial("WatchWithInitial"),
+                ChatEventSchema("WatchEvent")
+            );
+
+        var response = await ToClientResponseAsync(
+            protocol.SerializeResponse(
+                new EnvelopeBuilder
+                {
+                    Name = "ready",
+                    Events = ToAsync([new ChatEvent.Message(new Echo("one"))]),
+                }
+            )
         );
 
-        Assert.Contains("initial response members", ex.Message);
+        var output = await protocol.DeserializeResponseAsync(response);
+        Assert.Equal("ready", output.Name);
+        var message = Assert.IsType<ChatEvent.Message>(
+            Assert.Single(await CollectAsync(output.Events!))
+        );
+        Assert.Equal(new Echo("one"), message.Value);
     }
 
     private static async Task<SmithyHttpClientResponse> ToClientResponseAsync(

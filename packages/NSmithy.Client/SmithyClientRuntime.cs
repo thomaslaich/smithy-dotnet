@@ -49,47 +49,16 @@ public sealed class SmithyClientRuntime(
         return InvokeCoreAsync(binding, input, cancellationToken);
     }
 
-    public IAsyncEnumerable<TOutputEvent> InvokeOutputStreamAsync<TInput, TOutputEvent>(
-        SmithyOutputEventStreamOperationBinding<TInput, TOutputEvent> binding,
-        TInput input,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(binding);
-        return InvokeOutputStreamCoreAsync(binding, input, cancellationToken);
-    }
-
-    public Task<TOutput> InvokeInputStreamAsync<TInputEvent, TOutput>(
-        SmithyInputEventStreamOperationBinding<TInputEvent, TOutput> binding,
-        IAsyncEnumerable<TInputEvent> input,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(binding);
-        ArgumentNullException.ThrowIfNull(input);
-        return InvokeInputStreamCoreAsync(binding, input, cancellationToken);
-    }
-
-    public IAsyncEnumerable<TOutputEvent> InvokeDuplexStreamAsync<TInputEvent, TOutputEvent>(
-        SmithyDuplexEventStreamOperationBinding<TInputEvent, TOutputEvent> binding,
-        IAsyncEnumerable<TInputEvent> input,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(binding);
-        ArgumentNullException.ThrowIfNull(input);
-        return InvokeDuplexStreamCoreAsync(binding, input, cancellationToken);
-    }
-
     private async Task<TOutput> InvokeCoreAsync<TInput, TOutput>(
         SmithyOperationBinding<TInput, TOutput> binding,
         TInput input,
         CancellationToken callerToken
     )
     {
-        // The operation timeout is a deadline over the whole execution — serialization, every
-        // retry attempt, and backoff delays — enforced through a linked token so in-flight
-        // transport work is cancelled promptly.
+        // The operation timeout is a deadline over establishing the exchange — serialization, every
+        // retry attempt, backoff delays, and receiving the response. Established streaming response
+        // bodies are consumed lazily by the caller after this method returns, so they use the caller
+        // token rather than this timeout source.
         using var timeoutSource = operationTimeout is null
             ? null
             : CancellationTokenSource.CreateLinkedTokenSource(callerToken);
@@ -158,7 +127,7 @@ public sealed class SmithyClientRuntime(
                 interceptor.OnBeforeSerialization(context, input);
             }
 
-            var request = protocol.SerializeRequest(input);
+            var request = protocol.SerializeRequest(input, callerToken);
             var response = await SendUnaryAsync(
                     context,
                     request,
@@ -171,10 +140,15 @@ public sealed class SmithyClientRuntime(
                 )
                 .ConfigureAwait(false);
 
+            var deserializationToken =
+                response.Body is SmithyHttpBody.Streaming ? callerToken : cancellationToken;
+
             TOutput output;
             try
             {
-                output = protocol.DeserializeResponse(response);
+                output = await protocol
+                    .DeserializeResponseAsync(response, deserializationToken)
+                    .ConfigureAwait(false);
             }
             catch
             {
@@ -335,390 +309,6 @@ public sealed class SmithyClientRuntime(
         response.Body is SmithyHttpBody.Streaming streaming
             ? streaming.Content.DisposeAsync()
             : ValueTask.CompletedTask;
-
-    private async Task<SmithyHttpClientResponse> SendStreamingAsync(
-        SmithyContext context,
-        SmithyHttpRequest request,
-        TagList tags,
-        SmithyEndpoint? resolvedEndpoint,
-        IClientInterceptor? authInterceptor,
-        CancellationToken cancellationToken
-    )
-    {
-        context.Set(SmithyContextKeys.Attempt, 1);
-        using var attemptActivity = SmithyClientTelemetry.ActivitySource.StartActivity(
-            "attempt",
-            ActivityKind.Internal
-        );
-        attemptActivity?.SetTag("smithy.attempt", 1);
-        SmithyClientTelemetry.Attempts.Add(1, tags);
-
-        var resolvedRequest = ApplyEndpoint(CloneRequest(request), resolvedEndpoint);
-        var attemptRequest = await ApplyRequestInterceptorsAsync(
-                context,
-                resolvedRequest,
-                authInterceptor,
-                cancellationToken
-            )
-            .ConfigureAwait(false);
-
-        var response = await transport
-            .SendAsync(attemptRequest, SmithyHttpClientResponseMode.Stream, cancellationToken)
-            .ConfigureAwait(false);
-
-        for (var i = interceptors.Count - 1; i >= 0; i--)
-        {
-            interceptors[i].OnAfterTransmit(context, response);
-        }
-
-        return response;
-    }
-
-    private async IAsyncEnumerable<TOutputEvent> InvokeOutputStreamCoreAsync<TInput, TOutputEvent>(
-        SmithyOutputEventStreamOperationBinding<TInput, TOutputEvent> binding,
-        TInput input,
-        [EnumeratorCancellation] CancellationToken callerToken
-    )
-    {
-        using var timeoutSource = operationTimeout is null
-            ? null
-            : CancellationTokenSource.CreateLinkedTokenSource(callerToken);
-        timeoutSource?.CancelAfter(operationTimeout!.Value);
-        var cancellationToken = timeoutSource?.Token ?? callerToken;
-
-        var protocol = binding.Protocol;
-        var context = CreateContext(binding.ServiceId.Name, binding.OperationId.Name);
-        var (resolvedEndpoint, authInterceptor) = await ResolveEndpointAndAuthAsync(
-                binding.ServiceId,
-                binding.OperationId,
-                binding.AuthSchemeIds,
-                input,
-                context,
-                callerToken
-            )
-            .ConfigureAwait(false);
-        var tags = CreateTags(binding.ServiceId.ToString(), binding.OperationId.Name);
-        using var activity = StartOperationActivity(
-            binding.ServiceId.Name,
-            binding.OperationId.Name,
-            tags
-        );
-        var startTimestamp = Stopwatch.GetTimestamp();
-        Exception? executionError = null;
-
-        foreach (var interceptor in interceptors)
-        {
-            interceptor.OnBeforeExecution(context);
-        }
-
-        IAsyncEnumerator<TOutputEvent>? events = null;
-        try
-        {
-            foreach (var interceptor in interceptors)
-            {
-                interceptor.OnBeforeSerialization(context, input);
-            }
-
-            var request = protocol.SerializeRequest(input);
-            var response = await SendStreamingAsync(
-                    context,
-                    request,
-                    tags,
-                    resolvedEndpoint,
-                    authInterceptor,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-            events = protocol
-                .DeserializeResponseEventsAsync(response, cancellationToken)
-                .GetAsyncEnumerator(cancellationToken);
-        }
-        catch (OperationCanceledException)
-            when (timeoutSource?.IsCancellationRequested == true
-                && !callerToken.IsCancellationRequested
-            )
-        {
-            var timeoutError = new TimeoutException(
-                $"The operation did not complete within {operationTimeout!.Value}."
-            );
-            executionError = timeoutError;
-            CompleteExecution(context, executionError, activity, startTimestamp, tags);
-            throw timeoutError;
-        }
-        catch (Exception error)
-        {
-            executionError = error;
-            CompleteExecution(context, executionError, activity, startTimestamp, tags);
-            throw;
-        }
-
-        try
-        {
-            while (true)
-            {
-                TOutputEvent item;
-                try
-                {
-                    if (!await events.MoveNextAsync().ConfigureAwait(false))
-                    {
-                        break;
-                    }
-
-                    item = events.Current;
-                }
-                catch (OperationCanceledException)
-                    when (timeoutSource?.IsCancellationRequested == true
-                        && !callerToken.IsCancellationRequested
-                    )
-                {
-                    var timeoutError = new TimeoutException(
-                        $"The operation did not complete within {operationTimeout!.Value}."
-                    );
-                    executionError = timeoutError;
-                    throw timeoutError;
-                }
-                catch (Exception error)
-                {
-                    executionError = error;
-                    throw;
-                }
-
-                for (var i = interceptors.Count - 1; i >= 0; i--)
-                {
-                    interceptors[i].OnAfterDeserialization(context, item);
-                }
-
-                yield return item;
-            }
-        }
-        finally
-        {
-            if (events is not null)
-            {
-                await events.DisposeAsync().ConfigureAwait(false);
-            }
-
-            CompleteExecution(context, executionError, activity, startTimestamp, tags);
-        }
-    }
-
-    private async Task<TOutput> InvokeInputStreamCoreAsync<TInputEvent, TOutput>(
-        SmithyInputEventStreamOperationBinding<TInputEvent, TOutput> binding,
-        IAsyncEnumerable<TInputEvent> input,
-        CancellationToken callerToken
-    )
-    {
-        using var timeoutSource = operationTimeout is null
-            ? null
-            : CancellationTokenSource.CreateLinkedTokenSource(callerToken);
-        timeoutSource?.CancelAfter(operationTimeout!.Value);
-        var cancellationToken = timeoutSource?.Token ?? callerToken;
-
-        var protocol = binding.Protocol;
-        var context = CreateContext(binding.ServiceId.Name, binding.OperationId.Name);
-        var (resolvedEndpoint, authInterceptor) = await ResolveEndpointAndAuthAsync(
-                binding.ServiceId,
-                binding.OperationId,
-                binding.AuthSchemeIds,
-                input,
-                context,
-                callerToken
-            )
-            .ConfigureAwait(false);
-        var tags = CreateTags(binding.ServiceId.ToString(), binding.OperationId.Name);
-        using var activity = StartOperationActivity(
-            binding.ServiceId.Name,
-            binding.OperationId.Name,
-            tags
-        );
-        var startTimestamp = Stopwatch.GetTimestamp();
-
-        foreach (var interceptor in interceptors)
-        {
-            interceptor.OnBeforeExecution(context);
-        }
-
-        Exception? executionError = null;
-        try
-        {
-            foreach (var interceptor in interceptors)
-            {
-                interceptor.OnBeforeSerialization(context, input);
-            }
-
-            var request = protocol.SerializeRequest(input, cancellationToken);
-            var response = await SendStreamingAsync(
-                    context,
-                    request,
-                    tags,
-                    resolvedEndpoint,
-                    authInterceptor,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-            var output = await protocol
-                .DeserializeResponseAsync(response, cancellationToken)
-                .ConfigureAwait(false);
-
-            for (var i = interceptors.Count - 1; i >= 0; i--)
-            {
-                interceptors[i].OnAfterDeserialization(context, output);
-            }
-
-            return output;
-        }
-        catch (OperationCanceledException)
-            when (timeoutSource?.IsCancellationRequested == true
-                && !callerToken.IsCancellationRequested
-            )
-        {
-            var timeoutError = new TimeoutException(
-                $"The operation did not complete within {operationTimeout!.Value}."
-            );
-            executionError = timeoutError;
-            throw timeoutError;
-        }
-        catch (Exception error)
-        {
-            executionError = error;
-            throw;
-        }
-        finally
-        {
-            CompleteExecution(context, executionError, activity, startTimestamp, tags);
-        }
-    }
-
-    private async IAsyncEnumerable<TOutputEvent> InvokeDuplexStreamCoreAsync<
-        TInputEvent,
-        TOutputEvent
-    >(
-        SmithyDuplexEventStreamOperationBinding<TInputEvent, TOutputEvent> binding,
-        IAsyncEnumerable<TInputEvent> input,
-        [EnumeratorCancellation] CancellationToken callerToken
-    )
-    {
-        using var timeoutSource = operationTimeout is null
-            ? null
-            : CancellationTokenSource.CreateLinkedTokenSource(callerToken);
-        timeoutSource?.CancelAfter(operationTimeout!.Value);
-        var cancellationToken = timeoutSource?.Token ?? callerToken;
-
-        var protocol = binding.Protocol;
-        var context = CreateContext(binding.ServiceId.Name, binding.OperationId.Name);
-        var (resolvedEndpoint, authInterceptor) = await ResolveEndpointAndAuthAsync(
-                binding.ServiceId,
-                binding.OperationId,
-                binding.AuthSchemeIds,
-                input,
-                context,
-                callerToken
-            )
-            .ConfigureAwait(false);
-        var tags = CreateTags(binding.ServiceId.ToString(), binding.OperationId.Name);
-        using var activity = StartOperationActivity(
-            binding.ServiceId.Name,
-            binding.OperationId.Name,
-            tags
-        );
-        var startTimestamp = Stopwatch.GetTimestamp();
-        Exception? executionError = null;
-
-        foreach (var interceptor in interceptors)
-        {
-            interceptor.OnBeforeExecution(context);
-        }
-
-        IAsyncEnumerator<TOutputEvent>? events = null;
-        try
-        {
-            foreach (var interceptor in interceptors)
-            {
-                interceptor.OnBeforeSerialization(context, input);
-            }
-
-            var request = protocol.SerializeRequest(input, cancellationToken);
-            var response = await SendStreamingAsync(
-                    context,
-                    request,
-                    tags,
-                    resolvedEndpoint,
-                    authInterceptor,
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
-            events = protocol
-                .DeserializeResponseEventsAsync(response, cancellationToken)
-                .GetAsyncEnumerator(cancellationToken);
-        }
-        catch (OperationCanceledException)
-            when (timeoutSource?.IsCancellationRequested == true
-                && !callerToken.IsCancellationRequested
-            )
-        {
-            var timeoutError = new TimeoutException(
-                $"The operation did not complete within {operationTimeout!.Value}."
-            );
-            executionError = timeoutError;
-            CompleteExecution(context, executionError, activity, startTimestamp, tags);
-            throw timeoutError;
-        }
-        catch (Exception error)
-        {
-            executionError = error;
-            CompleteExecution(context, executionError, activity, startTimestamp, tags);
-            throw;
-        }
-
-        try
-        {
-            while (true)
-            {
-                TOutputEvent item;
-                try
-                {
-                    if (!await events.MoveNextAsync().ConfigureAwait(false))
-                    {
-                        break;
-                    }
-
-                    item = events.Current;
-                }
-                catch (OperationCanceledException)
-                    when (timeoutSource?.IsCancellationRequested == true
-                        && !callerToken.IsCancellationRequested
-                    )
-                {
-                    var timeoutError = new TimeoutException(
-                        $"The operation did not complete within {operationTimeout!.Value}."
-                    );
-                    executionError = timeoutError;
-                    throw timeoutError;
-                }
-                catch (Exception error)
-                {
-                    executionError = error;
-                    throw;
-                }
-
-                for (var i = interceptors.Count - 1; i >= 0; i--)
-                {
-                    interceptors[i].OnAfterDeserialization(context, item);
-                }
-
-                yield return item;
-            }
-        }
-        finally
-        {
-            if (events is not null)
-            {
-                await events.DisposeAsync().ConfigureAwait(false);
-            }
-
-            CompleteExecution(context, executionError, activity, startTimestamp, tags);
-        }
-    }
 
     private static Task DelayAsync(TimeSpan delay, CancellationToken cancellationToken) =>
         delay > TimeSpan.Zero ? Task.Delay(delay, cancellationToken) : Task.CompletedTask;
