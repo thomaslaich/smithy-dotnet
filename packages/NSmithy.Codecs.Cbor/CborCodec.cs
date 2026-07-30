@@ -26,6 +26,15 @@ public static class CborCodec
         return new CborCodecImpl<T>(schema, materializeTopLevelDefaults);
     }
 
+    public static IProjectionCodec<T> FromProjection<T>(
+        StructProjection<T> projection,
+        bool materializeTopLevelDefaults = true
+    )
+    {
+        ArgumentNullException.ThrowIfNull(projection);
+        return new CborProjectionCodec<T>(projection, materializeTopLevelDefaults);
+    }
+
     /// <summary>
     /// Serializes an error structure as a CBOR map, prefixing a <c>__type</c> discriminator
     /// entry that carries the absolute shape id. This is how rpcv2Cbor encodes error responses.
@@ -82,6 +91,33 @@ public static class CborCodec
             var reader = new CborReader(payload, CborConformanceMode.Lax);
             var value = ReadValue(ref reader);
             return (T)Materialize(schema, value)!;
+        }
+    }
+
+    private sealed class CborProjectionCodec<T>(
+        StructProjection<T> projection,
+        bool materializeTopLevelDefaults
+    ) : IProjectionCodec<T>
+    {
+        public byte[] Serialize(T value)
+        {
+            var writer = new CborWriter(CborConformanceMode.Lax);
+            WriteProjection(writer, projection, value, materializeTopLevelDefaults);
+            return writer.Encode();
+        }
+
+        public void ReadInto(byte[] payload, object builder)
+        {
+            ArgumentNullException.ThrowIfNull(payload);
+            ArgumentNullException.ThrowIfNull(builder);
+            if (payload.Length == 0)
+            {
+                return;
+            }
+
+            var reader = new CborReader(payload, CborConformanceMode.Lax);
+            var value = ReadValue(ref reader);
+            MaterializeProjection(projection, value, builder);
         }
     }
 
@@ -199,6 +235,35 @@ public static class CborCodec
 
             writer.WriteTextString(member.Name);
             // Nested structures always materialize their defaults.
+            WriteValue(writer, member.Target, memberValue, materializeDefaults: true);
+        }
+
+        writer.WriteEndMap();
+    }
+
+    private static void WriteProjection<T>(
+        CborWriter writer,
+        StructProjection<T> projection,
+        T value,
+        bool materializeDefaults
+    )
+    {
+        writer.WriteStartMap(null);
+        foreach (var member in projection.TypedMembers)
+        {
+            var memberValue = member.GetObject(value!);
+            if (memberValue is null && !member.IsRequired)
+            {
+                if (
+                    !materializeDefaults
+                    || !TryCreateDefaultValue(member.Target, member.Traits, out memberValue)
+                )
+                {
+                    continue;
+                }
+            }
+
+            writer.WriteTextString(member.Name);
             WriteValue(writer, member.Target, memberValue, materializeDefaults: true);
         }
 
@@ -386,6 +451,34 @@ public static class CborCodec
         }
 
         return schema.BuildObject(builder);
+    }
+
+    private static void MaterializeProjection<T>(
+        StructProjection<T> projection,
+        object? value,
+        object builder
+    )
+    {
+        if (value is not IReadOnlyDictionary<string, object?> map)
+        {
+            throw new InvalidOperationException("Expected CBOR map for structure projection.");
+        }
+
+        foreach (var member in projection.TypedMembers)
+        {
+            if (map.TryGetValue(member.Name, out var memberValue))
+            {
+                member.SetObject(builder, Materialize(member.Target, memberValue));
+            }
+            else if (member.IsRequired)
+            {
+                throw new InvalidOperationException($"Missing required member '{member.Name}'.");
+            }
+            else if (TryCreateDefaultValue(member.Target, member.Traits, out var defaultValue))
+            {
+                member.SetObject(builder, defaultValue);
+            }
+        }
     }
 
     private static object MaterializeUnion(IUnionSchema schema, object value)

@@ -16,7 +16,9 @@
  *   - IntEnum 0-value conflict is avoided: _UNSPECIFIED = 0 is only emitted when
  *     no existing value already occupies field number 0.
  *   - @protoNumType maps integer members to sint/uint/fixed proto types.
- *   - Streaming operations use the `stream` keyword in rpc signatures.
+ *   - Streaming operations use the `stream` keyword in rpc signatures. Smithy operation
+ *     input/output wrappers are flattened to the streaming member target, so event-stream wrapper
+ *     structures must not contain sibling members.
  *   - Invalid proto3 map key types (float, double, bytes, message, etc.) cause a
  *     CodegenException at code-generation time.
  *   - Duplicate @protoIndex values within a message/union cause a CodegenException.
@@ -106,6 +108,7 @@ public final class ProtoGenerator {
         idx.getContainedOperations(service).stream()
             .sorted(Comparator.comparing(o -> o.getId().toString()))
             .toList();
+    operations.forEach(this::validateStreamingOperation);
 
     // Collect referenced shapes and group by Smithy namespace.
     Set<ShapeId> allReferenced = collectReferencedShapes(operations);
@@ -164,8 +167,8 @@ public final class ProtoGenerator {
     if (shapesNeedValue(localShapes)) imports.add(IMPORT_VALUE);
     // Also scan operation I/O for well-known types used directly.
     for (OperationShape op : operations) {
-      checkWellKnownImports(op.getInputShape(), imports, serviceNs);
-      checkWellKnownImports(op.getOutputShape(), imports, serviceNs);
+      checkWellKnownImports(op.getInputShape(), imports);
+      checkWellKnownImports(op.getOutputShape(), imports);
     }
 
     StringBuilder sb = new StringBuilder();
@@ -308,8 +311,8 @@ public final class ProtoGenerator {
     Set<ShapeId> result = new LinkedHashSet<>();
     Set<ShapeId> seen = new HashSet<>();
     for (OperationShape op : operations) {
-      collect(op.getInputShape(), result, seen);
-      collect(op.getOutputShape(), result, seen);
+      collect(streamingMemberTarget(op.getInputShape()).orElse(op.getInputShape()), result, seen);
+      collect(streamingMemberTarget(op.getOutputShape()).orElse(op.getOutputShape()), result, seen);
       for (ShapeId errId : op.getErrors(service)) collect(errId, result, seen);
     }
     return result;
@@ -416,7 +419,7 @@ public final class ProtoGenerator {
     sb.append("  oneof value {\n");
     for (MemberShape m : members) {
       sb.append("    ")
-          .append(fieldType(m, true, localNs))
+          .append(fieldType(m, localNs))
           .append(" ")
           .append(camelToSnake(m.getMemberName()))
           .append(" = ")
@@ -440,7 +443,7 @@ public final class ProtoGenerator {
     sb.append("  oneof ").append(camelToSnake(parentMember.getMemberName())).append(" {\n");
     for (MemberShape m : members) {
       sb.append("    ")
-          .append(fieldType(m, true, localNs))
+          .append(fieldType(m, localNs))
           .append(" ")
           .append(camelToSnake(m.getMemberName()))
           .append(" = ")
@@ -460,7 +463,7 @@ public final class ProtoGenerator {
     }
     sb.append("  ")
         .append(label)
-        .append(fieldType(m, false, localNs))
+        .append(fieldType(m, localNs))
         .append(" ")
         .append(camelToSnake(m.getMemberName()))
         .append(" = ")
@@ -475,7 +478,7 @@ public final class ProtoGenerator {
    * For direct (non-collection) members, the member shape is used so that {@code @protoNumType} is
    * respected.
    */
-  private String fieldType(MemberShape m, boolean inOneof, String localNs) {
+  private String fieldType(MemberShape m, String localNs) {
     Shape target = model.expectShape(m.getTarget());
     return switch (target.getType()) {
       case LIST, SET -> scalarOrRef(((ListShape) target).getMember(), localNs);
@@ -576,6 +579,42 @@ public final class ProtoGenerator {
                     || model.expectShape(m.getTarget()).hasTrait(StreamingTrait.class))
         .map(MemberShape::getTarget)
         .findFirst();
+  }
+
+  private void validateStreamingOperation(OperationShape op) {
+    validateStreamingShape(op, op.getInputShape(), "input");
+    validateStreamingShape(op, op.getOutputShape(), "output");
+  }
+
+  private void validateStreamingShape(OperationShape op, ShapeId shapeId, String direction) {
+    if (isUnit(shapeId)) return;
+
+    Shape shape = model.expectShape(shapeId);
+    if (!(shape instanceof StructureShape structure) || !isStreamingShape(shapeId)) {
+      return;
+    }
+
+    long streamingMemberCount =
+        structure.members().stream()
+            .filter(
+                member ->
+                    member.hasTrait(StreamingTrait.class)
+                        || model.expectShape(member.getTarget()).hasTrait(StreamingTrait.class))
+            .count();
+    if (streamingMemberCount == 1 && structure.members().size() == 1) {
+      return;
+    }
+
+    throw new CodegenException(
+        "gRPC event-stream operation "
+            + op.getId()
+            + " "
+            + direction
+            + " shape "
+            + shapeId
+            + " must contain exactly one streaming member. Native gRPC flattens the Smithy "
+            + direction
+            + " wrapper to 'stream <Event>', so sibling members cannot be represented.");
   }
 
   // ---- optional / required -----------------------------------------------
@@ -691,7 +730,7 @@ public final class ProtoGenerator {
    * Checks if an operation's I/O shape (when it is a structure) directly uses a well-known type,
    * adding the required import to {@code imports}.
    */
-  private void checkWellKnownImports(ShapeId id, Set<String> imports, String localNs) {
+  private void checkWellKnownImports(ShapeId id, Set<String> imports) {
     if (isUnit(id)) return;
     Shape s = model.expectShape(id);
     for (MemberShape m : s.members()) {

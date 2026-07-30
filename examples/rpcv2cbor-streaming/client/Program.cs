@@ -24,9 +24,10 @@ using var cts = new CancellationTokenSource();
 var exiting = false;
 try
 {
-    await foreach (
-        var item in client.ChatAsync(ReadConsoleEvents(user, () => exiting = true, cts), cts.Token)
-    )
+    var output = await client
+        .ChatAsync(new ChatInput(ReadConsoleEvents(user, () => exiting = true, cts)), cts.Token)
+        .ConfigureAwait(false);
+    await foreach (var item in (output.Events ?? EmptyEvents()).WithCancellation(cts.Token))
     {
         if (item is ChatEvent.Message message)
             Console.WriteLine($"{message.Value.User}: {message.Value.Text}");
@@ -43,6 +44,14 @@ catch (IOException ex)
 }
 
 Console.WriteLine("Disconnected.");
+
+static async IAsyncEnumerable<ChatEvent> EmptyEvents(
+    [EnumeratorCancellation] CancellationToken cancellationToken = default
+)
+{
+    await Task.CompletedTask.ConfigureAwait(false);
+    yield break;
+}
 
 static async IAsyncEnumerable<ChatEvent> ReadConsoleEvents(
     string user,

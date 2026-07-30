@@ -400,6 +400,9 @@ public final class SchemaGenerator {
     if (ShapeSupport.isStreamingBlobMember(context.model(), member)) {
       return "Schemas.StreamingBlob";
     }
+    if (ShapeSupport.isEventStreamMember(context.model(), member)) {
+      return "Schemas.EventStream(" + shapeSchemaAccessor(context, target) + ")";
+    }
     return shapeSchemaAccessor(context, target);
   }
 

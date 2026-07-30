@@ -102,9 +102,13 @@ from the caller:
 ```csharp
 public interface IServerOperationProtocol<TInput, TOutput>
 {
-    TInput DeserializeRequest(SmithyHttpRequest request);
+    ValueTask<TInput> DeserializeRequestAsync(
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken = default);
 
-    SmithyHttpServerResponse SerializeResponse(TOutput output);
+    ValueTask<SmithyHttpServerResponse> SerializeResponseAsync(
+        TOutput output,
+        CancellationToken cancellationToken = default);
 
     // Serializes a modeled error to a protocol error response. Returns false for an
     // unmodeled exception, which the runtime rethrows (surfaced as a 500 by the host).
@@ -112,26 +116,9 @@ public interface IServerOperationProtocol<TInput, TOutput>
 }
 ```
 
-Streaming server halves return the same `SmithyHttpServerResponse`, building the
-`Body` from framed chunks and attaching their `Trailers` provider:
-
-```csharp
-public interface IOutputEventStreamServerProtocol<TInput, TOutputEvent>
-{
-    TInput DeserializeRequest(SmithyHttpRequest request);
-    SmithyHttpServerResponse SerializeResponse(
-        IAsyncEnumerable<TOutputEvent> events,
-        CancellationToken cancellationToken = default);
-}
-
-public interface IInputEventStreamServerProtocol<TInputEvent, TOutput>
-{
-    IAsyncEnumerable<TInputEvent> DeserializeRequestEventsAsync(
-        SmithyHttpRequest request,
-        CancellationToken cancellationToken = default);
-    SmithyHttpServerResponse SerializeResponse(TOutput output);
-}
-```
+Event-stream server halves use the same interface. The operation input/output
+shape carries any `IAsyncEnumerable<TEvent>` member; the protocol implementation
+owns deframing request bodies and framing streamed response chunks.
 
 ## Server Runtime
 
@@ -142,37 +129,26 @@ telemetry attach to it the way they attach to `SmithyClientRuntime`.
 ```csharp
 public sealed class SmithyServerRuntime
 {
-    // Unary: deserialize, invoke, serialize — with modeled errors caught once, for every protocol.
+    // Deserialize, invoke, serialize — with modeled errors caught once, for every protocol.
     public async Task<SmithyHttpServerResponse> DispatchAsync<TInput, TOutput>(
         IServerOperationProtocol<TInput, TOutput> protocol,
         SmithyHttpRequest request,
         Func<TInput, CancellationToken, Task<TOutput>> handler,
         CancellationToken cancellationToken)
     {
-        var input = protocol.DeserializeRequest(request);
+        var input = await protocol.DeserializeRequestAsync(request, cancellationToken)
+            .ConfigureAwait(false);
         try
         {
             var output = await handler(input, cancellationToken).ConfigureAwait(false);
-            return protocol.SerializeResponse(output);
+            return await protocol.SerializeResponseAsync(output, cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (Exception ex) when (protocol.TrySerializeError(ex, out var errorResponse))
         {
             return errorResponse;
         }
     }
-
-    // Output stream: unary in, events out. Body and Trailers both come from the protocol.
-    public SmithyHttpServerResponse DispatchOutputStream<TInput, TOutputEvent>(
-        IOutputEventStreamServerProtocol<TInput, TOutputEvent> protocol,
-        SmithyHttpRequest request,
-        Func<TInput, CancellationToken, IAsyncEnumerable<TOutputEvent>> handler,
-        CancellationToken cancellationToken)
-    {
-        var input = protocol.DeserializeRequest(request);
-        return protocol.SerializeResponse(handler(input, cancellationToken), cancellationToken);
-    }
-
-    // Input stream and duplex are the same shape over the other protocol halves.
 }
 ```
 

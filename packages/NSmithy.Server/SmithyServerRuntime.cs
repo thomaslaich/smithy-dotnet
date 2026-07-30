@@ -14,8 +14,9 @@ namespace NSmithy.Server;
 public sealed class SmithyServerRuntime
 {
     /// <summary>
-    /// Unary dispatch: deserialize, invoke, serialize — with the operation's modeled errors caught
-    /// once, for every protocol. An unmodeled exception rethrows (surfaced as a 500 by the host).
+    /// Dispatches an operation: deserialize, invoke, serialize — with the operation's modeled
+    /// errors caught once, for every protocol. An unmodeled exception rethrows (surfaced as a 500
+    /// by the host).
     /// </summary>
     public async Task<SmithyHttpServerResponse> DispatchAsync<TInput, TOutput>(
         IServerOperationProtocol<TInput, TOutput> protocol,
@@ -28,69 +29,18 @@ public sealed class SmithyServerRuntime
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(handler);
 
-        var input = protocol.DeserializeRequest(request);
+        var input = await protocol
+            .DeserializeRequestAsync(request, cancellationToken)
+            .ConfigureAwait(false);
         try
         {
             var output = await handler(input, cancellationToken).ConfigureAwait(false);
-            return protocol.SerializeResponse(output);
+            return protocol.SerializeResponse(output, cancellationToken);
         }
         catch (Exception exception)
             when (protocol.TrySerializeError(exception, out var errorResponse))
         {
             return errorResponse;
         }
-    }
-
-    /// <summary>Output-stream dispatch: unary request in, events out.</summary>
-    public SmithyHttpServerResponse DispatchOutputStream<TInput, TOutputEvent>(
-        IOutputEventStreamServerProtocol<TInput, TOutputEvent> protocol,
-        SmithyHttpRequest request,
-        Func<TInput, CancellationToken, IAsyncEnumerable<TOutputEvent>> handler,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(protocol);
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(handler);
-
-        var input = protocol.DeserializeRequest(request);
-        return protocol.SerializeResponse(handler(input, cancellationToken), cancellationToken);
-    }
-
-    /// <summary>Input-stream dispatch: events in, unary response out.</summary>
-    public async Task<SmithyHttpServerResponse> DispatchInputStreamAsync<TInputEvent, TOutput>(
-        IInputEventStreamServerProtocol<TInputEvent, TOutput> protocol,
-        SmithyHttpRequest request,
-        Func<IAsyncEnumerable<TInputEvent>, CancellationToken, Task<TOutput>> handler,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(protocol);
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(handler);
-
-        var input = protocol.DeserializeRequestEventsAsync(request, cancellationToken);
-        var output = await handler(input, cancellationToken).ConfigureAwait(false);
-        return protocol.SerializeResponse(output);
-    }
-
-    /// <summary>Duplex-stream dispatch: events in both directions.</summary>
-    public SmithyHttpServerResponse DispatchDuplexStream<TInputEvent, TOutputEvent>(
-        IDuplexEventStreamServerProtocol<TInputEvent, TOutputEvent> protocol,
-        SmithyHttpRequest request,
-        Func<
-            IAsyncEnumerable<TInputEvent>,
-            CancellationToken,
-            IAsyncEnumerable<TOutputEvent>
-        > handler,
-        CancellationToken cancellationToken = default
-    )
-    {
-        ArgumentNullException.ThrowIfNull(protocol);
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(handler);
-
-        var input = protocol.DeserializeRequestEventsAsync(request, cancellationToken);
-        return protocol.SerializeResponse(handler(input, cancellationToken), cancellationToken);
     }
 }

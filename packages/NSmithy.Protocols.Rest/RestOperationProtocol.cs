@@ -64,21 +64,30 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
                 CompileServerError((dynamic)error, codecFactory, rawStringPayloads, errorTypeHeader)
         );
 
-    public SmithyHttpRequest SerializeRequest(TInput input)
+    public SmithyHttpRequest SerializeRequest(
+        TInput input,
+        CancellationToken cancellationToken = default
+    )
     {
         var request = RestProtocol.SerializeRequest(binding, input);
         requestTransform?.Invoke(request);
         return request;
     }
 
-    public TOutput DeserializeResponse(SmithyHttpClientResponse response) =>
-        RestProtocol.DeserializeResponse(binding, response);
+    public ValueTask<TOutput> DeserializeResponseAsync(
+        SmithyHttpClientResponse response,
+        CancellationToken cancellationToken = default
+    ) => ValueTask.FromResult(RestProtocol.DeserializeResponse(binding, response));
 
-    public TInput DeserializeRequest(SmithyHttpRequest request) =>
-        RestProtocol.DeserializeRequest(binding, request);
+    public ValueTask<TInput> DeserializeRequestAsync(
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken = default
+    ) => ValueTask.FromResult(RestProtocol.DeserializeRequest(binding, request));
 
-    public SmithyHttpServerResponse SerializeResponse(TOutput output) =>
-        RestProtocol.SerializeResponse(binding, output);
+    public SmithyHttpServerResponse SerializeResponse(
+        TOutput output,
+        CancellationToken cancellationToken = default
+    ) => RestProtocol.SerializeResponse(binding, output);
 
     public bool IsErrorResponse(SmithyHttpClientResponse response) =>
         (int)response.StatusCode >= 400;

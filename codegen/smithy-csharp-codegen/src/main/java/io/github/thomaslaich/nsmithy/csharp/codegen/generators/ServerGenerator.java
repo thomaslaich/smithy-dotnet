@@ -28,7 +28,6 @@ import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
-import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.traits.HttpTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -68,6 +67,9 @@ public final class ServerGenerator implements Runnable {
             .collect(Collectors.toList());
 
     List<Kind> serverKinds = serverKinds();
+    if (serverKinds.contains(Kind.GRPC)) {
+      ops.forEach(op -> ShapeSupport.requireGrpcEventStreamWrapperIsFlattenable(model, op));
+    }
     boolean emitsAspNetCore = !serverKinds.isEmpty();
 
     writer.addImport(RuntimeTypes.NSMITHY_CORE);
@@ -106,7 +108,7 @@ public final class ServerGenerator implements Runnable {
 
     for (Kind kind : serverKinds) {
       writer.write("");
-      writeProtocolExtensions(sp, kind, ops, contract);
+      writeProtocolExtensions(kind, ops, contract);
     }
   }
 
@@ -148,8 +150,7 @@ public final class ServerGenerator implements Runnable {
 
   // ---------------- per-protocol endpoint extensions ----------------
 
-  private void writeProtocolExtensions(
-      SymbolProvider sp, Kind kind, List<OperationShape> ops, String contract) {
+  private void writeProtocolExtensions(Kind kind, List<OperationShape> ops, String contract) {
     String suffix = mapSuffix(kind);
     writer.write("public static class $L$LExtensions", contract, suffix);
     writer.openBlock(
@@ -161,10 +162,7 @@ public final class ServerGenerator implements Runnable {
               ProtocolSupport.protocolType(kind),
               SchemaGenerator.serviceSchemaAccessor(context, service));
           for (OperationShape op : ops) {
-            if (isEventStreamOperation(context.model(), op)) {
-              if (supportsEventStreamOperations(kind)) {
-                writeEventStreamProtocolField(sp, op);
-              }
+            if (!canBindOperation(kind, op)) {
               continue;
             }
             writer.write(
@@ -188,8 +186,7 @@ public final class ServerGenerator implements Runnable {
                 writer.write("System.ArgumentNullException.ThrowIfNull(endpoints);");
                 writer.write("");
                 for (OperationShape op : ops) {
-                  if (isEventStreamOperation(context.model(), op)
-                      && !supportsEventStreamOperations(kind)) {
+                  if (!canBindOperation(kind, op)) {
                     continue;
                   }
                   writeOperationMap(kind, op);
@@ -198,43 +195,6 @@ public final class ServerGenerator implements Runnable {
                 writer.write("return endpoints;");
               });
         });
-  }
-
-  private void writeEventStreamProtocolField(SymbolProvider sp, OperationShape op) {
-    Model model = context.model();
-    String opName = CSharpNaming.typeName(op.getId().getName());
-    String inputType = SchemaGenerator.operationShapeType(context, op.getInputShape());
-    String outputType = SchemaGenerator.operationShapeType(context, op.getOutputShape());
-    String operationSchema = SchemaGenerator.operationSchemaAccessor(context, op);
-    if (isInputStreaming(model, op) && isOutputStreaming(model, op)) {
-      writer.write(
-          "private static readonly IDuplexEventStreamOperationProtocol<$L, $L> $LProtocol ="
-              + " ServiceProtocol.ForDuplexEventStreamOperation($L, $L, $L);",
-          streamingEventType(sp, model, op.getInputShape()),
-          streamingEventType(sp, model, op.getOutputShape()),
-          opName,
-          operationSchema,
-          streamingEventSchema(model, op.getInputShape()),
-          streamingEventSchema(model, op.getOutputShape()));
-    } else if (isOutputStreaming(model, op)) {
-      writer.write(
-          "private static readonly IOutputEventStreamOperationProtocol<$L, $L> $LProtocol ="
-              + " ServiceProtocol.ForOutputEventStreamOperation($L, $L);",
-          inputType,
-          streamingEventType(sp, model, op.getOutputShape()),
-          opName,
-          operationSchema,
-          streamingEventSchema(model, op.getOutputShape()));
-    } else {
-      writer.write(
-          "private static readonly IInputEventStreamOperationProtocol<$L, $L> $LProtocol ="
-              + " ServiceProtocol.ForInputEventStreamOperation($L, $L);",
-          streamingEventType(sp, model, op.getInputShape()),
-          outputType,
-          opName,
-          operationSchema,
-          streamingEventSchema(model, op.getInputShape()));
-    }
   }
 
   private void writeOperationMap(Kind kind, OperationShape op) {
@@ -287,32 +247,10 @@ public final class ServerGenerator implements Runnable {
   private void writeDispatch(Kind kind, OperationShape op) {
     Model model = context.model();
     String opProtocol = CSharpNaming.typeName(op.getId().getName()) + "Protocol";
-    if (isEventStreamOperation(model, op)) {
-      if (isInputStreaming(model, op) && isOutputStreaming(model, op)) {
-        writer.write(
-            "await SmithyAspNetCoreHost.DispatchDuplexStreamAsync(httpContext, $L, $L,"
-                + " cancellationToken).ConfigureAwait(false);",
-            opProtocol,
-            duplexAdapter(op));
-      } else if (isOutputStreaming(model, op)) {
-        writer.write(
-            "await SmithyAspNetCoreHost.DispatchOutputStreamAsync(httpContext, $L, $L,"
-                + " cancellationToken).ConfigureAwait(false);",
-            opProtocol,
-            outputStreamAdapter(op));
-      } else {
-        writer.write(
-            "await SmithyAspNetCoreHost.DispatchInputStreamAsync(httpContext, $L, $L,"
-                + " cancellationToken).ConfigureAwait(false);",
-            opProtocol,
-            inputStreamAdapter(op));
-      }
-      return;
-    }
-
     boolean streamRequestBody =
-        (kind == Kind.SIMPLE_REST_JSON || kind == Kind.REST_JSON_1)
-            && ShapeSupport.isStreamingBlobShape(model, op.getInputShape());
+        isInputStreaming(model, op)
+            || ((kind == Kind.SIMPLE_REST_JSON || kind == Kind.REST_JSON_1)
+                && ShapeSupport.isStreamingBlobShape(model, op.getInputShape()));
     writer.write(
         "await SmithyAspNetCoreHost.DispatchAsync(httpContext, $L, $L, $L,"
             + " cancellationToken).ConfigureAwait(false);",
@@ -347,26 +285,6 @@ public final class ServerGenerator implements Runnable {
             + ", ct) => { await "
             + call
             + ".ConfigureAwait(false); return SmithyUnit.Value; }";
-  }
-
-  private String outputStreamAdapter(OperationShape op) {
-    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
-    String method = handlerMethod(op);
-    return hasInput ? method : "(_, ct) => " + method + "(ct)";
-  }
-
-  private String inputStreamAdapter(OperationShape op) {
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
-    String method = handlerMethod(op);
-    return hasOutput
-        ? method
-        : "async (input, ct) => { await "
-            + method
-            + "(input, ct).ConfigureAwait(false); return SmithyUnit.Value; }";
-  }
-
-  private String duplexAdapter(OperationShape op) {
-    return handlerMethod(op);
   }
 
   private String handlerMethod(OperationShape op) {
@@ -431,8 +349,10 @@ public final class ServerGenerator implements Runnable {
     return serviceTypeName.endsWith("Service") ? serviceTypeName : serviceTypeName + "Service";
   }
 
-  private static boolean supportsEventStreamOperations(Kind kind) {
-    return kind == Kind.GRPC || kind == Kind.RPC_V2_CBOR;
+  private boolean canBindOperation(Kind kind, OperationShape op) {
+    return !isEventStreamOperation(context.model(), op)
+        || kind == Kind.GRPC
+        || kind == Kind.RPC_V2_CBOR;
   }
 
   private String opHandlerName(OperationShape op) {
@@ -441,33 +361,22 @@ public final class ServerGenerator implements Runnable {
 
   private String serverOperationSignature(SymbolProvider sp, OperationShape op) {
     Model model = context.model();
-    boolean inputStreaming = isInputStreaming(model, op);
-    boolean outputStreaming = isOutputStreaming(model, op);
-    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape()) && !inputStreaming;
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape()) && !outputStreaming;
+    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
+    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
     String inputType =
-        inputStreaming
-            ? "System.Collections.Generic.IAsyncEnumerable<"
-                + streamingEventType(sp, model, op.getInputShape())
-                + ">"
-            : hasInput
-                ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())))
-                : null;
+        hasInput
+            ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())))
+            : null;
     String outputType =
-        outputStreaming
-            ? streamingEventType(sp, model, op.getOutputShape())
-            : hasOutput
-                ? CSharpSymbolProvider.qualified(
-                    sp.toSymbol(model.expectShape(op.getOutputShape())))
-                : null;
+        hasOutput
+            ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getOutputShape())))
+            : null;
     String returnType =
-        outputStreaming
-            ? "System.Collections.Generic.IAsyncEnumerable<" + outputType + ">"
-            : hasOutput
-                ? "System.Threading.Tasks.Task<" + outputType + ">"
-                : "System.Threading.Tasks.Task";
-    String params = inputStreaming || hasInput ? inputType + " input, " : "";
+        hasOutput
+            ? "System.Threading.Tasks.Task<" + outputType + ">"
+            : "System.Threading.Tasks.Task";
+    String params = hasInput ? inputType + " input, " : "";
     return returnType
         + " "
         + name
@@ -486,19 +395,5 @@ public final class ServerGenerator implements Runnable {
 
   private boolean isOutputStreaming(Model model, OperationShape op) {
     return ShapeSupport.isEventStreamShape(model, op.getOutputShape());
-  }
-
-  private String streamingEventType(SymbolProvider sp, Model model, ShapeId shapeId) {
-    ShapeId target =
-        ShapeSupport.streamingMemberTarget(model, shapeId)
-            .orElseThrow(() -> new IllegalStateException("Expected streaming shape: " + shapeId));
-    return CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(target)));
-  }
-
-  private String streamingEventSchema(Model model, ShapeId shapeId) {
-    ShapeId target =
-        ShapeSupport.streamingMemberTarget(model, shapeId)
-            .orElseThrow(() -> new IllegalStateException("Expected streaming shape: " + shapeId));
-    return SchemaGenerator.shapeSchemaAccessor(context, model.expectShape(target));
   }
 }

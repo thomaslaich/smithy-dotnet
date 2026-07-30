@@ -6,9 +6,7 @@ description: Current direction and near-term priorities for NSmithy.
 The architecture is settled: NSmithy uses the Smithy CLI for model assembly
 and a Smithy Java plugin for generation, integrated into the .NET build
 through `NSmithy.MSBuild`. This roadmap covers hardening and expanding that
-baseline rather than revisiting it.
-
-## Direction
+baseline rather than revisiting it, guided by a few principles:
 
 - Keep Smithy CLI as the model front end for assembly, validation, projections,
   and Maven dependency resolution.
@@ -17,23 +15,9 @@ baseline rather than revisiting it.
 - Use protocol expansion to validate and strengthen the runtime seams that are
   already in place.
 
-## Recently Shipped
-
-The 0.4.0 release delivered several items that were previously on this roadmap:
-
-- **AWS JSON client protocol** (`NSmithy.Protocols.AwsJson`).
-- **AWS SigV4 signing** driven by `@aws.auth#sigv4`, generated auth-scheme
-  wiring, and an AWS LocalStack example — early preview.
-- **Client runtime pipeline** — the generated client stack now runs on
-  `SmithyClientRuntime` with named interceptors, a typed per-call execution
-  context, auth-scheme resolution, runtime-owned retry, and precomputed
-  operation bindings.
-- **Bidirectional gRPC event streaming** for generated clients and ASP.NET Core
-  servers.
-
-See the
-[changelog](https://github.com/thomaslaich/smithy-dotnet/blob/main/CHANGELOG.md)
-for the full list. The priorities below are what remains.
+For what has already shipped, see the
+[changelog](https://github.com/thomaslaich/smithy-dotnet/blob/main/CHANGELOG.md).
+The priorities below are what remains.
 
 ## Near-Term Priorities
 
@@ -54,26 +38,19 @@ for the full list. The priorities below are what remains.
 
 ### 2. Move the client runtime to the target architecture
 
-The core client runtime pipeline landed in 0.4.0 (see Recently Shipped); the
-desired end-state is documented in
+The core client runtime pipeline, standard retry, operation timeouts,
+telemetry, and paginators have landed; the desired
+end-state is documented in
 [`designs/client-architecture.md`](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/client-architecture.md).
 The remaining work closes the gaps:
 
-- Continuing to harden named client interceptors and the typed per-call
-  execution context.
-- Adding per-operation endpoint resolution, including host labels and endpoint
-  auth-scheme overrides.
 - Splitting auth into scheme resolution, identity resolution, and signing;
   adding per-operation `@auth` overrides and identity caching/refresh.
-- Extending the retry strategy model with exponential backoff with full jitter,
-  retry quota, `Retry-After`, modeled retryability, and deterministic
-  `TimeProvider` tests.
-- Adding operation timeout support through execution context rather than only
-  `HttpClient.Timeout`.
-- Adding OpenTelemetry-friendly tracing and metrics with `ActivitySource` and
-  `Meter`.
-- Generating paginators for `@paginated` operations as `IAsyncEnumerable<T>`.
+- Adding per-operation endpoint resolution beyond the static resolver,
+  including host labels and endpoint auth-scheme overrides.
 - Setting a modeled/default User-Agent.
+- Continuing to harden named client interceptors and the typed per-call
+  execution context.
 
 ### 3. XML doc comments from Smithy documentation traits
 
@@ -93,7 +70,27 @@ model's documentation rather than being empty.
   protocol-selectable, for example `MapFooService(protocols)`, while preserving
   protocol-specific internals and handling route conflicts explicitly.
 
-### 5. Improve CBOR and XML codec performance through schema-compiled codecs
+### 5. Enforce constraint traits and modeled validation
+
+Smithy's constraint traits — `@length`, `@pattern`, `@range`, `@uniqueItems`,
+and server-side enforcement of `@required` — are not yet enforced. `@required`
+is currently honored only for C# nullability, and the value constraints are
+ignored entirely, so generated servers accept input the model forbids.
+
+The focus is server-first: Smithy's contract is that constraint violations
+produce a structured `smithy.framework#ValidationException` before the operation
+handler runs. Client-side validation of outbound input is out of scope for now.
+
+This work includes:
+
+- Generating constraint checks from the model and rejecting violations with a
+  structured `smithy.framework#ValidationException` before the handler runs.
+- Enforcing `@required` on the server rather than only using it for C#
+  nullability.
+- Covering server behavior with Smithy's malformed-request conformance suites.
+- Documenting the client-side non-goal as an explicit preview boundary.
+
+### 6. Improve CBOR and XML codec performance through schema-compiled codecs
 
 JSON already benefits from compiling codec state once from the schema so the
 runtime can cache structural decisions such as dispatch and boxing behavior.
@@ -110,22 +107,23 @@ This work includes:
 - Keeping the generated codec path explicit enough that performance work does
   not make diagnostics and debuggability worse.
 
-### 6. Harden streaming operations
+### 7. Harden streaming operations
 
-NSmithy has an experimental native gRPC event-streaming surface for client
-streaming, server streaming, and bidirectional streaming. The next step is to
-harden that path and keep the abstractions usable for future non-gRPC streaming
-protocols.
+NSmithy has two experimental event-streaming surfaces: native gRPC (client,
+server, and bidirectional streaming) and `rpcv2Cbor` event streams over
+`vnd.amazon.eventstream` message framing, sharing the `NSmithy.EventStream`
+framing layer. The next step is to harden these paths and keep the abstractions
+usable across additional streaming protocols.
 
 This work includes:
 
 - Adding end-to-end tests that cover backpressure, cancellation, errors, and
-  stream completion behavior.
+  stream completion behavior across both surfaces.
 - Adding interop tests with `Grpc.Net` peers generated from the emitted `.proto`.
 - Extending streaming support beyond event streams, especially streaming blob
   payloads.
 
-### 7. Expand to async protocols
+### 8. Expand to async protocols
 
 NSmithy's current protocol work is mostly request/response oriented. A separate
 near-term goal is to validate that the runtime and generator model can also
@@ -140,7 +138,7 @@ This work includes:
 - Using these protocols to pressure-test the existing transport, codec, and
   client/server seams beyond HTTP-centric assumptions.
 
-### 8. Support Smithy AI traits and MCP generation
+### 9. Support Smithy AI traits and MCP generation
 
 Support Smithy's AI-oriented traits so that .NET and protocol artifacts can be
 generated for tool-driven and agent-driven workflows, rather than treating the
@@ -154,7 +152,7 @@ This work includes:
 - Defining the runtime and generation boundaries needed so AI-trait-aware
   models remain inspectable, testable, and versionable.
 
-### 9. Honor protocol HTTP-version traits
+### 10. Honor protocol HTTP-version traits
 
 Protocol traits can declare the HTTP versions a service supports via their `http`
 and `eventStreamHttp` members — a list of ALPN protocol IDs in preference order

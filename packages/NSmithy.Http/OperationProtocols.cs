@@ -28,9 +28,12 @@ public interface IProtocol
 /// </summary>
 public interface IClientOperationProtocol<TInput, TOutput>
 {
-    SmithyHttpRequest SerializeRequest(TInput input);
+    SmithyHttpRequest SerializeRequest(TInput input, CancellationToken cancellationToken = default);
 
-    TOutput DeserializeResponse(SmithyHttpClientResponse response);
+    ValueTask<TOutput> DeserializeResponseAsync(
+        SmithyHttpClientResponse response,
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>
     /// Decides whether a response represents an error, by the protocol's own rules — HTTP status
@@ -60,9 +63,15 @@ public interface IClientOperationProtocol<TInput, TOutput>
 /// </summary>
 public interface IServerOperationProtocol<TInput, TOutput>
 {
-    TInput DeserializeRequest(SmithyHttpRequest request);
+    ValueTask<TInput> DeserializeRequestAsync(
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken = default
+    );
 
-    SmithyHttpServerResponse SerializeResponse(TOutput output);
+    SmithyHttpServerResponse SerializeResponse(
+        TOutput output,
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>
     /// Serializes a modeled error to a protocol error response. The operation's modeled errors and
@@ -77,129 +86,10 @@ public interface IServerOperationProtocol<TInput, TOutput>
 /// A protocol bound to a single (service, operation) pair, usable from both call sides. Protocol
 /// implementations implement this combined interface; client-side code (operation bindings, the
 /// client runtime) depends only on <see cref="IClientOperationProtocol{TInput, TOutput}"/> and
-/// server-side code only on <see cref="IServerOperationProtocol{TInput, TOutput}"/>. This is the
-/// <em>unary</em> shape — streaming variants are separate interfaces.
+/// server-side code only on <see cref="IServerOperationProtocol{TInput, TOutput}"/>. Streaming is
+/// represented by event-stream members on <typeparamref name="TInput"/> or
+/// <typeparamref name="TOutput"/>, not by a different protocol interface.
 /// </summary>
 public interface IOperationProtocol<TInput, TOutput>
     : IClientOperationProtocol<TInput, TOutput>,
         IServerOperationProtocol<TInput, TOutput>;
-
-// Event-stream operation protocols, named by stream direction × call side.
-//
-// Direction is the @streaming member's position in the model:
-//   - Output: the response carries the event stream (server pushes events).
-//   - Input: the request carries the event stream (client pushes events).
-//   - Duplex: both.
-//
-// Each direction has a client half and a server half; protocol implementations implement the
-// combined interface. The protocol owns all wire framing: client halves emit a fully framed
-// request body (a SmithyHttpBody.EventStreaming, or Bytes for a unary output-stream request) and
-// deframe the streaming response; server halves deframe the raw request body and emit a
-// SmithyHttpServerResponse whose body is framed chunks. Transports and hosts stay protocol-neutral.
-
-/// <summary>Client half of an output-stream operation: unary request in, events out.</summary>
-public interface IOutputEventStreamClientProtocol<TInput, TOutputEvent>
-{
-    SmithyHttpRequest SerializeRequest(TInput input);
-
-    /// <summary>
-    /// Deframes and decodes the response events. Implementations own <paramref name="response"/>'s
-    /// body stream and must dispose it when enumeration completes or is abandoned.
-    /// </summary>
-    IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-        SmithyHttpClientResponse response,
-        CancellationToken cancellationToken = default
-    );
-}
-
-/// <summary>Server half of an output-stream operation: unary request in, framed events out.</summary>
-public interface IOutputEventStreamServerProtocol<TInput, TOutputEvent>
-{
-    TInput DeserializeRequest(SmithyHttpRequest request);
-
-    /// <summary>Encodes and frames the response events into a streamed server response.</summary>
-    SmithyHttpServerResponse SerializeResponse(
-        IAsyncEnumerable<TOutputEvent> output,
-        CancellationToken cancellationToken = default
-    );
-}
-
-/// <summary>An output-stream operation protocol usable from both call sides.</summary>
-public interface IOutputEventStreamOperationProtocol<TInput, TOutputEvent>
-    : IOutputEventStreamClientProtocol<TInput, TOutputEvent>,
-        IOutputEventStreamServerProtocol<TInput, TOutputEvent>;
-
-/// <summary>Client half of an input-stream operation: events in, unary response out.</summary>
-public interface IInputEventStreamClientProtocol<TInputEvent, TOutput>
-{
-    SmithyHttpRequest SerializeRequest(
-        IAsyncEnumerable<TInputEvent> input,
-        CancellationToken cancellationToken = default
-    );
-
-    /// <summary>
-    /// Reads the unary response. Implementations own <paramref name="response"/>'s body stream
-    /// and must dispose it before returning.
-    /// </summary>
-    ValueTask<TOutput> DeserializeResponseAsync(
-        SmithyHttpClientResponse response,
-        CancellationToken cancellationToken = default
-    );
-}
-
-/// <summary>Server half of an input-stream operation: framed events in, unary response out.</summary>
-public interface IInputEventStreamServerProtocol<TInputEvent, TOutput>
-{
-    /// <summary>Deframes and decodes the request events from the raw request body.</summary>
-    IAsyncEnumerable<TInputEvent> DeserializeRequestEventsAsync(
-        SmithyHttpRequest request,
-        CancellationToken cancellationToken = default
-    );
-
-    /// <summary>Encodes and frames the unary response into a server response.</summary>
-    SmithyHttpServerResponse SerializeResponse(TOutput output);
-}
-
-/// <summary>An input-stream operation protocol usable from both call sides.</summary>
-public interface IInputEventStreamOperationProtocol<TInputEvent, TOutput>
-    : IInputEventStreamClientProtocol<TInputEvent, TOutput>,
-        IInputEventStreamServerProtocol<TInputEvent, TOutput>;
-
-/// <summary>Client half of a duplex-stream operation: events in both directions.</summary>
-public interface IDuplexEventStreamClientProtocol<TInputEvent, TOutputEvent>
-{
-    SmithyHttpRequest SerializeRequest(
-        IAsyncEnumerable<TInputEvent> input,
-        CancellationToken cancellationToken = default
-    );
-
-    /// <summary>
-    /// Deframes and decodes the response events. Implementations own <paramref name="response"/>'s
-    /// body stream and must dispose it when enumeration completes or is abandoned.
-    /// </summary>
-    IAsyncEnumerable<TOutputEvent> DeserializeResponseEventsAsync(
-        SmithyHttpClientResponse response,
-        CancellationToken cancellationToken = default
-    );
-}
-
-/// <summary>Server half of a duplex-stream operation: events in both directions.</summary>
-public interface IDuplexEventStreamServerProtocol<TInputEvent, TOutputEvent>
-{
-    /// <summary>Deframes and decodes the request events from the raw request body.</summary>
-    IAsyncEnumerable<TInputEvent> DeserializeRequestEventsAsync(
-        SmithyHttpRequest request,
-        CancellationToken cancellationToken = default
-    );
-
-    /// <summary>Encodes and frames the response events into a streamed server response.</summary>
-    SmithyHttpServerResponse SerializeResponse(
-        IAsyncEnumerable<TOutputEvent> output,
-        CancellationToken cancellationToken = default
-    );
-}
-
-/// <summary>A duplex-stream operation protocol usable from both call sides.</summary>
-public interface IDuplexEventStreamOperationProtocol<TInputEvent, TOutputEvent>
-    : IDuplexEventStreamClientProtocol<TInputEvent, TOutputEvent>,
-        IDuplexEventStreamServerProtocol<TInputEvent, TOutputEvent>;
