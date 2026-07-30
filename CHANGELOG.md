@@ -11,6 +11,57 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.7.0]
+
+This release brings event streaming to NSmithy: a standalone
+`vnd.amazon.eventstream` framing library and streaming support across the
+rpcv2Cbor and restJson1 protocols. Protocol interfaces are split by call side so
+each side owns its streaming framing, codegen dependencies are bundled so builds
+work on a clean machine, and the release version is decoupled from local dev
+builds.
+
+### Added
+
+- **`NSmithy.EventStream`.** A standalone library implementing
+  `vnd.amazon.eventstream` message framing. (#94)
+- **rpcv2Cbor event streaming.** The rpcv2Cbor protocol supports event-stream
+  operations, including initial request/response messages, with unified
+  operation dispatch. (#106, #108)
+- **restJson1 streaming.** The restJson1 protocol supports streaming. (#110)
+
+### Changed
+
+- **BREAKING: protocol interfaces split by call side.** Client and server
+  protocol interfaces are separated, and streaming framing is owned by the
+  protocol implementation. (#93)
+- **BREAKING: unified streaming operation shape.** Streaming operations now use
+  the same `Task<TOutput>(TInput)` signature as unary operations — the event
+  stream is a member of the input/output structure (alongside any initial
+  request/response fields), rather than being passed or returned directly. This
+  applies across protocols, including gRPC. (#93, #108)
+- **Codegen dependencies bundled.** `NSmithy.MSBuild` ships the Smithy codegen
+  dependencies so code generation works on a clean machine without a locally
+  built codegen JAR. (#105)
+- **Release version decoupled from local dev builds.** Local builds use a fixed
+  `0.0.0-SNAPSHOT`; the real version comes from the `VERSION` file / release
+  tag. (#104)
+- **Docs and landing.** Added a Quick Start guide and protocol details, removed
+  the outdated modeling guide, and simplified the landing page (click-to-switch
+  protocol widgets, no scroll reveals) and docs (wordmark, no logo image).
+  (#102, #103, #107)
+
+### Fixed
+
+- **rpcv2Cbor example.** Corrected the rpcv2Cbor example. (#111)
+- **Release template version guard.** The template pack guard compares only the
+  `Major.Minor.Patch` core, so a single `VERSION=0.7.0` covers every
+  `0.7.0-preview.N` tag, and scaffolded templates reference the actual published
+  tag version. (#109)
+
+### Packages
+
+All packages are published to NuGet at `0.7.0`.
+
 ## [0.6.0]
 
 This release adds a debug-logging interceptor to the client runtime, fixes the
@@ -294,7 +345,8 @@ All published to NuGet at `0.1.0`:
 - **Protocols:** `NSmithy.Protocols.Rest`, `NSmithy.Protocols.RestJson`, `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`
 - **Tooling:** `NSmithy.Templates` (project templates), `dotnet-nsmithy` (CLI tool)
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.3.0...v0.4.0
