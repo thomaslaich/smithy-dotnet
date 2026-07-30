@@ -974,8 +974,7 @@ public sealed class RpcV2CborProtocol : IProtocol
                 }
             }
 
-            ownsEnumerator = false;
-            return binding.Build(
+            var shape = binding.Build(
                 initialPayload.ToArray(),
                 ReadRemainingEventsAsync(
                     firstEvent,
@@ -986,6 +985,8 @@ public sealed class RpcV2CborProtocol : IProtocol
                     cancellationToken
                 )
             );
+            ownsEnumerator = false;
+            return shape;
         }
         finally
         {

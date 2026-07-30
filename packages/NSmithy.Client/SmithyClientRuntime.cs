@@ -55,9 +55,10 @@ public sealed class SmithyClientRuntime(
         CancellationToken callerToken
     )
     {
-        // The operation timeout is a deadline over the whole execution — serialization, every
-        // retry attempt, and backoff delays — enforced through a linked token so in-flight
-        // transport work is cancelled promptly.
+        // The operation timeout is a deadline over establishing the exchange — serialization, every
+        // retry attempt, backoff delays, and receiving the response. Established streaming response
+        // bodies are consumed lazily by the caller after this method returns, so they use the caller
+        // token rather than this timeout source.
         using var timeoutSource = operationTimeout is null
             ? null
             : CancellationTokenSource.CreateLinkedTokenSource(callerToken);
@@ -126,7 +127,7 @@ public sealed class SmithyClientRuntime(
                 interceptor.OnBeforeSerialization(context, input);
             }
 
-            var request = protocol.SerializeRequest(input, cancellationToken);
+            var request = protocol.SerializeRequest(input, callerToken);
             var response = await SendUnaryAsync(
                     context,
                     request,
@@ -139,11 +140,14 @@ public sealed class SmithyClientRuntime(
                 )
                 .ConfigureAwait(false);
 
+            var deserializationToken =
+                response.Body is SmithyHttpBody.Streaming ? callerToken : cancellationToken;
+
             TOutput output;
             try
             {
                 output = await protocol
-                    .DeserializeResponseAsync(response, cancellationToken)
+                    .DeserializeResponseAsync(response, deserializationToken)
                     .ConfigureAwait(false);
             }
             catch

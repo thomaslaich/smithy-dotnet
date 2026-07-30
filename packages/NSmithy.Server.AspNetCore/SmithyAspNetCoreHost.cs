@@ -34,6 +34,11 @@ public static class SmithyAspNetCoreHost
     )
     {
         ArgumentNullException.ThrowIfNull(httpContext);
+        if (streamRequestBody)
+        {
+            RelaxRequestBodyRate(httpContext);
+        }
+
         var request = await ToSmithyRequestAsync(httpContext, streamRequestBody, cancellationToken)
             .ConfigureAwait(false);
         var response = await Runtime
@@ -189,10 +194,7 @@ public static class SmithyAspNetCoreHost
     private static void RelaxRequestBodyRate(HttpContext httpContext)
     {
         var feature = httpContext.Features.Get<IHttpMinRequestBodyDataRateFeature>();
-        if (feature is not null)
-        {
-            feature.MinDataRate = null;
-        }
+        feature?.MinDataRate = null;
     }
 
     private static async Task<byte[]> ReadRequestBodyContentAsync(
