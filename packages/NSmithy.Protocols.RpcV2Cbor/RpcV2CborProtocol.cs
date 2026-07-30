@@ -589,7 +589,8 @@ public sealed class RpcV2CborProtocol : IProtocol
         )
         {
             ArgumentNullException.ThrowIfNull(input);
-            return BaseStreamingRequest(
+            // Duplex streams both directions, so the response must be read in Stream mode.
+            var request = BaseStreamingRequest(
                 requestUri,
                 EventStreamContentType,
                 FrameShapeAsync(
@@ -601,6 +602,8 @@ public sealed class RpcV2CborProtocol : IProtocol
                     cancellationToken
                 )
             );
+            request.ExpectStreamingResponse = true;
+            return request;
         }
 
         public ValueTask<TInput> DeserializeRequestAsync(

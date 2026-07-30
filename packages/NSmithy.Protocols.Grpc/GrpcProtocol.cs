@@ -406,6 +406,7 @@ public sealed class GrpcProtocol : IProtocol
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
 
         // An output stream's request is unary — one framed message, so an ordinary Bytes body.
+        // The response, however, is a live event stream, so the runtime must read it in Stream mode.
         public SmithyHttpRequest SerializeRequest(
             TInput input,
             CancellationToken cancellationToken = default
@@ -417,6 +418,7 @@ public sealed class GrpcProtocol : IProtocol
                     GrpcMessageFraming.Frame(inputIsUnit ? [] : requestCodec!.Serialize(input))
                 ),
                 ContentType = ContentType,
+                ExpectStreamingResponse = true,
             };
             request.Headers["te"] = ["trailers"];
             return request;
@@ -601,6 +603,7 @@ public sealed class GrpcProtocol : IProtocol
         public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
             CompileErrors(operation.Errors);
 
+        // Duplex streams both directions, so the response must be read in Stream mode.
         public SmithyHttpRequest SerializeRequest(
             TInput input,
             CancellationToken cancellationToken = default
@@ -613,6 +616,7 @@ public sealed class GrpcProtocol : IProtocol
                     FrameEventsAsync(inputBinding.GetEvents(input), requestCodec, cancellationToken)
                 ),
                 ContentType = ContentType,
+                ExpectStreamingResponse = true,
             };
             request.Headers["te"] = ["trailers"];
             return request;
