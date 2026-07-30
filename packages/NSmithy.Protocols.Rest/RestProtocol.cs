@@ -1,9 +1,11 @@
 using System.Globalization;
 using System.Net;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Text;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.EventStream;
 using NSmithy.Http;
 
 namespace NSmithy.Protocols.Rest;
@@ -35,18 +37,24 @@ public readonly record struct RestBody(
     byte[] Content,
     string? ContentType,
     Stream? StreamingContent = null,
-    long? StreamingContentLength = null
+    long? StreamingContentLength = null,
+    IAsyncEnumerable<ReadOnlyMemory<byte>>? EventStreamingContent = null
 )
 {
     /// <summary>No body — the member was null/absent, so neither content nor Content-Type is written.</summary>
     public static RestBody None { get; } = new([], null);
 
     public bool HasContent =>
-        StreamingContent is not null || Content.Length > 0 || ContentType is not null;
+        EventStreamingContent is not null
+        || StreamingContent is not null
+        || Content.Length > 0
+        || ContentType is not null;
 }
 
 public static class RestProtocol
 {
+    internal const string EventStreamContentType = "application/vnd.amazon.eventstream";
+
     private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
 
     public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
@@ -475,6 +483,7 @@ public static class RestProtocol
         {
             SmithyHttpBody.Bytes bytes => SingleChunk(bytes.Content),
             SmithyHttpBody.Streaming streaming => ReadStream(streaming.Content),
+            SmithyHttpBody.EventStreaming eventStreaming => eventStreaming.Content,
             _ => AsyncEnumerable.Empty<ReadOnlyMemory<byte>>(),
         };
 
@@ -483,6 +492,7 @@ public static class RestProtocol
         {
             SmithyHttpBody.Bytes bytes => bytes.Content.Length,
             SmithyHttpBody.Streaming streaming => streaming.ContentLength,
+            SmithyHttpBody.EventStreaming => null,
             _ => 0L,
         };
 
@@ -511,9 +521,11 @@ public static class RestProtocol
     }
 
     private static SmithyHttpBody ToHttpBody(RestBody body) =>
-        body.StreamingContent is not null
+        body.EventStreamingContent is not null
+            ? new SmithyHttpBody.EventStreaming(body.EventStreamingContent)
+        : body.StreamingContent is not null
             ? new SmithyHttpBody.Streaming(body.StreamingContent, body.StreamingContentLength)
-            : ToHttpBody(body.Content);
+        : ToHttpBody(body.Content);
 
     private static SmithyHttpBody ToHttpBody(byte[] content) =>
         content.Length == 0 ? SmithyHttpBody.Empty : new SmithyHttpBody.Bytes(content);
@@ -523,6 +535,149 @@ public static class RestProtocol
 
     private static Stream? BodyStreamOrNull(SmithyHttpBody body) =>
         body is SmithyHttpBody.Streaming stream ? stream.Content : null;
+
+    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> FrameEventsAsync<TEvent>(
+        IAsyncEnumerable<TEvent> events,
+        ICodec<TEvent> codec,
+        IUnionSchema eventSchema,
+        string payloadContentType,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        await foreach (
+            var value in events.WithCancellation(cancellationToken).ConfigureAwait(false)
+        )
+        {
+            var eventType = eventSchema.GetCaseObject(value!).Name;
+            yield return CreateEventStreamMessage(
+                    eventType,
+                    codec.Serialize(value),
+                    payloadContentType
+                )
+                .Encode();
+        }
+    }
+
+    private static async IAsyncEnumerable<TEvent> ReadEventsAsync<TEvent>(
+        Stream stream,
+        ICodec<TEvent> codec,
+        string payloadContentType,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+    {
+        await using (stream.ConfigureAwait(false))
+        {
+            await foreach (
+                var message in EventStreamMessageReader
+                    .ReadAllAsync(stream, cancellationToken)
+                    .WithCancellation(cancellationToken)
+                    .ConfigureAwait(false)
+            )
+            {
+                var value = DeserializeEventMessage(codec, message, payloadContentType);
+                if (value is not null)
+                {
+                    yield return value;
+                }
+            }
+        }
+    }
+
+    private static EventStreamMessage CreateEventStreamMessage(
+        string eventType,
+        ReadOnlyMemory<byte> payload,
+        string payloadContentType
+    ) =>
+        new(
+            new Dictionary<string, EventStreamHeaderValue>
+            {
+                [EventStreamHeaders.MessageType] = new EventStreamHeaderValue.Text(
+                    EventStreamHeaders.EventMessageType
+                ),
+                [EventStreamHeaders.EventType] = new EventStreamHeaderValue.Text(eventType),
+                [EventStreamHeaders.ContentType] = new EventStreamHeaderValue.Text(
+                    payloadContentType
+                ),
+            },
+            payload
+        );
+
+    private static TEvent? DeserializeEventMessage<TEvent>(
+        ICodec<TEvent> codec,
+        EventStreamMessage message,
+        string payloadContentType
+    )
+    {
+        EnsureEventMessage(message);
+        EnsureEventPayload(message, payloadContentType);
+        return codec.Deserialize(message.Payload.ToArray());
+    }
+
+    private static void EnsureEventMessage(EventStreamMessage message)
+    {
+        var messageType = message.StringHeader(EventStreamHeaders.MessageType);
+        if (
+            string.Equals(
+                messageType,
+                EventStreamHeaders.EventMessageType,
+                StringComparison.Ordinal
+            )
+        )
+        {
+            return;
+        }
+
+        ThrowEventStreamException(message);
+    }
+
+    private static void EnsureEventPayload(EventStreamMessage message, string payloadContentType)
+    {
+        var contentType = message.StringHeader(EventStreamHeaders.ContentType);
+        if (
+            contentType is not null
+            && !contentType.StartsWith(payloadContentType, StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            throw new InvalidDataException(
+                $"Expected REST event payload content type '{payloadContentType}' but received '{contentType}'."
+            );
+        }
+    }
+
+    private static void ThrowEventStreamException(EventStreamMessage message)
+    {
+        var messageType = message.StringHeader(EventStreamHeaders.MessageType);
+        if (
+            string.Equals(
+                messageType,
+                EventStreamHeaders.ErrorMessageType,
+                StringComparison.Ordinal
+            )
+        )
+        {
+            var code = message.StringHeader(EventStreamHeaders.ErrorCode) ?? "UnknownError";
+            var text = message.StringHeader(EventStreamHeaders.ErrorMessage);
+            throw new InvalidOperationException(
+                string.IsNullOrEmpty(text) ? code : $"{code}: {text}"
+            );
+        }
+
+        if (
+            string.Equals(
+                messageType,
+                EventStreamHeaders.ExceptionMessageType,
+                StringComparison.Ordinal
+            )
+        )
+        {
+            var type = message.StringHeader(EventStreamHeaders.ExceptionType) ?? "UnknownException";
+            throw new InvalidOperationException($"REST event stream exception: {type}.");
+        }
+
+        throw new InvalidDataException(
+            $"Unknown REST event stream message type '{messageType ?? "<missing>"}'."
+        );
+    }
 
     private static string LocalName(string shapeId)
     {
@@ -556,6 +711,7 @@ public static class RestProtocol
 
         return UnwrapNullable(target).Kind switch
         {
+            _ when target.Resolved is IEventStreamSchema => EventStreamContentType,
             ShapeKind.Blob => codecFactory.BlobContentType,
             ShapeKind.String
             or ShapeKind.Enum when !UseBodyCodecForPayload(target, traits, rawStringPayloads) =>
@@ -613,6 +769,16 @@ public static class RestProtocol
             var traits = member.Traits;
             var mediaType = GetMediaType(target, traits);
             var kind = UnwrapNullable(target).Kind;
+
+            if (target.Resolved is IEventStreamSchema eventStream)
+            {
+                Result = BuildEventStreamPayloadWriter(
+                    member,
+                    (dynamic)eventStream.EventSchema,
+                    codecFactory
+                );
+                return;
+            }
 
             if (kind == ShapeKind.Blob && traits.ContainsKey(RestTraits.Streaming))
             {
@@ -716,6 +882,16 @@ public static class RestProtocol
             var traits = member.Traits;
             var unwrapped = UnwrapNullable(target);
 
+            if (target.Resolved is IEventStreamSchema eventStream)
+            {
+                Result = BuildEventStreamPayloadReader(
+                    member,
+                    (dynamic)eventStream.EventSchema,
+                    codecFactory
+                );
+                return;
+            }
+
             if (unwrapped.Kind == ShapeKind.Blob && traits.ContainsKey(RestTraits.Streaming))
             {
                 Result = (content, streamingContent, builder) =>
@@ -791,6 +967,68 @@ public static class RestProtocol
             if (TryCreateDefaultValue(target, traits, out var defaultValue))
                 member.SetObject(builder, defaultValue);
         }
+    }
+
+    private static Func<TContainer, RestBody> BuildEventStreamPayloadWriter<
+        TContainer,
+        TValue,
+        TEvent
+    >(
+        IMemberSchema<TContainer, TValue> member,
+        Schema<TEvent> eventSchema,
+        IRestBodyCodecFactory codecFactory
+    )
+    {
+        var codec = codecFactory.CodecFor(eventSchema);
+        var union =
+            eventSchema.Resolved as IUnionSchema
+            ?? throw new InvalidOperationException(
+                "REST event stream payloads must target a union schema."
+            );
+
+        return container =>
+        {
+            var value = member.GetValue(container);
+            if (value is null)
+            {
+                return RestBody.None;
+            }
+
+            return new RestBody(
+                [],
+                EventStreamContentType,
+                EventStreamingContent: FrameEventsAsync(
+                    (IAsyncEnumerable<TEvent>)(object)value,
+                    codec,
+                    union,
+                    codecFactory.ContentType
+                )
+            );
+        };
+    }
+
+    private static RestPayloadReader BuildEventStreamPayloadReader<TContainer, TValue, TEvent>(
+        IMemberSchema<TContainer, TValue> member,
+        Schema<TEvent> eventSchema,
+        IRestBodyCodecFactory codecFactory
+    )
+    {
+        var codec = codecFactory.CodecFor(eventSchema);
+        var payloadContentType = codecFactory.ContentType;
+        return (content, streamingContent, builder) =>
+        {
+            var stream =
+                streamingContent
+                ?? (
+                    content is { Length: > 0 }
+                        ? new MemoryStream(content, writable: false)
+                        : Stream.Null
+                );
+            member.SetObject(
+                builder,
+                (TValue)(object)ReadEventsAsync(stream, codec, payloadContentType)
+            );
+        };
     }
 
     private static string BuildRequestUri<TInput>(

@@ -94,10 +94,6 @@ public final class ClientGenerator implements Runnable {
     // The generated client only names the primary protocol (the default constructor argument);
     // callers selecting another declared protocol reference its namespace from their own code.
     writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kinds.get(0)));
-    if (operations.stream().anyMatch(op -> isEventStreamOperation(model, op))
-        && ProtocolSupport.declaredKinds(service).contains(Kind.GRPC)) {
-      writer.addImport(RuntimeTypes.NSMITHY_PROTOCOLS_GRPC);
-    }
 
     writeClient(sp, model, operations, typeName, interfaceName, kinds);
   }
@@ -450,8 +446,8 @@ public final class ClientGenerator implements Runnable {
           "}",
           () ->
               writer.write(
-                  "throw new System.NotSupportedException(\"Streaming operations are only wired"
-                      + " for native gRPC clients today.\");"));
+                  "throw new System.NotSupportedException(\"Event-stream operations are not"
+                      + " supported by the declared service protocols.\");"));
       writer.write("");
       return;
     }
@@ -708,7 +704,7 @@ public final class ClientGenerator implements Runnable {
       return true;
     }
     return ProtocolSupport.declaredKinds(service).stream()
-        .anyMatch(kind -> kind == Kind.GRPC || kind == Kind.RPC_V2_CBOR);
+        .anyMatch(ProtocolSupport::supportsEventStreams);
   }
 
   private boolean isInputStreaming(Model model, OperationShape op) {

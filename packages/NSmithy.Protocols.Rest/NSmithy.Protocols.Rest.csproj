@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Core/NSmithy.Core.csproj" />
+    <ProjectReference Include="../NSmithy.EventStream/NSmithy.EventStream.csproj" />
     <ProjectReference Include="../NSmithy.Http/NSmithy.Http.csproj" />
   </ItemGroup>
 </Project>

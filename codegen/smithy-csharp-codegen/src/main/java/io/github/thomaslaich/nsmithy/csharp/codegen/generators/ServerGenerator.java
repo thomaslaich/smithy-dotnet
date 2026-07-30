@@ -351,8 +351,7 @@ public final class ServerGenerator implements Runnable {
 
   private boolean canBindOperation(Kind kind, OperationShape op) {
     return !isEventStreamOperation(context.model(), op)
-        || kind == Kind.GRPC
-        || kind == Kind.RPC_V2_CBOR;
+        || ProtocolSupport.supportsEventStreams(kind);
   }
 
   private String opHandlerName(OperationShape op) {

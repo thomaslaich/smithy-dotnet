@@ -2,29 +2,35 @@ $version: "2"
 
 namespace example.chat
 
+use aws.protocols#restJson1
 use smithy.api#streaming
-use smithy.protocols#rpcv2Cbor
 
-@rpcv2Cbor
+@restJson1
 service ChatService {
-    version: "2026-07-28"
+    version: "2026-07-30"
     operations: [WatchRoom, UploadTranscript, Chat]
 }
 
-/// Server-streaming: one request, many events.
+/// Server-streaming over restJson1: one request, many AWS event-stream frames.
+@readonly
+@http(method: "GET", uri: "/rooms/{room}/watch")
 operation WatchRoom {
     input := {
         @required
+        @httpLabel
         room: String
     }
     output := {
+        @httpPayload
         events: ChatEvent
     }
 }
 
-/// Client-streaming: many events, one summary.
+/// Client-streaming over restJson1: many AWS event-stream frames, one JSON summary.
+@http(method: "POST", uri: "/transcripts")
 operation UploadTranscript {
     input := {
+        @httpPayload
         events: ChatEvent
     }
     output := {
@@ -33,18 +39,23 @@ operation UploadTranscript {
     }
 }
 
-/// Bidirectional streaming: many events in both directions.
+/// Bidirectional streaming over restJson1: AWS event-stream frames in both directions.
+@http(method: "POST", uri: "/rooms/{room}/chat")
 operation Chat {
     input := {
         @required
+        @httpLabel
         room: String
 
+        @httpPayload
         events: ChatEvent
     }
     output := {
         @required
+        @httpHeader("X-Room")
         room: String
 
+        @httpPayload
         events: ChatEvent
     }
 }
