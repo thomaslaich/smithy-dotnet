@@ -98,18 +98,33 @@
     <PropertyGroup>
       <_TemplateStageDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'nupkg-content'))</_TemplateStageDir>
       <_NSmithyReleaseVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../../VERSION').Trim())</_NSmithyReleaseVersion>
+
+      <!-- Version the templates actually reference. On a release the tag ($(Version)) is
+           the version being published (e.g. 0.7.0-preview.1), so templates must point at
+           it. Local SNAPSHOT dev builds have no published tag, so fall back to the VERSION
+           file (a real-looking version the placeholder can carry). -->
+      <_NSmithyTemplateVersion>$(_NSmithyReleaseVersion)</_NSmithyTemplateVersion>
+      <_NSmithyTemplateVersion Condition="!$(Version.Contains('SNAPSHOT'))">$(Version)</_NSmithyTemplateVersion>
+
+      <!-- Major.Minor.Patch core of each, dropping any -preview.N / prerelease suffix, so
+           the release-line guard below matches VERSION=0.7.0 against a 0.7.0-preview.N tag. -->
+      <_NSmithyReleaseCore>$(_NSmithyReleaseVersion)</_NSmithyReleaseCore>
+      <_NSmithyReleaseCore Condition="$(_NSmithyReleaseVersion.Contains('-'))">$(_NSmithyReleaseVersion.Substring(0, $(_NSmithyReleaseVersion.IndexOf('-'))))</_NSmithyReleaseCore>
+      <_NSmithyTagCore>$(Version)</_NSmithyTagCore>
+      <_NSmithyTagCore Condition="$(Version.Contains('-'))">$(Version.Substring(0, $(Version.IndexOf('-'))))</_NSmithyTagCore>
     </PropertyGroup>
-    <!-- On a release build (Version has no -SNAPSHOT), the VERSION file must match the
-         tag, or templates would scaffold references to a version that isn't published. -->
+    <!-- On a release build (Version has no -SNAPSHOT), the VERSION file must track the same
+         release line as the tag. The prerelease suffix is ignored so a single VERSION=0.7.0
+         covers every 0.7.0-preview.N tag; only the Major.Minor.Patch core must match. -->
     <Error
-      Condition="!$(Version.Contains('SNAPSHOT')) and '$(_NSmithyReleaseVersion)' != '$(Version)'"
-      Text="VERSION file ($(_NSmithyReleaseVersion)) does not match the release version ($(Version)). Bump the VERSION file to match the release tag."
+      Condition="!$(Version.Contains('SNAPSHOT')) and '$(_NSmithyReleaseCore)' != '$(_NSmithyTagCore)'"
+      Text="VERSION file ($(_NSmithyReleaseVersion)) is on a different release line than the release tag ($(Version)). Bump the VERSION file so its Major.Minor.Patch matches the tag."
     />
     <_NSmithyStageTemplateContent
       SourceDir="$(MSBuildProjectDirectory)/content"
       StageDir="$(_TemplateStageDir)"
       Find="NSMITHY_VERSION"
-      ReplaceWith="$(_NSmithyReleaseVersion)"
+      ReplaceWith="$(_NSmithyTemplateVersion)"
     />
     <ItemGroup>
       <_StagedTemplateFile Include="$(_TemplateStageDir)**/*" />
