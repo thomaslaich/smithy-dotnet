@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.AspNetCore.Http;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.EventStream;
 using NSmithy.Http;
 using NSmithy.Protocols.Rest;
 using NSmithy.Protocols.RestJson;
@@ -35,6 +36,29 @@ public sealed class RestJson1ProtocolTests
     public sealed record UpdateUserOutput;
 
     public sealed class UpdateUserOutputBuilder { }
+
+    public sealed record Echo(string Message);
+
+    public abstract record ChatEvent
+    {
+        private ChatEvent() { }
+
+        public sealed record Message(Echo Value) : ChatEvent;
+    }
+
+    public sealed class EchoBuilder
+    {
+        public string? Message { get; set; }
+    }
+
+    public sealed class EventEnvelopeBuilder
+    {
+        public string? StreamId { get; set; }
+
+        public IAsyncEnumerable<ChatEvent>? Events { get; set; }
+    }
+
+    public sealed record EventEnvelope(string StreamId, IAsyncEnumerable<ChatEvent> Events);
 
     [Fact]
     public void RestJson1ProtocolSerializesLabelsHeadersAndBodySeparately()
@@ -886,6 +910,96 @@ public sealed class RestJson1ProtocolTests
         Assert.Equal("avatar bytes", Encoding.UTF8.GetString(await DrainAsync(response)));
     }
 
+    [Fact]
+    public async Task RestJson1ProtocolSerializesAndReadsOutputEventStream()
+    {
+        var protocol = Protocol(OutputEventStreamOperation("Watch"));
+
+        var request = protocol.SerializeRequest(new Echo("ada"));
+
+        Assert.Equal(HttpMethod.Get, request.Method);
+        Assert.Equal("/streams/ada", request.RequestUri);
+        Assert.Equal(["application/vnd.amazon.eventstream"], request.Headers["Accept"]);
+        Assert.True(request.ExpectStreamingResponse);
+
+        var response = await ToClientResponseAsync(
+            protocol.SerializeResponse(
+                new EventEnvelope("s-1", ToAsync([new ChatEvent.Message(new Echo("one"))]))
+            )
+        );
+
+        var output = await protocol.DeserializeResponseAsync(response);
+        Assert.Equal("s-1", output.StreamId);
+        var message = Assert.IsType<ChatEvent.Message>(
+            Assert.Single(await CollectAsync(output.Events))
+        );
+        Assert.Equal(new Echo("one"), message.Value);
+    }
+
+    [Fact]
+    public async Task RestJson1ProtocolSerializesInputEventStreamRequest()
+    {
+        var protocol = Protocol(InputEventStreamOperation("Upload"));
+
+        var request = protocol.SerializeRequest(
+            new EventEnvelope("s-1", ToAsync([new ChatEvent.Message(new Echo("one"))]))
+        );
+
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.Equal("/streams/s-1", request.RequestUri);
+        Assert.Equal("application/vnd.amazon.eventstream", request.ContentType);
+        Assert.Equal(["application/json"], request.Headers["Accept"]);
+        Assert.False(request.ExpectStreamingResponse);
+
+        var messages = await ReadMessagesAsync(await BodyBytesAsync(request.Body));
+        var message = Assert.Single(messages);
+        Assert.Equal("event", message.StringHeader(":message-type"));
+        Assert.Equal("message", message.StringHeader(":event-type"));
+        Assert.Equal("application/json", message.StringHeader(":content-type"));
+
+        var input = protocol.DeserializeRequest(
+            new SmithyHttpRequest(HttpMethod.Post, "/streams/s-1")
+            {
+                Body = new SmithyHttpBody.Streaming(
+                    new MemoryStream(await BodyBytesAsync(request.Body))
+                ),
+                ContentType = "application/vnd.amazon.eventstream",
+            }
+        );
+        var chat = Assert.IsType<ChatEvent.Message>(
+            Assert.Single(await CollectAsync(input.Events))
+        );
+        Assert.Equal(new Echo("one"), chat.Value);
+    }
+
+    [Fact]
+    public async Task RestJson1ProtocolUsesEventStreamForDuplexRequestAndResponse()
+    {
+        var protocol = Protocol(DuplexEventStreamOperation("Chat"));
+
+        var request = protocol.SerializeRequest(
+            new EventEnvelope("s-1", ToAsync([new ChatEvent.Message(new Echo("in"))]))
+        );
+
+        Assert.Equal("application/vnd.amazon.eventstream", request.ContentType);
+        Assert.Equal(["application/vnd.amazon.eventstream"], request.Headers["Accept"]);
+        Assert.True(request.ExpectStreamingResponse);
+        Assert.Single(await ReadMessagesAsync(await BodyBytesAsync(request.Body)));
+
+        var response = await ToClientResponseAsync(
+            protocol.SerializeResponse(
+                new EventEnvelope("s-2", ToAsync([new ChatEvent.Message(new Echo("out"))]))
+            )
+        );
+
+        var output = await protocol.DeserializeResponseAsync(response);
+        Assert.Equal("s-2", output.StreamId);
+        var message = Assert.IsType<ChatEvent.Message>(
+            Assert.Single(await CollectAsync(output.Events))
+        );
+        Assert.Equal(new Echo("out"), message.Value);
+    }
+
     private static async Task<byte[]> DrainAsync(SmithyHttpServerResponse response)
     {
         var buffer = new MemoryStream();
@@ -896,6 +1010,162 @@ public sealed class RestJson1ProtocolTests
 
         return buffer.ToArray();
     }
+
+    private static async Task<SmithyHttpClientResponse> ToClientResponseAsync(
+        SmithyHttpServerResponse response
+    )
+    {
+        var headers = response.Headers.ToDictionary(
+            static pair => pair.Key,
+            static pair => pair.Value,
+            StringComparer.OrdinalIgnoreCase
+        );
+        return new SmithyHttpClientResponse(
+            (HttpStatusCode)response.StatusCode,
+            null,
+            new SmithyHttpBody.Streaming(new MemoryStream(await DrainAsync(response))),
+            headers,
+            headers
+        );
+    }
+
+    private static async Task<byte[]> BodyBytesAsync(SmithyHttpBody body)
+    {
+        var buffer = new MemoryStream();
+        await foreach (var chunk in BodyChunks(body))
+        {
+            buffer.Write(chunk.Span);
+        }
+
+        return buffer.ToArray();
+    }
+
+    private static IAsyncEnumerable<ReadOnlyMemory<byte>> BodyChunks(SmithyHttpBody body) =>
+        body switch
+        {
+            SmithyHttpBody.EventStreaming eventStreaming => eventStreaming.Content,
+            SmithyHttpBody.Bytes bytes => ToAsyncBytes([bytes.Content]),
+            _ => ToAsyncBytes([]),
+        };
+
+    private static async Task<List<EventStreamMessage>> ReadMessagesAsync(byte[] framed)
+    {
+        var messages = new List<EventStreamMessage>();
+        await foreach (
+            var message in EventStreamMessageReader.ReadAllAsync(new MemoryStream(framed))
+        )
+        {
+            messages.Add(message);
+        }
+
+        return messages;
+    }
+
+    private static async IAsyncEnumerable<T> ToAsync<T>(IEnumerable<T> values)
+    {
+        foreach (var value in values)
+        {
+            await Task.Yield();
+            yield return value;
+        }
+    }
+
+    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> ToAsyncBytes(
+        IEnumerable<byte[]> values
+    )
+    {
+        foreach (var value in values)
+        {
+            await Task.Yield();
+            yield return value;
+        }
+    }
+
+    private static async Task<List<T>> CollectAsync<T>(IAsyncEnumerable<T> values)
+    {
+        var result = new List<T>();
+        await foreach (var value in values)
+        {
+            result.Add(value);
+        }
+
+        return result;
+    }
+
+    private static Schema<Echo> EchoSchema(string name) =>
+        Schemas
+            .Structure<Echo, EchoBuilder>(new ShapeId("example", name))
+            .Required(
+                "message",
+                static value => value.Message,
+                static (builder, value) => builder.Message = value,
+                Schemas.String,
+                traits: [RestTraits.HttpLabelTrait]
+            )
+            .Build(static () => new EchoBuilder(), static b => new Echo(b.Message!));
+
+    private static Schema<ChatEvent> ChatEventSchema(string name) =>
+        Schemas
+            .Union<ChatEvent>(new ShapeId("example", name))
+            .Case(
+                "message",
+                static value => value is ChatEvent.Message,
+                static value => ((ChatEvent.Message)value).Value,
+                static value => new ChatEvent.Message(value!),
+                EchoSchema($"{name}Message")
+            )
+            .Build();
+
+    private static Schema<EventEnvelope> EventEnvelopeSchema(
+        string name,
+        IReadOnlyList<Trait> streamIdTraits
+    ) =>
+        Schemas
+            .Structure<EventEnvelope, EventEnvelopeBuilder>(new ShapeId("example", name))
+            .Required(
+                "streamId",
+                static value => value.StreamId,
+                static (builder, value) => builder.StreamId = value,
+                Schemas.String,
+                traits: streamIdTraits
+            )
+            .Required(
+                "events",
+                static value => value.Events,
+                static (builder, value) => builder.Events = value,
+                Schemas.EventStream(ChatEventSchema($"{name}Event")),
+                traits: [RestTraits.HttpPayloadTrait, new Trait(RestTraits.Streaming)]
+            )
+            .Build(
+                static () => new EventEnvelopeBuilder(),
+                static builder => new EventEnvelope(builder.StreamId!, builder.Events!)
+            );
+
+    private static OperationSchema<Echo, EventEnvelope> OutputEventStreamOperation(string name) =>
+        Schemas.Operation(
+            new ShapeId("example", name),
+            EchoSchema($"{name}Input"),
+            EventEnvelopeSchema($"{name}Output", [RestTraits.HttpHeaderTrait("X-Stream-Id")]),
+            traits: [RestTraits.HttpTrait("GET", "/streams/{message}")]
+        );
+
+    private static OperationSchema<EventEnvelope, Echo> InputEventStreamOperation(string name) =>
+        Schemas.Operation(
+            new ShapeId("example", name),
+            EventEnvelopeSchema($"{name}Input", [RestTraits.HttpLabelTrait]),
+            EchoSchema($"{name}Output"),
+            traits: [RestTraits.HttpTrait("POST", "/streams/{streamId}")]
+        );
+
+    private static OperationSchema<EventEnvelope, EventEnvelope> DuplexEventStreamOperation(
+        string name
+    ) =>
+        Schemas.Operation(
+            new ShapeId("example", name),
+            EventEnvelopeSchema($"{name}Input", [RestTraits.HttpLabelTrait]),
+            EventEnvelopeSchema($"{name}Output", [RestTraits.HttpHeaderTrait("X-Stream-Id")]),
+            traits: [RestTraits.HttpTrait("POST", "/streams/{streamId}")]
+        );
 
     private static StructSchema<
         UploadUserAvatarStreamInput,

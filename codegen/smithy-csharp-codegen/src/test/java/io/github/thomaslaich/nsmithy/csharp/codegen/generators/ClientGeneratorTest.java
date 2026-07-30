@@ -218,6 +218,63 @@ final class ClientGeneratorTest {
       }
       """;
 
+  private static final String REST_STREAMING_MODEL =
+      """
+      $version: "2"
+
+      namespace example.reststreaming
+
+      use aws.protocols#restJson1
+      use smithy.api#streaming
+
+      @restJson1
+      service StreamingService {
+          version: "1"
+          operations: [Watch]
+      }
+
+      @http(method: "GET", uri: "/watch")
+      operation Watch {
+          input := {}
+          output := {
+              @httpPayload
+              events: ChatEvent
+          }
+      }
+
+      @streaming
+      union ChatEvent {
+          message: MessageEvent
+      }
+
+      structure MessageEvent {
+          text: String
+      }
+      """;
+
+  @Test
+  void restJson1EventStreamOperationsAreBoundThroughSharedRuntime() throws Exception {
+    String generated =
+        renderClient(
+            REST_PROTOCOL_TRAITS,
+            REST_STREAMING_MODEL,
+            "example.reststreaming#StreamingService",
+            "Example.RestStreaming");
+
+    assertTrue(
+        generated.contains(
+            "private readonly"
+                + " SmithyOperationBinding<Example.Example.Reststreaming.WatchInput,"
+                + " Example.Example.Reststreaming.WatchOutput> WatchBinding;"),
+        generated);
+    assertTrue(
+        generated.contains(
+            "serviceProtocol.ForOperation(Example.Example.Reststreaming.WatchSchema.Schema)"),
+        generated);
+    assertTrue(generated.contains("runtime.InvokeAsync(WatchBinding"), generated);
+    assertFalse(generated.contains("Event-stream operations are not supported"), generated);
+  }
+
   @Test
   void operationBindingsCarryEffectiveAuthSchemes() throws Exception {
     String generated =

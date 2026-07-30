@@ -1,9 +1,9 @@
 using System.Net.Http;
 using System.Runtime.CompilerServices;
 using Example.Chat;
-using NSmithy.Protocols.RpcV2Cbor;
+using NSmithy.Protocols.RestJson;
 
-var (user, endpoint) = ParseArgs(args, "http://localhost:5004");
+var (user, endpoint) = ParseArgs(args, "http://localhost:5005");
 
 using var httpClient = new HttpClient
 {
@@ -13,7 +13,7 @@ using var httpClient = new HttpClient
 
 using var client = new ChatServiceClient(
     httpClient,
-    new() { Endpoint = new Uri(endpoint), Protocol = new RpcV2CborProtocol() }
+    new() { Endpoint = new Uri(endpoint), Protocol = new RestJson1Protocol() }
 );
 
 const string room = "general";

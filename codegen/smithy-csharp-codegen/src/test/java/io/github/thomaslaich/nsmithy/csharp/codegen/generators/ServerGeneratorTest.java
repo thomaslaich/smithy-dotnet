@@ -121,6 +121,63 @@ final class ServerGeneratorTest {
       structure grpc {}
       """;
 
+  private static final String REST_PROTOCOL_TRAITS =
+      """
+      $version: "2"
+
+      namespace aws.protocols
+
+      use smithy.api#protocolDefinition
+      use smithy.api#trait
+
+      @trait(selector: "service")
+      @protocolDefinition
+      structure restJson1 {}
+      """;
+
+  private static final String REST_STREAMING_MODEL =
+      """
+      $version: "2"
+
+      namespace example.reststreaming
+
+      use aws.protocols#restJson1
+      use smithy.api#streaming
+
+      @restJson1
+      service StreamingService {
+          version: "1"
+          operations: [Watch, Upload]
+      }
+
+      @http(method: "GET", uri: "/watch")
+      operation Watch {
+          input := {}
+          output := {
+              @httpPayload
+              events: ChatEvent
+          }
+      }
+
+      @http(method: "POST", uri: "/upload")
+      operation Upload {
+          input := {
+              @httpPayload
+              events: ChatEvent
+          }
+          output := {}
+      }
+
+      @streaming
+      union ChatEvent {
+          message: MessageEvent
+      }
+
+      structure MessageEvent {
+          text: String
+      }
+      """;
+
   @Test
   void streamingGrpcServerUsesAsyncEnumerableHandlersAndStreamingWriter() throws Exception {
     String generated = renderServer();
@@ -165,21 +222,44 @@ final class ServerGeneratorTest {
         ex.getMessage());
   }
 
+  @Test
+  void restJson1EventStreamOperationsMapRestRoutes() throws Exception {
+    String generated =
+        renderServer(
+            REST_PROTOCOL_TRAITS,
+            REST_STREAMING_MODEL,
+            "example.reststreaming#StreamingService",
+            "Example.RestStreaming");
+
+    assertTrue(generated.contains("MapStreamingServiceRestJson1"), generated);
+    assertTrue(generated.contains("endpoints.MapMethods(\"/watch\", [\"GET\"]"), generated);
+    assertTrue(generated.contains("WatchProtocol, handler.WatchAsync, false"), generated);
+    assertTrue(generated.contains("endpoints.MapMethods(\"/upload\", [\"POST\"]"), generated);
+    assertTrue(generated.contains("UploadProtocol, handler.UploadAsync, true"), generated);
+  }
+
   private String renderServer() throws Exception {
     return renderServer(MODEL);
   }
 
   private String renderServer(String modelText) throws Exception {
+    return renderServer(
+        PROTOCOL_TRAITS, modelText, "example.streaming#StreamingService", "Example.Streaming");
+  }
+
+  private String renderServer(
+      String protocolTraits, String modelText, String serviceId, String writerNamespace)
+      throws Exception {
     Model model =
         Model.assembler()
-            .addUnparsedModel("protocol-traits.smithy", PROTOCOL_TRAITS)
+            .addUnparsedModel("protocol-traits.smithy", protocolTraits)
             .addUnparsedModel("model.smithy", modelText)
             .assemble()
             .unwrap();
     CSharpSettings settings =
         CSharpSettings.fromNode(
             ObjectNode.builder()
-                .withMember("service", Node.from("example.streaming#StreamingService"))
+                .withMember("service", Node.from(serviceId))
                 .withMember("baseNamespace", Node.from("Example"))
                 .build());
     var symbolProvider = new CSharpSymbolProvider(model, settings);
@@ -192,9 +272,8 @@ final class ServerGeneratorTest {
             .fileManifest(manifest)
             .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
             .build();
-    var writer = new CSharpWriter("Example.Streaming");
-    var service =
-        model.expectShape(ShapeId.from("example.streaming#StreamingService"), ServiceShape.class);
+    var writer = new CSharpWriter(writerNamespace);
+    var service = model.expectShape(ShapeId.from(serviceId), ServiceShape.class);
 
     new ServerGenerator(context, writer, service).run();
 

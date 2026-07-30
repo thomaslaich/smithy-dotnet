@@ -141,6 +141,14 @@ public final class ProtocolSupport {
     };
   }
 
+  /** True when the runtime protocol can bind Smithy event-stream operation inputs/outputs. */
+  public static boolean supportsEventStreams(Kind kind) {
+    return switch (kind) {
+      case REST_JSON_1, SIMPLE_REST_JSON, RPC_V2_CBOR, GRPC -> true;
+      case AWS_JSON_1_0, AWS_JSON_1_1, REST_XML -> false;
+    };
+  }
+
   /** Runtime namespace housing the codec singleton. */
   public static String codecNamespace(Kind kind) {
     return switch (kind) {
