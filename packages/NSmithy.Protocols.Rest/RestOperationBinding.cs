@@ -226,7 +226,7 @@ public sealed class RestOperationBinding<TInput, TOutput>
             OutputHasStreamingPayload =
                 outputPayloadMember is not null
                 && (
-                    outputPayloadMember.Target is IEventStreamSchema
+                    outputPayloadMember.Target.Resolved is IEventStreamSchema
                     || outputPayloadMember.Traits.ContainsKey(RestTraits.Streaming)
                 ),
             InputSchema = inputSchema,

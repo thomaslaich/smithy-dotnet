@@ -3,7 +3,7 @@ using System.Threading.Channels;
 using Example.Chat;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 
-var port = args.Length > 0 && int.TryParse(args[0], out var parsedPort) ? parsedPort : 5004;
+var port = args.Length > 0 && int.TryParse(args[0], out var parsedPort) ? parsedPort : 5005;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(options =>
@@ -20,7 +20,7 @@ builder.Services.AddSingleton<ChatRooms>();
 builder.Services.AddChatServiceHandler<ChatHandler>();
 
 var app = builder.Build();
-app.MapChatServiceRpcV2Cbor();
+app.MapChatServiceRestJson1();
 app.Run();
 
 internal sealed class ChatHandler(ChatRooms rooms) : IChatServiceHandler

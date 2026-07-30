@@ -711,7 +711,7 @@ public static class RestProtocol
 
         return UnwrapNullable(target).Kind switch
         {
-            _ when target is IEventStreamSchema => EventStreamContentType,
+            _ when target.Resolved is IEventStreamSchema => EventStreamContentType,
             ShapeKind.Blob => codecFactory.BlobContentType,
             ShapeKind.String
             or ShapeKind.Enum when !UseBodyCodecForPayload(target, traits, rawStringPayloads) =>
@@ -770,7 +770,7 @@ public static class RestProtocol
             var mediaType = GetMediaType(target, traits);
             var kind = UnwrapNullable(target).Kind;
 
-            if (target is IEventStreamSchema eventStream)
+            if (target.Resolved is IEventStreamSchema eventStream)
             {
                 Result = BuildEventStreamPayloadWriter(
                     member,
@@ -882,7 +882,7 @@ public static class RestProtocol
             var traits = member.Traits;
             var unwrapped = UnwrapNullable(target);
 
-            if (target is IEventStreamSchema eventStream)
+            if (target.Resolved is IEventStreamSchema eventStream)
             {
                 Result = BuildEventStreamPayloadReader(
                     member,
