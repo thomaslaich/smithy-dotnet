@@ -104,14 +104,20 @@
            it. Local SNAPSHOT dev builds have no published tag, so fall back to the VERSION
            file (a real-looking version the placeholder can carry). -->
       <_NSmithyTemplateVersion>$(_NSmithyReleaseVersion)</_NSmithyTemplateVersion>
-      <_NSmithyTemplateVersion Condition="!$(Version.Contains('SNAPSHOT'))">$(Version)</_NSmithyTemplateVersion>
+      <_NSmithyTemplateVersion Condition="!$(Version.Contains('SNAPSHOT'))"
+        >$(Version)</_NSmithyTemplateVersion
+      >
 
       <!-- Major.Minor.Patch core of each, dropping any -preview.N / prerelease suffix, so
            the release-line guard below matches VERSION=0.7.0 against a 0.7.0-preview.N tag. -->
       <_NSmithyReleaseCore>$(_NSmithyReleaseVersion)</_NSmithyReleaseCore>
-      <_NSmithyReleaseCore Condition="$(_NSmithyReleaseVersion.Contains('-'))">$(_NSmithyReleaseVersion.Substring(0, $(_NSmithyReleaseVersion.IndexOf('-'))))</_NSmithyReleaseCore>
+      <_NSmithyReleaseCore Condition="$(_NSmithyReleaseVersion.Contains('-'))"
+        >$(_NSmithyReleaseVersion.Substring(0, $(_NSmithyReleaseVersion.IndexOf('-'))))</_NSmithyReleaseCore
+      >
       <_NSmithyTagCore>$(Version)</_NSmithyTagCore>
-      <_NSmithyTagCore Condition="$(Version.Contains('-'))">$(Version.Substring(0, $(Version.IndexOf('-'))))</_NSmithyTagCore>
+      <_NSmithyTagCore Condition="$(Version.Contains('-'))"
+        >$(Version.Substring(0, $(Version.IndexOf('-'))))</_NSmithyTagCore
+      >
     </PropertyGroup>
     <!-- On a release build (Version has no -SNAPSHOT), the VERSION file must track the same
          release line as the tag. The prerelease suffix is ignored so a single VERSION=0.7.0
