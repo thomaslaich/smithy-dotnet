@@ -116,6 +116,8 @@ public sealed class RpcV2CborStreamingProtocolTests
         Assert.Equal("/service/Greeter/operation/Watch", request.RequestUri);
         Assert.Equal("application/cbor", request.ContentType);
         Assert.Equal(["application/vnd.amazon.eventstream"], request.Headers["Accept"]);
+        // The response is a live event stream, so the runtime must read it in Stream mode.
+        Assert.True(request.ExpectStreamingResponse);
 
         var response = await ToClientResponseAsync(
             protocol.SerializeResponse(
@@ -142,6 +144,8 @@ public sealed class RpcV2CborStreamingProtocolTests
         Assert.Equal("/service/Greeter/operation/Upload", request.RequestUri);
         Assert.Equal("application/vnd.amazon.eventstream", request.ContentType);
         Assert.Equal(["application/cbor"], request.Headers["Accept"]);
+        // Client streaming has a unary response, so it stays in Buffer mode.
+        Assert.False(request.ExpectStreamingResponse);
 
         var framed = await BodyBytesAsync(request.Body);
         var message = Assert.Single(await ReadMessagesAsync(framed));
@@ -172,6 +176,8 @@ public sealed class RpcV2CborStreamingProtocolTests
 
         Assert.Equal("application/vnd.amazon.eventstream", request.ContentType);
         Assert.Equal(["application/vnd.amazon.eventstream"], request.Headers["Accept"]);
+        // Duplex streams the response too, so the runtime must read it in Stream mode.
+        Assert.True(request.ExpectStreamingResponse);
         Assert.Single(await ReadMessagesAsync(await BodyBytesAsync(request.Body)));
 
         var response = await ToClientResponseAsync(

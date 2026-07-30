@@ -252,6 +252,8 @@ public sealed class GrpcProtocolTests
         Assert.Equal(HttpMethod.Post, request.Method);
         Assert.Equal("/example.greeter.Greeter/Watch", request.RequestUri);
         Assert.Equal("application/grpc+proto", request.ContentType);
+        // The response is a live event stream, so the runtime must read it in Stream mode.
+        Assert.True(request.ExpectStreamingResponse);
         Assert.Equal([new Echo("start")], await DecodeChunks(BodyChunks(request.Body)));
 
         var response = EventStreamResponse([
@@ -279,6 +281,8 @@ public sealed class GrpcProtocolTests
         );
 
         Assert.Equal("/example.greeter.Greeter/Upload", request.RequestUri);
+        // Client streaming has a unary response, so it stays in Buffer mode.
+        Assert.False(request.ExpectStreamingResponse);
         Assert.Equal(
             [new Echo("one"), new Echo("two")],
             await DecodeChunks(BodyChunks(request.Body))
@@ -298,6 +302,8 @@ public sealed class GrpcProtocolTests
         var request = protocol.SerializeRequest(new EchoEvents(ToAsync([new Echo("client")])));
 
         Assert.Equal("/example.greeter.Greeter/Chat", request.RequestUri);
+        // Duplex streams the response too, so the runtime must read it in Stream mode.
+        Assert.True(request.ExpectStreamingResponse);
         Assert.Equal([new Echo("client")], await DecodeChunks(BodyChunks(request.Body)));
 
         var response = EventStreamResponse([
