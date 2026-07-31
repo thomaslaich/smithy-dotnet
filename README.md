@@ -25,34 +25,57 @@ NSmithy is a .NET toolkit that turns a [Smithy](https://smithy.io) model into id
 
 ## Quick Start
 
-Install the templates and scaffold a contracts project, a server, and a client:
+Start with a Smithy model in a contracts project:
 
-```bash
-dotnet new install NSmithy.Templates
-
-# A contracts project owns the Smithy model
-dotnet new nsmithy-contracts -n HelloWorld.Contracts
-
-# A server that implements the model's handler…
-dotnet new nsmithy-server -n HelloWorld.Server --contracts HelloWorld.Contracts
-
-# …and a typed client that calls it
-dotnet new nsmithy-client -n HelloWorld.Client
-```
-
-The starter model is a single `restJson1` operation; `dotnet build` runs codegen
-and produces the model types, `IHelloServiceHandler` interface, and typed
-`HelloServiceClient`. Implement the handler, and call the client:
-
-```csharp
-// Server: implement the generated handler
-internal sealed class HelloHandler : IHelloServiceHandler
-{
-    public Task<SayHelloOutput> SayHelloAsync(SayHelloInput input, CancellationToken ct = default) =>
-        Task.FromResult(new SayHelloOutput($"Hello, {input.Name}!"));
+```smithy
+@restJson1
+service HelloService {
+    version: "1.0.0"
+    operations: [SayHello]
 }
 
-// Client: call the typed client
+@http(method: "POST", uri: "/hello", code: 200)
+operation SayHello {
+    input := {
+        @required
+        name: String
+    }
+    output := {
+        @required
+        message: String
+    }
+}
+```
+
+`dotnet build` runs NSmithy codegen and produces the C# model types, generated
+ASP.NET Core server hooks, and a typed client. Implement the generated handler
+on the server:
+
+```csharp
+using Hello.World;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddHelloServiceHandler<HelloHandler>();
+
+var app = builder.Build();
+app.MapHelloServiceRestJson1();
+app.Run();
+
+internal sealed class HelloHandler : IHelloServiceHandler
+{
+    public Task<SayHelloOutput> SayHelloAsync(
+        SayHelloInput input,
+        CancellationToken cancellationToken = default
+    ) =>
+        Task.FromResult(new SayHelloOutput($"Hello, {input.Name}!"));
+}
+```
+
+Then call it through the generated client from another .NET project:
+
+```csharp
+using Hello.World;
+
 var client = new HelloServiceClient(new Uri("http://localhost:5000"));
 var response = await client.SayHelloAsync(new SayHelloInput("world"));
 Console.WriteLine(response.Message); // Hello, world!
