@@ -23,6 +23,8 @@ The priorities below are what remains.
 
 ### 1. Expand AWS protocol coverage and AWS readiness
 
+Tracked in [#113](https://github.com/thomaslaich/smithy-dotnet/issues/113).
+
 - Expand AWS protocol coverage beyond the initial AWS JSON client support,
   especially AWS Query and EC2 Query.
 - Continue hardening `aws.protocols#restJson1`, `aws.protocols#restXml`, and
@@ -37,6 +39,8 @@ The priorities below are what remains.
   than by protocol checklists.
 
 ### 2. Move the client runtime to the target architecture
+
+Tracked in [#114](https://github.com/thomaslaich/smithy-dotnet/issues/114).
 
 The core client runtime pipeline, standard retry, operation timeouts,
 telemetry, and paginators have landed; the desired
@@ -54,6 +58,8 @@ The remaining work closes the gaps:
 
 ### 3. XML doc comments from Smithy documentation traits
 
+Tracked in [#115](https://github.com/thomaslaich/smithy-dotnet/issues/115).
+
 Smithy's `@documentation` trait and `///` doc comments are not yet emitted as
 C# XML doc comments (`/// <summary>…</summary>`) on generated types and members.
 Adding this would improve the IDE experience for consumers of generated code —
@@ -61,6 +67,8 @@ hover documentation, parameter hints, and IntelliSense would reflect the
 model's documentation rather than being empty.
 
 ### 4. Improve generator clarity and diagnostics
+
+Tracked in [#116](https://github.com/thomaslaich/smithy-dotnet/issues/116).
 
 - Keep generated output predictable and easy to inspect.
 - Improve unsupported-shape and unsupported-trait diagnostics.
@@ -71,6 +79,8 @@ model's documentation rather than being empty.
   protocol-specific internals and handling route conflicts explicitly.
 
 ### 5. Enforce constraint traits and modeled validation
+
+Tracked in [#117](https://github.com/thomaslaich/smithy-dotnet/issues/117).
 
 Smithy's constraint traits — `@length`, `@pattern`, `@range`, `@uniqueItems`,
 and server-side enforcement of `@required` — are not yet enforced. `@required`
@@ -92,6 +102,8 @@ This work includes:
 
 ### 6. Improve CBOR and XML codec performance through schema-compiled codecs
 
+Tracked in [#118](https://github.com/thomaslaich/smithy-dotnet/issues/118).
+
 JSON already benefits from compiling codec state once from the schema so the
 runtime can cache structural decisions such as dispatch and boxing behavior.
 CBOR and XML should move in the same direction so runtime performance does not
@@ -109,6 +121,8 @@ This work includes:
 
 ### 7. Harden streaming operations
 
+Tracked in [#119](https://github.com/thomaslaich/smithy-dotnet/issues/119).
+
 NSmithy has two experimental event-streaming surfaces: native gRPC (client,
 server, and bidirectional streaming) and `rpcv2Cbor` event streams over
 `vnd.amazon.eventstream` message framing, sharing the `NSmithy.EventStream`
@@ -125,6 +139,8 @@ This work includes:
 
 ### 8. Expand to async protocols
 
+Tracked in [#120](https://github.com/thomaslaich/smithy-dotnet/issues/120).
+
 NSmithy's current protocol work is mostly request/response oriented. A separate
 near-term goal is to validate that the runtime and generator model can also
 support async protocol families cleanly.
@@ -140,6 +156,8 @@ This work includes:
 
 ### 9. Support Smithy AI traits and MCP generation
 
+Tracked in [#121](https://github.com/thomaslaich/smithy-dotnet/issues/121).
+
 Support Smithy's AI-oriented traits so that .NET and protocol artifacts can be
 generated for tool-driven and agent-driven workflows, rather than treating the
 traits as out-of-band metadata.
@@ -153,6 +171,8 @@ This work includes:
   models remain inspectable, testable, and versionable.
 
 ### 10. Honor protocol HTTP-version traits
+
+Tracked in [#122](https://github.com/thomaslaich/smithy-dotnet/issues/122).
 
 Protocol traits can declare the HTTP versions a service supports via their `http`
 and `eventStreamHttp` members — a list of ALPN protocol IDs in preference order
