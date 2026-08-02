@@ -13,7 +13,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import software.amazon.smithy.model.shapes.ServiceShape;
@@ -22,12 +21,10 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 @SmithyInternalApi
 public final class ServiceSchemaGenerator implements Runnable {
 
-  private final GenerationContext context;
   private final CSharpWriter writer;
   private final ServiceShape service;
 
-  public ServiceSchemaGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
-    this.context = c;
+  public ServiceSchemaGenerator(CSharpWriter w, ServiceShape s) {
     this.writer = w;
     this.service = s;
   }

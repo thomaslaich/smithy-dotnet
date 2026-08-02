@@ -125,7 +125,12 @@ public final class ShapeSupport {
               case LIST -> target.asListShape().orElseThrow().getMember().getTarget();
               case SET -> target.asSetShape().orElseThrow().getMember().getTarget();
               default ->
-                  throw new IllegalArgumentException("Expected list/set shape: " + target.getId());
+                  throw new CodegenException(
+                      "Expected list or set shape while rendering @default for "
+                          + target.getId()
+                          + ", but found "
+                          + target.getType()
+                          + ".");
             });
     String elementType = CSharpSymbolProvider.qualified(sp.toSymbol(memberTarget));
     List<String> elements = new ArrayList<>();
@@ -144,7 +149,17 @@ public final class ShapeSupport {
       software.amazon.smithy.model.node.Node node,
       String typeName) {
     if (!node.isObjectNode()) return null;
-    var mapShape = target.asMapShape().orElseThrow();
+    var mapShape =
+        target
+            .asMapShape()
+            .orElseThrow(
+                () ->
+                    new CodegenException(
+                        "Expected map shape while rendering @default for "
+                            + target.getId()
+                            + ", but found "
+                            + target.getType()
+                            + "."));
     Shape keyTarget = model.expectShape(mapShape.getKey().getTarget());
     Shape valueTarget = model.expectShape(mapShape.getValue().getTarget());
     String keyType = CSharpSymbolProvider.qualified(sp.toSymbol(keyTarget));

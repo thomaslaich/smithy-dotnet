@@ -4,7 +4,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
@@ -16,12 +15,10 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 @SmithyInternalApi
 public final class IntEnumGenerator implements Runnable {
 
-  private final GenerationContext context;
   private final CSharpWriter writer;
   private final IntEnumShape shape;
 
-  public IntEnumGenerator(GenerationContext c, CSharpWriter w, IntEnumShape s) {
-    this.context = c;
+  public IntEnumGenerator(CSharpWriter w, IntEnumShape s) {
     this.writer = w;
     this.shape = s;
   }
