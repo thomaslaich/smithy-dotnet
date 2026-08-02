@@ -70,7 +70,7 @@ final class DirectedCSharpCodegen
         .useFileWriter(
             dir + "/" + typeName + ".Schema.g.cs",
             csNamespace,
-            writer -> new ServiceSchemaGenerator(ctx, writer, directive.shape()).run());
+            writer -> new ServiceSchemaGenerator(writer, directive.shape()).run());
 
     // Service-level files use a dotted ".Client"/".Server" suffix so the MSBuild
     // include/exclude globs (*.Client.g.cs / *.Server.g.cs) can distinguish them from
@@ -177,9 +177,7 @@ final class DirectedCSharpCodegen
     directive
         .context()
         .writerDelegator()
-        .useShapeWriter(
-            enumShape,
-            writer -> new StringEnumGenerator(directive.context(), writer, enumShape).run());
+        .useShapeWriter(enumShape, writer -> new StringEnumGenerator(writer, enumShape).run());
   }
 
   @Override
@@ -190,10 +188,7 @@ final class DirectedCSharpCodegen
         .writerDelegator()
         .useShapeWriter(
             directive.shape(),
-            writer ->
-                new IntEnumGenerator(
-                        directive.context(), writer, directive.shape().asIntEnumShape().get())
-                    .run());
+            writer -> new IntEnumGenerator(writer, directive.shape().asIntEnumShape().get()).run());
   }
 
   @Override

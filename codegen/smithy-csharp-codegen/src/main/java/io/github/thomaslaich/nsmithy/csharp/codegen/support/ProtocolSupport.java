@@ -14,6 +14,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
 import java.util.ArrayList;
 import java.util.List;
+import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -100,8 +101,20 @@ public final class ProtocolSupport {
   public static Kind primaryKind(ServiceShape s) {
     List<Kind> kinds = declaredKinds(s);
     if (kinds.isEmpty()) {
-      throw new IllegalStateException(
-          "Service " + s.getId() + " declares no supported protocol trait");
+      throw new CodegenException(
+          "Service "
+              + s.getId()
+              + " declares no supported protocol trait. Supported protocol traits: "
+              + String.join(
+                  ", ",
+                  TraitIds.RPC_V2_CBOR.toString(),
+                  TraitIds.REST_XML.toString(),
+                  TraitIds.AWS_JSON_1_1.toString(),
+                  TraitIds.AWS_JSON_1_0.toString(),
+                  TraitIds.SIMPLE_REST_JSON.toString(),
+                  TraitIds.REST_JSON_1.toString(),
+                  TraitIds.GRPC.toString())
+              + ".");
     }
     return kinds.get(0);
   }

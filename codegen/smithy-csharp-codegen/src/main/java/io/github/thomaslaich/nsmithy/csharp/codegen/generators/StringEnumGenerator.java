@@ -5,7 +5,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
@@ -17,12 +16,10 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 @SmithyInternalApi
 public final class StringEnumGenerator implements Runnable {
 
-  private final GenerationContext context;
   private final CSharpWriter writer;
   private final EnumShape shape;
 
-  public StringEnumGenerator(GenerationContext c, CSharpWriter w, EnumShape s) {
-    this.context = c;
+  public StringEnumGenerator(CSharpWriter w, EnumShape s) {
     this.writer = w;
     this.shape = s;
   }
