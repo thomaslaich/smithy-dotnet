@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.node.ArrayNode;
@@ -58,7 +59,14 @@ public final class SchemaGenerator {
         case "Document" -> "Schemas.Document";
         case "Unit" -> "Schemas.Unit";
         default ->
-            throw new IllegalArgumentException("Unsupported prelude shape: " + shape.getId());
+            throw new CodegenException(
+                "Unsupported Smithy prelude schema shape "
+                    + shape.getId()
+                    + " ("
+                    + shape.getType()
+                    + "). Supported prelude schema shapes: "
+                    + supportedPreludeSchemaShapeNames()
+                    + ".");
       };
     }
 
@@ -95,6 +103,25 @@ public final class SchemaGenerator {
       case STRUCTURE, UNION, LIST, SET, MAP -> true;
       default -> false;
     };
+  }
+
+  private static String supportedPreludeSchemaShapeNames() {
+    return String.join(
+        ", ",
+        "Boolean",
+        "Byte",
+        "Short",
+        "Integer",
+        "Long",
+        "Float",
+        "Double",
+        "BigInteger",
+        "BigDecimal",
+        "String",
+        "Blob",
+        "Timestamp",
+        "Document",
+        "Unit");
   }
 
   public static String schemaClassName(GenerationContext context, Shape shape) {
