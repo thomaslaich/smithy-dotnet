@@ -135,6 +135,46 @@ final class ServerGeneratorTest {
       structure restJson1 {}
       """;
 
+  private static final String MULTI_PROTOCOL_TRAITS =
+      """
+      $version: "2"
+
+      namespace aws.protocols
+
+      use smithy.api#protocolDefinition
+      use smithy.api#trait
+
+      @trait(selector: "service")
+      @protocolDefinition
+      structure restJson1 {}
+
+      ---
+
+      $version: "2"
+
+      namespace alloy
+
+      use smithy.api#protocolDefinition
+      use smithy.api#trait
+
+      @trait(selector: "service")
+      @protocolDefinition
+      structure simpleRestJson {}
+
+      ---
+
+      $version: "2"
+
+      namespace smithy.protocols
+
+      use smithy.api#protocolDefinition
+      use smithy.api#trait
+
+      @trait(selector: "service")
+      @protocolDefinition
+      structure rpcv2Cbor {}
+      """;
+
   private static final String REST_STREAMING_MODEL =
       """
       $version: "2"
@@ -178,6 +218,37 @@ final class ServerGeneratorTest {
       }
       """;
 
+  private static final String MULTI_PROTOCOL_MODEL =
+      """
+      $version: "2"
+
+      namespace example.multi
+
+      use alloy#simpleRestJson
+      use aws.protocols#restJson1
+      use smithy.protocols#rpcv2Cbor
+
+      @rpcv2Cbor
+      @simpleRestJson
+      @restJson1
+      service MultiService {
+          version: "1"
+          operations: [GetThing]
+      }
+
+      @http(method: "GET", uri: "/things/{id}")
+      operation GetThing {
+          input := {
+              @required
+              @httpLabel
+              id: String
+          }
+          output := {
+              name: String
+          }
+      }
+      """;
+
   @Test
   void streamingGrpcServerUsesAsyncEnumerableHandlersAndStreamingWriter() throws Exception {
     String generated = renderServer();
@@ -203,10 +274,18 @@ final class ServerGeneratorTest {
     assertFalse(generated.contains("IEventStreamServiceProtocol"));
     // Streaming endpoints delegate to the shared runtime path; only request-body streaming is
     // selected per operation.
-    assertTrue(generated.contains("WatchProtocol, handler.WatchAsync, false"), generated);
-    assertTrue(generated.contains("UploadProtocol, handler.UploadAsync, true"), generated);
-    assertTrue(generated.contains("ChatProtocol, handler.ChatAsync, true"), generated);
-    assertTrue(generated.contains("MapStreamingServiceGrpc"), generated);
+    assertTrue(generated.contains("WatchGrpcProtocol, handler.WatchAsync, false"), generated);
+    assertTrue(generated.contains("UploadGrpcProtocol, handler.UploadAsync, true"), generated);
+    assertTrue(generated.contains("ChatGrpcProtocol, handler.ChatAsync, true"), generated);
+    assertTrue(
+        generated.contains(
+            "public static IEndpointRouteBuilder MapStreamingService(this IEndpointRouteBuilder"
+                + " endpoints, StreamingServiceProtocols protocols ="
+                + " StreamingServiceProtocols.Grpc)"),
+        generated);
+    assertFalse(
+        generated.contains("public static IEndpointRouteBuilder MapStreamingServiceGrpc"),
+        generated);
   }
 
   @Test
@@ -232,11 +311,67 @@ final class ServerGeneratorTest {
             "example.reststreaming#StreamingService",
             "Example.RestStreaming");
 
-    assertTrue(generated.contains("MapStreamingServiceRestJson1"), generated);
+    assertTrue(generated.contains("public enum StreamingServiceProtocols"), generated);
+    assertTrue(generated.contains("RestJson1 = 1,"), generated);
+    assertTrue(generated.contains("All = RestJson1,"), generated);
+    assertTrue(
+        generated.contains(
+            "public static IEndpointRouteBuilder MapStreamingService(this IEndpointRouteBuilder"
+                + " endpoints, StreamingServiceProtocols protocols ="
+                + " StreamingServiceProtocols.RestJson1)"),
+        generated);
+    assertFalse(
+        generated.contains("public static IEndpointRouteBuilder MapStreamingServiceRestJson1"),
+        generated);
     assertTrue(generated.contains("endpoints.MapMethods(\"/watch\", [\"GET\"]"), generated);
-    assertTrue(generated.contains("WatchProtocol, handler.WatchAsync, false"), generated);
+    assertTrue(generated.contains("WatchRestJson1Protocol, handler.WatchAsync, false"), generated);
     assertTrue(generated.contains("endpoints.MapMethods(\"/upload\", [\"POST\"]"), generated);
-    assertTrue(generated.contains("UploadProtocol, handler.UploadAsync, true"), generated);
+    assertTrue(generated.contains("UploadRestJson1Protocol, handler.UploadAsync, true"), generated);
+  }
+
+  @Test
+  void multiProtocolServersGenerateSelectableMapperAndRouteConflictChecks() throws Exception {
+    String generated =
+        renderServer(
+            MULTI_PROTOCOL_TRAITS,
+            MULTI_PROTOCOL_MODEL,
+            "example.multi#MultiService",
+            "Example.Multi");
+
+    assertTrue(generated.contains("public enum MultiServiceProtocols"), generated);
+    assertTrue(generated.contains("RpcV2Cbor = 1,"), generated);
+    assertTrue(generated.contains("SimpleRestJson = 2,"), generated);
+    assertTrue(generated.contains("RestJson1 = 4,"), generated);
+    assertTrue(generated.contains("All = RpcV2Cbor | SimpleRestJson | RestJson1,"), generated);
+    assertTrue(
+        generated.contains(
+            "public static IEndpointRouteBuilder MapMultiService(this IEndpointRouteBuilder"
+                + " endpoints, MultiServiceProtocols protocols = MultiServiceProtocols.RpcV2Cbor)"),
+        generated);
+    assertTrue(generated.contains("if ((protocols & ~MultiServiceProtocols.All) != 0)"), generated);
+    assertTrue(
+        generated.contains("if ((protocols & MultiServiceProtocols.SimpleRestJson) != 0)"),
+        generated);
+    assertTrue(
+        generated.contains(
+            "EnsureRouteAvailable(mappedRoutes, \"GET\", \"/things/{id}\","
+                + " MultiServiceProtocols.SimpleRestJson);"),
+        generated);
+    assertTrue(
+        generated.contains(
+            "EnsureRouteAvailable(mappedRoutes, \"GET\", \"/things/{id}\","
+                + " MultiServiceProtocols.RestJson1);"),
+        generated);
+    assertTrue(
+        generated.contains(
+            "Map conflicting protocols on different endpoint route builders, hosts, or ports."),
+        generated);
+    assertFalse(
+        generated.contains("public static IEndpointRouteBuilder MapMultiServiceRestJson1"),
+        generated);
+    assertFalse(
+        generated.contains("public static IEndpointRouteBuilder MapMultiServiceRpcV2Cbor"),
+        generated);
   }
 
   private String renderServer() throws Exception {
@@ -251,12 +386,12 @@ final class ServerGeneratorTest {
   private String renderServer(
       String protocolTraits, String modelText, String serviceId, String writerNamespace)
       throws Exception {
-    Model model =
-        Model.assembler()
-            .addUnparsedModel("protocol-traits.smithy", protocolTraits)
-            .addUnparsedModel("model.smithy", modelText)
-            .assemble()
-            .unwrap();
+    var assembler = Model.assembler();
+    String[] protocolTraitModels = protocolTraits.split("(?m)^---$");
+    for (int i = 0; i < protocolTraitModels.length; i++) {
+      assembler.addUnparsedModel("protocol-traits-" + i + ".smithy", protocolTraitModels[i]);
+    }
+    Model model = assembler.addUnparsedModel("model.smithy", modelText).assemble().unwrap();
     CSharpSettings settings =
         CSharpSettings.fromNode(
             ObjectNode.builder()

@@ -32,7 +32,7 @@ app.MapSmithyDocs();
 
 //#endif
 //#if (IsGrpc)
-app.MapHelloServiceGrpc();
+app.MapHelloService();
 
 //#else
 app.MapHelloServiceHttp();

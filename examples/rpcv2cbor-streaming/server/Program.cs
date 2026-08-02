@@ -20,7 +20,7 @@ builder.Services.AddSingleton<ChatRooms>();
 builder.Services.AddChatServiceHandler<ChatHandler>();
 
 var app = builder.Build();
-app.MapChatServiceRpcV2Cbor();
+app.MapChatService();
 app.Run();
 
 internal sealed class ChatHandler(ChatRooms rooms) : IChatServiceHandler

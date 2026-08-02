@@ -58,7 +58,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHelloServiceHandler<HelloHandler>();
 
 var app = builder.Build();
-app.MapHelloServiceRestJson1();
+app.MapHelloService();
 app.Run();
 
 internal sealed class HelloHandler : IHelloServiceHandler

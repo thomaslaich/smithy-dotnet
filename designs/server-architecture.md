@@ -261,14 +261,14 @@ bolted-on feature:
 - Dispatch is parameterized by that binding, so the same handler delegate serves
   every protocol.
 
-Codegen emits one `Map{Service}{Protocol}` endpoint extension per protocol trait
-on the service, each building its own bindings and all resolving the same
-DI-registered handler:
+Codegen emits one `Map{Service}` endpoint extension with a generated
+`{Service}Protocols` flags enum. Each selected protocol builds its own bindings
+and resolves the same DI-registered handler:
 
 ```csharp
-app.MapWeatherRestJson();    // @http routes:      POST /forecast
-app.MapWeatherRpcV2Cbor();   // structured routes: /service/Weather/operation/GetForecast
-services.AddWeatherHandler<MyWeatherHandler>();   // one handler, both
+app.MapWeatherService(
+    WeatherServiceProtocols.RestJson1 | WeatherServiceProtocols.RpcV2Cbor);
+services.AddWeatherServiceHandler<MyWeatherHandler>();   // one handler, both
 ```
 
 Two rules keep the handler shared across protocols:
@@ -282,8 +282,8 @@ Two rules keep the handler shared across protocols:
 
 ### Listeners and Ports
 
-Generated `Map{Service}{Protocol}` extensions are port-agnostic — ports are a
-deployment concern, not a model concern, so codegen never binds one. Whether two
+Generated `Map{Service}` extensions are port-agnostic — ports are a deployment
+concern, not a model concern, so codegen never binds one. Whether two
 protocols can share a listener depends on their routes and transport:
 
 - **Disjoint routes share a port.** restJson1 (`@http` paths), rpcv2Cbor
@@ -301,7 +301,9 @@ The scoping mechanism is ASP.NET Core's `RequireHost`, applied by the app, not t
 generator:
 
 ```csharp
-app.MapWeatherGrpc().RequireHost("*:5002");   // gRPC on its own HTTP/2 port
+app.MapGroup("")
+    .RequireHost("*:5002")
+    .MapWeatherService(WeatherServiceProtocols.Grpc);   // gRPC on its own HTTP/2 port
 ```
 
 ## Streaming Type Naming

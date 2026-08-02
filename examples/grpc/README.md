@@ -13,7 +13,7 @@ numbers, `@protoNumType` (`uint32`, `fixed64`), `@sparse` maps,
 
 - `contracts`: the Smithy model, packaged as a contracts project.
 - `server`: ASP.NET Core server on Kestrel HTTP/2 that maps the generated gRPC
-  endpoints via `MapLibraryServiceGrpc()`.
+  endpoints via `MapLibraryService()`.
 - `client`: generated typed client that selects gRPC with
   `Protocol = new GrpcProtocol()`.
 

@@ -52,8 +52,8 @@ public class WeatherHandler : IWeatherHandler
 }
 
 // register the handler, map the routes + docs
-builder.Services.AddWeatherHandler<WeatherHandler>();
-app.MapWeatherHttp();     // REST routes -> /forecast/{city}
+builder.Services.AddWeatherServiceHandler<WeatherHandler>();
+app.MapWeatherService();  // REST routes -> /forecast/{city}
 app.MapSmithyOpenApi();   // Scalar UI   -> /openapi
 app.MapSmithyDocs();      // Sphinx docs -> /docs`,
   },
@@ -83,7 +83,7 @@ function hl(code: string, lang: 'smithy' | 'csharp'): string {
   const types =
     lang === 'smithy'
       ? ['String', 'Float', 'Integer', 'Boolean', 'Long', 'Double', 'Timestamp', 'Blob', 'Document']
-      : ['Task', 'CancellationToken', 'String', 'Float', 'Console', 'IWeatherClient', 'WeatherClient', 'GetForecastInput', 'GetForecastOutput', 'IWeatherHandler', 'WeatherHandler'];
+      : ['Task', 'CancellationToken', 'String', 'Float', 'Console', 'IWeatherClient', 'WeatherClient', 'GetForecastInput', 'GetForecastOutput', 'IWeatherHandler', 'WeatherHandler', 'AddWeatherServiceHandler', 'MapWeatherService'];
   const re = /(\/\/[^\n]*)|("(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)|(@[A-Za-z][\w.#]*|\$[a-z]+)|\b([A-Za-z_][A-Za-z0-9_]*)\b/g;
   return esc(code).replace(re, (m, comment, str, ann, word) => {
     if (comment) return `<span style="color:#6b7280">${comment}</span>`;

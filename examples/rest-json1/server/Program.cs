@@ -19,7 +19,7 @@ builder
 var app = builder.Build();
 app.MapSmithyOpenApi();
 app.MapSmithyDocs();
-app.MapWeatherServiceRestJson1();
+app.MapWeatherService();
 app.Run();
 
 internal sealed class WeatherHandler : IWeatherServiceHandler
