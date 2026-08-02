@@ -426,10 +426,23 @@
     <PropertyGroup Condition="'@(_SmithyBundleJar)' != ''">
       <_SmithyMavenEnv>SMITHY_MAVEN_REPOS=$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri);SMITHY_MAVEN_CACHE=$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(IntermediateOutputPath)smithy-maven-cache'))</_SmithyMavenEnv>
     </PropertyGroup>
+    <PropertyGroup>
+      <_SmithyCliBuildOutput>$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\'))</_SmithyCliBuildOutput>
+    </PropertyGroup>
     <Exec
-      Command="&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\\'))&quot; $(SmithyExtraArgs)"
+      Command="&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)"
       EnvironmentVariables="$(_SmithyMavenEnv)"
+      IgnoreExitCode="true"
+      StandardOutputImportance="High"
+      StandardErrorImportance="High"
       WorkingDirectory="$(MSBuildProjectDirectory)"
+    >
+      <Output TaskParameter="ExitCode" PropertyName="_SmithyCliExitCode" />
+    </Exec>
+    <Error
+      Code="NSMITHYCLI"
+      Text="NSmithy: Smithy CLI failed with exit code $(_SmithyCliExitCode). Command: &quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)"
+      Condition="'$(_SmithyCliExitCode)' != '0'"
     />
     <Touch Files="$(SmithyStampFile)" AlwaysCreate="true" />
 
