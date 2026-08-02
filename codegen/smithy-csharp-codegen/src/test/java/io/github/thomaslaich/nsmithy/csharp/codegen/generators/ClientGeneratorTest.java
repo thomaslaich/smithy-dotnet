@@ -172,6 +172,7 @@ final class ClientGeneratorTest {
                 "gRPC event-stream operation example.streaming#Chat input shape"
                     + " example.streaming#ChatInput must contain exactly one event-stream member"),
         ex.getMessage());
+    assertTrue(ex.getMessage().contains("Members: events (event stream), room."), ex.getMessage());
   }
 
   private static final String REST_PROTOCOL_TRAITS =

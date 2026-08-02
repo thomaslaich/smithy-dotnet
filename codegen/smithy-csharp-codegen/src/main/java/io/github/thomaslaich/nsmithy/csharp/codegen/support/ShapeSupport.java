@@ -439,6 +439,16 @@ public final class ShapeSupport {
       return;
     }
 
+    String members =
+        structure.members().stream()
+            .sorted(Comparator.comparing(MemberShape::getMemberName))
+            .map(
+                member ->
+                    member.getMemberName()
+                        + (isEventStreamMember(model, member) ? " (event stream)" : ""))
+            .reduce((left, right) -> left + ", " + right)
+            .orElse("<none>");
+
     throw new CodegenException(
         "gRPC event-stream operation "
             + op.getId()
@@ -448,7 +458,9 @@ public final class ShapeSupport {
             + shapeId
             + " must contain exactly one event-stream member. Native gRPC flattens the Smithy "
             + direction
-            + " wrapper to 'stream <Event>', so sibling members cannot be represented.");
+            + " wrapper to 'stream <Event>', so sibling members cannot be represented. Members: "
+            + members
+            + ".");
   }
 
   public static boolean isStreamingBlobMember(Model model, MemberShape member) {
