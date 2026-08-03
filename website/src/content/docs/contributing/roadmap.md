@@ -52,15 +52,7 @@ The remaining work closes the gaps:
 - Continuing to harden named client interceptors and the typed per-call
   execution context.
 
-### 3. XML doc comments from Smithy documentation traits
-
-Smithy's `@documentation` trait and `///` doc comments are not yet emitted as
-C# XML doc comments (`/// <summary>…</summary>`) on generated types and members.
-Adding this would improve the IDE experience for consumers of generated code —
-hover documentation, parameter hints, and IntelliSense would reflect the
-model's documentation rather than being empty.
-
-### 4. Enforce constraint traits and modeled validation
+### 3. Enforce constraint traits and modeled validation
 
 Smithy's constraint traits — `@length`, `@pattern`, `@range`, `@uniqueItems`,
 and server-side enforcement of `@required` — are not yet enforced. `@required`
@@ -80,7 +72,7 @@ This work includes:
 - Covering server behavior with Smithy's malformed-request conformance suites.
 - Documenting the client-side non-goal as an explicit preview boundary.
 
-### 5. Improve CBOR and XML codec performance through schema-compiled codecs
+### 4. Improve CBOR and XML codec performance through schema-compiled codecs
 
 JSON already benefits from compiling codec state once from the schema so the
 runtime can cache structural decisions such as dispatch and boxing behavior.
@@ -97,7 +89,7 @@ This work includes:
 - Keeping the generated codec path explicit enough that performance work does
   not make diagnostics and debuggability worse.
 
-### 6. Harden streaming operations
+### 5. Harden streaming operations
 
 NSmithy has two experimental event-streaming surfaces: native gRPC (client,
 server, and bidirectional streaming) and `rpcv2Cbor` event streams over
@@ -113,7 +105,7 @@ This work includes:
 - Extending streaming support beyond event streams, especially streaming blob
   payloads.
 
-### 7. Expand to async protocols
+### 6. Expand to async protocols
 
 NSmithy's current protocol work is mostly request/response oriented. A separate
 near-term goal is to validate that the runtime and generator model can also
@@ -128,7 +120,7 @@ This work includes:
 - Using these protocols to pressure-test the existing transport, codec, and
   client/server seams beyond HTTP-centric assumptions.
 
-### 8. Support Smithy AI traits and MCP generation
+### 7. Support Smithy AI traits and MCP generation
 
 Support Smithy's AI-oriented traits so that .NET and protocol artifacts can be
 generated for tool-driven and agent-driven workflows, rather than treating the
@@ -142,7 +134,7 @@ This work includes:
 - Defining the runtime and generation boundaries needed so AI-trait-aware
   models remain inspectable, testable, and versionable.
 
-### 9. Honor protocol HTTP-version traits
+### 8. Honor protocol HTTP-version traits
 
 Protocol traits can declare the HTTP versions a service supports via their `http`
 and `eventStreamHttp` members — a list of ALPN protocol IDs in preference order

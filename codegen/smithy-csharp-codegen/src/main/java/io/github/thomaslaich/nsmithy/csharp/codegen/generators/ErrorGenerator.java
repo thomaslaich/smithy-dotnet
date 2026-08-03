@@ -9,12 +9,15 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.StructureShape;
+import software.amazon.smithy.model.traits.DocumentationTrait;
 import software.amazon.smithy.model.traits.RetryableTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -40,6 +43,7 @@ public final class ErrorGenerator implements Runnable {
     List<MemberShape> members = ShapeSupport.sortedMembers(shape);
 
     Optional<RetryableTrait> retryable = shape.getTrait(RetryableTrait.class);
+    writer.writeXmlDocs(shape);
     if (retryable.isPresent()) {
       writer.write(
           "public sealed partial class $L : System.Exception, NSmithy.Core.ISmithyRetryableError",
@@ -61,6 +65,7 @@ public final class ErrorGenerator implements Runnable {
           writeConstructor(typeName, messageMember.orElse(null));
           messageMember.ifPresent(
               mm -> {
+                writer.writeXmlDocs(mm);
                 writer.write("public override string Message => base.Message!;");
                 writer.write("");
               });
@@ -75,6 +80,21 @@ public final class ErrorGenerator implements Runnable {
     Model model = context.model();
     List<MemberShape> ctor = ShapeSupport.constructorMembers(shape, messageMember);
     boolean hasRequired = ctor.stream().anyMatch(m -> !ShapeSupport.isOptionalParameter(m));
+
+    Map<String, String> parameterDocs = new LinkedHashMap<>();
+    if (messageMember != null) {
+      messageMember
+          .getTrait(DocumentationTrait.class)
+          .ifPresent(trait -> parameterDocs.put("message", trait.getValue()));
+    }
+    for (MemberShape m : ctor) {
+      m.getTrait(DocumentationTrait.class)
+          .ifPresent(
+              trait ->
+                  parameterDocs.put(
+                      CSharpNaming.parameterName(m.getMemberName()), trait.getValue()));
+    }
+    writer.writeXmlDocs(shape, parameterDocs);
 
     StringBuilder sig = new StringBuilder("public ").append(typeName).append("(");
     sig.append("string? message");
@@ -119,6 +139,7 @@ public final class ErrorGenerator implements Runnable {
       String prop = CSharpNaming.propertyName(m.getMemberName());
       boolean nullable = ShapeSupport.isNullable(m);
       String type = ShapeSupport.memberTypeExpr(model, sp, m, nullable);
+      writer.writeXmlDocs(m);
       writer.write("public $L $L { get; }", type, prop);
     }
   }

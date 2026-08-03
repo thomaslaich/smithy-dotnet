@@ -14,7 +14,9 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport.Kind
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.SymbolProvider;
@@ -28,6 +30,7 @@ import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.StructureShape;
+import software.amazon.smithy.model.traits.DocumentationTrait;
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -64,6 +67,7 @@ public final class ClientGenerator implements Runnable {
     String interfaceName = "I" + typeName;
 
     // Interface — IDisposable so a client that owns its HttpClient is released via `using` or DI.
+    writer.writeXmlDocs(service);
     writer.write("public interface $L : System.IDisposable", interfaceName);
     writer.openBlock(
         "{",
@@ -71,13 +75,19 @@ public final class ClientGenerator implements Runnable {
         () -> {
           writer.write("");
           for (OperationShape op : operations) {
+            writer.writeXmlDocs(op, operationParameterDocs(model, op));
             writer.write("$L;", operationSignature(sp, op));
             paginationInfo(op)
                 .ifPresent(
                     info -> {
+                      writer.writeXmlDocs(op, operationParameterDocs(model, op));
                       writer.write("$L;", paginatorPagesSignature(sp, op));
                       paginatorItemsSignature(sp, info)
-                          .ifPresent(signature -> writer.write("$L;", signature));
+                          .ifPresent(
+                              signature -> {
+                                writer.writeXmlDocs(op, operationParameterDocs(model, op));
+                                writer.write("$L;", signature);
+                              });
                     });
           }
         });
@@ -117,6 +127,7 @@ public final class ClientGenerator implements Runnable {
     boolean needsRuntime = operations.stream().anyMatch(op -> canBindOperation(op));
     boolean needsIdempotency =
         operations.stream().anyMatch(op -> operationCanDefaultIdempotencyToken(model, op));
+    writer.writeXmlDocs(service);
     writer.write("public sealed class $L : $L", typeName, interfaceName);
     writer.openBlock(
         "{",
@@ -439,6 +450,7 @@ public final class ClientGenerator implements Runnable {
   // ---------------- per-operation method ----------------
 
   private void writeOperationMethod(SymbolProvider sp, Model model, OperationShape op) {
+    writer.writeXmlDocs(op, operationParameterDocs(model, op));
     if (!canBindOperation(op)) {
       writer.write("public $L", operationSignature(sp, op));
       writer.openBlock(
@@ -589,6 +601,7 @@ public final class ClientGenerator implements Runnable {
     String tokenProperty = CSharpNaming.propertyName(info.getInputTokenMember().getMemberName());
     String outputTokenExpr = memberPathExpr("output", info.getOutputTokenMemberPath());
 
+    writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
     writer.write(
         "public async $L",
         paginatorPagesSignature(sp, op)
@@ -625,6 +638,7 @@ public final class ClientGenerator implements Runnable {
         .ifPresent(
             signature -> {
               String itemsExpr = memberPathExpr("page", info.getItemsMemberPath());
+              writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
               writer.write(
                   "public async $L",
                   signature.replace(
@@ -693,6 +707,18 @@ public final class ClientGenerator implements Runnable {
         + "("
         + params
         + "System.Threading.CancellationToken cancellationToken = default)";
+  }
+
+  private Map<String, String> operationParameterDocs(Model model, OperationShape op) {
+    if (ShapeSupport.isUnit(op.getInputShape())) {
+      return Map.of();
+    }
+    Map<String, String> docs = new LinkedHashMap<>();
+    model
+        .expectShape(op.getInputShape())
+        .getTrait(DocumentationTrait.class)
+        .ifPresent(trait -> docs.put("input", trait.getValue()));
+    return docs;
   }
 
   private boolean isEventStreamOperation(Model model, OperationShape op) {

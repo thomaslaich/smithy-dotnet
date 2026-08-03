@@ -21,13 +21,16 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport.Kind
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
+import software.amazon.smithy.model.traits.DocumentationTrait;
 import software.amazon.smithy.model.traits.HttpTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -92,8 +95,15 @@ public final class ServerGenerator implements Runnable {
 
     // Per-operation handler interfaces (streaming surface derived from the model).
     for (OperationShape op : ops) {
+      writer.writeXmlDocs(op, operationParameterDocs(op));
       writer.write("public interface $L", opHandlerName(op));
-      writer.openBlock("{", "}", () -> writer.write("$L;", serverOperationSignature(sp, op)));
+      writer.openBlock(
+          "{",
+          "}",
+          () -> {
+            writer.writeXmlDocs(op, operationParameterDocs(op));
+            writer.write("$L;", serverOperationSignature(sp, op));
+          });
       writer.write("");
     }
 
@@ -101,6 +111,7 @@ public final class ServerGenerator implements Runnable {
         ops.isEmpty()
             ? ""
             : " : " + ops.stream().map(this::opHandlerName).collect(Collectors.joining(", "));
+    writer.writeXmlDocs(service);
     writer.write("public interface $L$L { }", aggInterface, inherits);
     writer.write("");
 
@@ -498,6 +509,19 @@ public final class ServerGenerator implements Runnable {
         + "("
         + params
         + "System.Threading.CancellationToken cancellationToken = default)";
+  }
+
+  private Map<String, String> operationParameterDocs(OperationShape op) {
+    Model model = context.model();
+    if (ShapeSupport.isUnit(op.getInputShape())) {
+      return Map.of();
+    }
+    Map<String, String> docs = new LinkedHashMap<>();
+    model
+        .expectShape(op.getInputShape())
+        .getTrait(DocumentationTrait.class)
+        .ifPresent(trait -> docs.put("input", trait.getValue()));
+    return docs;
   }
 
   private boolean isEventStreamOperation(Model model, OperationShape op) {
