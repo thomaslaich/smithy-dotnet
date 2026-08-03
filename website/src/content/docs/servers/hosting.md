@@ -4,17 +4,18 @@ description: Expose one service over several protocols from a single handler set
 ---
 
 A service can declare more than one protocol trait. When it does, codegen emits
-a `Map{Service}{Protocol}` extension per protocol, and every one of them
-resolves the **same** handler you registered with `Add{Service}Handler`. The
-handler deals only in model types, so nothing about it is protocol-specific.
+a `Map{Service}` extension with a generated `{Service}Protocols` flags enum.
+Every selected protocol resolves the **same** handler you registered with
+`Add{Service}Handler`. The handler deals only in model types, so nothing about
+it is protocol-specific.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddWeatherServiceHandler<WeatherHandler>();   // one handler
 
 var app = builder.Build();
-app.MapWeatherServiceRestJson1();    // POST /forecast
-app.MapWeatherServiceRpcV2Cbor();    // /service/Weather/operation/GetForecast
+app.MapWeatherService(
+    WeatherServiceProtocols.RestJson1 | WeatherServiceProtocols.RpcV2Cbor);
 app.Run();
 ```
 
@@ -24,7 +25,7 @@ lives entirely in each protocol's binding.
 ## What can share a port
 
 Endpoints are port-agnostic — ports are a deployment concern, so the generated
-`Map` extensions never bind one. Whether two protocols can share a listener
+`Map` extension never binds one. Whether two protocols can share a listener
 depends on their routes and transport:
 
 - **Disjoint routes share a port.** restJson1 (`@http` paths), rpcv2Cbor
@@ -51,8 +52,11 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 var app = builder.Build();
-app.MapWeatherServiceRestJson1();
-app.MapWeatherServiceGrpc().RequireHost("*:5001");
+app.MapGroup("")
+    .MapWeatherService(WeatherServiceProtocols.RestJson1);
+app.MapGroup("")
+    .RequireHost("*:5001")
+    .MapWeatherService(WeatherServiceProtocols.Grpc);
 app.Run();
 ```
 

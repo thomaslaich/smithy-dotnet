@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
@@ -50,7 +51,7 @@ internal sealed class RestJsonServerHost : IAsyncDisposable
 
         var operationHandler = ResolveOperationHandlerInterface(operationName);
         var aggregateHandler = ResolveAggregateHandlerInterface(operationHandler);
-        var mapMethod = ResolveMapMethod(aggregateHandler);
+        var map = ResolveMapMethod(aggregateHandler);
         var handler = CreateProxy(aggregateHandler, invoker);
 
         builder.Services.AddSingleton(aggregateHandler, handler);
@@ -76,7 +77,7 @@ internal sealed class RestJsonServerHost : IAsyncDisposable
                 }
             }
         );
-        mapMethod.Invoke(null, [app]);
+        map.MapMethod.Invoke(null, [app, map.Protocol]);
         await app.StartAsync(cancellationToken).ConfigureAwait(false);
 
         var address =
@@ -120,21 +121,30 @@ internal sealed class RestJsonServerHost : IAsyncDisposable
             );
     }
 
-    private static MethodInfo ResolveMapMethod(Type aggregateHandler)
+    private static (MethodInfo MapMethod, object Protocol) ResolveMapMethod(Type aggregateHandler)
     {
         var serviceName = aggregateHandler.Name["I".Length..^"Handler".Length];
-        return aggregateHandler
+        var protocolType = aggregateHandler
+            .Assembly.GetTypes()
+            .Single(t =>
+                t.IsEnum
+                && string.Equals(t.Name, serviceName + "Protocols", StringComparison.Ordinal)
+            );
+        var protocol = Enum.Parse(protocolType, "SimpleRestJson");
+        var endpointRouteBuilderType = typeof(IEndpointRouteBuilder);
+        var method = aggregateHandler
             .Assembly.GetTypes()
             .Where(t => t.IsSealed && t.IsAbstract)
             .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Static))
             .Single(m =>
             {
                 var parameters = m.GetParameters();
-                return m.Name == $"Map{serviceName}SimpleRestJson"
-                    && parameters.Length == 1
-                    && parameters[0].ParameterType.FullName
-                        == "Microsoft.AspNetCore.Routing.IEndpointRouteBuilder";
+                return m.Name == $"Map{serviceName}"
+                    && parameters.Length == 2
+                    && parameters[0].ParameterType == endpointRouteBuilderType
+                    && parameters[1].ParameterType == protocolType;
             });
+        return (method, protocol);
     }
 
     private static object CreateProxy(

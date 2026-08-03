@@ -6,7 +6,7 @@ builder.Services.AddPizzaAdminServiceHandler<PizzaHandler>();
 
 var app = builder.Build();
 app.MapSmithyDocs();
-app.MapPizzaAdminServiceSimpleRestJson();
+app.MapPizzaAdminService();
 app.Run();
 
 internal sealed class PizzaHandler : IPizzaAdminServiceHandler

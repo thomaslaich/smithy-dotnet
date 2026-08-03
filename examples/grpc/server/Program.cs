@@ -15,7 +15,7 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddLibraryServiceHandler<LibraryHandler>();
 
 var app = builder.Build();
-app.MapLibraryServiceGrpc();
+app.MapLibraryService();
 app.Run();
 
 internal sealed class LibraryHandler : ILibraryServiceHandler

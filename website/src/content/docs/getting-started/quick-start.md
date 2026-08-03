@@ -173,7 +173,7 @@ The generated server uses [ASP.NET Core minimal API](https://learn.microsoft.com
 ```csharp
 builder.Services.AddHelloServiceHandler<HelloHandler>();
 
-app.MapHelloServiceRestJson1();
+app.MapHelloService();
 ```
 
 `HelloHandler` (also generated as a starter) returns a greeting:

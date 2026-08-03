@@ -7,7 +7,7 @@ builder.WebHost.UseUrls($"http://localhost:{port}");
 builder.Services.AddWeatherServiceHandler<WeatherHandler>();
 
 var app = builder.Build();
-app.MapWeatherServiceRpcV2Cbor();
+app.MapWeatherService();
 app.Run();
 
 internal sealed class WeatherHandler : IWeatherServiceHandler

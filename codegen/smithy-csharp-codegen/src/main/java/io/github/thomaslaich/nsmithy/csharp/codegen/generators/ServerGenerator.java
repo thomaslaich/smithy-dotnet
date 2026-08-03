@@ -3,8 +3,8 @@
  *   - one `I{Operation}Handler` per operation (streaming surface derived from the model)
  *   - aggregate `I{Service}ServiceHandler`
  *   - `{Service}ServiceServerExtensions` with AddXxxHandler<THandler>(IServiceCollection)
- *   - one `{Service}Service{Protocol}Extensions` per declared server protocol, each with a
- *     `Map{Service}Service{Protocol}(IEndpointRouteBuilder)` that binds routes to the shared handler
+ *   - `{Service}ServiceProtocols` flags and `Map{Service}Service(..., protocols)` that bind
+ *     selected protocol routes to the shared handler
  *
  * Endpoints are thin: each maps a route to a handler method and the operation's bound protocol and
  * delegates to SmithyAspNetCoreHost, which runs the shared SmithyServerRuntime dispatch. No
@@ -104,18 +104,19 @@ public final class ServerGenerator implements Runnable {
     writer.write("public interface $L$L { }", aggInterface, inherits);
     writer.write("");
 
-    writeServerExtensions(ops, contract, aggInterface);
-
-    for (Kind kind : serverKinds) {
+    if (emitsAspNetCore) {
+      writeProtocolEnum(contract, serverKinds);
       writer.write("");
-      writeProtocolExtensions(kind, ops, contract);
     }
+
+    writeServerExtensions(ops, contract, aggInterface, serverKinds);
   }
 
   // ---------------- DI registration ----------------
 
   private void writeServerExtensions(
-      List<OperationShape> ops, String contract, String aggInterface) {
+      List<OperationShape> ops, String contract, String aggInterface, List<Kind> serverKinds) {
+    String protocolEnum = protocolEnumName(contract);
     writer.write("public static class $LServerExtensions", contract);
     writer.openBlock(
         "{",
@@ -145,63 +146,166 @@ public final class ServerGenerator implements Runnable {
                 }
                 writer.write("return services;");
               });
+
+          if (serverKinds.isEmpty()) {
+            return;
+          }
+
+          writer.write("");
+          writeProtocolFields(ops, serverKinds);
+          writer.write("");
+          writeSelectableMapMethod(contract, serverKinds, protocolEnum);
+          writer.write("");
+          writeRouteConflictHelper(contract, protocolEnum);
+
+          for (Kind kind : serverKinds) {
+            writer.write("");
+            writeProtocolMapHelper(kind, ops, contract, protocolEnum);
+          }
         });
   }
 
-  // ---------------- per-protocol endpoint extensions ----------------
+  // ---------------- endpoint mapping ----------------
 
-  private void writeProtocolExtensions(Kind kind, List<OperationShape> ops, String contract) {
-    String suffix = mapSuffix(kind);
-    writer.write("public static class $L$LExtensions", contract, suffix);
+  private void writeProtocolEnum(String contract, List<Kind> serverKinds) {
+    String enumName = protocolEnumName(contract);
+    writer.write("[System.Flags]");
+    writer.write("public enum $L", enumName);
     writer.openBlock(
         "{",
         "}",
         () -> {
+          writer.write("None = 0,");
+          for (int i = 0; i < serverKinds.size(); i++) {
+            Kind kind = serverKinds.get(i);
+            writer.write("$L = $L,", mapSuffix(kind), 1 << i);
+          }
           writer.write(
-              "private static readonly IServiceProtocol ServiceProtocol = new $L().ForService($L);",
-              ProtocolSupport.protocolType(kind),
-              SchemaGenerator.serviceSchemaAccessor(context, service));
-          for (OperationShape op : ops) {
-            if (!canBindOperation(kind, op)) {
-              continue;
-            }
-            writer.write(
-                "private static readonly IOperationProtocol<$L, $L> $LProtocol ="
-                    + " ServiceProtocol.ForOperation($L);",
-                SchemaGenerator.operationShapeType(context, op.getInputShape()),
-                SchemaGenerator.operationShapeType(context, op.getOutputShape()),
-                CSharpNaming.typeName(op.getId().getName()),
-                SchemaGenerator.operationSchemaAccessor(context, op));
+              "All = $L,",
+              serverKinds.stream()
+                  .map(ServerGenerator::mapSuffix)
+                  .collect(Collectors.joining(" | ")));
+        });
+  }
+
+  private void writeProtocolFields(List<OperationShape> ops, List<Kind> serverKinds) {
+    for (Kind kind : serverKinds) {
+      writer.write(
+          "private static readonly IServiceProtocol $LServiceProtocol = new $L().ForService($L);",
+          mapSuffix(kind),
+          ProtocolSupport.protocolType(kind),
+          SchemaGenerator.serviceSchemaAccessor(context, service));
+      for (OperationShape op : ops) {
+        if (!canBindOperation(kind, op)) {
+          continue;
+        }
+        writer.write(
+            "private static readonly IOperationProtocol<$L, $L> $L ="
+                + " $LServiceProtocol.ForOperation($L);",
+            SchemaGenerator.operationShapeType(context, op.getInputShape()),
+            SchemaGenerator.operationShapeType(context, op.getOutputShape()),
+            operationProtocolField(kind, op),
+            mapSuffix(kind),
+            SchemaGenerator.operationSchemaAccessor(context, op));
+      }
+    }
+  }
+
+  private void writeSelectableMapMethod(
+      String contract, List<Kind> serverKinds, String protocolEnum) {
+    writer.write(
+        "public static IEndpointRouteBuilder Map$L(this IEndpointRouteBuilder endpoints,"
+            + " $L protocols = $L.$L)",
+        contract,
+        protocolEnum,
+        protocolEnum,
+        mapSuffix(serverKinds.get(0)));
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write("System.ArgumentNullException.ThrowIfNull(endpoints);");
+          writer.write("if ((protocols & ~$L.All) != 0)", protocolEnum);
+          writer.openBlock(
+              "{",
+              "}",
+              () ->
+                  writer.write(
+                      "throw new System.ArgumentOutOfRangeException(nameof(protocols), protocols,"
+                          + " \"Unknown $L value.\");",
+                      protocolEnum));
+          writer.write("");
+          writer.write(
+              "var mappedRoutes = new System.Collections.Generic.HashSet<string>("
+                  + "System.StringComparer.Ordinal);");
+          for (Kind kind : serverKinds) {
+            writer.write("if ((protocols & $L.$L) != 0)", protocolEnum, mapSuffix(kind));
+            writer.openBlock(
+                "{",
+                "}",
+                () -> writer.write("Map$L$L(endpoints, mappedRoutes);", contract, mapSuffix(kind)));
           }
           writer.write("");
+          writer.write("return endpoints;");
+        });
+  }
 
-          writer.write(
-              "public static IEndpointRouteBuilder Map$L$L(this IEndpointRouteBuilder endpoints)",
-              contract,
-              suffix);
+  private void writeRouteConflictHelper(String contract, String protocolEnum) {
+    writer.write(
+        "private static void EnsureRouteAvailable(System.Collections.Generic.HashSet<string>"
+            + " mappedRoutes, string method, string routePattern, $L protocol)",
+        protocolEnum);
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write("var route = method + \" \" + routePattern;");
+          writer.write("if (!mappedRoutes.Add(route))");
           writer.openBlock(
               "{",
               "}",
               () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(endpoints);");
-                writer.write("");
-                for (OperationShape op : ops) {
-                  if (!canBindOperation(kind, op)) {
-                    continue;
-                  }
-                  writeOperationMap(kind, op);
-                  writer.write("");
-                }
-                writer.write("return endpoints;");
+                writer.write(
+                    "throw new System.InvalidOperationException(\"Mapping \" + protocol + \" for"
+                        + " $L would register duplicate route '\" + route + \"'. Map conflicting"
+                        + " protocols on different endpoint route builders, hosts, or ports.\");",
+                    contract);
               });
         });
   }
 
-  private void writeOperationMap(Kind kind, OperationShape op) {
+  private void writeProtocolMapHelper(
+      Kind kind, List<OperationShape> ops, String contract, String protocolEnum) {
+    writer.write(
+        "private static void Map$L$L(IEndpointRouteBuilder endpoints,"
+            + " System.Collections.Generic.HashSet<string> mappedRoutes)",
+        contract,
+        mapSuffix(kind));
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          for (OperationShape op : ops) {
+            if (!canBindOperation(kind, op)) {
+              continue;
+            }
+            writeOperationMap(kind, op, protocolEnum);
+            writer.write("");
+          }
+        });
+  }
+
+  private void writeOperationMap(Kind kind, OperationShape op, String protocolEnum) {
     String opInterface = opHandlerName(op);
     boolean rest = kind == Kind.SIMPLE_REST_JSON || kind == Kind.REST_JSON_1;
     if (rest) {
       HttpTrait http = op.expectTrait(HttpTrait.class);
+      writer.write(
+          "EnsureRouteAvailable(mappedRoutes, $L, $L, $L.$L);",
+          CSharpNaming.formatString(http.getMethod()),
+          CSharpNaming.formatString(routePattern(http)),
+          protocolEnum,
+          mapSuffix(kind));
       writer.openBlock(
           "endpoints.MapMethods($L, [$L], async (HttpContext httpContext, $L handler,"
               + " System.Threading.CancellationToken"
@@ -230,6 +334,11 @@ public final class ServerGenerator implements Runnable {
                 + "/"
                 + op.getId().getName()
             : "/service/" + service.getId().getName() + "/operation/" + op.getId().getName();
+    writer.write(
+        "EnsureRouteAvailable(mappedRoutes, \"POST\", $L, $L.$L);",
+        CSharpNaming.formatString(uri),
+        protocolEnum,
+        mapSuffix(kind));
     writer.openBlock(
         "endpoints.MapPost($L, async (HttpContext httpContext, $L handler,"
             + " System.Threading.CancellationToken cancellationToken) => {",
@@ -246,7 +355,6 @@ public final class ServerGenerator implements Runnable {
 
   private void writeDispatch(Kind kind, OperationShape op) {
     Model model = context.model();
-    String opProtocol = CSharpNaming.typeName(op.getId().getName()) + "Protocol";
     boolean streamRequestBody =
         isInputStreaming(model, op)
             || ((kind == Kind.SIMPLE_REST_JSON || kind == Kind.REST_JSON_1)
@@ -254,7 +362,7 @@ public final class ServerGenerator implements Runnable {
     writer.write(
         "await SmithyAspNetCoreHost.DispatchAsync(httpContext, $L, $L, $L,"
             + " cancellationToken).ConfigureAwait(false);",
-        opProtocol,
+        operationProtocolField(kind, op),
         unaryAdapter(op),
         streamRequestBody ? "true" : "false");
   }
@@ -343,6 +451,14 @@ public final class ServerGenerator implements Runnable {
       case GRPC -> "Grpc";
       default -> throw new IllegalStateException("Unsupported server protocol: " + kind);
     };
+  }
+
+  private static String protocolEnumName(String contract) {
+    return contract + "Protocols";
+  }
+
+  private static String operationProtocolField(Kind kind, OperationShape op) {
+    return CSharpNaming.typeName(op.getId().getName()) + mapSuffix(kind) + "Protocol";
   }
 
   private static String serviceContractName(String serviceTypeName) {

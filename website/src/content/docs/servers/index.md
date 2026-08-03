@@ -62,21 +62,20 @@ served.
 
 ## Map the endpoints
 
-Each declared protocol generates a `Map{Service}{Protocol}` extension —
-`MapWeatherServiceRestJson1`, `MapWeatherServiceRpcV2Cbor`,
-`MapWeatherServiceGrpc`, and so on. Call the one for the protocol your service
-declares:
+Each server generates a `Map{Service}` extension. By default it maps the first
+declared server protocol; for multi-protocol services, pass the generated
+`{Service}Protocols` flags enum to select one or more protocols:
 
 ```csharp
 var app = builder.Build();
-app.MapWeatherServiceRestJson1();
+app.MapWeatherService();
 app.Run();
 ```
 
 The endpoint is thin: it binds the route to your handler method and the
 operation's bound protocol, and delegates to the runtime. A service that
-declares several protocols gets one `Map` per protocol and can serve them all
-from the same handler — see [Hosting &amp; Multiple Protocols](/smithy-dotnet/servers/hosting/).
+declares several protocols can serve selected protocols from the same handler —
+see [Hosting &amp; Multiple Protocols](/smithy-dotnet/servers/hosting/).
 
 ## Implement the handler
 

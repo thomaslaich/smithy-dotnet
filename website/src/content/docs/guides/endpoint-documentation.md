@@ -71,7 +71,7 @@ using NSmithy.Server.AspNetCore.Docs;
 var app = builder.Build();
 app.MapSmithyOpenApi(); // mounts Scalar at /openapi (requires SmithyOpenApiProtocol)
 app.MapSmithyDocs();    // serves Sphinx HTML at /docs (requires SmithyGenerateDocs)
-app.MapMyServiceRestJson1();
+app.MapMyService();
 app.Run();
 ```
 

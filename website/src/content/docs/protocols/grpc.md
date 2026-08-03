@@ -114,7 +114,7 @@ itself works the same way — you implement one method per operation.
 
 Configure Kestrel to serve HTTP/2 on a dedicated port. Cleartext gRPC requires
 HTTP/2; mixing HTTP/1.1 REST and cleartext gRPC on the same port is unreliable
-without TLS/ALPN. There is no `AddGrpc()` call — the generated `MapWeatherServiceGrpc`
+without TLS/ALPN. There is no `AddGrpc()` call — the generated `MapWeatherService`
 maps the gRPC method routes itself:
 
 ```csharp
@@ -129,7 +129,7 @@ builder.WebHost.ConfigureKestrel(options =>
 builder.Services.AddWeatherServiceHandler<WeatherHandler>();
 
 var app = builder.Build();
-app.MapWeatherServiceGrpc();
+app.MapWeatherService();
 app.Run();
 
 internal sealed class WeatherHandler : IWeatherServiceHandler
