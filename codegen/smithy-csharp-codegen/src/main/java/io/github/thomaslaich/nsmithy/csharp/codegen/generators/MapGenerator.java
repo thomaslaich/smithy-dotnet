@@ -36,6 +36,7 @@ public final class MapGenerator implements Runnable {
     String valueType =
         CSharpSymbolProvider.qualified(value) + (ShapeSupport.isSparse(shape) ? "?" : "");
 
+    writer.writeXmlDocs(shape);
     writer.write("public sealed partial record class $L", typeName);
     writer.openBlock(
         "{",
@@ -60,6 +61,7 @@ public final class MapGenerator implements Runnable {
                     valueType);
               });
           writer.write("");
+          writer.writeXmlDocs(shape.getValue());
           writer.write(
               "public System.Collections.Generic.IReadOnlyDictionary<$L, $L> Values { get; }",
               keyType,

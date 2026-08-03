@@ -28,6 +28,7 @@ public final class IntEnumGenerator implements Runnable {
     writer.addImport(RuntimeTypes.NSMITHY_CORE);
     writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     String typeName = CSharpNaming.typeName(shape.getId().getName());
+    writer.writeXmlDocs(shape);
     writer.write("public enum $L", typeName);
     writer.openBlock(
         "{",
@@ -37,6 +38,7 @@ public final class IntEnumGenerator implements Runnable {
             String prop = CSharpNaming.propertyName(m.getMemberName());
             Integer value =
                 m.getTrait(EnumValueTrait.class).flatMap(t -> t.getIntValue()).orElse(null);
+            writer.writeXmlDocs(m);
             if (value != null) {
               writer.write("$L = $L,", prop, value);
             } else {

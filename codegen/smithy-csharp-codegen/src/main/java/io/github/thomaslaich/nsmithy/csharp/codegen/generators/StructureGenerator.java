@@ -9,10 +9,13 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.StructureShape;
+import software.amazon.smithy.model.traits.DocumentationTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -34,9 +37,29 @@ public final class StructureGenerator implements Runnable {
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     List<MemberShape> members = List.copyOf(shape.members());
 
+    Map<String, String> parameterDocs = parameterDocs(ShapeSupport.constructorMembers(shape));
+    if (shape.hasTrait(DocumentationTrait.class)) {
+      writer.writeXmlDocs(shape, parameterDocs);
+    } else if (!parameterDocs.isEmpty()) {
+      writer.writeXmlDocs("Represents the Smithy structure " + shape.getId() + ".", parameterDocs);
+    } else {
+      writer.writeXmlDocs(shape);
+    }
     writer.write("public sealed record class $L$L;", typeName, primaryConstructorParameters(sp));
     writer.write("");
     SchemaGenerator.writeStructureSchema(writer, context, shape, members);
+  }
+
+  private Map<String, String> parameterDocs(List<MemberShape> members) {
+    Map<String, String> docs = new LinkedHashMap<>();
+    for (MemberShape member : members) {
+      member
+          .getTrait(DocumentationTrait.class)
+          .ifPresent(
+              trait ->
+                  docs.put(CSharpNaming.propertyName(member.getMemberName()), trait.getValue()));
+    }
+    return docs;
   }
 
   private String primaryConstructorParameters(SymbolProvider sp) {

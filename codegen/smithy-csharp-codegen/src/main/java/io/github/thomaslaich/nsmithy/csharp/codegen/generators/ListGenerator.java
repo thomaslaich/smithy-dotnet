@@ -34,6 +34,7 @@ public final class ListGenerator implements Runnable {
     String memberType =
         CSharpSymbolProvider.qualified(member) + (ShapeSupport.isSparse(shape) ? "?" : "");
 
+    writer.writeXmlDocs(shape);
     writer.write("public sealed partial record class $L", typeName);
     writer.openBlock(
         "{",
@@ -50,6 +51,7 @@ public final class ListGenerator implements Runnable {
                     "Values = System.Array.AsReadOnly(System.Linq.Enumerable.ToArray(values));");
               });
           writer.write("");
+          writer.writeXmlDocs(shape.getMember());
           writer.write(
               "public System.Collections.Generic.IReadOnlyList<$L> Values { get; }", memberType);
         });

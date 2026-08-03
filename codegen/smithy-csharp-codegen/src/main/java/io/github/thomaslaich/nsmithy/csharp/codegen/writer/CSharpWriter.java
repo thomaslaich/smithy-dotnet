@@ -13,11 +13,14 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.writer;
 
+import java.util.Map;
 import java.util.function.BiFunction;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolReference;
 import software.amazon.smithy.codegen.core.SymbolWriter;
+import software.amazon.smithy.model.shapes.Shape;
+import software.amazon.smithy.model.traits.DocumentationTrait;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
 @SmithyUnstableApi
@@ -37,6 +40,68 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
   public CSharpWriter addImport(String csharpNamespace) {
     getImportContainer().importNamespace(csharpNamespace);
     return this;
+  }
+
+  /** Emits a C# XML documentation summary from a Smithy shape's documentation trait. */
+  public void writeXmlDocs(Shape shape) {
+    shape.getTrait(DocumentationTrait.class).ifPresent(trait -> writeXmlDocs(trait.getValue()));
+  }
+
+  /**
+   * Emits a C# XML documentation summary and parameter tags. Parameter names must match the
+   * generated C# declaration.
+   */
+  public void writeXmlDocs(Shape shape, Map<String, String> parameterDocs) {
+    shape
+        .getTrait(DocumentationTrait.class)
+        .ifPresentOrElse(
+            trait -> writeXmlDocs(trait.getValue(), parameterDocs),
+            () -> writeXmlDocs((String) null, parameterDocs));
+  }
+
+  /** Emits C# XML documentation parameter tags without a summary. */
+  public void writeXmlParamDocs(Map<String, String> parameterDocs) {
+    writeXmlDocs((String) null, parameterDocs);
+  }
+
+  private void writeXmlDocs(String summary) {
+    writeXmlDocs(summary, Map.of());
+  }
+
+  public void writeXmlDocs(String summary, Map<String, String> parameterDocs) {
+    boolean hasSummary = summary != null && !summary.isBlank();
+    if (hasSummary) {
+      write("/// <summary>");
+      writeXmlText(summary);
+      write("/// </summary>");
+    }
+    parameterDocs.forEach(
+        (name, documentation) -> {
+          if (documentation == null || documentation.isBlank()) {
+            return;
+          }
+          write("/// <param name=\"$L\">", escapeXml(name));
+          writeXmlText(documentation);
+          write("/// </param>");
+        });
+  }
+
+  private void writeXmlText(String text) {
+    for (String line : text.strip().split("\\R", -1)) {
+      if (line.isBlank()) {
+        write("///");
+      } else {
+        write("/// $L", escapeXml(line.strip()));
+      }
+    }
+  }
+
+  private static String escapeXml(String value) {
+    return value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;");
   }
 
   /** Factory used by WriterDelegator. */
