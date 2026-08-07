@@ -1,7 +1,7 @@
 [workspace]
 authors = ["Thomas Laich <thomaslaich@gmail.com>"]
 channels = ["conda-forge"]
-name = "rest-json1"
+name = "restjson1"
 platforms = ["osx-arm64"]
 version = "0.1.0"
 

@@ -50,7 +50,7 @@ stale or missing staged JAR produces confusing codegen errors.
   `NSmithy.Protocols.*`, `NSmithy.MSBuild`).
 - `tests/` — `NSmithy.Tests` (unit) and `tests/Conformance/*` (one project per
   protocol, run against the official Smithy/AWS protocol-test fixtures).
-- `examples/` — runnable end-to-end samples (`simple-rest-json`, `rest-json1`,
+- `examples/` — runnable end-to-end samples (`simplerestjson`, `restjson1`,
   `rpcv2cbor`, `aws-localstack`, `grpc`, `grpc-streaming`, `polyglot`). These
   consume **packed** packages from `artifacts/packages`, not project references —
   see the gotcha below.
