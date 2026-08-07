@@ -1,3 +1,4 @@
+using NSmithy.Core.Validation;
 using NSmithy.Http;
 
 namespace NSmithy.Server;
@@ -32,6 +33,21 @@ public sealed class SmithyServerRuntime
         var input = await protocol
             .DeserializeRequestAsync(request, cancellationToken)
             .ConfigureAwait(false);
+        if (protocol.InputValidator is { } validator)
+        {
+            var validationErrors = validator.GetErrors(input);
+            if (validationErrors.Count > 0)
+            {
+                // Serialized like any modeled error (every operation implicitly carries
+                // smithy.framework#ValidationException); a protocol that cannot serialize server
+                // errors rethrows, surfaced as a 500 by the host.
+                var validationException = ValidationException.FromErrors(validationErrors);
+                return protocol.TrySerializeError(validationException, out var validationResponse)
+                    ? validationResponse
+                    : throw validationException;
+            }
+        }
+
         try
         {
             var output = await handler(input, cancellationToken).ConfigureAwait(false);

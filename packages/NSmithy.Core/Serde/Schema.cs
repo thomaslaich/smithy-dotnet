@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Numerics;
+using NSmithy.Core.Validation;
 
 namespace NSmithy.Core.Serde;
 
@@ -1442,7 +1443,7 @@ public sealed class OperationSchema<TInput, TOutput>
         Id = id;
         Input = input;
         Output = output;
-        Errors = errors?.ToArray() ?? [];
+        Errors = WithImplicitValidationError(errors);
         Traits = Schema.BuildTraits(traits);
     }
 
@@ -1461,6 +1462,19 @@ public sealed class OperationSchema<TInput, TOutput>
     public Trait? GetTrait(ShapeId id) => Traits.TryGetValue(id, out var trait) ? trait : null;
 
     public bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
+
+    // Every operation implicitly carries smithy.framework#ValidationException: the server runtime
+    // returns it when input validation fails, and clients must be able to deserialize it. A model
+    // that declares the error itself keeps its own registration.
+    private static IOperationErrorSchema[] WithImplicitValidationError(
+        IEnumerable<IOperationErrorSchema>? errors
+    )
+    {
+        IOperationErrorSchema[] modeled = errors?.ToArray() ?? [];
+        return modeled.Any(error => error.Id == ValidationExceptionSchema.Id)
+            ? modeled
+            : [.. modeled, ValidationExceptionSchema.OperationError];
+    }
 }
 
 public interface IOperationErrorSchema

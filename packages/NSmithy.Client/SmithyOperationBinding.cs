@@ -1,6 +1,4 @@
 using NSmithy.Core;
-using NSmithy.Core.Serde;
-using NSmithy.Core.Validation;
 using NSmithy.Http;
 
 namespace NSmithy.Client;
@@ -18,8 +16,7 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
         ShapeId serviceId,
         ShapeId operationId,
         IClientOperationProtocol<TInput, TOutput> protocol,
-        IReadOnlyList<string>? authSchemeIds = null,
-        Schema<TInput>? inputSchema = null
+        IReadOnlyList<string>? authSchemeIds = null
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceId.Name, nameof(serviceId));
@@ -30,7 +27,6 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
         OperationId = operationId;
         Protocol = protocol;
         AuthSchemeIds = authSchemeIds ?? [];
-        InputValidator = inputSchema is null ? null : SmithyValidator.FromSchema(inputSchema);
     }
 
     public ShapeId ServiceId { get; }
@@ -38,12 +34,6 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
     public ShapeId OperationId { get; }
 
     public IClientOperationProtocol<TInput, TOutput> Protocol { get; }
-
-    /// <summary>
-    /// Validates operation input before serialization. Null when no input schema was provided or
-    /// when nothing reachable from it carries a validation constraint.
-    /// </summary>
-    public ISmithyValidator<TInput>? InputValidator { get; }
 
     /// <summary>
     /// The operation's effective modeled auth scheme ids in Smithy priority order — the

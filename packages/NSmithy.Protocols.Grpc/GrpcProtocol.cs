@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using NSmithy.Codecs.Proto;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.Core.Validation;
 using NSmithy.Http;
 
 namespace NSmithy.Protocols.Grpc;
@@ -152,9 +153,12 @@ public sealed class GrpcProtocol : IProtocol
                 operation.Errors,
                 error => CompileServerError((dynamic)error)
             );
+            InputValidator = SmithyValidator.FromSchema(operation.Input);
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
+
+        public ISmithyValidator<TInput>? InputValidator { get; }
 
         public SmithyHttpRequest SerializeRequest(
             TInput input,

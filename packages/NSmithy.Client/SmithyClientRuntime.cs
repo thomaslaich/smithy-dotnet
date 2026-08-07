@@ -127,7 +127,6 @@ public sealed class SmithyClientRuntime(
                 interceptor.OnBeforeSerialization(context, input);
             }
 
-            binding.InputValidator?.Validate(input);
             var request = protocol.SerializeRequest(input, callerToken);
             var response = await SendUnaryAsync(
                     context,

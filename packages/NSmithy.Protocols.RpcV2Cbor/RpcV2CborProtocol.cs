@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using NSmithy.Codecs.Cbor;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.Core.Validation;
 using NSmithy.EventStream;
 using NSmithy.Http;
 
@@ -234,9 +235,12 @@ public sealed class RpcV2CborProtocol : IProtocol
                 operation.Errors,
                 error => CompileServerError((dynamic)error)
             );
+            InputValidator = SmithyValidator.FromSchema(operation.Input);
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
+
+        public ISmithyValidator<TInput>? InputValidator { get; }
 
         public SmithyHttpRequest SerializeRequest(
             TInput input,

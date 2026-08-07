@@ -1,4 +1,5 @@
 using NSmithy.Core.Serde;
+using NSmithy.Core.Validation;
 
 namespace NSmithy.Http;
 
@@ -63,6 +64,14 @@ public interface IClientOperationProtocol<TInput, TOutput>
 /// </summary>
 public interface IServerOperationProtocol<TInput, TOutput>
 {
+    /// <summary>
+    /// Validates deserialized input against the model's constraint traits before the handler runs.
+    /// Null when the input schema carries no constraints (or the protocol opts out); the server
+    /// runtime then skips validation entirely. Compiled once per operation from the operation's
+    /// input schema.
+    /// </summary>
+    ISmithyValidator<TInput>? InputValidator => null;
+
     ValueTask<TInput> DeserializeRequestAsync(
         SmithyHttpRequest request,
         CancellationToken cancellationToken = default

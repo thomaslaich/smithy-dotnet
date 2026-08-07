@@ -285,15 +285,13 @@ final class ClientGeneratorTest {
     assertTrue(
         generated.contains(
             "serviceProtocol.ForOperation(Example.Example.Auth.ReadThingSchema.Schema), new"
-                + " string[] { \"smithy.api#httpApiKeyAuth\", \"smithy.api#httpBearerAuth\" },"
-                + " Example.Example.Auth.ReadThingSchema.Schema.Input);"),
+                + " string[] { \"smithy.api#httpApiKeyAuth\", \"smithy.api#httpBearerAuth\" });"),
         generated);
     // AdminThing's @auth trait overrides the service default.
     assertTrue(
         generated.contains(
             "serviceProtocol.ForOperation(Example.Example.Auth.AdminThingSchema.Schema), new"
-                + " string[] { \"smithy.api#httpApiKeyAuth\" },"
-                + " Example.Example.Auth.AdminThingSchema.Schema.Input);"),
+                + " string[] { \"smithy.api#httpApiKeyAuth\" });"),
         generated);
   }
 
