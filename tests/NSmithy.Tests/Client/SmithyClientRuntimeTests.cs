@@ -3,12 +3,15 @@ using System.Text;
 using NSmithy.Client;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.Core.Validation;
 using NSmithy.Http;
 
 namespace NSmithy.Tests.Client;
 
 public sealed class SmithyClientRuntimeTests
 {
+    private static readonly ShapeId LengthTrait = new("smithy.api", "length");
+
     [Fact]
     public async Task InvokeAsyncThrowsDeserializedErrorForNonSuccessResponse()
     {
@@ -28,6 +31,22 @@ public sealed class SmithyClientRuntimeTests
         );
 
         Assert.Equal("""{"message":"bad city"}""", error.Message);
+    }
+
+    [Fact]
+    public async Task InvokeAsyncValidatesInputBeforeSerialization()
+    {
+        var transport = new RecordingTransport(
+            new SmithyHttpClientResponse(HttpStatusCode.OK, "OK", [], EmptyHeaders, EmptyHeaders)
+        );
+        var runtime = new SmithyClientRuntime(transport);
+
+        var error = await Assert.ThrowsAsync<SmithyValidationException>(() =>
+            runtime.InvokeAsync(Binding(new TextProtocol(), StringInputSchema()), "x")
+        );
+
+        Assert.Equal("$", error.Errors[0].Path);
+        Assert.Null(transport.Request);
     }
 
     [Fact]
@@ -693,12 +712,30 @@ public sealed class SmithyClientRuntimeTests
     }
 
     private static SmithyOperationBinding<string, string> Binding(
-        IClientOperationProtocol<string, string> protocol
+        IClientOperationProtocol<string, string> protocol,
+        Schema<string>? inputSchema = null
     ) =>
         new(
             ShapeId.Parse("example.weather#Weather"),
             ShapeId.Parse("example.weather#GetForecast"),
-            protocol
+            protocol,
+            inputSchema: inputSchema
+        );
+
+    private static Schema<string> StringInputSchema() =>
+        Schemas.WithTraits(
+            Schemas.String,
+            [
+                new Trait(
+                    LengthTrait,
+                    Document.From(
+                        new Dictionary<string, Document>(StringComparer.Ordinal)
+                        {
+                            ["min"] = Document.From(2),
+                        }
+                    )
+                ),
+            ]
         );
 
     private sealed class RecordingTransport(SmithyHttpClientResponse response) : IHttpTransport
