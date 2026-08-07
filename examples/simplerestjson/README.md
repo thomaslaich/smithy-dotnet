@@ -26,7 +26,7 @@ just refresh-examples
 Start the server:
 
 ```bash
-cd examples/simple-rest-json
+cd examples/simplerestjson
 pixi shell  # not needed when using direnv
 dotnet run --project server --urls http://localhost:5000
 ```
@@ -34,7 +34,7 @@ dotnet run --project server --urls http://localhost:5000
 In another shell, run the client:
 
 ```bash
-cd examples/simple-rest-json
+cd examples/simplerestjson
 dotnet run --project client -- http://localhost:5000
 ```
 

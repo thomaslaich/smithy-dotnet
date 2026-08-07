@@ -1,6 +1,6 @@
 # NSmithy rpcv2Cbor Example
 
-The Weather service from the [rest-json1 example](../rest-json1/), served over
+The Weather service from the [restjson1 example](../restjson1/), served over
 `smithy.protocols#rpcv2Cbor` instead of REST. The model demonstrates resources,
 pagination, typed errors, and retries (`@retryable`); the protocol swap shows
 that neither the handler implementation nor the client call sites depend on the
