@@ -24,8 +24,8 @@ public interface IRestBodyCodecFactory
 
     ICodec<T> CodecFor<T>(Schema<T> schema);
 
-    IProjectionCodec<T> CodecFor<T>(
-        StructProjection<T> projection,
+    IProjectionCodec<T, TBuilder> CodecFor<T, TBuilder>(
+        StructProjection<T, TBuilder> projection,
         bool materializeTopLevelDefaults
     );
 }
@@ -57,10 +57,14 @@ public static class RestProtocol
 
     private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
 
-    public static SmithyHttpRequest SerializeRequest<TInput, TOutput>(
-        RestOperationBinding<TInput, TOutput> binding,
-        TInput input
-    )
+    public static SmithyHttpRequest SerializeRequest<
+        TInput,
+        TOutput,
+        TInputBuilder,
+        TOutputBuilder
+    >(RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> binding, TInput input)
+        where TInputBuilder : notnull
+        where TOutputBuilder : notnull
     {
         ArgumentNullException.ThrowIfNull(binding);
 
@@ -100,29 +104,34 @@ public static class RestProtocol
         return request;
     }
 
-    public static TInput DeserializeRequest<TInput, TOutput>(
-        RestOperationBinding<TInput, TOutput> binding,
+    public static TInput DeserializeRequest<TInput, TOutput, TInputBuilder, TOutputBuilder>(
+        RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> binding,
         SmithyHttpRequest request
     )
+        where TInputBuilder : notnull
+        where TOutputBuilder : notnull
     {
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(request);
 
-        var builder = binding.InputSchema.CreateBuilder();
+        var builder = binding.InputSchema.CreateTypedBuilder();
         var labels = ExtractLabels(binding.UriTemplate, request.RequestUri);
         var query = ParseQuery(request.RequestUri);
 
         foreach (var member in binding.LabelMembers)
         {
             if (labels.TryGetValue(member.Name, out var labelValue))
-                member.SetObject(builder, ParseHttpValue(member.Target, member.Traits, labelValue));
+                member.SetObject(
+                    builder,
+                    ParseHttpValue(member.Target, member.MemberTraits, labelValue)
+                );
         }
         foreach (var (member, headerName) in binding.RequestHeaderMembers)
         {
             if (TryGetFirstHeader(request.Headers, headerName, out var header))
                 member.SetObject(
                     builder,
-                    ParseHttpBindingValue(member.Target, member.Traits, header)
+                    ParseHttpBindingValue(member.Target, member.MemberTraits, header)
                 );
         }
         if (binding.RequestPrefixHeadersMember is { } reqPhMember)
@@ -135,7 +144,7 @@ public static class RestProtocol
             if (query.TryGetValue(queryName, out var values) && values.Count > 0)
                 member.SetObject(
                     builder,
-                    ParseHttpBindingValues(member.Target, member.Traits, values)
+                    ParseHttpBindingValues(member.Target, member.MemberTraits, values)
                 );
         }
         if (binding.QueryParamsMember is { } qpMember)
@@ -148,13 +157,17 @@ public static class RestProtocol
         )
             codec.ReadInto(content, builder);
 
-        return (TInput)binding.InputSchema.BuildObject(builder);
+        return binding.InputSchema.Build(builder);
     }
 
-    public static SmithyHttpServerResponse SerializeResponse<TInput, TOutput>(
-        RestOperationBinding<TInput, TOutput> binding,
-        TOutput output
-    )
+    public static SmithyHttpServerResponse SerializeResponse<
+        TInput,
+        TOutput,
+        TInputBuilder,
+        TOutputBuilder
+    >(RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> binding, TOutput output)
+        where TInputBuilder : notnull
+        where TOutputBuilder : notnull
     {
         ArgumentNullException.ThrowIfNull(binding);
 
@@ -194,15 +207,17 @@ public static class RestProtocol
         return ToServerResponse(statusCode, responseBody, headers, contentHeaders);
     }
 
-    public static TOutput DeserializeResponse<TInput, TOutput>(
-        RestOperationBinding<TInput, TOutput> binding,
+    public static TOutput DeserializeResponse<TInput, TOutput, TInputBuilder, TOutputBuilder>(
+        RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> binding,
         SmithyHttpClientResponse response
     )
+        where TInputBuilder : notnull
+        where TOutputBuilder : notnull
     {
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(response);
 
-        var builder = binding.OutputSchema.CreateBuilder();
+        var builder = binding.OutputSchema.CreateTypedBuilder();
 
         if (binding.ResponseCodeMember is { } codeMember)
             codeMember.SetObject(
@@ -221,7 +236,7 @@ public static class RestProtocol
             {
                 member.SetObject(
                     builder,
-                    ParseHttpBindingValue(member.Target, member.Traits, header)
+                    ParseHttpBindingValue(member.Target, member.MemberTraits, header)
                 );
             }
         }
@@ -235,7 +250,7 @@ public static class RestProtocol
         else if (binding.OutputBodyCodec is { } codec && response.Content.Length > 0)
             codec.ReadInto(response.Content, builder);
 
-        return (TOutput)binding.OutputSchema.BuildObject(builder);
+        return binding.OutputSchema.Build(builder);
     }
 
     internal static HttpOperationError[] CompileErrorDeserializers(
@@ -271,29 +286,43 @@ public static class RestProtocol
             );
         }
 
+        return CompileErrorDeserializer(error, (dynamic)schema, codecFactory, rawStringPayloads);
+    }
+
+    private static HttpOperationError CompileErrorDeserializer<TError, TBuilder>(
+        OperationErrorSchema<TError> error,
+        IStructSchema<TError, TBuilder> schema,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads
+    )
+        where TError : Exception
+        where TBuilder : notnull
+    {
         IMemberSchema<TError>? responseCodeMember = null;
         var headerMembers = new List<HeaderMemberBinding>();
         var prefixHeaderMembers = new List<PrefixHeaderMemberBinding>();
         RestPayloadReader? payloadReader = null;
         var bodyMembers = new List<IMemberSchema<TError>>();
 
-        foreach (var member in schema.TypedMembers)
+        foreach (var member in Schemas.GetMembers(schema))
         {
-            if (member.Traits.ContainsKey(RestTraits.HttpResponseCode))
+            if (member.MemberTraits.ContainsKey(RestTraits.HttpResponseCode))
             {
                 responseCodeMember = member;
             }
-            else if (member.Traits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
+            else if (member.MemberTraits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
             {
                 headerMembers.Add(new HeaderMemberBinding(member, headerTrait.Value.AsString()));
             }
-            else if (member.Traits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait))
+            else if (
+                member.MemberTraits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait)
+            )
             {
                 prefixHeaderMembers.Add(
                     new PrefixHeaderMemberBinding(member, prefixTrait.Value.AsString())
                 );
             }
-            else if (member.Traits.ContainsKey(RestTraits.HttpPayload))
+            else if (member.MemberTraits.ContainsKey(RestTraits.HttpPayload))
             {
                 payloadReader = BuildPayloadReader(member, codecFactory, rawStringPayloads);
             }
@@ -316,7 +345,7 @@ public static class RestProtocol
             error.HttpStatusCode,
             response =>
             {
-                var builder = schema.CreateBuilder();
+                var builder = schema.CreateTypedBuilder();
                 if (responseCodeMember is not null)
                 {
                     responseCodeMember.SetObject(
@@ -337,7 +366,7 @@ public static class RestProtocol
                     {
                         member.SetObject(
                             builder,
-                            ParseHttpBindingValue(member.Target, member.Traits, header)
+                            ParseHttpBindingValue(member.Target, member.MemberTraits, header)
                         );
                     }
                 }
@@ -360,7 +389,7 @@ public static class RestProtocol
                     bodyCodec.ReadInto(response.Content, builder);
                 }
 
-                return (TError)schema.BuildObject(builder);
+                return schema.Build(builder);
             }
         );
     }
@@ -391,6 +420,28 @@ public static class RestProtocol
             );
         }
 
+        return SerializeStructuredError(
+            (dynamic)schema,
+            value,
+            errorShapeId,
+            statusCode,
+            codecFactory,
+            rawStringPayloads,
+            errorTypeHeader
+        );
+    }
+
+    private static SmithyHttpServerResponse SerializeStructuredError<TError, TBuilder>(
+        IStructSchema<TError, TBuilder> schema,
+        TError value,
+        string errorShapeId,
+        int statusCode,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads,
+        string errorTypeHeader
+    )
+        where TBuilder : notnull
+    {
         var headers = new Dictionary<string, IReadOnlyList<string>>(
             StringComparer.OrdinalIgnoreCase
         )
@@ -403,22 +454,24 @@ public static class RestProtocol
 
         IMemberSchema<TError>? payloadMember = null;
         var bodyMembers = new List<IMemberSchema<TError>>();
-        foreach (var member in schema.TypedMembers)
+        foreach (var member in Schemas.GetMembers(schema))
         {
-            if (member.Traits.ContainsKey(RestTraits.HttpResponseCode))
+            if (member.MemberTraits.ContainsKey(RestTraits.HttpResponseCode))
             {
                 continue;
             }
 
-            if (member.Traits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
+            if (member.MemberTraits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
             {
                 AddHeader(headers, headerTrait.Value.AsString(), member, value);
             }
-            else if (member.Traits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait))
+            else if (
+                member.MemberTraits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait)
+            )
             {
                 AddPrefixedHeaders(headers, prefixTrait.Value.AsString(), member, value);
             }
-            else if (member.Traits.ContainsKey(RestTraits.HttpPayload))
+            else if (member.MemberTraits.ContainsKey(RestTraits.HttpPayload))
             {
                 payloadMember = member;
             }
@@ -766,7 +819,7 @@ public static class RestProtocol
         public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
         {
             var target = member.TargetSchema;
-            var traits = member.Traits;
+            var traits = member.MemberTraits;
             var mediaType = GetMediaType(target, traits);
             var kind = UnwrapNullable(target).Kind;
 
@@ -879,7 +932,7 @@ public static class RestProtocol
         public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
         {
             var target = member.TargetSchema;
-            var traits = member.Traits;
+            var traits = member.MemberTraits;
             var unwrapped = UnwrapNullable(target);
 
             if (target.Resolved is IEventStreamSchema eventStream)
@@ -1049,12 +1102,14 @@ public static class RestProtocol
             requestUri = requestUri
                 .Replace(
                     "{" + member.Name + "+}",
-                    EscapeGreedyLabel(member.Target, member.Traits, value),
+                    EscapeGreedyLabel(member.Target, member.MemberTraits, value),
                     StringComparison.Ordinal
                 )
                 .Replace(
                     "{" + member.Name + "}",
-                    Uri.EscapeDataString(FormatHttpValue(member.Target, member.Traits, value)),
+                    Uri.EscapeDataString(
+                        FormatHttpValue(member.Target, member.MemberTraits, value)
+                    ),
                     StringComparison.Ordinal
                 );
         }
@@ -1203,7 +1258,7 @@ public static class RestProtocol
         }
 
         var builder = new StringBuilder(requestUri);
-        AppendQueryValue(builder, name, member.Target, member.Traits, value);
+        AppendQueryValue(builder, name, member.Target, member.MemberTraits, value);
         return builder.ToString();
     }
 
@@ -1297,12 +1352,12 @@ public static class RestProtocol
                     .GetElementsObject(value)
                     .Where(element => element is not null)
                     .Select(element =>
-                        FormatHttpHeaderListValue(listSchema.Element, member.Traits, element!)
+                        FormatHttpHeaderListValue(listSchema.Element, member.MemberTraits, element!)
                     )
             );
         }
 
-        return FormatHttpValue(member.Target, member.Traits, value);
+        return FormatHttpValue(member.Target, member.MemberTraits, value);
     }
 
     private static string FormatHttpValue(Schema schema, object value)

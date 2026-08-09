@@ -673,61 +673,152 @@ public sealed class GrpcProtocol : IProtocol
             serverErrors.TrySerialize(exception, out response);
     }
 
-    private sealed class EventStreamShapeBinding<TShape, TEvent>
+    private abstract class EventStreamShapeBinding<TShape, TEvent>
     {
-        private EventStreamShapeBinding(
-            IStructSchema<TShape> structure,
-            IMemberSchema<TShape> streamMember
-        )
-        {
-            Structure = structure;
-            StreamMember = streamMember;
-        }
-
-        private IStructSchema<TShape> Structure { get; }
-
-        private IMemberSchema<TShape> StreamMember { get; }
-
         public static EventStreamShapeBinding<TShape, TEvent> Create(Schema<TShape> schema)
         {
-            if (schema.Resolved is not IStructSchema<TShape> structure)
+            ArgumentNullException.ThrowIfNull(schema);
+            var resolved = schema.Resolved;
+            var unwrapped = resolved is INullableSchema nullable
+                ? nullable.Target.Resolved
+                : resolved;
+            return (EventStreamShapeBinding<TShape, TEvent>)unwrapped.Accept(new Visitor());
+        }
+
+        public abstract IAsyncEnumerable<TEvent> GetEvents(TShape shape);
+
+        public abstract TShape Build(IAsyncEnumerable<TEvent> events);
+
+        private sealed class Visitor : ISchemaVisitor<object>
+        {
+            public object VisitBoolean(Schema<bool> schema) => Unsupported();
+
+            public object VisitByte(Schema<sbyte> schema) => Unsupported();
+
+            public object VisitShort(Schema<short> schema) => Unsupported();
+
+            public object VisitInteger(Schema<int> schema) => Unsupported();
+
+            public object VisitLong(Schema<long> schema) => Unsupported();
+
+            public object VisitFloat(Schema<float> schema) => Unsupported();
+
+            public object VisitDouble(Schema<double> schema) => Unsupported();
+
+            public object VisitBigInteger(Schema<System.Numerics.BigInteger> schema) =>
+                Unsupported();
+
+            public object VisitBigDecimal(Schema<decimal> schema) => Unsupported();
+
+            public object VisitString(Schema<string> schema) => Unsupported();
+
+            public object VisitBlob(Schema<byte[]> schema) => Unsupported();
+
+            public object VisitTimestamp(Schema<DateTimeOffset> schema) => Unsupported();
+
+            public object VisitDocument(Schema<Document> schema) => Unsupported();
+
+            public object VisitNullable<T>(NullableSchema<T> schema)
+                where T : struct => Unsupported();
+
+            public object VisitEventStream<TEventValue>(EventStreamSchema<TEventValue> schema) =>
+                Unsupported();
+
+            public object VisitList<TCollection, TElement, TBuilder>(
+                IListSchema<TCollection, TElement, TBuilder> schema
+            ) => Unsupported();
+
+            public object VisitMap<TDictionary, TValue, TBuilder>(
+                IMapSchema<TDictionary, TValue, TBuilder> schema
+            ) => Unsupported();
+
+            public object VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
             {
+                if (!typeof(T).IsAssignableTo(typeof(TShape)))
+                {
+                    return Unsupported();
+                }
+
+                var typed = (IStructSchema<TShape, TBuilder>)(object)schema;
+                var visitor = new EventStreamMemberVisitor<TShape, TBuilder, TEvent>();
+                typed.VisitMembers(visitor);
+                if (visitor.MemberCount != 1)
+                {
+                    throw new NotSupportedException(
+                        "gRPC event streaming with non-streaming initial members is not supported."
+                    );
+                }
+
+                return new TypedEventStreamShapeBinding<TShape, TEvent, TBuilder>(
+                    typed,
+                    visitor.Member
+                        ?? throw new InvalidOperationException(
+                            "gRPC event streams require one event stream member."
+                        )
+                );
+            }
+
+            public object VisitUnion<T>(IUnionSchema<T> schema) => Unsupported();
+
+            public object VisitStringEnum<T>(StringEnumSchema<T> schema)
+                where T : IStringEnumValue<T> => Unsupported();
+
+            public object VisitIntEnum<T>(IntEnumSchema<T> schema)
+                where T : struct, Enum => Unsupported();
+
+            private static object Unsupported() =>
                 throw new InvalidOperationException(
                     "gRPC event streams must use a structure shape."
                 );
+        }
+    }
+
+    private sealed class TypedEventStreamShapeBinding<TShape, TEvent, TBuilder>(
+        IStructSchema<TShape, TBuilder> structure,
+        IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>> streamMember
+    ) : EventStreamShapeBinding<TShape, TEvent>
+    {
+        public override IAsyncEnumerable<TEvent> GetEvents(TShape shape) =>
+            streamMember.GetValue(shape)
+            ?? throw new InvalidOperationException(
+                $"Event stream member '{streamMember.Name}' was null."
+            );
+
+        public override TShape Build(IAsyncEnumerable<TEvent> events)
+        {
+            var builder = structure.CreateTypedBuilder();
+            streamMember.SetValue(builder, events);
+            return structure.Build(builder);
+        }
+    }
+
+    private sealed class EventStreamMemberVisitor<TShape, TBuilder, TEvent>
+        : IMemberVisitor<TShape, TBuilder>
+    {
+        public IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>>? Member
+        {
+            get;
+            private set;
+        }
+
+        public int MemberCount { get; private set; }
+
+        public void Visit<TValue>(IMemberSchema<TShape, TBuilder, TValue> member)
+        {
+            MemberCount++;
+            if (member.Target is not EventStreamSchema<TEvent>)
+            {
+                return;
             }
 
-            var streamMember =
-                structure.TypedMembers.SingleOrDefault(member =>
-                    member.Target is IEventStreamSchema
-                )
-                ?? throw new InvalidOperationException(
+            if (Member is not null)
+            {
+                throw new InvalidOperationException(
                     "gRPC event streams require one event stream member."
                 );
-            if (structure.TypedMembers.Count != 1)
-            {
-                throw new NotSupportedException(
-                    "gRPC event streaming with non-streaming initial members is not supported."
-                );
             }
 
-            return new EventStreamShapeBinding<TShape, TEvent>(structure, streamMember);
-        }
-
-        public IAsyncEnumerable<TEvent> GetEvents(TShape shape)
-        {
-            var value = StreamMember.GetObject(shape!);
-            return value as IAsyncEnumerable<TEvent>
-                ?? throw new InvalidOperationException(
-                    $"Event stream member '{StreamMember.Name}' was null."
-                );
-        }
-
-        public TShape Build(IAsyncEnumerable<TEvent> events)
-        {
-            var builder = Structure.CreateBuilder();
-            StreamMember.SetObject(builder, events);
-            return (TShape)Structure.BuildObject(builder);
+            Member = (IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>>)(object)member;
         }
     }
 
@@ -1006,10 +1097,33 @@ public sealed class GrpcProtocol : IProtocol
 
     private static Schema? FindEventStreamEventSchema(Schema schema) =>
         schema.Resolved is IStructSchema structure
-            ? structure
-                .Members.Select(member => member.Target)
-                .OfType<IEventStreamSchema>()
-                .Select(eventStream => eventStream.EventSchema)
-                .SingleOrDefault()
+            ? FindEventStreamEventSchemaCore((dynamic)structure)
             : null;
+
+    private static Schema? FindEventStreamEventSchemaCore<T>(IStructSchema<T> structure)
+    {
+        var visitor = new EventStreamSchemaVisitor<T>();
+        structure.VisitMembers(visitor);
+        return visitor.EventSchema;
+    }
+
+    private sealed class EventStreamSchemaVisitor<T> : IMemberVisitor<T>
+    {
+        public Schema? EventSchema { get; private set; }
+
+        public void Visit<TValue>(IMemberSchema<T, TValue> member)
+        {
+            if (member.Target is not IEventStreamSchema eventStream)
+            {
+                return;
+            }
+
+            if (EventSchema is not null)
+            {
+                throw new InvalidOperationException("Operation shape has multiple event streams.");
+            }
+
+            EventSchema = eventStream.EventSchema;
+        }
+    }
 }

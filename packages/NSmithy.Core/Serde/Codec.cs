@@ -10,9 +10,9 @@ public interface ICodec<TValue>
     TValue Deserialize(byte[] payload);
 }
 
-public interface IProjectionCodec<TValue>
+public interface IProjectionCodec<TValue, in TBuilder>
 {
     byte[] Serialize(TValue value);
 
-    void ReadInto(byte[] payload, object builder);
+    void ReadInto(byte[] payload, TBuilder builder);
 }

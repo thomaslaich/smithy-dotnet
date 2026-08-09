@@ -38,9 +38,13 @@ public sealed class SmithyServerRuntime
             return protocol.SerializeResponse(output, cancellationToken);
         }
         catch (Exception exception)
-            when (protocol.TrySerializeError(exception, out var errorResponse))
         {
-            return errorResponse;
+            if (protocol.TrySerializeError(exception, out var errorResponse))
+            {
+                return errorResponse;
+            }
+
+            throw;
         }
     }
 }

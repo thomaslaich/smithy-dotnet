@@ -1,38 +1,47 @@
-# Serialization
+# Schemas, Serialization, and Validation
 
-How NSmithy serializes model types to and from wire formats, and why codegen
-emits schemas rather than serializers.
+The runtime schema model is the contract between generated C# model types and
+runtime consumers: codecs, protocols, and validators.
 
-Serialization design sits between generated code, runtime libraries, and wire
-protocols. Different designs optimize for different things:
+NSmithy deliberately keeps generated serialization code small. The generator
+emits plain model types plus schemas, not serializer methods. Codecs and
+protocols are ordinary runtime libraries that fold over those schemas, so adding
+CBOR, XML, JSON, REST, rpcv2Cbor, or gRPC behavior does not require regenerating
+format-specific methods into every shape.
 
-- Runtime performance
-- Codegen simplicity
-- Runtime maintainability
-- Extensibility for new protocols and body formats
-- Startup time and memory use
+Every runtime capability is a *fold* over the schema algebra: a typed walk of
+the schema graph that compiles a plan once and caches it. A codec folds a
+schema into body readers and writers; a protocol folds service and operation
+schemas into transport bindings; the validator folds a schema into a constraint
+checker. Heterogeneous infrastructure can hold a non-generic `Schema` handle,
+but behavior re-enters typed code through visitor dispatch.
 
-NSmithy deliberately keeps generated serialization code small. Codegen is harder
-to inspect, test, and evolve than ordinary C# runtime libraries, so the
-generator emits plain model types plus schemas, not serializers. It does not
-generate protocol-specific serialization branches, and it does not generate
-per-shape JSON/XML/CBOR serializer methods.
-
-Schemas are the generated contract between models and the runtime. Codecs
-compile format-specific readers and writers from those schemas; protocols
-precompute operation bindings from service and operation schemas and compose
-them with the appropriate codecs. This shifts some work to startup, but keeps
-the hot path typed and precomputed.
-
-That split gives NSmithy's serialization model four layers:
+That split gives NSmithy's model five layers:
 
 1. **Model types** are plain C# values.
 2. **Schemas** describe Smithy metadata, typed member access, and construction.
 3. **Codecs** compile schemas into body readers and writers.
 4. **Protocols** project operation schemas into transport requests and responses.
+5. **Validators** compile schemas into constraint checkers.
 
-Only the first two layers are generated. Codecs and protocols are runtime
-libraries that are configured from the generated schemas.
+Only the first two layers are generated. Codecs, protocols, and validators are
+runtime libraries configured from the generated schemas.
+
+## Goals
+
+- **Fidelity.** The schema model mirrors the Smithy meta-model. Anything the
+  model can express — member-level traits on list elements and map keys,
+  presence semantics, service and resource structure — is representable.
+- **One dispatch mechanism.** Consumers traverse schemas through a single typed
+  visitor. Object-shaped helpers exist for heterogeneous infrastructure, but
+  codecs and protocols do not maintain a separate interpretive fallback.
+- **Typed everywhere.** Trait values, member access, and construction are all
+  statically typed. `object` casts do not appear in steady-state execution.
+- **AOT-safe.** Plans are composed from delegates, never emitted IL. The model
+  works unchanged under Native AOT.
+- **Pay once.** Member lookup tables are built at schema construction; trait
+  resolution and consumer plans are computed at fold time. Nothing is resolved
+  per call.
 
 ## End-To-End Sketch
 
@@ -90,25 +99,23 @@ build the value during deserialization:
 public static partial class GetForecastInputSchema
 {
     public static Schema<GetForecastInput> Schema { get; } =
-        Schemas.Struct<GetForecastInput, GetForecastInputBuilder>(
-            ShapeId.Parse("example.weather#GetForecastInput"),
-            members: [
-                Schemas.Member(
-                    "city",
-                    StringSchema.Schema,
-                    get: input => input.City,
-                    set: (builder, value) => builder.City = value,
-                    traits: [new RequiredTrait(), new HttpLabelTrait()]),
-
-                Schemas.Member(
-                    "units",
-                    StringSchema.Schema,
-                    get: input => input.Units,
-                    set: (builder, value) => builder.Units = value,
-                    traits: [new HttpQueryTrait("units")])
-            ],
-            createBuilder: () => new GetForecastInputBuilder(),
-            build: builder => new GetForecastInput(builder.City, builder.Units));
+        Schemas.Structure<GetForecastInput, GetForecastInputBuilder>(
+                ShapeId.Parse("example.weather#GetForecastInput"))
+            .Required(
+                "city",
+                input => input.City,
+                (builder, value) => builder.City = value,
+                Schemas.String,
+                traits: [RestTraits.HttpLabelTrait])
+            .Optional(
+                "units",
+                input => input.Units,
+                (builder, value) => builder.Units = value,
+                Schemas.NullableReference(Schemas.String),
+                traits: [RestTraits.HttpQueryTrait("units")])
+            .Build(
+                () => new GetForecastInputBuilder(),
+                builder => new GetForecastInput(builder.City!, builder.Units));
 }
 ```
 
@@ -123,7 +130,7 @@ public static partial class GetForecastSchema
             ShapeId.Parse("example.weather#GetForecast"),
             GetForecastInputSchema.Schema,
             GetForecastOutputSchema.Schema,
-            traits: [new HttpTrait("GET", "/forecast/{city}", 200)]);
+            traits: [RestTraits.HttpTrait("GET", "/forecast/{city}")]);
 }
 
 public static partial class WeatherServiceSchema
@@ -131,7 +138,7 @@ public static partial class WeatherServiceSchema
     public static ServiceSchema Schema { get; } =
         Schemas.Service(
             ShapeId.Parse("example.weather#WeatherService"),
-            traits: [new RestJson1Trait()]);
+            traits: [new Trait(ShapeId.Parse("aws.protocols#restJson1"))]);
 }
 ```
 
@@ -151,7 +158,7 @@ builds the request path, and uses JSON for the body:
 
 ```csharp
 IServiceProtocol serviceProtocol =
-    RestJsonProtocol.ForService(WeatherServiceSchema.Schema);
+    new RestJson1Protocol().ForService(WeatherServiceSchema.Schema);
 
 IOperationProtocol<GetForecastInput, GetForecastOutput> getForecastProtocol =
     serviceProtocol.ForOperation(GetForecastSchema.Schema);
@@ -177,13 +184,12 @@ public sealed class WeatherServiceClient
     public WeatherServiceClient(/* endpoint / config / runtime */)
     {
         IServiceProtocol serviceProtocol =
-            RestJsonProtocol.ForService(WeatherServiceSchema.Schema);
+            new RestJson1Protocol().ForService(WeatherServiceSchema.Schema);
 
         GetForecastBinding = new SmithyOperationBinding<GetForecastInput, GetForecastOutput>(
-            serviceName: "WeatherService",
-            operationName: "GetForecast",
-            protocol: serviceProtocol.ForOperation(GetForecastSchema.Schema),
-            modifyRequest: null);
+            WeatherServiceSchema.Schema.Id,
+            GetForecastSchema.Schema.Id,
+            serviceProtocol.ForOperation(GetForecastSchema.Schema));
         // ... one binding per operation, plus runtime construction
     }
 
@@ -203,9 +209,14 @@ operation protocol. The runtime owns execution — interceptors, auth, retries �
 and modeled-error deserialization runs through the binding's protocol, so the
 generated method has no protocol-specific branches.
 
+On the server, the runtime deserializes the request through the same operation
+protocol, validates the input against the model's constraint traits, and
+invokes the handler; constraint violations never reach handler code (see
+[Validation](#validation)).
+
 For a different protocol, the model types and schemas stay the same. Only the
-service protocol factory changes, for example to
-`RpcV2CborProtocol.ForService(...)` or `RestXmlProtocol.ForService(...)`.
+protocol instance changes, for example to `new RpcV2CborProtocol()` or
+`new RestXmlProtocol()`.
 
 ## Generated Model Types
 
@@ -220,81 +231,130 @@ Wire-format behavior lives in the schema, codec, and protocol layers. When
 deserialization needs staged construction, the generator emits a separate
 builder type instead of adding mutable hooks to the model.
 
-## Schema Model
+## The Schema Algebra
 
-Schemas sit next to the model types. A `Schema<T>` (in `NSmithy.Core`) describes
-a Smithy shape at runtime. The typed form is used when the C# type is known; the
-erased `Schema` base is reserved for shape-generic boundaries, such as protocol
-analysis over an operation graph.
+Every shape is a `Schema`, and every aggregate shape is made of *members*,
+exactly as in the Smithy model:
+
+- Structures and unions have named members.
+- Lists have a single `Member`.
+- Maps have `Key` and `Value` members.
+
+```csharp
+public abstract class Schema
+{
+    public ShapeId Id { get; }
+    public ShapeKind Kind { get; }
+    public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
+}
+
+public abstract class Schema<T> : Schema;
+```
+
+`Schema<T>` binds a shape to its exact CLR type `T`, including nullability
+annotations. The typed layer is the only real layer; there is no erased
+counterpart.
 
 For each shape, the generated schema contains typed member accessors, builder
-factory, builder finalizer, shape traits, and member traits. For each operation,
-the generator emits an `OperationSchema<TInput, TOutput>` that references the
-input and output schemas plus operation traits. For each service, it emits a
-`ServiceSchema` with the service shape id and service-level traits.
-
-A schema carries:
-
-- `ShapeId Id` - the fully qualified Smithy shape identifier.
-- `ShapeKind Kind` - the shape kind (`Structure`, `Union`, `List`, `Map`,
-  `String`, etc.).
-- `IReadOnlyDictionary<ShapeId, Trait> Traits` - traits applied to the shape.
-- For structures: typed member accessors, builder factory and finalizer,
-  required/default metadata, and member traits.
-- For lists and maps: element/value schemas and typed builder operations.
-- For unions: case matcher, case getter, and case constructor per variant.
-- Lazy schema references for recursive shape graphs.
+factory, builder finalizer, shape traits, and member traits. For each
+operation, the generator emits an `OperationSchema<TInput, TOutput>` that
+references the input and output schemas plus operation traits and modeled
+error descriptors. For each service, it emits a `ServiceSchema` with the
+service shape id and service-level traits.
 
 Traits stay on schemas and members. Core schemas carry any Smithy trait, but
-protocol packages decide which traits they interpret. REST protocols interpret
+consumers decide which traits they interpret. REST protocols interpret
 `@httpLabel`, `@httpHeader`, `@httpPayload`, and `@timestampFormat`; a gRPC
-protocol can ignore those bindings entirely.
+protocol can ignore those bindings entirely; the validator interprets
+constraint traits and nothing else.
 
-### Schema Internals
+### The Non-Generic `Schema`
 
-Structure schemas expose typed member visitors so codecs can compile member
-readers and writers without boxing:
+The non-generic `Schema` exists because C# lacks existential types: it is the
+encoding of `exists T. Schema<T>`, nothing more. Three positions force it:
+
+- **Heterogeneous edges in the graph.** A structure's members list holds
+  members whose value types all differ, an error registry maps `ShapeId` to a
+  schema of unknown type, and a server dispatch table holds operation schemas
+  with varying type arguments. Each needs a common supertype to be stored at
+  all, and `IMemberSchema.Target` needs a type to return.
+- **Re-entry into typed land.** From an untyped handle, the only way back to
+  `Schema<T>` is double dispatch: `schema.Accept(visitor)`, where the sealed
+  leaf calls the visitor with its own type arguments.
+- **Metadata reads without dispatch.** Documentation, diffing, and logging
+  read `Id`, `Kind`, or `Traits` off an arbitrary node without constructing a
+  visitor.
+
+That list is exhaustive, and none of it is behavior. The non-generic surface
+is exactly `Id`, `Kind`, `Traits`, and `Accept` — an existential wrapper plus
+metadata. Construction, member access, and serde exist only on the typed
+layer, reachable only through the visitor.
+
+Entry points never touch the untyped handle: anywhere traversal starts from a
+known shape (`ISmithyShape<T>.Schema`, a generated operation), it is in
+`Schema<T>` from the first instruction, and a fold stays typed all the way
+down — inside `Visit<TValue>` the recursion continues through `TargetSchema`,
+which is `Schema<TValue>`. The untyped base appears only at graph-internal
+heterogeneous positions and in generic tooling, and it is held only until the
+next `Accept`.
+
+### Members
+
+A member is the association between a container shape and a target shape, and
+it is the one place member-level traits live:
 
 ```csharp
-public interface IStructSchema<T, TBuilder> : IStructSchema<T>
+public interface IMemberSchema
 {
-    TBuilder CreateTypedBuilder();
-    T Build(TBuilder builder);
-    void VisitMembers(IMemberVisitor<T, TBuilder> visitor);
-}
+    string Name { get; }
 
-public interface IMemberVisitor<TContainer, TBuilder>
-{
-    void Visit<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member);
+    /// Traits declared on the member itself.
+    IReadOnlyDictionary<ShapeId, Trait> MemberTraits { get; }
+
+    Schema Target { get; }
+
+    /// Effective trait resolution per the Smithy spec: the member's
+    /// declaration supersedes the target shape's. The only place
+    /// precedence is implemented.
+    Trait? GetTrait(ShapeId id);
 }
 ```
 
-`IMemberSchema<TContainer, TBuilder, TValue>` exposes both
-`GetValue(TContainer)` for serialization and `SetValue(TBuilder, TValue)` for
-deserialization.
+Only ground truth is stored, each set where the model declares it: member
+traits on the member, shape traits on the target. Effective-value consumers
+(codecs resolving `@xmlName` or `@timestampFormat`, validators reading
+`@length`) call `GetTrait(ShapeId)` and never re-implement precedence. Since
+consumers are compiled folds, resolution runs at fold time — once per
+consumer and schema — so no merged view is materialized. Origin-aware
+consumers (documentation generation, model diffing, hierarchical trait
+queries) read `MemberTraits` and `Target.Traits` directly.
 
-Collection schemas follow the same pattern:
+Structure members additionally carry typed accessors, a typed setter for the
+builder, and required-member metadata:
 
 ```csharp
-public interface IListSchema<TCollection, TElement, TBuilder>
-    : IListSchema<TCollection, TElement>
+public interface IMemberSchema<TContainer, TBuilder, TValue>
+    : IMemberSchema<TContainer, TValue>
 {
-    TBuilder CreateTypedBuilder();
-    void Add(TBuilder builder, TElement value);
-    TCollection Build(TBuilder builder);
+    Schema<TValue> TargetSchema { get; }
+    TValue GetValue(TContainer container);
+    void SetValue(TBuilder builder, TValue value);
 }
 ```
 
-Recursive shape graphs use lazy references to break cycles:
+List and map members expose typed collection-member schemas, not container
+accessors: an element is enumerated and appended, never read by member name.
+Because map keys are members, a constraint such as `@length` on `map$key` is
+representable and validated like any other member trait.
 
-```csharp
-var nodeSchema = Schemas.Lazy<Node>(() => builtNodeSchema);
-```
+### Recursion
 
-`LazySchema<T>` is a thin transparent wrapper. It delegates `Id`, `Kind`,
-`Traits`, and `Resolved` to the target. Dispatch code calls `.Resolved` before
-performing type checks, so lazy wrappers are invisible to codecs and protocol
-code.
+Recursive models form a cyclic schema graph. Generated schemas use
+`Schemas.Lazy(...)` to tie the cycle, and `LazySchema<T>` resolves to the target
+schema before dispatching to a visitor. Consumers see the same typed schema
+interface either way.
+
+### Projections
 
 REST protocols use projections to keep the same container type while narrowing
 the visible member set:
@@ -307,12 +367,111 @@ The projection itself is just schema metadata: it says which members of the
 container are visible for a particular protocol body. The actual codec compiled
 from that projection is introduced in the codec layer below.
 
+## Traits
+
+Traits are stored as Smithy shape ids plus Smithy `Document` values:
+
+```csharp
+public readonly record struct Trait(ShapeId Id, Document Value);
+```
+
+Schemas and members keep traits in `IReadOnlyDictionary<ShapeId, Trait>`, and
+members expose `GetTrait(ShapeId)` for effective trait resolution. Protocols and
+codecs put format-specific parsing behind small helper APIs such as
+`RestTraits.HttpTrait(...)` and `XmlTraits`, so trait ids and wire-shape parsing
+are centralized even though the core schema model remains open-ended.
+
+## Dispatch: Folds Over the Algebra
+
+There is exactly one way to consume a schema: a generic visitor covering the
+whole algebra.
+
+```csharp
+public interface ISchemaVisitor<out TResult>
+{
+    TResult VisitBoolean(Schema<bool> schema);
+    TResult VisitString(Schema<string> schema);
+    TResult VisitTimestamp(Schema<DateTimeOffset> schema);
+    // ... remaining simple shapes ...
+
+    TResult VisitNullable<T>(NullableSchema<T> schema)
+        where T : struct;
+
+    TResult VisitList<TCollection, TElement, TBuilder>(
+        IListSchema<TCollection, TElement, TBuilder> schema);
+
+    TResult VisitMap<TDictionary, TValue, TBuilder>(
+        IMapSchema<TDictionary, TValue, TBuilder> schema);
+
+    TResult VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema);
+    TResult VisitUnion<T>(IUnionSchema<T> schema);
+}
+```
+
+A consumer is a *fold*: it visits the schema graph once and compiles a typed
+plan, cached per (consumer, schema).
+
+- A codec folds a schema into `Writer<T>` and `Reader<T>` delegates.
+- A protocol folds service and operation schemas into transport bindings.
+- The validator folds a schema into a `Validator<T>`.
+- A documentation generator folds a schema into rendered docs.
+- A test-data generator folds a schema into an `Arbitrary<T>`.
+
+The hot path executes only precompiled, monomorphized delegates: no boxing, no
+per-value trait lookup, no runtime type tests. Because plans are delegate
+composition rather than emitted IL, the same machinery runs under Native AOT.
+
+Generic dispatch through the visitor is the *only* dispatch. Adding a consumer
+means writing one fold; adding a shape kind means every fold fails to compile
+until it handles the new case — exhaustiveness is enforced by the type system
+rather than by runtime `default:` branches.
+
+## Shape–Schema Binding
+
+Generated shapes know their own schemas through a static abstract interface
+member:
+
+```csharp
+public interface ISmithyShape<TSelf>
+{
+    static abstract Schema<TSelf> Schema { get; }
+}
+```
+
+Schema discovery is a generic constraint — `Serialize<T>(T value) where T :
+ISmithyShape<T>` — with no registry, no reflection, and no startup scan. Any
+API that has the type has the schema.
+
+Construction during deserialization goes through the schema as well: a struct,
+list, or map schema exposes a typed builder protocol (create, set/add, build)
+that folds compile against. The builder type appears in the schema visitor only
+while compiling the plan; public codec entry points remain typed by the model
+value.
+
+## Presence and Nullability
+
+Presence is a property of the *member position*, never of the target shape:
+
+- `required` is member metadata (`IMemberSchema.IsRequired`).
+- Modeled defaults are represented as member traits and interpreted by codecs
+  and validators where needed.
+- `@sparse` is metadata on the list or map schema, declaring that the
+  collection holds nullable elements or values.
+- `Schema<T>`'s type argument is always the exact CLR type, including
+  nullability annotations, so an optional integer member targets
+  `NullableSchema<int>` through `Schemas.Nullable(Schemas.Integer)`.
+
+Reference-type nullability stays in the `Schema<T>` type argument; value-type
+nullability uses `NullableSchema<T>` because C# needs a distinct runtime type
+for `T?`. A fold reads required/default metadata from the member and nullable
+value-type metadata from the schema.
+
 ## Codec Model
 
-A codec is compiled once from a schema. The compiled result is a tree of typed
-reader and writer objects that mirror the schema graph. On the hot path, no
-schema dispatch or trait lookup occurs; those decisions are baked into the
-compiled reader/writer tree.
+A codec is the serialization fold: compiled once from a schema, producing a
+tree of typed reader and writer objects that mirror the schema graph. On the
+hot path, no schema dispatch or trait lookup occurs; those decisions are baked
+into the compiled reader/writer tree.
 
 ```csharp
 public interface ICodec<TValue>
@@ -321,12 +480,16 @@ public interface ICodec<TValue>
     TValue Deserialize(byte[] payload);
 }
 
-public interface IProjectionCodec<TValue>
+public interface IProjectionCodec<TValue, in TBuilder>
 {
     byte[] Serialize(TValue value);
-    void ReadInto(byte[] payload, object builder);
+    void ReadInto(byte[] payload, TBuilder builder);
 }
 ```
+
+A protocol creates one typed builder per request, lets each projection codec and
+each HTTP binding reader write the members it owns, and finalizes the builder
+once.
 
 Codec usage:
 
@@ -352,17 +515,18 @@ format:
 - `NSmithy.Codecs.Xml` - XML documents
 - `NSmithy.Codecs.Cbor` - CBOR documents
 
-Codecs read schema metadata at compilation time. They handle body-format traits
-such as XML names, timestamp formats, enum values, sparse collections, and
-document nodes. They do not build HTTP requests, expand URI labels, choose
-headers, or map status codes; those are protocol responsibilities.
+Codecs read schema metadata at fold time. They handle body-format traits such
+as XML names, timestamp formats, enum values, sparse collections, and document
+nodes. They do not build HTTP requests, expand URI labels, choose headers, or
+map status codes; those are protocol responsibilities.
 
 ### Codec Compilation
 
-`JsonCodec.FromSchema<T>` walks the schema graph once and produces an
+`JsonCodec.FromSchema<T>` folds the schema graph once and produces an
 `IJsonValueReader<T>` / `IJsonValueWriter<T>` tree. Each node in the tree is a
 small sealed class with the exact concrete types it needs captured in its
-generic parameters.
+generic parameters — including the builder type, which the fold obtains
+through the schema's builder plan.
 
 For a structure member typed `int`:
 
@@ -370,7 +534,7 @@ For a structure member typed `int`:
 JsonMemberReader<TContainer, TBuilder, int>
   .ReadInto(TBuilder builder, JsonElement element)
       value = IntegerJsonValueReader.Read(element)   // element.GetInt32() -> int
-      member.SetValue(builder, value)                // Action<TBuilder, int>
+      setValue(builder, value)                       // Action<TBuilder, int>
 ```
 
 For a list typed `IReadOnlyList<string>`:
@@ -378,20 +542,74 @@ For a list typed `IReadOnlyList<string>`:
 ```csharp
 ListJsonValueReader<IReadOnlyList<string>, string, List<string>>
   .Read(JsonElement element)
-      builder = schema.CreateTypedBuilder()          // new List<string>()
+      builder = plan.CreateBuilder()                 // new List<string>()
       for each element:
-          schema.Add(builder, reader.Read(element))  // string
-      return schema.Build(builder)                   // typed collection
+          plan.Add(builder, reader.Read(element))    // string
+      return plan.Build(builder)                     // typed collection
 ```
 
 The entire body deserialization path for value types is boxing-free.
 
-## Protocol Model
+## Validation
 
-Protocols bind operation schemas to transports. The abstraction has two
-interfaces in `NSmithy.Http`:
+Constraint traits — `@required`, `@length`, `@range`, `@pattern`,
+`@uniqueItems` — are enforced by the server. Validation is a fold like any
+other: it compiles a schema into a `Validator<T>` that walks a deserialized
+value and collects every violation.
 
 ```csharp
+Validator<T>? validator = SmithyValidator.FromSchema(inputSchema);
+```
+
+The fold resolves each constraint through member precedence
+(`member.GetTrait(LengthTraitId)`), reads `@required` off
+`IMemberSchema.IsRequired`, and compiles one checker per constrained node. It
+prunes aggressively: a
+subgraph with no reachable constraints compiles to nothing, and a schema with
+no constraints at all yields no validator, so unconstrained operations pay
+zero — no wrapper, no walk, no branch per request.
+
+A validator reports all violations in one pass rather than failing on the
+first. Each violation carries a path into the value (`$.tags[2]`,
+`$.attributes.color`) and a message, so a caller can correct every problem
+from a single response.
+
+On the server request path, the validation fold fuses with the codec's reader
+fold: constraint checks run as the value is built, so the input is
+deserialized and validated in a single pass with no second walk over the
+value. Missing `@required` members are detected where the builder is
+finalized, in the same pass. The standalone `Validator<T>` remains the form
+used to validate values that did not arrive through a codec.
+
+### ValidationException
+
+The server runtime runs the input validator between request deserialization
+and the handler. Violations become `smithy.framework#ValidationException`, a
+modeled error carrying a message and a `fieldList` of path/message pairs.
+Every operation schema carries this error implicitly — a model that declares
+it explicitly keeps its own registration — so protocols serialize it exactly
+like any other modeled error, and generated clients deserialize it into the
+typed exception with no special casing.
+
+Clients do not pre-validate inputs. The server is the authority on
+constraints: when a service loosens a constraint, deployed clients benefit
+immediately rather than rejecting inputs a newer model allows, and every
+caller — generated client or hand-written request — receives the same modeled
+error for the same invalid input. Handlers never see invalid input, and
+handler authors write no constraint checks.
+
+## Protocol Model
+
+Protocols bind operation schemas to transports. The abstraction lives in
+`NSmithy.Http`:
+
+```csharp
+public interface IProtocol
+{
+    IServiceProtocol ForService(ServiceSchema service);
+    bool RequiresHttp2 => false;
+}
+
 public interface IServiceProtocol
 {
     IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
@@ -400,10 +618,16 @@ public interface IServiceProtocol
 
 public interface IClientOperationProtocol<TInput, TOutput>
 {
-    SmithyHttpRequest SerializeRequest(TInput input);
-    TOutput           DeserializeResponse(SmithyHttpClientResponse response);
+    SmithyHttpRequest SerializeRequest(
+        TInput input,
+        CancellationToken cancellationToken = default);
+
+    ValueTask<TOutput> DeserializeResponseAsync(
+        SmithyHttpClientResponse response,
+        CancellationToken cancellationToken = default);
 
     bool IsErrorResponse(SmithyHttpClientResponse response);
+
     ValueTask<Exception?> DeserializeErrorAsync(
         SmithyHttpClientResponse response,
         CancellationToken cancellationToken = default);
@@ -411,8 +635,14 @@ public interface IClientOperationProtocol<TInput, TOutput>
 
 public interface IServerOperationProtocol<TInput, TOutput>
 {
-    TInput DeserializeRequest(SmithyHttpRequest request);
-    SmithyHttpServerResponse SerializeResponse(TOutput output);
+    ValueTask<TInput> DeserializeRequestAsync(
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken = default);
+
+    SmithyHttpServerResponse SerializeResponse(
+        TOutput output,
+        CancellationToken cancellationToken = default);
+
     bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response);
 }
 
@@ -433,10 +663,11 @@ required (rpc-style protocols always carry one), and whether the HTTP status
 code may resolve an error when the discriminator does not (REST). Those rules
 are per-protocol internals, not interface members.
 
-Each protocol provides a `ForService(ServiceSchema)` factory that returns an
+Each protocol implements `IProtocol.ForService(ServiceSchema)`, returning an
 `IServiceProtocol`, which in turn hands out an `IOperationProtocol` per
-operation. The interface is the *unary* shape; a streaming sibling would be a
-separate interface.
+operation. Protocol instances can carry configuration such as gRPC limits or
+HTTP/2 requirements, while service and operation protocols carry schema-derived
+plans.
 
 Every protocol-specific wire decision lives behind the implementation, so
 generated clients do not need protocol-specific serialization branches:
@@ -463,12 +694,13 @@ generated clients do not need protocol-specific serialization branches:
   label/query/header binding, payload handling, and error parsing. restJson1 and
   restXml share it and differ only by `IRestBodyFormat` (JSON vs XML).
 
-A `RestOperationBinding<TInput, TOutput>` precomputes everything determinable
-from the operation schema before any request arrives — HTTP method, URI
-template, the label/header/query/queryParams/payload member lists, and the
-input/output body projections. `SerializeRequest`/`DeserializeRequest` then
-iterate those precomputed lists directly; no trait lookup, LINQ, or
-schema-analysis allocation is needed per request.
+A `RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder>`
+precomputes everything determinable from the operation schema before any request
+arrives — HTTP method, URI template, the label/header/query/queryParams/payload
+member lists, and the input/output body projections.
+`SerializeRequest`/`DeserializeRequestAsync` then iterate those precomputed
+lists directly; no trait lookup, LINQ, or schema-analysis allocation is needed
+per request.
 
 rpcv2Cbor is **not** built on `RestProtocol`. Its `IOperationProtocol`
 implementation holds the request URI plus the request/response CBOR codecs
@@ -477,19 +709,24 @@ CBOR envelope directly.
 
 ## Client Generation
 
-A generated client stores protocol objects in `static readonly` fields. The
-service protocol is created from the service schema; each operation protocol is
-created from its operation schema via `ForOperation`:
+A generated client resolves the protocol once in its constructor, binds it to
+the service schema, then creates one client-runtime binding per operation:
 
 ```csharp
-private static readonly IServiceProtocol ServiceProtocol =
-    RpcV2CborProtocol.ForService(RpcV2ProtocolSchema.Schema);
+private readonly SmithyOperationBinding<GreetingWithErrorsInput, GreetingWithErrorsOutput>
+    greetingWithErrorsBinding;
 
-private static readonly SmithyOperationBinding<GreetingWithErrorsInput, GreetingWithErrorsOutput>
-    GreetingWithErrorsBinding = new(
+public RpcV2ProtocolClient(/* endpoint / config / runtime */)
+{
+    var resolvedProtocol = config.Protocol ?? new RpcV2CborProtocol();
+    var serviceProtocol = resolvedProtocol.ForService(RpcV2ProtocolSchema.Schema);
+
+    greetingWithErrorsBinding =
+        new SmithyOperationBinding<GreetingWithErrorsInput, GreetingWithErrorsOutput>(
         RpcV2ProtocolSchema.Schema.Id,
         GreetingWithErrorsSchema.Schema.Id,
-        ServiceProtocol.ForOperation(GreetingWithErrorsSchema.Schema));
+        serviceProtocol.ForOperation(GreetingWithErrorsSchema.Schema));
+}
 ```
 
 Operation methods are protocol-agnostic. They have the same shape for restJson1,
@@ -501,15 +738,15 @@ public async Task<GreetingWithErrorsOutput> GreetingWithErrorsAsync(
     CancellationToken cancellationToken = default)
 {
     ArgumentNullException.ThrowIfNull(input);
-    return await runtime.InvokeAsync(GreetingWithErrorsBinding, input, cancellationToken)
+    return await runtime.InvokeAsync(greetingWithErrorsBinding, input, cancellationToken)
         .ConfigureAwait(false);
 }
 ```
 
-The `static readonly` fields also define the caching boundary. Work derived from
-the operation schema — such as a `RestOperationBinding` for REST or compiled
-request/response codecs for rpcv2Cbor — is computed when the field is
-initialized and reused for every request. The hot path serializes through those
+Those constructor-created bindings define the caching boundary. Work derived
+from the operation schema — such as a `RestOperationBinding` for REST or
+compiled request/response codecs for rpcv2Cbor — is computed when the client is
+constructed and reused for every request. The hot path serializes through those
 precomputed objects instead of reanalyzing schema metadata.
 
 The generated client also precomputes a client-runtime operation binding per
@@ -551,6 +788,42 @@ These conversions go through typed HTTP value readers and writers in
 binding values are strings with Smithy-specific escaping, timestamp, list, and
 media-type rules.
 
+## The Full Model at Runtime
+
+The schema model covers the entire Smithy model, not only data shapes:
+
+```csharp
+public sealed class ServiceSchema
+{
+    public ShapeId Id { get; }
+    public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
+    public IReadOnlyList<OperationSchema> Operations { get; }
+    public IReadOnlyList<ResourceSchema> Resources { get; }
+}
+```
+
+Operations carry input, output, error schemas, and typed traits. Because the
+full graph is available with typed traits, generic infrastructure is a fold
+over the model rather than a codegen feature:
+
+- Paginators and waiters derive from `@paginated` and waitable traits.
+- Auth middleware derives from auth traits on services and operations.
+- Protocol conformance tests generate from `@httpRequestTests` /
+  `@httpResponseTests`.
+- Mock servers and live documentation endpoints derive from the same graph the
+  real server dispatches on.
+
+## Compile-Time Plans
+
+The fold that a codec or validator runs at first use can equally run at build
+time. A source generator in the consuming project executes the same fold over
+generated schemas and emits the resulting plans as ordinary C#, reducing
+startup cost to zero for known protocols. Model types stay wire-format-free —
+the plans live with the consumer, not the model — and adding a codec never
+touches generated models. Runtime folding remains for dynamically constructed
+schemas (documents, generic tooling) and for codecs the generator does not
+know about. The fold is written once; where it runs is deployment detail.
+
 ## Alternatives Considered
 
 ### Reflection-based serialization
@@ -576,6 +849,24 @@ Generated shapes could contain explicit methods that call a serializer visitor.
 - Deserialization becomes callback-heavy and harder to reason about than
   constructing via schema builder metadata.
 
+### Model-side per-format serializers
+
+The Java codegen could emit typed JSON deserializers alongside each shape,
+similar to `System.Text.Json` source generation.
+
+**Rejected because:**
+
+- It couples generated model types to a specific wire format.
+- Adding a new codec (CBOR, XML, MessagePack) would require regenerating all
+  models.
+- The fold achieves boxing-free deserialization without per-format codegen,
+  while keeping codecs swappable at runtime.
+
+This is distinct from [compile-time plans](#compile-time-plans), where a
+consumer-side source generator runs the same fold at build time: there the
+plans live in the consuming project, models stay format-free, and new codecs
+require no model regeneration.
+
 ### Protocol locations in core schema metadata
 
 Core member metadata could store a normalized location such as `Body`, `Header`,
@@ -589,15 +880,67 @@ Core member metadata could store a normalized location such as `Body`, `Header`,
 - Sharing traits lets protocols interpret them independently without forcing
   agreement on one projection.
 
-### Source-generated per-format deserializers
+### An interpretive erased codec path
 
-The Java codegen could emit typed JSON deserializers alongside each shape,
-similar to `System.Text.Json` source generation.
+Every schema exposes enough `object`-shaped members for heterogeneous
+infrastructure to store, inspect, and build values when the CLR type is not
+known statically. Using that surface as the main codec implementation was
+rejected: it would box and cast on the hot path and would force compiled and
+interpretive serializers to stay behaviorally identical. Runtime codecs use the
+erased surface only to re-enter typed visitor dispatch and compile typed plans.
 
-**Rejected because:**
+### Trait overlays instead of members
 
-- It couples generated model types to a specific wire format.
-- Adding a new codec (CBOR, XML, MessagePack) would require regenerating all
-  models.
-- The compiler pattern achieves boxing-free deserialization without
-  per-format codegen, while keeping codecs swappable at runtime.
+List and map elements can be modeled as plain target schemas, with member-level
+traits merged onto a wrapping schema at construction. This keeps every consumer
+input a single `Schema` and computes precedence once. Rejected in favor of
+first-class members with a resolution helper, which keeps precedence in one
+place while also representing trait origin, map-key traits, and the member
+itself as a first-class node — capabilities an overlay erases.
+
+### A materialized merged trait view
+
+Members can carry a third trait collection: the member-over-target merge,
+computed at construction, so effective-value consumers read one dictionary.
+Rejected: because consumers are compiled folds, trait resolution already runs
+once per consumer and schema, so caching the merge buys nothing on the hot
+path. The stored view also cannot represent origin — a member re-declaring a
+trait with a value equal to the target's is indistinguishable from declaring
+nothing — so it cannot replace the split views, only duplicate them.
+`GetTrait(ShapeId)` provides the same single point of precedence without the
+redundant storage.
+
+### Presence as nullable wrapper schemas
+
+Optionality can be expressed entirely by wrapping target schemas in nullable
+adapters. Rejected: presence is positional in Smithy, so `required`, optional,
+and defaulted all belong to the member, not to the target shape. NSmithy only
+uses `NullableSchema<T>` where C# requires a distinct runtime type for nullable
+value types; it does not use nullability wrappers as the source of member
+presence.
+
+### Generated typed trait classes
+
+Generating a CLR type for every Smithy trait would give consumers strongly
+typed property access. Rejected for now: it expands the generated surface, makes
+vendor traits a special case, and still requires protocol-specific
+interpretation for traits such as `@http` and `@timestampFormat`. The core model
+stores all traits as `Trait(ShapeId, Document)` and centralizes parsing in the
+runtime component that owns the trait's semantics.
+
+### Registry-based schema discovery
+
+A global registry mapping CLR types to schemas supports lookup from
+non-generic contexts. Rejected: it requires registration at startup, fails at
+runtime rather than compile time, and interacts badly with trimming. Static
+abstract interface members provide discovery as a compile-time constraint.
+
+### Client-side constraint validation
+
+Clients could validate inputs against constraint traits before serialization.
+Rejected: the server is the authority on constraints. A client pinned to an
+older model would reject inputs a loosened server-side constraint now allows,
+so validation skew punishes exactly the callers who cannot regenerate. Server
+enforcement gives every caller — generated client or hand-written request —
+the same modeled `ValidationException` for the same invalid input, and clients
+must handle that error anyway.

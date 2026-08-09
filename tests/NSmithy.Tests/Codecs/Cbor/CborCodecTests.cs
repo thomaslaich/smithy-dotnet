@@ -1,3 +1,4 @@
+using System.Formats.Cbor;
 using NSmithy.Codecs.Cbor;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
@@ -68,5 +69,17 @@ public sealed class CborCodecTests
         var decoded = codec.Deserialize(bytes);
 
         Assert.Equal(input, decoded);
+    }
+
+    [Fact]
+    public void CborCodecReadsHalfPrecisionFloat()
+    {
+        var writer = new CborWriter();
+        writer.WriteHalf((Half)1.5);
+        var codec = CborCodec.FromSchema(Schemas.Float);
+
+        var decoded = codec.Deserialize(writer.Encode());
+
+        Assert.Equal(1.5f, decoded);
     }
 }

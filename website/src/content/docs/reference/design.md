@@ -12,7 +12,7 @@ its goals, the chosen design, alternatives considered, and tradeoffs.
 | --- | --- |
 | [codegen-architecture.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/codegen-architecture.md) | Java plugin + MSBuild integration pipeline |
 | [shapes.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/shapes.md) | Smithy shape → C# type mapping |
-| [serialization.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/serialization.md) | Schema-aware codec and serialization design |
+| [serialization.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/serialization.md) | Schema algebra, typed traits, compiled codecs, and constraint validation |
 | [http-interfaces.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/http-interfaces.md) | HTTP transport abstractions |
 | [client-architecture.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/client-architecture.md) | Generated client lifecycle, config, interceptors, auth, retries |
 | [server-architecture.md](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/server-architecture.md) | Generated server dispatch, shared server runtime, host adapter |
