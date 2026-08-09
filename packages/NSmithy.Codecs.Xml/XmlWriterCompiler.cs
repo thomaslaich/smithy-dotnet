@@ -28,21 +28,38 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
 
     private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
 
-    public static IXmlValueWriter<T> Compile<T>(Schema<T> schema)
+    public static IXmlValueWriter<T> Compile<T>(
+        Schema<T> schema,
+        bool materializeTopLevelDefaults = true
+    )
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new XmlWriterCompiler().CompileValue(schema);
+        return new XmlWriterCompiler().CompileTopLevelValue(schema, materializeTopLevelDefaults);
     }
 
     public static StructureXmlValueWriter<T> Compile<T, TBuilder>(
-        StructProjection<T, TBuilder> projection
+        StructProjection<T, TBuilder> projection,
+        bool materializeTopLevelDefaults = true
     )
     {
         ArgumentNullException.ThrowIfNull(projection);
         var compiler = new XmlWriterCompiler();
-        var visitor = new XmlMemberWriterCompiler<T>(compiler);
+        var visitor = new XmlMemberWriterCompiler<T>(compiler, materializeTopLevelDefaults);
         projection.VisitMembers(visitor);
         return new StructureXmlValueWriter<T>(visitor.Writers);
+    }
+
+    private IXmlValueWriter<T> CompileTopLevelValue<T>(
+        Schema<T> schema,
+        bool materializeTopLevelDefaults
+    )
+    {
+        if (schema.Resolved is IStructSchema<T> structure)
+        {
+            return CompileStructure(structure, materializeTopLevelDefaults);
+        }
+
+        return CompileValue(schema);
     }
 
     public IXmlValueWriter<T> CompileValue<T>(Schema<T> schema) =>
@@ -125,7 +142,7 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
 
     public object VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
     {
-        var visitor = new XmlMemberWriterCompiler<T>(this);
+        var visitor = new XmlMemberWriterCompiler<T>(this, materializeDefaults: true);
         schema.VisitMembers(visitor);
         return new StructureXmlValueWriter<T>(visitor.Writers);
     }
@@ -147,6 +164,16 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
         Schema<T> schema,
         IReadOnlyDictionary<ShapeId, Trait> traits
     ) => new(schema, traits);
+
+    private StructureXmlValueWriter<T> CompileStructure<T>(
+        IStructSchema<T> schema,
+        bool materializeDefaults
+    )
+    {
+        var visitor = new XmlMemberWriterCompiler<T>(this, materializeDefaults);
+        schema.VisitMembers(visitor);
+        return new StructureXmlValueWriter<T>(visitor.Writers);
+    }
 }
 
 internal sealed class DeferredXmlValueWriter<T> : IXmlValueWriter<T>
@@ -266,8 +293,10 @@ internal sealed class NullableXmlValueWriter<T>(IXmlValueWriter<T> inner) : IXml
     }
 }
 
-internal sealed class XmlMemberWriterCompiler<TContainer>(XmlWriterCompiler compiler)
-    : IMemberVisitor<TContainer>
+internal sealed class XmlMemberWriterCompiler<TContainer>(
+    XmlWriterCompiler compiler,
+    bool materializeDefaults
+) : IMemberVisitor<TContainer>
 {
     private readonly List<IXmlMemberWriter<TContainer>> writers = [];
 
@@ -278,7 +307,8 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(XmlWriterCompiler comp
         writers.Add(
             new XmlMemberWriter<TContainer, TValue>(
                 member,
-                compiler.CompileValue(member.TargetSchema, member.MemberTraits)
+                compiler.CompileValue(member.TargetSchema, member.MemberTraits),
+                materializeDefaults
             )
         );
     }
@@ -286,7 +316,8 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(XmlWriterCompiler comp
 
 internal sealed class XmlMemberWriter<TContainer, TValue>(
     IMemberSchema<TContainer, TValue> member,
-    IXmlValueWriter<TValue> valueWriter
+    IXmlValueWriter<TValue> valueWriter,
+    bool materializeDefault
 ) : IXmlMemberWriter<TContainer>
 {
     public void Write(XElement element, TContainer container)
@@ -294,7 +325,19 @@ internal sealed class XmlMemberWriter<TContainer, TValue>(
         var value = member.GetValue(container);
         if (value is null && !member.IsRequired)
         {
-            return;
+            if (
+                !materializeDefault
+                || !TryCreateDefaultValue(
+                    member.TargetSchema,
+                    member.MemberTraits,
+                    out var defaultValue
+                )
+            )
+            {
+                return;
+            }
+
+            value = (TValue)defaultValue!;
         }
 
         if (XmlTraits.IsXmlAttribute(member))

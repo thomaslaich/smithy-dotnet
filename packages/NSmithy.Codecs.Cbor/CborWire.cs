@@ -83,70 +83,111 @@ internal static class CborWire
         writer.WriteEndArray();
     }
 
-    internal static DateTimeOffset MaterializeTimestamp(object value)
+    internal static DateTimeOffset ReadTimestamp(CborReader reader)
     {
-        return value switch
+        if (reader.PeekState() == CborReaderState.Tag)
         {
-            DateTimeOffset timestamp => timestamp,
-            long longValue => DateTimeOffset.FromUnixTimeSeconds(longValue),
-            double doubleValue =>
-            // Use ticks for sub-second precision
-            new DateTimeOffset(
-                DateTime.UnixEpoch.AddTicks((long)(doubleValue * TimeSpan.TicksPerSecond)),
-                TimeSpan.Zero
+            var tag = reader.ReadTag();
+            if (tag != CborTag.UnixTimeSeconds)
+            {
+                throw new InvalidOperationException(
+                    $"Expected unix timestamp tag but found {tag}."
+                );
+            }
+        }
+
+        return reader.PeekState() switch
+        {
+            CborReaderState.UnsignedInteger => DateTimeOffset.FromUnixTimeSeconds(
+                Convert.ToInt64(reader.ReadUInt64(), CultureInfo.InvariantCulture)
             ),
-            string text => DateTimeOffset.Parse(
-                text,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind
+            CborReaderState.NegativeInteger => DateTimeOffset.FromUnixTimeSeconds(
+                reader.ReadInt64()
             ),
+            CborReaderState.SinglePrecisionFloat => MaterializeTimestamp(reader.ReadSingle()),
+            CborReaderState.DoublePrecisionFloat => MaterializeTimestamp(reader.ReadDouble()),
+            CborReaderState.HalfPrecisionFloat => MaterializeTimestamp((double)reader.ReadHalf()),
+            CborReaderState.TextString or CborReaderState.StartIndefiniteLengthTextString =>
+                DateTimeOffset.Parse(
+                    reader.ReadTextString(),
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind
+                ),
             _ => throw new InvalidOperationException(
-                $"Cannot convert {value.GetType().Name} to DateTimeOffset."
+                $"Cannot convert CBOR {reader.PeekState()} to DateTimeOffset."
             ),
         };
     }
 
-    internal static object? ReadValue(ref CborReader reader)
+    internal static BigInteger ReadBigInteger(CborReader reader)
     {
-        var state = reader.PeekState();
-        if (state == CborReaderState.Tag)
+        if (reader.PeekState() != CborReaderState.Tag)
         {
-            var tag = reader.ReadTag();
-            var inner = ReadValue(ref reader);
-            return tag switch
+            return ReadIntegerAsBigInteger(reader);
+        }
+
+        var tag = reader.ReadTag();
+        return tag switch
+        {
+            CborTag.UnsignedBigNum => new BigInteger(
+                reader.ReadByteString(),
+                isUnsigned: true,
+                isBigEndian: true
+            ),
+            CborTag.NegativeBigNum => -1
+                - new BigInteger(reader.ReadByteString(), isUnsigned: true, isBigEndian: true),
+            _ => throw new InvalidOperationException($"Expected bignum tag but found {tag}."),
+        };
+    }
+
+    internal static decimal ReadBigDecimal(CborReader reader)
+    {
+        if (reader.PeekState() != CborReaderState.Tag)
+        {
+            return reader.PeekState() switch
             {
-                CborTag.UnixTimeSeconds => MaterializeTimestamp(inner!),
-                CborTag.UnsignedBigNum when inner is byte[] positiveBytes => new BigInteger(
-                    positiveBytes,
-                    isUnsigned: true,
-                    isBigEndian: true
+                CborReaderState.UnsignedInteger => Convert.ToDecimal(
+                    reader.ReadUInt64(),
+                    CultureInfo.InvariantCulture
                 ),
-                CborTag.NegativeBigNum when inner is byte[] negativeBytes => -1
-                    - new BigInteger(negativeBytes, isUnsigned: true, isBigEndian: true),
-                CborTag.DecimalFraction
-                    when inner is IReadOnlyList<object?> parts && parts.Count == 2 =>
-                    MaterializeDecimalFraction(parts[0], parts[1]),
-                _ => inner,
+                CborReaderState.NegativeInteger => Convert.ToDecimal(
+                    reader.ReadInt64(),
+                    CultureInfo.InvariantCulture
+                ),
+                CborReaderState.SinglePrecisionFloat => Convert.ToDecimal(
+                    reader.ReadSingle(),
+                    CultureInfo.InvariantCulture
+                ),
+                CborReaderState.DoublePrecisionFloat => Convert.ToDecimal(
+                    reader.ReadDouble(),
+                    CultureInfo.InvariantCulture
+                ),
+                CborReaderState.HalfPrecisionFloat => Convert.ToDecimal(
+                    reader.ReadHalf(),
+                    CultureInfo.InvariantCulture
+                ),
+                _ => throw new InvalidOperationException(
+                    $"Cannot convert CBOR {reader.PeekState()} to decimal."
+                ),
             };
         }
 
-        return state switch
+        var tag = reader.ReadTag();
+        if (tag != CborTag.DecimalFraction)
         {
-            CborReaderState.Null => ReadNull(ref reader),
-            CborReaderState.Boolean => reader.ReadBoolean(),
-            CborReaderState.UnsignedInteger => ReadUnsignedInteger(ref reader),
-            CborReaderState.NegativeInteger => reader.ReadInt64(),
-            CborReaderState.SinglePrecisionFloat => reader.ReadSingle(),
-            CborReaderState.DoublePrecisionFloat => reader.ReadDouble(),
-            CborReaderState.HalfPrecisionFloat => (double)reader.ReadHalf(),
-            CborReaderState.TextString or CborReaderState.StartIndefiniteLengthTextString =>
-                reader.ReadTextString(),
-            CborReaderState.ByteString or CborReaderState.StartIndefiniteLengthByteString =>
-                reader.ReadByteString(),
-            CborReaderState.StartArray => ReadArray(ref reader),
-            CborReaderState.StartMap => ReadMap(ref reader),
-            _ => SkipAndReturn(ref reader),
-        };
+            throw new InvalidOperationException($"Expected decimal fraction tag but found {tag}.");
+        }
+
+        var length = reader.ReadStartArray();
+        if (length is not 2)
+        {
+            throw new InvalidOperationException("CBOR decimal fraction must contain two items.");
+        }
+
+        var exponent = Convert.ToInt32(ReadInteger(reader), CultureInfo.InvariantCulture);
+        var significand = ReadBigInteger(reader);
+        reader.ReadEndArray();
+        return MaterializeDecimalFraction(exponent, significand);
     }
 
     internal static object ReadUnsignedInteger(ref CborReader reader)
@@ -162,6 +203,16 @@ internal static class CborWire
         reader.PeekState() == CborReaderState.UnsignedInteger
             ? ReadUnsignedInteger(ref reader)
             : reader.ReadInt64();
+
+    private static BigInteger ReadIntegerAsBigInteger(CborReader reader) =>
+        reader.PeekState() switch
+        {
+            CborReaderState.UnsignedInteger => new BigInteger(reader.ReadUInt64()),
+            CborReaderState.NegativeInteger => new BigInteger(reader.ReadInt64()),
+            _ => throw new InvalidOperationException(
+                $"Cannot convert CBOR {reader.PeekState()} to BigInteger."
+            ),
+        };
 
     internal static string ReadNullableTextString(CborReader reader)
     {
@@ -185,58 +236,11 @@ internal static class CborWire
         return null!;
     }
 
-    internal static object? ReadNull(ref CborReader reader)
+    private static DateTimeOffset MaterializeTimestamp(double seconds) =>
+        new(DateTime.UnixEpoch.AddTicks((long)(seconds * TimeSpan.TicksPerSecond)), TimeSpan.Zero);
+
+    internal static decimal MaterializeDecimalFraction(int exponent, BigInteger significand)
     {
-        reader.ReadNull();
-        return null;
-    }
-
-    internal static string SkipAndReturn(ref CborReader reader)
-    {
-        reader.SkipValue();
-        return "<skipped>";
-    }
-
-    internal static List<object?> ReadArray(ref CborReader reader)
-    {
-        var count = reader.ReadStartArray();
-        var list = count.HasValue ? new List<object?>(count.Value) : [];
-        while (reader.PeekState() != CborReaderState.EndArray)
-        {
-            list.Add(ReadValue(ref reader));
-        }
-
-        reader.ReadEndArray();
-        return list;
-    }
-
-    internal static Dictionary<string, object?> ReadMap(ref CborReader reader)
-    {
-        var count = reader.ReadStartMap();
-        var dict = new Dictionary<string, object?>(
-            count.HasValue ? count.Value : 8,
-            StringComparer.Ordinal
-        );
-        while (reader.PeekState() != CborReaderState.EndMap)
-        {
-            dict[reader.ReadTextString()] = ReadValue(ref reader);
-        }
-
-        reader.ReadEndMap();
-        return dict;
-    }
-
-    internal static decimal MaterializeDecimalFraction(object? exponentObj, object? significandObj)
-    {
-        var exponent = Convert.ToInt32(exponentObj, CultureInfo.InvariantCulture);
-        BigInteger significand;
-        if (significandObj is BigInteger bi)
-            significand = bi;
-        else
-            significand = new BigInteger(
-                Convert.ToInt64(significandObj, CultureInfo.InvariantCulture)
-            );
-
         // CBOR decimal fraction: significand * 10^exponent
         // C# decimal: significand * 10^(-scale) where scale is 0..28
         var scale = -exponent;

@@ -6,10 +6,13 @@ public interface IJsonCodec<T> : ICodec<T> { }
 
 public static class JsonCodec
 {
-    public static IJsonCodec<T> FromSchema<T>(Schema<T> schema)
+    public static IJsonCodec<T> FromSchema<T>(
+        Schema<T> schema,
+        bool materializeTopLevelDefaults = true
+    )
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new CompiledJsonCodec<T>(schema);
+        return new CompiledJsonCodec<T>(schema, materializeTopLevelDefaults);
     }
 
     public static IProjectionCodec<T, TBuilder> FromProjection<T, TBuilder>(

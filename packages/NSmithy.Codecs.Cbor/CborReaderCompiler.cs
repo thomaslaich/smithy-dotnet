@@ -81,20 +81,10 @@ internal sealed class CborReaderCompiler : ISchemaVisitor<object>
         );
 
     public object VisitBigInteger(Schema<BigInteger> schema) =>
-        new DelegatingCborValueReader<BigInteger>(reader =>
-        {
-            var value = ReadValue(ref reader);
-            return value is BigInteger bi
-                ? bi
-                : new BigInteger(Convert.ToInt64(value, CultureInfo.InvariantCulture));
-        });
+        new DelegatingCborValueReader<BigInteger>(ReadBigInteger);
 
     public object VisitBigDecimal(Schema<decimal> schema) =>
-        new DelegatingCborValueReader<decimal>(reader =>
-        {
-            var value = ReadValue(ref reader);
-            return value is decimal d ? d : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
-        });
+        new DelegatingCborValueReader<decimal>(ReadBigDecimal);
 
     public object VisitString(Schema<string> schema) =>
         new DelegatingCborValueReader<string>(ReadNullableTextString);
@@ -103,11 +93,7 @@ internal sealed class CborReaderCompiler : ISchemaVisitor<object>
         new DelegatingCborValueReader<byte[]>(ReadNullableByteString);
 
     public object VisitTimestamp(Schema<DateTimeOffset> schema) =>
-        new DelegatingCborValueReader<DateTimeOffset>(reader =>
-        {
-            var value = ReadValue(ref reader);
-            return MaterializeTimestamp(value!);
-        });
+        new DelegatingCborValueReader<DateTimeOffset>(ReadTimestamp);
 
     public object VisitDocument(Schema<Document> schema) =>
         throw new NotSupportedException("Smithy Document values are not supported by rpcv2Cbor.");

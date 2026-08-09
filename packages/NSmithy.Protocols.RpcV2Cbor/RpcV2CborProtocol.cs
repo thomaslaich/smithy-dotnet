@@ -1,3 +1,4 @@
+using System.Formats.Cbor;
 using System.Net;
 using System.Runtime.CompilerServices;
 using NSmithy.Codecs.Cbor;
@@ -801,13 +802,45 @@ public sealed class RpcV2CborProtocol : IProtocol
 
         return BufferedResponse(
             statusCode,
-            CborCodec.SerializeError(errorSchema, error, errorShapeId),
+            SerializeErrorBody(errorSchema, error, errorShapeId),
             headers =>
             {
                 headers["Smithy-Protocol"] = ["rpc-v2-cbor"];
                 headers["Content-Type"] = [ContentType];
             }
         );
+    }
+
+    private static byte[] SerializeErrorBody<TError>(
+        Schema<TError> errorSchema,
+        TError error,
+        string errorShapeId
+    )
+    {
+        if (errorSchema.Resolved is not IStructSchema<TError> structSchema)
+        {
+            throw new InvalidOperationException(
+                "rpcv2Cbor errors must be backed by a structure schema."
+            );
+        }
+
+        var visitor = new CborMemberWriterCompiler<TError>(
+            new CborWriterCompiler(materializeTopLevelDefaults: true),
+            materializeDefaults: true
+        );
+        structSchema.VisitMembers(visitor);
+
+        var writer = new CborWriter(CborConformanceMode.Lax);
+        writer.WriteStartMap(null);
+        writer.WriteTextString("__type");
+        writer.WriteTextString(errorShapeId);
+        foreach (var memberWriter in visitor.Writers)
+        {
+            memberWriter.Write(writer, error);
+        }
+
+        writer.WriteEndMap();
+        return writer.Encode();
     }
 
     private static ValueTask<Exception?> DeserializeModeledErrorAsync(

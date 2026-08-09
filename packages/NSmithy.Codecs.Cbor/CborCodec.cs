@@ -1,9 +1,4 @@
-using System.Formats.Cbor;
-using System.Globalization;
-using System.Numerics;
-using NSmithy.Core;
 using NSmithy.Core.Serde;
-using static NSmithy.Codecs.Cbor.CborWire;
 
 namespace NSmithy.Codecs.Cbor;
 
@@ -37,38 +32,5 @@ public static class CborCodec
             projection,
             materializeTopLevelDefaults
         );
-    }
-
-    /// <summary>
-    /// Serializes an error structure as a CBOR map, prefixing a <c>__type</c> discriminator
-    /// entry that carries the absolute shape id. This is how rpcv2Cbor encodes error responses.
-    /// </summary>
-    public static byte[] SerializeError<T>(Schema<T> schema, T value, string typeDiscriminator)
-    {
-        ArgumentNullException.ThrowIfNull(schema);
-        ArgumentNullException.ThrowIfNull(typeDiscriminator);
-        if (schema.Resolved is not IStructSchema<T> structSchema)
-        {
-            throw new InvalidOperationException(
-                "rpcv2Cbor errors must be backed by a structure schema."
-            );
-        }
-
-        var visitor = new CborMemberWriterCompiler<T>(
-            new CborWriterCompiler(materializeTopLevelDefaults: true),
-            materializeDefaults: true
-        );
-        structSchema.VisitMembers(visitor);
-        var writer = new CborWriter(CborConformanceMode.Lax);
-        writer.WriteStartMap(null);
-        writer.WriteTextString("__type");
-        writer.WriteTextString(typeDiscriminator);
-        foreach (var memberWriter in visitor.Writers)
-        {
-            memberWriter.Write(writer, value);
-        }
-
-        writer.WriteEndMap();
-        return writer.Encode();
     }
 }

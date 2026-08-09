@@ -8,6 +8,9 @@ namespace NSmithy.Codecs.Xml;
 
 internal static class XmlWire
 {
+    private static readonly ShapeId ClientOptionalTrait = new("smithy.api", "clientOptional");
+    private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
+
     internal sealed class XmlCodecImpl<T>(Schema<T> schema) : IXmlCodec<T>
     {
         public byte[] Serialize(T value)
@@ -182,6 +185,80 @@ internal static class XmlWire
             element.Add(entryElement);
         }
     }
+
+    internal static bool TryCreateDefaultValue(
+        Schema schema,
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        out object? value
+    )
+    {
+        if (
+            traits.ContainsKey(ClientOptionalTrait)
+            || !traits.TryGetValue(DefaultTrait, out var trait)
+            || trait.Value.Kind == DocumentKind.Null
+        )
+        {
+            value = null;
+            return false;
+        }
+
+        value = CreateDefaultValue(UnwrapNullable(schema), trait.Value);
+        return value is not null;
+    }
+
+    private static object? CreateDefaultValue(Schema schema, Document value)
+    {
+        return schema.Kind switch
+        {
+            ShapeKind.Boolean => value.AsBoolean(),
+            ShapeKind.Byte => (sbyte)value.AsNumber(),
+            ShapeKind.Short => (short)value.AsNumber(),
+            ShapeKind.Integer => (int)value.AsNumber(),
+            ShapeKind.Long => (long)value.AsNumber(),
+            ShapeKind.Float => (float)value.AsNumber(),
+            ShapeKind.Double => (double)value.AsNumber(),
+            ShapeKind.BigInteger => new BigInteger(value.AsNumber()),
+            ShapeKind.BigDecimal => value.AsNumber(),
+            ShapeKind.String => value.AsString(),
+            ShapeKind.Enum => ((IStringEnumSchema)schema).CreateObject(value.AsString()),
+            ShapeKind.IntEnum => ((IIntEnumSchema)schema).CreateObject((int)value.AsNumber()),
+            ShapeKind.Blob => Convert.FromBase64String(value.AsString()),
+            ShapeKind.Timestamp => DateTimeOffset.FromUnixTimeSeconds((long)value.AsNumber()),
+            ShapeKind.List or ShapeKind.Set when schema.Resolved is IListSchema list =>
+                CreateDefaultList(list, value),
+            ShapeKind.Map when schema.Resolved is IMapSchema map => CreateDefaultMap(map, value),
+            _ => null,
+        };
+    }
+
+    private static object CreateDefaultList(IListSchema schema, Document value)
+    {
+        var builder = schema.CreateBuilder();
+        foreach (var item in value.AsArray())
+        {
+            schema.AddObject(builder, CreateDefaultValue(UnwrapNullable(schema.Element), item));
+        }
+
+        return schema.BuildObject(builder);
+    }
+
+    private static object CreateDefaultMap(IMapSchema schema, Document value)
+    {
+        var builder = schema.CreateBuilder();
+        foreach (var entry in value.AsObject())
+        {
+            schema.AddObject(
+                builder,
+                entry.Key,
+                CreateDefaultValue(UnwrapNullable(schema.Value), entry.Value)
+            );
+        }
+
+        return schema.BuildObject(builder);
+    }
+
+    private static Schema UnwrapNullable(Schema schema) =>
+        schema.Resolved is INullableSchema nullable ? nullable.Target.Resolved : schema.Resolved;
 
     internal static object? ReadValue(Schema schema, XElement? element)
     {

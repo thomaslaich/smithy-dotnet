@@ -6,9 +6,13 @@ using static NSmithy.Codecs.Xml.XmlWire;
 
 namespace NSmithy.Codecs.Xml;
 
-internal sealed class CompiledXmlCodec<T>(Schema<T> schema) : IXmlCodec<T>
+internal sealed class CompiledXmlCodec<T>(Schema<T> schema, bool materializeTopLevelDefaults)
+    : IXmlCodec<T>
 {
-    private readonly IXmlValueWriter<T> valueWriter = XmlWriterCompiler.Compile(schema);
+    private readonly IXmlValueWriter<T> valueWriter = XmlWriterCompiler.Compile(
+        schema,
+        materializeTopLevelDefaults
+    );
     private readonly IXmlValueReader<T> valueReader = XmlReaderCompiler.Compile(schema);
 
     public byte[] Serialize(T value)
@@ -32,10 +36,14 @@ internal sealed class CompiledXmlCodec<T>(Schema<T> schema) : IXmlCodec<T>
 }
 
 internal sealed class CompiledXmlProjectionCodec<T, TBuilder>(
-    StructProjection<T, TBuilder> projection
+    StructProjection<T, TBuilder> projection,
+    bool materializeTopLevelDefaults
 ) : IProjectionCodec<T, TBuilder>
 {
-    private readonly StructureXmlValueWriter<T> valueWriter = XmlWriterCompiler.Compile(projection);
+    private readonly StructureXmlValueWriter<T> valueWriter = XmlWriterCompiler.Compile(
+        projection,
+        materializeTopLevelDefaults
+    );
     private readonly StructureXmlProjectionReader<TBuilder> valueReader = XmlReaderCompiler.Compile(
         projection
     );

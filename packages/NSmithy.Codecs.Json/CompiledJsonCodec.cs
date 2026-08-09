@@ -3,9 +3,13 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Json;
 
-internal sealed class CompiledJsonCodec<T>(Schema<T> schema) : IJsonCodec<T>
+internal sealed class CompiledJsonCodec<T>(Schema<T> schema, bool materializeTopLevelDefaults)
+    : IJsonCodec<T>
 {
-    private readonly IJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(schema);
+    private readonly IJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(
+        schema,
+        materializeTopLevelDefaults
+    );
     private readonly IJsonValueReader<T> valueReader = JsonReaderCompiler.Compile(schema);
 
     public byte[] Serialize(T value)

@@ -26,10 +26,26 @@ internal sealed class JsonWriterCompiler : ISchemaVisitor<object>
 {
     private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
 
-    public static IJsonValueWriter<T> Compile<T>(Schema<T> schema)
+    public static IJsonValueWriter<T> Compile<T>(
+        Schema<T> schema,
+        bool materializeTopLevelDefaults = true
+    )
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new JsonWriterCompiler().CompileValue(schema);
+        return new JsonWriterCompiler().CompileTopLevelValue(schema, materializeTopLevelDefaults);
+    }
+
+    private IJsonValueWriter<T> CompileTopLevelValue<T>(
+        Schema<T> schema,
+        bool materializeTopLevelDefaults
+    )
+    {
+        if (schema.Resolved is IStructSchema<T> structure)
+        {
+            return CompileStructure(structure, materializeTopLevelDefaults);
+        }
+
+        return CompileValue(schema);
     }
 
     public static StructureJsonValueWriter<T> Compile<T, TBuilder>(
@@ -136,9 +152,15 @@ internal sealed class JsonWriterCompiler : ISchemaVisitor<object>
     internal static IntEnumJsonValueWriter<T> CompileIntEnum<T>(IntEnumSchema<T> schema)
         where T : struct, Enum => new IntEnumJsonValueWriter<T>(schema);
 
-    internal StructureJsonValueWriter<T> CompileStructure<T>(IStructSchema<T> schema)
+    internal StructureJsonValueWriter<T> CompileStructure<T>(IStructSchema<T> schema) =>
+        CompileStructure(schema, materializeDefaults: true);
+
+    private StructureJsonValueWriter<T> CompileStructure<T>(
+        IStructSchema<T> schema,
+        bool materializeDefaults
+    )
     {
-        var visitor = new JsonMemberWriterCompiler<T>(this, materializeDefaults: true);
+        var visitor = new JsonMemberWriterCompiler<T>(this, materializeDefaults);
         schema.VisitMembers(visitor);
         return new StructureJsonValueWriter<T>(visitor.Writers);
     }
