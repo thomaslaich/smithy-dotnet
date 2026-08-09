@@ -54,10 +54,12 @@ internal static class XmlWire
             ShapeKind.Enum => (T)((IStringEnumSchema)resolved).CreateObject(value.AsString()),
             ShapeKind.IntEnum => (T)((IIntEnumSchema)resolved).CreateObject((int)value.AsNumber()),
             ShapeKind.Blob => (T)(object)Convert.FromBase64String(value.AsString()),
-            ShapeKind.Timestamp =>
-                (T)(object)DateTimeOffset.FromUnixTimeSeconds((long)value.AsNumber()),
-            ShapeKind.List or ShapeKind.Set when resolved is IListSchema list =>
-                CreateDefaultList((dynamic)list, value),
+            ShapeKind.Timestamp => (T)
+                (object)DateTimeOffset.FromUnixTimeSeconds((long)value.AsNumber()),
+            ShapeKind.List or ShapeKind.Set when resolved is IListSchema list => CreateDefaultList(
+                (dynamic)list,
+                value
+            ),
             ShapeKind.Map when resolved is IMapSchema map => CreateDefaultMap((dynamic)map, value),
             _ => null,
         };
@@ -85,7 +87,11 @@ internal static class XmlWire
         var builder = schema.CreateTypedBuilder();
         foreach (var entry in value.AsObject())
         {
-            schema.Add(builder, entry.Key, CreateDefaultValue(schema.TypedValueMember.TargetSchema, entry.Value)!);
+            schema.Add(
+                builder,
+                entry.Key,
+                CreateDefaultValue(schema.TypedValueMember.TargetSchema, entry.Value)!
+            );
         }
 
         return schema.Build(builder);
@@ -117,30 +123,23 @@ internal static class XmlWire
 
         return resolved.Kind switch
         {
-            ShapeKind.Boolean => (T)(object)string.Equals(
-                value,
-                "true",
-                StringComparison.OrdinalIgnoreCase
-            ),
+            ShapeKind.Boolean => (T)
+                (object)string.Equals(value, "true", StringComparison.OrdinalIgnoreCase),
             ShapeKind.Byte => (T)(object)sbyte.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.Short => (T)(object)short.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.Integer => (T)(object)int.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.Long => (T)(object)long.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.Float => (T)(object)float.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.Double => (T)(object)double.Parse(value, CultureInfo.InvariantCulture),
-            ShapeKind.BigInteger => (T)(object)BigInteger.Parse(
-                value,
-                CultureInfo.InvariantCulture
-            ),
-            ShapeKind.BigDecimal => (T)(object)decimal.Parse(
-                value,
-                CultureInfo.InvariantCulture
-            ),
+            ShapeKind.BigInteger => (T)
+                (object)BigInteger.Parse(value, CultureInfo.InvariantCulture),
+            ShapeKind.BigDecimal => (T)(object)decimal.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.String => (T)(object)value,
             ShapeKind.Enum => (T)((IStringEnumSchema)resolved).CreateObject(value),
-            ShapeKind.IntEnum => (T)((IIntEnumSchema)resolved).CreateObject(
-                int.Parse(value, CultureInfo.InvariantCulture)
-            ),
+            ShapeKind.IntEnum => (T)
+                ((IIntEnumSchema)resolved).CreateObject(
+                    int.Parse(value, CultureInfo.InvariantCulture)
+                ),
             ShapeKind.Blob => (T)(object)Convert.FromBase64String(value),
             ShapeKind.Timestamp => (T)(object)ParseTimestamp(resolved, traits, value),
             _ => throw new InvalidOperationException(

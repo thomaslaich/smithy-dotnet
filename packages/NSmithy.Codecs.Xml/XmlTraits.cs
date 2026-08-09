@@ -14,9 +14,7 @@ internal static class XmlTraits
         schema.GetTrait(XmlNameId) is { HasValue: true } t ? t.Value.AsString() : null;
 
     public static string? GetXmlName(IMemberSchema schema) =>
-        schema.GetTrait(XmlNameId) is { HasValue: true } trait
-            ? trait.Value.AsString()
-            : null;
+        schema.GetTrait(XmlNameId) is { HasValue: true } trait ? trait.Value.AsString() : null;
 
     public static bool IsXmlAttribute(IMemberSchema schema) =>
         schema.MemberTraits.ContainsKey(XmlAttributeId);

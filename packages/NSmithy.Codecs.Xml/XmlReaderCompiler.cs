@@ -335,7 +335,10 @@ internal sealed class XmlMemberReaderCompiler<TContainer, TBuilder>(XmlReaderCom
         new(
             member,
             map,
-            compiler.CompileValue(map.TypedValueMember.TargetSchema, map.TypedValueMember.MemberTraits)
+            compiler.CompileValue(
+                map.TypedValueMember.TargetSchema,
+                map.TypedValueMember.MemberTraits
+            )
         );
 }
 

@@ -483,7 +483,11 @@ internal static class ProtoWire
     private const int ValueListField = 6;
 
     /// <summary>Encodes a sparse-map value (a declared scalar, or null) as a google.protobuf.Value.</summary>
-    internal static void EncodeScalarValueMessage<T>(ProtoWriter writer, Schema<T> valueSchema, T? value)
+    internal static void EncodeScalarValueMessage<T>(
+        ProtoWriter writer,
+        Schema<T> valueSchema,
+        T? value
+    )
     {
         if (value is null)
         {
@@ -521,7 +525,6 @@ internal static class ProtoWire
                         + "(only scalar values map to google.protobuf.Value)."
                 );
         }
-
     }
 
     /// <summary>Decodes a google.protobuf.Value back to a sparse-map scalar (or null).</summary>

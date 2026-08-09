@@ -102,7 +102,13 @@ internal sealed class CborProjectionMemberReader<TContainer, TBuilder, TValue>(
 
     public void ReadMissing(TBuilder builder)
     {
-        if (TryCreateDefaultValue(member.TargetSchema, member.MemberTraits, out TValue? defaultValue))
+        if (
+            TryCreateDefaultValue(
+                member.TargetSchema,
+                member.MemberTraits,
+                out TValue? defaultValue
+            )
+        )
         {
             member.SetValue(builder, defaultValue!);
         }

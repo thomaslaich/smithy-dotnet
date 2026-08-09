@@ -316,11 +316,13 @@ internal static class CborWire
             ShapeKind.Enum => (T)((IStringEnumSchema)resolved).CreateObject(value.AsString()),
             ShapeKind.IntEnum => (T)((IIntEnumSchema)resolved).CreateObject((int)value.AsNumber()),
             ShapeKind.Blob => (T)(object)Convert.FromBase64String(value.AsString()),
-            ShapeKind.Timestamp =>
-                (T)(object)DateTimeOffset.FromUnixTimeSeconds((long)value.AsNumber()),
+            ShapeKind.Timestamp => (T)
+                (object)DateTimeOffset.FromUnixTimeSeconds((long)value.AsNumber()),
             ShapeKind.Document => (T)(object)value,
-            ShapeKind.List or ShapeKind.Set when resolved is IListSchema list =>
-                CreateDefaultList((dynamic)list, value),
+            ShapeKind.List or ShapeKind.Set when resolved is IListSchema list => CreateDefaultList(
+                (dynamic)list,
+                value
+            ),
             ShapeKind.Map when resolved is IMapSchema map => CreateDefaultMap((dynamic)map, value),
             _ => null,
         };

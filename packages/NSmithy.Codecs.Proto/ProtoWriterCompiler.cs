@@ -220,19 +220,26 @@ internal sealed class MemberTraitProtoWriterCompiler(
     IReadOnlyDictionary<ShapeId, Trait> traits
 ) : ISchemaVisitor<object>
 {
-    public object VisitBoolean(Schema<bool> schema) => new ScalarProtoValueWriter<bool>(schema, traits);
+    public object VisitBoolean(Schema<bool> schema) =>
+        new ScalarProtoValueWriter<bool>(schema, traits);
 
-    public object VisitByte(Schema<sbyte> schema) => new ScalarProtoValueWriter<sbyte>(schema, traits);
+    public object VisitByte(Schema<sbyte> schema) =>
+        new ScalarProtoValueWriter<sbyte>(schema, traits);
 
-    public object VisitShort(Schema<short> schema) => new ScalarProtoValueWriter<short>(schema, traits);
+    public object VisitShort(Schema<short> schema) =>
+        new ScalarProtoValueWriter<short>(schema, traits);
 
-    public object VisitInteger(Schema<int> schema) => new ScalarProtoValueWriter<int>(schema, traits);
+    public object VisitInteger(Schema<int> schema) =>
+        new ScalarProtoValueWriter<int>(schema, traits);
 
-    public object VisitLong(Schema<long> schema) => new ScalarProtoValueWriter<long>(schema, traits);
+    public object VisitLong(Schema<long> schema) =>
+        new ScalarProtoValueWriter<long>(schema, traits);
 
-    public object VisitFloat(Schema<float> schema) => new ScalarProtoValueWriter<float>(schema, traits);
+    public object VisitFloat(Schema<float> schema) =>
+        new ScalarProtoValueWriter<float>(schema, traits);
 
-    public object VisitDouble(Schema<double> schema) => new ScalarProtoValueWriter<double>(schema, traits);
+    public object VisitDouble(Schema<double> schema) =>
+        new ScalarProtoValueWriter<double>(schema, traits);
 
     public object VisitBigInteger(Schema<BigInteger> schema) =>
         new ScalarProtoValueWriter<BigInteger>(schema, traits);
@@ -240,9 +247,11 @@ internal sealed class MemberTraitProtoWriterCompiler(
     public object VisitBigDecimal(Schema<decimal> schema) =>
         new ScalarProtoValueWriter<decimal>(schema, traits);
 
-    public object VisitString(Schema<string> schema) => new ScalarProtoValueWriter<string>(schema, traits);
+    public object VisitString(Schema<string> schema) =>
+        new ScalarProtoValueWriter<string>(schema, traits);
 
-    public object VisitBlob(Schema<byte[]> schema) => new ScalarProtoValueWriter<byte[]>(schema, traits);
+    public object VisitBlob(Schema<byte[]> schema) =>
+        new ScalarProtoValueWriter<byte[]>(schema, traits);
 
     public object VisitTimestamp(Schema<DateTimeOffset> schema) =>
         new ScalarProtoValueWriter<DateTimeOffset>(schema, traits);
@@ -250,7 +259,8 @@ internal sealed class MemberTraitProtoWriterCompiler(
     public object VisitDocument(Schema<Document> schema) => inner.CompileValue(schema);
 
     public object VisitNullable<T>(NullableSchema<T> schema)
-        where T : struct => new NullableProtoValueWriter<T>(inner.CompileValue(schema.TargetSchema, traits));
+        where T : struct =>
+        new NullableProtoValueWriter<T>(inner.CompileValue(schema.TargetSchema, traits));
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         inner.CompileValue(schema);
@@ -365,8 +375,12 @@ internal sealed class ScalarProtoValueWriter<T>(
                 break;
             case ShapeKind.Enum:
                 writer.WriteVarint(
-                    (ulong)(long)
-                        ProtoWire.EnumOrdinal(resolved, ((IStringEnumValue)(object)value!).Value)
+                    (ulong)
+                        (long)
+                            ProtoWire.EnumOrdinal(
+                                resolved,
+                                ((IStringEnumValue)(object)value!).Value
+                            )
                 );
                 break;
             default:
@@ -451,17 +465,15 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
         IUnionSchema<TUnion> union
     )
     {
-        var visitor = new InlinedProtoUnionMemberWriterCompiler<TContainer, TUnion>(
-            compiler
-        );
+        var visitor = new InlinedProtoUnionMemberWriterCompiler<TContainer, TUnion>(compiler);
         union.VisitCases(visitor);
         writers.Add(new InlinedProtoUnionMemberWriter<TContainer, TUnion>(member, visitor.Writers));
     }
 
-    private ListProtoMemberWriter<TContainer, TValue, TElement> CreateListWriter<
-        TValue,
-        TElement
-    >(IMemberSchema<TContainer, TValue> member, IListSchema<TValue, TElement> list) =>
+    private ListProtoMemberWriter<TContainer, TValue, TElement> CreateListWriter<TValue, TElement>(
+        IMemberSchema<TContainer, TValue> member,
+        IListSchema<TValue, TElement> list
+    ) =>
         new(
             member,
             list,
@@ -507,7 +519,9 @@ internal sealed class ListProtoMemberWriter<TContainer, TCollection, TElement>(
 ) : IProtoMemberWriter<TContainer>
 {
     private readonly int fieldNumber = ProtoWire.ProtoIndex(member.MemberTraits);
-    private readonly bool packable = ProtoWire.IsPackableScalar(ProtoWire.Unwrap(list.ElementSchema).Kind);
+    private readonly bool packable = ProtoWire.IsPackableScalar(
+        ProtoWire.Unwrap(list.ElementSchema).Kind
+    );
 
     public void Write(ProtoWriter writer, TContainer value)
     {
@@ -550,7 +564,9 @@ internal sealed class MapProtoMemberWriter<TContainer, TDictionary, TValue>(
 ) : IProtoMemberWriter<TContainer>
 {
     private readonly int fieldNumber = ProtoWire.ProtoIndex(member.MemberTraits);
-    private readonly SparseScalarValueWriter<TValue> sparseWriter = new(map.TypedValueMember.TargetSchema);
+    private readonly SparseScalarValueWriter<TValue> sparseWriter = new(
+        map.TypedValueMember.TargetSchema
+    );
 
     public void Write(ProtoWriter writer, TContainer value)
     {

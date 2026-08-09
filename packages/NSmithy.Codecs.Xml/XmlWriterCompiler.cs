@@ -357,7 +357,10 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(
         new(
             member,
             map,
-            compiler.CompileValue(map.TypedValueMember.TargetSchema, map.TypedValueMember.MemberTraits),
+            compiler.CompileValue(
+                map.TypedValueMember.TargetSchema,
+                map.TypedValueMember.MemberTraits
+            ),
             materializeDefaults
         );
 }

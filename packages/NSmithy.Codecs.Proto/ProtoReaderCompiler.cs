@@ -260,19 +260,26 @@ internal sealed class MemberTraitProtoReaderCompiler(
     IReadOnlyDictionary<ShapeId, Trait> traits
 ) : ISchemaVisitor<object>
 {
-    public object VisitBoolean(Schema<bool> schema) => new ScalarProtoValueReader<bool>(schema, traits);
+    public object VisitBoolean(Schema<bool> schema) =>
+        new ScalarProtoValueReader<bool>(schema, traits);
 
-    public object VisitByte(Schema<sbyte> schema) => new ScalarProtoValueReader<sbyte>(schema, traits);
+    public object VisitByte(Schema<sbyte> schema) =>
+        new ScalarProtoValueReader<sbyte>(schema, traits);
 
-    public object VisitShort(Schema<short> schema) => new ScalarProtoValueReader<short>(schema, traits);
+    public object VisitShort(Schema<short> schema) =>
+        new ScalarProtoValueReader<short>(schema, traits);
 
-    public object VisitInteger(Schema<int> schema) => new ScalarProtoValueReader<int>(schema, traits);
+    public object VisitInteger(Schema<int> schema) =>
+        new ScalarProtoValueReader<int>(schema, traits);
 
-    public object VisitLong(Schema<long> schema) => new ScalarProtoValueReader<long>(schema, traits);
+    public object VisitLong(Schema<long> schema) =>
+        new ScalarProtoValueReader<long>(schema, traits);
 
-    public object VisitFloat(Schema<float> schema) => new ScalarProtoValueReader<float>(schema, traits);
+    public object VisitFloat(Schema<float> schema) =>
+        new ScalarProtoValueReader<float>(schema, traits);
 
-    public object VisitDouble(Schema<double> schema) => new ScalarProtoValueReader<double>(schema, traits);
+    public object VisitDouble(Schema<double> schema) =>
+        new ScalarProtoValueReader<double>(schema, traits);
 
     public object VisitBigInteger(Schema<BigInteger> schema) =>
         new ScalarProtoValueReader<BigInteger>(schema, traits);
@@ -280,9 +287,11 @@ internal sealed class MemberTraitProtoReaderCompiler(
     public object VisitBigDecimal(Schema<decimal> schema) =>
         new ScalarProtoValueReader<decimal>(schema, traits);
 
-    public object VisitString(Schema<string> schema) => new ScalarProtoValueReader<string>(schema, traits);
+    public object VisitString(Schema<string> schema) =>
+        new ScalarProtoValueReader<string>(schema, traits);
 
-    public object VisitBlob(Schema<byte[]> schema) => new ScalarProtoValueReader<byte[]>(schema, traits);
+    public object VisitBlob(Schema<byte[]> schema) =>
+        new ScalarProtoValueReader<byte[]>(schema, traits);
 
     public object VisitTimestamp(Schema<DateTimeOffset> schema) =>
         new ScalarProtoValueReader<DateTimeOffset>(schema, traits);
@@ -290,7 +299,8 @@ internal sealed class MemberTraitProtoReaderCompiler(
     public object VisitDocument(Schema<Document> schema) => inner.CompileValue(schema);
 
     public object VisitNullable<T>(NullableSchema<T> schema)
-        where T : struct => new NullableProtoValueReader<T>(inner.CompileValue(schema.TargetSchema, traits));
+        where T : struct =>
+        new NullableProtoValueReader<T>(inner.CompileValue(schema.TargetSchema, traits));
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         inner.CompileValue(schema);
@@ -347,30 +357,33 @@ internal sealed class ScalarProtoValueReader<T>(
         return resolved.Kind switch
         {
             ShapeKind.Boolean => (T)(object)(reader.ReadVarint() != 0),
-            ShapeKind.Byte => (T)(object)(sbyte)ProtoWire.ReadInteger(ref reader, resolved.Kind, traits),
-            ShapeKind.Short => (T)(object)(short)ProtoWire.ReadInteger(ref reader, resolved.Kind, traits),
-            ShapeKind.Integer => (T)(object)(int)ProtoWire.ReadInteger(ref reader, resolved.Kind, traits),
+            ShapeKind.Byte => (T)
+                (object)(sbyte)ProtoWire.ReadInteger(ref reader, resolved.Kind, traits),
+            ShapeKind.Short => (T)
+                (object)(short)ProtoWire.ReadInteger(ref reader, resolved.Kind, traits),
+            ShapeKind.Integer => (T)
+                (object)(int)ProtoWire.ReadInteger(ref reader, resolved.Kind, traits),
             ShapeKind.Long => (T)(object)ProtoWire.ReadInteger(ref reader, resolved.Kind, traits),
             ShapeKind.Float => (T)(object)BitConverter.UInt32BitsToSingle(reader.ReadFixed32()),
             ShapeKind.Double => (T)(object)BitConverter.UInt64BitsToDouble(reader.ReadFixed64()),
             ShapeKind.String => (T)(object)Encoding.UTF8.GetString(reader.ReadLengthDelimited()),
             ShapeKind.Blob => (T)(object)reader.ReadLengthDelimited().ToArray(),
-            ShapeKind.BigInteger =>
-                (T)(object)
+            ShapeKind.BigInteger => (T)
+                (object)
                     BigInteger.Parse(
                         Encoding.UTF8.GetString(reader.ReadLengthDelimited()),
                         CultureInfo.InvariantCulture
                     ),
-            ShapeKind.BigDecimal =>
-                (T)(object)
+            ShapeKind.BigDecimal => (T)
+                (object)
                     decimal.Parse(
                         Encoding.UTF8.GetString(reader.ReadLengthDelimited()),
                         CultureInfo.InvariantCulture
                     ),
-            ShapeKind.IntEnum =>
-                (T)((IIntEnumSchema)resolved).CreateObject((int)reader.ReadVarint()),
-            ShapeKind.Timestamp =>
-                (T)(object)ProtoWire.DecodeTimestamp(reader.ReadLengthDelimited()),
+            ShapeKind.IntEnum => (T)
+                ((IIntEnumSchema)resolved).CreateObject((int)reader.ReadVarint()),
+            ShapeKind.Timestamp => (T)
+                (object)ProtoWire.DecodeTimestamp(reader.ReadLengthDelimited()),
             ShapeKind.Enum => ReadStringEnum(resolved, ref reader),
             _ => throw new NotSupportedException(
                 $"Proto codec cannot decode schema kind '{resolved.Kind}' (wire type {wireType})."
@@ -465,11 +478,16 @@ internal sealed class ProtoFieldReaderCompiler<TContainer, TBuilder>(
             compiler.CompileValue(list.TypedElementMember.TargetSchema, member.MemberTraits)
         );
 
-    private MapProtoFieldReader<TContainer, TBuilder, TValue, TMapValue, TMapBuilder>
-        CreateMapReader<TValue, TMapValue, TMapBuilder>(
-            IMemberSchema<TContainer, TBuilder, TValue> member,
-            IMapSchema<TValue, TMapValue, TMapBuilder> map
-        ) =>
+    private MapProtoFieldReader<
+        TContainer,
+        TBuilder,
+        TValue,
+        TMapValue,
+        TMapBuilder
+    > CreateMapReader<TValue, TMapValue, TMapBuilder>(
+        IMemberSchema<TContainer, TBuilder, TValue> member,
+        IMapSchema<TValue, TMapValue, TMapBuilder> map
+    ) =>
         new(
             member,
             map,
@@ -555,7 +573,9 @@ internal sealed class MapProtoFieldReader<TContainer, TBuilder, TDictionary, TVa
 {
     public int FieldNumber { get; } = ProtoWire.ProtoIndex(member.MemberTraits);
 
-    private readonly SparseScalarValueReader<TValue> sparseReader = new(map.TypedValueMember.TargetSchema);
+    private readonly SparseScalarValueReader<TValue> sparseReader = new(
+        map.TypedValueMember.TargetSchema
+    );
 
     public void ReadInto(
         TBuilder builder,
