@@ -58,6 +58,9 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
         IReadOnlyDictionary<ShapeId, Trait> traits
     )
     {
+        ArgumentNullException.ThrowIfNull(schema);
+        ArgumentNullException.ThrowIfNull(traits);
+
         var resolved = schema.Resolved;
         if (traits.Count != 0)
         {
@@ -477,7 +480,10 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
         new(
             member,
             list,
-            compiler.CompileValue(list.TypedElementMember.TargetSchema, member.MemberTraits)
+            compiler.CompileValue(
+                list.TypedElementMember.TargetSchema,
+                list.TypedElementMember.MemberTraits
+            )
         );
 
     private MapProtoMemberWriter<TContainer, TValue, TMapValue> CreateMapWriter<TValue, TMapValue>(
@@ -488,7 +494,10 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
             member,
             map,
             ProtoWire.IsSparse((Schema)map),
-            compiler.CompileValue(map.TypedValueMember.TargetSchema)
+            compiler.CompileValue(
+                map.TypedValueMember.TargetSchema,
+                map.TypedValueMember.MemberTraits
+            )
         );
 }
 

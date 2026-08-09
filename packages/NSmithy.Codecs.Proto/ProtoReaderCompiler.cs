@@ -88,6 +88,9 @@ internal sealed class ProtoValueReaderCompiler : ISchemaVisitor<object>
         IReadOnlyDictionary<ShapeId, Trait> traits
     )
     {
+        ArgumentNullException.ThrowIfNull(schema);
+        ArgumentNullException.ThrowIfNull(traits);
+
         var resolved = schema.Resolved;
         if (traits.Count != 0)
         {
@@ -475,7 +478,10 @@ internal sealed class ProtoFieldReaderCompiler<TContainer, TBuilder>(
         new(
             member,
             list,
-            compiler.CompileValue(list.TypedElementMember.TargetSchema, member.MemberTraits)
+            compiler.CompileValue(
+                list.TypedElementMember.TargetSchema,
+                list.TypedElementMember.MemberTraits
+            )
         );
 
     private MapProtoFieldReader<
@@ -492,7 +498,10 @@ internal sealed class ProtoFieldReaderCompiler<TContainer, TBuilder>(
             member,
             map,
             ProtoWire.IsSparse((Schema)map),
-            compiler.CompileValue(map.TypedValueMember.TargetSchema)
+            compiler.CompileValue(
+                map.TypedValueMember.TargetSchema,
+                map.TypedValueMember.MemberTraits
+            )
         );
 }
 
@@ -545,7 +554,7 @@ internal sealed class ListProtoFieldReader<
                     accumulator,
                     elementReader.ReadBody(
                         ref packed,
-                        ProtoWire.WireTypeOf(element.Kind, member.MemberTraits)
+                        ProtoWire.WireTypeOf(element.Kind, list.TypedElementMember.MemberTraits)
                     )
                 );
             }

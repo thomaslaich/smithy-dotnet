@@ -85,7 +85,7 @@ internal sealed class CborProjectionMemberReaderCompiler<TContainer, TBuilder>(
         readers.Add(
             new CborProjectionMemberReader<TContainer, TBuilder, TValue>(
                 member,
-                compiler.CompileValue(member.TargetSchema, member.MemberTraits)
+                compiler.CompileValue(member.TargetSchema)
             )
         );
     }

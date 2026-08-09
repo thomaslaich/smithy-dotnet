@@ -7,6 +7,29 @@ using static NSmithy.Codecs.Cbor.CborWire;
 
 namespace NSmithy.Codecs.Cbor;
 
+internal interface ICborValueReader<T>
+{
+    T Read(CborReader reader);
+}
+
+internal interface ICborMemberReader<in TBuilder>
+{
+    string Name { get; }
+
+    bool IsRequired { get; }
+
+    void ReadMissing(TBuilder builder);
+
+    void ReadInto(TBuilder builder, CborReader reader);
+}
+
+internal interface ICborUnionCaseReader<out TUnion>
+{
+    string Name { get; }
+
+    TUnion Read(CborReader reader);
+}
+
 internal sealed class CborReaderCompiler : ISchemaVisitor<object>
 {
     private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
@@ -19,6 +42,8 @@ internal sealed class CborReaderCompiler : ISchemaVisitor<object>
 
     public ICborValueReader<T> CompileValue<T>(Schema<T> schema)
     {
+        ArgumentNullException.ThrowIfNull(schema);
+
         var resolved = schema.Resolved;
         if (cache.TryGetValue(resolved, out var cached))
         {
@@ -31,69 +56,29 @@ internal sealed class CborReaderCompiler : ISchemaVisitor<object>
         return deferred;
     }
 
-    public ICborValueReader<T> CompileValue<T>(
-        Schema<T> schema,
-        IReadOnlyDictionary<ShapeId, Trait> memberTraits
-    )
-    {
-        ArgumentNullException.ThrowIfNull(memberTraits);
-        return CompileValue(schema);
-    }
+    public object VisitBoolean(Schema<bool> schema) => new BooleanCborValueReader();
 
-    public object VisitBoolean(Schema<bool> schema) =>
-        new DelegatingCborValueReader<bool>(static reader => reader.ReadBoolean());
+    public object VisitByte(Schema<sbyte> schema) => new ByteCborValueReader();
 
-    public object VisitByte(Schema<sbyte> schema) =>
-        new DelegatingCborValueReader<sbyte>(static reader =>
-            Convert.ToSByte(ReadInteger(reader), CultureInfo.InvariantCulture)
-        );
+    public object VisitShort(Schema<short> schema) => new ShortCborValueReader();
 
-    public object VisitShort(Schema<short> schema) =>
-        new DelegatingCborValueReader<short>(static reader =>
-            Convert.ToInt16(ReadInteger(reader), CultureInfo.InvariantCulture)
-        );
+    public object VisitInteger(Schema<int> schema) => new IntegerCborValueReader();
 
-    public object VisitInteger(Schema<int> schema) =>
-        new DelegatingCborValueReader<int>(static reader =>
-            Convert.ToInt32(ReadInteger(reader), CultureInfo.InvariantCulture)
-        );
+    public object VisitLong(Schema<long> schema) => new LongCborValueReader();
 
-    public object VisitLong(Schema<long> schema) =>
-        new DelegatingCborValueReader<long>(static reader =>
-            Convert.ToInt64(ReadInteger(reader), CultureInfo.InvariantCulture)
-        );
+    public object VisitFloat(Schema<float> schema) => new FloatCborValueReader();
 
-    public object VisitFloat(Schema<float> schema) =>
-        new DelegatingCborValueReader<float>(static reader =>
-            reader.PeekState() == CborReaderState.SinglePrecisionFloat
-                ? reader.ReadSingle()
-                : Convert.ToSingle(reader.ReadDouble(), CultureInfo.InvariantCulture)
-        );
+    public object VisitDouble(Schema<double> schema) => new DoubleCborValueReader();
 
-    public object VisitDouble(Schema<double> schema) =>
-        new DelegatingCborValueReader<double>(static reader =>
-            reader.PeekState() switch
-            {
-                CborReaderState.SinglePrecisionFloat => reader.ReadSingle(),
-                CborReaderState.HalfPrecisionFloat => (double)reader.ReadHalf(),
-                _ => reader.ReadDouble(),
-            }
-        );
+    public object VisitBigInteger(Schema<BigInteger> schema) => new BigIntegerCborValueReader();
 
-    public object VisitBigInteger(Schema<BigInteger> schema) =>
-        new DelegatingCborValueReader<BigInteger>(ReadBigInteger);
+    public object VisitBigDecimal(Schema<decimal> schema) => new BigDecimalCborValueReader();
 
-    public object VisitBigDecimal(Schema<decimal> schema) =>
-        new DelegatingCborValueReader<decimal>(ReadBigDecimal);
+    public object VisitString(Schema<string> schema) => new StringCborValueReader();
 
-    public object VisitString(Schema<string> schema) =>
-        new DelegatingCborValueReader<string>(ReadNullableTextString);
+    public object VisitBlob(Schema<byte[]> schema) => new BlobCborValueReader();
 
-    public object VisitBlob(Schema<byte[]> schema) =>
-        new DelegatingCborValueReader<byte[]>(ReadNullableByteString);
-
-    public object VisitTimestamp(Schema<DateTimeOffset> schema) =>
-        new DelegatingCborValueReader<DateTimeOffset>(ReadTimestamp);
+    public object VisitTimestamp(Schema<DateTimeOffset> schema) => new TimestampCborValueReader();
 
     public object VisitDocument(Schema<Document> schema) =>
         throw new NotSupportedException("Smithy Document values are not supported by rpcv2Cbor.");
@@ -166,9 +151,80 @@ internal sealed class DeferredCborValueReader<T> : ICborValueReader<T>
     }
 }
 
-internal sealed class DelegatingCborValueReader<T>(Func<CborReader, T> read) : ICborValueReader<T>
+internal sealed class BooleanCborValueReader : ICborValueReader<bool>
 {
-    public T Read(CborReader reader) => read(reader);
+    public bool Read(CborReader reader) => reader.ReadBoolean();
+}
+
+internal sealed class ByteCborValueReader : ICborValueReader<sbyte>
+{
+    public sbyte Read(CborReader reader) =>
+        Convert.ToSByte(ReadInteger(reader), CultureInfo.InvariantCulture);
+}
+
+internal sealed class ShortCborValueReader : ICborValueReader<short>
+{
+    public short Read(CborReader reader) =>
+        Convert.ToInt16(ReadInteger(reader), CultureInfo.InvariantCulture);
+}
+
+internal sealed class IntegerCborValueReader : ICborValueReader<int>
+{
+    public int Read(CborReader reader) =>
+        Convert.ToInt32(ReadInteger(reader), CultureInfo.InvariantCulture);
+}
+
+internal sealed class LongCborValueReader : ICborValueReader<long>
+{
+    public long Read(CborReader reader) =>
+        Convert.ToInt64(ReadInteger(reader), CultureInfo.InvariantCulture);
+}
+
+internal sealed class FloatCborValueReader : ICborValueReader<float>
+{
+    public float Read(CborReader reader) =>
+        reader.PeekState() switch
+        {
+            CborReaderState.SinglePrecisionFloat => reader.ReadSingle(),
+            CborReaderState.HalfPrecisionFloat => (float)reader.ReadHalf(),
+            _ => Convert.ToSingle(reader.ReadDouble(), CultureInfo.InvariantCulture),
+        };
+}
+
+internal sealed class DoubleCborValueReader : ICborValueReader<double>
+{
+    public double Read(CborReader reader) =>
+        reader.PeekState() switch
+        {
+            CborReaderState.SinglePrecisionFloat => reader.ReadSingle(),
+            CborReaderState.HalfPrecisionFloat => (double)reader.ReadHalf(),
+            _ => reader.ReadDouble(),
+        };
+}
+
+internal sealed class BigIntegerCborValueReader : ICborValueReader<BigInteger>
+{
+    public BigInteger Read(CborReader reader) => ReadBigInteger(reader);
+}
+
+internal sealed class BigDecimalCborValueReader : ICborValueReader<decimal>
+{
+    public decimal Read(CborReader reader) => ReadBigDecimal(reader);
+}
+
+internal sealed class StringCborValueReader : ICborValueReader<string>
+{
+    public string Read(CborReader reader) => ReadNullableTextString(reader);
+}
+
+internal sealed class BlobCborValueReader : ICborValueReader<byte[]>
+{
+    public byte[] Read(CborReader reader) => ReadNullableByteString(reader);
+}
+
+internal sealed class TimestampCborValueReader : ICborValueReader<DateTimeOffset>
+{
+    public DateTimeOffset Read(CborReader reader) => ReadTimestamp(reader);
 }
 
 internal sealed class NullableCborValueReader<T>(ICborValueReader<T> inner) : ICborValueReader<T?>
@@ -211,7 +267,7 @@ internal sealed class CborMemberReaderCompiler<TContainer, TBuilder>(CborReaderC
         readers.Add(
             new CborMemberReader<TContainer, TBuilder, TValue>(
                 member,
-                compiler.CompileValue(member.TargetSchema, member.MemberTraits)
+                compiler.CompileValue(member.TargetSchema)
             )
         );
     }

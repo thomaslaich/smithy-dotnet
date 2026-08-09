@@ -70,6 +70,9 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
         IReadOnlyDictionary<ShapeId, Trait> memberTraits
     )
     {
+        ArgumentNullException.ThrowIfNull(schema);
+        ArgumentNullException.ThrowIfNull(memberTraits);
+
         var resolved = schema.Resolved;
         if (memberTraits.Count != 0)
         {

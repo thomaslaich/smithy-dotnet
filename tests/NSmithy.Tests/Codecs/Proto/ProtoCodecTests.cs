@@ -16,10 +16,12 @@ public sealed class ProtoCodecTests
 
     private static Trait Index(int value) => new(ProtoIndex, Document.From(value));
 
+    private static Trait NumType(string value) => new(ProtoNumType, Document.From(value));
+
     private static IEnumerable<Trait> Field(int index) => [Index(index)];
 
     private static IEnumerable<Trait> Field(int index, string numType) =>
-        [Index(index), new Trait(ProtoNumType, Document.From(numType))];
+        [Index(index), NumType(numType)];
 
     // ---- message M { string name = 1; int32 value = 2; } ----
 
@@ -104,6 +106,13 @@ public sealed class ProtoCodecTests
         public IReadOnlyList<int>? Nums { get; set; }
     }
 
+    public sealed record IntMapHolder(IReadOnlyDictionary<string, int> Values);
+
+    public sealed class IntMapHolderBuilder
+    {
+        public IReadOnlyDictionary<string, int>? Values { get; set; }
+    }
+
     [Fact]
     public void PacksRepeatedScalars()
     {
@@ -136,8 +145,12 @@ public sealed class ProtoCodecTests
                 "nums",
                 x => x.Nums,
                 (b, v) => b.Nums = v,
-                Schemas.List(ShapeId.Parse("test#SignedIntList"), Schemas.Integer),
-                Field(1, "SIGNED")
+                Schemas.List(
+                    ShapeId.Parse("test#SignedIntList"),
+                    Schemas.Integer,
+                    elementTraits: [NumType("SIGNED")]
+                ),
+                Field(1)
             )
             .Build(() => new RepeatedBuilder(), b => new Repeated(b.Nums!));
         var codec = ProtoCodec.FromSchema(schema);
@@ -148,6 +161,33 @@ public sealed class ProtoCodecTests
 
         Assert.Equal(expectedNums, codec.Deserialize(bytes).Nums);
         Assert.Equal(bytes, codec.Serialize(new Repeated(expectedNums)));
+    }
+
+    [Fact]
+    public void EncodesMapValuesWithValueProtoNumType()
+    {
+        var schema = Schemas
+            .Structure<IntMapHolder, IntMapHolderBuilder>(ShapeId.Parse("test#IntMapHolder"))
+            .Required(
+                "values",
+                x => x.Values,
+                (b, v) => b.Values = v,
+                Schemas.Map(
+                    ShapeId.Parse("test#SignedIntMap"),
+                    Schemas.Integer,
+                    valueTraits: [NumType("SIGNED")]
+                ),
+                Field(1)
+            )
+            .Build(() => new IntMapHolderBuilder(), b => new IntMapHolder(b.Values!));
+        var codec = ProtoCodec.FromSchema(schema);
+
+        // field 1, LEN, entry { key: "a", value: sint32(-1) }
+        byte[] bytes = [0x0A, 0x05, 0x0A, 0x01, 0x61, 0x10, 0x01];
+        var expected = new Dictionary<string, int> { ["a"] = -1 };
+
+        Assert.Equal(bytes, codec.Serialize(new IntMapHolder(expected)));
+        Assert.Equal(expected, codec.Deserialize(bytes).Values);
     }
 
     public sealed record EmptyCollections(

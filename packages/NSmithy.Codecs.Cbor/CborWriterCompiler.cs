@@ -22,29 +22,6 @@ internal interface ICborUnionCaseWriter<in TUnion>
     bool TryWrite(CborWriter writer, TUnion value);
 }
 
-internal interface ICborValueReader<T>
-{
-    T Read(CborReader reader);
-}
-
-internal interface ICborMemberReader<in TBuilder>
-{
-    string Name { get; }
-
-    bool IsRequired { get; }
-
-    void ReadMissing(TBuilder builder);
-
-    void ReadInto(TBuilder builder, CborReader reader);
-}
-
-internal interface ICborUnionCaseReader<out TUnion>
-{
-    string Name { get; }
-
-    TUnion Read(CborReader reader);
-}
-
 internal sealed class CborWriterCompiler : ISchemaVisitor<object>
 {
     private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
@@ -70,6 +47,8 @@ internal sealed class CborWriterCompiler : ISchemaVisitor<object>
 
     public ICborValueWriter<T> CompileValue<T>(Schema<T> schema)
     {
+        ArgumentNullException.ThrowIfNull(schema);
+
         var resolved = schema.Resolved;
         if (cache.TryGetValue(resolved, out var cached))
         {
