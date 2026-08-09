@@ -64,50 +64,139 @@ public sealed class RpcV2CborProtocol : IProtocol
             };
         }
 
-        private OutputEventStreamOperationProtocol<
+        private IOperationProtocol<TInput, TOutput> CreateOutputEventStreamProtocol<
             TInput,
             TOutput,
             TOutputEvent
-        > CreateOutputEventStreamProtocol<TInput, TOutput, TOutputEvent>(
+        >(OperationSchema<TInput, TOutput> operation, Schema<TOutputEvent> outputEvent)
+        {
+            if (operation.Output.Resolved is not IStructSchema<TOutput> outputSchema)
+            {
+                throw new InvalidOperationException(
+                    "rpcv2Cbor event stream output must use a structure shape."
+                );
+            }
+
+            return CreateOutputEventStreamProtocol(operation, outputEvent, (dynamic)outputSchema);
+        }
+
+        private OutputEventStreamOperationProtocol<
+            TInput,
+            TOutput,
+            TOutputEvent,
+            TOutputBuilder
+        > CreateOutputEventStreamProtocol<TInput, TOutput, TOutputEvent, TOutputBuilder>(
             OperationSchema<TInput, TOutput> operation,
-            Schema<TOutputEvent> outputEvent
-        ) =>
-            new OutputEventStreamOperationProtocol<TInput, TOutput, TOutputEvent>(
+            Schema<TOutputEvent> outputEvent,
+            IStructSchema<TOutput, TOutputBuilder> outputSchema
+        )
+            where TOutputBuilder : notnull =>
+            new OutputEventStreamOperationProtocol<TInput, TOutput, TOutputEvent, TOutputBuilder>(
                 service,
                 operation,
-                outputEvent
+                outputEvent,
+                outputSchema
             );
+
+        private IOperationProtocol<TInput, TOutput> CreateInputEventStreamProtocol<
+            TInput,
+            TInputEvent,
+            TOutput
+        >(OperationSchema<TInput, TOutput> operation, Schema<TInputEvent> inputEvent)
+        {
+            if (operation.Input.Resolved is not IStructSchema<TInput> inputSchema)
+            {
+                throw new InvalidOperationException(
+                    "rpcv2Cbor event stream input must use a structure shape."
+                );
+            }
+
+            return CreateInputEventStreamProtocol(operation, inputEvent, (dynamic)inputSchema);
+        }
 
         private InputEventStreamOperationProtocol<
             TInput,
             TInputEvent,
-            TOutput
-        > CreateInputEventStreamProtocol<TInput, TInputEvent, TOutput>(
+            TOutput,
+            TInputBuilder
+        > CreateInputEventStreamProtocol<TInput, TInputEvent, TOutput, TInputBuilder>(
             OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent
-        ) =>
-            new InputEventStreamOperationProtocol<TInput, TInputEvent, TOutput>(
+            Schema<TInputEvent> inputEvent,
+            IStructSchema<TInput, TInputBuilder> inputSchema
+        )
+            where TInputBuilder : notnull =>
+            new InputEventStreamOperationProtocol<TInput, TInputEvent, TOutput, TInputBuilder>(
                 service,
                 operation,
-                inputEvent
+                inputEvent,
+                inputSchema
             );
+
+        private IOperationProtocol<TInput, TOutput> CreateDuplexEventStreamProtocol<
+            TInput,
+            TOutput,
+            TInputEvent,
+            TOutputEvent
+        >(
+            OperationSchema<TInput, TOutput> operation,
+            Schema<TInputEvent> inputEvent,
+            Schema<TOutputEvent> outputEvent
+        )
+        {
+            if (operation.Input.Resolved is not IStructSchema<TInput> inputSchema)
+            {
+                throw new InvalidOperationException(
+                    "rpcv2Cbor event stream input must use a structure shape."
+                );
+            }
+
+            if (operation.Output.Resolved is not IStructSchema<TOutput> outputSchema)
+            {
+                throw new InvalidOperationException(
+                    "rpcv2Cbor event stream output must use a structure shape."
+                );
+            }
+
+            return CreateDuplexEventStreamProtocol(
+                operation,
+                inputEvent,
+                outputEvent,
+                (dynamic)inputSchema,
+                (dynamic)outputSchema
+            );
+        }
 
         private DuplexEventStreamOperationProtocol<
             TInput,
             TOutput,
             TInputEvent,
-            TOutputEvent
-        > CreateDuplexEventStreamProtocol<TInput, TOutput, TInputEvent, TOutputEvent>(
+            TOutputEvent,
+            TInputBuilder,
+            TOutputBuilder
+        > CreateDuplexEventStreamProtocol<
+            TInput,
+            TOutput,
+            TInputEvent,
+            TOutputEvent,
+            TInputBuilder,
+            TOutputBuilder
+        >(
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent,
-            Schema<TOutputEvent> outputEvent
-        ) =>
-            new DuplexEventStreamOperationProtocol<TInput, TOutput, TInputEvent, TOutputEvent>(
-                service,
-                operation,
-                inputEvent,
-                outputEvent
-            );
+            Schema<TOutputEvent> outputEvent,
+            IStructSchema<TInput, TInputBuilder> inputSchema,
+            IStructSchema<TOutput, TOutputBuilder> outputSchema
+        )
+            where TInputBuilder : notnull
+            where TOutputBuilder : notnull =>
+            new DuplexEventStreamOperationProtocol<
+                TInput,
+                TOutput,
+                TInputEvent,
+                TOutputEvent,
+                TInputBuilder,
+                TOutputBuilder
+            >(service, operation, inputEvent, outputEvent, inputSchema, outputSchema);
     }
 
     private sealed class OperationProtocol<TInput, TOutput> : IOperationProtocol<TInput, TOutput>
@@ -281,21 +370,31 @@ public sealed class RpcV2CborProtocol : IProtocol
             body is SmithyHttpBody.Bytes bytes ? bytes.Content : [];
     }
 
-    private sealed class OutputEventStreamOperationProtocol<TInput, TOutput, TOutputEvent>
-        : IOperationProtocol<TInput, TOutput>
+    private sealed class OutputEventStreamOperationProtocol<
+        TInput,
+        TOutput,
+        TOutputEvent,
+        TOutputBuilder
+    > : IOperationProtocol<TInput, TOutput>
+        where TOutputBuilder : notnull
     {
         private readonly string requestUri;
         private readonly bool inputIsUnit;
         private readonly ICborCodec<TInput>? requestCodec;
         private readonly ICborCodec<TOutputEvent> responseCodec;
         private readonly IUnionSchema responseEvent;
-        private readonly EventStreamShapeBinding<TOutput, TOutputEvent> outputBinding;
+        private readonly EventStreamShapeBinding<
+            TOutput,
+            TOutputEvent,
+            TOutputBuilder
+        > outputBinding;
         private readonly ModeledErrorSerializer serverErrors;
 
         public OutputEventStreamOperationProtocol(
             ServiceSchema service,
             OperationSchema<TInput, TOutput> operation,
-            Schema<TOutputEvent> outputEvent
+            Schema<TOutputEvent> outputEvent,
+            IStructSchema<TOutput, TOutputBuilder> outputSchema
         )
         {
             requestUri = RequestUri(service, operation);
@@ -309,8 +408,8 @@ public sealed class RpcV2CborProtocol : IProtocol
                 ?? throw new InvalidOperationException(
                     "rpcv2Cbor event streams must target a union schema."
                 );
-            outputBinding = EventStreamShapeBinding<TOutput, TOutputEvent>.Create(
-                operation.Output,
+            outputBinding = EventStreamShapeBinding<TOutput, TOutputEvent, TOutputBuilder>.Create(
+                outputSchema,
                 materializeTopLevelDefaults: true
             );
             HttpErrors = CompileErrors(operation.Errors);
@@ -402,21 +501,27 @@ public sealed class RpcV2CborProtocol : IProtocol
             serverErrors.TrySerialize(exception, out response);
     }
 
-    private sealed class InputEventStreamOperationProtocol<TInput, TInputEvent, TOutput>
-        : IOperationProtocol<TInput, TOutput>
+    private sealed class InputEventStreamOperationProtocol<
+        TInput,
+        TInputEvent,
+        TOutput,
+        TInputBuilder
+    > : IOperationProtocol<TInput, TOutput>
+        where TInputBuilder : notnull
     {
         private readonly string requestUri;
         private readonly bool outputIsUnit;
         private readonly ICborCodec<TInputEvent> requestCodec;
         private readonly IUnionSchema requestEvent;
         private readonly ICborCodec<TOutput>? responseCodec;
-        private readonly EventStreamShapeBinding<TInput, TInputEvent> inputBinding;
+        private readonly EventStreamShapeBinding<TInput, TInputEvent, TInputBuilder> inputBinding;
         private readonly ModeledErrorSerializer serverErrors;
 
         public InputEventStreamOperationProtocol(
             ServiceSchema service,
             OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent
+            Schema<TInputEvent> inputEvent,
+            IStructSchema<TInput, TInputBuilder> inputSchema
         )
         {
             requestUri = RequestUri(service, operation);
@@ -428,8 +533,8 @@ public sealed class RpcV2CborProtocol : IProtocol
                     "rpcv2Cbor event streams must target a union schema."
                 );
             responseCodec = outputIsUnit ? null : CborCodec.FromSchema(operation.Output);
-            inputBinding = EventStreamShapeBinding<TInput, TInputEvent>.Create(
-                operation.Input,
+            inputBinding = EventStreamShapeBinding<TInput, TInputEvent, TInputBuilder>.Create(
+                inputSchema,
                 materializeTopLevelDefaults: false
             );
             HttpErrors = CompileErrors(operation.Errors);
@@ -534,23 +639,33 @@ public sealed class RpcV2CborProtocol : IProtocol
         TInput,
         TOutput,
         TInputEvent,
-        TOutputEvent
+        TOutputEvent,
+        TInputBuilder,
+        TOutputBuilder
     > : IOperationProtocol<TInput, TOutput>
+        where TInputBuilder : notnull
+        where TOutputBuilder : notnull
     {
         private readonly string requestUri;
         private readonly ICborCodec<TInputEvent> requestCodec;
         private readonly IUnionSchema requestEvent;
         private readonly ICborCodec<TOutputEvent> responseCodec;
         private readonly IUnionSchema responseEvent;
-        private readonly EventStreamShapeBinding<TInput, TInputEvent> inputBinding;
-        private readonly EventStreamShapeBinding<TOutput, TOutputEvent> outputBinding;
+        private readonly EventStreamShapeBinding<TInput, TInputEvent, TInputBuilder> inputBinding;
+        private readonly EventStreamShapeBinding<
+            TOutput,
+            TOutputEvent,
+            TOutputBuilder
+        > outputBinding;
         private readonly ModeledErrorSerializer serverErrors;
 
         public DuplexEventStreamOperationProtocol(
             ServiceSchema service,
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent,
-            Schema<TOutputEvent> outputEvent
+            Schema<TOutputEvent> outputEvent,
+            IStructSchema<TInput, TInputBuilder> inputSchema,
+            IStructSchema<TOutput, TOutputBuilder> outputSchema
         )
         {
             requestUri = RequestUri(service, operation);
@@ -566,12 +681,12 @@ public sealed class RpcV2CborProtocol : IProtocol
                 ?? throw new InvalidOperationException(
                     "rpcv2Cbor event streams must target a union schema."
                 );
-            inputBinding = EventStreamShapeBinding<TInput, TInputEvent>.Create(
-                operation.Input,
+            inputBinding = EventStreamShapeBinding<TInput, TInputEvent, TInputBuilder>.Create(
+                inputSchema,
                 materializeTopLevelDefaults: false
             );
-            outputBinding = EventStreamShapeBinding<TOutput, TOutputEvent>.Create(
-                operation.Output,
+            outputBinding = EventStreamShapeBinding<TOutput, TOutputEvent, TOutputBuilder>.Create(
+                outputSchema,
                 materializeTopLevelDefaults: true
             );
             HttpErrors = CompileErrors(operation.Errors);
@@ -814,12 +929,13 @@ public sealed class RpcV2CborProtocol : IProtocol
         }
     }
 
-    private sealed class EventStreamShapeBinding<TShape, TEvent>
+    private sealed class EventStreamShapeBinding<TShape, TEvent, TBuilder>
+        where TBuilder : notnull
     {
         private EventStreamShapeBinding(
-            IStructSchema<TShape> structure,
-            IMemberSchema<TShape> streamMember,
-            IProjectionCodec<TShape> initialCodec,
+            IStructSchema<TShape, TBuilder> structure,
+            IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>> streamMember,
+            IProjectionCodec<TShape, TBuilder> initialCodec,
             bool hasInitialMembers
         )
         {
@@ -829,37 +945,24 @@ public sealed class RpcV2CborProtocol : IProtocol
             HasInitialMembers = hasInitialMembers;
         }
 
-        public IStructSchema<TShape> Structure { get; }
+        public IStructSchema<TShape, TBuilder> Structure { get; }
 
-        public IMemberSchema<TShape> StreamMember { get; }
+        public IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>> StreamMember { get; }
 
-        public IProjectionCodec<TShape> InitialCodec { get; }
+        public IProjectionCodec<TShape, TBuilder> InitialCodec { get; }
 
         public bool HasInitialMembers { get; }
 
-        public static EventStreamShapeBinding<TShape, TEvent> Create(
-            Schema<TShape> schema,
+        public static EventStreamShapeBinding<TShape, TEvent, TBuilder> Create(
+            IStructSchema<TShape, TBuilder> structure,
             bool materializeTopLevelDefaults
         )
         {
-            if (schema.Resolved is not IStructSchema<TShape> structure)
-            {
-                throw new InvalidOperationException(
-                    "rpcv2Cbor initial event streams must use a structure shape."
-                );
-            }
-
-            var streamMember =
-                structure.TypedMembers.SingleOrDefault(member =>
-                    member.Target is IEventStreamSchema
-                )
-                ?? throw new InvalidOperationException(
-                    "rpcv2Cbor initial event streams require one event stream member."
-                );
+            var streamMember = FindStreamMember(structure);
             var initialMembers = structure
                 .TypedMembers.Where(member => !ReferenceEquals(member, streamMember))
                 .ToArray();
-            return new EventStreamShapeBinding<TShape, TEvent>(
+            return new EventStreamShapeBinding<TShape, TEvent, TBuilder>(
                 structure,
                 streamMember,
                 CborCodec.FromProjection(
@@ -870,36 +973,77 @@ public sealed class RpcV2CborProtocol : IProtocol
             );
         }
 
-        public IAsyncEnumerable<TEvent> GetEvents(TShape shape)
-        {
-            var value = StreamMember.GetObject(shape!);
-            return value as IAsyncEnumerable<TEvent>
-                ?? throw new InvalidOperationException(
-                    $"Event stream member '{StreamMember.Name}' was null."
-                );
-        }
+        public IAsyncEnumerable<TEvent> GetEvents(TShape shape) =>
+            StreamMember.GetValue(shape)
+            ?? throw new InvalidOperationException(
+                $"Event stream member '{StreamMember.Name}' was null."
+            );
 
         public TShape Build(byte[] initialPayload, IAsyncEnumerable<TEvent> events)
         {
-            var builder = Structure.CreateBuilder();
+            var builder = Structure.CreateTypedBuilder();
             if (initialPayload.Length > 0)
             {
                 InitialCodec.ReadInto(initialPayload, builder);
             }
 
-            StreamMember.SetObject(builder, events);
-            return (TShape)Structure.BuildObject(builder);
+            StreamMember.SetValue(builder, events);
+            return Structure.Build(builder);
+        }
+
+        private static IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>> FindStreamMember(
+            IStructSchema<TShape, TBuilder> structure
+        )
+        {
+            var visitor = new EventStreamMemberVisitor<TShape, TBuilder, TEvent>();
+            structure.VisitMembers(visitor);
+            return visitor.Member
+                ?? throw new InvalidOperationException(
+                    "rpcv2Cbor initial event streams require one event stream member."
+                );
         }
     }
 
-    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> FrameShapeAsync<TShape, TEvent>(
+    private sealed class EventStreamMemberVisitor<TShape, TBuilder, TEvent>
+        : IMemberVisitor<TShape, TBuilder>
+    {
+        public IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>>? Member
+        {
+            get;
+            private set;
+        }
+
+        public void Visit<TValue>(IMemberSchema<TShape, TBuilder, TValue> member)
+        {
+            if (member.Target is not EventStreamSchema<TEvent>)
+            {
+                return;
+            }
+
+            if (Member is not null)
+            {
+                throw new InvalidOperationException(
+                    "rpcv2Cbor initial event streams require one event stream member."
+                );
+            }
+
+            Member = (IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>>)(object)member;
+        }
+    }
+
+    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> FrameShapeAsync<
+        TShape,
+        TEvent,
+        TBuilder
+    >(
         TShape shape,
-        EventStreamShapeBinding<TShape, TEvent> binding,
+        EventStreamShapeBinding<TShape, TEvent, TBuilder> binding,
         ICborCodec<TEvent> eventCodec,
         IUnionSchema eventSchema,
         string initialEventType,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
+        where TBuilder : notnull
     {
         if (binding.HasInitialMembers)
         {
@@ -940,14 +1084,15 @@ public sealed class RpcV2CborProtocol : IProtocol
             payload
         );
 
-    private static async ValueTask<TShape> ReadShapeAsync<TShape, TEvent>(
+    private static async ValueTask<TShape> ReadShapeAsync<TShape, TEvent, TBuilder>(
         Stream body,
         bool disposeBody,
-        EventStreamShapeBinding<TShape, TEvent> binding,
+        EventStreamShapeBinding<TShape, TEvent, TBuilder> binding,
         ICborCodec<TEvent> eventCodec,
         string initialEventType,
         CancellationToken cancellationToken
     )
+        where TBuilder : notnull
     {
         var enumerator = EventStreamMessageReader
             .ReadAllAsync(body, cancellationToken)

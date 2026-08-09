@@ -141,6 +141,79 @@ public sealed class JsonCodecTests
         Assert.Equal(json, codec.SerializeText(decoded));
     }
 
+    public sealed record Timeline(IReadOnlyList<DateTimeOffset> Events);
+
+    public sealed class TimelineBuilder
+    {
+        public IReadOnlyList<DateTimeOffset>? Events { get; set; }
+    }
+
+    [Fact]
+    public void JsonCodecAppliesListElementMemberTraits()
+    {
+        var timestampFormat = ShapeId.Parse("smithy.api#timestampFormat");
+        var schema = Schemas
+            .Structure<Timeline, TimelineBuilder>(new ShapeId("example", "Timeline"))
+            .Required(
+                "events",
+                static timeline => timeline.Events,
+                static (builder, value) => builder.Events = value,
+                Schemas.List(
+                    new ShapeId("example", "Events"),
+                    Schemas.Timestamp,
+                    elementTraits: [new Trait(timestampFormat, Document.From("date-time"))]
+                )
+            )
+            .Build(
+                static () => new TimelineBuilder(),
+                static builder => new Timeline(builder.Events!)
+            );
+        var codec = JsonCodec.FromSchema(schema);
+        var input = new Timeline([new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero)]);
+
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
+
+        Assert.Equal("{\"events\":[\"2026-08-09T12:34:56Z\"]}", json);
+        Assert.Equal(input.Events, decoded.Events);
+    }
+
+    public sealed record TimestampRecord(DateTimeOffset Created);
+
+    public sealed class TimestampRecordBuilder
+    {
+        public DateTimeOffset Created { get; set; }
+    }
+
+    [Fact]
+    public void JsonCodecAppliesStructureMemberTraits()
+    {
+        var timestampFormat = ShapeId.Parse("smithy.api#timestampFormat");
+        var schema = Schemas
+            .Structure<TimestampRecord, TimestampRecordBuilder>(
+                new ShapeId("example", "TimestampRecord")
+            )
+            .Required(
+                "created",
+                static record => record.Created,
+                static (builder, value) => builder.Created = value,
+                Schemas.Timestamp,
+                [new Trait(timestampFormat, Document.From("date-time"))]
+            )
+            .Build(
+                static () => new TimestampRecordBuilder(),
+                static builder => new TimestampRecord(builder.Created)
+            );
+        var codec = JsonCodec.FromSchema(schema);
+        var input = new TimestampRecord(new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero));
+
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
+
+        Assert.Equal("{\"created\":\"2026-08-09T12:34:56Z\"}", json);
+        Assert.Equal(input, decoded);
+    }
+
     // ---------------- nested structure ----------------
 
     public sealed record Address(string City);

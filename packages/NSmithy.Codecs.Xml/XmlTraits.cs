@@ -14,15 +14,15 @@ internal static class XmlTraits
         schema.GetTrait(XmlNameId) is { HasValue: true } t ? t.Value.AsString() : null;
 
     public static string? GetXmlName(IMemberSchema schema) =>
-        schema.Traits.TryGetValue(XmlNameId, out var trait) && trait.HasValue
+        schema.GetTrait(XmlNameId) is { HasValue: true } trait
             ? trait.Value.AsString()
             : null;
 
     public static bool IsXmlAttribute(IMemberSchema schema) =>
-        schema.Traits.ContainsKey(XmlAttributeId);
+        schema.MemberTraits.ContainsKey(XmlAttributeId);
 
     public static bool IsXmlFlattened(IMemberSchema schema) =>
-        schema.Traits.ContainsKey(XmlFlattenedId);
+        schema.MemberTraits.ContainsKey(XmlFlattenedId);
 
     public static string? GetTimestampFormat(
         Schema schema,

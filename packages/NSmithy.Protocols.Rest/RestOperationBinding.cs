@@ -15,7 +15,9 @@ public readonly record struct PrefixHeaderMemberBinding(IMemberSchema Member, st
 /// the operation's <c>@http</c> trait. The body/payload codecs and payload (de)serialize delegates
 /// are <em>compiled here</em> and reused for every call — nothing is recompiled per request.
 /// </summary>
-public sealed class RestOperationBinding<TInput, TOutput>
+public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder>
+    where TInputBuilder : notnull
+    where TOutputBuilder : notnull
 {
     public required HttpMethod HttpMethod { get; init; }
     public required string UriTemplate { get; init; }
@@ -36,7 +38,7 @@ public sealed class RestOperationBinding<TInput, TOutput>
     public required bool OutputHasStreamingPayload { get; init; }
 
     // Input
-    public required IStructSchema<TInput> InputSchema { get; init; }
+    public required IStructSchema<TInput, TInputBuilder> InputSchema { get; init; }
     public required IReadOnlyList<IMemberSchema> LabelMembers { get; init; }
     public required IReadOnlyList<QueryMemberBinding> QueryMembers { get; init; }
     public IMemberSchema? QueryParamsMember { get; init; }
@@ -45,7 +47,7 @@ public sealed class RestOperationBinding<TInput, TOutput>
     public required HashSet<string> BoundQueryNames { get; init; }
 
     /// <summary>Compiled codec for the request body projection (null when there is no body / a payload).</summary>
-    public IProjectionCodec<TInput>? InputBodyCodec { get; init; }
+    public IProjectionCodec<TInput, TInputBuilder>? InputBodyCodec { get; init; }
 
     /// <summary>Writes the <c>@httpPayload</c> input to a body (null when there is no payload member).</summary>
     public Func<TInput, RestBody>? InputPayloadWriter { get; init; }
@@ -54,13 +56,13 @@ public sealed class RestOperationBinding<TInput, TOutput>
     public RestPayloadReader? InputPayloadReader { get; init; }
 
     // Output
-    public required IStructSchema<TOutput> OutputSchema { get; init; }
+    public required IStructSchema<TOutput, TOutputBuilder> OutputSchema { get; init; }
     public IMemberSchema? ResponseCodeMember { get; init; }
     public required IReadOnlyList<HeaderMemberBinding> ResponseHeaderMembers { get; init; }
     public PrefixHeaderMemberBinding? ResponsePrefixHeadersMember { get; init; }
 
     /// <summary>Compiled codec for the response body projection (null for unit / payload outputs).</summary>
-    public IProjectionCodec<TOutput>? OutputBodyCodec { get; init; }
+    public IProjectionCodec<TOutput, TOutputBuilder>? OutputBodyCodec { get; init; }
 
     /// <summary>Writes the <c>@httpPayload</c> output to a body (null when there is no payload member).</summary>
     public Func<TOutput, RestBody>? OutputPayloadWriter { get; init; }
@@ -68,13 +70,17 @@ public sealed class RestOperationBinding<TInput, TOutput>
     /// <summary>Reads the <c>@httpPayload</c> output from a body into the builder.</summary>
     public RestPayloadReader? OutputPayloadReader { get; init; }
 
-    internal static RestOperationBinding<TInput, TOutput> CreateFrom(
+    internal static RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> CreateFrom(
         OperationSchema<TInput, TOutput> operation,
+        IStructSchema<TInput, TInputBuilder> inputSchema,
+        IStructSchema<TOutput, TOutputBuilder> outputSchema,
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
+        ArgumentNullException.ThrowIfNull(inputSchema);
+        ArgumentNullException.ThrowIfNull(outputSchema);
         ArgumentNullException.ThrowIfNull(codecFactory);
 
         var httpTrait =
@@ -91,17 +97,6 @@ public sealed class RestOperationBinding<TInput, TOutput>
         var outputIsUnit =
             typeof(TOutput) == typeof(SmithyUnit) || operation.Output.Resolved is UnitSchema;
 
-        var inputSchema =
-            operation.Input.Resolved as IStructSchema<TInput>
-            ?? throw new InvalidOperationException(
-                $"Operation '{operation.Id}' input must be a structure schema."
-            );
-        var outputSchema =
-            operation.Output.Resolved as IStructSchema<TOutput>
-            ?? throw new InvalidOperationException(
-                $"Operation '{operation.Id}' output must be a structure schema."
-            );
-
         // Partition input members in a single pass
         var labelMembers = new List<IMemberSchema>();
         var queryMembers = new List<QueryMemberBinding>();
@@ -114,34 +109,36 @@ public sealed class RestOperationBinding<TInput, TOutput>
 
         foreach (var member in inputSchema.TypedMembers)
         {
-            if (member.Traits.ContainsKey(RestTraits.HttpLabel))
+            if (member.MemberTraits.ContainsKey(RestTraits.HttpLabel))
             {
                 labelMembers.Add(member);
             }
-            else if (member.Traits.TryGetValue(RestTraits.HttpQuery, out var queryTrait))
+            else if (member.MemberTraits.TryGetValue(RestTraits.HttpQuery, out var queryTrait))
             {
                 var name = queryTrait.Value.AsString();
                 queryMembers.Add(new QueryMemberBinding(member, name));
                 boundQueryNames.Add(name);
             }
-            else if (member.Traits.ContainsKey(RestTraits.HttpQueryParams))
+            else if (member.MemberTraits.ContainsKey(RestTraits.HttpQueryParams))
             {
                 queryParamsMember = member;
             }
-            else if (member.Traits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
+            else if (member.MemberTraits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
             {
                 requestHeaderMembers.Add(
                     new HeaderMemberBinding(member, headerTrait.Value.AsString())
                 );
             }
-            else if (member.Traits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait))
+            else if (
+                member.MemberTraits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait)
+            )
             {
                 requestPrefixHeadersMember = new PrefixHeaderMemberBinding(
                     member,
                     prefixTrait.Value.AsString()
                 );
             }
-            else if (member.Traits.ContainsKey(RestTraits.HttpPayload))
+            else if (member.MemberTraits.ContainsKey(RestTraits.HttpPayload))
             {
                 inputPayloadMember = member;
             }
@@ -152,7 +149,7 @@ public sealed class RestOperationBinding<TInput, TOutput>
         }
 
         // Request bodies don't materialize top-level defaults (the client sends only what was set).
-        IProjectionCodec<TInput>? inputBodyCodec =
+        IProjectionCodec<TInput, TInputBuilder>? inputBodyCodec =
             inputPayloadMember is null && inputBodyMembers.Count > 0
                 ? codecFactory.CodecFor(
                     Schemas.Project(inputSchema, inputBodyMembers),
@@ -169,24 +166,26 @@ public sealed class RestOperationBinding<TInput, TOutput>
 
         foreach (var member in outputSchema.TypedMembers)
         {
-            if (member.Traits.ContainsKey(RestTraits.HttpResponseCode))
+            if (member.MemberTraits.ContainsKey(RestTraits.HttpResponseCode))
             {
                 responseCodeMember = member;
             }
-            else if (member.Traits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
+            else if (member.MemberTraits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
             {
                 responseHeaderMembers.Add(
                     new HeaderMemberBinding(member, headerTrait.Value.AsString())
                 );
             }
-            else if (member.Traits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait))
+            else if (
+                member.MemberTraits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait)
+            )
             {
                 responsePrefixHeadersMember = new PrefixHeaderMemberBinding(
                     member,
                     prefixTrait.Value.AsString()
                 );
             }
-            else if (member.Traits.ContainsKey(RestTraits.HttpPayload))
+            else if (member.MemberTraits.ContainsKey(RestTraits.HttpPayload))
             {
                 outputPayloadMember = member;
             }
@@ -200,7 +199,7 @@ public sealed class RestOperationBinding<TInput, TOutput>
         // even when every member is bound to a header/status, so build the codec regardless of
         // member count. Unit outputs and payload-bound outputs are handled separately. Responses
         // materialize top-level defaults.
-        IProjectionCodec<TOutput>? outputBodyCodec =
+        IProjectionCodec<TOutput, TOutputBuilder>? outputBodyCodec =
             outputPayloadMember is null && !outputIsUnit
                 ? codecFactory.CodecFor(
                     Schemas.Project(outputSchema, outputBodyMembers),
@@ -208,7 +207,7 @@ public sealed class RestOperationBinding<TInput, TOutput>
                 )
                 : null;
 
-        return new RestOperationBinding<TInput, TOutput>
+        return new RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder>
         {
             HttpMethod = httpMethod,
             UriTemplate = uriTemplate,
@@ -219,7 +218,7 @@ public sealed class RestOperationBinding<TInput, TOutput>
                 ? codecFactory.ContentType
                 : RestProtocol.PayloadContentType(
                     outputPayloadMember.Target,
-                    outputPayloadMember.Traits,
+                    outputPayloadMember.MemberTraits,
                     codecFactory,
                     rawStringPayloads
                 ),
@@ -227,7 +226,7 @@ public sealed class RestOperationBinding<TInput, TOutput>
                 outputPayloadMember is not null
                 && (
                     outputPayloadMember.Target.Resolved is IEventStreamSchema
-                    || outputPayloadMember.Traits.ContainsKey(RestTraits.Streaming)
+                    || outputPayloadMember.MemberTraits.ContainsKey(RestTraits.Streaming)
                 ),
             InputSchema = inputSchema,
             LabelMembers = labelMembers,
@@ -296,14 +295,52 @@ public static class RestOperationBinding
     /// protocols hold one per operation in a static field), and the body/payload codecs are compiled
     /// here, so the per-call path never recompiles a codec.
     /// </summary>
-    public static RestOperationBinding<TInput, TOutput> From<TInput, TOutput>(
+    public static RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> From<
+        TInput,
+        TOutput,
+        TInputBuilder,
+        TOutputBuilder
+    >(
         OperationSchema<TInput, TOutput> operation,
+        IStructSchema<TInput, TInputBuilder> inputSchema,
+        IStructSchema<TOutput, TOutputBuilder> outputSchema,
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads
-    ) =>
-        RestOperationBinding<TInput, TOutput>.CreateFrom(
+    )
+        where TInputBuilder : notnull
+        where TOutputBuilder : notnull =>
+        RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder>.CreateFrom(
             operation,
+            inputSchema,
+            outputSchema,
             codecFactory,
             rawStringPayloads
         );
+
+    public static dynamic From<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads
+    )
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        var inputSchema =
+            operation.Input.Resolved as IStructSchema<TInput>
+            ?? throw new InvalidOperationException(
+                $"Operation '{operation.Id}' input must be a structure schema."
+            );
+        var outputSchema =
+            operation.Output.Resolved as IStructSchema<TOutput>
+            ?? throw new InvalidOperationException(
+                $"Operation '{operation.Id}' output must be a structure schema."
+            );
+
+        return From(
+            (dynamic)operation,
+            (dynamic)inputSchema,
+            (dynamic)outputSchema,
+            codecFactory,
+            rawStringPayloads
+        );
+    }
 }

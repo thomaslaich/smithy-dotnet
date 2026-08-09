@@ -26,7 +26,7 @@ public interface IProtoCodec<T> : ICodec<T> { }
 /// <c>@protoInlinedOneOf</c>. Not yet covered: streaming (the codec is per-message; streaming is a
 /// transport concern) and <c>@sparse</c> maps whose values are aggregates rather than scalars.
 /// </remarks>
-public static class ProtoCodec
+public static partial class ProtoCodec
 {
     private static readonly ShapeId ProtoIndexTrait = new("alloy.proto", "protoIndex");
     private static readonly ShapeId ProtoNumTypeTrait = new("alloy.proto", "protoNumType");
@@ -51,55 +51,12 @@ public static class ProtoCodec
             );
         }
 
-        return new ProtoCodecImpl<T>(schema);
-    }
-
-    private sealed class ProtoCodecImpl<T>(Schema<T> schema) : IProtoCodec<T>
-    {
-        public byte[] Serialize(T value)
-        {
-            if (value is null)
-            {
-                return [];
-            }
-
-            var writer = new ProtoWriter();
-            switch (Unwrap(schema))
-            {
-                case IStructSchema structure:
-                    WriteMessage(writer, structure, value);
-                    break;
-                case IUnionSchema union:
-                    WriteUnion(writer, union, value);
-                    break;
-                default:
-                    throw new InvalidOperationException(
-                        "Protobuf messages must be backed by a structure or union schema."
-                    );
-            }
-
-            return writer.ToArray();
-        }
-
-        public T Deserialize(byte[] payload)
-        {
-            ArgumentNullException.ThrowIfNull(payload);
-            return Unwrap(schema) switch
-            {
-                IStructSchema structure => (T)ReadMessage(structure, payload)!,
-                // ReadUnion returns null for a message with no recognized case (forward-compat); the
-                // cast preserves that null so callers can skip the unknown message.
-                IUnionSchema union => (T)ReadUnion(union, payload)!,
-                _ => throw new InvalidOperationException(
-                    "Protobuf messages must be backed by a structure or union schema."
-                ),
-            };
-        }
+        return new CompiledProtoCodec<T>(schema);
     }
 
     // ---- writing -----------------------------------------------------------
 
-    private static void WriteMessage(ProtoWriter writer, IStructSchema schema, object value)
+    internal static void WriteMessage(ProtoWriter writer, IStructSchema schema, object value)
     {
         foreach (var member in schema.Members)
         {
@@ -114,9 +71,9 @@ public static class ProtoCodec
         }
     }
 
-    private static void WriteField(ProtoWriter writer, IMemberSchema member, object value)
+    internal static void WriteField(ProtoWriter writer, IMemberSchema member, object value)
     {
-        var field = ProtoIndex(member.Traits);
+        var field = ProtoIndex(member.MemberTraits);
         var target = Unwrap(member.Target);
 
         switch (target.Kind)
@@ -131,7 +88,7 @@ public static class ProtoCodec
                     var packed = new ProtoWriter();
                     foreach (var item in elements)
                     {
-                        WriteValueBody(packed, list.Element, member.Traits, item!);
+                        WriteValueBody(packed, list.Element, member.MemberTraits, item!);
                     }
 
                     if (packed.Length > 0)
@@ -144,7 +101,7 @@ public static class ProtoCodec
                 {
                     foreach (var item in elements)
                     {
-                        WriteTagged(writer, field, list.Element, member.Traits, item!);
+                        WriteTagged(writer, field, list.Element, member.MemberTraits, item!);
                     }
                 }
 
@@ -192,12 +149,12 @@ public static class ProtoCodec
                 break;
             }
             default:
-                WriteTagged(writer, field, member.Target, member.Traits, value);
+                WriteTagged(writer, field, member.Target, member.MemberTraits, value);
                 break;
         }
     }
 
-    private static void WriteTagged(
+    internal static void WriteTagged(
         ProtoWriter writer,
         int field,
         Schema schema,
@@ -209,7 +166,7 @@ public static class ProtoCodec
         WriteValueBody(writer, schema, traits, value);
     }
 
-    private static void WriteValueBody(
+    internal static void WriteValueBody(
         ProtoWriter writer,
         Schema schema,
         IReadOnlyDictionary<ShapeId, Trait> traits,
@@ -293,7 +250,7 @@ public static class ProtoCodec
         }
     }
 
-    private static void WriteUnion(ProtoWriter writer, IUnionSchema schema, object value)
+    internal static void WriteUnion(ProtoWriter writer, IUnionSchema schema, object value)
     {
         var @case = schema.GetCaseObject(value);
         WriteTagged(
@@ -367,7 +324,7 @@ public static class ProtoCodec
 
     // ---- reading -----------------------------------------------------------
 
-    private static object ReadMessage(IStructSchema schema, ReadOnlySpan<byte> bytes)
+    internal static object ReadMessage(IStructSchema schema, ReadOnlySpan<byte> bytes)
     {
         var builder = schema.CreateBuilder();
         var byNumber = BuildFieldMap(schema);
@@ -417,8 +374,8 @@ public static class ProtoCodec
                                 ReadValueBody(
                                     ref packed,
                                     list.Element,
-                                    member.Traits,
-                                    WireTypeOf(element.Kind, member.Traits)
+                                    member.MemberTraits,
+                                    WireTypeOf(element.Kind, member.MemberTraits)
                                 )
                             );
                         }
@@ -427,7 +384,7 @@ public static class ProtoCodec
                     {
                         list.AddObject(
                             acc.Builder,
-                            ReadValueBody(ref reader, list.Element, member.Traits, wireType)
+                            ReadValueBody(ref reader, list.Element, member.MemberTraits, wireType)
                         );
                     }
 
@@ -449,7 +406,7 @@ public static class ProtoCodec
                 default:
                     member.SetObject(
                         builder,
-                        ReadValueBody(ref reader, member.Target, member.Traits, wireType)
+                        ReadValueBody(ref reader, member.Target, member.MemberTraits, wireType)
                     );
                     break;
             }
@@ -486,7 +443,7 @@ public static class ProtoCodec
             {
                 case ShapeKind.List or ShapeKind.Set:
                 {
-                    var field = ProtoIndex(member.Traits);
+                    var field = ProtoIndex(member.MemberTraits);
                     if (lists.ContainsKey(field))
                     {
                         break;
@@ -498,7 +455,7 @@ public static class ProtoCodec
                 }
                 case ShapeKind.Map:
                 {
-                    var field = ProtoIndex(member.Traits);
+                    var field = ProtoIndex(member.MemberTraits);
                     if (maps.ContainsKey(field))
                     {
                         break;
@@ -512,7 +469,7 @@ public static class ProtoCodec
         }
     }
 
-    private static void ReadMapEntry(
+    internal static void ReadMapEntry(
         IMapSchema map,
         bool sparse,
         object builder,
@@ -546,7 +503,7 @@ public static class ProtoCodec
         map.AddObject(builder, key ?? string.Empty, value);
     }
 
-    private static object? ReadUnion(IUnionSchema schema, ReadOnlySpan<byte> bytes)
+    internal static object? ReadUnion(IUnionSchema schema, ReadOnlySpan<byte> bytes)
     {
         var byNumber = new Dictionary<int, IUnionCaseSchema>();
         foreach (var @case in schema.Cases)
@@ -577,7 +534,7 @@ public static class ProtoCodec
         return result;
     }
 
-    private static object? ReadValueBody(
+    internal static object? ReadValueBody(
         ref ProtoReader reader,
         Schema schema,
         IReadOnlyDictionary<ShapeId, Trait> traits,
@@ -733,7 +690,7 @@ public static class ProtoCodec
         };
     }
 
-    private static WireType WireTypeOf(
+    internal static WireType WireTypeOf(
         ShapeKind kind,
         IReadOnlyDictionary<ShapeId, Trait> traits
     ) =>
@@ -760,7 +717,7 @@ public static class ProtoCodec
             _ => throw new NotSupportedException($"No proto wire type for schema kind '{kind}'."),
         };
 
-    private static bool IsPackableScalar(ShapeKind kind) =>
+    internal static bool IsPackableScalar(ShapeKind kind) =>
         kind
             is ShapeKind.Boolean
                 or ShapeKind.Byte
@@ -783,7 +740,7 @@ public static class ProtoCodec
                 continue;
             }
 
-            map[ProtoIndex(member.Traits)] = member;
+            map[ProtoIndex(member.MemberTraits)] = member;
         }
 
         return map;
@@ -1128,7 +1085,7 @@ public static class ProtoCodec
         return Document.From(items);
     }
 
-    private static int ProtoIndex(IReadOnlyDictionary<ShapeId, Trait> traits)
+    internal static int ProtoIndex(IReadOnlyDictionary<ShapeId, Trait> traits)
     {
         if (
             traits.TryGetValue(ProtoIndexTrait, out var trait)
@@ -1155,7 +1112,7 @@ public static class ProtoCodec
 
     private static long DecodeZigZag(ulong value) => (long)(value >> 1) ^ -(long)(value & 1);
 
-    private static Schema Unwrap(Schema schema)
+    internal static Schema Unwrap(Schema schema)
     {
         var resolved = schema.Resolved;
         return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;

@@ -62,8 +62,8 @@ public sealed class RestXmlProtocol : IProtocol
         public ICodec<T> CodecFor<T>(Schema<T> schema) => XmlCodec.FromSchema(schema);
 
         // XML serialization doesn't distinguish top-level default materialization.
-        public IProjectionCodec<T> CodecFor<T>(
-            StructProjection<T> projection,
+        public IProjectionCodec<T, TBuilder> CodecFor<T, TBuilder>(
+            StructProjection<T, TBuilder> projection,
             bool materializeTopLevelDefaults
         ) => XmlCodec.FromProjection(projection);
     }

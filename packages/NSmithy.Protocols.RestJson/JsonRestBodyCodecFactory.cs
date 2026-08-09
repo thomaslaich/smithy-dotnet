@@ -20,8 +20,8 @@ internal sealed class JsonRestBodyCodecFactory : IRestBodyCodecFactory
 
     public ICodec<T> CodecFor<T>(Schema<T> schema) => JsonCodec.FromSchema(schema);
 
-    public IProjectionCodec<T> CodecFor<T>(
-        StructProjection<T> projection,
+    public IProjectionCodec<T, TBuilder> CodecFor<T, TBuilder>(
+        StructProjection<T, TBuilder> projection,
         bool materializeTopLevelDefaults
     ) => JsonCodec.FromProjection(projection, materializeTopLevelDefaults);
 }

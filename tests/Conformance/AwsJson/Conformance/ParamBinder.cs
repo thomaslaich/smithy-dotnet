@@ -292,7 +292,7 @@ internal static class ParamBinder
                     p.ParameterType == typeof(byte[])
                     && node is JsonValue scalar
                     && scalar.TryGetValue<string>(out var text)
-                    && memberSchema?.Traits.ContainsKey(HttpPayloadTraitId) == true
+                    && memberSchema?.MemberTraits.ContainsKey(HttpPayloadTraitId) == true
                 )
                 {
                     args[i] = System.Text.Encoding.UTF8.GetBytes(text);

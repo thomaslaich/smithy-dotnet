@@ -274,7 +274,10 @@ public final class SchemaGenerator {
           writer.write("static () => new $L(),", builderType);
           writer.write("static (builder, value) => builder.Add(value),");
           writer.write("static builder => new $L(builder),", typeName);
-          writer.write("$L);", traitsExpr(shape.getAllTraits().values()));
+          writer.write(
+              "$L, elementTraits: $L);",
+              traitsExpr(shape.getAllTraits().values()),
+              memberTraitsExpr(context, shape.getMember()));
           writer.dedent();
           writer.dedent();
           writer.write("");
@@ -312,7 +315,11 @@ public final class SchemaGenerator {
           writer.write("static () => new $L(System.StringComparer.Ordinal),", builderType);
           writer.write("static (builder, key, value) => builder[key] = value,");
           writer.write("static builder => new $L(builder),", typeName);
-          writer.write("$L);", traitsExpr(shape.getAllTraits().values()));
+          writer.write(
+              "$L, keyTraits: $L, valueTraits: $L);",
+              traitsExpr(shape.getAllTraits().values()),
+              memberTraitsExpr(context, shape.getKey()),
+              memberTraitsExpr(context, shape.getValue()));
           writer.dedent();
           writer.dedent();
           writer.write("");
@@ -408,22 +415,8 @@ public final class SchemaGenerator {
     return targetSchemaExpr(context, member, target);
   }
 
-  /**
-   * Target schema for a member, honoring a member-level {@code @timestampFormat} (which takes
-   * precedence over the target shape's format). Baking the format into the target schema lets the
-   * codec resolve it from the schema without threading member traits.
-   */
   private static String targetSchemaExpr(
       GenerationContext context, MemberShape member, Shape target) {
-    if (target.getType() == ShapeType.TIMESTAMP) {
-      List<Trait> memberFormat =
-          member.getAllTraits().values().stream()
-              .filter(t -> t.toShapeId().toString().equals("smithy.api#timestampFormat"))
-              .collect(Collectors.toList());
-      if (!memberFormat.isEmpty()) {
-        return "Schemas.TimestampWithTraits(" + traitsExpr(memberFormat) + ")";
-      }
-    }
     if (ShapeSupport.isStreamingBlobMember(context.model(), member)) {
       return "Schemas.StreamingBlob";
     }
@@ -451,13 +444,7 @@ public final class SchemaGenerator {
               : "Schemas.Nullable(" + targetExpr + ")";
     }
 
-    // List/map members carry their own traits (e.g. @xmlName naming each item element in a
-    // non-flattened restXml list, or a member-level @timestampFormat). The element is otherwise the
-    // shared target schema, which doesn't carry them, so overlay the member's traits onto it.
-    String memberTraits = memberTraitsExpr(context, member);
-    return "null".equals(memberTraits)
-        ? base
-        : "Schemas.WithTraits(" + base + ", " + memberTraits + ")";
+    return base;
   }
 
   private static String constructorArguments(

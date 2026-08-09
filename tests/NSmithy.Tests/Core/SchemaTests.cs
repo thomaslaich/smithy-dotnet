@@ -557,14 +557,52 @@ public sealed class SchemaTests
             "PUT",
             operation.GetTrait(RestTraits.Http)!.Value.Value.AsObject()["method"].AsString()
         );
-        Assert.True(inputSchema.GetMember("userId")!.Traits.ContainsKey(RestTraits.HttpLabel));
+        Assert.True(
+            inputSchema.GetMember("userId")!.MemberTraits.ContainsKey(RestTraits.HttpLabel)
+        );
         Assert.Equal(
             "X-Request-Token",
-            inputSchema.GetMember("requestToken")!.Traits[RestTraits.HttpHeader].Value.AsString()
+            inputSchema
+                .GetMember("requestToken")!
+                .MemberTraits[RestTraits.HttpHeader]
+                .Value.AsString()
         );
         Assert.False(
-            inputSchema.GetMember("displayName")!.Traits.ContainsKey(RestTraits.HttpLabel)
+            inputSchema.GetMember("displayName")!.MemberTraits.ContainsKey(RestTraits.HttpLabel)
         );
+    }
+
+    [Fact]
+    public void MemberSchemaResolvesMemberTraitsBeforeTargetTraits()
+    {
+        var traitId = ShapeId.Parse("smithy.api#timestampFormat");
+        var target = Schemas.TimestampWithTraits([new Trait(traitId, Document.From("date-time"))]);
+        var schema = Schemas
+            .Structure<DateInput, DateInputBuilder>(new ShapeId("example", "DateInput"))
+            .Required(
+                "created",
+                static input => input.Created,
+                static (builder, value) => builder.Created = value,
+                target,
+                [new Trait(traitId, Document.From("epoch-seconds"))]
+            )
+            .Build(
+                static () => new DateInputBuilder(),
+                static builder => new DateInput(builder.Created)
+            );
+
+        var member = schema.GetMember("created")!;
+
+        Assert.Equal("epoch-seconds", member.GetTrait(traitId)!.Value.Value.AsString());
+        Assert.Equal("epoch-seconds", member.MemberTraits[traitId].Value.AsString());
+        Assert.Equal("date-time", member.Target.GetTrait(traitId)!.Value.Value.AsString());
+    }
+
+    public sealed record DateInput(DateTimeOffset Created);
+
+    public sealed class DateInputBuilder
+    {
+        public DateTimeOffset Created { get; set; }
     }
 
     [Fact]

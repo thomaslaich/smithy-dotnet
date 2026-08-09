@@ -98,7 +98,8 @@ public sealed class XmlCodecTests
             );
         var listSchema = Schemas.List<S3Bucket>(
             new ShapeId("example", "S3BucketList"),
-            Schemas.WithTraits(bucketSchema, [XmlName("Bucket")])
+            bucketSchema,
+            elementTraits: [XmlName("Bucket")]
         );
         var outputSchema = Schemas
             .Structure<BucketList, BucketListBuilder>(

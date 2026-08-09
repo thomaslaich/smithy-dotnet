@@ -24,8 +24,8 @@ public sealed class RestServiceProtocol(
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
-        return new RestOperationProtocol<TInput, TOutput>(
-            RestOperationBinding.From(operation, codecFactory, rawStringPayloads),
+        return CreateOperation(
+            operation,
             operation.Errors,
             codecFactory,
             errorDiscriminator,
@@ -34,6 +34,74 @@ public sealed class RestServiceProtocol(
             SmithyRequestModifiers.Compile(operation)
         );
     }
+
+    private static IOperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation,
+        IReadOnlyList<IOperationErrorSchema> modeledErrors,
+        IRestBodyCodecFactory codecFactory,
+        Func<SmithyHttpClientResponse, string?> errorDiscriminator,
+        bool rawStringPayloads,
+        string? errorTypeHeader,
+        Action<SmithyHttpRequest>? requestTransform
+    )
+    {
+        var inputSchema =
+            operation.Input.Resolved as IStructSchema<TInput>
+            ?? throw new InvalidOperationException(
+                $"Operation '{operation.Id}' input must be a structure schema."
+            );
+        var outputSchema =
+            operation.Output.Resolved as IStructSchema<TOutput>
+            ?? throw new InvalidOperationException(
+                $"Operation '{operation.Id}' output must be a structure schema."
+            );
+
+        return CreateOperation(
+            operation,
+            (dynamic)inputSchema,
+            (dynamic)outputSchema,
+            modeledErrors,
+            codecFactory,
+            errorDiscriminator,
+            rawStringPayloads,
+            errorTypeHeader,
+            requestTransform
+        );
+    }
+
+    private static RestOperationProtocol<
+        TInput,
+        TOutput,
+        TInputBuilder,
+        TOutputBuilder
+    > CreateOperation<TInput, TOutput, TInputBuilder, TOutputBuilder>(
+        OperationSchema<TInput, TOutput> operation,
+        IStructSchema<TInput, TInputBuilder> inputSchema,
+        IStructSchema<TOutput, TOutputBuilder> outputSchema,
+        IReadOnlyList<IOperationErrorSchema> modeledErrors,
+        IRestBodyCodecFactory codecFactory,
+        Func<SmithyHttpClientResponse, string?> errorDiscriminator,
+        bool rawStringPayloads,
+        string? errorTypeHeader,
+        Action<SmithyHttpRequest>? requestTransform
+    )
+        where TInputBuilder : notnull
+        where TOutputBuilder : notnull =>
+        new RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutputBuilder>(
+            RestOperationBinding.From(
+                operation,
+                inputSchema,
+                outputSchema,
+                codecFactory,
+                rawStringPayloads
+            ),
+            modeledErrors,
+            codecFactory,
+            errorDiscriminator,
+            rawStringPayloads,
+            errorTypeHeader,
+            requestTransform
+        );
 }
 
 /// <summary>
@@ -41,8 +109,8 @@ public sealed class RestServiceProtocol(
 /// (parsed from the operation's <c>@http</c> trait, with body/payload codecs already compiled) is
 /// built once and reused; all wire logic is delegated to <see cref="RestProtocol"/>.
 /// </summary>
-public sealed class RestOperationProtocol<TInput, TOutput>(
-    RestOperationBinding<TInput, TOutput> binding,
+public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutputBuilder>(
+    RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> binding,
     IReadOnlyList<IOperationErrorSchema> modeledErrors,
     IRestBodyCodecFactory codecFactory,
     Func<SmithyHttpClientResponse, string?> errorDiscriminator,
@@ -50,6 +118,8 @@ public sealed class RestOperationProtocol<TInput, TOutput>(
     string? errorTypeHeader,
     Action<SmithyHttpRequest>? requestTransform = null
 ) : IOperationProtocol<TInput, TOutput>
+    where TInputBuilder : notnull
+    where TOutputBuilder : notnull
 {
     private readonly IReadOnlyList<HttpOperationError> httpErrors =
         RestProtocol.CompileErrorDeserializers(modeledErrors, codecFactory, rawStringPayloads);

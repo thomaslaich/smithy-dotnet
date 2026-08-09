@@ -10,7 +10,7 @@ tradeoffs.
 | --- | --- |
 | [codegen-architecture.md](codegen-architecture.md) | Java plugin + MSBuild integration pipeline |
 | [shapes.md](shapes.md) | Smithy shape → C# type mapping |
-| [serialization.md](serialization.md) | Schema-aware codec and serialization design |
+| [serialization.md](serialization.md) | Schema algebra, typed traits, compiled codecs, and constraint validation |
 | [http-interfaces.md](http-interfaces.md) | HTTP transport abstractions |
 | [client-architecture.md](client-architecture.md) | Generated client lifecycle, config, interceptors, auth, retries |
 | [server-architecture.md](server-architecture.md) | Generated server dispatch, shared server runtime, host adapter |
