@@ -107,7 +107,7 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
         var inputBodyMembers = new List<IMemberSchema<TInput>>();
         var boundQueryNames = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var member in inputSchema.TypedMembers)
+        foreach (var member in Schemas.GetMembers(inputSchema))
         {
             if (member.MemberTraits.ContainsKey(RestTraits.HttpLabel))
             {
@@ -164,7 +164,7 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
         IMemberSchema<TOutput>? outputPayloadMember = null;
         var outputBodyMembers = new List<IMemberSchema<TOutput>>();
 
-        foreach (var member in outputSchema.TypedMembers)
+        foreach (var member in Schemas.GetMembers(outputSchema))
         {
             if (member.MemberTraits.ContainsKey(RestTraits.HttpResponseCode))
             {

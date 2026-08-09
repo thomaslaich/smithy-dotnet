@@ -742,7 +742,7 @@ public sealed class GrpcProtocol : IProtocol
                 var typed = (IStructSchema<TShape, TBuilder>)(object)schema;
                 var visitor = new EventStreamMemberVisitor<TShape, TBuilder, TEvent>();
                 typed.VisitMembers(visitor);
-                if (typed.TypedMembers.Count != 1)
+                if (visitor.MemberCount != 1)
                 {
                     throw new NotSupportedException(
                         "gRPC event streaming with non-streaming initial members is not supported."
@@ -801,8 +801,11 @@ public sealed class GrpcProtocol : IProtocol
             private set;
         }
 
+        public int MemberCount { get; private set; }
+
         public void Visit<TValue>(IMemberSchema<TShape, TBuilder, TValue> member)
         {
+            MemberCount++;
             if (member.Target is not EventStreamSchema<TEvent>)
             {
                 return;
@@ -1094,10 +1097,33 @@ public sealed class GrpcProtocol : IProtocol
 
     private static Schema? FindEventStreamEventSchema(Schema schema) =>
         schema.Resolved is IStructSchema structure
-            ? structure
-                .Members.Select(member => member.Target)
-                .OfType<IEventStreamSchema>()
-                .Select(eventStream => eventStream.EventSchema)
-                .SingleOrDefault()
+            ? FindEventStreamEventSchema((dynamic)structure)
             : null;
+
+    private static Schema? FindEventStreamEventSchema<T>(IStructSchema<T> structure)
+    {
+        var visitor = new EventStreamSchemaVisitor<T>();
+        structure.VisitMembers(visitor);
+        return visitor.EventSchema;
+    }
+
+    private sealed class EventStreamSchemaVisitor<T> : IMemberVisitor<T>
+    {
+        public Schema? EventSchema { get; private set; }
+
+        public void Visit<TValue>(IMemberSchema<T, TValue> member)
+        {
+            if (member.Target is not IEventStreamSchema eventStream)
+            {
+                return;
+            }
+
+            if (EventSchema is not null)
+            {
+                throw new InvalidOperationException("Operation shape has multiple event streams.");
+            }
+
+            EventSchema = eventStream.EventSchema;
+        }
+    }
 }

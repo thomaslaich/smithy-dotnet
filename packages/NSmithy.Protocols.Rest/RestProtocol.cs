@@ -304,7 +304,7 @@ public static class RestProtocol
         RestPayloadReader? payloadReader = null;
         var bodyMembers = new List<IMemberSchema<TError>>();
 
-        foreach (var member in schema.TypedMembers)
+        foreach (var member in Schemas.GetMembers(schema))
         {
             if (member.MemberTraits.ContainsKey(RestTraits.HttpResponseCode))
             {
@@ -454,7 +454,7 @@ public static class RestProtocol
 
         IMemberSchema<TError>? payloadMember = null;
         var bodyMembers = new List<IMemberSchema<TError>>();
-        foreach (var member in schema.TypedMembers)
+        foreach (var member in Schemas.GetMembers(schema))
         {
             if (member.MemberTraits.ContainsKey(RestTraits.HttpResponseCode))
             {

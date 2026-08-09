@@ -992,9 +992,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         )
         {
             var streamMember = FindStreamMember(structure);
-            var initialMembers = structure
-                .TypedMembers.Where(member => !ReferenceEquals(member, streamMember))
-                .ToArray();
+            var initialMembers = CollectInitialMembers(structure, streamMember);
             return new EventStreamShapeBinding<TShape, TEvent, TBuilder>(
                 structure,
                 streamMember,
@@ -1035,6 +1033,15 @@ public sealed class RpcV2CborProtocol : IProtocol
                     "rpcv2Cbor initial event streams require one event stream member."
                 );
         }
+
+        private static IMemberSchema<TShape>[] CollectInitialMembers(
+            IStructSchema<TShape, TBuilder> structure,
+            IMemberSchema<TShape> streamMember
+        ) =>
+            Schemas
+                .GetMembers(structure)
+                .Where(member => !ReferenceEquals(member, streamMember))
+                .ToArray();
     }
 
     private sealed class EventStreamMemberVisitor<TShape, TBuilder, TEvent>
@@ -1359,12 +1366,35 @@ public sealed class RpcV2CborProtocol : IProtocol
 
     private static Schema? FindEventStreamEventSchema(Schema schema) =>
         schema.Resolved is IStructSchema structure
-            ? structure
-                .Members.Select(member => member.Target)
-                .OfType<IEventStreamSchema>()
-                .Select(eventStream => eventStream.EventSchema)
-                .SingleOrDefault()
+            ? FindEventStreamEventSchema((dynamic)structure)
             : null;
+
+    private static Schema? FindEventStreamEventSchema<T>(IStructSchema<T> structure)
+    {
+        var visitor = new EventStreamSchemaVisitor<T>();
+        structure.VisitMembers(visitor);
+        return visitor.EventSchema;
+    }
+
+    private sealed class EventStreamSchemaVisitor<T> : IMemberVisitor<T>
+    {
+        public Schema? EventSchema { get; private set; }
+
+        public void Visit<TValue>(IMemberSchema<T, TValue> member)
+        {
+            if (member.Target is not IEventStreamSchema eventStream)
+            {
+                return;
+            }
+
+            if (EventSchema is not null)
+            {
+                throw new InvalidOperationException("Operation shape has multiple event streams.");
+            }
+
+            EventSchema = eventStream.EventSchema;
+        }
+    }
 
     private static T DeserializeRequiredBody<T>(ICodec<T> codec, byte[] content)
     {

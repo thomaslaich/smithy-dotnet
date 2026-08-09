@@ -253,16 +253,8 @@ public sealed class DocumentSchema(ShapeId id, IEnumerable<Trait>? traits = null
 
 public sealed class UnitSchema : Schema<SmithyUnit>, IStructSchema<SmithyUnit, SmithyUnit>
 {
-    private static readonly IReadOnlyList<IMemberSchema> EmptyMembers = [];
-
-    private static readonly IReadOnlyList<IMemberSchema<SmithyUnit>> EmptyTypedMembers = [];
-
     internal UnitSchema()
         : base(new ShapeId("smithy.api", "Unit"), ShapeKind.Structure) { }
-
-    public IReadOnlyList<IMemberSchema> Members => EmptyMembers;
-
-    public IReadOnlyList<IMemberSchema<SmithyUnit>> TypedMembers => EmptyTypedMembers;
 
     public IMemberSchema? GetMember(string name) => null;
 
@@ -426,8 +418,6 @@ public sealed class EventStreamSchema<TEvent> : Schema<IAsyncEnumerable<TEvent>>
 
 public interface IStructSchema
 {
-    IReadOnlyList<IMemberSchema> Members { get; }
-
     IMemberSchema? GetMember(string name);
 
     object CreateBuilder();
@@ -437,8 +427,6 @@ public interface IStructSchema
 
 public interface IStructSchema<T> : IStructSchema
 {
-    IReadOnlyList<IMemberSchema<T>> TypedMembers { get; }
-
     void VisitMembers(IMemberVisitor<T> visitor);
 }
 
@@ -496,10 +484,6 @@ public interface IListSchema<TCollection, TElement, TBuilder> : IListSchema<TCol
 
 public interface IMapSchema
 {
-    IMemberSchema KeyMember { get; }
-
-    IMemberSchema ValueMember { get; }
-
     Schema Value { get; }
 
     IEnumerable<KeyValuePair<string, object?>> GetEntriesObject(object value);
@@ -559,10 +543,6 @@ public interface IUnionCaseSchema
     Schema Target { get; }
 
     bool MatchesObject(object value);
-
-    object? GetObject(object value);
-
-    object CreateObject(object? value);
 }
 
 public interface IUnionCaseSchema<TUnion, TValue> : IUnionCaseSchema
@@ -899,11 +879,7 @@ public sealed class MapSchema<TValue>
 
     public ICollectionMemberSchema<string> TypedKeyMember { get; }
 
-    public IMemberSchema KeyMember => TypedKeyMember;
-
     public ICollectionMemberSchema<TValue> TypedValueMember { get; }
-
-    public IMemberSchema ValueMember => TypedValueMember;
 
     public Schema<TValue> ValueSchema { get; }
 
@@ -990,11 +966,7 @@ public sealed class DictionarySchema<TDictionary, TValue, TBuilder>
 
     public ICollectionMemberSchema<string> TypedKeyMember { get; }
 
-    public IMemberSchema KeyMember => TypedKeyMember;
-
     public ICollectionMemberSchema<TValue> TypedValueMember { get; }
-
-    public IMemberSchema ValueMember => TypedValueMember;
 
     public Schema<TValue> ValueSchema { get; }
 
@@ -1077,10 +1049,6 @@ public sealed class UnionCaseSchema<TUnion, TValue>
     public TUnion Create(TValue value) => create(value);
 
     public bool MatchesObject(object value) => matches((TUnion)value);
-
-    public object? GetObject(object value) => get((TUnion)value);
-
-    public object CreateObject(object? value) => create((TValue)value!)!;
 
     public void Accept(IUnionCaseVisitor<TUnion> visitor) => visitor.Visit(this);
 }
@@ -1229,8 +1197,7 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
 {
     private readonly Func<TBuilder> createBuilder;
     private readonly Func<TBuilder, T> build;
-    private readonly ReadOnlyCollection<IMemberSchema> members;
-    private readonly ReadOnlyCollection<IMemberSchema<T>> typedMembers;
+    private readonly ReadOnlyCollection<IMemberSchema<T>> members;
     private readonly Dictionary<string, IMemberSchema> membersByName;
 
     internal StructSchema(
@@ -1244,16 +1211,11 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
     {
         this.createBuilder = createBuilder;
         this.build = build;
-        this.members = new ReadOnlyCollection<IMemberSchema>(members.ToArray());
-        typedMembers = new ReadOnlyCollection<IMemberSchema<T>>(
-            this.members.Cast<IMemberSchema<T>>().ToArray()
+        this.members = new ReadOnlyCollection<IMemberSchema<T>>(
+            members.Cast<IMemberSchema<T>>().ToArray()
         );
         membersByName = BuildMembersByName(this.members);
     }
-
-    public IReadOnlyList<IMemberSchema> Members => members;
-
-    public IReadOnlyList<IMemberSchema<T>> TypedMembers => typedMembers;
 
     public IMemberSchema? GetMember(string name)
     {
@@ -1272,7 +1234,7 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
     public void VisitMembers(IMemberVisitor<T> visitor)
     {
         ArgumentNullException.ThrowIfNull(visitor);
-        foreach (var member in typedMembers)
+        foreach (var member in members)
         {
             member.Accept(visitor);
         }
@@ -1294,7 +1256,7 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
     }
 
     private static Dictionary<string, IMemberSchema> BuildMembersByName(
-        ReadOnlyCollection<IMemberSchema> members
+        ReadOnlyCollection<IMemberSchema<T>> members
     )
     {
         var byName = new Dictionary<string, IMemberSchema>(StringComparer.Ordinal);
@@ -1310,7 +1272,7 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
 public sealed class StructProjection<T, TBuilder>
 {
     private readonly IStructSchema<T, TBuilder> source;
-    private readonly ReadOnlyCollection<IMemberSchema<T>> typedMembers;
+    private readonly ReadOnlyCollection<IMemberSchema<T>> members;
     private readonly Dictionary<string, IMemberSchema<T>> membersByName;
 
     internal StructProjection(
@@ -1321,13 +1283,11 @@ public sealed class StructProjection<T, TBuilder>
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(members);
         this.source = source;
-        typedMembers = new ReadOnlyCollection<IMemberSchema<T>>(members.ToArray());
-        membersByName = BuildMembersByName(typedMembers);
+        this.members = new ReadOnlyCollection<IMemberSchema<T>>(members.ToArray());
+        membersByName = BuildMembersByName(this.members);
     }
 
     public IStructSchema<T, TBuilder> Source => source;
-
-    public IReadOnlyList<IMemberSchema<T>> TypedMembers => typedMembers;
 
     public IMemberSchema<T>? GetMember(string name)
     {
@@ -1338,7 +1298,7 @@ public sealed class StructProjection<T, TBuilder>
     public void VisitMembers(IMemberVisitor<T> visitor)
     {
         ArgumentNullException.ThrowIfNull(visitor);
-        foreach (var member in typedMembers)
+        foreach (var member in members)
         {
             member.Accept(visitor);
         }
@@ -1347,7 +1307,7 @@ public sealed class StructProjection<T, TBuilder>
     public void VisitMembers(IMemberVisitor<T, TBuilder> visitor)
     {
         ArgumentNullException.ThrowIfNull(visitor);
-        foreach (var member in typedMembers)
+        foreach (var member in members)
         {
             ((IBuilderMemberSchema<T, TBuilder>)member).Accept(visitor);
         }
@@ -1754,4 +1714,19 @@ public static class Schemas
         IStructSchema<T, TBuilder> source,
         IReadOnlyList<IMemberSchema<T>> members
     ) => new(source, members);
+
+    public static IReadOnlyList<IMemberSchema<T>> GetMembers<T>(IStructSchema<T> schema)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        var visitor = new MemberCollector<T>();
+        schema.VisitMembers(visitor);
+        return visitor.Members;
+    }
+
+    private sealed class MemberCollector<T> : IMemberVisitor<T>
+    {
+        public List<IMemberSchema<T>> Members { get; } = [];
+
+        public void Visit<TValue>(IMemberSchema<T, TValue> member) => Members.Add(member);
+    }
 }
