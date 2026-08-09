@@ -382,6 +382,8 @@ internal sealed class ListCborValueReader<TCollection, TElement, TBuilder>(
     ICborValueReader<TElement> elementReader
 ) : ICborValueReader<TCollection>
 {
+    private readonly bool sparse = IsSparse((Schema)schema);
+
     public TCollection Read(CborReader reader)
     {
         if (reader.PeekState() != CborReaderState.StartArray)
@@ -393,6 +395,18 @@ internal sealed class ListCborValueReader<TCollection, TElement, TBuilder>(
         reader.ReadStartArray();
         while (reader.PeekState() != CborReaderState.EndArray)
         {
+            if (reader.PeekState() == CborReaderState.Null)
+            {
+                reader.ReadNull();
+                if (!sparse)
+                {
+                    throw new InvalidOperationException("Non-sparse CBOR list cannot contain null.");
+                }
+
+                schema.Add(builder, default!);
+                continue;
+            }
+
             schema.Add(builder, elementReader.Read(reader));
         }
 
@@ -406,6 +420,8 @@ internal sealed class MapCborValueReader<TDictionary, TValue, TBuilder>(
     ICborValueReader<TValue> valueReader
 ) : ICborValueReader<TDictionary>
 {
+    private readonly bool sparse = IsSparse((Schema)schema);
+
     public TDictionary Read(CborReader reader)
     {
         if (reader.PeekState() != CborReaderState.StartMap)
@@ -417,7 +433,20 @@ internal sealed class MapCborValueReader<TDictionary, TValue, TBuilder>(
         reader.ReadStartMap();
         while (reader.PeekState() != CborReaderState.EndMap)
         {
-            schema.Add(builder, reader.ReadTextString(), valueReader.Read(reader));
+            var key = reader.ReadTextString();
+            if (reader.PeekState() == CborReaderState.Null)
+            {
+                reader.ReadNull();
+                if (!sparse)
+                {
+                    throw new InvalidOperationException("Non-sparse CBOR map cannot contain null.");
+                }
+
+                schema.Add(builder, key, default!);
+                continue;
+            }
+
+            schema.Add(builder, key, valueReader.Read(reader));
         }
 
         reader.ReadEndMap();

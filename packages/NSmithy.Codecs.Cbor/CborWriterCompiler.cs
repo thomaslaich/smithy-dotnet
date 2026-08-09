@@ -45,14 +45,27 @@ internal interface ICborUnionCaseReader<out TUnion>
     TUnion Read(CborReader reader);
 }
 
-internal sealed class CborWriterCompiler(bool materializeTopLevelDefaults) : ISchemaVisitor<object>
+internal sealed class CborWriterCompiler : ISchemaVisitor<object>
 {
     private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
 
     public static ICborValueWriter<T> Compile<T>(Schema<T> schema, bool materializeTopLevelDefaults)
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new CborWriterCompiler(materializeTopLevelDefaults).CompileValue(schema);
+        return new CborWriterCompiler().CompileTopLevelValue(schema, materializeTopLevelDefaults);
+    }
+
+    private ICborValueWriter<T> CompileTopLevelValue<T>(
+        Schema<T> schema,
+        bool materializeTopLevelDefaults
+    )
+    {
+        if (schema.Resolved is IStructSchema<T> structure)
+        {
+            return CompileStructure(structure, materializeTopLevelDefaults);
+        }
+
+        return CompileValue(schema);
     }
 
     public ICborValueWriter<T> CompileValue<T>(Schema<T> schema)
@@ -140,7 +153,15 @@ internal sealed class CborWriterCompiler(bool materializeTopLevelDefaults) : ISc
 
     public object VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
     {
-        var visitor = new CborMemberWriterCompiler<T>(this, materializeTopLevelDefaults);
+        return CompileStructure(schema, materializeDefaults: true);
+    }
+
+    private StructureCborValueWriter<T> CompileStructure<T>(
+        IStructSchema<T> schema,
+        bool materializeDefaults
+    )
+    {
+        var visitor = new CborMemberWriterCompiler<T>(this, materializeDefaults);
         schema.VisitMembers(visitor);
         return new StructureCborValueWriter<T>(visitor.Writers);
     }

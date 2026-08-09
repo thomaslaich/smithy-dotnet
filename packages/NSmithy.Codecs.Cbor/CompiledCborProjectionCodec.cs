@@ -44,7 +44,7 @@ internal sealed class CompiledCborProjectionCodec<T, TBuilder>(
     )
     {
         var visitor = new CborMemberWriterCompiler<T>(
-            new CborWriterCompiler(materializeTopLevelDefaults),
+            new CborWriterCompiler(),
             materializeTopLevelDefaults
         );
         projection.VisitMembers(visitor);

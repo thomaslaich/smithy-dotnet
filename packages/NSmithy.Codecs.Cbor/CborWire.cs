@@ -9,6 +9,10 @@ namespace NSmithy.Codecs.Cbor;
 
 internal static class CborWire
 {
+    private static readonly ShapeId SparseTrait = new("smithy.api", "sparse");
+
+    internal static bool IsSparse(Schema schema) => schema.HasTrait(SparseTrait);
+
     internal static void WriteTimestamp(CborWriter writer, DateTimeOffset value)
     {
         writer.WriteTag(CborTag.UnixTimeSeconds);

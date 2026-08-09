@@ -1097,10 +1097,10 @@ public sealed class GrpcProtocol : IProtocol
 
     private static Schema? FindEventStreamEventSchema(Schema schema) =>
         schema.Resolved is IStructSchema structure
-            ? FindEventStreamEventSchema((dynamic)structure)
+            ? FindEventStreamEventSchemaCore((dynamic)structure)
             : null;
 
-    private static Schema? FindEventStreamEventSchema<T>(IStructSchema<T> structure)
+    private static Schema? FindEventStreamEventSchemaCore<T>(IStructSchema<T> structure)
     {
         var visitor = new EventStreamSchemaVisitor<T>();
         structure.VisitMembers(visitor);

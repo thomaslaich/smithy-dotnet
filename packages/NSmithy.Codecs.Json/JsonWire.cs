@@ -11,6 +11,7 @@ internal static class JsonWire
     private static readonly ShapeId ClientOptionalTrait = new("smithy.api", "clientOptional");
     private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
     private static readonly ShapeId JsonNameTrait = new("smithy.api", "jsonName");
+    private static readonly ShapeId SparseTrait = new("smithy.api", "sparse");
     private static readonly ShapeId AlloyDiscriminatedTrait = new("alloy", "discriminated");
     private static readonly ShapeId AlloyJsonUnknownTrait = new("alloy", "jsonUnknown");
 
@@ -21,6 +22,8 @@ internal static class JsonWire
     internal static bool IsOpenUnion(IUnionSchema schema) =>
         ((Schema)schema).Traits.ContainsKey(AlloyDiscriminatedTrait)
         || GetJsonUnknownCase(schema) is not null;
+
+    internal static bool IsSparse(Schema schema) => schema.HasTrait(SparseTrait);
 
     internal static bool TryCreateDefaultValue<T>(
         Schema<T> schema,

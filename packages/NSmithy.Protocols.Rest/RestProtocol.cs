@@ -420,7 +420,7 @@ public static class RestProtocol
             );
         }
 
-        return SerializeError(
+        return SerializeStructuredError(
             (dynamic)schema,
             value,
             errorShapeId,
@@ -431,7 +431,7 @@ public static class RestProtocol
         );
     }
 
-    private static SmithyHttpServerResponse SerializeError<TError, TBuilder>(
+    private static SmithyHttpServerResponse SerializeStructuredError<TError, TBuilder>(
         IStructSchema<TError, TBuilder> schema,
         TError value,
         string errorShapeId,

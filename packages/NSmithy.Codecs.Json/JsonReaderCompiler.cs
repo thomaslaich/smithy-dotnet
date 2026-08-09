@@ -546,7 +546,10 @@ internal sealed class UnionJsonValueReader<T> : IJsonValueReader<T>
             );
         }
 
-        var properties = value.EnumerateObject().ToArray();
+        var properties = value
+            .EnumerateObject()
+            .Where(property => !property.NameEquals("__type"))
+            .ToArray();
         if (properties.Length != 1)
         {
             throw new InvalidOperationException(
@@ -659,6 +662,8 @@ internal sealed class ListJsonValueReader<TCollection, TElement, TBuilder>(
     IJsonValueReader<TElement> elementReader
 ) : IJsonValueReader<TCollection>
 {
+    private readonly bool sparse = IsSparse((Schema)schema);
+
     public TCollection Read(JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.Array)
@@ -671,6 +676,17 @@ internal sealed class ListJsonValueReader<TCollection, TElement, TBuilder>(
         var builder = schema.CreateTypedBuilder();
         foreach (var element in value.EnumerateArray())
         {
+            if (element.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            {
+                if (!sparse)
+                {
+                    throw new InvalidOperationException("Non-sparse JSON list cannot contain null.");
+                }
+
+                schema.Add(builder, default!);
+                continue;
+            }
+
             schema.Add(builder, elementReader.Read(element));
         }
 
@@ -683,6 +699,8 @@ internal sealed class MapJsonValueReader<TDictionary, TValue, TBuilder>(
     IJsonValueReader<TValue> valueReader
 ) : IJsonValueReader<TDictionary>
 {
+    private readonly bool sparse = IsSparse((Schema)schema);
+
     public TDictionary Read(JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.Object)
@@ -695,6 +713,17 @@ internal sealed class MapJsonValueReader<TDictionary, TValue, TBuilder>(
         var builder = schema.CreateTypedBuilder();
         foreach (var property in value.EnumerateObject())
         {
+            if (property.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            {
+                if (!sparse)
+                {
+                    throw new InvalidOperationException("Non-sparse JSON map cannot contain null.");
+                }
+
+                schema.Add(builder, property.Name, default!);
+                continue;
+            }
+
             schema.Add(builder, property.Name, valueReader.Read(property.Value));
         }
 
