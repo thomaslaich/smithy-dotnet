@@ -304,6 +304,12 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(
 
     public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
     {
+        if (XmlTraits.IsXmlFlattened(member))
+        {
+            writers.Add(CreateFlattenedWriter(member));
+            return;
+        }
+
         writers.Add(
             new XmlMemberWriter<TContainer, TValue>(
                 member,
@@ -312,6 +318,48 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(
             )
         );
     }
+
+    private IXmlMemberWriter<TContainer> CreateFlattenedWriter<TValue>(
+        IMemberSchema<TContainer, TValue> member
+    )
+    {
+        var target = member.TargetSchema.Resolved;
+        return target switch
+        {
+            IListSchema list => CreateFlattenedListWriter(member, (dynamic)list),
+            IMapSchema map => CreateFlattenedMapWriter(member, (dynamic)map),
+            _ => new FlattenedXmlMemberWriter<TContainer, TValue>(
+                member,
+                compiler.CompileValue(member.TargetSchema, member.MemberTraits),
+                materializeDefaults
+            ),
+        };
+    }
+
+    private FlattenedListXmlMemberWriter<TContainer, TValue, TElement> CreateFlattenedListWriter<
+        TValue,
+        TElement
+    >(IMemberSchema<TContainer, TValue> member, IListSchema<TValue, TElement> list) =>
+        new(
+            member,
+            list,
+            compiler.CompileValue(
+                list.TypedElementMember.TargetSchema,
+                list.TypedElementMember.MemberTraits
+            ),
+            materializeDefaults
+        );
+
+    private FlattenedMapXmlMemberWriter<TContainer, TValue, TMapValue> CreateFlattenedMapWriter<
+        TValue,
+        TMapValue
+    >(IMemberSchema<TContainer, TValue> member, IMapSchema<TValue, TMapValue> map) =>
+        new(
+            member,
+            map,
+            compiler.CompileValue(map.TypedValueMember.TargetSchema, map.TypedValueMember.MemberTraits),
+            materializeDefaults
+        );
 }
 
 internal sealed class XmlMemberWriter<TContainer, TValue>(
@@ -330,14 +378,14 @@ internal sealed class XmlMemberWriter<TContainer, TValue>(
                 || !TryCreateDefaultValue(
                     member.TargetSchema,
                     member.MemberTraits,
-                    out var defaultValue
+                    out TValue? defaultValue
                 )
             )
             {
                 return;
             }
 
-            value = (TValue)defaultValue!;
+            value = defaultValue!;
         }
 
         if (XmlTraits.IsXmlAttribute(member))
@@ -351,13 +399,131 @@ internal sealed class XmlMemberWriter<TContainer, TValue>(
 
         if (XmlTraits.IsXmlFlattened(member))
         {
-            WriteFlattenedMember(element, member, value);
-            return;
+            throw new InvalidOperationException(
+                $"Flattened XML member '{member.Name}' was not compiled as a flattened writer."
+            );
         }
 
         var child = new XElement(ElementName(member));
         valueWriter.Write(child, value);
         element.Add(child);
+    }
+}
+
+internal sealed class FlattenedXmlMemberWriter<TContainer, TValue>(
+    IMemberSchema<TContainer, TValue> member,
+    IXmlValueWriter<TValue> valueWriter,
+    bool materializeDefault
+) : IXmlMemberWriter<TContainer>
+{
+    public void Write(XElement element, TContainer container)
+    {
+        var value = member.GetValue(container);
+        if (value is null && !member.IsRequired)
+        {
+            if (
+                !materializeDefault
+                || !TryCreateDefaultValue(
+                    member.TargetSchema,
+                    member.MemberTraits,
+                    out TValue? defaultValue
+                )
+            )
+            {
+                return;
+            }
+
+            value = defaultValue!;
+        }
+
+        var child = new XElement(ElementName(member));
+        valueWriter.Write(child, value);
+        element.Add(child);
+    }
+}
+
+internal sealed class FlattenedListXmlMemberWriter<TContainer, TCollection, TElement>(
+    IMemberSchema<TContainer, TCollection> member,
+    IListSchema<TCollection, TElement> list,
+    IXmlValueWriter<TElement> elementWriter,
+    bool materializeDefault
+) : IXmlMemberWriter<TContainer>
+{
+    public void Write(XElement element, TContainer container)
+    {
+        var value = member.GetValue(container);
+        if (value is null && !member.IsRequired)
+        {
+            if (
+                !materializeDefault
+                || !TryCreateDefaultValue(
+                    member.TargetSchema,
+                    member.MemberTraits,
+                    out TCollection? defaultValue
+                )
+            )
+            {
+                return;
+            }
+
+            value = defaultValue!;
+        }
+
+        if (value is null)
+        {
+            return;
+        }
+
+        foreach (var item in list.GetElements(value))
+        {
+            var child = new XElement(ElementName(member));
+            elementWriter.Write(child, item);
+            element.Add(child);
+        }
+    }
+}
+
+internal sealed class FlattenedMapXmlMemberWriter<TContainer, TDictionary, TValue>(
+    IMemberSchema<TContainer, TDictionary> member,
+    IMapSchema<TDictionary, TValue> map,
+    IXmlValueWriter<TValue> valueWriter,
+    bool materializeDefault
+) : IXmlMemberWriter<TContainer>
+{
+    public void Write(XElement element, TContainer container)
+    {
+        var value = member.GetValue(container);
+        if (value is null && !member.IsRequired)
+        {
+            if (
+                !materializeDefault
+                || !TryCreateDefaultValue(
+                    member.TargetSchema,
+                    member.MemberTraits,
+                    out TDictionary? defaultValue
+                )
+            )
+            {
+                return;
+            }
+
+            value = defaultValue!;
+        }
+
+        if (value is null)
+        {
+            return;
+        }
+
+        foreach (var entry in map.GetEntries(value))
+        {
+            var child = new XElement(ElementName(member));
+            child.Add(new XElement("key", entry.Key));
+            var valueElement = new XElement("value");
+            valueWriter.Write(valueElement, entry.Value);
+            child.Add(valueElement);
+            element.Add(child);
+        }
     }
 }
 

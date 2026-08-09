@@ -255,8 +255,7 @@ internal sealed class ScalarXmlValueReader<T>(
     IReadOnlyDictionary<ShapeId, Trait> traits
 ) : IXmlValueReader<T>
 {
-    public T Read(XElement? element) =>
-        (T)ReadScalar(schema, traits, element?.Value ?? string.Empty)!;
+    public T Read(XElement? element) => ReadScalar(schema, traits, element?.Value ?? string.Empty);
 }
 
 internal sealed class NullableXmlValueReader<T>(IXmlValueReader<T> inner) : IXmlValueReader<T?>
@@ -274,6 +273,12 @@ internal sealed class XmlMemberReaderCompiler<TContainer, TBuilder>(XmlReaderCom
 
     public void Visit<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member)
     {
+        if (XmlTraits.IsXmlFlattened(member))
+        {
+            readers.Add(CreateFlattenedReader(member));
+            return;
+        }
+
         readers.Add(
             new XmlMemberReader<TContainer, TBuilder, TValue>(
                 member,
@@ -281,6 +286,57 @@ internal sealed class XmlMemberReaderCompiler<TContainer, TBuilder>(XmlReaderCom
             )
         );
     }
+
+    private IXmlMemberReader<TBuilder> CreateFlattenedReader<TValue>(
+        IMemberSchema<TContainer, TBuilder, TValue> member
+    )
+    {
+        var target = member.TargetSchema.Resolved;
+        return target switch
+        {
+            IListSchema list => CreateFlattenedListReader(member, (dynamic)list),
+            IMapSchema map => CreateFlattenedMapReader(member, (dynamic)map),
+            _ => new FlattenedXmlMemberReader<TContainer, TBuilder, TValue>(
+                member,
+                compiler.CompileValue(member.TargetSchema, member.MemberTraits)
+            ),
+        };
+    }
+
+    private FlattenedListXmlMemberReader<
+        TContainer,
+        TBuilder,
+        TValue,
+        TElement,
+        TCollectionBuilder
+    > CreateFlattenedListReader<TValue, TElement, TCollectionBuilder>(
+        IMemberSchema<TContainer, TBuilder, TValue> member,
+        IListSchema<TValue, TElement, TCollectionBuilder> list
+    ) =>
+        new(
+            member,
+            list,
+            compiler.CompileValue(
+                list.TypedElementMember.TargetSchema,
+                list.TypedElementMember.MemberTraits
+            )
+        );
+
+    private FlattenedMapXmlMemberReader<
+        TContainer,
+        TBuilder,
+        TValue,
+        TMapValue,
+        TMapBuilder
+    > CreateFlattenedMapReader<TValue, TMapValue, TMapBuilder>(
+        IMemberSchema<TContainer, TBuilder, TValue> member,
+        IMapSchema<TValue, TMapValue, TMapBuilder> map
+    ) =>
+        new(
+            member,
+            map,
+            compiler.CompileValue(map.TypedValueMember.TargetSchema, map.TypedValueMember.MemberTraits)
+        );
 }
 
 internal sealed class XmlMemberReader<TContainer, TBuilder, TValue>(
@@ -301,7 +357,7 @@ internal sealed class XmlMemberReader<TContainer, TBuilder, TValue>(
             {
                 member.SetValue(
                     builder,
-                    (TValue)ReadScalar(member.TargetSchema, member.MemberTraits, attr.Value)!
+                    ReadScalar(member.TargetSchema, member.MemberTraits, attr.Value)
                 );
             }
             else if (member.IsRequired)
@@ -314,8 +370,9 @@ internal sealed class XmlMemberReader<TContainer, TBuilder, TValue>(
 
         if (XmlTraits.IsXmlFlattened(member))
         {
-            ReadFlattenedMember(builder!, element, member);
-            return;
+            throw new InvalidOperationException(
+                $"Flattened XML member '{member.Name}' was not compiled as a flattened reader."
+            );
         }
 
         var child = ChildElement(element, Name);
@@ -327,6 +384,91 @@ internal sealed class XmlMemberReader<TContainer, TBuilder, TValue>(
         {
             throw new InvalidOperationException($"Missing required member '{member.Name}'.");
         }
+    }
+}
+
+internal sealed class FlattenedXmlMemberReader<TContainer, TBuilder, TValue>(
+    IMemberSchema<TContainer, TBuilder, TValue> member,
+    IXmlValueReader<TValue> valueReader
+) : IXmlMemberReader<TBuilder>
+{
+    public string Name => ElementName(member);
+
+    public bool IsRequired => member.IsRequired;
+
+    public void ReadInto(TBuilder builder, XElement element)
+    {
+        var child = ChildElement(element, Name);
+        if (child is not null)
+        {
+            member.SetValue(builder, valueReader.Read(child));
+        }
+        else if (member.IsRequired)
+        {
+            throw new InvalidOperationException($"Missing required member '{member.Name}'.");
+        }
+    }
+}
+
+internal sealed class FlattenedListXmlMemberReader<
+    TContainer,
+    TBuilder,
+    TCollection,
+    TElement,
+    TCollectionBuilder
+>(
+    IMemberSchema<TContainer, TBuilder, TCollection> member,
+    IListSchema<TCollection, TElement, TCollectionBuilder> list,
+    IXmlValueReader<TElement> elementReader
+) : IXmlMemberReader<TBuilder>
+{
+    public string Name => ElementName(member);
+
+    public bool IsRequired => member.IsRequired;
+
+    public void ReadInto(TBuilder builder, XElement element)
+    {
+        var collectionBuilder = list.CreateTypedBuilder();
+        foreach (var child in ChildElements(element, Name))
+        {
+            list.Add(collectionBuilder, elementReader.Read(child));
+        }
+
+        member.SetValue(builder, list.Build(collectionBuilder));
+    }
+}
+
+internal sealed class FlattenedMapXmlMemberReader<
+    TContainer,
+    TBuilder,
+    TDictionary,
+    TValue,
+    TMapBuilder
+>(
+    IMemberSchema<TContainer, TBuilder, TDictionary> member,
+    IMapSchema<TDictionary, TValue, TMapBuilder> map,
+    IXmlValueReader<TValue> valueReader
+) : IXmlMemberReader<TBuilder>
+{
+    public string Name => ElementName(member);
+
+    public bool IsRequired => member.IsRequired;
+
+    public void ReadInto(TBuilder builder, XElement element)
+    {
+        var mapBuilder = map.CreateTypedBuilder();
+        foreach (var child in ChildElements(element, Name))
+        {
+            var key = ChildElement(child, "key")?.Value;
+            if (key is null)
+            {
+                continue;
+            }
+
+            map.Add(mapBuilder, key, valueReader.Read(ChildElement(child, "value")));
+        }
+
+        member.SetValue(builder, map.Build(mapBuilder));
     }
 }
 
