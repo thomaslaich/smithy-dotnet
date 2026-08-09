@@ -23,7 +23,7 @@ internal static class ProtoWriterCompiler
     public static IProtoMessageWriter<T> Compile<T>(Schema<T> schema)
     {
         ArgumentNullException.ThrowIfNull(schema);
-        var unwrapped = ProtoCodec.Unwrap(schema);
+        var unwrapped = ProtoWire.Unwrap(schema);
         return (IProtoMessageWriter<T>)unwrapped.Accept(new Visitor());
     }
 
@@ -141,7 +141,7 @@ internal sealed class ProtoMemberWriter<TContainer, TValue>(
             return;
         }
 
-        ProtoCodec.WriteField(writer, member, memberValue);
+        ProtoWire.WriteField(writer, member, memberValue);
     }
 }
 
@@ -179,9 +179,9 @@ internal sealed class ProtoUnionCaseWriter<TUnion, TValue>(
             return false;
         }
 
-        ProtoCodec.WriteTagged(
+        ProtoWire.WriteTagged(
             writer,
-            ProtoCodec.ProtoIndex(unionCase.Traits),
+            ProtoWire.ProtoIndex(unionCase.Traits),
             unionCase.TargetSchema,
             unionCase.Traits,
             unionCase.GetValue(value)!

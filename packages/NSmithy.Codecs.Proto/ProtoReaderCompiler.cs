@@ -55,7 +55,7 @@ internal static class ProtoReaderCompiler
     public static IProtoMessageReader<T> Compile<T>(Schema<T> schema)
     {
         ArgumentNullException.ThrowIfNull(schema);
-        var unwrapped = ProtoCodec.Unwrap(schema);
+        var unwrapped = ProtoWire.Unwrap(schema);
         return (IProtoMessageReader<T>)unwrapped.Accept(new Visitor());
     }
 
@@ -169,7 +169,7 @@ internal sealed class ProtoFieldReaderCompiler<TContainer, TBuilder>
 
     public void Visit<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member)
     {
-        var target = ProtoCodec.Unwrap(member.TargetSchema);
+        var target = ProtoWire.Unwrap(member.TargetSchema);
         if (
             target is IUnionSchema union
             && target.HasTrait(new ShapeId("alloy.proto", "protoInlinedOneOf"))
@@ -243,7 +243,7 @@ internal sealed class ValueProtoFieldReader<TContainer, TBuilder, TValue>(
     IMemberSchema<TContainer, TBuilder, TValue> member
 ) : IProtoFieldReader<TBuilder>
 {
-    public int FieldNumber { get; } = ProtoCodec.ProtoIndex(member.MemberTraits);
+    public int FieldNumber { get; } = ProtoWire.ProtoIndex(member.MemberTraits);
 
     public void ReadInto(
         TBuilder builder,
@@ -254,7 +254,7 @@ internal sealed class ValueProtoFieldReader<TContainer, TBuilder, TValue>(
         member.SetValue(
             builder,
             (TValue)
-                ProtoCodec.ReadValueBody(
+                ProtoWire.ReadValueBody(
                     ref reader,
                     member.TargetSchema,
                     member.MemberTraits,
@@ -277,7 +277,7 @@ internal sealed class ListProtoFieldReader<
     IListSchema<TCollection, TElement, TCollectionBuilder> list
 ) : IProtoFieldReader<TBuilder>
 {
-    public int FieldNumber { get; } = ProtoCodec.ProtoIndex(member.MemberTraits);
+    public int FieldNumber { get; } = ProtoWire.ProtoIndex(member.MemberTraits);
 
     public void ReadInto(
         TBuilder builder,
@@ -287,8 +287,8 @@ internal sealed class ListProtoFieldReader<
     )
     {
         var accumulator = state.GetOrCreate(FieldNumber, list.CreateTypedBuilder);
-        var element = ProtoCodec.Unwrap(list.ElementSchema);
-        if (wireType == WireType.Len && ProtoCodec.IsPackableScalar(element.Kind))
+        var element = ProtoWire.Unwrap(list.ElementSchema);
+        if (wireType == WireType.Len && ProtoWire.IsPackableScalar(element.Kind))
         {
             var packed = new ProtoReader(reader.ReadLengthDelimited());
             while (!packed.End)
@@ -296,11 +296,11 @@ internal sealed class ListProtoFieldReader<
                 list.Add(
                     accumulator,
                     (TElement)
-                        ProtoCodec.ReadValueBody(
+                        ProtoWire.ReadValueBody(
                             ref packed,
                             list.ElementSchema,
                             member.MemberTraits,
-                            ProtoCodec.WireTypeOf(element.Kind, member.MemberTraits)
+                            ProtoWire.WireTypeOf(element.Kind, member.MemberTraits)
                         )!
                 );
             }
@@ -310,7 +310,7 @@ internal sealed class ListProtoFieldReader<
         list.Add(
             accumulator,
             (TElement)
-                ProtoCodec.ReadValueBody(
+                ProtoWire.ReadValueBody(
                     ref reader,
                     list.ElementSchema,
                     member.MemberTraits,
@@ -341,7 +341,7 @@ internal sealed class MapProtoFieldReader<
     bool sparse
 ) : IProtoFieldReader<TBuilder>
 {
-    public int FieldNumber { get; } = ProtoCodec.ProtoIndex(member.MemberTraits);
+    public int FieldNumber { get; } = ProtoWire.ProtoIndex(member.MemberTraits);
 
     public void ReadInto(
         TBuilder builder,
@@ -352,7 +352,7 @@ internal sealed class MapProtoFieldReader<
     {
         var accumulator = state.GetOrCreate(FieldNumber, map.CreateTypedBuilder);
         var entryBytes = reader.ReadLengthDelimited();
-        ProtoCodec.ReadMapEntry(map, sparse, accumulator!, entryBytes);
+        ProtoWire.ReadMapEntry(map, sparse, accumulator!, entryBytes);
     }
 
     public void Complete(TBuilder builder, ProtoReadState state)
@@ -380,7 +380,7 @@ internal sealed class InlinedProtoUnionCaseReader<TContainer, TBuilder, TUnion, 
     IUnionCaseSchema<TUnion, TValue> unionCase
 ) : IProtoFieldReader<TBuilder>
 {
-    public int FieldNumber { get; } = ProtoCodec.ProtoIndex(unionCase.Traits);
+    public int FieldNumber { get; } = ProtoWire.ProtoIndex(unionCase.Traits);
 
     public void ReadInto(
         TBuilder builder,
@@ -390,7 +390,7 @@ internal sealed class InlinedProtoUnionCaseReader<TContainer, TBuilder, TUnion, 
     )
     {
         var caseValue = (TValue)
-            ProtoCodec.ReadValueBody(
+            ProtoWire.ReadValueBody(
                 ref reader,
                 unionCase.TargetSchema,
                 unionCase.Traits,
@@ -452,12 +452,12 @@ internal sealed class ProtoUnionCaseReader<TUnion, TValue>(
     IUnionCaseSchema<TUnion, TValue> unionCase
 ) : IProtoUnionCaseReader<TUnion>
 {
-    public int FieldNumber { get; } = ProtoCodec.ProtoIndex(unionCase.Traits);
+    public int FieldNumber { get; } = ProtoWire.ProtoIndex(unionCase.Traits);
 
     public TUnion Read(ref ProtoReader reader, WireType wireType)
     {
         var value = (TValue)
-            ProtoCodec.ReadValueBody(
+            ProtoWire.ReadValueBody(
                 ref reader,
                 unionCase.TargetSchema,
                 unionCase.Traits,
