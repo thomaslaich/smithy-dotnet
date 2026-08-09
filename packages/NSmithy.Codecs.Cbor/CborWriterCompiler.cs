@@ -245,14 +245,14 @@ internal sealed class CborMemberWriter<TContainer, TValue>(
                 || !TryCreateDefaultValue(
                     member.TargetSchema,
                     member.MemberTraits,
-                    out var defaultValue
+                    out TValue? defaultValue
                 )
             )
             {
                 return;
             }
 
-            memberValue = (TValue)defaultValue!;
+            memberValue = defaultValue!;
         }
 
         writer.WriteTextString(member.Name);

@@ -335,14 +335,14 @@ internal sealed class JsonMemberWriter<TContainer, TValue>(
                 || !TryCreateDefaultValue(
                     member.TargetSchema,
                     member.MemberTraits,
-                    out var defaultValue
+                    out TValue? defaultValue
                 )
             )
             {
                 return;
             }
 
-            value = (TValue)defaultValue!;
+            value = defaultValue!;
         }
 
         writer.WritePropertyName(WireName(member.MemberTraits, member.Name));

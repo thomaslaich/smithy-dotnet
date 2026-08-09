@@ -8,12 +8,6 @@ namespace NSmithy.Codecs.Json;
 
 internal static class JsonWire
 {
-    private static Schema UnwrapNullable(Schema schema)
-    {
-        var resolved = schema.Resolved;
-        return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;
-    }
-
     private static readonly ShapeId ClientOptionalTrait = new("smithy.api", "clientOptional");
     private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
     private static readonly ShapeId JsonNameTrait = new("smithy.api", "jsonName");
@@ -28,10 +22,10 @@ internal static class JsonWire
         ((Schema)schema).Traits.ContainsKey(AlloyDiscriminatedTrait)
         || GetJsonUnknownCase(schema) is not null;
 
-    internal static bool TryCreateDefaultValue(
-        Schema schema,
+    internal static bool TryCreateDefaultValue<T>(
+        Schema<T> schema,
         IReadOnlyDictionary<ShapeId, Trait> traits,
-        out object? value
+        out T? value
     )
     {
         if (
@@ -40,64 +34,77 @@ internal static class JsonWire
             || trait.Value.Kind == DocumentKind.Null
         )
         {
-            value = null;
+            value = default;
             return false;
         }
 
-        value = CreateDefaultValue(UnwrapNullable(schema), trait.Value);
+        value = CreateDefaultValue(schema, trait.Value);
         return value is not null;
     }
 
-    private static object? CreateDefaultValue(Schema schema, Document value)
+    private static T? CreateDefaultValue<T>(Schema<T> schema, Document value)
     {
-        return schema.Kind switch
+        var resolved = schema.Resolved;
+        if (resolved is INullableSchema nullable)
         {
-            ShapeKind.Boolean => value.AsBoolean(),
-            ShapeKind.Byte => (sbyte)value.AsNumber(),
-            ShapeKind.Short => (short)value.AsNumber(),
-            ShapeKind.Integer => (int)value.AsNumber(),
-            ShapeKind.Long => (long)value.AsNumber(),
-            ShapeKind.Float => (float)value.AsNumber(),
-            ShapeKind.Double => (double)value.AsNumber(),
-            ShapeKind.BigInteger => new BigInteger(value.AsNumber()),
-            ShapeKind.BigDecimal => value.AsNumber(),
-            ShapeKind.String => value.AsString(),
-            ShapeKind.Enum => ((IStringEnumSchema)schema).CreateObject(value.AsString()),
-            ShapeKind.IntEnum => ((IIntEnumSchema)schema).CreateObject((int)value.AsNumber()),
-            ShapeKind.Blob => Convert.FromBase64String(value.AsString()),
-            ShapeKind.Timestamp => DateTimeOffset.FromUnixTimeSeconds((long)value.AsNumber()),
-            ShapeKind.Document => value,
-            ShapeKind.List or ShapeKind.Set when schema.Resolved is IListSchema list =>
-                CreateDefaultList(list, value),
-            ShapeKind.Map when schema.Resolved is IMapSchema map => CreateDefaultMap(map, value),
+            return (T?)CreateDefaultValue((dynamic)nullable.Target, value);
+        }
+
+        return resolved.Kind switch
+        {
+            ShapeKind.Boolean => (T)(object)value.AsBoolean(),
+            ShapeKind.Byte => (T)(object)(sbyte)value.AsNumber(),
+            ShapeKind.Short => (T)(object)(short)value.AsNumber(),
+            ShapeKind.Integer => (T)(object)(int)value.AsNumber(),
+            ShapeKind.Long => (T)(object)(long)value.AsNumber(),
+            ShapeKind.Float => (T)(object)(float)value.AsNumber(),
+            ShapeKind.Double => (T)(object)(double)value.AsNumber(),
+            ShapeKind.BigInteger => (T)(object)new BigInteger(value.AsNumber()),
+            ShapeKind.BigDecimal => (T)(object)value.AsNumber(),
+            ShapeKind.String => (T)(object)value.AsString(),
+            ShapeKind.Enum => (T)((IStringEnumSchema)resolved).CreateObject(value.AsString()),
+            ShapeKind.IntEnum => (T)((IIntEnumSchema)resolved).CreateObject((int)value.AsNumber()),
+            ShapeKind.Blob => (T)(object)Convert.FromBase64String(value.AsString()),
+            ShapeKind.Timestamp =>
+                (T)(object)DateTimeOffset.FromUnixTimeSeconds((long)value.AsNumber()),
+            ShapeKind.Document => (T)(object)value,
+            ShapeKind.List or ShapeKind.Set when resolved is IListSchema list =>
+                CreateDefaultList((dynamic)list, value),
+            ShapeKind.Map when resolved is IMapSchema map => CreateDefaultMap((dynamic)map, value),
             _ => null,
         };
     }
 
-    private static object CreateDefaultList(IListSchema schema, Document value)
+    private static TCollection CreateDefaultList<TCollection, TElement, TBuilder>(
+        IListSchema<TCollection, TElement, TBuilder> schema,
+        Document value
+    )
     {
-        var builder = schema.CreateBuilder();
+        var builder = schema.CreateTypedBuilder();
         foreach (var item in value.AsArray())
         {
-            schema.AddObject(builder, CreateDefaultValue(UnwrapNullable(schema.Element), item));
+            schema.Add(builder, CreateDefaultValue(schema.TypedElementMember.TargetSchema, item)!);
         }
 
-        return schema.BuildObject(builder);
+        return schema.Build(builder);
     }
 
-    private static object CreateDefaultMap(IMapSchema schema, Document value)
+    private static TDictionary CreateDefaultMap<TDictionary, TValue, TBuilder>(
+        IMapSchema<TDictionary, TValue, TBuilder> schema,
+        Document value
+    )
     {
-        var builder = schema.CreateBuilder();
+        var builder = schema.CreateTypedBuilder();
         foreach (var entry in value.AsObject())
         {
-            schema.AddObject(
+            schema.Add(
                 builder,
                 entry.Key,
-                CreateDefaultValue(UnwrapNullable(schema.Value), entry.Value)
+                CreateDefaultValue(schema.TypedValueMember.TargetSchema, entry.Value)!
             );
         }
 
-        return schema.BuildObject(builder);
+        return schema.Build(builder);
     }
 
     internal static bool TryGetDiscriminatorName(IUnionSchema schema, out string discriminatorName)

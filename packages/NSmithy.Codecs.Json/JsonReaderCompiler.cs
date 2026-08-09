@@ -317,9 +317,9 @@ internal sealed class JsonMemberReader<TContainer, TBuilder, TValue>(
 
     public void ReadMissing(TBuilder builder)
     {
-        if (TryCreateDefaultValue(member.TargetSchema, member.MemberTraits, out var defaultValue))
+        if (TryCreateDefaultValue(member.TargetSchema, member.MemberTraits, out TValue? defaultValue))
         {
-            member.SetValue(builder, (TValue)defaultValue!);
+            member.SetValue(builder, defaultValue!);
         }
     }
 

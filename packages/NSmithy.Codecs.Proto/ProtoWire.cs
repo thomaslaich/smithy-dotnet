@@ -212,601 +212,6 @@ internal static class ProtoWire
     // synthetic trait the codegen attaches, matching ProtoGenerator's UNSPECIFIED=0, then 1,2,3…
     private static readonly ShapeId SyntheticEnumTrait = new("smithy.synthetic", "enum");
 
-    // ---- writing -----------------------------------------------------------
-
-    internal static void WriteMessage(ProtoWriter writer, IStructSchema schema, object value)
-    {
-        foreach (var member in schema.Members)
-        {
-            var memberValue = member.GetObject(value);
-            if (memberValue is null)
-            {
-                // proto3 has no null on the wire; absence is expressed by omitting the field.
-                continue;
-            }
-
-            WriteField(writer, member, memberValue);
-        }
-    }
-
-    internal static void WriteField(ProtoWriter writer, IMemberSchema member, object value)
-    {
-        var field = ProtoIndex(member.MemberTraits);
-        var target = Unwrap(member.Target);
-
-        switch (target.Kind)
-        {
-            case ShapeKind.List or ShapeKind.Set:
-            {
-                var list = (IListSchema)target;
-                var element = Unwrap(list.Element);
-                var elements = list.GetElementsObject(value).ToArray();
-                if (IsPackableScalar(element.Kind))
-                {
-                    var packed = new ProtoWriter();
-                    foreach (var item in elements)
-                    {
-                        WriteValueBody(packed, list.Element, member.MemberTraits, item!);
-                    }
-
-                    if (packed.Length > 0)
-                    {
-                        writer.WriteTag(field, WireType.Len);
-                        writer.WriteLengthDelimited(packed.ToArray());
-                    }
-                }
-                else
-                {
-                    foreach (var item in elements)
-                    {
-                        WriteTagged(writer, field, list.Element, member.MemberTraits, item!);
-                    }
-                }
-
-                break;
-            }
-            case ShapeKind.Map:
-            {
-                var map = (IMapSchema)target;
-                var sparse = target.HasTrait(SparseTrait);
-                foreach (var entry in map.GetEntriesObject(value))
-                {
-                    var sub = new ProtoWriter();
-                    WriteTagged(sub, 1, Schemas.String, NoTraits, entry.Key);
-                    if (sparse)
-                    {
-                        // @sparse map values are encoded as google.protobuf.Value so null entries
-                        // round-trip (null_value) rather than being dropped.
-                        sub.WriteTag(2, WireType.Len);
-                        sub.WriteLengthDelimited(EncodeScalarValueMessage(map.Value, entry.Value));
-                    }
-                    else if (entry.Value is not null)
-                    {
-                        WriteTagged(sub, 2, map.Value, NoTraits, entry.Value);
-                    }
-
-                    writer.WriteTag(field, WireType.Len);
-                    writer.WriteLengthDelimited(sub.ToArray());
-                }
-
-                break;
-            }
-            case ShapeKind.Union when target.HasTrait(ProtoInlinedOneOfTrait):
-            {
-                // @protoInlinedOneOf: the active case is written directly into the parent message at
-                // the case's own field number (not wrapped, not at the member's field number).
-                var union = (IUnionSchema)target;
-                var @case = union.GetCaseObject(value);
-                WriteTagged(
-                    writer,
-                    ProtoIndex(@case.Traits),
-                    @case.Target,
-                    @case.Traits,
-                    @case.GetObject(value)!
-                );
-                break;
-            }
-            default:
-                WriteTagged(writer, field, member.Target, member.MemberTraits, value);
-                break;
-        }
-    }
-
-    internal static void WriteTagged(
-        ProtoWriter writer,
-        int field,
-        Schema schema,
-        IReadOnlyDictionary<ShapeId, Trait> traits,
-        object value
-    )
-    {
-        writer.WriteTag(field, WireTypeOf(Unwrap(schema).Kind, traits));
-        WriteValueBody(writer, schema, traits, value);
-    }
-
-    internal static void WriteValueBody(
-        ProtoWriter writer,
-        Schema schema,
-        IReadOnlyDictionary<ShapeId, Trait> traits,
-        object value
-    )
-    {
-        var resolved = Unwrap(schema);
-        switch (resolved.Kind)
-        {
-            case ShapeKind.Boolean:
-                writer.WriteVarint((bool)value ? 1UL : 0UL);
-                break;
-            case ShapeKind.Byte:
-            case ShapeKind.Short:
-            case ShapeKind.Integer:
-            case ShapeKind.Long:
-                WriteInteger(writer, IntEncodingOf(resolved.Kind, traits), ToInt64(value));
-                break;
-            case ShapeKind.Float:
-                writer.WriteFixed32(BitConverter.SingleToUInt32Bits((float)value));
-                break;
-            case ShapeKind.Double:
-                writer.WriteFixed64(BitConverter.DoubleToUInt64Bits((double)value));
-                break;
-            case ShapeKind.String:
-                writer.WriteLengthDelimited(Encoding.UTF8.GetBytes((string)value));
-                break;
-            case ShapeKind.Blob:
-                writer.WriteLengthDelimited((byte[])value);
-                break;
-            case ShapeKind.BigInteger:
-                writer.WriteLengthDelimited(
-                    Encoding.UTF8.GetBytes(
-                        ((BigInteger)value).ToString(CultureInfo.InvariantCulture)
-                    )
-                );
-                break;
-            case ShapeKind.BigDecimal:
-                writer.WriteLengthDelimited(
-                    Encoding.UTF8.GetBytes(((decimal)value).ToString(CultureInfo.InvariantCulture))
-                );
-                break;
-            case ShapeKind.IntEnum:
-                writer.WriteVarint(
-                    (ulong)(long)((IIntEnumSchema)resolved).GetIntegerValueObject(value)
-                );
-                break;
-            case ShapeKind.Timestamp:
-                writer.WriteLengthDelimited(EncodeTimestamp((DateTimeOffset)value));
-                break;
-            case ShapeKind.Structure:
-            {
-                var sub = new ProtoWriter();
-                WriteMessage(sub, (IStructSchema)resolved, value);
-                writer.WriteLengthDelimited(sub.ToArray());
-                break;
-            }
-            case ShapeKind.Union:
-            {
-                var sub = new ProtoWriter();
-                WriteUnion(sub, (IUnionSchema)resolved, value);
-                writer.WriteLengthDelimited(sub.ToArray());
-                break;
-            }
-            case ShapeKind.Enum:
-                writer.WriteVarint(
-                    (ulong)(long)EnumOrdinal(resolved, ((IStringEnumValue)value).Value)
-                );
-                break;
-            case ShapeKind.Document:
-            {
-                var sub = new ProtoWriter();
-                EncodeDocumentValue(sub, (Document)value);
-                writer.WriteLengthDelimited(sub.ToArray());
-                break;
-            }
-            default:
-                throw new NotSupportedException(
-                    $"Proto codec cannot encode schema kind '{resolved.Kind}'."
-                );
-        }
-    }
-
-    internal static void WriteUnion(ProtoWriter writer, IUnionSchema schema, object value)
-    {
-        var @case = schema.GetCaseObject(value);
-        WriteTagged(
-            writer,
-            ProtoIndex(@case.Traits),
-            @case.Target,
-            @case.Traits,
-            @case.GetObject(value)!
-        );
-    }
-
-    private static void WriteInteger(ProtoWriter writer, IntEncoding encoding, long value)
-    {
-        switch (encoding)
-        {
-            case IntEncoding.VarInt32:
-            case IntEncoding.VarInt64:
-                writer.WriteVarint((ulong)value);
-                break;
-            case IntEncoding.SInt32:
-                writer.WriteVarint(ProtoWriter.ZigZag((int)value));
-                break;
-            case IntEncoding.SInt64:
-                writer.WriteVarint(ProtoWriter.ZigZag(value));
-                break;
-            case IntEncoding.UInt32:
-                writer.WriteVarint((uint)value);
-                break;
-            case IntEncoding.UInt64:
-                writer.WriteVarint((ulong)value);
-                break;
-            case IntEncoding.Fixed32:
-            case IntEncoding.SFixed32:
-                writer.WriteFixed32((uint)(int)value);
-                break;
-            case IntEncoding.Fixed64:
-            case IntEncoding.SFixed64:
-                writer.WriteFixed64((ulong)value);
-                break;
-            default:
-                throw new InvalidOperationException($"Unknown integer encoding '{encoding}'.");
-        }
-    }
-
-    private static byte[] EncodeTimestamp(DateTimeOffset value)
-    {
-        var ticks = value.UtcTicks - DateTimeOffset.UnixEpoch.UtcTicks;
-        var seconds = Math.DivRem(ticks, TimeSpan.TicksPerSecond, out var remainderTicks);
-        if (remainderTicks < 0)
-        {
-            seconds--;
-            remainderTicks += TimeSpan.TicksPerSecond;
-        }
-
-        var nanos = (int)remainderTicks * 100;
-        var writer = new ProtoWriter();
-        if (seconds != 0)
-        {
-            writer.WriteTag(1, WireType.Varint);
-            writer.WriteVarint((ulong)seconds);
-        }
-
-        if (nanos != 0)
-        {
-            writer.WriteTag(2, WireType.Varint);
-            writer.WriteVarint((ulong)(long)nanos);
-        }
-
-        return writer.ToArray();
-    }
-
-    // ---- reading -----------------------------------------------------------
-
-    internal static object ReadMessage(IStructSchema schema, ReadOnlySpan<byte> bytes)
-    {
-        var builder = schema.CreateBuilder();
-        var byNumber = BuildFieldMap(schema);
-        var inlined = BuildInlinedCaseMap(schema);
-        var lists = new Dictionary<int, (IMemberSchema Member, object Builder)>();
-        var maps = new Dictionary<int, (IMemberSchema Member, object Builder)>();
-
-        var reader = new ProtoReader(bytes);
-        while (!reader.End)
-        {
-            var (number, wireType) = reader.ReadTag();
-
-            // @protoInlinedOneOf: a case field number sets the parent union member directly.
-            if (inlined.TryGetValue(number, out var ic))
-            {
-                var caseValue = ReadValueBody(ref reader, ic.Case.Target, ic.Case.Traits, wireType);
-                ic.Member.SetObject(builder, ic.Case.CreateObject(caseValue));
-                continue;
-            }
-
-            if (!byNumber.TryGetValue(number, out var member))
-            {
-                reader.SkipField(wireType);
-                continue;
-            }
-
-            var target = Unwrap(member.Target);
-            switch (target.Kind)
-            {
-                case ShapeKind.List or ShapeKind.Set:
-                {
-                    var list = (IListSchema)target;
-                    if (!lists.TryGetValue(number, out var acc))
-                    {
-                        acc = (member, list.CreateBuilder());
-                        lists[number] = acc;
-                    }
-
-                    var element = Unwrap(list.Element);
-                    if (wireType == WireType.Len && IsPackableScalar(element.Kind))
-                    {
-                        var packed = new ProtoReader(reader.ReadLengthDelimited());
-                        while (!packed.End)
-                        {
-                            list.AddObject(
-                                acc.Builder,
-                                ReadValueBody(
-                                    ref packed,
-                                    list.Element,
-                                    member.MemberTraits,
-                                    WireTypeOf(element.Kind, member.MemberTraits)
-                                )
-                            );
-                        }
-                    }
-                    else
-                    {
-                        list.AddObject(
-                            acc.Builder,
-                            ReadValueBody(ref reader, list.Element, member.MemberTraits, wireType)
-                        );
-                    }
-
-                    break;
-                }
-                case ShapeKind.Map:
-                {
-                    var map = (IMapSchema)target;
-                    if (!maps.TryGetValue(number, out var acc))
-                    {
-                        acc = (member, map.CreateBuilder());
-                        maps[number] = acc;
-                    }
-
-                    var entryBytes = reader.ReadLengthDelimited();
-                    ReadMapEntry(map, target.HasTrait(SparseTrait), acc.Builder, entryBytes);
-                    break;
-                }
-                default:
-                    member.SetObject(
-                        builder,
-                        ReadValueBody(ref reader, member.Target, member.MemberTraits, wireType)
-                    );
-                    break;
-            }
-        }
-
-        foreach (var (_, acc) in lists)
-        {
-            var list = (IListSchema)Unwrap(acc.Member.Target);
-            acc.Member.SetObject(builder, list.BuildObject(acc.Builder));
-        }
-
-        foreach (var (_, acc) in maps)
-        {
-            var map = (IMapSchema)Unwrap(acc.Member.Target);
-            acc.Member.SetObject(builder, map.BuildObject(acc.Builder));
-        }
-
-        SetMissingCollectionsToEmpty(schema, builder, lists, maps);
-
-        return schema.BuildObject(builder);
-    }
-
-    private static void SetMissingCollectionsToEmpty(
-        IStructSchema schema,
-        object builder,
-        Dictionary<int, (IMemberSchema Member, object Builder)> lists,
-        Dictionary<int, (IMemberSchema Member, object Builder)> maps
-    )
-    {
-        foreach (var member in schema.Members)
-        {
-            var target = Unwrap(member.Target);
-            switch (target.Kind)
-            {
-                case ShapeKind.List or ShapeKind.Set:
-                {
-                    var field = ProtoIndex(member.MemberTraits);
-                    if (lists.ContainsKey(field))
-                    {
-                        break;
-                    }
-
-                    var list = (IListSchema)target;
-                    member.SetObject(builder, list.BuildObject(list.CreateBuilder()));
-                    break;
-                }
-                case ShapeKind.Map:
-                {
-                    var field = ProtoIndex(member.MemberTraits);
-                    if (maps.ContainsKey(field))
-                    {
-                        break;
-                    }
-
-                    var map = (IMapSchema)target;
-                    member.SetObject(builder, map.BuildObject(map.CreateBuilder()));
-                    break;
-                }
-            }
-        }
-    }
-
-    internal static void ReadMapEntry(
-        IMapSchema map,
-        bool sparse,
-        object builder,
-        ReadOnlySpan<byte> bytes
-    )
-    {
-        string? key = null;
-        object? value = null;
-        var reader = new ProtoReader(bytes);
-        while (!reader.End)
-        {
-            var (number, wireType) = reader.ReadTag();
-            switch (number)
-            {
-                case 1:
-                    key = (string)ReadValueBody(ref reader, Schemas.String, NoTraits, wireType)!;
-                    break;
-                case 2 when sparse:
-                    // @sparse value is a google.protobuf.Value message.
-                    value = DecodeScalarValueMessage(map.Value, reader.ReadLengthDelimited());
-                    break;
-                case 2:
-                    value = ReadValueBody(ref reader, map.Value, NoTraits, wireType);
-                    break;
-                default:
-                    reader.SkipField(wireType);
-                    break;
-            }
-        }
-
-        map.AddObject(builder, key ?? string.Empty, value);
-    }
-
-    internal static object? ReadUnion(IUnionSchema schema, ReadOnlySpan<byte> bytes)
-    {
-        var byNumber = new Dictionary<int, IUnionCaseSchema>();
-        foreach (var @case in schema.Cases)
-        {
-            byNumber[ProtoIndex(@case.Traits)] = @case;
-        }
-
-        var reader = new ProtoReader(bytes);
-        object? result = null;
-        while (!reader.End)
-        {
-            var (number, wireType) = reader.ReadTag();
-            if (byNumber.TryGetValue(number, out var @case))
-            {
-                result = @case.CreateObject(
-                    ReadValueBody(ref reader, @case.Target, @case.Traits, wireType)
-                );
-            }
-            else
-            {
-                reader.SkipField(wireType);
-            }
-        }
-
-        // A message whose only fields are unrecognized case numbers (e.g. a newer peer added a oneof
-        // case this build doesn't know) leaves result null. Return null — "no known case set" — so
-        // callers can skip it for forward-compatibility rather than aborting on an unknown message.
-        return result;
-    }
-
-    internal static object? ReadValueBody(
-        ref ProtoReader reader,
-        Schema schema,
-        IReadOnlyDictionary<ShapeId, Trait> traits,
-        WireType wireType
-    )
-    {
-        var resolved = Unwrap(schema);
-        switch (resolved.Kind)
-        {
-            case ShapeKind.Boolean:
-                return reader.ReadVarint() != 0;
-            case ShapeKind.Byte:
-                return (sbyte)ReadInteger(ref reader, IntEncodingOf(resolved.Kind, traits));
-            case ShapeKind.Short:
-                return (short)ReadInteger(ref reader, IntEncodingOf(resolved.Kind, traits));
-            case ShapeKind.Integer:
-                return (int)ReadInteger(ref reader, IntEncodingOf(resolved.Kind, traits));
-            case ShapeKind.Long:
-                return ReadInteger(ref reader, IntEncodingOf(resolved.Kind, traits));
-            case ShapeKind.Float:
-                return BitConverter.UInt32BitsToSingle(reader.ReadFixed32());
-            case ShapeKind.Double:
-                return BitConverter.UInt64BitsToDouble(reader.ReadFixed64());
-            case ShapeKind.String:
-                return Encoding.UTF8.GetString(reader.ReadLengthDelimited());
-            case ShapeKind.Blob:
-                return reader.ReadLengthDelimited().ToArray();
-            case ShapeKind.BigInteger:
-                return BigInteger.Parse(
-                    Encoding.UTF8.GetString(reader.ReadLengthDelimited()),
-                    CultureInfo.InvariantCulture
-                );
-            case ShapeKind.BigDecimal:
-                return decimal.Parse(
-                    Encoding.UTF8.GetString(reader.ReadLengthDelimited()),
-                    CultureInfo.InvariantCulture
-                );
-            case ShapeKind.IntEnum:
-                return ((IIntEnumSchema)resolved).CreateObject((int)reader.ReadVarint());
-            case ShapeKind.Timestamp:
-                return DecodeTimestamp(reader.ReadLengthDelimited());
-            case ShapeKind.Structure:
-                return ReadMessage((IStructSchema)resolved, reader.ReadLengthDelimited());
-            case ShapeKind.Union:
-                return ReadUnion((IUnionSchema)resolved, reader.ReadLengthDelimited());
-            case ShapeKind.Enum:
-            {
-                var name = EnumValueForOrdinal(resolved, (int)reader.ReadVarint());
-                return name is null ? null : ((IStringEnumSchema)resolved).CreateObject(name);
-            }
-            case ShapeKind.Document:
-                return DecodeDocumentValue(reader.ReadLengthDelimited());
-            default:
-                throw new NotSupportedException(
-                    $"Proto codec cannot decode schema kind '{resolved.Kind}' (wire type {wireType})."
-                );
-        }
-    }
-
-    private static long ReadInteger(ref ProtoReader reader, IntEncoding encoding)
-    {
-        switch (encoding)
-        {
-            case IntEncoding.VarInt32:
-                return (int)(uint)reader.ReadVarint();
-            case IntEncoding.VarInt64:
-                return (long)reader.ReadVarint();
-            case IntEncoding.SInt32:
-                return (int)DecodeZigZag(reader.ReadVarint());
-            case IntEncoding.SInt64:
-                return DecodeZigZag(reader.ReadVarint());
-            case IntEncoding.UInt32:
-                return (uint)reader.ReadVarint();
-            case IntEncoding.UInt64:
-                return (long)reader.ReadVarint();
-            case IntEncoding.Fixed32:
-                return reader.ReadFixed32();
-            case IntEncoding.SFixed32:
-                return (int)reader.ReadFixed32();
-            case IntEncoding.Fixed64:
-            case IntEncoding.SFixed64:
-                return (long)reader.ReadFixed64();
-            default:
-                throw new InvalidOperationException($"Unknown integer encoding '{encoding}'.");
-        }
-    }
-
-    private static DateTimeOffset DecodeTimestamp(ReadOnlySpan<byte> bytes)
-    {
-        long seconds = 0;
-        var nanos = 0;
-        var reader = new ProtoReader(bytes);
-        while (!reader.End)
-        {
-            var (number, wireType) = reader.ReadTag();
-            switch (number)
-            {
-                case 1:
-                    seconds = (long)reader.ReadVarint();
-                    break;
-                case 2:
-                    nanos = (int)(long)reader.ReadVarint();
-                    break;
-                default:
-                    reader.SkipField(wireType);
-                    break;
-            }
-        }
-
-        var ticks =
-            DateTimeOffset.UnixEpoch.UtcTicks + (seconds * TimeSpan.TicksPerSecond) + (nanos / 100);
-        return new DateTimeOffset(ticks, TimeSpan.Zero);
-    }
-
     // ---- helpers -----------------------------------------------------------
 
     private static readonly IReadOnlyDictionary<ShapeId, Trait> NoTraits =
@@ -848,6 +253,134 @@ internal static class ProtoWire
         };
     }
 
+    internal static void WriteInteger(
+        ProtoWriter writer,
+        ShapeKind kind,
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        long value
+    ) => WriteInteger(writer, IntEncodingOf(kind, traits), value);
+
+    private static void WriteInteger(ProtoWriter writer, IntEncoding encoding, long value)
+    {
+        switch (encoding)
+        {
+            case IntEncoding.VarInt32:
+            case IntEncoding.VarInt64:
+                writer.WriteVarint((ulong)value);
+                break;
+            case IntEncoding.SInt32:
+                writer.WriteVarint(ProtoWriter.ZigZag((int)value));
+                break;
+            case IntEncoding.SInt64:
+                writer.WriteVarint(ProtoWriter.ZigZag(value));
+                break;
+            case IntEncoding.UInt32:
+                writer.WriteVarint((uint)value);
+                break;
+            case IntEncoding.UInt64:
+                writer.WriteVarint((ulong)value);
+                break;
+            case IntEncoding.Fixed32:
+            case IntEncoding.SFixed32:
+                writer.WriteFixed32((uint)(int)value);
+                break;
+            case IntEncoding.Fixed64:
+            case IntEncoding.SFixed64:
+                writer.WriteFixed64((ulong)value);
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown integer encoding '{encoding}'.");
+        }
+    }
+
+    internal static long ReadInteger(
+        ref ProtoReader reader,
+        ShapeKind kind,
+        IReadOnlyDictionary<ShapeId, Trait> traits
+    ) => ReadInteger(ref reader, IntEncodingOf(kind, traits));
+
+    private static long ReadInteger(ref ProtoReader reader, IntEncoding encoding)
+    {
+        switch (encoding)
+        {
+            case IntEncoding.VarInt32:
+                return (int)(uint)reader.ReadVarint();
+            case IntEncoding.VarInt64:
+                return (long)reader.ReadVarint();
+            case IntEncoding.SInt32:
+                return (int)DecodeZigZag(reader.ReadVarint());
+            case IntEncoding.SInt64:
+                return DecodeZigZag(reader.ReadVarint());
+            case IntEncoding.UInt32:
+                return (uint)reader.ReadVarint();
+            case IntEncoding.UInt64:
+                return (long)reader.ReadVarint();
+            case IntEncoding.Fixed32:
+                return reader.ReadFixed32();
+            case IntEncoding.SFixed32:
+                return (int)reader.ReadFixed32();
+            case IntEncoding.Fixed64:
+            case IntEncoding.SFixed64:
+                return (long)reader.ReadFixed64();
+            default:
+                throw new InvalidOperationException($"Unknown integer encoding '{encoding}'.");
+        }
+    }
+
+    internal static byte[] EncodeTimestamp(DateTimeOffset value)
+    {
+        var ticks = value.UtcTicks - DateTimeOffset.UnixEpoch.UtcTicks;
+        var seconds = Math.DivRem(ticks, TimeSpan.TicksPerSecond, out var remainderTicks);
+        if (remainderTicks < 0)
+        {
+            seconds--;
+            remainderTicks += TimeSpan.TicksPerSecond;
+        }
+
+        var nanos = (int)remainderTicks * 100;
+        var writer = new ProtoWriter();
+        if (seconds != 0)
+        {
+            writer.WriteTag(1, WireType.Varint);
+            writer.WriteVarint((ulong)seconds);
+        }
+
+        if (nanos != 0)
+        {
+            writer.WriteTag(2, WireType.Varint);
+            writer.WriteVarint((ulong)(long)nanos);
+        }
+
+        return writer.ToArray();
+    }
+
+    internal static DateTimeOffset DecodeTimestamp(ReadOnlySpan<byte> bytes)
+    {
+        long seconds = 0;
+        var nanos = 0;
+        var reader = new ProtoReader(bytes);
+        while (!reader.End)
+        {
+            var (number, wireType) = reader.ReadTag();
+            switch (number)
+            {
+                case 1:
+                    seconds = (long)reader.ReadVarint();
+                    break;
+                case 2:
+                    nanos = (int)(long)reader.ReadVarint();
+                    break;
+                default:
+                    reader.SkipField(wireType);
+                    break;
+            }
+        }
+
+        var ticks =
+            DateTimeOffset.UnixEpoch.UtcTicks + (seconds * TimeSpan.TicksPerSecond) + (nanos / 100);
+        return new DateTimeOffset(ticks, TimeSpan.Zero);
+    }
+
     internal static WireType WireTypeOf(
         ShapeKind kind,
         IReadOnlyDictionary<ShapeId, Trait> traits
@@ -886,50 +419,14 @@ internal static class ProtoWire
                 or ShapeKind.Double
                 or ShapeKind.IntEnum;
 
-    private static Dictionary<int, IMemberSchema> BuildFieldMap(IStructSchema schema)
-    {
-        var map = new Dictionary<int, IMemberSchema>();
-        foreach (var member in schema.Members)
-        {
-            // Inlined-oneof members have no field of their own — their union's case field numbers
-            // live directly in this message (see BuildInlinedCaseMap).
-            if (IsInlinedUnion(Unwrap(member.Target)))
-            {
-                continue;
-            }
+    internal static bool IsSparse(Schema schema) => schema.HasTrait(SparseTrait);
 
-            map[ProtoIndex(member.MemberTraits)] = member;
-        }
-
-        return map;
-    }
-
-    private static Dictionary<
-        int,
-        (IMemberSchema Member, IUnionCaseSchema Case)
-    > BuildInlinedCaseMap(IStructSchema schema)
-    {
-        var map = new Dictionary<int, (IMemberSchema, IUnionCaseSchema)>();
-        foreach (var member in schema.Members)
-        {
-            if (Unwrap(member.Target) is IUnionSchema union && IsInlinedUnion((Schema)union))
-            {
-                foreach (var @case in union.Cases)
-                {
-                    map[ProtoIndex(@case.Traits)] = (member, @case);
-                }
-            }
-        }
-
-        return map;
-    }
-
-    private static bool IsInlinedUnion(Schema schema) =>
+    internal static bool IsInlinedUnion(Schema schema) =>
         schema.Kind == ShapeKind.Union && schema.HasTrait(ProtoInlinedOneOfTrait);
 
     // ---- string enum ordinals ----------------------------------------------
 
-    private static int EnumOrdinal(Schema enumSchema, string value)
+    internal static int EnumOrdinal(Schema enumSchema, string value)
     {
         var members = EnumMembers(enumSchema);
         var index = members.IndexOf(value);
@@ -937,7 +434,7 @@ internal static class ProtoWire
         return index < 0 ? 0 : index + 1;
     }
 
-    private static string? EnumValueForOrdinal(Schema enumSchema, int ordinal)
+    internal static string? EnumValueForOrdinal(Schema enumSchema, int ordinal)
     {
         if (ordinal <= 0)
         {
@@ -986,25 +483,24 @@ internal static class ProtoWire
     private const int ValueListField = 6;
 
     /// <summary>Encodes a sparse-map value (a declared scalar, or null) as a google.protobuf.Value.</summary>
-    private static byte[] EncodeScalarValueMessage(Schema valueSchema, object? value)
+    internal static void EncodeScalarValueMessage<T>(ProtoWriter writer, Schema<T> valueSchema, T? value)
     {
-        var writer = new ProtoWriter();
         if (value is null)
         {
             writer.WriteTag(ValueNullField, WireType.Varint);
             writer.WriteVarint(0);
-            return writer.ToArray();
+            return;
         }
 
         switch (Unwrap(valueSchema).Kind)
         {
             case ShapeKind.String:
                 writer.WriteTag(ValueStringField, WireType.Len);
-                writer.WriteLengthDelimited(Encoding.UTF8.GetBytes((string)value));
+                writer.WriteLengthDelimited(Encoding.UTF8.GetBytes((string)(object)value));
                 break;
             case ShapeKind.Boolean:
                 writer.WriteTag(ValueBoolField, WireType.Varint);
-                writer.WriteVarint((bool)value ? 1UL : 0UL);
+                writer.WriteVarint((bool)(object)value ? 1UL : 0UL);
                 break;
             case ShapeKind.Byte
             or ShapeKind.Short
@@ -1026,14 +522,13 @@ internal static class ProtoWire
                 );
         }
 
-        return writer.ToArray();
     }
 
     /// <summary>Decodes a google.protobuf.Value back to a sparse-map scalar (or null).</summary>
-    private static object? DecodeScalarValueMessage(Schema valueSchema, ReadOnlySpan<byte> bytes)
+    internal static T? DecodeScalarValueMessage<T>(Schema<T> valueSchema, ReadOnlySpan<byte> bytes)
     {
         var kind = Unwrap(valueSchema).Kind;
-        object? result = null;
+        T? result = default;
         var reader = new ProtoReader(bytes);
         while (!reader.End)
         {
@@ -1042,16 +537,16 @@ internal static class ProtoWire
             {
                 case ValueNullField:
                     reader.ReadVarint();
-                    result = null;
+                    result = default;
                     break;
                 case ValueStringField:
-                    result = Encoding.UTF8.GetString(reader.ReadLengthDelimited());
+                    result = (T)(object)Encoding.UTF8.GetString(reader.ReadLengthDelimited());
                     break;
                 case ValueBoolField:
-                    result = reader.ReadVarint() != 0;
+                    result = (T)(object)(reader.ReadVarint() != 0);
                     break;
                 case ValueNumberField:
-                    result = CoerceNumber(
+                    result = CoerceNumber<T>(
                         BitConverter.UInt64BitsToDouble(reader.ReadFixed64()),
                         kind
                     );
@@ -1065,20 +560,18 @@ internal static class ProtoWire
         return result;
     }
 
-    private static object CoerceNumber(double number, ShapeKind kind) =>
+    private static T CoerceNumber<T>(double number, ShapeKind kind) =>
         kind switch
         {
-            // Cast each arm to object so the value boxes as its own type rather than widening to
-            // double (the switch expression's common type would otherwise be double).
-            ShapeKind.Byte => (object)(sbyte)number,
-            ShapeKind.Short => (short)number,
-            ShapeKind.Integer => (int)number,
-            ShapeKind.Long => (long)number,
-            ShapeKind.Float => (float)number,
-            _ => number,
+            ShapeKind.Byte => (T)(object)(sbyte)number,
+            ShapeKind.Short => (T)(object)(short)number,
+            ShapeKind.Integer => (T)(object)(int)number,
+            ShapeKind.Long => (T)(object)(long)number,
+            ShapeKind.Float => (T)(object)(float)number,
+            _ => (T)(object)number,
         };
 
-    private static void EncodeDocumentValue(ProtoWriter writer, Document document)
+    internal static void EncodeDocumentValue(ProtoWriter writer, Document document)
     {
         switch (document.Kind)
         {
@@ -1138,7 +631,7 @@ internal static class ProtoWire
         }
     }
 
-    private static Document DecodeDocumentValue(ReadOnlySpan<byte> bytes)
+    internal static Document DecodeDocumentValue(ReadOnlySpan<byte> bytes)
     {
         var reader = new ProtoReader(bytes);
         var result = Document.Null;
@@ -1257,16 +750,6 @@ internal static class ProtoWire
             "Proto codec requires every member to carry an @protoIndex trait."
         );
     }
-
-    private static long ToInt64(object value) =>
-        value switch
-        {
-            sbyte v => v,
-            short v => v,
-            int v => v,
-            long v => v,
-            _ => Convert.ToInt64(value, CultureInfo.InvariantCulture),
-        };
 
     private static long DecodeZigZag(ulong value) => (long)(value >> 1) ^ -(long)(value & 1);
 
