@@ -680,7 +680,9 @@ internal sealed class ListJsonValueReader<TCollection, TElement, TBuilder>(
             {
                 if (!sparse)
                 {
-                    throw new InvalidOperationException("Non-sparse JSON list cannot contain null.");
+                    throw new InvalidOperationException(
+                        "Non-sparse JSON list cannot contain null."
+                    );
                 }
 
                 schema.Add(builder, default!);

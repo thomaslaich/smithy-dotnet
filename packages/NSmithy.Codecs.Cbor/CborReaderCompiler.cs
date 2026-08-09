@@ -400,7 +400,9 @@ internal sealed class ListCborValueReader<TCollection, TElement, TBuilder>(
                 reader.ReadNull();
                 if (!sparse)
                 {
-                    throw new InvalidOperationException("Non-sparse CBOR list cannot contain null.");
+                    throw new InvalidOperationException(
+                        "Non-sparse CBOR list cannot contain null."
+                    );
                 }
 
                 schema.Add(builder, default!);
