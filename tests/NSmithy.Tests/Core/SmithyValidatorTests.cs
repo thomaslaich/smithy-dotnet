@@ -167,10 +167,11 @@ public sealed class SmithyValidatorTests
         );
 
         Assert.Equal(2, errors.Count);
+        // A key violation is reported at the map itself, not at the entry's pointer.
         Assert.Contains(
             errors,
             error =>
-                error.Path == "/x"
+                error.Path == ""
                 && error.ConstraintId == LengthTrait
                 && error.ShapeId == new ShapeId("example", "Scores", "key")
         );

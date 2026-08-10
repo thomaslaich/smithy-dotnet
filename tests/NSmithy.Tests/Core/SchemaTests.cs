@@ -530,11 +530,13 @@ public sealed class SchemaTests
             );
         var codec = JsonCodec.FromSchema(schema);
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = Assert.Throws<MissingRequiredMemberException>(() =>
             codec.DeserializeText("{\"name\":null}")
         );
 
-        Assert.Equal("Required member 'name' cannot be null.", ex.Message);
+        // An explicitly null required member is the same violation as an absent one, and reaches
+        // the server runtime the same way.
+        Assert.Equal("Missing required member 'name'.", ex.Message);
     }
 
     public sealed record UpdateUserInput(string UserId, string? RequestToken, string DisplayName);

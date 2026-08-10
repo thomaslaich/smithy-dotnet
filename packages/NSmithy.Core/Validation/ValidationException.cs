@@ -24,10 +24,12 @@ public sealed class ValidationException : Exception
     public static ValidationException FromErrors(IReadOnlyList<SmithyValidationError> errors)
     {
         ArgumentNullException.ThrowIfNull(errors);
-        var message =
-            errors.Count == 1
-                ? errors[0].Message
-                : FormattableString.Invariant($"{errors.Count} validation errors detected.");
+        // "N validation error(s) detected. <messages>" — the wording Smithy's malformed-request
+        // tests assert, so a caller sees the same shape of message from any Smithy server.
+        var detail = string.Join("; ", errors.Select(error => error.Message));
+        var message = FormattableString.Invariant(
+            $"{errors.Count} validation error{(errors.Count == 1 ? "" : "s")} detected. {detail}"
+        );
         return new ValidationException(
             message,
             [.. errors.Select(error => new ValidationExceptionField(error.Path, error.Message))]
@@ -49,8 +51,15 @@ public sealed class ValidationException : Exception
             path = JsonPointer.Append(path, token);
         }
 
-        var message = $"Required member '{exception.MemberName}' must not be null.";
-        return new ValidationException(message, [new ValidationExceptionField(path, message)]);
+        var message = $"Value at '{path}' failed to satisfy constraint: Member must not be null";
+        return FromErrors([
+            new SmithyValidationError(
+                path,
+                ValidationExceptionSchema.Id,
+                ShapeId.Parse("smithy.api#required"),
+                message
+            ),
+        ]);
     }
 }
 

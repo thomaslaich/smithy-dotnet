@@ -392,6 +392,11 @@ payload shape.
 
 ## Non-goals
 
+- **Client-side validation of outbound input.** The client is not the authority
+  on the contract — the server is — so checking there would duplicate the check
+  that actually decides, cost latency on every call, and drift the moment a
+  model changes without a client rebuild. A generated client sends what it is
+  given and surfaces the server's `ValidationException` as a modeled error.
 - Protocol-specific types (gRPC status codes, trailer names, media types) do not
   appear in the host adapter or generated server code.
 - Codegen does not own the dispatch algorithm; the runtime is its single owner.

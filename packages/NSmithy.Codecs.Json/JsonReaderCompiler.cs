@@ -372,9 +372,7 @@ internal sealed class StructureJsonValueReader<T, TBuilder>(
             {
                 if (memberReader.IsRequired)
                 {
-                    throw new InvalidOperationException(
-                        $"Required member '{memberReader.Name}' cannot be null."
-                    );
+                    throw new MissingRequiredMemberException(memberReader.Name);
                 }
 
                 continue;
@@ -423,16 +421,22 @@ internal sealed class StructureJsonProjectionReader<TBuilder>(
             {
                 if (memberReader.IsRequired)
                 {
-                    throw new InvalidOperationException(
-                        $"Required member '{member.Name}' cannot be null."
-                    );
+                    throw new MissingRequiredMemberException(member.Name);
                 }
 
                 continue;
             }
 
             seen.Add(member.Name);
-            memberReader.ReadInto(builder, member.Value);
+            try
+            {
+                memberReader.ReadInto(builder, member.Value);
+            }
+            catch (MissingRequiredMemberException exception)
+            {
+                exception.PrependPathToken(member.Name);
+                throw;
+            }
         }
 
         foreach (var memberReader in memberReaders)

@@ -148,7 +148,7 @@ internal static class ValidatorCompiler
 
     internal static IValueValidator<T> CompileBody<T>(Schema<T> schema)
     {
-        var constraints = ConstraintValidator<T>.FromTraits(schema.Traits, schema.Id, schema.Kind);
+        var constraints = ConstraintValidator<T>.FromTraits(schema.Traits, schema.Id, schema);
         var structural = (IValueValidator<T>)schema.Resolved.Accept(StructuralCompiler.Instance);
 
         return ReferenceEquals(structural, NoOpValidator<T>.Instance) ? constraints
@@ -344,7 +344,7 @@ internal static class ValidatorCompiler
             ConstraintValidator<TValue>.FromTraits(
                 member.MemberTraits,
                 member.Id,
-                member.Target.Kind
+                member.TargetSchema
             ),
             Compile(member.TargetSchema)
         );
@@ -457,7 +457,7 @@ internal sealed class MemberValidator<TContainer, TValue>(
                         memberPath,
                         member.Target.Id,
                         ConstraintTraits.Required,
-                        $"Required member '{member.Name}' must not be null."
+                        ConstraintMessages.Failed(memberPath, "Member must not be null")
                     )
                 );
             }
@@ -505,7 +505,7 @@ internal sealed class ListValidator<TCollection, TElement> : IValueValidator<TCo
                         path,
                         shapeId,
                         ConstraintTraits.UniqueItems,
-                        $"Value at {JsonPointer.Describe(path)} has duplicate items."
+                        ConstraintMessages.Failed(path, "Member must have unique values")
                     )
                 );
                 seen = null;
@@ -540,11 +540,12 @@ internal sealed class MapValidator<TDictionary, TValue>(IMapSchema<TDictionary, 
 
         foreach (var entry in schema.GetEntries(value))
         {
-            var entryPath = JsonPointer.Append(path, entry.Key);
-            keyValidator.Validate(entry.Key, entryPath, errors);
+            // A key violation is reported at the map itself: the key is not a value sitting at
+            // the entry's pointer, the entry's value is.
+            keyValidator.Validate(entry.Key, path, errors);
             if (entry.Value is not null)
             {
-                valueValidator.Validate(entry.Value, entryPath, errors);
+                valueValidator.Validate(entry.Value, JsonPointer.Append(path, entry.Key), errors);
             }
         }
     }
@@ -595,7 +596,7 @@ internal sealed class UnionCaseValidator<TUnion, TValue>(IUnionCaseSchema<TUnion
         ConstraintValidator<TValue>.FromTraits(
             unionCase.Traits,
             unionCase.Id,
-            unionCase.Target.Kind
+            unionCase.TargetSchema
         );
     private readonly IValueValidator<TValue> valueValidator = ValidatorCompiler.Compile(
         unionCase.TargetSchema
@@ -632,7 +633,7 @@ internal sealed class ConstraintValidator<T> : IValueValidator<T>
     public static IValueValidator<T> FromTraits(
         IReadOnlyDictionary<ShapeId, Trait> traits,
         ShapeId shapeId,
-        ShapeKind kind
+        Schema<T> target
     )
     {
         if (traits.Count == 0)
@@ -640,8 +641,9 @@ internal sealed class ConstraintValidator<T> : IValueValidator<T>
             return NoOpValidator<T>.Instance;
         }
 
+        var kind = target.Kind;
         List<IConstraint<T>> constraints = [];
-        AddLengthConstraint(traits, shapeId, kind, constraints);
+        AddLengthConstraint(traits, shapeId, kind, target, constraints);
         AddRangeConstraint(traits, shapeId, kind, constraints);
         AddPatternConstraint(traits, shapeId, kind, constraints);
         return constraints.Count == 0
@@ -672,6 +674,7 @@ internal sealed class ConstraintValidator<T> : IValueValidator<T>
         IReadOnlyDictionary<ShapeId, Trait> traits,
         ShapeId shapeId,
         ShapeKind kind,
+        Schema<T> target,
         List<IConstraint<T>> constraints
     )
     {
@@ -685,15 +688,8 @@ internal sealed class ConstraintValidator<T> : IValueValidator<T>
             return;
         }
 
-        // A streaming blob is handed to the handler as an unread stream, so its length is not
-        // knowable without buffering the request. Smithy's own server implementations skip it too.
-        if (typeof(T) == typeof(Stream))
-        {
-            return;
-        }
-
         var length =
-            LengthAccessor<T>.Create() ?? throw Unenforceable(ConstraintTraits.Length, shapeId);
+            LengthCompiler.For(target) ?? throw Unenforceable(ConstraintTraits.Length, shapeId);
 
         constraints.Add(
             new LengthConstraint<T>(
@@ -805,7 +801,7 @@ internal sealed class StringEnumValidator<T>(StringEnumSchema<T> schema) : IValu
 {
     public void Validate(T value, string path, List<SmithyValidationError> errors)
     {
-        if (value?.Value is not { } text || schema.Values.Contains(text))
+        if (value?.Value is not { } text || schema.Contains(text))
         {
             return;
         }
@@ -815,7 +811,10 @@ internal sealed class StringEnumValidator<T>(StringEnumSchema<T> schema) : IValu
                 path,
                 schema.Id,
                 ConstraintTraits.Enum,
-                $"Value at {JsonPointer.Describe(path)} '{text}' is not a member of enum '{schema.Id}'."
+                ConstraintMessages.Failed(
+                    path,
+                    $"Member must satisfy enum value set: [{string.Join(", ", schema.Values)}]"
+                )
             )
         );
     }
@@ -828,7 +827,7 @@ internal sealed class IntEnumValidator<T>(IntEnumSchema<T> schema) : IValueValid
     public void Validate(T value, string path, List<SmithyValidationError> errors)
     {
         var number = schema.GetIntegerValue(value);
-        if (schema.Values.Contains(number))
+        if (schema.Contains(number))
         {
             return;
         }
@@ -838,7 +837,10 @@ internal sealed class IntEnumValidator<T>(IntEnumSchema<T> schema) : IValueValid
                 path,
                 schema.Id,
                 ConstraintTraits.Enum,
-                $"Value at {JsonPointer.Describe(path)} {number} is not a member of intEnum '{schema.Id}'."
+                ConstraintMessages.Failed(
+                    path,
+                    $"Member must satisfy enum value set: [{string.Join(", ", schema.Values)}]"
+                )
             )
         );
     }
@@ -856,6 +858,52 @@ internal interface IConstraint<in T>
     void Validate(T value, string path, List<SmithyValidationError> errors);
 }
 
+/// <summary>
+/// Messages follow the wording Smithy's malformed-request tests assert, which is the de facto
+/// contract for <c>smithy.framework#ValidationException</c> across implementations: a caller — or a
+/// generic client — reading them gets the same text any other Smithy server would produce.
+/// </summary>
+internal static class ConstraintMessages
+{
+    public static string Bounds(long? min, long? max, string subject) =>
+        (min, max) switch
+        {
+            ({ } low, { } high) => FormattableString.Invariant(
+                $"{subject} between {low} and {high}, inclusive"
+            ),
+            ({ } low, null) => FormattableString.Invariant(
+                $"{subject} greater than or equal to {low}"
+            ),
+            (null, { } high) => FormattableString.Invariant(
+                $"{subject} less than or equal to {high}"
+            ),
+            _ => subject,
+        };
+
+    public static string Bounds(decimal? min, decimal? max, string subject) =>
+        (min, max) switch
+        {
+            ({ } low, { } high) => FormattableString.Invariant(
+                $"{subject} between {low} and {high}, inclusive"
+            ),
+            ({ } low, null) => FormattableString.Invariant(
+                $"{subject} greater than or equal to {low}"
+            ),
+            (null, { } high) => FormattableString.Invariant(
+                $"{subject} less than or equal to {high}"
+            ),
+            _ => subject,
+        };
+
+    public static string Failed(string path, string requirement) =>
+        $"Value at '{path}' failed to satisfy constraint: {requirement}";
+
+    public static string FailedWithLength(string path, int length, string requirement) =>
+        FormattableString.Invariant(
+            $"Value with length {length} at '{path}' failed to satisfy constraint: {requirement}"
+        );
+}
+
 internal sealed class LengthConstraint<T>(
     ShapeId shapeId,
     long? min,
@@ -863,29 +911,25 @@ internal sealed class LengthConstraint<T>(
     Func<T, int> length
 ) : IConstraint<T>
 {
+    // One error per constraint, worded from the bounds the model declares rather than from the side
+    // that was crossed: a value can only cross one, and the caller needs to be told both.
+    private readonly string requirement = ConstraintMessages.Bounds(
+        min,
+        max,
+        "Member must have length"
+    );
+
     public void Validate(T value, string path, List<SmithyValidationError> errors)
     {
         var actual = length(value);
-        if (min is { } minValue && actual < minValue)
+        if ((min is { } low && actual < low) || (max is { } high && actual > high))
         {
             errors.Add(
                 new SmithyValidationError(
                     path,
                     shapeId,
                     ConstraintTraits.Length,
-                    $"Value at {JsonPointer.Describe(path)} length {actual} is less than minimum {minValue}."
-                )
-            );
-        }
-
-        if (max is { } maxValue && actual > maxValue)
-        {
-            errors.Add(
-                new SmithyValidationError(
-                    path,
-                    shapeId,
-                    ConstraintTraits.Length,
-                    $"Value at {JsonPointer.Describe(path)} length {actual} is greater than maximum {maxValue}."
+                    ConstraintMessages.FailedWithLength(path, actual, requirement)
                 )
             );
         }
@@ -899,6 +943,8 @@ internal sealed class RangeConstraint<T>(
     Func<T, decimal?> number
 ) : IConstraint<T>
 {
+    private readonly string requirement = ConstraintMessages.Bounds(min, max, "Member must be");
+
     public void Validate(T value, string path, List<SmithyValidationError> errors)
     {
         if (number(value) is not { } actual)
@@ -906,26 +952,14 @@ internal sealed class RangeConstraint<T>(
             return;
         }
 
-        if (min is { } minValue && actual < minValue)
+        if ((min is { } low && actual < low) || (max is { } high && actual > high))
         {
             errors.Add(
                 new SmithyValidationError(
                     path,
                     shapeId,
                     ConstraintTraits.Range,
-                    $"Value at {JsonPointer.Describe(path)} {actual} is less than minimum {minValue}."
-                )
-            );
-        }
-
-        if (max is { } maxValue && actual > maxValue)
-        {
-            errors.Add(
-                new SmithyValidationError(
-                    path,
-                    shapeId,
-                    ConstraintTraits.Range,
-                    $"Value at {JsonPointer.Describe(path)} {actual} is greater than maximum {maxValue}."
+                    ConstraintMessages.Failed(path, requirement)
                 )
             );
         }
@@ -957,47 +991,88 @@ internal sealed class PatternConstraint<T>(ShapeId shapeId, string pattern, Rege
                     path,
                     shapeId,
                     ConstraintTraits.Pattern,
-                    $"Value at {JsonPointer.Describe(path)} does not match pattern '{pattern}'."
+                    ConstraintMessages.Failed(
+                        path,
+                        $"Member must satisfy regular expression pattern: {pattern}"
+                    )
                 )
             );
         }
     }
 }
 
-internal static class LengthAccessor<T>
+/// <summary>
+/// How to measure a value's length, taken from its schema rather than from its CLR type. Generated
+/// collection types are ordinary records that wrap their storage — they implement no collection
+/// interface — so only the schema knows how to enumerate one.
+/// </summary>
+internal static class LengthCompiler
 {
-    public static Func<T, int>? Create()
+    public static Func<T, int>? For<T>(Schema<T> schema) =>
+        schema.Resolved.Accept(Instance) as Func<T, int>;
+
+    private static readonly LengthVisitor Instance = new();
+
+    private sealed class LengthVisitor : ISchemaVisitor<object?>
     {
-        if (typeof(T) == typeof(string))
-        {
-            return static value => ((string)(object)value!).EnumerateRunes().Count();
-        }
+        public object? VisitString(Schema<string> schema) =>
+            // Smithy measures a string's length in Unicode code points, not UTF-16 units.
+            (Func<string, int>)(value => value.EnumerateRunes().Count());
 
-        if (typeof(T) == typeof(byte[]))
-        {
-            return static value => ((byte[])(object)value!).Length;
-        }
+        public object? VisitBlob(Schema<byte[]> schema) =>
+            (Func<byte[], int>)(value => value.Length);
 
-        if (typeof(ICollection).IsAssignableFrom(typeof(T)))
-        {
-            return static value => ((ICollection)value!).Count;
-        }
+        // A streaming blob reaches the handler unread, so its length is not knowable without
+        // buffering the whole request.
+        public object? VisitStreamingBlob(Schema<Stream> schema) => null;
 
-        if (typeof(IEnumerable).IsAssignableFrom(typeof(T)))
-        {
-            return static value =>
-            {
-                var count = 0;
-                foreach (var _ in (IEnumerable)value!)
-                {
-                    count++;
-                }
+        public object? VisitList<TCollection, TElement, TBuilder>(
+            IListSchema<TCollection, TElement, TBuilder> schema
+        ) => (Func<TCollection, int>)(value => Count(schema.GetElements(value)));
 
-                return count;
-            };
-        }
+        public object? VisitMap<TDictionary, TValue, TBuilder>(
+            IMapSchema<TDictionary, TValue, TBuilder> schema
+        ) => (Func<TDictionary, int>)(value => Count(schema.GetEntries(value)));
 
-        return null;
+        public object? VisitBoolean(Schema<bool> schema) => null;
+
+        public object? VisitByte(Schema<sbyte> schema) => null;
+
+        public object? VisitShort(Schema<short> schema) => null;
+
+        public object? VisitInteger(Schema<int> schema) => null;
+
+        public object? VisitLong(Schema<long> schema) => null;
+
+        public object? VisitFloat(Schema<float> schema) => null;
+
+        public object? VisitDouble(Schema<double> schema) => null;
+
+        public object? VisitBigInteger(Schema<BigInteger> schema) => null;
+
+        public object? VisitBigDecimal(Schema<decimal> schema) => null;
+
+        public object? VisitTimestamp(Schema<DateTimeOffset> schema) => null;
+
+        public object? VisitDocument(Schema<Document> schema) => null;
+
+        public object? VisitNullable<T>(NullableSchema<T> schema)
+            where T : struct => null;
+
+        public object? VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) => null;
+
+        public object? VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema) => null;
+
+        public object? VisitUnion<T>(IUnionSchema<T> schema) => null;
+
+        public object? VisitStringEnum<T>(StringEnumSchema<T> schema)
+            where T : IStringEnumValue<T> => null;
+
+        public object? VisitIntEnum<T>(IntEnumSchema<T> schema)
+            where T : struct, Enum => null;
+
+        private static int Count<TItem>(IEnumerable<TItem> items) =>
+            items is ICollection<TItem> collection ? collection.Count : items.Count();
     }
 }
 

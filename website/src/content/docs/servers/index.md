@@ -150,6 +150,12 @@ it as a modeled `ValidationException` whether or not the model declares it.
 Validation is compiled from the schema once, when the service starts. An
 operation whose input carries no constraints skips validation entirely.
 
+Clients deliberately do not validate outbound input. The server is the authority
+on the contract, so checking on the client would duplicate the check that
+actually decides, add latency to every call, and go stale as soon as the model
+changes without a client rebuild. A generated client sends what it is given and
+surfaces the server's `ValidationException` as a modeled error.
+
 ## Which protocols generate a server
 
 Server generation exists for `simpleRestJson`, `restJson1`, `rpcv2Cbor`, and

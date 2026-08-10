@@ -335,9 +335,7 @@ internal sealed class StructureCborValueReader<T, TBuilder>(
                 if (reader.PeekState() == CborReaderState.Null && memberReader.IsRequired)
                 {
                     reader.ReadNull();
-                    throw new InvalidOperationException(
-                        $"Required member '{name}' cannot be null."
-                    );
+                    throw new MissingRequiredMemberException(name);
                 }
 
                 seen.Add(name);

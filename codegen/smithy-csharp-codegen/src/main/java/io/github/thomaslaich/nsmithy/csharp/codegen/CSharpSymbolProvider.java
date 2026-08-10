@@ -167,6 +167,11 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
     if (ShapeSupport.isUnit(s.getId())) {
       return primitive(RuntimeTypes.NSMITHY_CORE, "SmithyUnit", true);
     }
+    // The server runtime throws this one itself, so a model that declares it must bind to the
+    // runtime's type — a generated copy would be a different type the runtime never throws.
+    if (ShapeSupport.isValidationException(s.getId())) {
+      return primitive(RuntimeTypes.NSMITHY_CORE_VALIDATION, "ValidationException", false);
+    }
     return generated(s, CSharpNaming.typeName(s.getId().getName()));
   }
 

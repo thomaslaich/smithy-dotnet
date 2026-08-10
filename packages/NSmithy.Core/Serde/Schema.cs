@@ -337,10 +337,15 @@ public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
     )
         : base(id, ShapeKind.Enum, traits)
     {
-        Values = values is null
-            ? FrozenSet<string>.Empty
-            : values.ToFrozenSet(StringComparer.Ordinal);
+        // Declaration order is kept: a membership failure names the value set, and that message is
+        // part of the contract.
+        Values = values is null ? [] : [.. values];
+        lookup = Values.ToFrozenSet(StringComparer.Ordinal);
     }
+
+    private readonly FrozenSet<string> lookup;
+
+    public bool Contains(string value) => lookup.Contains(value);
 
     /// <summary>
     /// The values the model defines. Generated types are open — an unrecognized value round-trips
@@ -348,7 +353,7 @@ public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
     /// from one the peer invented. Empty when the schema was built without them, in which case
     /// membership is unknown and no consumer should claim otherwise.
     /// </summary>
-    public IReadOnlySet<string> Values { get; }
+    public IReadOnlyList<string> Values { get; }
 
     public T Create(string value) => T.FromValue(value);
 
@@ -378,11 +383,16 @@ public sealed class IntEnumSchema<T> : Schema<T>, IIntEnumSchema
     )
         : base(id, ShapeKind.IntEnum, traits)
     {
-        Values = values is null ? FrozenSet<int>.Empty : values.ToFrozenSet();
+        Values = values is null ? [] : [.. values];
+        lookup = Values.ToFrozenSet();
     }
 
+    private readonly FrozenSet<int> lookup;
+
+    public bool Contains(int value) => lookup.Contains(value);
+
     /// <inheritdoc cref="StringEnumSchema{T}.Values" />
-    public IReadOnlySet<int> Values { get; }
+    public IReadOnlyList<int> Values { get; }
 
     public int GetIntegerValue(T value) => Convert.ToInt32(value, CultureInfo.InvariantCulture);
 
