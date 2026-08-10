@@ -148,7 +148,15 @@ internal sealed class CborProjectionValueReader<TBuilder>(
                 }
 
                 seen.Add(name);
-                memberReader.ReadInto(builder, reader);
+                try
+                {
+                    memberReader.ReadInto(builder, reader);
+                }
+                catch (MissingRequiredMemberException exception)
+                {
+                    exception.PrependPathToken(memberReader.Name);
+                    throw;
+                }
             }
             else
             {

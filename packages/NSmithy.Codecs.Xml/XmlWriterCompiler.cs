@@ -26,7 +26,7 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
     private static readonly IReadOnlyDictionary<ShapeId, Trait> EmptyTraits =
         new Dictionary<ShapeId, Trait>();
 
-    private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
+    private readonly SchemaCompilationCache cache = new();
 
     public static IXmlValueWriter<T> Compile<T>(
         Schema<T> schema,
@@ -80,15 +80,11 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
                 resolved.Accept(new MemberTraitXmlWriterCompiler(this, memberTraits));
         }
 
-        if (cache.TryGetValue(resolved, out var cached))
-        {
-            return (IXmlValueWriter<T>)cached;
-        }
-
-        var deferred = new DeferredXmlValueWriter<T>();
-        cache.Add(resolved, deferred);
-        deferred.Set((IXmlValueWriter<T>)resolved.Accept(this));
-        return deferred;
+        return cache.GetOrCompile<IXmlValueWriter<T>, DeferredXmlValueWriter<T>>(
+            resolved,
+            static () => new DeferredXmlValueWriter<T>(),
+            target => (IXmlValueWriter<T>)target.Accept(this)
+        );
     }
 
     public object VisitBoolean(Schema<bool> schema) => Scalar(schema, EmptyTraits);
@@ -120,6 +116,9 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct => new NullableXmlValueWriter<T>(CompileValue(schema.TargetSchema));
+
+    public object VisitStreamingBlob(Schema<Stream> schema) =>
+        throw new NotSupportedException("XML codec does not support streaming blob schemas.");
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         throw new NotSupportedException("XML codec does not support event stream schemas.");
@@ -179,8 +178,12 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
     }
 }
 
-internal sealed class DeferredXmlValueWriter<T> : IXmlValueWriter<T>
+internal sealed class DeferredXmlValueWriter<T>
+    : IXmlValueWriter<T>,
+        IDeferredCompilation<IXmlValueWriter<T>>
 {
+    public void Complete(IXmlValueWriter<T> compiled) => Set(compiled);
+
     private IXmlValueWriter<T>? inner;
 
     public void Set(IXmlValueWriter<T> writer)
@@ -246,6 +249,8 @@ internal sealed class MemberTraitXmlWriterCompiler(
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct =>
         new NullableXmlValueWriter<T>(inner.CompileValue(schema.TargetSchema, memberTraits));
+
+    public object VisitStreamingBlob(Schema<Stream> schema) => inner.CompileValue(schema);
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         inner.CompileValue(schema);

@@ -72,7 +72,7 @@ internal sealed class ProtoValueReaderCompiler : ISchemaVisitor<object>
     private static readonly IReadOnlyDictionary<ShapeId, Trait> EmptyTraits =
         new Dictionary<ShapeId, Trait>();
 
-    private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
+    private readonly SchemaCompilationCache cache = new();
 
     public IProtoMessageReader<T> CompileMessage<T>(Schema<T> schema)
     {
@@ -98,15 +98,11 @@ internal sealed class ProtoValueReaderCompiler : ISchemaVisitor<object>
                 resolved.Accept(new MemberTraitProtoReaderCompiler(this, traits));
         }
 
-        if (cache.TryGetValue(resolved, out var cached))
-        {
-            return (IProtoValueReader<T>)cached;
-        }
-
-        var deferred = new DeferredProtoValueReader<T>();
-        cache.Add(resolved, deferred);
-        deferred.Set((IProtoValueReader<T>)resolved.Accept(this));
-        return deferred;
+        return cache.GetOrCompile<IProtoValueReader<T>, DeferredProtoValueReader<T>>(
+            resolved,
+            static () => new DeferredProtoValueReader<T>(),
+            target => (IProtoValueReader<T>)target.Accept(this)
+        );
     }
 
     public object VisitBoolean(Schema<bool> schema) => Scalar(schema, EmptyTraits);
@@ -137,6 +133,9 @@ internal sealed class ProtoValueReaderCompiler : ISchemaVisitor<object>
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct => new NullableProtoValueReader<T>(CompileValue(schema.TargetSchema));
+
+    public object VisitStreamingBlob(Schema<Stream> schema) =>
+        throw new NotSupportedException("Proto codec does not support streaming blob schemas.");
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         throw new NotSupportedException("Proto codec does not support event stream schemas.");
@@ -217,6 +216,8 @@ internal sealed class MessageReaderVisitor(ProtoValueReaderCompiler compiler)
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct => Unsupported();
+
+    public object VisitStreamingBlob(Schema<Stream> schema) => Unsupported();
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) => Unsupported();
 
@@ -305,6 +306,8 @@ internal sealed class MemberTraitProtoReaderCompiler(
         where T : struct =>
         new NullableProtoValueReader<T>(inner.CompileValue(schema.TargetSchema, traits));
 
+    public object VisitStreamingBlob(Schema<Stream> schema) => inner.CompileValue(schema);
+
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         inner.CompileValue(schema);
 
@@ -328,8 +331,12 @@ internal sealed class MemberTraitProtoReaderCompiler(
         where T : struct, Enum => new ScalarProtoValueReader<T>(schema, traits);
 }
 
-internal sealed class DeferredProtoValueReader<T> : IProtoValueReader<T>
+internal sealed class DeferredProtoValueReader<T>
+    : IProtoValueReader<T>,
+        IDeferredCompilation<IProtoValueReader<T>>
 {
+    public void Complete(IProtoValueReader<T> compiled) => Set(compiled);
+
     private IProtoValueReader<T>? inner;
 
     public void Set(IProtoValueReader<T> reader)
@@ -517,7 +524,18 @@ internal sealed class ValueProtoFieldReader<TContainer, TBuilder, TValue>(
         ref ProtoReader reader,
         WireType wireType,
         ProtoReadState state
-    ) => member.SetValue(builder, valueReader.ReadBody(ref reader, wireType));
+    )
+    {
+        try
+        {
+            member.SetValue(builder, valueReader.ReadBody(ref reader, wireType));
+        }
+        catch (MissingRequiredMemberException exception)
+        {
+            exception.PrependPathToken(member.Name);
+            throw;
+        }
+    }
 
     public void Complete(TBuilder builder, ProtoReadState state) { }
 }

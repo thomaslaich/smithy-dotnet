@@ -438,6 +438,55 @@ public sealed class SchemaTests
         public string? Name { get; set; }
     }
 
+    public sealed record Order(Customer Buyer);
+
+    public sealed class OrderBuilder
+    {
+        public Customer? Buyer { get; set; }
+    }
+
+    public sealed record Customer(string Name);
+
+    public sealed class CustomerBuilder
+    {
+        public string? Name { get; set; }
+    }
+
+    [Fact]
+    public void JsonCodecReportsPathOfNestedMissingRequiredMember()
+    {
+        var customerSchema = Schemas
+            .Structure<Customer, CustomerBuilder>(new ShapeId("example", "Customer"))
+            .Required(
+                "name",
+                static value => value.Name,
+                static (builder, value) => builder.Name = value,
+                Schemas.String
+            )
+            .Build(
+                static () => new CustomerBuilder(),
+                static builder => new Customer(builder.Name!)
+            );
+        var orderSchema = Schemas
+            .Structure<Order, OrderBuilder>(new ShapeId("example", "Order"))
+            .Required(
+                "buyer",
+                static value => value.Buyer,
+                static (builder, value) => builder.Buyer = value,
+                customerSchema
+            )
+            .Build(static () => new OrderBuilder(), static builder => new Order(builder.Buyer!));
+        var codec = JsonCodec.FromSchema(orderSchema);
+
+        var ex = Assert.Throws<MissingRequiredMemberException>(() =>
+            codec.DeserializeText("""{"buyer":{}}""")
+        );
+
+        // The reader that finds the omission knows only "name"; the enclosing reader supplies the
+        // rest as the exception unwinds.
+        Assert.Equal(["buyer", "name"], ex.PathTokens);
+    }
+
     [Fact]
     public void JsonCodecRejectsMissingRequiredMember()
     {

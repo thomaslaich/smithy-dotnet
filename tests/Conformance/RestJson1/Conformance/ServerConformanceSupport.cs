@@ -200,6 +200,14 @@ internal static class ConformanceObjectFactory
             return null;
         if (type == typeof(string))
             return string.Empty;
+        if (type.IsEnum)
+        {
+            // A Smithy intEnum only has the members the model declares, and 0 is rarely one of
+            // them, so default(T) is a value the server is right to reject. Use a declared member.
+            var members = Enum.GetValues(type);
+            if (members.Length > 0)
+                return members.GetValue(0);
+        }
         if (type.IsValueType)
         {
             var schemaKind = GetSchemaKind(type);

@@ -119,6 +119,7 @@ internal static class ConstraintTraits
     public static readonly ShapeId Range = new("smithy.api", "range");
     public static readonly ShapeId Pattern = new("smithy.api", "pattern");
     public static readonly ShapeId UniqueItems = new("smithy.api", "uniqueItems");
+    public static readonly ShapeId Enum = new("smithy.api", "enum");
 
     public static bool AnyIn(IReadOnlyDictionary<ShapeId, Trait> traits) =>
         traits.Count > 0
@@ -165,14 +166,6 @@ internal static class ValidatorCompiler
         }
 
         var resolved = schema.Resolved;
-
-        // A streaming blob is never buffered, so there is nothing to validate and no visitor case
-        // for it — Accept would throw.
-        if (resolved is StreamingBlobSchema)
-        {
-            return false;
-        }
-
         if (!visited.Add(resolved))
         {
             return false;
@@ -228,6 +221,8 @@ internal static class ValidatorCompiler
         public object VisitNullable<T>(NullableSchema<T> schema)
             where T : struct => new NullableValidator<T>(Compile(schema.TargetSchema));
 
+        public object VisitStreamingBlob(Schema<Stream> schema) => NoOpValidator<Stream>.Instance;
+
         public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
             NoOpValidator<IAsyncEnumerable<TEvent>>.Instance;
 
@@ -245,10 +240,14 @@ internal static class ValidatorCompiler
         public object VisitUnion<T>(IUnionSchema<T> schema) => new UnionValidator<T>(schema);
 
         public object VisitStringEnum<T>(StringEnumSchema<T> schema)
-            where T : IStringEnumValue<T> => NoOpValidator<T>.Instance;
+            where T : IStringEnumValue<T> =>
+            schema.Values.Count == 0
+                ? NoOpValidator<T>.Instance
+                : new StringEnumValidator<T>(schema);
 
         public object VisitIntEnum<T>(IntEnumSchema<T> schema)
-            where T : struct, Enum => NoOpValidator<T>.Instance;
+            where T : struct, Enum =>
+            schema.Values.Count == 0 ? NoOpValidator<T>.Instance : new IntEnumValidator<T>(schema);
     }
 
     private sealed class ValidationRequirementVisitor(HashSet<Schema> visited)
@@ -283,6 +282,8 @@ internal static class ValidatorCompiler
         public bool VisitNullable<T>(NullableSchema<T> schema)
             where T : struct => RequiresValidation(schema.TargetSchema, visited);
 
+        public bool VisitStreamingBlob(Schema<Stream> schema) => false;
+
         public bool VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) => false;
 
         public bool VisitList<TCollection, TElement, TBuilder>(
@@ -307,10 +308,10 @@ internal static class ValidatorCompiler
             );
 
         public bool VisitStringEnum<T>(StringEnumSchema<T> schema)
-            where T : IStringEnumValue<T> => false;
+            where T : IStringEnumValue<T> => schema.Values.Count > 0;
 
         public bool VisitIntEnum<T>(IntEnumSchema<T> schema)
-            where T : struct, Enum => false;
+            where T : struct, Enum => schema.Values.Count > 0;
     }
 
     private sealed class ValidationRequirementMemberVisitor<T>(HashSet<Schema> visited)
@@ -329,12 +330,14 @@ internal static class ValidatorCompiler
         }
     }
 
+    /// <summary>
+    /// One compilation path for every kind of member — structure members, list elements, map keys
+    /// and map values are the same thing here: an edge with its own traits onto a target schema.
+    /// </summary>
     internal static MemberValueValidator<TValue> CompileMember<TValue>(
-        IMemberSchema member,
-        Schema<TValue> target
-    )
-    {
-        return new MemberValueValidator<TValue>(
+        ITargetedMemberSchema<TValue> member
+    ) =>
+        new(
             // The member's own traits are compiled against the target's kind: a member schema is
             // itself ShapeKind.Member, and an optional member wraps its target in a nullable
             // schema, so neither the member nor the CLR type alone identifies the constrained shape.
@@ -343,13 +346,8 @@ internal static class ValidatorCompiler
                 member.Id,
                 member.Target.Kind
             ),
-            Compile(target)
+            Compile(member.TargetSchema)
         );
-    }
-
-    internal static MemberValueValidator<TValue> CompileMember<TValue>(
-        ICollectionMemberSchema<TValue> member
-    ) => CompileMember(member, member.TargetSchema);
 }
 
 internal readonly struct MemberValueValidator<T>(
@@ -415,7 +413,7 @@ internal sealed class StructValidator<T> : IValueValidator<T>, IMemberVisitor<T>
 
     public void Visit<TValue>(IMemberSchema<T, TValue> member)
     {
-        var valueValidator = ValidatorCompiler.CompileMember(member, member.TargetSchema);
+        var valueValidator = ValidatorCompiler.CompileMember(member);
         if (member.IsRequired || !valueValidator.IsNoOp)
         {
             members.Add(new MemberValidator<T, TValue>(member, valueValidator));
@@ -476,6 +474,7 @@ internal sealed class ListValidator<TCollection, TElement> : IValueValidator<TCo
     private readonly IListSchema<TCollection, TElement> schema;
     private readonly ShapeId shapeId;
     private readonly bool uniqueItems;
+    private readonly IEqualityComparer<TElement>? elementComparer;
     private readonly MemberValueValidator<TElement> elementValidator;
 
     public ListValidator(IListSchema<TCollection, TElement> schema)
@@ -484,6 +483,7 @@ internal sealed class ListValidator<TCollection, TElement> : IValueValidator<TCo
         var shape = (Schema<TCollection>)schema;
         shapeId = shape.Id;
         uniqueItems = shape.HasTrait(ConstraintTraits.UniqueItems);
+        elementComparer = uniqueItems ? SchemaEqualityComparer.For(schema.ElementSchema) : null;
         elementValidator = ValidatorCompiler.CompileMember(schema.TypedElementMember);
     }
 
@@ -494,7 +494,7 @@ internal sealed class ListValidator<TCollection, TElement> : IValueValidator<TCo
             return;
         }
 
-        HashSet<TElement>? seen = uniqueItems ? new(UniqueItemsComparer<TElement>.Instance) : null;
+        HashSet<TElement>? seen = elementComparer is null ? null : new(elementComparer);
         var index = 0;
         foreach (var element in schema.GetElements(value))
         {
@@ -517,32 +517,6 @@ internal sealed class ListValidator<TCollection, TElement> : IValueValidator<TCo
             }
 
             index++;
-        }
-    }
-}
-
-/// <summary>
-/// Equality for <c>@uniqueItems</c>. Blobs are the one modeled shape whose CLR representation
-/// (<see cref="byte"/>[]) compares by reference under the default comparer, which would let
-/// duplicates through; every other element type either is a value type or is generated as a record.
-/// </summary>
-internal static class UniqueItemsComparer<TElement>
-{
-    public static IEqualityComparer<TElement> Instance { get; } =
-        typeof(TElement) == typeof(byte[])
-            ? (IEqualityComparer<TElement>)(object)new BlobComparer()
-            : EqualityComparer<TElement>.Default;
-
-    private sealed class BlobComparer : IEqualityComparer<byte[]>
-    {
-        public bool Equals(byte[]? x, byte[]? y) =>
-            x is null ? y is null : y is not null && x.AsSpan().SequenceEqual(y);
-
-        public int GetHashCode(byte[] obj)
-        {
-            var hash = new HashCode();
-            hash.AddBytes(obj);
-            return hash.ToHashCode();
         }
     }
 }
@@ -620,7 +594,7 @@ internal sealed class UnionCaseValidator<TUnion, TValue>(IUnionCaseSchema<TUnion
     private readonly IValueValidator<TValue> caseConstraints =
         ConstraintValidator<TValue>.FromTraits(
             unionCase.Traits,
-            unionCase.Target.Id,
+            unionCase.Id,
             unionCase.Target.Kind
         );
     private readonly IValueValidator<TValue> valueValidator = ValidatorCompiler.Compile(
@@ -818,6 +792,55 @@ internal sealed class ConstraintValidator<T> : IValueValidator<T>
         return members.TryGetValue(memberName, out var member) && member.Kind == DocumentKind.Number
             ? member.AsNumber()
             : null;
+    }
+}
+
+/// <summary>
+/// Enum shapes are open in the generated types: an unrecognized value deserializes rather than
+/// throwing, so that a client is not broken by a server that added a member. On a server that
+/// openness has to stop at the handler, which is what this checks.
+/// </summary>
+internal sealed class StringEnumValidator<T>(StringEnumSchema<T> schema) : IValueValidator<T>
+    where T : IStringEnumValue<T>
+{
+    public void Validate(T value, string path, List<SmithyValidationError> errors)
+    {
+        if (value?.Value is not { } text || schema.Values.Contains(text))
+        {
+            return;
+        }
+
+        errors.Add(
+            new SmithyValidationError(
+                path,
+                schema.Id,
+                ConstraintTraits.Enum,
+                $"Value at {JsonPointer.Describe(path)} '{text}' is not a member of enum '{schema.Id}'."
+            )
+        );
+    }
+}
+
+/// <inheritdoc cref="StringEnumValidator{T}" />
+internal sealed class IntEnumValidator<T>(IntEnumSchema<T> schema) : IValueValidator<T>
+    where T : struct, Enum
+{
+    public void Validate(T value, string path, List<SmithyValidationError> errors)
+    {
+        var number = schema.GetIntegerValue(value);
+        if (schema.Values.Contains(number))
+        {
+            return;
+        }
+
+        errors.Add(
+            new SmithyValidationError(
+                path,
+                schema.Id,
+                ConstraintTraits.Enum,
+                $"Value at {JsonPointer.Describe(path)} {number} is not a member of intEnum '{schema.Id}'."
+            )
+        );
     }
 }
 

@@ -9,6 +9,15 @@ restore:
 fmt:
     treefmt
 
+# Drop every build output, including the caches that outlive `dotnet clean`.
+clean:
+    # The Smithy CLI resolves the codegen plugin into a per-project cache under obj/, and the
+    # in-repo version is a fixed 0.0.0-SNAPSHOT, so a rebuilt plugin looks unchanged to it and
+    # generated code silently stays stale. Deleting obj/ and bin/ takes that cache with it.
+    find . -type d \( -name obj -o -name bin \) -not -path './website/*' -prune -exec rm -rf {} +
+    find codegen -type d -name build -prune -exec rm -rf {} +
+    dotnet nuget locals temp --clear >/dev/null
+
 check-format:
     treefmt --ci
 

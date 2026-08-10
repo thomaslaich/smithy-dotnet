@@ -124,9 +124,12 @@ operation whether or not the rest of the service is implemented by the same clas
 ## Constraint validation
 
 The server checks the model's constraint traits — `@required`, `@length`,
-`@range`, `@pattern`, `@uniqueItems` — after deserializing the request and before
-calling the handler. A handler only sees input the model permits, so it does not
-need to re-check what the model already states.
+`@range`, `@pattern`, `@uniqueItems` — plus enum membership, after deserializing
+the request and before calling the handler. A handler only sees input the model
+permits, so it does not need to re-check what the model already states.
+
+Enum types stay open on the wire so that a client is not broken by a server that
+adds a member; the server is where that openness stops.
 
 A request that violates a constraint gets `smithy.framework#ValidationException`
 with HTTP 400, listing each violation with a JSONPointer path into the input:

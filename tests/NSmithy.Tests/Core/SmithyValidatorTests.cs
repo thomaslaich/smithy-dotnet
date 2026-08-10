@@ -416,6 +416,84 @@ public sealed class SmithyValidatorTests
         Assert.Equal("/a~1b~0c", error.Path);
     }
 
+    public readonly record struct Colour(string Value) : IStringEnumValue<Colour>
+    {
+        public static Colour FromValue(string value) => new(value);
+    }
+
+    public enum Rank
+    {
+        First = 1,
+        Second = 2,
+    }
+
+    [Fact]
+    public void ValidateRejectsValueOutsideStringEnum()
+    {
+        var validator = SmithyValidator.FromSchema(
+            Schemas.StringEnum<Colour>(new ShapeId("example", "Colour"), values: ["RED", "GREEN"])
+        )!;
+
+        Assert.Empty(validator.GetErrors(new Colour("RED")));
+        var error = Assert.Single(validator.GetErrors(new Colour("MAUVE")));
+        Assert.Equal(new ShapeId("smithy.api", "enum"), error.ConstraintId);
+    }
+
+    [Fact]
+    public void ValidateRejectsValueOutsideIntEnum()
+    {
+        var validator = SmithyValidator.FromSchema(
+            Schemas.IntEnum<Rank>(new ShapeId("example", "Rank"), values: [1, 2])
+        )!;
+
+        Assert.Empty(validator.GetErrors(Rank.Second));
+        Assert.Single(validator.GetErrors((Rank)7));
+    }
+
+    [Fact]
+    public void FromSchemaSkipsEnumsWithoutDeclaredValues()
+    {
+        // A schema built without them cannot tell a modeled value from an invented one, so it must
+        // not pretend to.
+        Assert.Null(SmithyValidator.FromSchema(Schemas.StringEnum<Colour>(new ShapeId("x", "C"))));
+    }
+
+    public sealed record Basket(IReadOnlyList<string> Items);
+
+    public sealed class BasketBuilder
+    {
+        public IReadOnlyList<string>? Items { get; set; }
+    }
+
+    [Fact]
+    public void ValidateComparesStructuresByContentForUniqueItems()
+    {
+        // Generated structures are records, but a record compares a list member by reference, so
+        // .NET equality alone would let these two duplicates through.
+        var basketSchema = Schemas
+            .Structure<Basket, BasketBuilder>(new ShapeId("example", "Basket"))
+            .Required(
+                "items",
+                static value => value.Items,
+                static (builder, value) => builder.Items = value,
+                Schemas.List(new ShapeId("example", "Items"), Schemas.String)
+            )
+            .Build(static () => new BasketBuilder(), static builder => new Basket(builder.Items!));
+
+        var validator = SmithyValidator.FromSchema(
+            Schemas.List(
+                new ShapeId("example", "Baskets"),
+                basketSchema,
+                [new Trait(UniqueItemsTrait)]
+            )
+        )!;
+
+        var errors = validator.GetErrors([new Basket(["a"]), new Basket(["a"])]);
+
+        Assert.Single(errors, error => error.ConstraintId == UniqueItemsTrait);
+        Assert.Empty(validator.GetErrors([new Basket(["a"]), new Basket(["b"])]));
+    }
+
     private static Trait Length(int min, int max) =>
         new(
             LengthTrait,

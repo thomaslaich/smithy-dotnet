@@ -4,11 +4,11 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Protocols.Rest;
 
-public readonly record struct QueryMemberBinding(IMemberSchema Member, string QueryName);
+public readonly record struct QueryMemberBinding(IStructMemberSchema Member, string QueryName);
 
-public readonly record struct HeaderMemberBinding(IMemberSchema Member, string HeaderName);
+public readonly record struct HeaderMemberBinding(IStructMemberSchema Member, string HeaderName);
 
-public readonly record struct PrefixHeaderMemberBinding(IMemberSchema Member, string Prefix);
+public readonly record struct PrefixHeaderMemberBinding(IStructMemberSchema Member, string Prefix);
 
 /// <summary>
 /// Everything <see cref="RestProtocol"/> needs to (de)serialize one operation, derived once from
@@ -39,9 +39,9 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
 
     // Input
     public required IStructSchema<TInput, TInputBuilder> InputSchema { get; init; }
-    public required IReadOnlyList<IMemberSchema> LabelMembers { get; init; }
+    public required IReadOnlyList<IStructMemberSchema> LabelMembers { get; init; }
     public required IReadOnlyList<QueryMemberBinding> QueryMembers { get; init; }
-    public IMemberSchema? QueryParamsMember { get; init; }
+    public IStructMemberSchema? QueryParamsMember { get; init; }
     public required IReadOnlyList<HeaderMemberBinding> RequestHeaderMembers { get; init; }
     public PrefixHeaderMemberBinding? RequestPrefixHeadersMember { get; init; }
     public required HashSet<string> BoundQueryNames { get; init; }
@@ -57,7 +57,7 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
 
     // Output
     public required IStructSchema<TOutput, TOutputBuilder> OutputSchema { get; init; }
-    public IMemberSchema? ResponseCodeMember { get; init; }
+    public IStructMemberSchema? ResponseCodeMember { get; init; }
     public required IReadOnlyList<HeaderMemberBinding> ResponseHeaderMembers { get; init; }
     public PrefixHeaderMemberBinding? ResponsePrefixHeadersMember { get; init; }
 
@@ -98,9 +98,9 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
             typeof(TOutput) == typeof(SmithyUnit) || operation.Output.Resolved is UnitSchema;
 
         // Partition input members in a single pass
-        var labelMembers = new List<IMemberSchema>();
+        var labelMembers = new List<IStructMemberSchema>();
         var queryMembers = new List<QueryMemberBinding>();
-        IMemberSchema? queryParamsMember = null;
+        IStructMemberSchema? queryParamsMember = null;
         var requestHeaderMembers = new List<HeaderMemberBinding>();
         PrefixHeaderMemberBinding? requestPrefixHeadersMember = null;
         IMemberSchema<TInput>? inputPayloadMember = null;
@@ -158,7 +158,7 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
                 : null;
 
         // Partition output members in a single pass
-        IMemberSchema? responseCodeMember = null;
+        IStructMemberSchema? responseCodeMember = null;
         var responseHeaderMembers = new List<HeaderMemberBinding>();
         PrefixHeaderMemberBinding? responsePrefixHeadersMember = null;
         IMemberSchema<TOutput>? outputPayloadMember = null;

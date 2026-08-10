@@ -36,23 +36,21 @@ public sealed class ValidationException : Exception
 
     /// <summary>
     /// The codec-level counterpart of a <c>@required</c> violation: a member missing from the
-    /// payload never reaches the compiled validator, because deserialization fails first. The path
-    /// names the member itself; a member missing from a nested structure is reported at the depth
-    /// the codec knows about, which is the member name alone.
+    /// payload never reaches the compiled validator, because deserialization fails first.
     /// </summary>
-    public static ValidationException FromMissingRequiredMember(string memberName)
+    public static ValidationException FromMissingRequiredMember(
+        MissingRequiredMemberException exception
+    )
     {
-        ArgumentException.ThrowIfNullOrEmpty(memberName);
-        var message = $"Required member '{memberName}' must not be null.";
-        return new ValidationException(
-            message,
-            [
-                new ValidationExceptionField(
-                    JsonPointer.Append(JsonPointer.Root, memberName),
-                    message
-                ),
-            ]
-        );
+        ArgumentNullException.ThrowIfNull(exception);
+        var path = JsonPointer.Root;
+        foreach (var token in exception.PathTokens)
+        {
+            path = JsonPointer.Append(path, token);
+        }
+
+        var message = $"Required member '{exception.MemberName}' must not be null.";
+        return new ValidationException(message, [new ValidationExceptionField(path, message)]);
     }
 }
 

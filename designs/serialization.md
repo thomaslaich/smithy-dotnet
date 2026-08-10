@@ -329,18 +329,38 @@ consumer and schema — so no merged view is materialized. Origin-aware
 consumers (documentation generation, model diffing, hierarchical trait
 queries) read `MemberTraits` and `Target.Traits` directly.
 
-Structure members additionally carry typed accessors, a typed setter for the
-builder, and required-member metadata:
+What every member has in common is its target's static type, which is what a
+consumer needs to compile anything per member. That is one interface, shared by
+structure members and by list elements and map keys and values alike:
 
 ```csharp
+public interface ITargetedMemberSchema<TValue> : IMemberSchema
+{
+    Schema<TValue> TargetSchema { get; }
+}
+```
+
+A structure member additionally reads and writes its value on a container, which
+a collection member cannot do — so those accessors live on the structure member,
+not on every member:
+
+```csharp
+public interface IStructMemberSchema : IMemberSchema
+{
+    object? GetObject(object container);
+    void SetObject(object builder, object? value);
+}
+
 public interface IMemberSchema<TContainer, TBuilder, TValue>
     : IMemberSchema<TContainer, TValue>
 {
-    Schema<TValue> TargetSchema { get; }
     TValue GetValue(TContainer container);
     void SetValue(TBuilder builder, TValue value);
 }
 ```
+
+A union case is a member too, and carries the same member id, so a consumer can
+report a case the way it reports any other member.
 
 List and map members expose typed collection-member schemas, not container
 accessors: an element is enumerated and appended, never read by member name.
@@ -570,9 +590,20 @@ no constraints at all yields no validator, so unconstrained operations pay
 zero — no wrapper, no walk, no branch per request.
 
 A validator reports all violations in one pass rather than failing on the
-first. Each violation carries a path into the value (`$.tags[2]`,
-`$.attributes.color`) and a message, so a caller can correct every problem
-from a single response.
+first. Each violation carries a JSONPointer into the value (`/tags/2`,
+`/attributes/color`) and a message, so a caller can correct every problem from a
+single response — and so the path means the same thing as the one
+`smithy.framework#ValidationExceptionField` documents.
+
+Enum membership is checked from the values the schema carries. Generated enum
+types stay open, so an unrecognized value deserializes rather than throwing and a
+client is not broken by a server that added a member; the server is where that
+openness stops.
+
+`@uniqueItems` compares elements through equality derived from the schema, not
+from .NET. A blob is a `byte[]` and a generated structure holding a list compares
+that member by reference, so .NET equality would let duplicates the model forbids
+pass unnoticed.
 
 On the server request path, the validation fold fuses with the codec's reader
 fold: constraint checks run as the value is built, so the input is

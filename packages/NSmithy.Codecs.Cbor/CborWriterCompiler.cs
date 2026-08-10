@@ -24,7 +24,7 @@ internal interface ICborUnionCaseWriter<in TUnion>
 
 internal sealed class CborWriterCompiler : ISchemaVisitor<object>
 {
-    private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
+    private readonly SchemaCompilationCache cache = new();
 
     public static ICborValueWriter<T> Compile<T>(Schema<T> schema, bool materializeTopLevelDefaults)
     {
@@ -49,16 +49,11 @@ internal sealed class CborWriterCompiler : ISchemaVisitor<object>
     {
         ArgumentNullException.ThrowIfNull(schema);
 
-        var resolved = schema.Resolved;
-        if (cache.TryGetValue(resolved, out var cached))
-        {
-            return (ICborValueWriter<T>)cached;
-        }
-
-        var deferred = new DeferredCborValueWriter<T>();
-        cache.Add(resolved, deferred);
-        deferred.Set((ICborValueWriter<T>)resolved.Accept(this));
-        return deferred;
+        return cache.GetOrCompile<ICborValueWriter<T>, DeferredCborValueWriter<T>>(
+            schema,
+            static () => new DeferredCborValueWriter<T>(),
+            target => (ICborValueWriter<T>)target.Accept(this)
+        );
     }
 
     public object VisitBoolean(Schema<bool> schema) =>
@@ -119,6 +114,9 @@ internal sealed class CborWriterCompiler : ISchemaVisitor<object>
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct => new NullableCborValueWriter<T>(CompileValue(schema.TargetSchema));
 
+    public object VisitStreamingBlob(Schema<Stream> schema) =>
+        throw new NotSupportedException("CBOR codec does not support streaming blob schemas.");
+
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         throw new NotSupportedException("CBOR codec does not support event stream schemas.");
 
@@ -162,8 +160,12 @@ internal sealed class CborWriterCompiler : ISchemaVisitor<object>
         where T : struct, Enum => new IntEnumCborValueWriter<T>(schema);
 }
 
-internal sealed class DeferredCborValueWriter<T> : ICborValueWriter<T>
+internal sealed class DeferredCborValueWriter<T>
+    : ICborValueWriter<T>,
+        IDeferredCompilation<ICborValueWriter<T>>
 {
+    public void Complete(ICborValueWriter<T> compiled) => Set(compiled);
+
     private ICborValueWriter<T>? inner;
 
     public void Set(ICborValueWriter<T> writer)

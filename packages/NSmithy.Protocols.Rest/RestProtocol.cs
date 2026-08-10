@@ -1011,7 +1011,7 @@ public static class RestProtocol
         }
 
         private static void ApplyDefault(
-            IMemberSchema member,
+            IStructMemberSchema member,
             Schema target,
             IReadOnlyDictionary<ShapeId, Trait> traits,
             object builder
@@ -1086,7 +1086,7 @@ public static class RestProtocol
 
     private static string BuildRequestUri<TInput>(
         string uriTemplate,
-        IReadOnlyList<IMemberSchema> labelMembers,
+        IReadOnlyList<IStructMemberSchema> labelMembers,
         TInput input
     )
     {
@@ -1120,7 +1120,7 @@ public static class RestProtocol
     private static void AddHeader<TInput>(
         Dictionary<string, IReadOnlyList<string>> headers,
         string name,
-        IMemberSchema member,
+        IStructMemberSchema member,
         TInput input
     )
     {
@@ -1136,7 +1136,7 @@ public static class RestProtocol
     private static void AddRequestHeader<TInput>(
         SmithyHttpRequest request,
         string name,
-        IMemberSchema member,
+        IStructMemberSchema member,
         TInput input
     )
     {
@@ -1165,7 +1165,7 @@ public static class RestProtocol
     private static void AddPrefixedHeaders<TInput>(
         IDictionary<string, IReadOnlyList<string>> headers,
         string prefix,
-        IMemberSchema member,
+        IStructMemberSchema member,
         TInput input
     )
     {
@@ -1192,7 +1192,7 @@ public static class RestProtocol
     }
 
     private static object ReadPrefixedHeaders(
-        IMemberSchema member,
+        IStructMemberSchema member,
         IEnumerable<KeyValuePair<string, IReadOnlyList<string>>> headers,
         string prefix
     )
@@ -1220,7 +1220,7 @@ public static class RestProtocol
     }
 
     private static object ReadQueryParams(
-        IMemberSchema member,
+        IStructMemberSchema member,
         Dictionary<string, IReadOnlyList<string>> query,
         HashSet<string> excludedNames
     )
@@ -1247,7 +1247,7 @@ public static class RestProtocol
     private static string AppendQuery<TInput>(
         string requestUri,
         string name,
-        IMemberSchema member,
+        IStructMemberSchema member,
         TInput input
     )
     {
@@ -1264,7 +1264,7 @@ public static class RestProtocol
 
     private static string AppendQueryParams<TInput>(
         string requestUri,
-        IMemberSchema member,
+        IStructMemberSchema member,
         TInput input,
         HashSet<string> excludedNames
     )
@@ -1290,7 +1290,7 @@ public static class RestProtocol
         return builder.ToString();
     }
 
-    private static IMapSchema RequireMap(IMemberSchema member) =>
+    private static IMapSchema RequireMap(IStructMemberSchema member) =>
         member.Target.Resolved is IMapSchema mapSchema
             ? mapSchema
             : throw new InvalidOperationException(
@@ -1342,7 +1342,7 @@ public static class RestProtocol
         builder.Append(Uri.EscapeDataString(FormatHttpValue(schema, traits, value)));
     }
 
-    private static string FormatHttpHeaderValue(IMemberSchema member, object value)
+    private static string FormatHttpHeaderValue(IStructMemberSchema member, object value)
     {
         if (member.Target.Resolved is IListSchema listSchema)
         {

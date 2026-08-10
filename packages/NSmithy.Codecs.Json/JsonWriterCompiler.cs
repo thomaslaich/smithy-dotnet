@@ -24,7 +24,7 @@ internal interface IJsonUnionCaseWriter<in TUnion>
 
 internal sealed class JsonWriterCompiler : ISchemaVisitor<object>
 {
-    private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
+    private readonly SchemaCompilationCache cache = new();
 
     public static IJsonValueWriter<T> Compile<T>(
         Schema<T> schema,
@@ -60,16 +60,11 @@ internal sealed class JsonWriterCompiler : ISchemaVisitor<object>
 
     public IJsonValueWriter<T> CompileValue<T>(Schema<T> schema)
     {
-        var resolved = schema.Resolved;
-        if (cache.TryGetValue(resolved, out var cached))
-        {
-            return (IJsonValueWriter<T>)cached;
-        }
-
-        var deferred = new DeferredJsonValueWriter<T>();
-        cache.Add(resolved, deferred);
-        deferred.Set(CompileValueCore<T>(resolved));
-        return deferred;
+        return cache.GetOrCompile<IJsonValueWriter<T>, DeferredJsonValueWriter<T>>(
+            schema,
+            static () => new DeferredJsonValueWriter<T>(),
+            target => CompileValueCore<T>(target)
+        );
     }
 
     public IJsonValueWriter<T> CompileValue<T>(
@@ -120,6 +115,9 @@ internal sealed class JsonWriterCompiler : ISchemaVisitor<object>
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct => CompileNullable(schema);
+
+    public object VisitStreamingBlob(Schema<Stream> schema) =>
+        throw new NotSupportedException("JSON codec does not support streaming blob schemas.");
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         throw new NotSupportedException("JSON codec does not support event stream schemas.");
@@ -212,8 +210,12 @@ internal sealed class JsonWriterCompiler : ISchemaVisitor<object>
     internal static IJsonValueWriter<T> Cast<T>(object writer) => (IJsonValueWriter<T>)writer;
 }
 
-internal sealed class DeferredJsonValueWriter<T> : IJsonValueWriter<T>
+internal sealed class DeferredJsonValueWriter<T>
+    : IJsonValueWriter<T>,
+        IDeferredCompilation<IJsonValueWriter<T>>
 {
+    public void Complete(IJsonValueWriter<T> compiled) => Set(compiled);
+
     internal IJsonValueWriter<T>? inner;
 
     public void Set(IJsonValueWriter<T> writer)
@@ -274,6 +276,8 @@ internal sealed class MemberTraitJsonWriterCompiler(
     public object VisitBlob(Schema<byte[]> schema) => inner.CompileValue(schema);
 
     public object VisitDocument(Schema<Document> schema) => inner.CompileValue(schema);
+
+    public object VisitStreamingBlob(Schema<Stream> schema) => inner.CompileValue(schema);
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         inner.CompileValue(schema);

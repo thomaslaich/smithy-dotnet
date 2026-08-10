@@ -725,6 +725,8 @@ public sealed class GrpcProtocol : IProtocol
             public object VisitNullable<T>(NullableSchema<T> schema)
                 where T : struct => Unsupported();
 
+            public object VisitStreamingBlob(Schema<Stream> schema) => Unsupported();
+
             public object VisitEventStream<TEventValue>(EventStreamSchema<TEventValue> schema) =>
                 Unsupported();
 

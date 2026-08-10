@@ -19,6 +19,7 @@ import software.amazon.smithy.model.node.ArrayNode;
 import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.node.StringNode;
+import software.amazon.smithy.model.shapes.IntEnumShape;
 import software.amazon.smithy.model.shapes.ListShape;
 import software.amazon.smithy.model.shapes.MapShape;
 import software.amazon.smithy.model.shapes.MemberShape;
@@ -337,10 +338,11 @@ public final class SchemaGenerator {
             String typeName = CSharpNaming.typeName(shape.getId().getName());
             writer.write(
                 "public static Schema<$L> Schema { get; } ="
-                    + " Schemas.StringEnum<$L>($L, traits: $L);",
+                    + " Schemas.StringEnum<$L>($L, values: $L, traits: $L);",
                 typeName,
                 typeName,
                 shapeIdExpr(shape.getId()),
+                stringEnumValuesExpr(shape),
                 traitsExpr(shape.getAllTraits().values()));
             writer.write("");
             return;
@@ -571,6 +573,28 @@ public final class SchemaGenerator {
         + ", "
         + documentExpr(member.getValue())
         + "}";
+  }
+
+  /**
+   * The values an enum shape defines, so the runtime can tell a modeled value from one a peer
+   * invented. Generated enum types stay open, so the schema is the only place this is recorded.
+   */
+  public static String stringEnumValuesExpr(Shape shape) {
+    return shape
+        .asEnumShape()
+        .map(
+            e ->
+                e.getEnumValues().values().stream()
+                    .map(CSharpNaming::formatString)
+                    .collect(Collectors.joining(", ", "[", "]")))
+        .orElse("null");
+  }
+
+  /** The int values an intEnum shape defines. See {@link #stringEnumValuesExpr}. */
+  public static String intEnumValuesExpr(IntEnumShape shape) {
+    return shape.getEnumValues().values().stream()
+        .map(String::valueOf)
+        .collect(Collectors.joining(", ", "[", "]"));
   }
 
   private static String primitiveTypeToPreludeSchema(ShapeType t) {

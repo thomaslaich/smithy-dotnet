@@ -45,7 +45,7 @@ public sealed class SmithyServerRuntime
             // same modeled response rather than surfacing as a server fault.
             return SerializeValidationFailure(
                 protocol,
-                ValidationException.FromMissingRequiredMember(exception.MemberName)
+                ValidationException.FromMissingRequiredMember(exception)
             );
         }
 

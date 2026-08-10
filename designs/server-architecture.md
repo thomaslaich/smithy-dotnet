@@ -176,7 +176,10 @@ constraint, and the runtime then skips validation altogether, so an unconstraine
 operation pays nothing. Constraints are read from the shape's kind rather than
 its CLR type, because an optional member wraps its target in a nullable schema
 and a member schema is its own kind; a constraint the kind says should apply but
-that cannot be enforced fails at compile time rather than being dropped.
+that cannot be enforced fails at compile time rather than being dropped. Enum
+membership comes from the values the schema carries, and `@uniqueItems` compares
+elements through equality derived from the schema rather than from .NET, which
+would compare a blob or a structure holding a collection by reference.
 
 A violation becomes `smithy.framework#ValidationException`, which every operation
 carries as an implicit modeled error so protocols serialize it like any other and
@@ -187,7 +190,10 @@ A `@required` member absent from the payload fails inside the codec, before the
 compiled validator runs, because the builder cannot produce the shape without it.
 Codecs signal that with `MissingRequiredMemberException`, which the runtime
 converts into the same `ValidationException` — a caller's omission is a 400 on
-the server and an exception on the client, from one throw site.
+the server and an exception on the client, from one throw site. The reader that
+finds the omission knows only the member's own name, so each enclosing reader
+prepends its own step as the exception unwinds and the member is reported where
+it actually sits.
 
 ## Host Adapter
 

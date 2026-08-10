@@ -79,21 +79,14 @@ The `http` / `eventStreamHttp` members on protocol traits (for example
 `HttpClient`'s default HTTP version (HTTP/1.1 unless configured), and HTTP/2 is
 forced only for native gRPC. See the [Roadmap](/smithy-dotnet/contributing/roadmap/).
 
-## Validation Is Incomplete
+## Validation Covers Constraint Traits Only
 
-Servers enforce `@required`, `@length`, `@range`, `@pattern`, and `@uniqueItems`
-and answer violations with `smithy.framework#ValidationException` (see
-[Servers](/smithy-dotnet/servers/)). Three gaps remain:
+Servers enforce `@required`, `@length`, `@range`, `@pattern`, `@uniqueItems`, and
+enum membership, and answer violations with
+`smithy.framework#ValidationException` (see [Servers](/smithy-dotnet/servers/)).
 
-- Enum membership is not checked, so a value outside an enum's members reaches
-  the handler as an unknown variant. The schema does not carry the allowed
-  values yet.
-- A `@required` member missing from a **nested** structure is reported with the
-  member's own name as its path rather than a full pointer to its position,
-  because the codec detects it without the enclosing path.
-- `@uniqueItems` compares elements with .NET equality. Strings, numbers, blobs,
-  and generated records compare by value; a record holding a list or map member
-  compares that member by reference, so such elements can duplicate undetected.
+Traits outside that set — `@idRef` reference resolution, for example — are not
+enforced, and neither are constraints a model expresses only in documentation.
 
 ## Extra Smithy Maven Dependencies Are External
 
