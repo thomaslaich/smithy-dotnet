@@ -303,7 +303,6 @@ internal static class ValidatorCompiler
     internal static MemberValueValidator<TValue> CompileMember<TValue>(
         ICollectionMemberSchema<TValue> member
     ) => CompileMember(member, member.TargetSchema);
-
 }
 
 internal readonly struct MemberValueValidator<T>(
