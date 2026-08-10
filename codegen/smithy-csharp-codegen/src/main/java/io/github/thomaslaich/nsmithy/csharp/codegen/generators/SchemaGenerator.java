@@ -480,12 +480,13 @@ public final class SchemaGenerator {
         if (memberIsValueType) {
           expr = "builder." + prop + ".GetValueOrDefault()";
         } else {
+          // Typed so the server runtime can tell a caller's missing member from a server fault and
+          // answer with smithy.framework#ValidationException instead of a 500.
           expr =
               "builder."
                   + prop
-                  + " ?? throw new System.InvalidOperationException("
-                  + CSharpNaming.formatString(
-                      "Missing required member '" + member.getMemberName() + "'.")
+                  + " ?? throw new NSmithy.Core.Serde.MissingRequiredMemberException("
+                  + CSharpNaming.formatString(member.getMemberName())
                   + ")";
         }
       }

@@ -368,7 +368,7 @@ internal sealed class XmlMemberReader<TContainer, TBuilder, TValue>(
             }
             else if (member.IsRequired)
             {
-                throw new InvalidOperationException($"Missing required member '{member.Name}'.");
+                throw new MissingRequiredMemberException(member.Name);
             }
 
             return;
@@ -388,7 +388,7 @@ internal sealed class XmlMemberReader<TContainer, TBuilder, TValue>(
         }
         else if (member.IsRequired)
         {
-            throw new InvalidOperationException($"Missing required member '{member.Name}'.");
+            throw new MissingRequiredMemberException(member.Name);
         }
     }
 }
@@ -411,7 +411,7 @@ internal sealed class FlattenedXmlMemberReader<TContainer, TBuilder, TValue>(
         }
         else if (member.IsRequired)
         {
-            throw new InvalidOperationException($"Missing required member '{member.Name}'.");
+            throw new MissingRequiredMemberException(member.Name);
         }
     }
 }

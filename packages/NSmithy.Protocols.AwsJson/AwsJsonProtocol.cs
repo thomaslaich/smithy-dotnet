@@ -2,6 +2,7 @@ using System.Text.Json;
 using NSmithy.Codecs.Json;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.Core.Validation;
 using NSmithy.Http;
 
 namespace NSmithy.Protocols.AwsJson;
@@ -76,9 +77,12 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             responseCodec = JsonCodec.FromSchema(operation.Output);
             requestTransform = SmithyRequestModifiers.Compile(operation);
             HttpErrors = CompileErrors(operation.Errors);
+            InputValidator = SmithyValidator.FromSchema(operation.Input);
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
+
+        public ISmithyValidator<TInput>? InputValidator { get; }
 
         public SmithyHttpRequest SerializeRequest(
             TInput input,

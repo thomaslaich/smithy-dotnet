@@ -357,9 +357,7 @@ internal sealed class StructureJsonValueReader<T, TBuilder>(
             {
                 if (memberReader.IsRequired)
                 {
-                    throw new InvalidOperationException(
-                        $"Missing required member '{memberReader.Name}'."
-                    );
+                    throw new MissingRequiredMemberException(memberReader.Name);
                 }
 
                 memberReader.ReadMissing(builder);
@@ -434,9 +432,7 @@ internal sealed class StructureJsonProjectionReader<TBuilder>(
 
             if (memberReader.IsRequired)
             {
-                throw new InvalidOperationException(
-                    $"Missing required member '{memberReader.Name}'."
-                );
+                throw new MissingRequiredMemberException(memberReader.Name);
             }
 
             memberReader.ReadMissing(builder);

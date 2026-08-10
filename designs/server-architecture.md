@@ -138,6 +138,12 @@ public sealed class SmithyServerRuntime
     {
         var input = await protocol.DeserializeRequestAsync(request, cancellationToken)
             .ConfigureAwait(false);
+        if (protocol.InputValidator is { } validator)
+        {
+            var errors = validator.GetErrors(input);
+            // Answered with smithy.framework#ValidationException.
+        }
+
         try
         {
             var output = await handler(input, cancellationToken).ConfigureAwait(false);
@@ -155,6 +161,33 @@ public sealed class SmithyServerRuntime
 One dispatch algorithm covers every protocol and operation shape. Modeled-error
 handling is a single `catch` filtered by `TrySerializeError`, not a generated
 `catch` block per error.
+
+## Input Validation
+
+Constraint traits are enforced on the server, between deserialization and the
+handler, so a handler only ever sees input the model permits. The client does not
+validate: it is not the authority on the contract, and duplicating the check
+there costs latency without buying safety.
+
+`SmithyValidator.FromSchema` compiles an operation's input schema into a tree of
+validators once, when the protocol is built — the same compile-once shape the
+codecs use. It returns `null` when nothing reachable from the schema carries a
+constraint, and the runtime then skips validation altogether, so an unconstrained
+operation pays nothing. Constraints are read from the shape's kind rather than
+its CLR type, because an optional member wraps its target in a nullable schema
+and a member schema is its own kind; a constraint the kind says should apply but
+that cannot be enforced fails at compile time rather than being dropped.
+
+A violation becomes `smithy.framework#ValidationException`, which every operation
+carries as an implicit modeled error so protocols serialize it like any other and
+generated clients can deserialize it. Each violation is reported as a
+`ValidationExceptionField` whose `path` is a JSONPointer into the input.
+
+A `@required` member absent from the payload fails inside the codec, before the
+compiled validator runs, because the builder cannot produce the shape without it.
+Codecs signal that with `MissingRequiredMemberException`, which the runtime
+converts into the same `ValidationException` — a caller's omission is a 400 on
+the server and an exception on the client, from one throw site.
 
 ## Host Adapter
 

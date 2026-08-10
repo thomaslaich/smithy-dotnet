@@ -48,7 +48,7 @@ public sealed class SmithyServerRuntimeTests
         Assert.Equal(400, response.StatusCode);
         Assert.Equal("ValidationException", response.Headers["X-Amzn-Errortype"].Single());
         var body = await ReadBodyAsync(response);
-        Assert.Contains("$.name", body, StringComparison.Ordinal);
+        Assert.Contains("/name", body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -88,6 +88,36 @@ public sealed class SmithyServerRuntimeTests
         );
 
         Assert.Single(operation.Errors, error => error.Id == ValidationExceptionSchema.Id);
+    }
+
+    [Fact]
+    public async Task DispatchReturnsValidationExceptionForMissingRequiredMember()
+    {
+        var protocol = Protocol();
+        var request = new SmithyHttpRequest(HttpMethod.Post, "/users")
+        {
+            Body = new SmithyHttpBody.Bytes(Encoding.UTF8.GetBytes("{}")),
+            ContentType = "application/json",
+        };
+        var handled = false;
+
+        var response = await new SmithyServerRuntime().DispatchAsync(
+            protocol,
+            request,
+            (input, _) =>
+            {
+                handled = true;
+                return Task.FromResult(new CreateUserOutput(input.Name));
+            }
+        );
+
+        // The codec rejects the payload before the compiled validator runs; it is still the
+        // caller's mistake, so it must not surface as a 500.
+        Assert.False(handled);
+        Assert.Equal(400, response.StatusCode);
+        Assert.Equal("ValidationException", response.Headers["X-Amzn-Errortype"].Single());
+        var body = await ReadBodyAsync(response);
+        Assert.Contains("/name", body, StringComparison.Ordinal);
     }
 
     private static OperationSchema<CreateUserInput, CreateUserOutput> Operation()

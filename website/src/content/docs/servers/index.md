@@ -121,6 +121,32 @@ Register it with `AddSingleton<IGetCityHandler, GetCityHandler>()` (see
 The endpoint that maps `GetCity` resolves this handler directly, so it serves that
 operation whether or not the rest of the service is implemented by the same class.
 
+## Constraint validation
+
+The server checks the model's constraint traits — `@required`, `@length`,
+`@range`, `@pattern`, `@uniqueItems` — after deserializing the request and before
+calling the handler. A handler only sees input the model permits, so it does not
+need to re-check what the model already states.
+
+A request that violates a constraint gets `smithy.framework#ValidationException`
+with HTTP 400, listing each violation with a JSONPointer path into the input:
+
+```json
+{
+  "message": "2 validation errors detected.",
+  "fieldList": [
+    { "path": "/name", "message": "Value at '/name' length 1 is less than minimum 3." },
+    { "path": "/tags/0", "message": "Value at '/tags/0' does not match pattern '^[a-z]+$'." }
+  ]
+}
+```
+
+Every operation carries this error implicitly, so a generated client deserializes
+it as a modeled `ValidationException` whether or not the model declares it.
+
+Validation is compiled from the schema once, when the service starts. An
+operation whose input carries no constraints skips validation entirely.
+
 ## Which protocols generate a server
 
 Server generation exists for `simpleRestJson`, `restJson1`, `rpcv2Cbor`, and

@@ -457,7 +457,7 @@ public sealed class SchemaTests
             );
         var codec = JsonCodec.FromSchema(schema);
 
-        var ex = Assert.Throws<InvalidOperationException>(() => codec.DeserializeText("{}"));
+        var ex = Assert.Throws<MissingRequiredMemberException>(() => codec.DeserializeText("{}"));
 
         Assert.Equal("Missing required member 'name'.", ex.Message);
     }

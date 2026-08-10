@@ -9,36 +9,26 @@ namespace NSmithy.Core.Validation;
 
 public interface ISmithyValidator<in T>
 {
+    /// <summary>
+    /// Throws <see cref="ValidationException"/> — the modeled
+    /// <c>smithy.framework#ValidationException</c> — when the value violates a constraint.
+    /// </summary>
     void Validate(T value);
 
     IReadOnlyList<SmithyValidationError> GetErrors(T value);
 }
 
+/// <summary>
+/// One constraint violation. <see cref="Path"/> is a JSONPointer (RFC 6901) into the validated
+/// value, matching what <c>smithy.framework#ValidationExceptionField</c> documents its path member
+/// to be; the empty string points at the value itself.
+/// </summary>
 public sealed record SmithyValidationError(
     string Path,
     ShapeId ShapeId,
     ShapeId ConstraintId,
     string Message
 );
-
-public sealed class SmithyValidationException : Exception
-{
-    public SmithyValidationException(IReadOnlyList<SmithyValidationError> errors)
-        : base(CreateMessage(errors))
-    {
-        Errors = new ReadOnlyCollection<SmithyValidationError>(errors.ToArray());
-    }
-
-    public IReadOnlyList<SmithyValidationError> Errors { get; }
-
-    private static string CreateMessage(IReadOnlyList<SmithyValidationError> errors) =>
-        errors.Count == 1
-            ? errors[0].Message
-            : string.Create(
-                CultureInfo.InvariantCulture,
-                $"Smithy validation failed with {errors.Count} error(s)."
-            );
-}
 
 public static class SmithyValidator
 {
@@ -56,23 +46,65 @@ public static class SmithyValidator
     }
 }
 
-internal sealed class SchemaValidator<T>(IValueValidator<T> validator) : ISmithyValidator<T>
+/// <summary>
+/// JSONPointer (RFC 6901) path building. The root value is the empty string; every step appends
+/// <c>/</c> plus the escaped token.
+/// </summary>
+internal static class JsonPointer
 {
+    public const string Root = "";
+
+    public static string Append(string path, string token) =>
+        path
+        + "/"
+        + token
+            .Replace("~", "~0", StringComparison.Ordinal)
+            .Replace("/", "~1", StringComparison.Ordinal);
+
+    public static string Append(string path, int index) =>
+        string.Create(CultureInfo.InvariantCulture, $"{path}/{index}");
+
+    /// <summary>Renders a path for an error message, since the root pointer is empty.</summary>
+    public static string Describe(string path) => path.Length == 0 ? "the value" : $"'{path}'";
+}
+
+internal sealed class SchemaValidator<T> : ISmithyValidator<T>
+{
+    private readonly IValueValidator<T> validator;
+
+    public SchemaValidator(IValueValidator<T> validator)
+    {
+        this.validator = validator;
+
+        // Force the top-level body now so a schema the validator cannot compile fails when the
+        // protocol is built rather than on the first request. Nested bodies stay deferred, which
+        // is what keeps recursive schemas from recursing forever at compile time.
+        if (validator is IEagerlyCompilable eager)
+        {
+            eager.Compile();
+        }
+    }
+
     public void Validate(T value)
     {
         var errors = GetErrors(value);
         if (errors.Count > 0)
         {
-            throw new SmithyValidationException(errors);
+            throw ValidationException.FromErrors(errors);
         }
     }
 
     public IReadOnlyList<SmithyValidationError> GetErrors(T value)
     {
         List<SmithyValidationError> errors = [];
-        validator.Validate(value, "$", errors);
-        return errors;
+        validator.Validate(value, JsonPointer.Root, errors);
+        return new ReadOnlyCollection<SmithyValidationError>(errors);
     }
+}
+
+internal interface IEagerlyCompilable
+{
+    void Compile();
 }
 
 internal interface IValueValidator<in T>
@@ -115,7 +147,7 @@ internal static class ValidatorCompiler
 
     internal static IValueValidator<T> CompileBody<T>(Schema<T> schema)
     {
-        var constraints = ConstraintValidator<T>.FromTraits(schema.Traits, schema.Id);
+        var constraints = ConstraintValidator<T>.FromTraits(schema.Traits, schema.Id, schema.Kind);
         var structural = (IValueValidator<T>)schema.Resolved.Accept(StructuralCompiler.Instance);
 
         return ReferenceEquals(structural, NoOpValidator<T>.Instance) ? constraints
@@ -133,6 +165,14 @@ internal static class ValidatorCompiler
         }
 
         var resolved = schema.Resolved;
+
+        // A streaming blob is never buffered, so there is nothing to validate and no visitor case
+        // for it — Accept would throw.
+        if (resolved is StreamingBlobSchema)
+        {
+            return false;
+        }
+
         if (!visited.Add(resolved))
         {
             return false;
@@ -295,7 +335,14 @@ internal static class ValidatorCompiler
     )
     {
         return new MemberValueValidator<TValue>(
-            ConstraintValidator<TValue>.FromTraits(member.MemberTraits, member.Id),
+            // The member's own traits are compiled against the target's kind: a member schema is
+            // itself ShapeKind.Member, and an optional member wraps its target in a nullable
+            // schema, so neither the member nor the CLR type alone identifies the constrained shape.
+            ConstraintValidator<TValue>.FromTraits(
+                member.MemberTraits,
+                member.Id,
+                member.Target.Kind
+            ),
             Compile(target)
         );
     }
@@ -321,11 +368,15 @@ internal readonly struct MemberValueValidator<T>(
     }
 }
 
-internal sealed class DeferredValidator<T>(Schema<T> schema) : IValueValidator<T>
+internal sealed class DeferredValidator<T>(Schema<T> schema)
+    : IValueValidator<T>,
+        IEagerlyCompilable
 {
     private readonly Lazy<IValueValidator<T>> body = new(() =>
         ValidatorCompiler.CompileBody(schema)
     );
+
+    public void Compile() => _ = body.Value;
 
     public void Validate(T value, string path, List<SmithyValidationError> errors) =>
         body.Value.Validate(value, path, errors);
@@ -397,7 +448,7 @@ internal sealed class MemberValidator<TContainer, TValue>(
 {
     public void Validate(TContainer container, string path, List<SmithyValidationError> errors)
     {
-        var memberPath = path + "." + member.Name;
+        var memberPath = JsonPointer.Append(path, member.Name);
         var value = member.GetValue(container);
         if (value is null)
         {
@@ -443,7 +494,7 @@ internal sealed class ListValidator<TCollection, TElement> : IValueValidator<TCo
             return;
         }
 
-        HashSet<TElement>? seen = uniqueItems ? [] : null;
+        HashSet<TElement>? seen = uniqueItems ? new(UniqueItemsComparer<TElement>.Instance) : null;
         var index = 0;
         foreach (var element in schema.GetElements(value))
         {
@@ -454,7 +505,7 @@ internal sealed class ListValidator<TCollection, TElement> : IValueValidator<TCo
                         path,
                         shapeId,
                         ConstraintTraits.UniqueItems,
-                        $"Value at '{path}' has duplicate items."
+                        $"Value at {JsonPointer.Describe(path)} has duplicate items."
                     )
                 );
                 seen = null;
@@ -462,10 +513,36 @@ internal sealed class ListValidator<TCollection, TElement> : IValueValidator<TCo
 
             if (element is not null)
             {
-                elementValidator.Validate(element, $"{path}[{index}]", errors);
+                elementValidator.Validate(element, JsonPointer.Append(path, index), errors);
             }
 
             index++;
+        }
+    }
+}
+
+/// <summary>
+/// Equality for <c>@uniqueItems</c>. Blobs are the one modeled shape whose CLR representation
+/// (<see cref="byte"/>[]) compares by reference under the default comparer, which would let
+/// duplicates through; every other element type either is a value type or is generated as a record.
+/// </summary>
+internal static class UniqueItemsComparer<TElement>
+{
+    public static IEqualityComparer<TElement> Instance { get; } =
+        typeof(TElement) == typeof(byte[])
+            ? (IEqualityComparer<TElement>)(object)new BlobComparer()
+            : EqualityComparer<TElement>.Default;
+
+    private sealed class BlobComparer : IEqualityComparer<byte[]>
+    {
+        public bool Equals(byte[]? x, byte[]? y) =>
+            x is null ? y is null : y is not null && x.AsSpan().SequenceEqual(y);
+
+        public int GetHashCode(byte[] obj)
+        {
+            var hash = new HashCode();
+            hash.AddBytes(obj);
+            return hash.ToHashCode();
         }
     }
 }
@@ -489,20 +566,14 @@ internal sealed class MapValidator<TDictionary, TValue>(IMapSchema<TDictionary, 
 
         foreach (var entry in schema.GetEntries(value))
         {
-            keyValidator.Validate(entry.Key, AppendKey(path, entry.Key), errors);
+            var entryPath = JsonPointer.Append(path, entry.Key);
+            keyValidator.Validate(entry.Key, entryPath, errors);
             if (entry.Value is not null)
             {
-                valueValidator.Validate(entry.Value, AppendKey(path, entry.Key), errors);
+                valueValidator.Validate(entry.Value, entryPath, errors);
             }
         }
     }
-
-    private static string AppendKey(string path, string key) =>
-        path
-        + "[\""
-        + key.Replace("\\", "\\\\", StringComparison.Ordinal)
-            .Replace("\"", "\\\"", StringComparison.Ordinal)
-        + "\"]";
 }
 
 internal sealed class UnionValidator<T> : IValueValidator<T>, IUnionCaseVisitor<T>
@@ -547,7 +618,11 @@ internal sealed class UnionCaseValidator<TUnion, TValue>(IUnionCaseSchema<TUnion
     : IUnionCaseValidator<TUnion>
 {
     private readonly IValueValidator<TValue> caseConstraints =
-        ConstraintValidator<TValue>.FromTraits(unionCase.Traits, unionCase.Target.Id);
+        ConstraintValidator<TValue>.FromTraits(
+            unionCase.Traits,
+            unionCase.Target.Id,
+            unionCase.Target.Kind
+        );
     private readonly IValueValidator<TValue> valueValidator = ValidatorCompiler.Compile(
         unionCase.TargetSchema
     );
@@ -562,7 +637,7 @@ internal sealed class UnionCaseValidator<TUnion, TValue>(IUnionCaseSchema<TUnion
         var caseValue = unionCase.GetValue(value);
         if (caseValue is not null)
         {
-            var casePath = path + "." + unionCase.Name;
+            var casePath = JsonPointer.Append(path, unionCase.Name);
             caseConstraints.Validate(caseValue, casePath, errors);
             valueValidator.Validate(caseValue, casePath, errors);
         }
@@ -582,17 +657,34 @@ internal sealed class ConstraintValidator<T> : IValueValidator<T>
 
     public static IValueValidator<T> FromTraits(
         IReadOnlyDictionary<ShapeId, Trait> traits,
-        ShapeId shapeId
+        ShapeId shapeId,
+        ShapeKind kind
     )
     {
+        if (traits.Count == 0)
+        {
+            return NoOpValidator<T>.Instance;
+        }
+
         List<IConstraint<T>> constraints = [];
-        AddLengthConstraint(traits, shapeId, constraints);
-        AddRangeConstraint(traits, shapeId, constraints);
-        AddPatternConstraint(traits, shapeId, constraints);
+        AddLengthConstraint(traits, shapeId, kind, constraints);
+        AddRangeConstraint(traits, shapeId, kind, constraints);
+        AddPatternConstraint(traits, shapeId, kind, constraints);
         return constraints.Count == 0
             ? NoOpValidator<T>.Instance
             : new ConstraintValidator<T>(constraints);
     }
+
+    /// <summary>
+    /// A constraint the shape's kind says should apply but that this validator cannot enforce is a
+    /// bug in the validator, not in the model, so it fails loudly at compile time. Silently
+    /// dropping it would leave the operation looking validated while accepting anything.
+    /// </summary>
+    private static InvalidOperationException Unenforceable(ShapeId constraint, ShapeId shapeId) =>
+        new(
+            $"Constraint trait '{constraint}' on '{shapeId}' cannot be enforced for CLR type "
+                + $"'{typeof(T)}'."
+        );
 
     public void Validate(T value, string path, List<SmithyValidationError> errors)
     {
@@ -605,19 +697,29 @@ internal sealed class ConstraintValidator<T> : IValueValidator<T>
     private static void AddLengthConstraint(
         IReadOnlyDictionary<ShapeId, Trait> traits,
         ShapeId shapeId,
+        ShapeKind kind,
         List<IConstraint<T>> constraints
     )
     {
-        if (!traits.TryGetValue(ConstraintTraits.Length, out var trait))
+        if (
+            !traits.TryGetValue(ConstraintTraits.Length, out var trait)
+            || kind
+                is not (ShapeKind.String or ShapeKind.Blob)
+                    and not (ShapeKind.List or ShapeKind.Set or ShapeKind.Map)
+        )
         {
             return;
         }
 
-        var length = LengthAccessor<T>.Create();
-        if (length is null)
+        // A streaming blob is handed to the handler as an unread stream, so its length is not
+        // knowable without buffering the request. Smithy's own server implementations skip it too.
+        if (typeof(T) == typeof(Stream))
         {
             return;
         }
+
+        var length =
+            LengthAccessor<T>.Create() ?? throw Unenforceable(ConstraintTraits.Length, shapeId);
 
         constraints.Add(
             new LengthConstraint<T>(
@@ -632,19 +734,23 @@ internal sealed class ConstraintValidator<T> : IValueValidator<T>
     private static void AddRangeConstraint(
         IReadOnlyDictionary<ShapeId, Trait> traits,
         ShapeId shapeId,
+        ShapeKind kind,
         List<IConstraint<T>> constraints
     )
     {
-        if (!traits.TryGetValue(ConstraintTraits.Range, out var trait))
+        if (
+            !traits.TryGetValue(ConstraintTraits.Range, out var trait)
+            || kind
+                is not (ShapeKind.Byte or ShapeKind.Short or ShapeKind.Integer or ShapeKind.Long)
+                    and not (ShapeKind.Float or ShapeKind.Double)
+                    and not (ShapeKind.BigInteger or ShapeKind.BigDecimal)
+        )
         {
             return;
         }
 
-        var number = NumberAccessor<T>.Create();
-        if (number is null)
-        {
-            return;
-        }
+        var number =
+            NumberAccessor<T>.Create() ?? throw Unenforceable(ConstraintTraits.Range, shapeId);
 
         constraints.Add(
             new RangeConstraint<T>(
@@ -659,11 +765,12 @@ internal sealed class ConstraintValidator<T> : IValueValidator<T>
     private static void AddPatternConstraint(
         IReadOnlyDictionary<ShapeId, Trait> traits,
         ShapeId shapeId,
+        ShapeKind kind,
         List<IConstraint<T>> constraints
     )
     {
         if (
-            typeof(T) != typeof(string)
+            kind != ShapeKind.String
             || !traits.TryGetValue(ConstraintTraits.Pattern, out var trait)
             || trait.Value.Kind != DocumentKind.String
         )
@@ -671,9 +778,30 @@ internal sealed class ConstraintValidator<T> : IValueValidator<T>
             return;
         }
 
+        if (typeof(T) != typeof(string))
+        {
+            throw Unenforceable(ConstraintTraits.Pattern, shapeId);
+        }
+
         var pattern = trait.Value.AsString();
-        var regex = new Regex(pattern, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
-        constraints.Add(new PatternConstraint<T>(shapeId, pattern, regex));
+        constraints.Add(new PatternConstraint<T>(shapeId, pattern, CompilePattern(pattern)));
+    }
+
+    /// <summary>
+    /// Prefers the non-backtracking engine, which has no catastrophic-backtracking failure mode, so
+    /// a hostile input cannot stall a request thread. Patterns using constructs it does not support
+    /// (backreferences, lookaround) fall back to the backtracking engine under a timeout.
+    /// </summary>
+    private static Regex CompilePattern(string pattern)
+    {
+        try
+        {
+            return new Regex(pattern, RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
+        }
+        catch (NotSupportedException)
+        {
+            return new Regex(pattern, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
+        }
     }
 
     private static long? OptionalLong(Document document, string memberName) =>
@@ -722,7 +850,7 @@ internal sealed class LengthConstraint<T>(
                     path,
                     shapeId,
                     ConstraintTraits.Length,
-                    $"Value at '{path}' length {actual} is less than minimum {minValue}."
+                    $"Value at {JsonPointer.Describe(path)} length {actual} is less than minimum {minValue}."
                 )
             );
         }
@@ -734,7 +862,7 @@ internal sealed class LengthConstraint<T>(
                     path,
                     shapeId,
                     ConstraintTraits.Length,
-                    $"Value at '{path}' length {actual} is greater than maximum {maxValue}."
+                    $"Value at {JsonPointer.Describe(path)} length {actual} is greater than maximum {maxValue}."
                 )
             );
         }
@@ -762,7 +890,7 @@ internal sealed class RangeConstraint<T>(
                     path,
                     shapeId,
                     ConstraintTraits.Range,
-                    $"Value at '{path}' {actual} is less than minimum {minValue}."
+                    $"Value at {JsonPointer.Describe(path)} {actual} is less than minimum {minValue}."
                 )
             );
         }
@@ -774,7 +902,7 @@ internal sealed class RangeConstraint<T>(
                     path,
                     shapeId,
                     ConstraintTraits.Range,
-                    $"Value at '{path}' {actual} is greater than maximum {maxValue}."
+                    $"Value at {JsonPointer.Describe(path)} {actual} is greater than maximum {maxValue}."
                 )
             );
         }
@@ -787,14 +915,26 @@ internal sealed class PatternConstraint<T>(ShapeId shapeId, string pattern, Rege
     public void Validate(T value, string path, List<SmithyValidationError> errors)
     {
         var text = (string)(object)value!;
-        if (!regex.IsMatch(text))
+        bool matches;
+        try
+        {
+            matches = regex.IsMatch(text);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // A pattern that cannot be decided within the timeout is reported as a violation
+            // rather than escaping as a server fault: the input, not the server, is the problem.
+            matches = false;
+        }
+
+        if (!matches)
         {
             errors.Add(
                 new SmithyValidationError(
                     path,
                     shapeId,
                     ConstraintTraits.Pattern,
-                    $"Value at '{path}' does not match pattern '{pattern}'."
+                    $"Value at {JsonPointer.Describe(path)} does not match pattern '{pattern}'."
                 )
             );
         }
@@ -840,84 +980,100 @@ internal static class LengthAccessor<T>
 
 internal static class NumberAccessor<T>
 {
+    // decimal cannot hold the whole double, float or BigInteger range. Magnitudes beyond it are
+    // clamped rather than converted, so an out-of-range value compares as out of range instead of
+    // throwing OverflowException on the request path. Any bound a model can express is far inside
+    // these limits, so clamping never changes a verdict.
+    private const double DecimalUpperBound = 7.9e28;
+    private const double DecimalLowerBound = -7.9e28;
+
+    /// <summary>
+    /// Builds a reader for the CLR type behind a numeric shape. An optional member wraps its value
+    /// in <see cref="Nullable{T}"/>, so the underlying type — not <c>typeof(T)</c> — selects the
+    /// reader; a null value yields null and is left to the <c>@required</c> check.
+    /// </summary>
     public static Func<T, decimal?>? Create()
     {
-        if (typeof(T) == typeof(sbyte))
+        var read = CreateReader(Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T));
+        return read is null ? null : value => value is null ? null : read(value);
+    }
+
+    private static Func<object, decimal?>? CreateReader(Type type)
+    {
+        if (type == typeof(sbyte))
         {
-            return static value => (sbyte)(object)value!;
+            return static value => (sbyte)value;
         }
 
-        if (typeof(T) == typeof(short))
+        if (type == typeof(short))
         {
-            return static value => (short)(object)value!;
+            return static value => (short)value;
         }
 
-        if (typeof(T) == typeof(int))
+        if (type == typeof(int))
         {
-            return static value => (int)(object)value!;
+            return static value => (int)value;
         }
 
-        if (typeof(T) == typeof(long))
+        if (type == typeof(long))
         {
-            return static value => (long)(object)value!;
+            return static value => (long)value;
         }
 
-        if (typeof(T) == typeof(byte))
+        if (type == typeof(byte))
         {
-            return static value => (byte)(object)value!;
+            return static value => (byte)value;
         }
 
-        if (typeof(T) == typeof(ushort))
+        if (type == typeof(ushort))
         {
-            return static value => (ushort)(object)value!;
+            return static value => (ushort)value;
         }
 
-        if (typeof(T) == typeof(uint))
+        if (type == typeof(uint))
         {
-            return static value => (uint)(object)value!;
+            return static value => (uint)value;
         }
 
-        if (typeof(T) == typeof(ulong))
+        if (type == typeof(ulong))
         {
-            return static value => (ulong)(object)value!;
+            return static value => (ulong)value;
         }
 
-        if (typeof(T) == typeof(float))
+        if (type == typeof(float))
+        {
+            return static value => FromDouble((float)value);
+        }
+
+        if (type == typeof(double))
+        {
+            return static value => FromDouble((double)value);
+        }
+
+        if (type == typeof(decimal))
+        {
+            return static value => (decimal)value;
+        }
+
+        if (type == typeof(BigInteger))
         {
             return static value =>
             {
-                var number = (float)(object)value!;
-                return float.IsFinite(number) ? (decimal)number : null;
-            };
-        }
-
-        if (typeof(T) == typeof(double))
-        {
-            return static value =>
-            {
-                var number = (double)(object)value!;
-                return double.IsFinite(number) ? (decimal)number : null;
-            };
-        }
-
-        if (typeof(T) == typeof(decimal))
-        {
-            return static value => (decimal)(object)value!;
-        }
-
-        if (typeof(T) == typeof(BigInteger))
-        {
-            return static value =>
-            {
-                var number = (BigInteger)(object)value!;
-                return
-                    number >= new BigInteger(decimal.MinValue)
-                    && number <= new BigInteger(decimal.MaxValue)
-                    ? (decimal)number
-                    : null;
+                var number = (BigInteger)value;
+                return number >= new BigInteger(decimal.MinValue)
+                    ? number <= new BigInteger(decimal.MaxValue)
+                        ? (decimal)number
+                        : decimal.MaxValue
+                    : decimal.MinValue;
             };
         }
 
         return null;
     }
+
+    private static decimal? FromDouble(double number) =>
+        !double.IsFinite(number) ? null
+        : number >= DecimalUpperBound ? decimal.MaxValue
+        : number <= DecimalLowerBound ? decimal.MinValue
+        : (decimal)number;
 }

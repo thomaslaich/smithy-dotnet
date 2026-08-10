@@ -33,6 +33,27 @@ public sealed class ValidationException : Exception
             [.. errors.Select(error => new ValidationExceptionField(error.Path, error.Message))]
         );
     }
+
+    /// <summary>
+    /// The codec-level counterpart of a <c>@required</c> violation: a member missing from the
+    /// payload never reaches the compiled validator, because deserialization fails first. The path
+    /// names the member itself; a member missing from a nested structure is reported at the depth
+    /// the codec knows about, which is the member name alone.
+    /// </summary>
+    public static ValidationException FromMissingRequiredMember(string memberName)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(memberName);
+        var message = $"Required member '{memberName}' must not be null.";
+        return new ValidationException(
+            message,
+            [
+                new ValidationExceptionField(
+                    JsonPointer.Append(JsonPointer.Root, memberName),
+                    message
+                ),
+            ]
+        );
+    }
 }
 
 public sealed record ValidationExceptionField(string Path, string Message);
@@ -55,23 +76,36 @@ public static class ValidationExceptionFieldSchema
                 "path",
                 static value => value.Path,
                 static (builder, value) => builder.Path = value,
-                Schemas.NullableReference(Schemas.String)
+                Schemas.NullableReference(Schemas.String),
+                [FrameworkTraits.ProtoIndex(1)]
             )
             .Required(
                 "message",
                 static value => value.Message,
                 static (builder, value) => builder.Message = value,
-                Schemas.NullableReference(Schemas.String)
+                Schemas.NullableReference(Schemas.String),
+                [FrameworkTraits.ProtoIndex(2)]
             )
             .Build(
                 static () => new Builder(),
                 static builder => new ValidationExceptionField(
-                    builder.Path
-                        ?? throw new InvalidOperationException("Missing required member 'path'."),
-                    builder.Message
-                        ?? throw new InvalidOperationException("Missing required member 'message'.")
+                    builder.Path ?? throw new MissingRequiredMemberException("path"),
+                    builder.Message ?? throw new MissingRequiredMemberException("message")
                 )
             );
+}
+
+internal static class FrameworkTraits
+{
+    private static readonly ShapeId ProtoIndexTrait = ShapeId.Parse("alloy.proto#protoIndex");
+
+    /// <summary>
+    /// Every protocol has to be able to put this shape on the wire, because the server runtime can
+    /// return it from any operation. The proto codec requires a field number on every member, and
+    /// unlike a modeled shape there is no model file to carry one, so the framework shape declares
+    /// its own.
+    /// </summary>
+    public static Trait ProtoIndex(int index) => new(ProtoIndexTrait, Document.From(index));
 }
 
 public static class ValidationExceptionSchema
@@ -95,7 +129,8 @@ public static class ValidationExceptionSchema
                 "message",
                 static value => value.Message,
                 static (builder, value) => builder.Message = value,
-                Schemas.NullableReference(Schemas.String)
+                Schemas.NullableReference(Schemas.String),
+                [FrameworkTraits.ProtoIndex(1)]
             )
             .Optional(
                 "fieldList",
@@ -106,7 +141,8 @@ public static class ValidationExceptionSchema
                         ShapeId.Parse("smithy.framework#ValidationExceptionFieldList"),
                         ValidationExceptionFieldSchema.Schema
                     )
-                )
+                ),
+                [FrameworkTraits.ProtoIndex(2)]
             )
             .Build(
                 static () => new Builder(),

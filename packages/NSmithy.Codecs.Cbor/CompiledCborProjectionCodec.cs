@@ -166,9 +166,7 @@ internal sealed class CborProjectionValueReader<TBuilder>(
 
             if (memberReader.IsRequired)
             {
-                throw new InvalidOperationException(
-                    $"Missing required member '{memberReader.Name}'."
-                );
+                throw new MissingRequiredMemberException(memberReader.Name);
             }
 
             memberReader.ReadMissing(builder);

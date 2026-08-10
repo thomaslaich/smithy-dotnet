@@ -81,9 +81,19 @@ forced only for native gRPC. See the [Roadmap](/smithy-dotnet/contributing/roadm
 
 ## Validation Is Incomplete
 
-Generated constructors do not implement full Smithy validation semantics.
-Generated C# nullability is authoritative, but external request binding and
-deserialization still need more protocol-aware runtime validation.
+Servers enforce `@required`, `@length`, `@range`, `@pattern`, and `@uniqueItems`
+and answer violations with `smithy.framework#ValidationException` (see
+[Servers](/smithy-dotnet/servers/)). Three gaps remain:
+
+- Enum membership is not checked, so a value outside an enum's members reaches
+  the handler as an unknown variant. The schema does not carry the allowed
+  values yet.
+- A `@required` member missing from a **nested** structure is reported with the
+  member's own name as its path rather than a full pointer to its position,
+  because the codec detects it without the enclosing path.
+- `@uniqueItems` compares elements with .NET equality. Strings, numbers, blobs,
+  and generated records compare by value; a record holding a list or map member
+  compares that member by reference, so such elements can duplicate undetected.
 
 ## Extra Smithy Maven Dependencies Are External
 
