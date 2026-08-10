@@ -31,3 +31,7 @@ build/
 
 # macOS Finder metadata
 .DS_Store
+
+# Smithy CLI dependency cache; belongs under obj/, never in the source tree.
+smithy-maven-cache/
+smithy-maven-cache.stamp
