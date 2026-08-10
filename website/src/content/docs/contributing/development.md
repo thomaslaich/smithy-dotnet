@@ -37,7 +37,7 @@ All day-to-day tasks are defined as [just](https://just.systems) recipes. Run
 | `just check-format` | Verify formatting (used in CI) |
 | `just pack` | Pack NuGet packages to `artifacts/packages` |
 | `just docs` | Start the documentation dev server |
-| `just ci` | Full CI sequence: restore → check-format → build → test → pack |
+| `just ci` | Full CI sequence: check-format → build → test → pack → build examples |
 
 ## Pack Local Packages
 

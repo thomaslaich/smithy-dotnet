@@ -450,7 +450,7 @@
       <_SmithyBundleJar Include="$(_SmithyBundledMavenRepo)/**/*.jar" />
     </ItemGroup>
     <PropertyGroup Condition="'@(_SmithyBundleJar)' != ''">
-      <_SmithyMavenEnv>SMITHY_MAVEN_REPOS=$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri);SMITHY_MAVEN_CACHE=$(_SmithyMavenCachePath)</_SmithyMavenEnv>
+      <_SmithyMavenEnv>SMITHY_MAVEN_REPOS=$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri);SMITHY_MAVEN_CACHE=$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(IntermediateOutputPath)smithy-maven-cache'))</_SmithyMavenEnv>
     </PropertyGroup>
     <PropertyGroup>
       <_SmithyCliBuildOutput>$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\'))</_SmithyCliBuildOutput>

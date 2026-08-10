@@ -38,12 +38,25 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
         );
         var execServerResp = responses.Count(c => c.AppliesToServer);
 
+        // Malformed cases are server-only — a client would never send one — and are counted after
+        // testParameters expansion, because that is what actually runs. The gap between executed
+        // and total is the part of the suite asserting that unparseable input gets a structured
+        // 400 rather than a 500, which the server does not implement yet.
+        var malformed = Model
+            .EnumerateHttpMalformedRequestTests(RestJson1Allowlist.Protocol)
+            .ToList();
+        var malformedTotal = malformed.Count;
+        var execMalformed = malformed.Count(c =>
+            GeneratedService.HasHandler(c.OperationName) && RestJson1Allowlist.RunsMalformedCase(c)
+        );
+
         output.WriteLine(
             $"[{RestJson1Allowlist.Protocol}] "
                 + $"client-requests: {execClientReq}/{clientReqTotal} ({Pct(execClientReq, clientReqTotal)}), "
                 + $"client-responses: {execClientResp}/{clientRespTotal} ({Pct(execClientResp, clientRespTotal)}), "
                 + $"server-requests: {execServerReq}/{serverReqTotal} ({Pct(execServerReq, serverReqTotal)}), "
-                + $"server-responses: {execServerResp}/{serverRespTotal} ({Pct(execServerResp, serverRespTotal)})"
+                + $"server-responses: {execServerResp}/{serverRespTotal} ({Pct(execServerResp, serverRespTotal)}), "
+                + $"server-malformed: {execMalformed}/{malformedTotal} ({Pct(execMalformed, malformedTotal)})"
         );
     }
 

@@ -53,6 +53,10 @@ pack:
     bash packages/NSmithy.MSBuild/tools/download-smithy-cli.sh
     dotnet pack NSmithy.slnx --configuration Release --no-build --output artifacts/packages ${VERSION:+-p:Version=$VERSION}
 
+# Build the examples against the freshly packed packages, the way a consumer does.
+# Part of `ci`, so an example cannot break unnoticed — they consume NSmithy through
+
+# NuGet and MSBuild rather than project references, which is a path nothing else covers.
 refresh-examples:
     find examples -type d -name obj -prune -exec rm -rf {} +
     dotnet restore examples/examples.slnx --no-cache --force
@@ -63,7 +67,7 @@ refresh-examples:
     dotnet build examples/examples.slnx --verbosity minimal >/dev/null 2>&1 || true
     dotnet build examples/examples.slnx --verbosity minimal
 
-ci: check-format build test pack
+ci: check-format build test pack refresh-examples
 
 docs:
     cd website && npm install && npm run dev
