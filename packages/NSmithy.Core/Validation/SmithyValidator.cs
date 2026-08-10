@@ -116,16 +116,9 @@ internal static class ValidatorCompiler
     internal static IValueValidator<T> CompileBody<T>(Schema<T> schema)
     {
         var constraints = ConstraintValidator<T>.FromTraits(schema.Traits, schema.Id);
-        IValueValidator<T>? structural = schema.Resolved switch
-        {
-            IStructSchema<T> structure => new StructValidator<T>(structure),
-            IUnionSchema<T> union => new UnionValidator<T>(union),
-            IListSchema list => (IValueValidator<T>)CompileList((dynamic)list),
-            IMapSchema map => (IValueValidator<T>)CompileMap((dynamic)map),
-            _ => null,
-        };
+        var structural = (IValueValidator<T>)schema.Resolved.Accept(StructuralCompiler.Instance);
 
-        return structural is null ? constraints
+        return ReferenceEquals(structural, NoOpValidator<T>.Instance) ? constraints
             : ReferenceEquals(constraints, NoOpValidator<T>.Instance) ? structural
             : new CompositeValidator<T>(constraints, structural);
     }
@@ -145,29 +138,188 @@ internal static class ValidatorCompiler
             return false;
         }
 
-        return resolved switch
-        {
-            IStructSchema structure => structure.Members.Any(member =>
-                member.IsRequired
-                || ConstraintTraits.AnyIn(member.Traits)
-                || RequiresValidation(member.Target, visited)
-            ),
-            IUnionSchema union => union.Cases.Any(unionCase =>
-                RequiresValidation(unionCase.Target, visited)
-            ),
-            IListSchema list => RequiresValidation(list.Element, visited),
-            IMapSchema map => RequiresValidation(map.Value, visited),
-            _ => false,
-        };
+        return resolved.Accept(new ValidationRequirementVisitor(visited));
     }
 
-    private static ListValidator<TCollection, TElement> CompileList<TCollection, TElement>(
-        IListSchema<TCollection, TElement> schema
-    ) => new(schema);
+    private static bool RequiresMemberValidation(IMemberSchema member, HashSet<Schema> visited) =>
+        member.IsRequired
+        || ConstraintTraits.AnyIn(member.MemberTraits)
+        || RequiresValidation(member.Target, visited);
 
-    private static MapValidator<TDictionary, TValue> CompileMap<TDictionary, TValue>(
-        IMapSchema<TDictionary, TValue> schema
-    ) => new(schema);
+    private static bool RequiresMapValidation<TDictionary, TValue>(
+        IMapSchema<TDictionary, TValue> map,
+        HashSet<Schema> visited
+    ) =>
+        RequiresMemberValidation(map.TypedKeyMember, visited)
+        || RequiresMemberValidation(map.TypedValueMember, visited);
+
+    private sealed class StructuralCompiler : ISchemaVisitor<object>
+    {
+        public static StructuralCompiler Instance { get; } = new();
+
+        public object VisitBoolean(Schema<bool> schema) => NoOpValidator<bool>.Instance;
+
+        public object VisitByte(Schema<sbyte> schema) => NoOpValidator<sbyte>.Instance;
+
+        public object VisitShort(Schema<short> schema) => NoOpValidator<short>.Instance;
+
+        public object VisitInteger(Schema<int> schema) => NoOpValidator<int>.Instance;
+
+        public object VisitLong(Schema<long> schema) => NoOpValidator<long>.Instance;
+
+        public object VisitFloat(Schema<float> schema) => NoOpValidator<float>.Instance;
+
+        public object VisitDouble(Schema<double> schema) => NoOpValidator<double>.Instance;
+
+        public object VisitBigInteger(Schema<BigInteger> schema) =>
+            NoOpValidator<BigInteger>.Instance;
+
+        public object VisitBigDecimal(Schema<decimal> schema) => NoOpValidator<decimal>.Instance;
+
+        public object VisitString(Schema<string> schema) => NoOpValidator<string>.Instance;
+
+        public object VisitBlob(Schema<byte[]> schema) => NoOpValidator<byte[]>.Instance;
+
+        public object VisitTimestamp(Schema<DateTimeOffset> schema) =>
+            NoOpValidator<DateTimeOffset>.Instance;
+
+        public object VisitDocument(Schema<Document> schema) => NoOpValidator<Document>.Instance;
+
+        public object VisitNullable<T>(NullableSchema<T> schema)
+            where T : struct => new NullableValidator<T>(Compile(schema.TargetSchema));
+
+        public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
+            NoOpValidator<IAsyncEnumerable<TEvent>>.Instance;
+
+        public object VisitList<TCollection, TElement, TBuilder>(
+            IListSchema<TCollection, TElement, TBuilder> schema
+        ) => new ListValidator<TCollection, TElement>(schema);
+
+        public object VisitMap<TDictionary, TValue, TBuilder>(
+            IMapSchema<TDictionary, TValue, TBuilder> schema
+        ) => new MapValidator<TDictionary, TValue>(schema);
+
+        public object VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema) =>
+            new StructValidator<T>(schema);
+
+        public object VisitUnion<T>(IUnionSchema<T> schema) => new UnionValidator<T>(schema);
+
+        public object VisitStringEnum<T>(StringEnumSchema<T> schema)
+            where T : IStringEnumValue<T> => NoOpValidator<T>.Instance;
+
+        public object VisitIntEnum<T>(IntEnumSchema<T> schema)
+            where T : struct, Enum => NoOpValidator<T>.Instance;
+    }
+
+    private sealed class ValidationRequirementVisitor(HashSet<Schema> visited)
+        : ISchemaVisitor<bool>
+    {
+        public bool VisitBoolean(Schema<bool> schema) => false;
+
+        public bool VisitByte(Schema<sbyte> schema) => false;
+
+        public bool VisitShort(Schema<short> schema) => false;
+
+        public bool VisitInteger(Schema<int> schema) => false;
+
+        public bool VisitLong(Schema<long> schema) => false;
+
+        public bool VisitFloat(Schema<float> schema) => false;
+
+        public bool VisitDouble(Schema<double> schema) => false;
+
+        public bool VisitBigInteger(Schema<BigInteger> schema) => false;
+
+        public bool VisitBigDecimal(Schema<decimal> schema) => false;
+
+        public bool VisitString(Schema<string> schema) => false;
+
+        public bool VisitBlob(Schema<byte[]> schema) => false;
+
+        public bool VisitTimestamp(Schema<DateTimeOffset> schema) => false;
+
+        public bool VisitDocument(Schema<Document> schema) => false;
+
+        public bool VisitNullable<T>(NullableSchema<T> schema)
+            where T : struct => RequiresValidation(schema.TargetSchema, visited);
+
+        public bool VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) => false;
+
+        public bool VisitList<TCollection, TElement, TBuilder>(
+            IListSchema<TCollection, TElement, TBuilder> schema
+        ) => RequiresMemberValidation(schema.TypedElementMember, visited);
+
+        public bool VisitMap<TDictionary, TValue, TBuilder>(
+            IMapSchema<TDictionary, TValue, TBuilder> schema
+        ) => RequiresMapValidation(schema, visited);
+
+        public bool VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
+        {
+            var visitor = new ValidationRequirementMemberVisitor<T>(visited);
+            schema.VisitMembers(visitor);
+            return visitor.RequiresValidation;
+        }
+
+        public bool VisitUnion<T>(IUnionSchema<T> schema) =>
+            schema.Cases.Any(unionCase =>
+                ConstraintTraits.AnyIn(unionCase.Traits)
+                || RequiresValidation(unionCase.Target, visited)
+            );
+
+        public bool VisitStringEnum<T>(StringEnumSchema<T> schema)
+            where T : IStringEnumValue<T> => false;
+
+        public bool VisitIntEnum<T>(IntEnumSchema<T> schema)
+            where T : struct, Enum => false;
+    }
+
+    private sealed class ValidationRequirementMemberVisitor<T>(HashSet<Schema> visited)
+        : IMemberVisitor<T>
+    {
+        public bool RequiresValidation { get; private set; }
+
+        public void Visit<TValue>(IMemberSchema<T, TValue> member)
+        {
+            if (RequiresValidation)
+            {
+                return;
+            }
+
+            RequiresValidation = RequiresMemberValidation(member, visited);
+        }
+    }
+
+    internal static MemberValueValidator<TValue> CompileMember<TValue>(
+        IMemberSchema member,
+        Schema<TValue> target
+    )
+    {
+        return new MemberValueValidator<TValue>(
+            ConstraintValidator<TValue>.FromTraits(member.MemberTraits, member.Id),
+            Compile(target)
+        );
+    }
+
+    internal static MemberValueValidator<TValue> CompileMember<TValue>(
+        ICollectionMemberSchema<TValue> member
+    ) => CompileMember(member, member.TargetSchema);
+
+}
+
+internal readonly struct MemberValueValidator<T>(
+    IValueValidator<T> memberConstraints,
+    IValueValidator<T> targetValidator
+)
+{
+    public bool IsNoOp =>
+        ReferenceEquals(memberConstraints, NoOpValidator<T>.Instance)
+        && ReferenceEquals(targetValidator, NoOpValidator<T>.Instance);
+
+    public void Validate(T value, string path, List<SmithyValidationError> errors)
+    {
+        memberConstraints.Validate(value, path, errors);
+        targetValidator.Validate(value, path, errors);
+    }
 }
 
 internal sealed class DeferredValidator<T>(Schema<T> schema) : IValueValidator<T>
@@ -190,6 +342,18 @@ internal sealed class CompositeValidator<T>(IValueValidator<T> first, IValueVali
     }
 }
 
+internal sealed class NullableValidator<T>(IValueValidator<T> targetValidator) : IValueValidator<T?>
+    where T : struct
+{
+    public void Validate(T? value, string path, List<SmithyValidationError> errors)
+    {
+        if (value.HasValue)
+        {
+            targetValidator.Validate(value.Value, path, errors);
+        }
+    }
+}
+
 internal sealed class StructValidator<T> : IValueValidator<T>, IMemberVisitor<T>
 {
     private readonly List<IMemberValidator<T>> members = [];
@@ -201,18 +365,10 @@ internal sealed class StructValidator<T> : IValueValidator<T>, IMemberVisitor<T>
 
     public void Visit<TValue>(IMemberSchema<T, TValue> member)
     {
-        var memberConstraints = ConstraintValidator<TValue>.FromTraits(
-            member.Traits,
-            member.Target.Id
-        );
-        var valueValidator = ValidatorCompiler.Compile(member.TargetSchema);
-        if (
-            member.IsRequired
-            || !ReferenceEquals(memberConstraints, NoOpValidator<TValue>.Instance)
-            || !ReferenceEquals(valueValidator, NoOpValidator<TValue>.Instance)
-        )
+        var valueValidator = ValidatorCompiler.CompileMember(member, member.TargetSchema);
+        if (member.IsRequired || !valueValidator.IsNoOp)
         {
-            members.Add(new MemberValidator<T, TValue>(member, memberConstraints, valueValidator));
+            members.Add(new MemberValidator<T, TValue>(member, valueValidator));
         }
     }
 
@@ -237,8 +393,7 @@ internal interface IMemberValidator<in TContainer>
 
 internal sealed class MemberValidator<TContainer, TValue>(
     IMemberSchema<TContainer, TValue> member,
-    IValueValidator<TValue> memberConstraints,
-    IValueValidator<TValue> valueValidator
+    MemberValueValidator<TValue> valueValidator
 ) : IMemberValidator<TContainer>
 {
     public void Validate(TContainer container, string path, List<SmithyValidationError> errors)
@@ -262,7 +417,6 @@ internal sealed class MemberValidator<TContainer, TValue>(
             return;
         }
 
-        memberConstraints.Validate(value, memberPath, errors);
         valueValidator.Validate(value, memberPath, errors);
     }
 }
@@ -272,7 +426,7 @@ internal sealed class ListValidator<TCollection, TElement> : IValueValidator<TCo
     private readonly IListSchema<TCollection, TElement> schema;
     private readonly ShapeId shapeId;
     private readonly bool uniqueItems;
-    private readonly IValueValidator<TElement> elementValidator;
+    private readonly MemberValueValidator<TElement> elementValidator;
 
     public ListValidator(IListSchema<TCollection, TElement> schema)
     {
@@ -280,7 +434,7 @@ internal sealed class ListValidator<TCollection, TElement> : IValueValidator<TCo
         var shape = (Schema<TCollection>)schema;
         shapeId = shape.Id;
         uniqueItems = shape.HasTrait(ConstraintTraits.UniqueItems);
-        elementValidator = ValidatorCompiler.Compile(schema.ElementSchema);
+        elementValidator = ValidatorCompiler.CompileMember(schema.TypedElementMember);
     }
 
     public void Validate(TCollection value, string path, List<SmithyValidationError> errors)
@@ -320,8 +474,11 @@ internal sealed class ListValidator<TCollection, TElement> : IValueValidator<TCo
 internal sealed class MapValidator<TDictionary, TValue>(IMapSchema<TDictionary, TValue> schema)
     : IValueValidator<TDictionary>
 {
-    private readonly IValueValidator<TValue> valueValidator = ValidatorCompiler.Compile(
-        schema.ValueSchema
+    private readonly MemberValueValidator<string> keyValidator = ValidatorCompiler.CompileMember(
+        schema.TypedKeyMember
+    );
+    private readonly MemberValueValidator<TValue> valueValidator = ValidatorCompiler.CompileMember(
+        schema.TypedValueMember
     );
 
     public void Validate(TDictionary value, string path, List<SmithyValidationError> errors)
@@ -333,6 +490,7 @@ internal sealed class MapValidator<TDictionary, TValue>(IMapSchema<TDictionary, 
 
         foreach (var entry in schema.GetEntries(value))
         {
+            keyValidator.Validate(entry.Key, AppendKey(path, entry.Key), errors);
             if (entry.Value is not null)
             {
                 valueValidator.Validate(entry.Value, AppendKey(path, entry.Key), errors);
@@ -389,6 +547,8 @@ internal interface IUnionCaseValidator<in T>
 internal sealed class UnionCaseValidator<TUnion, TValue>(IUnionCaseSchema<TUnion, TValue> unionCase)
     : IUnionCaseValidator<TUnion>
 {
+    private readonly IValueValidator<TValue> caseConstraints =
+        ConstraintValidator<TValue>.FromTraits(unionCase.Traits, unionCase.Target.Id);
     private readonly IValueValidator<TValue> valueValidator = ValidatorCompiler.Compile(
         unionCase.TargetSchema
     );
@@ -403,7 +563,9 @@ internal sealed class UnionCaseValidator<TUnion, TValue>(IUnionCaseSchema<TUnion
         var caseValue = unionCase.GetValue(value);
         if (caseValue is not null)
         {
-            valueValidator.Validate(caseValue, path + "." + unionCase.Name, errors);
+            var casePath = path + "." + unionCase.Name;
+            caseConstraints.Validate(caseValue, casePath, errors);
+            valueValidator.Validate(caseValue, casePath, errors);
         }
 
         return true;

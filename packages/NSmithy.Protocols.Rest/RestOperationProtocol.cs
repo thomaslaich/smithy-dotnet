@@ -44,7 +44,8 @@ public sealed class RestServiceProtocol(
         Func<SmithyHttpClientResponse, string?> errorDiscriminator,
         bool rawStringPayloads,
         string? errorTypeHeader,
-        Action<SmithyHttpRequest>? requestTransform
+        Action<SmithyHttpRequest>? requestTransform,
+        ISmithyValidator<TInput>? inputValidator
     )
     {
         var inputSchema =
@@ -67,7 +68,8 @@ public sealed class RestServiceProtocol(
             errorDiscriminator,
             rawStringPayloads,
             errorTypeHeader,
-            requestTransform
+            requestTransform,
+            inputValidator
         );
     }
 
@@ -85,7 +87,8 @@ public sealed class RestServiceProtocol(
         Func<SmithyHttpClientResponse, string?> errorDiscriminator,
         bool rawStringPayloads,
         string? errorTypeHeader,
-        Action<SmithyHttpRequest>? requestTransform
+        Action<SmithyHttpRequest>? requestTransform,
+        ISmithyValidator<TInput>? inputValidator
     )
         where TInputBuilder : notnull
         where TOutputBuilder : notnull =>
@@ -102,7 +105,8 @@ public sealed class RestServiceProtocol(
             errorDiscriminator,
             rawStringPayloads,
             errorTypeHeader,
-            requestTransform
+            requestTransform,
+            inputValidator
         );
 }
 

@@ -559,6 +559,8 @@ public interface IUnionCaseSchema<TUnion, TValue> : IUnionCaseSchema
 
 public interface IMemberSchema
 {
+    ShapeId Id { get; }
+
     string Name { get; }
 
     IReadOnlyDictionary<ShapeId, Trait> MemberTraits { get; }

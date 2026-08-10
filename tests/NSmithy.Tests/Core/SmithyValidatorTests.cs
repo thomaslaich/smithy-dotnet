@@ -132,6 +132,58 @@ public sealed class SmithyValidatorTests
         Assert.Equal(LengthTrait, error.ConstraintId);
     }
 
+    [Fact]
+    public void ValidateAppliesCollectionMemberTraits()
+    {
+        var validator = SmithyValidator.FromSchema(
+            Schemas.List(
+                new ShapeId("example", "Codes"),
+                Schemas.String,
+                elementTraits: [Length(2, 4)]
+            )
+        )!;
+
+        var errors = validator.GetErrors(["a"]);
+
+        var error = Assert.Single(errors);
+        Assert.Equal("$[0]", error.Path);
+        Assert.Equal(LengthTrait, error.ConstraintId);
+        Assert.Equal(new ShapeId("example", "Codes", "member"), error.ShapeId);
+    }
+
+    [Fact]
+    public void ValidateAppliesMapKeyAndValueMemberTraits()
+    {
+        var validator = SmithyValidator.FromSchema(
+            Schemas.Map(
+                new ShapeId("example", "Scores"),
+                Schemas.Integer,
+                keyTraits: [Length(2, 4)],
+                valueTraits: [Range(0, 10)]
+            )
+        )!;
+
+        var errors = validator.GetErrors(
+            new Dictionary<string, int>(StringComparer.Ordinal) { ["x"] = 11 }
+        );
+
+        Assert.Equal(2, errors.Count);
+        Assert.Contains(
+            errors,
+            error =>
+                error.Path == "$[\"x\"]"
+                && error.ConstraintId == LengthTrait
+                && error.ShapeId == new ShapeId("example", "Scores", "key")
+        );
+        Assert.Contains(
+            errors,
+            error =>
+                error.Path == "$[\"x\"]"
+                && error.ConstraintId == RangeTrait
+                && error.ShapeId == new ShapeId("example", "Scores", "value")
+        );
+    }
+
     public sealed record Note(string? Text);
 
     public sealed class NoteBuilder
