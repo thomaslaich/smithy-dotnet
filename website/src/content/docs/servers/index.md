@@ -126,35 +126,12 @@ operation whether or not the rest of the service is implemented by the same clas
 The server checks the model's constraint traits — `@required`, `@length`,
 `@range`, `@pattern`, `@uniqueItems` — plus enum membership, after deserializing
 the request and before calling the handler. A handler only sees input the model
-permits, so it does not need to re-check what the model already states.
+permits, so it does not need to re-check what the model already states. A
+violation gets `smithy.framework#ValidationException` with HTTP 400, listing
+each one with a JSONPointer path into the input.
 
-Enum types stay open on the wire so that a client is not broken by a server that
-adds a member; the server is where that openness stops.
-
-A request that violates a constraint gets `smithy.framework#ValidationException`
-with HTTP 400, listing each violation with a JSONPointer path into the input:
-
-```json
-{
-  "message": "2 validation errors detected.",
-  "fieldList": [
-    { "path": "/name", "message": "Value at '/name' length 1 is less than minimum 3." },
-    { "path": "/tags/0", "message": "Value at '/tags/0' does not match pattern '^[a-z]+$'." }
-  ]
-}
-```
-
-Every operation carries this error implicitly, so a generated client deserializes
-it as a modeled `ValidationException` whether or not the model declares it.
-
-Validation is compiled from the schema once, when the service starts. An
-operation whose input carries no constraints skips validation entirely.
-
-Clients deliberately do not validate outbound input. The server is the authority
-on the contract, so checking on the client would duplicate the check that
-actually decides, add latency to every call, and go stale as soon as the model
-changes without a client rebuild. A generated client sends what it is given and
-surfaces the server's `ValidationException` as a modeled error.
+See [Validation](/smithy-dotnet/servers/validation/) for what is checked, the
+response format, and what is not covered yet.
 
 ## Which protocols generate a server
 

@@ -91,6 +91,7 @@ export default defineConfig({
 					label: 'Servers',
 					items: [
 						{ label: 'Overview', slug: 'servers' },
+						{ label: 'Validation', slug: 'servers/validation' },
 						{ label: 'Hosting & Multiple Protocols', slug: 'servers/hosting' },
 						{ label: 'Endpoint Documentation', slug: 'guides/endpoint-documentation' },
 					],
