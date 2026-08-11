@@ -2,7 +2,6 @@ using System.Text.Json;
 using NSmithy.Codecs.Json;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
-using NSmithy.Core.Validation;
 using NSmithy.Http;
 
 namespace NSmithy.Protocols.AwsJson;
@@ -40,16 +39,21 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
     private sealed class ServiceProtocol(ServiceSchema service, string contentType)
         : IServiceProtocol
     {
-        public IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
+        public IClientOperationProtocol<TInput, TOutput> ForClientOperation<TInput, TOutput>(
             OperationSchema<TInput, TOutput> operation
         )
         {
             ArgumentNullException.ThrowIfNull(operation);
             return new OperationProtocol<TInput, TOutput>(service, operation, contentType);
         }
+
+        public IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
+            OperationSchema<TInput, TOutput> operation
+        ) => throw new NotSupportedException("AWS JSON does not support serving operations.");
     }
 
-    private sealed class OperationProtocol<TInput, TOutput> : IOperationProtocol<TInput, TOutput>
+    private sealed class OperationProtocol<TInput, TOutput>
+        : IClientOperationProtocol<TInput, TOutput>
     {
         private static readonly byte[] EmptyJsonObject = "{}"u8.ToArray();
 
@@ -77,12 +81,9 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             responseCodec = JsonCodec.FromSchema(operation.Output);
             requestTransform = SmithyRequestModifiers.Compile(operation);
             HttpErrors = CompileErrors(operation.Errors);
-            InputValidator = SmithyValidator.FromSchema(operation.Input);
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
-
-        public ISmithyValidator<TInput>? InputValidator { get; }
 
         public SmithyHttpRequest SerializeRequest(
             TInput input,
@@ -129,24 +130,6 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             return ValueTask.FromResult(output is null ? CreateEmptyOutput(outputSchema) : output);
         }
 
-        public ValueTask<TInput> DeserializeRequestAsync(
-            SmithyHttpRequest request,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(request);
-            var content = BodyBytes(request.Body);
-            return ValueTask.FromResult(
-                content.Length == 0 ? default! : requestCodec.Deserialize(content)
-            );
-        }
-
-        public SmithyHttpServerResponse SerializeResponse(
-            TOutput output,
-            CancellationToken cancellationToken = default
-        ) =>
-            throw new NotSupportedException("AWS JSON server-side serialization is not supported.");
-
         public bool IsErrorResponse(SmithyHttpClientResponse response) =>
             (int)response.StatusCode >= 400;
 
@@ -166,9 +149,6 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
                 )
             );
 
-        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
-            throw new NotSupportedException("AWS JSON server-side serialization is not supported.");
-
         private static TOutput CreateEmptyOutput(Schema<TOutput> schema)
         {
             if (schema.Resolved is IStructSchema structSchema)
@@ -178,9 +158,6 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
 
             return default!;
         }
-
-        private static byte[] BodyBytes(SmithyHttpBody body) =>
-            body is SmithyHttpBody.Bytes bytes ? bytes.Content : [];
 
         private static HttpOperationError[] CompileErrors(
             IReadOnlyList<IOperationErrorSchema> errors

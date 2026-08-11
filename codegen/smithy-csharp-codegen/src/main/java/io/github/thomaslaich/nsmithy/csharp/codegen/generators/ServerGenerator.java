@@ -211,8 +211,8 @@ public final class ServerGenerator implements Runnable {
           continue;
         }
         writer.write(
-            "private static readonly IOperationProtocol<$L, $L> $L ="
-                + " $LServiceProtocol.ForOperation($L);",
+            "private static readonly IServerOperationProtocol<$L, $L> $L ="
+                + " $LServiceProtocol.ForServerOperation($L);",
             SchemaGenerator.operationShapeType(context, op.getInputShape()),
             SchemaGenerator.operationShapeType(context, op.getOutputShape()),
             operationProtocolField(kind, op),

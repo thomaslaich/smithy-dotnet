@@ -32,11 +32,10 @@ codegen:
     cp -R codegen/build/maven-bundle/. packages/NSmithy.MSBuild/tools/maven-repo/
 
 # Publish the codegen JARs to Maven Central via the Sonatype Central Portal.
-# Used by the release workflow; expects MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD
-# and ORG_GRADLE_PROJECT_signingInMemoryKey / ORG_GRADLE_PROJECT_signingInMemoryKeyPassword
-
-# to be set in the environment.
 publish-codegen VERSION:
+    # Used by the release workflow; expects MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD and
+    # ORG_GRADLE_PROJECT_signingInMemoryKey / ORG_GRADLE_PROJECT_signingInMemoryKeyPassword to be
+    # set in the environment.
     cd codegen && gradle -Pversion={{ VERSION }} :smithy-csharp-codegen:publishAndReleaseToMavenCentral :smithy-proto-codegen:publishAndReleaseToMavenCentral
 
 build: codegen restore
@@ -54,10 +53,9 @@ pack:
     dotnet pack NSmithy.slnx --configuration Release --no-build --output artifacts/packages ${VERSION:+-p:Version=$VERSION}
 
 # Build the examples against the freshly packed packages, the way a consumer does.
-# Part of `ci`, so an example cannot break unnoticed — they consume NSmithy through
-
-# NuGet and MSBuild rather than project references, which is a path nothing else covers.
 refresh-examples:
+    # Part of `ci`, so an example cannot break unnoticed: the examples consume NSmithy through
+    # NuGet and MSBuild rather than project references, which is a path nothing else covers.
     find examples -type d -name obj -prune -exec rm -rf {} +
     dotnet restore examples/examples.slnx --no-cache --force
     # gRPC examples need two build passes: the first generates the .proto file via the

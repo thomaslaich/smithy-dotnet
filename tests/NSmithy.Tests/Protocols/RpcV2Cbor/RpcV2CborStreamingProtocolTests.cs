@@ -97,6 +97,83 @@ public sealed class RpcV2CborStreamingProtocolTests
             StreamEnvelopeSchema($"{name}Output")
         );
 
+    private static Trait Length(int min, int max) =>
+        new(
+            ShapeId.Parse("smithy.api#length"),
+            Document.From(
+                new Dictionary<string, Document>(StringComparer.Ordinal)
+                {
+                    ["min"] = Document.From(min),
+                    ["max"] = Document.From(max),
+                }
+            )
+        );
+
+    private static Schema<EnvelopeBuilder> ConstrainedEnvelopeSchema(string name) =>
+        Schemas
+            .Structure<EnvelopeBuilder, EnvelopeBuilder>(ShapeId.Parse($"example.greeter#{name}"))
+            .Required("name", x => x.Name!, (b, v) => b.Name = v, Schemas.String, [Length(2, 10)])
+            .Required(
+                "events",
+                x => x.Events!,
+                (b, v) => b.Events = v,
+                Schemas.EventStream(ChatEventSchema("Events"))
+            )
+            .Build(() => new EnvelopeBuilder(), b => b);
+
+    private static async IAsyncEnumerable<ChatEvent> NoEvents()
+    {
+        await Task.CompletedTask;
+        yield break;
+    }
+
+    /// <summary>
+    /// An event stream changes how the body is framed, not what the initial request has to satisfy,
+    /// so the surrounding members are validated exactly as on a unary operation. The stream member
+    /// itself is skipped — hence a single error here, not one complaining about <c>events</c>.
+    /// </summary>
+    [Fact]
+    public void InputEventStreamValidatesTheInitialRequest()
+    {
+        var protocol = BuildServiceProtocol()
+            .ForServerOperation(
+                Schemas.Operation(
+                    ShapeId.Parse("example.greeter#Talk"),
+                    ConstrainedEnvelopeSchema("TalkInput"),
+                    EchoSchema("TalkOutput")
+                )
+            );
+
+        Assert.NotNull(protocol.InputValidator);
+        var error = Assert.Single(
+            protocol.InputValidator.GetErrors(
+                new EnvelopeBuilder { Name = "x", Events = NoEvents() }
+            )
+        );
+        Assert.Equal("/name", error.Path);
+    }
+
+    [Fact]
+    public void DuplexEventStreamValidatesTheInitialRequest()
+    {
+        var protocol = BuildServiceProtocol()
+            .ForServerOperation(
+                Schemas.Operation(
+                    ShapeId.Parse("example.greeter#Converse"),
+                    ConstrainedEnvelopeSchema("ConverseInput"),
+                    StreamEnvelopeSchema("ConverseOutput")
+                )
+            );
+
+        Assert.NotNull(protocol.InputValidator);
+        var error = Assert.Single(
+            protocol.InputValidator.GetErrors(
+                new EnvelopeBuilder { Name = "x", Events = NoEvents() }
+            )
+        );
+        Assert.Equal("/name", error.Path);
+    }
+
     private static OperationSchema<Echo, EnvelopeBuilder> OutputOperationWithInitial(string name) =>
         Schemas.Operation(
             ShapeId.Parse($"example.greeter#{name}"),

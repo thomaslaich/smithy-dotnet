@@ -43,25 +43,50 @@ public sealed class RpcV2CborProtocol : IProtocol
 
     private sealed class ServiceProtocol(ServiceSchema service) : IServiceProtocol
     {
-        public IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
+        public IClientOperationProtocol<TInput, TOutput> ForClientOperation<TInput, TOutput>(
             OperationSchema<TInput, TOutput> operation
+        ) => CreateOperation(operation, validateInput: false);
+
+        public IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
+            OperationSchema<TInput, TOutput> operation
+        ) => CreateOperation(operation, validateInput: true);
+
+        private IOperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
+            OperationSchema<TInput, TOutput> operation,
+            bool validateInput
         )
         {
             ArgumentNullException.ThrowIfNull(operation);
+
+            // Decided once here rather than in each protocol below: an event stream changes how the
+            // body is framed, not what the operation's input structure has to satisfy. The events
+            // themselves are not covered — the validator skips the event-stream member — since
+            // rejecting one mid-stream needs a way to report it after the response has begun.
+            var inputValidator = validateInput ? SmithyValidator.FromSchema(operation.Input) : null;
             var inputEvent = FindEventStreamEventSchema(operation.Input);
             var outputEvent = FindEventStreamEventSchema(operation.Output);
             return (inputEvent, outputEvent) switch
             {
-                (null, null) => new OperationProtocol<TInput, TOutput>(service, operation),
+                (null, null) => new OperationProtocol<TInput, TOutput>(
+                    service,
+                    operation,
+                    inputValidator
+                ),
                 (null, not null) => CreateOutputEventStreamProtocol(
                     operation,
-                    (dynamic)outputEvent
+                    (dynamic)outputEvent,
+                    inputValidator
                 ),
-                (not null, null) => CreateInputEventStreamProtocol(operation, (dynamic)inputEvent),
+                (not null, null) => CreateInputEventStreamProtocol(
+                    operation,
+                    (dynamic)inputEvent,
+                    inputValidator
+                ),
                 (not null, not null) => CreateDuplexEventStreamProtocol(
                     operation,
                     (dynamic)inputEvent,
-                    (dynamic)outputEvent
+                    (dynamic)outputEvent,
+                    inputValidator
                 ),
             };
         }
@@ -70,7 +95,11 @@ public sealed class RpcV2CborProtocol : IProtocol
             TInput,
             TOutput,
             TOutputEvent
-        >(OperationSchema<TInput, TOutput> operation, Schema<TOutputEvent> outputEvent)
+        >(
+            OperationSchema<TInput, TOutput> operation,
+            Schema<TOutputEvent> outputEvent,
+            ISmithyValidator<TInput>? inputValidator
+        )
         {
             if (operation.Output.Resolved is not IStructSchema<TOutput> outputSchema)
             {
@@ -79,7 +108,12 @@ public sealed class RpcV2CborProtocol : IProtocol
                 );
             }
 
-            return CreateOutputEventStreamProtocol(operation, outputEvent, (dynamic)outputSchema);
+            return CreateOutputEventStreamProtocol(
+                operation,
+                outputEvent,
+                (dynamic)outputSchema,
+                inputValidator
+            );
         }
 
         private OutputEventStreamOperationProtocol<
@@ -90,21 +124,27 @@ public sealed class RpcV2CborProtocol : IProtocol
         > CreateOutputEventStreamProtocol<TInput, TOutput, TOutputEvent, TOutputBuilder>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TOutputEvent> outputEvent,
-            IStructSchema<TOutput, TOutputBuilder> outputSchema
+            IStructSchema<TOutput, TOutputBuilder> outputSchema,
+            ISmithyValidator<TInput>? inputValidator
         )
             where TOutputBuilder : notnull =>
             new OutputEventStreamOperationProtocol<TInput, TOutput, TOutputEvent, TOutputBuilder>(
                 service,
                 operation,
                 outputEvent,
-                outputSchema
+                outputSchema,
+                inputValidator
             );
 
         private IOperationProtocol<TInput, TOutput> CreateInputEventStreamProtocol<
             TInput,
             TInputEvent,
             TOutput
-        >(OperationSchema<TInput, TOutput> operation, Schema<TInputEvent> inputEvent)
+        >(
+            OperationSchema<TInput, TOutput> operation,
+            Schema<TInputEvent> inputEvent,
+            ISmithyValidator<TInput>? inputValidator
+        )
         {
             if (operation.Input.Resolved is not IStructSchema<TInput> inputSchema)
             {
@@ -113,7 +153,12 @@ public sealed class RpcV2CborProtocol : IProtocol
                 );
             }
 
-            return CreateInputEventStreamProtocol(operation, inputEvent, (dynamic)inputSchema);
+            return CreateInputEventStreamProtocol(
+                operation,
+                inputEvent,
+                (dynamic)inputSchema,
+                inputValidator
+            );
         }
 
         private InputEventStreamOperationProtocol<
@@ -124,14 +169,16 @@ public sealed class RpcV2CborProtocol : IProtocol
         > CreateInputEventStreamProtocol<TInput, TInputEvent, TOutput, TInputBuilder>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent,
-            IStructSchema<TInput, TInputBuilder> inputSchema
+            IStructSchema<TInput, TInputBuilder> inputSchema,
+            ISmithyValidator<TInput>? inputValidator
         )
             where TInputBuilder : notnull =>
             new InputEventStreamOperationProtocol<TInput, TInputEvent, TOutput, TInputBuilder>(
                 service,
                 operation,
                 inputEvent,
-                inputSchema
+                inputSchema,
+                inputValidator
             );
 
         private IOperationProtocol<TInput, TOutput> CreateDuplexEventStreamProtocol<
@@ -142,7 +189,8 @@ public sealed class RpcV2CborProtocol : IProtocol
         >(
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent,
-            Schema<TOutputEvent> outputEvent
+            Schema<TOutputEvent> outputEvent,
+            ISmithyValidator<TInput>? inputValidator
         )
         {
             if (operation.Input.Resolved is not IStructSchema<TInput> inputSchema)
@@ -164,7 +212,8 @@ public sealed class RpcV2CborProtocol : IProtocol
                 inputEvent,
                 outputEvent,
                 (dynamic)inputSchema,
-                (dynamic)outputSchema
+                (dynamic)outputSchema,
+                inputValidator
             );
         }
 
@@ -187,7 +236,8 @@ public sealed class RpcV2CborProtocol : IProtocol
             Schema<TInputEvent> inputEvent,
             Schema<TOutputEvent> outputEvent,
             IStructSchema<TInput, TInputBuilder> inputSchema,
-            IStructSchema<TOutput, TOutputBuilder> outputSchema
+            IStructSchema<TOutput, TOutputBuilder> outputSchema,
+            ISmithyValidator<TInput>? inputValidator
         )
             where TInputBuilder : notnull
             where TOutputBuilder : notnull =>
@@ -198,7 +248,15 @@ public sealed class RpcV2CborProtocol : IProtocol
                 TOutputEvent,
                 TInputBuilder,
                 TOutputBuilder
-            >(service, operation, inputEvent, outputEvent, inputSchema, outputSchema);
+            >(
+                service,
+                operation,
+                inputEvent,
+                outputEvent,
+                inputSchema,
+                outputSchema,
+                inputValidator
+            );
     }
 
     private sealed class OperationProtocol<TInput, TOutput> : IOperationProtocol<TInput, TOutput>
@@ -212,8 +270,13 @@ public sealed class RpcV2CborProtocol : IProtocol
         private readonly Action<SmithyHttpRequest>? requestTransform;
         private readonly ModeledErrorSerializer serverErrors;
 
-        public OperationProtocol(ServiceSchema service, OperationSchema<TInput, TOutput> operation)
+        public OperationProtocol(
+            ServiceSchema service,
+            OperationSchema<TInput, TOutput> operation,
+            ISmithyValidator<TInput>? inputValidator
+        )
         {
+            InputValidator = inputValidator;
             requestTransform = SmithyRequestModifiers.Compile(operation);
             // The rpcv2Cbor path is service-derived; the protocol owns this wire detail.
             requestUri = $"/service/{service.Id.Name}/operation/{operation.Id.Name}";
@@ -235,7 +298,6 @@ public sealed class RpcV2CborProtocol : IProtocol
                 operation.Errors,
                 error => CompileServerError((dynamic)error)
             );
-            InputValidator = SmithyValidator.FromSchema(operation.Input);
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
@@ -399,9 +461,11 @@ public sealed class RpcV2CborProtocol : IProtocol
             ServiceSchema service,
             OperationSchema<TInput, TOutput> operation,
             Schema<TOutputEvent> outputEvent,
-            IStructSchema<TOutput, TOutputBuilder> outputSchema
+            IStructSchema<TOutput, TOutputBuilder> outputSchema,
+            ISmithyValidator<TInput>? inputValidator
         )
         {
+            InputValidator = inputValidator;
             requestUri = RequestUri(service, operation);
             inputIsUnit = IsUnit<TInput>(operation.Input);
             requestCodec = inputIsUnit
@@ -425,6 +489,8 @@ public sealed class RpcV2CborProtocol : IProtocol
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
+
+        public ISmithyValidator<TInput>? InputValidator { get; }
 
         public SmithyHttpRequest SerializeRequest(
             TInput input,
@@ -526,9 +592,11 @@ public sealed class RpcV2CborProtocol : IProtocol
             ServiceSchema service,
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent,
-            IStructSchema<TInput, TInputBuilder> inputSchema
+            IStructSchema<TInput, TInputBuilder> inputSchema,
+            ISmithyValidator<TInput>? inputValidator
         )
         {
+            InputValidator = inputValidator;
             requestUri = RequestUri(service, operation);
             outputIsUnit = IsUnit<TOutput>(operation.Output);
             requestCodec = CborCodec.FromSchema(inputEvent);
@@ -550,6 +618,8 @@ public sealed class RpcV2CborProtocol : IProtocol
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
+
+        public ISmithyValidator<TInput>? InputValidator { get; }
 
         public SmithyHttpRequest SerializeRequest(
             TInput input,
@@ -670,9 +740,11 @@ public sealed class RpcV2CborProtocol : IProtocol
             Schema<TInputEvent> inputEvent,
             Schema<TOutputEvent> outputEvent,
             IStructSchema<TInput, TInputBuilder> inputSchema,
-            IStructSchema<TOutput, TOutputBuilder> outputSchema
+            IStructSchema<TOutput, TOutputBuilder> outputSchema,
+            ISmithyValidator<TInput>? inputValidator
         )
         {
+            InputValidator = inputValidator;
             requestUri = RequestUri(service, operation);
             requestCodec = CborCodec.FromSchema(inputEvent);
             requestEvent =
@@ -702,6 +774,8 @@ public sealed class RpcV2CborProtocol : IProtocol
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
+
+        public ISmithyValidator<TInput>? InputValidator { get; }
 
         public SmithyHttpRequest SerializeRequest(
             TInput input,

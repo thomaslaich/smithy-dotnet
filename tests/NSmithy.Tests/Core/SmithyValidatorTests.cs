@@ -374,6 +374,37 @@ public sealed class SmithyValidatorTests
     }
 
     [Fact]
+    public void FromSchemaSkipsLengthOnStreamingBlobMembers()
+    {
+        // A streaming blob is a blob by kind, so @length reaches the length compiler — which has no
+        // way to measure an unread stream. Skipped rather than rejected: building the schema must
+        // not throw, on a client that never validates least of all.
+        var schema = Schemas
+            .Structure<Upload, UploadBuilder>(new ShapeId("example", "Upload"))
+            .Required(
+                "body",
+                static value => value.Body,
+                static (builder, value) => builder.Body = value,
+                Schemas.StreamingBlob,
+                [Length(1, 4)]
+            )
+            .Required(
+                "name",
+                static value => value.Name,
+                static (builder, value) => builder.Name = value,
+                Schemas.String
+            )
+            .Build(
+                static () => new UploadBuilder(),
+                static builder => new Upload(builder.Name!, builder.Body!)
+            );
+
+        var validator = SmithyValidator.FromSchema(schema)!;
+
+        Assert.Empty(validator.GetErrors(new Upload("Ada", new MemoryStream([1, 2, 3, 4, 5, 6]))));
+    }
+
+    [Fact]
     public void ValidateComparesBlobsByContentForUniqueItems()
     {
         var validator = SmithyValidator.FromSchema(

@@ -20,8 +20,17 @@ public sealed class RestServiceProtocol(
     string? errorTypeHeader
 ) : IServiceProtocol
 {
-    public IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
+    public IClientOperationProtocol<TInput, TOutput> ForClientOperation<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation
+    ) => CreateOperation(operation, validateInput: false);
+
+    public IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation
+    ) => CreateOperation(operation, validateInput: true);
+
+    private IOperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation,
+        bool validateInput
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -33,7 +42,7 @@ public sealed class RestServiceProtocol(
             rawStringPayloads,
             errorTypeHeader,
             SmithyRequestModifiers.Compile(operation),
-            SmithyValidator.FromSchema(operation.Input)
+            validateInput ? SmithyValidator.FromSchema(operation.Input) : null
         );
     }
 

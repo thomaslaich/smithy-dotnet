@@ -688,6 +688,14 @@ internal sealed class ConstraintValidator<T> : IValueValidator<T>
             return;
         }
 
+        // A @streaming blob is a blob by kind but reaches the handler unread, so its length is not
+        // knowable without buffering the whole request — unenforceable by anyone rather than a gap
+        // in this validator, so it is skipped instead of failing the build.
+        if (target.Resolved is StreamingBlobSchema)
+        {
+            return;
+        }
+
         var length =
             LengthCompiler.For(target) ?? throw Unenforceable(ConstraintTraits.Length, shapeId);
 

@@ -48,8 +48,17 @@ public sealed class GrpcProtocol : IProtocol
 
     private sealed class ServiceProtocol(ServiceSchema service) : IServiceProtocol
     {
-        public IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
+        public IClientOperationProtocol<TInput, TOutput> ForClientOperation<TInput, TOutput>(
             OperationSchema<TInput, TOutput> operation
+        ) => CreateOperation(operation, validateInput: false);
+
+        public IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
+            OperationSchema<TInput, TOutput> operation
+        ) => CreateOperation(operation, validateInput: true);
+
+        private IOperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
+            OperationSchema<TInput, TOutput> operation,
+            bool validateInput
         )
         {
             ArgumentNullException.ThrowIfNull(operation);
@@ -65,20 +74,35 @@ public sealed class GrpcProtocol : IProtocol
                 );
             }
 
+            // Decided once here rather than in each protocol below: an event stream changes how the
+            // body is framed, not what the operation's input structure has to satisfy. The events
+            // themselves are not covered — the validator skips the event-stream member — since
+            // rejecting one mid-stream needs a way to report it after the response has begun.
+            var inputValidator = validateInput ? SmithyValidator.FromSchema(operation.Input) : null;
             var inputEvent = FindEventStreamEventSchema(operation.Input);
             var outputEvent = FindEventStreamEventSchema(operation.Output);
             return (inputEvent, outputEvent) switch
             {
-                (null, null) => new OperationProtocol<TInput, TOutput>(service, operation),
+                (null, null) => new OperationProtocol<TInput, TOutput>(
+                    service,
+                    operation,
+                    inputValidator
+                ),
                 (null, not null) => CreateOutputEventStreamProtocol(
                     operation,
-                    (dynamic)outputEvent
+                    (dynamic)outputEvent,
+                    inputValidator
                 ),
-                (not null, null) => CreateInputEventStreamProtocol(operation, (dynamic)inputEvent),
+                (not null, null) => CreateInputEventStreamProtocol(
+                    operation,
+                    (dynamic)inputEvent,
+                    inputValidator
+                ),
                 (not null, not null) => CreateDuplexEventStreamProtocol(
                     operation,
                     (dynamic)inputEvent,
-                    (dynamic)outputEvent
+                    (dynamic)outputEvent,
+                    inputValidator
                 ),
             };
         }
@@ -89,12 +113,14 @@ public sealed class GrpcProtocol : IProtocol
             TOutputEvent
         > CreateOutputEventStreamProtocol<TInput, TOutput, TOutputEvent>(
             OperationSchema<TInput, TOutput> operation,
-            Schema<TOutputEvent> outputEvent
+            Schema<TOutputEvent> outputEvent,
+            ISmithyValidator<TInput>? inputValidator
         ) =>
             new OutputEventStreamOperationProtocol<TInput, TOutput, TOutputEvent>(
                 service,
                 operation,
-                outputEvent
+                outputEvent,
+                inputValidator
             );
 
         private InputEventStreamOperationProtocol<
@@ -103,12 +129,14 @@ public sealed class GrpcProtocol : IProtocol
             TOutput
         > CreateInputEventStreamProtocol<TInput, TInputEvent, TOutput>(
             OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent
+            Schema<TInputEvent> inputEvent,
+            ISmithyValidator<TInput>? inputValidator
         ) =>
             new InputEventStreamOperationProtocol<TInput, TInputEvent, TOutput>(
                 service,
                 operation,
-                inputEvent
+                inputEvent,
+                inputValidator
             );
 
         private DuplexEventStreamOperationProtocol<
@@ -119,13 +147,15 @@ public sealed class GrpcProtocol : IProtocol
         > CreateDuplexEventStreamProtocol<TInput, TOutput, TInputEvent, TOutputEvent>(
             OperationSchema<TInput, TOutput> operation,
             Schema<TInputEvent> inputEvent,
-            Schema<TOutputEvent> outputEvent
+            Schema<TOutputEvent> outputEvent,
+            ISmithyValidator<TInput>? inputValidator
         ) =>
             new DuplexEventStreamOperationProtocol<TInput, TOutput, TInputEvent, TOutputEvent>(
                 service,
                 operation,
                 inputEvent,
-                outputEvent
+                outputEvent,
+                inputValidator
             );
     }
 
@@ -138,8 +168,13 @@ public sealed class GrpcProtocol : IProtocol
         private readonly IProtoCodec<TOutput>? responseCodec;
         private readonly ModeledErrorSerializer serverErrors;
 
-        public OperationProtocol(ServiceSchema service, OperationSchema<TInput, TOutput> operation)
+        public OperationProtocol(
+            ServiceSchema service,
+            OperationSchema<TInput, TOutput> operation,
+            ISmithyValidator<TInput>? inputValidator
+        )
         {
+            InputValidator = inputValidator;
             // gRPC full method name: "/{package}.{Service}/{Method}". The proto package mirrors the
             // Smithy namespace, matching what smithy-proto-codegen emits.
             methodPath = MethodPath(service, operation.Id.Name);
@@ -153,7 +188,6 @@ public sealed class GrpcProtocol : IProtocol
                 operation.Errors,
                 error => CompileServerError((dynamic)error)
             );
-            InputValidator = SmithyValidator.FromSchema(operation.Input);
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
@@ -392,9 +426,11 @@ public sealed class GrpcProtocol : IProtocol
         public OutputEventStreamOperationProtocol(
             ServiceSchema service,
             OperationSchema<TInput, TOutput> operation,
-            Schema<TOutputEvent> outputEvent
+            Schema<TOutputEvent> outputEvent,
+            ISmithyValidator<TInput>? inputValidator
         )
         {
+            InputValidator = inputValidator;
             methodPath = MethodPath(service, operation.Id.Name);
             inputIsUnit = IsUnit<TInput>(operation.Input);
             requestCodec = inputIsUnit ? null : ProtoCodec.FromSchema(operation.Input);
@@ -408,6 +444,8 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
+
+        public ISmithyValidator<TInput>? InputValidator { get; }
 
         // An output stream's request is unary — one framed message, so an ordinary Bytes body.
         // The response, however, is a live event stream, so the runtime must read it in Stream mode.
@@ -494,9 +532,11 @@ public sealed class GrpcProtocol : IProtocol
         public InputEventStreamOperationProtocol(
             ServiceSchema service,
             OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent
+            Schema<TInputEvent> inputEvent,
+            ISmithyValidator<TInput>? inputValidator
         )
         {
+            InputValidator = inputValidator;
             methodPath = MethodPath(service, operation.Id.Name);
             outputIsUnit = IsUnit<TOutput>(operation.Output);
             requestCodec = ProtoCodec.FromSchema(inputEvent);
@@ -510,6 +550,8 @@ public sealed class GrpcProtocol : IProtocol
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
+
+        public ISmithyValidator<TInput>? InputValidator { get; }
 
         public SmithyHttpRequest SerializeRequest(
             TInput input,
@@ -587,7 +629,8 @@ public sealed class GrpcProtocol : IProtocol
         ServiceSchema service,
         OperationSchema<TInput, TOutput> operation,
         Schema<TInputEvent> inputEvent,
-        Schema<TOutputEvent> outputEvent
+        Schema<TOutputEvent> outputEvent,
+        ISmithyValidator<TInput>? inputValidator
     ) : IOperationProtocol<TInput, TOutput>
     {
         private readonly string methodPath = MethodPath(service, operation.Id.Name);
@@ -606,6 +649,8 @@ public sealed class GrpcProtocol : IProtocol
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
             CompileErrors(operation.Errors);
+
+        public ISmithyValidator<TInput>? InputValidator { get; } = inputValidator;
 
         // Duplex streams both directions, so the response must be read in Stream mode.
         public SmithyHttpRequest SerializeRequest(

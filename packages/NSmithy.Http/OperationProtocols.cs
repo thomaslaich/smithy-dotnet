@@ -70,7 +70,12 @@ public interface IServerOperationProtocol<TInput, TOutput>
     /// runtime then skips validation entirely. Compiled once per operation from the operation's
     /// input schema.
     /// </summary>
-    ISmithyValidator<TInput>? InputValidator => null;
+    /// <remarks>
+    /// Deliberately not defaulted: an implementation that skips validation has to say so. A default
+    /// of null once let six event-stream protocols silently validate nothing simply by not
+    /// mentioning this member.
+    /// </remarks>
+    ISmithyValidator<TInput>? InputValidator { get; }
 
     ValueTask<TInput> DeserializeRequestAsync(
         SmithyHttpRequest request,

@@ -270,7 +270,7 @@ final class ClientGeneratorTest {
         generated);
     assertTrue(
         generated.contains(
-            "serviceProtocol.ForOperation(Example.Example.Reststreaming.WatchSchema.Schema)"),
+            "serviceProtocol.ForClientOperation(Example.Example.Reststreaming.WatchSchema.Schema)"),
         generated);
     assertTrue(generated.contains("runtime.InvokeAsync(WatchBinding"), generated);
     assertFalse(generated.contains("Event-stream operations are not supported"), generated);
@@ -284,13 +284,13 @@ final class ClientGeneratorTest {
     // ReadThing inherits the service's effective schemes (alphabetical by shape id).
     assertTrue(
         generated.contains(
-            "serviceProtocol.ForOperation(Example.Example.Auth.ReadThingSchema.Schema), new"
+            "serviceProtocol.ForClientOperation(Example.Example.Auth.ReadThingSchema.Schema), new"
                 + " string[] { \"smithy.api#httpApiKeyAuth\", \"smithy.api#httpBearerAuth\" });"),
         generated);
     // AdminThing's @auth trait overrides the service default.
     assertTrue(
         generated.contains(
-            "serviceProtocol.ForOperation(Example.Example.Auth.AdminThingSchema.Schema), new"
+            "serviceProtocol.ForClientOperation(Example.Example.Auth.AdminThingSchema.Schema), new"
                 + " string[] { \"smithy.api#httpApiKeyAuth\" });"),
         generated);
   }

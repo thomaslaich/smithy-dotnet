@@ -91,11 +91,13 @@ currently surfaces as a 500 rather than the structured 400 Smithy specifies. The
 remainder of the malformed-request suite covers exactly those cases and is not
 run yet.
 
-Constraint enforcement itself has two gaps:
+Constraint enforcement itself has three gaps:
 
 - The legacy `@enum` trait on a string is not validated — only enum *shapes* are.
   A string shape carrying `@enum` is generated as a plain `string`, so the schema
   carries no value set.
+- `@length` on a `@streaming` blob is not enforced. The stream reaches the handler
+  unread, so its length is not knowable without buffering the whole request.
 - Traits outside the constraint set — `@idRef` reference resolution, for example —
   are not enforced.
 
