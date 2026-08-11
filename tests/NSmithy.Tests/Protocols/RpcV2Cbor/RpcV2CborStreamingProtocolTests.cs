@@ -90,6 +90,13 @@ public sealed class RpcV2CborStreamingProtocolTests
             EchoSchema($"{name}Output")
         );
 
+    private static OperationSchema<EnvelopeBuilder, Echo> InputOperationWithInitial(string name) =>
+        Schemas.Operation(
+            ShapeId.Parse($"example.greeter#{name}"),
+            InitialEnvelopeSchema($"{name}Input"),
+            EchoSchema($"{name}Output")
+        );
+
     private static OperationSchema<EnvelopeBuilder, EnvelopeBuilder> DuplexOperation(string name) =>
         Schemas.Operation(
             ShapeId.Parse($"example.greeter#{name}"),
@@ -294,6 +301,151 @@ public sealed class RpcV2CborStreamingProtocolTests
             Assert.Single(await CollectAsync(output.Events!))
         );
         Assert.Equal(new Echo("one"), message.Value);
+    }
+
+    // ---------------- characterization ----------------
+    //
+    // The server half of an input or duplex stream had no coverage: every streaming test above
+    // drives the client. These pin what the wire actually carries and what the server reads back
+    // out of it, so a protocol restructure has something to be measured against.
+
+    [Fact]
+    public async Task ClientStreamingRoundTripsInitialRequestMembersAndEvents()
+    {
+        var protocol = BuildServiceProtocol()
+            .ForOperation(InputOperationWithInitial("UploadWithInitial"));
+
+        var request = protocol.SerializeRequest(
+            new EnvelopeBuilder
+            {
+                Name = "ready",
+                Events = ToAsync([new ChatEvent.Message(new Echo("one"))]),
+            }
+        );
+
+        var input = await protocol.DeserializeRequestAsync(await ToServerRequestAsync(request));
+
+        Assert.Equal("ready", input.Name);
+        var message = Assert.IsType<ChatEvent.Message>(
+            Assert.Single(await CollectAsync(input.Events!))
+        );
+        Assert.Equal(new Echo("one"), message.Value);
+    }
+
+    /// <summary>
+    /// The initial request is its own framed message, ahead of the events, and is typed
+    /// <c>initial-request</c> — a peer distinguishes it from an event by that header alone.
+    /// </summary>
+    [Fact]
+    public async Task ClientStreamingEmitsTheInitialRequestBeforeTheEvents()
+    {
+        var protocol = BuildServiceProtocol()
+            .ForOperation(InputOperationWithInitial("UploadOrdering"));
+
+        var request = protocol.SerializeRequest(
+            new EnvelopeBuilder
+            {
+                Name = "ready",
+                Events = ToAsync([
+                    new ChatEvent.Message(new Echo("one")),
+                    new ChatEvent.Message(new Echo("two")),
+                ]),
+            }
+        );
+
+        var messages = await ReadMessagesAsync(await BodyBytesAsync(request.Body));
+
+        Assert.Equal(
+            ["initial-request", "message", "message"],
+            messages.Select(m => m.StringHeader(":event-type"))
+        );
+    }
+
+    /// <summary>
+    /// The mirror of the test above: a shape whose only member is the stream has no initial
+    /// request to send, so nothing precedes the events.
+    /// </summary>
+    [Fact]
+    public async Task ClientStreamingWithoutInitialMembersEmitsOnlyEvents()
+    {
+        var protocol = BuildServiceProtocol().ForOperation(InputOperation("UploadBare"));
+
+        var request = protocol.SerializeRequest(
+            new EnvelopeBuilder { Events = ToAsync([new ChatEvent.Message(new Echo("one"))]) }
+        );
+
+        var messages = await ReadMessagesAsync(await BodyBytesAsync(request.Body));
+
+        Assert.Equal(["message"], messages.Select(m => m.StringHeader(":event-type")));
+    }
+
+    [Fact]
+    public async Task ClientStreamingPreservesEventOrder()
+    {
+        var protocol = BuildServiceProtocol().ForOperation(InputOperation("UploadOrdered"));
+
+        var request = protocol.SerializeRequest(
+            new EnvelopeBuilder
+            {
+                Events = ToAsync([
+                    new ChatEvent.Message(new Echo("one")),
+                    new ChatEvent.Message(new Echo("two")),
+                    new ChatEvent.Message(new Echo("three")),
+                ]),
+            }
+        );
+
+        var input = await protocol.DeserializeRequestAsync(await ToServerRequestAsync(request));
+
+        Assert.Equal(
+            ["one", "two", "three"],
+            (await CollectAsync(input.Events!)).Select(e => ((ChatEvent.Message)e).Value.Message)
+        );
+    }
+
+    [Fact]
+    public async Task ClientStreamingRoundTripsAnEmptyEventStream()
+    {
+        var protocol = BuildServiceProtocol().ForOperation(InputOperation("UploadEmpty"));
+
+        var request = protocol.SerializeRequest(
+            new EnvelopeBuilder { Events = ToAsync(Array.Empty<ChatEvent>()) }
+        );
+
+        var input = await protocol.DeserializeRequestAsync(await ToServerRequestAsync(request));
+
+        Assert.Empty(await CollectAsync(input.Events!));
+    }
+
+    [Fact]
+    public async Task BidirectionalStreamingRoundTripsTheRequestToTheServer()
+    {
+        var protocol = BuildServiceProtocol().ForOperation(DuplexOperation("ChatServerSide"));
+
+        var request = protocol.SerializeRequest(
+            new EnvelopeBuilder { Events = ToAsync([new ChatEvent.Message(new Echo("in"))]) }
+        );
+
+        var input = await protocol.DeserializeRequestAsync(await ToServerRequestAsync(request));
+
+        var message = Assert.IsType<ChatEvent.Message>(
+            Assert.Single(await CollectAsync(input.Events!))
+        );
+        Assert.Equal(new Echo("in"), message.Value);
+    }
+
+    /// <summary>
+    /// A host hands the server a buffered or live body, never the client's outgoing event-stream
+    /// body, so the framed bytes are replayed as a stream the way Kestrel would deliver them.
+    /// </summary>
+    private static async Task<SmithyHttpRequest> ToServerRequestAsync(SmithyHttpRequest request)
+    {
+        var framed = await BodyBytesAsync(request.Body);
+        return new SmithyHttpRequest(request.Method, request.RequestUri)
+        {
+            Body = new SmithyHttpBody.Streaming(new MemoryStream(framed)),
+            ContentType = request.ContentType,
+        };
     }
 
     private static async Task<SmithyHttpClientResponse> ToClientResponseAsync(
