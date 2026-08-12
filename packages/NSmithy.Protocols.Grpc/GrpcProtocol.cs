@@ -118,7 +118,7 @@ public sealed class GrpcProtocol : IProtocol
         {
             return new RequestStrategy<TInput>(
                 (_, _) => new SmithyHttpBody.Bytes(GrpcMessageFraming.Frame([])),
-                (_, _) => ValueTask.FromResult<TInput>(default!)
+                (_, _) => default
             );
         }
 

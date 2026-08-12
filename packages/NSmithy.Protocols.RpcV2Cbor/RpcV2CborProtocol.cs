@@ -122,7 +122,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         {
             return new RequestStrategy<TInput>(
                 static (_, _, _) => { },
-                static (_, _) => ValueTask.FromResult<TInput>(default!),
+                static (_, _) => default,
                 IsStreaming: false
             );
         }
@@ -137,9 +137,9 @@ public sealed class RpcV2CborProtocol : IProtocol
             (request, _) =>
             {
                 var content = BodyBytes(request.Body);
-                return ValueTask.FromResult(
-                    content.Length == 0 ? default! : codec.Deserialize(content)
-                );
+                return content.Length == 0
+                    ? default
+                    : ValueTask.FromResult(codec.Deserialize(content));
             },
             IsStreaming: false
         );
