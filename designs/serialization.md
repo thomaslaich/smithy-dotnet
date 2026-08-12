@@ -86,6 +86,13 @@ public abstract class Schema<T> : Schema;
 annotations. The typed layer is the only real layer; there is no erased
 counterpart.
 
+The non-generic `Schema` is a storage handle, not a second API. Heterogeneous
+positions — a structure's member list, an error registry keyed by `ShapeId`, a
+server's dispatch table — hold shapes whose type arguments all differ and need
+some common supertype to be stored at all. Its entire surface is `Id`, `Kind`,
+`Traits`, and `Accept`; construction, member access, and serde exist only on
+`Schema<T>`, which `schema.Accept(visitor)` gets back to.
+
 A scalar is the smallest node in the algebra — an id and a kind, no members and
 no accessors — so the prelude shapes are shared singletons:
 
@@ -149,36 +156,6 @@ consumers decide which traits they interpret. REST protocols interpret
 `@httpLabel`, `@httpHeader`, `@httpPayload`, and `@timestampFormat`; a gRPC
 protocol can ignore those bindings entirely; the validator interprets
 constraint traits and nothing else.
-
-### The Non-Generic `Schema`
-
-The non-generic `Schema` exists because C# lacks existential types: it is the
-encoding of `exists T. Schema<T>`, nothing more. Three positions force it:
-
-- **Heterogeneous edges in the graph.** A structure's members list holds
-  members whose value types all differ, an error registry maps `ShapeId` to a
-  schema of unknown type, and a server dispatch table holds operation schemas
-  with varying type arguments. Each needs a common supertype to be stored at
-  all, and `IMemberSchema.Target` needs a type to return.
-- **Re-entry into typed land.** From an untyped handle, the only way back to
-  `Schema<T>` is double dispatch: `schema.Accept(visitor)`, where the sealed
-  leaf calls the visitor with its own type arguments.
-- **Metadata reads without dispatch.** Documentation, diffing, and logging
-  read `Id`, `Kind`, or `Traits` off an arbitrary node without constructing a
-  visitor.
-
-That list is exhaustive, and none of it is behavior. The non-generic surface
-is exactly `Id`, `Kind`, `Traits`, and `Accept` — an existential wrapper plus
-metadata. Construction, member access, and serde exist only on the typed
-layer, reachable only through the visitor.
-
-Entry points never touch the untyped handle: anywhere traversal starts from a
-known shape (`ISmithyShape<T>.Schema`, a generated operation), it is in
-`Schema<T>` from the first instruction, and a fold stays typed all the way
-down — inside `Visit<TValue>` the recursion continues through `TargetSchema`,
-which is `Schema<TValue>`. The untyped base appears only at graph-internal
-heterogeneous positions and in generic tooling, and it is held only until the
-next `Accept`.
 
 ### Members
 
