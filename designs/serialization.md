@@ -460,10 +460,11 @@ format:
 - `NSmithy.Codecs.Json` - JSON documents
 - `NSmithy.Codecs.Xml` - XML documents
 - `NSmithy.Codecs.Cbor` - CBOR documents
+- `NSmithy.Codecs.Proto` - Protobuf messages
 
 Codecs read schema metadata at fold time. They handle body-format traits such
-as XML names, timestamp formats, enum values, sparse collections, and document
-nodes. They do not build HTTP requests, expand URI labels, choose headers, or
+as XML names, timestamp formats, enum values, sparse collections, document
+nodes, and protobuf field numbers. They do not build HTTP requests, expand URI labels, choose headers, or
 map status codes; those are protocol responsibilities.
 
 ### Codec Compilation
@@ -637,7 +638,8 @@ generated clients do not need protocol-specific serialization branches:
   computes it from the service and operation shape names. REST reads the
   `@http` trait off the operation schema and substitutes labels from the input
   per call.
-- **Body codec.** rpcv2Cbor uses CBOR; restJson1 uses JSON; restXml uses XML.
+- **Body codec.** rpcv2Cbor uses CBOR; restJson1 uses JSON; restXml uses XML;
+  gRPC uses Protobuf.
 - **Error discrimination.** REST reads `X-Amzn-Errortype` / `__type` / `code`;
   rpcv2Cbor reads `__type` from the CBOR body; `IsErrorResponse` decides whether
   a response is an error at all (HTTP status today, the `grpc-status` trailer for
