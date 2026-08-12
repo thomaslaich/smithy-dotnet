@@ -16,17 +16,6 @@ schemas into transport bindings; the validator folds a schema into a constraint
 checker. Heterogeneous infrastructure can hold a non-generic `Schema` handle,
 but behavior re-enters typed code through visitor dispatch.
 
-That split gives NSmithy's model five layers:
-
-1. **Model types** are plain C# values.
-2. **Schemas** describe Smithy metadata, typed member access, and construction.
-3. **Codecs** compile schemas into body readers and writers.
-4. **Protocols** project operation schemas into transport requests and responses.
-5. **Validators** compile schemas into constraint checkers.
-
-Only the first two layers are generated. Codecs, protocols, and validators are
-runtime libraries configured from the generated schemas.
-
 ## Goals
 
 - **Fidelity.** The schema model mirrors the Smithy meta-model. Anything the
@@ -45,16 +34,19 @@ runtime libraries configured from the generated schemas.
 
 ## Layers
 
-The pieces below stack in one direction. Generated **model types** are plain C#
-values. Alongside each, the generator emits a **schema** carrying the Smithy
-shape id, traits, and typed member accessors. A **codec** folds a schema into a
-reader and writer for one wire format, knowing nothing about HTTP. A **protocol**
-interprets service and operation schemas for a transport, using a codec for
-bodies. Generated **clients and servers** hold a bound operation protocol and
-hand typed values to a shared runtime.
+NSmithy's model has five layers:
 
-Each layer is described in its own section below, with the reasoning behind it.
-For a worked example of what generation produces for a given model, see the
+1. **Model types** are plain C# values.
+2. **Schemas** describe Smithy metadata, typed member access, and construction.
+3. **Codecs** compile schemas into body readers and writers.
+4. **Protocols** project operation schemas into transport requests and responses.
+5. **Validators** compile schemas into constraint checkers.
+
+Only the first two layers are generated. Codecs, protocols, and validators are
+runtime libraries configured from the generated schemas.
+
+Each layer has its own section below, with the reasoning behind it. For a worked
+example of what generation produces for a given model, see the
 [Quick Start](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/).
 
 ## Generated Model Types
