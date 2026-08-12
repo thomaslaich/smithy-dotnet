@@ -176,6 +176,89 @@ public sealed class RestJson1ProtocolTests
         Assert.Equal(new UpdateUserInput("ada lovelace", "token-123", "Ada"), input);
     }
 
+    // A required member bound to a header or query string never reaches the body codec, and a
+    // required value-type member has already defaulted by the time the validator runs, so this is
+    // the only layer that can tell the caller they left one out.
+    public sealed record CountInput(int Limit, string Tenant);
+
+    public sealed class CountInputBuilder
+    {
+        public int? Limit { get; set; }
+
+        public string? Tenant { get; set; }
+    }
+
+    private static OperationSchema<CountInput, UpdateUserOutput> CountOperation()
+    {
+        var inputSchema = Schemas
+            .Structure<CountInput, CountInputBuilder>(new ShapeId("example", "CountInput"))
+            .Required(
+                "limit",
+                static input => input.Limit,
+                static (builder, value) => builder.Limit = value,
+                Schemas.Nullable(Schemas.Integer),
+                traits: [RestTraits.HttpQueryTrait("limit")]
+            )
+            .Required(
+                "tenant",
+                static input => input.Tenant,
+                static (builder, value) => builder.Tenant = value,
+                Schemas.String,
+                traits: [RestTraits.HttpHeaderTrait("X-Tenant")]
+            )
+            .Build(
+                static () => new CountInputBuilder(),
+                static builder => new CountInput(builder.Limit.GetValueOrDefault(), builder.Tenant!)
+            );
+        var outputSchema = Schemas
+            .Structure<UpdateUserOutput, UpdateUserOutputBuilder>(
+                new ShapeId("example", "CountOutput")
+            )
+            .Build(static () => new UpdateUserOutputBuilder(), static _ => new UpdateUserOutput());
+        return Schemas.Operation(
+            new ShapeId("example", "Count"),
+            inputSchema,
+            outputSchema,
+            traits: [RestTraits.HttpTrait("GET", "/count")]
+        );
+    }
+
+    [Fact]
+    public void RestJson1ProtocolRejectsAMissingRequiredQueryMember()
+    {
+        var request = new SmithyHttpRequest(HttpMethod.Get, "/count");
+        request.Headers["X-Tenant"] = ["acme"];
+
+        var exception = Assert.Throws<MissingRequiredMemberException>(() =>
+            Protocol(CountOperation()).DeserializeRequest(request)
+        );
+
+        Assert.Equal("limit", exception.MemberName);
+    }
+
+    [Fact]
+    public void RestJson1ProtocolRejectsAMissingRequiredHeaderMember()
+    {
+        var request = new SmithyHttpRequest(HttpMethod.Get, "/count?limit=10");
+
+        var exception = Assert.Throws<MissingRequiredMemberException>(() =>
+            Protocol(CountOperation()).DeserializeRequest(request)
+        );
+
+        Assert.Equal("tenant", exception.MemberName);
+    }
+
+    [Fact]
+    public void RestJson1ProtocolAcceptsRequiredBoundMembersWhenPresent()
+    {
+        var request = new SmithyHttpRequest(HttpMethod.Get, "/count?limit=10");
+        request.Headers["X-Tenant"] = ["acme"];
+
+        var input = Protocol(CountOperation()).DeserializeRequest(request);
+
+        Assert.Equal(new CountInput(10, "acme"), input);
+    }
+
     public sealed record GetUserInput(
         string UserId,
         bool IncludeDetails,

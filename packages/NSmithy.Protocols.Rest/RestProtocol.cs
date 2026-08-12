@@ -118,6 +118,10 @@ public static class RestProtocol
         var labels = ExtractLabels(binding.UriTemplate, request.RequestUri);
         var query = ParseQuery(request.RequestUri);
 
+        // A member bound to the URI or headers is never seen by the body codec, so this is the only
+        // place its absence is still observable: once the builder is finalized a missing value-type
+        // member has already defaulted, and neither the finalizer nor the validator can tell it from
+        // a value the caller actually sent.
         foreach (var member in binding.LabelMembers)
         {
             if (labels.TryGetValue(member.Name, out var labelValue))
@@ -125,6 +129,8 @@ public static class RestProtocol
                     builder,
                     ParseHttpValue(member.Target, member.MemberTraits, labelValue)
                 );
+            else if (member.IsRequired)
+                throw new MissingRequiredMemberException(member.Name);
         }
         foreach (var (member, headerName) in binding.RequestHeaderMembers)
         {
@@ -133,6 +139,8 @@ public static class RestProtocol
                     builder,
                     ParseHttpBindingValue(member.Target, member.MemberTraits, header)
                 );
+            else if (member.IsRequired)
+                throw new MissingRequiredMemberException(member.Name);
         }
         if (binding.RequestPrefixHeadersMember is { } reqPhMember)
             reqPhMember.Member.SetObject(
@@ -146,6 +154,8 @@ public static class RestProtocol
                     builder,
                     ParseHttpBindingValues(member.Target, member.MemberTraits, values)
                 );
+            else if (member.IsRequired)
+                throw new MissingRequiredMemberException(member.Name);
         }
         if (binding.QueryParamsMember is { } qpMember)
             qpMember.SetObject(builder, ReadQueryParams(qpMember, query, binding.BoundQueryNames));

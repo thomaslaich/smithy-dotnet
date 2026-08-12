@@ -451,10 +451,6 @@ public sealed class EventStreamSchema<TEvent> : Schema<IAsyncEnumerable<TEvent>>
     }
 }
 
-/// <summary>
-/// A structure seen without its type arguments: enough to recognise one and to look a member up by
-/// name. Construction lives on the typed views, where the types are known.
-/// </summary>
 public interface IStructSchema
 {
     IMemberSchema? GetMember(string name);
@@ -464,11 +460,6 @@ public interface IStructSchema<T> : IStructSchema
 {
     void VisitMembers(IMemberVisitor<T> visitor);
 
-    /// <summary>
-    /// A value built from a fresh builder with nothing set, which is what an absent body
-    /// deserializes to. Here rather than on the two-argument view so a caller holding only
-    /// <typeparamref name="T"/> never has to recover the builder type.
-    /// </summary>
     T BuildEmpty();
 }
 
