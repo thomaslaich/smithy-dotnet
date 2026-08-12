@@ -149,15 +149,10 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
                 )
             );
 
-        private static TOutput CreateEmptyOutput(Schema<TOutput> schema)
-        {
-            if (schema.Resolved is IStructSchema structSchema)
-            {
-                return (TOutput)structSchema.BuildObject(structSchema.CreateBuilder());
-            }
-
-            return default!;
-        }
+        private static TOutput CreateEmptyOutput(Schema<TOutput> schema) =>
+            schema.Resolved is IStructSchema<TOutput> structSchema
+                ? structSchema.BuildEmpty()
+                : default!;
 
         private static HttpOperationError[] CompileErrors(
             IReadOnlyList<IOperationErrorSchema> errors

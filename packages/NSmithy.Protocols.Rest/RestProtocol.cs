@@ -911,8 +911,8 @@ public static class RestProtocol
                 {
                     return
                         writeEmptyStructOnNull
-                        && TryCreateEmptyStructureValue(target, out _, out var emptyObj)
-                        ? new RestBody(codec.Serialize((TValue)emptyObj!), jsonContentType)
+                        && UnwrapNullable(target).Resolved is IStructSchema<TValue> emptyStruct
+                        ? new RestBody(codec.Serialize(emptyStruct.BuildEmpty()), jsonContentType)
                         : RestBody.None;
                 }
                 if (IsDefaultValue(target, traits, value))
@@ -1506,23 +1506,6 @@ public static class RestProtocol
     {
         var resolved = schema.Resolved;
         return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;
-    }
-
-    private static bool TryCreateEmptyStructureValue(
-        Schema schema,
-        out Schema structureSchema,
-        out object value
-    )
-    {
-        structureSchema = UnwrapNullable(schema);
-        if (structureSchema.Resolved is IStructSchema structSchema)
-        {
-            value = structSchema.BuildObject(structSchema.CreateBuilder());
-            return true;
-        }
-
-        value = null!;
-        return false;
     }
 
     private static bool IsDefaultValue(

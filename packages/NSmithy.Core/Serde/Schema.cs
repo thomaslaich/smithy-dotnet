@@ -273,11 +273,9 @@ public sealed class UnitSchema : Schema<SmithyUnit>, IStructSchema<SmithyUnit, S
 
     public SmithyUnit CreateTypedBuilder() => SmithyUnit.Value;
 
-    public object CreateBuilder() => SmithyUnit.Value;
-
     public SmithyUnit Build(SmithyUnit builder) => SmithyUnit.Value;
 
-    public object BuildObject(object builder) => SmithyUnit.Value;
+    public SmithyUnit BuildEmpty() => SmithyUnit.Value;
 
     public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
     {
@@ -337,8 +335,6 @@ public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
     )
         : base(id, ShapeKind.Enum, traits)
     {
-        // Declaration order is kept: a membership failure names the value set, and that message is
-        // part of the contract.
         Values = values is null ? [] : [.. values];
         lookup = Values.ToFrozenSet(StringComparer.Ordinal);
     }
@@ -347,12 +343,6 @@ public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
 
     public bool Contains(string value) => lookup.Contains(value);
 
-    /// <summary>
-    /// The values the model defines. Generated types are open — an unrecognized value round-trips
-    /// rather than failing to deserialize — so this is what lets a consumer tell a modeled value
-    /// from one the peer invented. Empty when the schema was built without them, in which case
-    /// membership is unknown and no consumer should claim otherwise.
-    /// </summary>
     public IReadOnlyList<string> Values { get; }
 
     public T Create(string value) => T.FromValue(value);
@@ -391,7 +381,6 @@ public sealed class IntEnumSchema<T> : Schema<T>, IIntEnumSchema
 
     public bool Contains(int value) => lookup.Contains(value);
 
-    /// <inheritdoc cref="StringEnumSchema{T}.Values" />
     public IReadOnlyList<int> Values { get; }
 
     public int GetIntegerValue(T value) => Convert.ToInt32(value, CultureInfo.InvariantCulture);
@@ -462,18 +451,25 @@ public sealed class EventStreamSchema<TEvent> : Schema<IAsyncEnumerable<TEvent>>
     }
 }
 
+/// <summary>
+/// A structure seen without its type arguments: enough to recognise one and to look a member up by
+/// name. Construction lives on the typed views, where the types are known.
+/// </summary>
 public interface IStructSchema
 {
     IMemberSchema? GetMember(string name);
-
-    object CreateBuilder();
-
-    object BuildObject(object builder);
 }
 
 public interface IStructSchema<T> : IStructSchema
 {
     void VisitMembers(IMemberVisitor<T> visitor);
+
+    /// <summary>
+    /// A value built from a fresh builder with nothing set, which is what an absent body
+    /// deserializes to. Here rather than on the two-argument view so a caller holding only
+    /// <typeparamref name="T"/> never has to recover the builder type.
+    /// </summary>
+    T BuildEmpty();
 }
 
 public interface IStructSchema<T, TBuilder> : IStructSchema<T>
@@ -582,10 +578,6 @@ public interface IUnionCaseVisitor<TUnion>
 
 public interface IUnionCaseSchema
 {
-    /// <summary>
-    /// The case's member id — the union's id qualified by the case name — so a consumer can report
-    /// a union case the same way it reports any other member.
-    /// </summary>
     ShapeId Id { get; }
 
     string Name { get; }
@@ -608,11 +600,6 @@ public interface IUnionCaseSchema<TUnion, TValue> : IUnionCaseSchema
     TUnion Create(TValue value);
 }
 
-/// <summary>
-/// A named edge from an enclosing shape to a target shape, carrying the traits applied at that
-/// edge. Structure members, list elements, and map keys and values are all members in this sense;
-/// what separates them is what else they can do, not what they are.
-/// </summary>
 public interface IMemberSchema
 {
     ShapeId Id { get; }
@@ -630,19 +617,11 @@ public interface IMemberSchema
     bool HasTrait(ShapeId id);
 }
 
-/// <summary>
-/// A member paired with its target's static type — everything needed to compile a reader, writer
-/// or validator for that edge, whether the member belongs to a structure or to a collection.
-/// </summary>
 public interface ITargetedMemberSchema<TValue> : IMemberSchema
 {
     Schema<TValue> TargetSchema { get; }
 }
 
-/// <summary>
-/// A member of a structure, which unlike a collection member can read and write its value on a
-/// container.
-/// </summary>
 public interface IStructMemberSchema : IMemberSchema
 {
     object? GetObject(object container);
@@ -1302,9 +1281,7 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
 
     public T Build(TBuilder builder) => build(builder);
 
-    public object CreateBuilder() => createBuilder()!;
-
-    public object BuildObject(object builder) => build((TBuilder)builder)!;
+    public T BuildEmpty() => build(createBuilder());
 
     public void VisitMembers(IMemberVisitor<T> visitor)
     {
