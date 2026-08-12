@@ -417,7 +417,7 @@ public final class ClientGenerator implements Runnable {
       String operationSchema = SchemaGenerator.operationSchemaAccessor(context, op);
       writer.write(
           "this.$LBinding = new SmithyOperationBinding<$L, $L>($L.Id, $L.Id,"
-              + " serviceProtocol.ForOperation($L), $L);",
+              + " serviceProtocol.ForClientOperation($L), $L);",
           CSharpNaming.typeName(op.getId().getName()),
           SchemaGenerator.operationShapeType(context, op.getInputShape()),
           SchemaGenerator.operationShapeType(context, op.getOutputShape()),

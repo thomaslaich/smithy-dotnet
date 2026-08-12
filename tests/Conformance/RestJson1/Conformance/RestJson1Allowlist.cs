@@ -9,6 +9,17 @@ internal static class RestJson1Allowlist
 {
     public const string Protocol = "aws.protocols#restJson1";
 
+    /// <summary>
+    /// Malformed-request cases the generated server is expected to satisfy: the ones asserting
+    /// <c>smithy.framework#ValidationException</c>, i.e. constraint enforcement. The rest of the
+    /// suite asserts that unparseable input (a bad timestamp, a non-numeric integer, an
+    /// unsupported content type) is rejected with a structured 400 rather than a 500 — a separate
+    /// feature from constraint validation, which the server does not implement yet.
+    /// </summary>
+    internal static bool RunsMalformedCase(HttpMalformedRequestTestCase testCase) =>
+        testCase.ExpectedHeaders.TryGetValue("x-amzn-errortype", out var type)
+        && type == "ValidationException";
+
     public static readonly IReadOnlySet<string> ExecutableRequestCases = new HashSet<string>(
         StringComparer.Ordinal
     )

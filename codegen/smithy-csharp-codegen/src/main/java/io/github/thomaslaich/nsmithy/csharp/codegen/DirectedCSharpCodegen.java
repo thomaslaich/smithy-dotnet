@@ -124,6 +124,10 @@ final class DirectedCSharpCodegen
 
   @Override
   public void generateError(GenerateErrorDirective<GenerationContext, CSharpSettings> directive) {
+    if (ShapeSupport.isValidationException(directive.shape().getId())) {
+      return;
+    }
+
     directive
         .context()
         .writerDelegator()

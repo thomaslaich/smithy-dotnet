@@ -37,6 +37,18 @@ public final class ShapeSupport {
 
   private ShapeSupport() {}
 
+  /** smithy.framework#ValidationException, the error the server runtime itself returns. */
+  public static final ShapeId VALIDATION_EXCEPTION =
+      ShapeId.from("smithy.framework#ValidationException");
+
+  /**
+   * The runtime owns this shape: it is thrown by the server runtime when input validation fails, so
+   * a model that declares it must bind to the same type rather than to a generated copy.
+   */
+  public static boolean isValidationException(ShapeId id) {
+    return VALIDATION_EXCEPTION.equals(id);
+  }
+
   public static boolean isUnit(ShapeId id) {
     return UNIT.equals(id);
   }

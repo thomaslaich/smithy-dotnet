@@ -102,11 +102,16 @@ from the caller:
 ```csharp
 public interface IServerOperationProtocol<TInput, TOutput>
 {
+    // Validates deserialized input against the model's constraint traits before the
+    // handler runs; null when the input carries no constraints. Not defaulted, so an
+    // implementation that skips validation has to say so.
+    ISmithyValidator<TInput>? InputValidator { get; }
+
     ValueTask<TInput> DeserializeRequestAsync(
         SmithyHttpRequest request,
         CancellationToken cancellationToken = default);
 
-    ValueTask<SmithyHttpServerResponse> SerializeResponseAsync(
+    SmithyHttpServerResponse SerializeResponse(
         TOutput output,
         CancellationToken cancellationToken = default);
 
@@ -138,11 +143,16 @@ public sealed class SmithyServerRuntime
     {
         var input = await protocol.DeserializeRequestAsync(request, cancellationToken)
             .ConfigureAwait(false);
+        if (protocol.InputValidator is { } validator)
+        {
+            var errors = validator.GetErrors(input);
+            // Answered with smithy.framework#ValidationException.
+        }
+
         try
         {
             var output = await handler(input, cancellationToken).ConfigureAwait(false);
-            return await protocol.SerializeResponseAsync(output, cancellationToken)
-                .ConfigureAwait(false);
+            return protocol.SerializeResponse(output, cancellationToken);
         }
         catch (Exception ex) when (protocol.TrySerializeError(ex, out var errorResponse))
         {
@@ -155,6 +165,39 @@ public sealed class SmithyServerRuntime
 One dispatch algorithm covers every protocol and operation shape. Modeled-error
 handling is a single `catch` filtered by `TrySerializeError`, not a generated
 `catch` block per error.
+
+## Input Validation
+
+Constraint traits are enforced on the server, between deserialization and the
+handler, so a handler only ever sees input the model permits. The client does not
+validate: it is not the authority on the contract, and duplicating the check
+there costs latency without buying safety.
+
+`SmithyValidator.FromSchema` compiles an operation's input schema into a tree of
+validators once, when the protocol is built — the same compile-once shape the
+codecs use. It returns `null` when nothing reachable from the schema carries a
+constraint, and the runtime then skips validation altogether, so an unconstrained
+operation pays nothing. Constraints are read from the shape's kind rather than
+its CLR type, because an optional member wraps its target in a nullable schema
+and a member schema is its own kind; a constraint the kind says should apply but
+that cannot be enforced fails at compile time rather than being dropped. Enum
+membership comes from the values the schema carries, and `@uniqueItems` compares
+elements through equality derived from the schema rather than from .NET, which
+would compare a blob or a structure holding a collection by reference.
+
+A violation becomes `smithy.framework#ValidationException`, which every operation
+carries as an implicit modeled error so protocols serialize it like any other and
+generated clients can deserialize it. Each violation is reported as a
+`ValidationExceptionField` whose `path` is a JSONPointer into the input.
+
+A `@required` member absent from the payload fails inside the codec, before the
+compiled validator runs, because the builder cannot produce the shape without it.
+Codecs signal that with `MissingRequiredMemberException`, which the runtime
+converts into the same `ValidationException` — a caller's omission is a 400 on
+the server and an exception on the client, from one throw site. The reader that
+finds the omission knows only the member's own name, so each enclosing reader
+prepends its own step as the exception unwinds and the member is reported where
+it actually sits.
 
 ## Host Adapter
 
@@ -174,7 +217,8 @@ public static class SmithyAspNetCoreHost
         HttpContext context,
         IServerOperationProtocol<TInput, TOutput> protocol,
         Func<TInput, CancellationToken, Task<TOutput>> handler,
-        CancellationToken cancellationToken)
+        bool streamRequestBody = false,
+        CancellationToken cancellationToken = default)
     {
         var request = await ToSmithyRequestAsync(context, cancellationToken).ConfigureAwait(false);
         var response = await Runtime.DispatchAsync(protocol, request, handler, cancellationToken).ConfigureAwait(false);
@@ -255,8 +299,8 @@ bolted-on feature:
   deals only in typed model values; there is one handler interface per service,
   derived from the operation shapes.
 - All protocol knowledge lives in the operation-protocol binding.
-  `new RestJson1Protocol().ForService(schema).ForOperation(op)` and
-  `new RpcV2CborProtocol().ForService(schema).ForOperation(op)` are two different
+  `new RestJson1Protocol().ForService(schema).ForServerOperation(op)` and
+  `new RpcV2CborProtocol().ForService(schema).ForServerOperation(op)` are two different
   `IServerOperationProtocol<FooInput, FooOutput>` over the same typed contract.
 - Dispatch is parameterized by that binding, so the same handler delegate serves
   every protocol.
@@ -353,6 +397,11 @@ payload shape.
 
 ## Non-goals
 
+- **Client-side validation of outbound input.** The client is not the authority
+  on the contract — the server is — so checking there would duplicate the check
+  that actually decides, cost latency on every call, and drift the moment a
+  model changes without a client rebuild. A generated client sends what it is
+  given and surfaces the server's `ValidationException` as a modeled error.
 - Protocol-specific types (gRPC status codes, trailer names, media types) do not
   appear in the host adapter or generated server code.
 - Codegen does not own the dispatch algorithm; the runtime is its single owner.

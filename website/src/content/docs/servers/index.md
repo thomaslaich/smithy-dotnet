@@ -121,6 +121,18 @@ Register it with `AddSingleton<IGetCityHandler, GetCityHandler>()` (see
 The endpoint that maps `GetCity` resolves this handler directly, so it serves that
 operation whether or not the rest of the service is implemented by the same class.
 
+## Constraint validation
+
+The server checks the model's constraint traits — `@required`, `@length`,
+`@range`, `@pattern`, `@uniqueItems` — plus enum membership, after deserializing
+the request and before calling the handler. A handler only sees input the model
+permits, so it does not need to re-check what the model already states. A
+violation gets `smithy.framework#ValidationException` with HTTP 400, listing
+each one with a JSONPointer path into the input.
+
+See [Validation](/smithy-dotnet/servers/validation/) for what is checked, the
+response format, and what is not covered yet.
+
 ## Which protocols generate a server
 
 Server generation exists for `simpleRestJson`, `restJson1`, `rpcv2Cbor`, and

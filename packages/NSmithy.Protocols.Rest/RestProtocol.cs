@@ -118,6 +118,10 @@ public static class RestProtocol
         var labels = ExtractLabels(binding.UriTemplate, request.RequestUri);
         var query = ParseQuery(request.RequestUri);
 
+        // A member bound to the URI or headers is never seen by the body codec, so this is the only
+        // place its absence is still observable: once the builder is finalized a missing value-type
+        // member has already defaulted, and neither the finalizer nor the validator can tell it from
+        // a value the caller actually sent.
         foreach (var member in binding.LabelMembers)
         {
             if (labels.TryGetValue(member.Name, out var labelValue))
@@ -125,6 +129,8 @@ public static class RestProtocol
                     builder,
                     ParseHttpValue(member.Target, member.MemberTraits, labelValue)
                 );
+            else if (member.IsRequired)
+                throw new MissingRequiredMemberException(member.Name);
         }
         foreach (var (member, headerName) in binding.RequestHeaderMembers)
         {
@@ -133,6 +139,8 @@ public static class RestProtocol
                     builder,
                     ParseHttpBindingValue(member.Target, member.MemberTraits, header)
                 );
+            else if (member.IsRequired)
+                throw new MissingRequiredMemberException(member.Name);
         }
         if (binding.RequestPrefixHeadersMember is { } reqPhMember)
             reqPhMember.Member.SetObject(
@@ -146,6 +154,8 @@ public static class RestProtocol
                     builder,
                     ParseHttpBindingValues(member.Target, member.MemberTraits, values)
                 );
+            else if (member.IsRequired)
+                throw new MissingRequiredMemberException(member.Name);
         }
         if (binding.QueryParamsMember is { } qpMember)
             qpMember.SetObject(builder, ReadQueryParams(qpMember, query, binding.BoundQueryNames));
@@ -911,8 +921,8 @@ public static class RestProtocol
                 {
                     return
                         writeEmptyStructOnNull
-                        && TryCreateEmptyStructureValue(target, out _, out var emptyObj)
-                        ? new RestBody(codec.Serialize((TValue)emptyObj!), jsonContentType)
+                        && UnwrapNullable(target).Resolved is IStructSchema<TValue> emptyStruct
+                        ? new RestBody(codec.Serialize(emptyStruct.BuildEmpty()), jsonContentType)
                         : RestBody.None;
                 }
                 if (IsDefaultValue(target, traits, value))
@@ -1011,7 +1021,7 @@ public static class RestProtocol
         }
 
         private static void ApplyDefault(
-            IMemberSchema member,
+            IStructMemberSchema member,
             Schema target,
             IReadOnlyDictionary<ShapeId, Trait> traits,
             object builder
@@ -1086,7 +1096,7 @@ public static class RestProtocol
 
     private static string BuildRequestUri<TInput>(
         string uriTemplate,
-        IReadOnlyList<IMemberSchema> labelMembers,
+        IReadOnlyList<IStructMemberSchema> labelMembers,
         TInput input
     )
     {
@@ -1120,7 +1130,7 @@ public static class RestProtocol
     private static void AddHeader<TInput>(
         Dictionary<string, IReadOnlyList<string>> headers,
         string name,
-        IMemberSchema member,
+        IStructMemberSchema member,
         TInput input
     )
     {
@@ -1136,7 +1146,7 @@ public static class RestProtocol
     private static void AddRequestHeader<TInput>(
         SmithyHttpRequest request,
         string name,
-        IMemberSchema member,
+        IStructMemberSchema member,
         TInput input
     )
     {
@@ -1165,7 +1175,7 @@ public static class RestProtocol
     private static void AddPrefixedHeaders<TInput>(
         IDictionary<string, IReadOnlyList<string>> headers,
         string prefix,
-        IMemberSchema member,
+        IStructMemberSchema member,
         TInput input
     )
     {
@@ -1192,7 +1202,7 @@ public static class RestProtocol
     }
 
     private static object ReadPrefixedHeaders(
-        IMemberSchema member,
+        IStructMemberSchema member,
         IEnumerable<KeyValuePair<string, IReadOnlyList<string>>> headers,
         string prefix
     )
@@ -1220,7 +1230,7 @@ public static class RestProtocol
     }
 
     private static object ReadQueryParams(
-        IMemberSchema member,
+        IStructMemberSchema member,
         Dictionary<string, IReadOnlyList<string>> query,
         HashSet<string> excludedNames
     )
@@ -1247,7 +1257,7 @@ public static class RestProtocol
     private static string AppendQuery<TInput>(
         string requestUri,
         string name,
-        IMemberSchema member,
+        IStructMemberSchema member,
         TInput input
     )
     {
@@ -1264,7 +1274,7 @@ public static class RestProtocol
 
     private static string AppendQueryParams<TInput>(
         string requestUri,
-        IMemberSchema member,
+        IStructMemberSchema member,
         TInput input,
         HashSet<string> excludedNames
     )
@@ -1290,7 +1300,7 @@ public static class RestProtocol
         return builder.ToString();
     }
 
-    private static IMapSchema RequireMap(IMemberSchema member) =>
+    private static IMapSchema RequireMap(IStructMemberSchema member) =>
         member.Target.Resolved is IMapSchema mapSchema
             ? mapSchema
             : throw new InvalidOperationException(
@@ -1342,7 +1352,7 @@ public static class RestProtocol
         builder.Append(Uri.EscapeDataString(FormatHttpValue(schema, traits, value)));
     }
 
-    private static string FormatHttpHeaderValue(IMemberSchema member, object value)
+    private static string FormatHttpHeaderValue(IStructMemberSchema member, object value)
     {
         if (member.Target.Resolved is IListSchema listSchema)
         {
@@ -1506,23 +1516,6 @@ public static class RestProtocol
     {
         var resolved = schema.Resolved;
         return resolved is INullableSchema nullable ? nullable.Target.Resolved : resolved;
-    }
-
-    private static bool TryCreateEmptyStructureValue(
-        Schema schema,
-        out Schema structureSchema,
-        out object value
-    )
-    {
-        structureSchema = UnwrapNullable(schema);
-        if (structureSchema.Resolved is IStructSchema structSchema)
-        {
-            value = structSchema.BuildObject(structSchema.CreateBuilder());
-            return true;
-        }
-
-        value = null!;
-        return false;
     }
 
     private static bool IsDefaultValue(

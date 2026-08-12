@@ -96,5 +96,5 @@ port (`8082`).
 
 The .NET side currently demonstrates generated client code against a Java API.
 A .NET service can use the same MSBuild integration with an
-`alloy#simpleRestJson` model; see `examples/simple-rest-json` for the
+`alloy#simpleRestJson` model; see `examples/simplerestjson` for the
 generated ASP.NET Core server path.

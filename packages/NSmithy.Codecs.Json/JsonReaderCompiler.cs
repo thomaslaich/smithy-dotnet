@@ -32,7 +32,7 @@ internal interface IJsonUnionCaseReader<out TUnion>
 
 internal sealed class JsonReaderCompiler : ISchemaVisitor<object>
 {
-    private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
+    private readonly SchemaCompilationCache cache = new();
 
     public static IJsonValueReader<T> Compile<T>(Schema<T> schema)
     {
@@ -53,16 +53,11 @@ internal sealed class JsonReaderCompiler : ISchemaVisitor<object>
 
     public IJsonValueReader<T> CompileValue<T>(Schema<T> schema)
     {
-        var resolved = schema.Resolved;
-        if (cache.TryGetValue(resolved, out var cached))
-        {
-            return (IJsonValueReader<T>)cached;
-        }
-
-        var deferred = new DeferredJsonValueReader<T>();
-        cache.Add(resolved, deferred);
-        deferred.Set(CompileValueCore<T>(resolved));
-        return deferred;
+        return cache.GetOrCompile<IJsonValueReader<T>, DeferredJsonValueReader<T>>(
+            schema,
+            static () => new DeferredJsonValueReader<T>(),
+            target => CompileValueCore<T>(target)
+        );
     }
 
     public IJsonValueReader<T> CompileValue<T>(
@@ -113,6 +108,9 @@ internal sealed class JsonReaderCompiler : ISchemaVisitor<object>
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct => CompileNullable(schema);
+
+    public object VisitStreamingBlob(Schema<Stream> schema) =>
+        throw new NotSupportedException("JSON codec does not support streaming blob schemas.");
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         throw new NotSupportedException("JSON codec does not support event stream schemas.");
@@ -203,8 +201,12 @@ internal sealed class JsonReaderCompiler : ISchemaVisitor<object>
     internal static IJsonValueReader<T> Cast<T>(object reader) => (IJsonValueReader<T>)reader;
 }
 
-internal sealed class DeferredJsonValueReader<T> : IJsonValueReader<T>
+internal sealed class DeferredJsonValueReader<T>
+    : IJsonValueReader<T>,
+        IDeferredCompilation<IJsonValueReader<T>>
 {
+    public void Complete(IJsonValueReader<T> compiled) => Set(compiled);
+
     private IJsonValueReader<T>? inner;
 
     public void Set(IJsonValueReader<T> reader)
@@ -264,6 +266,8 @@ internal sealed class MemberTraitJsonReaderCompiler(
     public object VisitBlob(Schema<byte[]> schema) => inner.CompileValue(schema);
 
     public object VisitDocument(Schema<Document> schema) => inner.CompileValue(schema);
+
+    public object VisitStreamingBlob(Schema<Stream> schema) => inner.CompileValue(schema);
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         inner.CompileValue(schema);
@@ -357,9 +361,7 @@ internal sealed class StructureJsonValueReader<T, TBuilder>(
             {
                 if (memberReader.IsRequired)
                 {
-                    throw new InvalidOperationException(
-                        $"Missing required member '{memberReader.Name}'."
-                    );
+                    throw new MissingRequiredMemberException(memberReader.Name);
                 }
 
                 memberReader.ReadMissing(builder);
@@ -370,15 +372,21 @@ internal sealed class StructureJsonValueReader<T, TBuilder>(
             {
                 if (memberReader.IsRequired)
                 {
-                    throw new InvalidOperationException(
-                        $"Required member '{memberReader.Name}' cannot be null."
-                    );
+                    throw new MissingRequiredMemberException(memberReader.Name);
                 }
 
                 continue;
             }
 
-            memberReader.ReadInto(builder, memberValue);
+            try
+            {
+                memberReader.ReadInto(builder, memberValue);
+            }
+            catch (MissingRequiredMemberException exception)
+            {
+                exception.PrependPathToken(memberReader.Name);
+                throw;
+            }
         }
 
         return build(builder);
@@ -413,16 +421,22 @@ internal sealed class StructureJsonProjectionReader<TBuilder>(
             {
                 if (memberReader.IsRequired)
                 {
-                    throw new InvalidOperationException(
-                        $"Required member '{member.Name}' cannot be null."
-                    );
+                    throw new MissingRequiredMemberException(member.Name);
                 }
 
                 continue;
             }
 
             seen.Add(member.Name);
-            memberReader.ReadInto(builder, member.Value);
+            try
+            {
+                memberReader.ReadInto(builder, member.Value);
+            }
+            catch (MissingRequiredMemberException exception)
+            {
+                exception.PrependPathToken(member.Name);
+                throw;
+            }
         }
 
         foreach (var memberReader in memberReaders)
@@ -434,9 +448,7 @@ internal sealed class StructureJsonProjectionReader<TBuilder>(
 
             if (memberReader.IsRequired)
             {
-                throw new InvalidOperationException(
-                    $"Missing required member '{memberReader.Name}'."
-                );
+                throw new MissingRequiredMemberException(memberReader.Name);
             }
 
             memberReader.ReadMissing(builder);
@@ -674,6 +686,7 @@ internal sealed class ListJsonValueReader<TCollection, TElement, TBuilder>(
         }
 
         var builder = schema.CreateTypedBuilder();
+        var index = 0;
         foreach (var element in value.EnumerateArray())
         {
             if (element.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
@@ -686,10 +699,21 @@ internal sealed class ListJsonValueReader<TCollection, TElement, TBuilder>(
                 }
 
                 schema.Add(builder, default!);
+                index++;
                 continue;
             }
 
-            schema.Add(builder, elementReader.Read(element));
+            try
+            {
+                schema.Add(builder, elementReader.Read(element));
+            }
+            catch (MissingRequiredMemberException exception)
+            {
+                exception.PrependPathToken(index.ToString(CultureInfo.InvariantCulture));
+                throw;
+            }
+
+            index++;
         }
 
         return schema.Build(builder);
@@ -726,7 +750,15 @@ internal sealed class MapJsonValueReader<TDictionary, TValue, TBuilder>(
                 continue;
             }
 
-            schema.Add(builder, property.Name, valueReader.Read(property.Value));
+            try
+            {
+                schema.Add(builder, property.Name, valueReader.Read(property.Value));
+            }
+            catch (MissingRequiredMemberException exception)
+            {
+                exception.PrependPathToken(property.Name);
+                throw;
+            }
         }
 
         return schema.Build(builder);

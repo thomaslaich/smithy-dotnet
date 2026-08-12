@@ -492,7 +492,7 @@ public sealed class ProtoCodecTests
                 (b, v) => b.Shade = v,
                 Schemas.StringEnum<Color>(
                     ShapeId.Parse("test#Color"),
-                    [SyntheticEnum("RED", "GREEN", "BLUE")]
+                    traits: [SyntheticEnum("RED", "GREEN", "BLUE")]
                 ),
                 Field(1)
             )

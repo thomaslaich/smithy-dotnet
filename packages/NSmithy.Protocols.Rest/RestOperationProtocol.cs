@@ -1,4 +1,5 @@
 using NSmithy.Core.Serde;
+using NSmithy.Core.Validation;
 using NSmithy.Http;
 
 namespace NSmithy.Protocols.Rest;
@@ -19,8 +20,17 @@ public sealed class RestServiceProtocol(
     string? errorTypeHeader
 ) : IServiceProtocol
 {
-    public IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
+    public IClientOperationProtocol<TInput, TOutput> ForClientOperation<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation
+    ) => CreateOperation(operation, validateInput: false);
+
+    public IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation
+    ) => CreateOperation(operation, validateInput: true);
+
+    private IOperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation,
+        bool validateInput
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -31,7 +41,8 @@ public sealed class RestServiceProtocol(
             errorDiscriminator,
             rawStringPayloads,
             errorTypeHeader,
-            SmithyRequestModifiers.Compile(operation)
+            SmithyRequestModifiers.Compile(operation),
+            validateInput ? SmithyValidator.FromSchema(operation.Input) : null
         );
     }
 
@@ -42,7 +53,8 @@ public sealed class RestServiceProtocol(
         Func<SmithyHttpClientResponse, string?> errorDiscriminator,
         bool rawStringPayloads,
         string? errorTypeHeader,
-        Action<SmithyHttpRequest>? requestTransform
+        Action<SmithyHttpRequest>? requestTransform,
+        ISmithyValidator<TInput>? inputValidator
     )
     {
         var inputSchema =
@@ -65,7 +77,8 @@ public sealed class RestServiceProtocol(
             errorDiscriminator,
             rawStringPayloads,
             errorTypeHeader,
-            requestTransform
+            requestTransform,
+            inputValidator
         );
     }
 
@@ -83,7 +96,8 @@ public sealed class RestServiceProtocol(
         Func<SmithyHttpClientResponse, string?> errorDiscriminator,
         bool rawStringPayloads,
         string? errorTypeHeader,
-        Action<SmithyHttpRequest>? requestTransform
+        Action<SmithyHttpRequest>? requestTransform,
+        ISmithyValidator<TInput>? inputValidator
     )
         where TInputBuilder : notnull
         where TOutputBuilder : notnull =>
@@ -100,7 +114,8 @@ public sealed class RestServiceProtocol(
             errorDiscriminator,
             rawStringPayloads,
             errorTypeHeader,
-            requestTransform
+            requestTransform,
+            inputValidator
         );
 }
 
@@ -116,11 +131,14 @@ public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutpu
     Func<SmithyHttpClientResponse, string?> errorDiscriminator,
     bool rawStringPayloads,
     string? errorTypeHeader,
-    Action<SmithyHttpRequest>? requestTransform = null
+    Action<SmithyHttpRequest>? requestTransform = null,
+    ISmithyValidator<TInput>? inputValidator = null
 ) : IOperationProtocol<TInput, TOutput>
     where TInputBuilder : notnull
     where TOutputBuilder : notnull
 {
+    public ISmithyValidator<TInput>? InputValidator { get; } = inputValidator;
+
     private readonly IReadOnlyList<HttpOperationError> httpErrors =
         RestProtocol.CompileErrorDeserializers(modeledErrors, codecFactory, rawStringPayloads);
 

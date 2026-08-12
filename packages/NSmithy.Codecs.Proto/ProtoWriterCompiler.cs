@@ -42,7 +42,7 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
     private static readonly IReadOnlyDictionary<ShapeId, Trait> EmptyTraits =
         new Dictionary<ShapeId, Trait>();
 
-    private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
+    private readonly SchemaCompilationCache cache = new();
 
     public IProtoMessageWriter<T> CompileMessage<T>(Schema<T> schema)
     {
@@ -68,15 +68,11 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
                 resolved.Accept(new MemberTraitProtoWriterCompiler(this, traits));
         }
 
-        if (cache.TryGetValue(resolved, out var cached))
-        {
-            return (IProtoValueWriter<T>)cached;
-        }
-
-        var deferred = new DeferredProtoValueWriter<T>();
-        cache.Add(resolved, deferred);
-        deferred.Set((IProtoValueWriter<T>)resolved.Accept(this));
-        return deferred;
+        return cache.GetOrCompile<IProtoValueWriter<T>, DeferredProtoValueWriter<T>>(
+            resolved,
+            static () => new DeferredProtoValueWriter<T>(),
+            target => (IProtoValueWriter<T>)target.Accept(this)
+        );
     }
 
     public object VisitBoolean(Schema<bool> schema) => Scalar(schema, EmptyTraits);
@@ -107,6 +103,9 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct => new NullableProtoValueWriter<T>(CompileValue(schema.TargetSchema));
+
+    public object VisitStreamingBlob(Schema<Stream> schema) =>
+        throw new NotSupportedException("Proto codec does not support streaming blob schemas.");
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         throw new NotSupportedException("Proto codec does not support event stream schemas.");
@@ -181,6 +180,8 @@ internal sealed class MessageWriterVisitor(ProtoValueWriterCompiler compiler)
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct => Unsupported();
+
+    public object VisitStreamingBlob(Schema<Stream> schema) => Unsupported();
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) => Unsupported();
 
@@ -265,6 +266,8 @@ internal sealed class MemberTraitProtoWriterCompiler(
         where T : struct =>
         new NullableProtoValueWriter<T>(inner.CompileValue(schema.TargetSchema, traits));
 
+    public object VisitStreamingBlob(Schema<Stream> schema) => inner.CompileValue(schema);
+
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         inner.CompileValue(schema);
 
@@ -288,8 +291,12 @@ internal sealed class MemberTraitProtoWriterCompiler(
         where T : struct, Enum => new ScalarProtoValueWriter<T>(schema, traits);
 }
 
-internal sealed class DeferredProtoValueWriter<T> : IProtoValueWriter<T>
+internal sealed class DeferredProtoValueWriter<T>
+    : IProtoValueWriter<T>,
+        IDeferredCompilation<IProtoValueWriter<T>>
 {
+    public void Complete(IProtoValueWriter<T> compiled) => Set(compiled);
+
     private IProtoValueWriter<T>? inner;
 
     public WireType WireType =>

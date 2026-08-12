@@ -32,7 +32,7 @@ list recipes. Key ones:
 | `just fmt` / `just check-format` | Run / verify `treefmt` formatting. |
 | `just pack` | Pack NuGet packages to `artifacts/packages` (used by examples). |
 | `just refresh-examples` | Re-restore/rebuild the `examples/` against freshly packed packages. |
-| `just ci` | `check-format build test pack` — the full CI pipeline locally. |
+| `just ci` | `check-format build test pack refresh-examples` — the full CI pipeline locally. |
 | `just docs` | Install and run the docs site (`website/`) dev server. |
 
 You generally **must `just codegen` (or `just build`) before `dotnet test`**:
@@ -50,7 +50,7 @@ stale or missing staged JAR produces confusing codegen errors.
   `NSmithy.Protocols.*`, `NSmithy.MSBuild`).
 - `tests/` — `NSmithy.Tests` (unit) and `tests/Conformance/*` (one project per
   protocol, run against the official Smithy/AWS protocol-test fixtures).
-- `examples/` — runnable end-to-end samples (`simple-rest-json`, `rest-json1`,
+- `examples/` — runnable end-to-end samples (`simplerestjson`, `restjson1`,
   `rpcv2cbor`, `aws-localstack`, `grpc`, `grpc-streaming`, `polyglot`). These
   consume **packed** packages from `artifacts/packages`, not project references —
   see the gotcha below.

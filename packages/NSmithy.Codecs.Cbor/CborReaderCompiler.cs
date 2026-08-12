@@ -32,7 +32,7 @@ internal interface ICborUnionCaseReader<out TUnion>
 
 internal sealed class CborReaderCompiler : ISchemaVisitor<object>
 {
-    private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
+    private readonly SchemaCompilationCache cache = new();
 
     public static ICborValueReader<T> Compile<T>(Schema<T> schema)
     {
@@ -44,16 +44,11 @@ internal sealed class CborReaderCompiler : ISchemaVisitor<object>
     {
         ArgumentNullException.ThrowIfNull(schema);
 
-        var resolved = schema.Resolved;
-        if (cache.TryGetValue(resolved, out var cached))
-        {
-            return (ICborValueReader<T>)cached;
-        }
-
-        var deferred = new DeferredCborValueReader<T>();
-        cache.Add(resolved, deferred);
-        deferred.Set((ICborValueReader<T>)resolved.Accept(this));
-        return deferred;
+        return cache.GetOrCompile<ICborValueReader<T>, DeferredCborValueReader<T>>(
+            schema,
+            static () => new DeferredCborValueReader<T>(),
+            target => (ICborValueReader<T>)target.Accept(this)
+        );
     }
 
     public object VisitBoolean(Schema<bool> schema) => new BooleanCborValueReader();
@@ -85,6 +80,9 @@ internal sealed class CborReaderCompiler : ISchemaVisitor<object>
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct => new NullableCborValueReader<T>(CompileValue(schema.TargetSchema));
+
+    public object VisitStreamingBlob(Schema<Stream> schema) =>
+        throw new NotSupportedException("CBOR codec does not support streaming blob schemas.");
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         throw new NotSupportedException("CBOR codec does not support event stream schemas.");
@@ -130,8 +128,12 @@ internal sealed class CborReaderCompiler : ISchemaVisitor<object>
         where T : struct, Enum => new IntEnumCborValueReader<T>(schema);
 }
 
-internal sealed class DeferredCborValueReader<T> : ICborValueReader<T>
+internal sealed class DeferredCborValueReader<T>
+    : ICborValueReader<T>,
+        IDeferredCompilation<ICborValueReader<T>>
 {
+    public void Complete(ICborValueReader<T> compiled) => Set(compiled);
+
     private ICborValueReader<T>? inner;
 
     public void Set(ICborValueReader<T> reader)
@@ -333,13 +335,19 @@ internal sealed class StructureCborValueReader<T, TBuilder>(
                 if (reader.PeekState() == CborReaderState.Null && memberReader.IsRequired)
                 {
                     reader.ReadNull();
-                    throw new InvalidOperationException(
-                        $"Required member '{name}' cannot be null."
-                    );
+                    throw new MissingRequiredMemberException(name);
                 }
 
                 seen.Add(name);
-                memberReader.ReadInto(builder, reader);
+                try
+                {
+                    memberReader.ReadInto(builder, reader);
+                }
+                catch (MissingRequiredMemberException exception)
+                {
+                    exception.PrependPathToken(memberReader.Name);
+                    throw;
+                }
             }
             else
             {
@@ -357,9 +365,7 @@ internal sealed class StructureCborValueReader<T, TBuilder>(
 
             if (memberReader.IsRequired)
             {
-                throw new InvalidOperationException(
-                    $"Missing required member '{memberReader.Name}'."
-                );
+                throw new MissingRequiredMemberException(memberReader.Name);
             }
 
             memberReader.ReadMissing(builder);
@@ -448,6 +454,7 @@ internal sealed class ListCborValueReader<TCollection, TElement, TBuilder>(
         }
 
         var builder = schema.CreateTypedBuilder();
+        var index = 0;
         reader.ReadStartArray();
         while (reader.PeekState() != CborReaderState.EndArray)
         {
@@ -462,10 +469,21 @@ internal sealed class ListCborValueReader<TCollection, TElement, TBuilder>(
                 }
 
                 schema.Add(builder, default!);
+                index++;
                 continue;
             }
 
-            schema.Add(builder, elementReader.Read(reader));
+            try
+            {
+                schema.Add(builder, elementReader.Read(reader));
+            }
+            catch (MissingRequiredMemberException exception)
+            {
+                exception.PrependPathToken(index.ToString(CultureInfo.InvariantCulture));
+                throw;
+            }
+
+            index++;
         }
 
         reader.ReadEndArray();
@@ -504,7 +522,15 @@ internal sealed class MapCborValueReader<TDictionary, TValue, TBuilder>(
                 continue;
             }
 
-            schema.Add(builder, key, valueReader.Read(reader));
+            try
+            {
+                schema.Add(builder, key, valueReader.Read(reader));
+            }
+            catch (MissingRequiredMemberException exception)
+            {
+                exception.PrependPathToken(key);
+                throw;
+            }
         }
 
         reader.ReadEndMap();

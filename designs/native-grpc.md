@@ -74,7 +74,7 @@ the Smithy records directly.
 
 - `ProtoWire.cs` — low-level `ProtoWriter`/`ProtoReader` (varint, zigzag,
   fixed32/64, length-delimited, tags, field-skip).
-- `ProtoCodec.cs` — `ProtoCodec.FromSchema<T>(schema)` → `ICodec<T>`, mirroring
+- `ProtoCodec.cs` — `ProtoCodec.FromSchema<T>(schema)` → `IProtoCodec<T>`, mirroring
   `CborCodec`. Field numbers come from `@protoIndex`; integer wire types from
   `@protoNumType` (`SIGNED`→sint, `UNSIGNED`→uint, `FIXED`→fixed, `FIXED_SIGNED`
   →sfixed). proto3 presence rules: absent (null) members are omitted; nullable
@@ -98,8 +98,9 @@ rich nested/map/enum/timestamp round trip.
 - `GrpcProtocol.cs` — `GrpcProtocol.ForService(serviceSchema)` implementing
   `IServiceProtocol`/`IOperationProtocol`. Method path `/{namespace}.{Service}/{Method}`,
   content-type `application/grpc+proto`, `te: trailers`, framed proto bodies, and
-  the `grpc-status`/`grpc-message` trailer error model (carried on
-  `SmithyHttpClientResponse.Headers`, which the transport renders as HTTP/2 trailers).
+  and the `grpc-status`/`grpc-message` trailer error model, written through
+  `SmithyHttpServerResponse.Trailers` and read back through
+  `SmithyHttpClientResponse.Trailer`.
 
 Tests (`tests/.../GrpcProtocolTests.cs`) round-trip client→server→client through
 the protocol interface and cover framing + the modeled-error path. No
@@ -132,10 +133,11 @@ The full unary `alloy.proto#grpc` surface now works, verified end-to-end by the
 ## What landed in codegen + runtime
 
 - **Runtime trailer support.** `HttpClientTransport` exposes HTTP/2 trailing
-  headers through `SmithyHttpClientResponse.Trailer`, and
-  `SmithyAspNetCoreProtocol.WriteSmithyGrpcResponseAsync` emits
-  `grpc-status`/`grpc-message` as real HTTP/2 trailers (falling back to headers
-  when trailers are unsupported).
+  headers through `SmithyHttpClientResponse.Trailer`. On the server, the protocol
+  attaches `grpc-status`/`grpc-message` to `SmithyHttpServerResponse.Trailers`, and
+  `SmithyAspNetCoreHost` renders them as real HTTP/2 trailers, folding them into
+  leading headers when the connection cannot carry trailers. The host holds no gRPC
+  knowledge; it only decides whether trailers are possible.
 - **Native server codegen.** `ServerGenerator` emits `Map{Service}Grpc` using
   `new GrpcProtocol().ForService(...)` over the ASP.NET helpers — the
   protoc-generated `…GrpcAdapter` / `MapGrpcService` path is gone. It coexists with

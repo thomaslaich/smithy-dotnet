@@ -408,6 +408,37 @@
     <Exec Command="chmod +x &quot;$(SmithyCliPath)&quot;" />
   </Target>
 
+  <!--
+    The CLI resolves the codegen plugin into SMITHY_MAVEN_CACHE and keys it by Maven coordinate.
+    In-repo the version is a fixed 0.0.0-SNAPSHOT, so a rebuilt plugin is indistinguishable from
+    the cached one and codegen would keep emitting code from the stale jar. Drop the cache whenever
+    a bundled jar changes; the stamp keeps this a no-op on an unchanged tree.
+
+    Both paths hang off SmithyBuildOutputPath, next to the generated code they produce. That keeps
+    them configuration-independent like the generated output itself — a per-configuration cache
+    behind shared output is worse than either, because one configuration regenerates from a stale
+    plugin into output the other then trusts.
+  -->
+  <PropertyGroup>
+    <_SmithyMavenCachePath>$(SmithyBuildOutputPath)maven-cache</_SmithyMavenCachePath>
+    <_SmithyMavenCacheStamp>$(SmithyBuildOutputPath)NSmithy.MavenCache.stamp</_SmithyMavenCacheStamp>
+  </PropertyGroup>
+
+  <Target
+    Name="_SmithyRefreshMavenCache"
+    BeforeTargets="GenerateSmithyCode"
+    Condition="Exists('$(_SmithyBundledMavenRepo)')"
+    Inputs="@(_SmithyGeneratorInput)"
+    Outputs="$(_SmithyMavenCacheStamp)"
+  >
+    <RemoveDir
+      Directories="$(_SmithyMavenCachePath)"
+      Condition="Exists('$(_SmithyMavenCachePath)')"
+    />
+    <MakeDir Directories="$(SmithyBuildOutputPath)" />
+    <Touch Files="$(_SmithyMavenCacheStamp)" AlwaysCreate="true" />
+  </Target>
+
   <Target
     Name="GenerateSmithyCode"
     BeforeTargets="CoreCompile"
@@ -424,7 +455,7 @@
       <_SmithyBundleJar Include="$(_SmithyBundledMavenRepo)/**/*.jar" />
     </ItemGroup>
     <PropertyGroup Condition="'@(_SmithyBundleJar)' != ''">
-      <_SmithyMavenEnv>SMITHY_MAVEN_REPOS=$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri);SMITHY_MAVEN_CACHE=$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(IntermediateOutputPath)smithy-maven-cache'))</_SmithyMavenEnv>
+      <_SmithyMavenEnv>SMITHY_MAVEN_REPOS=$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri);SMITHY_MAVEN_CACHE=$([System.IO.Path]::GetFullPath('$(_SmithyMavenCachePath)'))</_SmithyMavenEnv>
     </PropertyGroup>
     <PropertyGroup>
       <_SmithyCliBuildOutput>$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\'))</_SmithyCliBuildOutput>

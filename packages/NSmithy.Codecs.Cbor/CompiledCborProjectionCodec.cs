@@ -142,13 +142,19 @@ internal sealed class CborProjectionValueReader<TBuilder>(
                 if (reader.PeekState() == CborReaderState.Null && memberReader.IsRequired)
                 {
                     reader.ReadNull();
-                    throw new InvalidOperationException(
-                        $"Required member '{name}' cannot be null."
-                    );
+                    throw new MissingRequiredMemberException(name);
                 }
 
                 seen.Add(name);
-                memberReader.ReadInto(builder, reader);
+                try
+                {
+                    memberReader.ReadInto(builder, reader);
+                }
+                catch (MissingRequiredMemberException exception)
+                {
+                    exception.PrependPathToken(memberReader.Name);
+                    throw;
+                }
             }
             else
             {
@@ -166,9 +172,7 @@ internal sealed class CborProjectionValueReader<TBuilder>(
 
             if (memberReader.IsRequired)
             {
-                throw new InvalidOperationException(
-                    $"Missing required member '{memberReader.Name}'."
-                );
+                throw new MissingRequiredMemberException(memberReader.Name);
             }
 
             memberReader.ReadMissing(builder);

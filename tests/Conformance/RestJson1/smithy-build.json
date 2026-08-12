@@ -53,24 +53,6 @@
         }
       }
     },
-    "restjson1-validation": {
-      "transforms": [
-        {
-          "name": "includeServices",
-          "args": {
-            "services": [
-              "restjsonone.local#RecursiveStructuresHarness"
-            ]
-          }
-        }
-      ],
-      "plugins": {
-        "csharp-codegen": {
-          "service": "restjsonone.local#RecursiveStructuresHarness",
-          "baseNamespace": ""
-        }
-      }
-    },
     "restjson1-apigateway": {
       "transforms": [
         {
@@ -86,6 +68,30 @@
         "csharp-codegen": {
           "service": "com.amazonaws.apigateway#BackplaneControlService",
           "baseNamespace": ""
+        }
+      }
+    },
+    "restjson1-constraints": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "aws.protocoltests.restjson.validation#RestJsonValidation"
+            ]
+          }
+        },
+        {
+          "name": "excludeShapesBySelector",
+          "args": {
+            "selector": "[id|namespace='aws.protocoltests.restjson.validation'][id|name^='MalformedEnum']"
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "aws.protocoltests.restjson.validation#RestJsonValidation",
+          "baseNamespace": "Constraints"
         }
       }
     }

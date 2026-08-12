@@ -5,7 +5,8 @@ namespace RestJson1.Conformance;
 
 /// <summary>
 /// Minimal reader over the assembled Smithy AST (model.json) — exposes operation traits used by
-/// the conformance suite (httpRequestTests, httpResponseTests). We deliberately don't model the
+/// the conformance suite (httpRequestTests, httpResponseTests, httpMalformedRequestTests). We
+/// deliberately don't model the
 /// full AST; we only project the bits the runner needs.
 /// </summary>
 internal sealed class SmithyTestModel
@@ -48,6 +49,33 @@ internal sealed class SmithyTestModel
                 if (node is not JsonObject c || (string?)c["protocol"] != protocol)
                     continue;
                 yield return HttpRequestTestCase.From(id, c);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Malformed-request cases, already expanded: a case carrying <c>testParameters</c> stands for
+    /// one run per value, so expansion belongs here rather than in every caller.
+    /// </summary>
+    public IEnumerable<HttpMalformedRequestTestCase> EnumerateHttpMalformedRequestTests(
+        string protocol
+    )
+    {
+        foreach (var (id, shape) in shapes)
+        {
+            if (shape is not JsonObject obj || (string?)obj["type"] != "operation")
+                continue;
+            var arr =
+                (obj["traits"] as JsonObject)?["smithy.test#httpMalformedRequestTests"]
+                as JsonArray;
+            if (arr is null)
+                continue;
+            foreach (var node in arr)
+            {
+                if (node is not JsonObject c || (string?)c["protocol"] != protocol)
+                    continue;
+                foreach (var expanded in HttpMalformedRequestTestCase.Expand(id, c))
+                    yield return expanded;
             }
         }
     }

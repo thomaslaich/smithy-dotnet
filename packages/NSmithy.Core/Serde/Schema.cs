@@ -1,6 +1,8 @@
+using System.Collections.Frozen;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Numerics;
+using NSmithy.Core.Validation;
 
 namespace NSmithy.Core.Serde;
 
@@ -76,6 +78,13 @@ public interface ISchemaVisitor<out TResult>
     TResult VisitString(Schema<string> schema);
 
     TResult VisitBlob(Schema<byte[]> schema);
+
+    /// <summary>
+    /// A <c>@streaming</c> blob, whose value is an unread <see cref="Stream"/> rather than a
+    /// buffered payload. Most consumers cannot handle one — but each says so itself, rather than
+    /// the schema refusing to be visited at all.
+    /// </summary>
+    TResult VisitStreamingBlob(Schema<Stream> schema);
 
     TResult VisitTimestamp(Schema<DateTimeOffset> schema);
 
@@ -227,7 +236,7 @@ public sealed class StreamingBlobSchema(ShapeId id, IEnumerable<Trait>? traits =
     public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
     {
         ArgumentNullException.ThrowIfNull(visitor);
-        throw new NotSupportedException("Streaming blob schemas are protocol-bound.");
+        return visitor.VisitStreamingBlob(this);
     }
 }
 
@@ -264,11 +273,9 @@ public sealed class UnitSchema : Schema<SmithyUnit>, IStructSchema<SmithyUnit, S
 
     public SmithyUnit CreateTypedBuilder() => SmithyUnit.Value;
 
-    public object CreateBuilder() => SmithyUnit.Value;
-
     public SmithyUnit Build(SmithyUnit builder) => SmithyUnit.Value;
 
-    public object BuildObject(object builder) => SmithyUnit.Value;
+    public SmithyUnit BuildEmpty() => SmithyUnit.Value;
 
     public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
     {
@@ -321,8 +328,22 @@ public interface IStringEnumValue<TSelf> : IStringEnumValue
 public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
     where T : IStringEnumValue<T>
 {
-    internal StringEnumSchema(ShapeId id, IEnumerable<Trait>? traits = null)
-        : base(id, ShapeKind.Enum, traits) { }
+    internal StringEnumSchema(
+        ShapeId id,
+        IEnumerable<string>? values = null,
+        IEnumerable<Trait>? traits = null
+    )
+        : base(id, ShapeKind.Enum, traits)
+    {
+        Values = values is null ? [] : [.. values];
+        lookup = Values.ToFrozenSet(StringComparer.Ordinal);
+    }
+
+    private readonly FrozenSet<string> lookup;
+
+    public bool Contains(string value) => lookup.Contains(value);
+
+    public IReadOnlyList<string> Values { get; }
 
     public T Create(string value) => T.FromValue(value);
 
@@ -345,8 +366,22 @@ public interface IIntEnumSchema
 public sealed class IntEnumSchema<T> : Schema<T>, IIntEnumSchema
     where T : struct, Enum
 {
-    internal IntEnumSchema(ShapeId id, IEnumerable<Trait>? traits = null)
-        : base(id, ShapeKind.IntEnum, traits) { }
+    internal IntEnumSchema(
+        ShapeId id,
+        IEnumerable<int>? values = null,
+        IEnumerable<Trait>? traits = null
+    )
+        : base(id, ShapeKind.IntEnum, traits)
+    {
+        Values = values is null ? [] : [.. values];
+        lookup = Values.ToFrozenSet();
+    }
+
+    private readonly FrozenSet<int> lookup;
+
+    public bool Contains(int value) => lookup.Contains(value);
+
+    public IReadOnlyList<int> Values { get; }
 
     public int GetIntegerValue(T value) => Convert.ToInt32(value, CultureInfo.InvariantCulture);
 
@@ -419,15 +454,13 @@ public sealed class EventStreamSchema<TEvent> : Schema<IAsyncEnumerable<TEvent>>
 public interface IStructSchema
 {
     IMemberSchema? GetMember(string name);
-
-    object CreateBuilder();
-
-    object BuildObject(object builder);
 }
 
 public interface IStructSchema<T> : IStructSchema
 {
     void VisitMembers(IMemberVisitor<T> visitor);
+
+    T BuildEmpty();
 }
 
 public interface IStructSchema<T, TBuilder> : IStructSchema<T>
@@ -466,7 +499,7 @@ public interface IListSchema
 
 public interface IListSchema<TCollection, TElement> : IListSchema
 {
-    ICollectionMemberSchema<TElement> TypedElementMember { get; }
+    ITargetedMemberSchema<TElement> TypedElementMember { get; }
 
     Schema<TElement> ElementSchema { get; }
 
@@ -497,9 +530,9 @@ public interface IMapSchema
 
 public interface IMapSchema<TDictionary, TValue> : IMapSchema
 {
-    ICollectionMemberSchema<string> TypedKeyMember { get; }
+    ITargetedMemberSchema<string> TypedKeyMember { get; }
 
-    ICollectionMemberSchema<TValue> TypedValueMember { get; }
+    ITargetedMemberSchema<TValue> TypedValueMember { get; }
 
     Schema<TValue> ValueSchema { get; }
 
@@ -536,6 +569,8 @@ public interface IUnionCaseVisitor<TUnion>
 
 public interface IUnionCaseSchema
 {
+    ShapeId Id { get; }
+
     string Name { get; }
 
     IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
@@ -558,6 +593,8 @@ public interface IUnionCaseSchema<TUnion, TValue> : IUnionCaseSchema
 
 public interface IMemberSchema
 {
+    ShapeId Id { get; }
+
     string Name { get; }
 
     IReadOnlyDictionary<ShapeId, Trait> MemberTraits { get; }
@@ -569,21 +606,29 @@ public interface IMemberSchema
     Trait? GetTrait(ShapeId id);
 
     bool HasTrait(ShapeId id);
+}
 
+public interface ITargetedMemberSchema<TValue> : IMemberSchema
+{
+    Schema<TValue> TargetSchema { get; }
+}
+
+public interface IStructMemberSchema : IMemberSchema
+{
     object? GetObject(object container);
 
     void SetObject(object builder, object? value);
 }
 
-public interface IMemberSchema<TContainer> : IMemberSchema
+public interface IMemberSchema<TContainer> : IStructMemberSchema
 {
     void Accept(IMemberVisitor<TContainer> visitor);
 }
 
-public interface IMemberSchema<TContainer, TValue> : IMemberSchema<TContainer>
+public interface IMemberSchema<TContainer, TValue>
+    : IMemberSchema<TContainer>,
+        ITargetedMemberSchema<TValue>
 {
-    Schema<TValue> TargetSchema { get; }
-
     TValue GetValue(TContainer container);
 }
 
@@ -599,12 +644,7 @@ internal interface IBuilderMemberSchema<TContainer, TBuilder>
     void Accept(IMemberVisitor<TContainer, TBuilder> visitor);
 }
 
-public interface ICollectionMemberSchema<TValue> : IMemberSchema
-{
-    Schema<TValue> TargetSchema { get; }
-}
-
-public sealed class CollectionMemberSchema<TValue> : ICollectionMemberSchema<TValue>
+public sealed class CollectionMemberSchema<TValue> : ITargetedMemberSchema<TValue>
 {
     private readonly IReadOnlyDictionary<ShapeId, Trait> memberTraits;
 
@@ -638,18 +678,14 @@ public sealed class CollectionMemberSchema<TValue> : ICollectionMemberSchema<TVa
 
     public Schema Target => TargetSchema;
 
+    // A collection element or map entry is always present when the collection holds it; there is
+    // no absent case for a consumer to check.
     public bool IsRequired => true;
 
     public Trait? GetTrait(ShapeId id) =>
         MemberTraits.TryGetValue(id, out var trait) ? trait : TargetSchema.GetTrait(id);
 
     public bool HasTrait(ShapeId id) => GetTrait(id) is not null;
-
-    public object? GetObject(object container) =>
-        throw new NotSupportedException("Collection members do not expose container accessors.");
-
-    public void SetObject(object builder, object? value) =>
-        throw new NotSupportedException("Collection members do not expose builder setters.");
 }
 
 public sealed class ListSchema<TElement>
@@ -674,7 +710,7 @@ public sealed class ListSchema<TElement>
         );
     }
 
-    public ICollectionMemberSchema<TElement> TypedElementMember { get; }
+    public ITargetedMemberSchema<TElement> TypedElementMember { get; }
 
     public IMemberSchema ElementMember => TypedElementMember;
 
@@ -753,7 +789,7 @@ public sealed class CollectionSchema<TCollection, TElement, TBuilder>
         this.build = build;
     }
 
-    public ICollectionMemberSchema<TElement> TypedElementMember { get; }
+    public ITargetedMemberSchema<TElement> TypedElementMember { get; }
 
     public IMemberSchema ElementMember => TypedElementMember;
 
@@ -812,7 +848,7 @@ public sealed class SetSchema<TElement>
         );
     }
 
-    public ICollectionMemberSchema<TElement> TypedElementMember { get; }
+    public ITargetedMemberSchema<TElement> TypedElementMember { get; }
 
     public IMemberSchema ElementMember => TypedElementMember;
 
@@ -877,9 +913,9 @@ public sealed class MapSchema<TValue>
         ValueSchema = value;
     }
 
-    public ICollectionMemberSchema<string> TypedKeyMember { get; }
+    public ITargetedMemberSchema<string> TypedKeyMember { get; }
 
-    public ICollectionMemberSchema<TValue> TypedValueMember { get; }
+    public ITargetedMemberSchema<TValue> TypedValueMember { get; }
 
     public Schema<TValue> ValueSchema { get; }
 
@@ -964,9 +1000,9 @@ public sealed class DictionarySchema<TDictionary, TValue, TBuilder>
         this.build = build;
     }
 
-    public ICollectionMemberSchema<string> TypedKeyMember { get; }
+    public ITargetedMemberSchema<string> TypedKeyMember { get; }
 
-    public ICollectionMemberSchema<TValue> TypedValueMember { get; }
+    public ITargetedMemberSchema<TValue> TypedValueMember { get; }
 
     public Schema<TValue> ValueSchema { get; }
 
@@ -1012,7 +1048,7 @@ public sealed class UnionCaseSchema<TUnion, TValue>
     private readonly Func<TValue, TUnion> create;
 
     internal UnionCaseSchema(
-        string name,
+        ShapeId id,
         Schema<TValue> target,
         Func<TUnion, bool> matches,
         Func<TUnion, TValue> get,
@@ -1020,13 +1056,20 @@ public sealed class UnionCaseSchema<TUnion, TValue>
         IEnumerable<Trait>? traits = null
     )
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(target);
+        if (!id.IsMember)
+        {
+            throw new ArgumentException(
+                $"Union case id must include a member name; got '{id}'.",
+                nameof(id)
+            );
+        }
+
         ArgumentNullException.ThrowIfNull(matches);
         ArgumentNullException.ThrowIfNull(get);
         ArgumentNullException.ThrowIfNull(create);
 
-        Name = name;
+        Id = id;
         Traits = Schema.BuildTraits(traits);
         TargetSchema = target;
         this.matches = matches;
@@ -1034,7 +1077,9 @@ public sealed class UnionCaseSchema<TUnion, TValue>
         this.create = create;
     }
 
-    public string Name { get; }
+    public ShapeId Id { get; }
+
+    public string Name => Id.MemberName!;
 
     public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
 
@@ -1227,9 +1272,7 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
 
     public T Build(TBuilder builder) => build(builder);
 
-    public object CreateBuilder() => createBuilder()!;
-
-    public object BuildObject(object builder) => build((TBuilder)builder)!;
+    public T BuildEmpty() => build(createBuilder());
 
     public void VisitMembers(IMemberVisitor<T> visitor)
     {
@@ -1412,7 +1455,17 @@ public sealed class UnionSchemaBuilder<T>
         IEnumerable<Trait>? traits = null
     )
     {
-        cases.Add(new UnionCaseSchema<T, TValue>(name, target, matches, get, create, traits));
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        cases.Add(
+            new UnionCaseSchema<T, TValue>(
+                id.WithMember(name),
+                target,
+                matches,
+                get,
+                create,
+                traits
+            )
+        );
         return this;
     }
 
@@ -1442,7 +1495,7 @@ public sealed class OperationSchema<TInput, TOutput>
         Id = id;
         Input = input;
         Output = output;
-        Errors = errors?.ToArray() ?? [];
+        Errors = WithImplicitValidationError(errors);
         Traits = Schema.BuildTraits(traits);
     }
 
@@ -1461,6 +1514,19 @@ public sealed class OperationSchema<TInput, TOutput>
     public Trait? GetTrait(ShapeId id) => Traits.TryGetValue(id, out var trait) ? trait : null;
 
     public bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
+
+    // Every operation implicitly carries smithy.framework#ValidationException: the server runtime
+    // returns it when input validation fails, and clients must be able to deserialize it. A model
+    // that declares the error itself keeps its own registration.
+    private static IOperationErrorSchema[] WithImplicitValidationError(
+        IEnumerable<IOperationErrorSchema>? errors
+    )
+    {
+        IOperationErrorSchema[] modeled = errors?.ToArray() ?? [];
+        return modeled.Any(error => error.Id == ValidationExceptionSchema.Id)
+            ? modeled
+            : [.. modeled, ValidationExceptionSchema.OperationError];
+    }
 }
 
 public interface IOperationErrorSchema
@@ -1581,11 +1647,19 @@ public static class Schemas
     public static EventStreamSchema<TEvent> EventStream<TEvent>(Schema<TEvent> eventSchema) =>
         new(eventSchema);
 
-    public static StringEnumSchema<T> StringEnum<T>(ShapeId id, IEnumerable<Trait>? traits = null)
-        where T : IStringEnumValue<T> => new(id, traits);
+    public static StringEnumSchema<T> StringEnum<T>(
+        ShapeId id,
+        IEnumerable<string>? values = null,
+        IEnumerable<Trait>? traits = null
+    )
+        where T : IStringEnumValue<T> => new(id, values, traits);
 
-    public static IntEnumSchema<T> IntEnum<T>(ShapeId id, IEnumerable<Trait>? traits = null)
-        where T : struct, Enum => new(id, traits);
+    public static IntEnumSchema<T> IntEnum<T>(
+        ShapeId id,
+        IEnumerable<int>? values = null,
+        IEnumerable<Trait>? traits = null
+    )
+        where T : struct, Enum => new(id, values, traits);
 
     public static StructSchemaBuilder<T, TBuilder> Structure<T, TBuilder>(
         ShapeId id,

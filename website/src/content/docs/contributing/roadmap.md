@@ -52,44 +52,24 @@ The remaining work closes the gaps:
 - Continuing to harden named client interceptors and the typed per-call
   execution context.
 
-### 3. Enforce constraint traits and modeled validation
+### 3. Reject unparseable input with a structured 400
 
-Smithy's constraint traits — `@length`, `@pattern`, `@range`, `@uniqueItems`,
-and server-side enforcement of `@required` — are not yet enforced. `@required`
-is currently honored only for C# nullability, and the value constraints are
-ignored entirely, so generated servers accept input the model forbids.
-
-The focus is server-first: Smithy's contract is that constraint violations
-produce a structured `smithy.framework#ValidationException` before the operation
-handler runs. Client-side validation of outbound input is out of scope for now.
+Constraint traits are enforced and answered with
+`smithy.framework#ValidationException`, covered by Smithy's malformed-request
+conformance suite. Input the codec cannot parse at all is still surfaced as a
+500: a non-numeric integer, an unparseable timestamp, a body that is not JSON, or
+an unsupported content type. Smithy specifies a structured 400 for each.
 
 This work includes:
 
-- Generating constraint checks from the model and rejecting violations with a
-  structured `smithy.framework#ValidationException` before the handler runs.
-- Enforcing `@required` on the server rather than only using it for C#
-  nullability.
-- Covering server behavior with Smithy's malformed-request conformance suites.
-- Documenting the client-side non-goal as an explicit preview boundary.
+- Turning deserialization failures into modeled error responses rather than
+  letting them reach the host as unhandled exceptions.
+- Running the remainder of the malformed-request conformance suite, which covers
+  exactly these cases.
+- Validating the legacy `@enum` trait on string shapes, which needs the value set
+  to reach the schema the way enum shapes' values already do.
 
-### 4. Improve CBOR and XML codec performance through schema-compiled codecs
-
-JSON already benefits from compiling codec state once from the schema so the
-runtime can cache structural decisions such as dispatch and boxing behavior.
-CBOR and XML should move in the same direction so runtime performance does not
-depend on repeating more dynamic codec work in the hot path.
-
-This work includes:
-
-- Compiling CBOR codecs from schema once, using the same general approach
-  already used for JSON.
-- Compiling XML codecs from schema once where the shape model allows it.
-- Caching the same kind of per-shape decisions that let the JSON path avoid
-  unnecessary boxing and repeated dynamic dispatch.
-- Keeping the generated codec path explicit enough that performance work does
-  not make diagnostics and debuggability worse.
-
-### 5. Harden streaming operations
+### 4. Harden streaming operations
 
 NSmithy has two experimental event-streaming surfaces: native gRPC (client,
 server, and bidirectional streaming) and `rpcv2Cbor` event streams over
@@ -105,7 +85,7 @@ This work includes:
 - Extending streaming support beyond event streams, especially streaming blob
   payloads.
 
-### 6. Expand to async protocols
+### 5. Expand to async protocols
 
 NSmithy's current protocol work is mostly request/response oriented. A separate
 near-term goal is to validate that the runtime and generator model can also
@@ -120,7 +100,7 @@ This work includes:
 - Using these protocols to pressure-test the existing transport, codec, and
   client/server seams beyond HTTP-centric assumptions.
 
-### 7. Support Smithy AI traits and MCP generation
+### 6. Support Smithy AI traits and MCP generation
 
 Support Smithy's AI-oriented traits so that .NET and protocol artifacts can be
 generated for tool-driven and agent-driven workflows, rather than treating the
@@ -134,7 +114,7 @@ This work includes:
 - Defining the runtime and generation boundaries needed so AI-trait-aware
   models remain inspectable, testable, and versionable.
 
-### 8. Honor protocol HTTP-version traits
+### 7. Honor protocol HTTP-version traits
 
 Protocol traits can declare the HTTP versions a service supports via their `http`
 and `eventStreamHttp` members — a list of ALPN protocol IDs in preference order

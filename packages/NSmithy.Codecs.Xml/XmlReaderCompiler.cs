@@ -32,7 +32,7 @@ internal sealed class XmlReaderCompiler : ISchemaVisitor<object>
     private static readonly IReadOnlyDictionary<ShapeId, Trait> EmptyTraits =
         new Dictionary<ShapeId, Trait>();
 
-    private readonly Dictionary<Schema, object> cache = new(ReferenceEqualityComparer.Instance);
+    private readonly SchemaCompilationCache cache = new();
 
     public static IXmlValueReader<T> Compile<T>(Schema<T> schema)
     {
@@ -69,15 +69,11 @@ internal sealed class XmlReaderCompiler : ISchemaVisitor<object>
                 resolved.Accept(new MemberTraitXmlReaderCompiler(this, memberTraits));
         }
 
-        if (cache.TryGetValue(resolved, out var cached))
-        {
-            return (IXmlValueReader<T>)cached;
-        }
-
-        var deferred = new DeferredXmlValueReader<T>();
-        cache.Add(resolved, deferred);
-        deferred.Set((IXmlValueReader<T>)resolved.Accept(this));
-        return deferred;
+        return cache.GetOrCompile<IXmlValueReader<T>, DeferredXmlValueReader<T>>(
+            resolved,
+            static () => new DeferredXmlValueReader<T>(),
+            target => (IXmlValueReader<T>)target.Accept(this)
+        );
     }
 
     public object VisitBoolean(Schema<bool> schema) => Scalar(schema, EmptyTraits);
@@ -109,6 +105,9 @@ internal sealed class XmlReaderCompiler : ISchemaVisitor<object>
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct => new NullableXmlValueReader<T>(CompileValue(schema.TargetSchema));
+
+    public object VisitStreamingBlob(Schema<Stream> schema) =>
+        throw new NotSupportedException("XML codec does not support streaming blob schemas.");
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         throw new NotSupportedException("XML codec does not support event stream schemas.");
@@ -162,8 +161,12 @@ internal sealed class XmlReaderCompiler : ISchemaVisitor<object>
     ) => new(schema, traits);
 }
 
-internal sealed class DeferredXmlValueReader<T> : IXmlValueReader<T>
+internal sealed class DeferredXmlValueReader<T>
+    : IXmlValueReader<T>,
+        IDeferredCompilation<IXmlValueReader<T>>
 {
+    public void Complete(IXmlValueReader<T> compiled) => Set(compiled);
+
     private IXmlValueReader<T>? inner;
 
     public void Set(IXmlValueReader<T> reader)
@@ -229,6 +232,8 @@ internal sealed class MemberTraitXmlReaderCompiler(
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct =>
         new NullableXmlValueReader<T>(inner.CompileValue(schema.TargetSchema, memberTraits));
+
+    public object VisitStreamingBlob(Schema<Stream> schema) => inner.CompileValue(schema);
 
     public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
         inner.CompileValue(schema);
@@ -368,7 +373,7 @@ internal sealed class XmlMemberReader<TContainer, TBuilder, TValue>(
             }
             else if (member.IsRequired)
             {
-                throw new InvalidOperationException($"Missing required member '{member.Name}'.");
+                throw new MissingRequiredMemberException(member.Name);
             }
 
             return;
@@ -388,7 +393,7 @@ internal sealed class XmlMemberReader<TContainer, TBuilder, TValue>(
         }
         else if (member.IsRequired)
         {
-            throw new InvalidOperationException($"Missing required member '{member.Name}'.");
+            throw new MissingRequiredMemberException(member.Name);
         }
     }
 }
@@ -411,7 +416,7 @@ internal sealed class FlattenedXmlMemberReader<TContainer, TBuilder, TValue>(
         }
         else if (member.IsRequired)
         {
-            throw new InvalidOperationException($"Missing required member '{member.Name}'.");
+            throw new MissingRequiredMemberException(member.Name);
         }
     }
 }

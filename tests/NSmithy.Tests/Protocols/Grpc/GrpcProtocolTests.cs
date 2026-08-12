@@ -132,6 +132,52 @@ public sealed class GrpcProtocolTests
             EchoSchema($"{name}Output")
         );
 
+    private static Trait Length(int min, int max) =>
+        new(
+            ShapeId.Parse("smithy.api#length"),
+            Document.From(
+                new Dictionary<string, Document>(StringComparer.Ordinal)
+                {
+                    ["min"] = Document.From(min),
+                    ["max"] = Document.From(max),
+                }
+            )
+        );
+
+    private static Schema<Echo> ConstrainedEchoSchema(string name) =>
+        Schemas
+            .Structure<Echo, EchoBuilder>(ShapeId.Parse($"example.greeter#{name}"))
+            .Required(
+                "message",
+                x => x.Message,
+                (b, v) => b.Message = v,
+                Schemas.String,
+                [.. Field(1), Length(2, 10)]
+            )
+            .Build(() => new EchoBuilder(), b => new Echo(b.Message!));
+
+    /// <summary>
+    /// An event stream changes how the body is framed, not what the initial request has to satisfy.
+    /// Covers the output-stream shape specifically because its input is an ordinary structure — a
+    /// streaming response is no reason to stop validating the request that asked for it.
+    /// </summary>
+    [Fact]
+    public void OutputEventStreamValidatesTheRequest()
+    {
+        var protocol = BuildEventStreamServiceProtocol()
+            .ForServerOperation(
+                Schemas.Operation(
+                    ShapeId.Parse("example.greeter#WatchConstrained"),
+                    ConstrainedEchoSchema("WatchConstrainedInput"),
+                    EchoEventsSchema("WatchConstrainedOutput")
+                )
+            );
+
+        Assert.NotNull(protocol.InputValidator);
+        var error = Assert.Single(protocol.InputValidator.GetErrors(new Echo("x")));
+        Assert.Equal("/message", error.Path);
+    }
+
     private static OperationSchema<Echo, EchoEvents> OutputStreamOperation(string name) =>
         Schemas.Operation(
             ShapeId.Parse($"example.greeter#{name}"),

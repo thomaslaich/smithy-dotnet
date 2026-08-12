@@ -1,3 +1,5 @@
+using NSmithy.Core.Serde;
+using NSmithy.Core.Validation;
 using NSmithy.Http;
 
 namespace NSmithy.Server;
@@ -29,9 +31,36 @@ public sealed class SmithyServerRuntime
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(handler);
 
-        var input = await protocol
-            .DeserializeRequestAsync(request, cancellationToken)
-            .ConfigureAwait(false);
+        TInput input;
+        try
+        {
+            input = await protocol
+                .DeserializeRequestAsync(request, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (MissingRequiredMemberException exception)
+        {
+            // A required member absent from the payload fails in the codec, before the compiled
+            // validator ever sees the input. It is still a constraint violation, so it gets the
+            // same modeled response rather than surfacing as a server fault.
+            return SerializeValidationFailure(
+                protocol,
+                ValidationException.FromMissingRequiredMember(exception)
+            );
+        }
+
+        if (protocol.InputValidator is { } validator)
+        {
+            var validationErrors = validator.GetErrors(input);
+            if (validationErrors.Count > 0)
+            {
+                return SerializeValidationFailure(
+                    protocol,
+                    ValidationException.FromErrors(validationErrors)
+                );
+            }
+        }
+
         try
         {
             var output = await handler(input, cancellationToken).ConfigureAwait(false);
@@ -47,4 +76,14 @@ public sealed class SmithyServerRuntime
             throw;
         }
     }
+
+    /// <summary>
+    /// Serialized like any modeled error, since every operation implicitly carries
+    /// smithy.framework#ValidationException. A protocol that cannot serialize server errors
+    /// rethrows, surfaced as a 500 by the host.
+    /// </summary>
+    private static SmithyHttpServerResponse SerializeValidationFailure<TInput, TOutput>(
+        IServerOperationProtocol<TInput, TOutput> protocol,
+        ValidationException exception
+    ) => protocol.TrySerializeError(exception, out var response) ? response : throw exception;
 }

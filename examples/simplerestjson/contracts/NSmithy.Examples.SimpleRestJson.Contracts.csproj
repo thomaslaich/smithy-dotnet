@@ -7,7 +7,7 @@
     <VersionSuffix>SNAPSHOT</VersionSuffix>
     <SmithyPublish>true</SmithyPublish>
     <SmithyMavenGroupId>io.github.thomaslaich.nsmithy.examples</SmithyMavenGroupId>
-    <SmithyMavenArtifactId>simple-rest-json</SmithyMavenArtifactId>
+    <SmithyMavenArtifactId>simplerestjson</SmithyMavenArtifactId>
   </PropertyGroup>
 
   <ItemGroup>

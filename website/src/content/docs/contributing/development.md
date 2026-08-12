@@ -32,11 +32,12 @@ All day-to-day tasks are defined as [just](https://just.systems) recipes. Run
 | `just codegen` | Run Smithy code generation (Java plugin → generated C#) |
 | `just build` | Build in Release configuration (runs `codegen` and `restore` first) |
 | `just test` | Run the test suite |
+| `just clean` | Delete all build output, including the Smithy plugin cache under `obj/` |
 | `just fmt` | Format all sources (C#, Nix, YAML, Justfile) |
 | `just check-format` | Verify formatting (used in CI) |
 | `just pack` | Pack NuGet packages to `artifacts/packages` |
 | `just docs` | Start the documentation dev server |
-| `just ci` | Full CI sequence: restore → check-format → build → test → pack |
+| `just ci` | Full CI sequence: check-format → build → test → pack → build examples |
 
 ## Pack Local Packages
 

@@ -6,7 +6,7 @@ use smithy.protocols#rpcv2Cbor
 
 /// Provides weather forecasts.
 ///
-/// The same Weather service as the rest-json1 example, served over the
+/// The same Weather service as the restjson1 example, served over the
 /// rpcv2Cbor protocol: operations are invoked by name via POST with CBOR
 /// bodies, so the model carries no HTTP binding traits.
 @rpcv2Cbor

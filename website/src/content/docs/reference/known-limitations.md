@@ -79,11 +79,27 @@ The `http` / `eventStreamHttp` members on protocol traits (for example
 `HttpClient`'s default HTTP version (HTTP/1.1 unless configured), and HTTP/2 is
 forced only for native gRPC. See the [Roadmap](/smithy-dotnet/contributing/roadmap/).
 
-## Validation Is Incomplete
+## Malformed Input Is Rejected As A 500, Not A 400
 
-Generated constructors do not implement full Smithy validation semantics.
-Generated C# nullability is authoritative, but external request binding and
-deserialization still need more protocol-aware runtime validation.
+Constraint violations are enforced and answered with
+`smithy.framework#ValidationException` (see [Servers](/smithy-dotnet/servers/)),
+covered by Smithy's malformed-request conformance suite.
+
+Input the codec cannot parse at all is a different matter: a non-numeric integer,
+an unparseable timestamp, a body that is not JSON, or an unsupported content type
+currently surfaces as a 500 rather than the structured 400 Smithy specifies. The
+remainder of the malformed-request suite covers exactly those cases and is not
+run yet.
+
+Constraint enforcement itself has three gaps:
+
+- The legacy `@enum` trait on a string is not validated — only enum *shapes* are.
+  A string shape carrying `@enum` is generated as a plain `string`, so the schema
+  carries no value set.
+- `@length` on a `@streaming` blob is not enforced. The stream reaches the handler
+  unread, so its length is not knowable without buffering the whole request.
+- Traits outside the constraint set — `@idRef` reference resolution, for example —
+  are not enforced.
 
 ## Extra Smithy Maven Dependencies Are External
 
@@ -100,13 +116,10 @@ bundled into the consumer MSBuild package.
 
 The codecs (`NSmithy.Codecs.Json`, `Cbor`, `Xml`, `Proto`) are schema-driven —
 they use the codegen-emitted typed accessors on the schema, with **no runtime
-reflection**. JSON goes a step further and compiles a per-shape reader/writer
-once from the schema, caching structural decisions such as dispatch and boxing.
-CBOR, XML, and Proto still walk the schema on each call; compiling them once (as
-JSON does) is a tracked performance item on the
-[Roadmap](/smithy-dotnet/contributing/roadmap/).
+reflection** — and each compiles a per-shape reader and writer once from the
+schema, caching structural decisions such as dispatch and boxing.
 
-The codecs are also not yet validated or optimized for:
+The codecs are not yet validated or optimized for:
 
 - NativeAOT
 - source-generated serializer metadata
