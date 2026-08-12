@@ -363,19 +363,30 @@ rather than by runtime `default:` branches.
 
 ## Shape–Schema Binding
 
-Generated shapes know their own schemas through a static abstract interface
-member:
+A shape's schema lives beside its model type, on a sibling static class named
+after the shape:
 
 ```csharp
-public interface ISmithyShape<TSelf>
+public sealed record class MenuItem(Food Food, float Price);
+
+public static partial class MenuItemSchema
 {
-    static abstract Schema<TSelf> Schema { get; }
+    public static Schema<MenuItem> Schema { get; } = /* ... */;
 }
 ```
 
-Schema discovery is a generic constraint, `Serialize<T>(T value) where T :
-ISmithyShape<T>`, with no registry, no reflection, and no startup scan. Any
-API that has the type has the schema.
+The model type carries no back-reference to it. That is the same rule as
+[Generated Model Types](#generated-model-types): a shape implements no
+serialization interface, so it cannot expose its own schema either, and one
+shape references another's schema by naming the sibling class
+(`Schemas.Lazy(() => FoodSchema.Schema)`).
+
+A consumer is therefore handed the schema rather than deriving it from the
+value: `JsonCodec.FromSchema(MenuItemSchema.Schema)`, and a generated client
+passes `MenuItemSchema.Schema` to the protocol when it binds an operation. The
+reference is an ordinary static property resolved at compile time, so there is
+still no registry, no reflection, and no startup scan. The schema class is
+`partial` so a project can add members to it without touching generated code.
 
 Construction during deserialization goes through the schema as well: a struct,
 list, or map schema exposes a typed builder protocol (create, set/add, build)
