@@ -34,17 +34,25 @@ the protocol's normal rules.
 ## Event Streams
 
 Event-stream operations are bound through the same `IServiceProtocol` operation
-factory as unary operations. `ForOperation` receives the modeled input/output
-schemas, detects event-stream members from those schemas, and returns the same
-operation protocol interface for every operation shape:
+factories as unary operations. Each receives the modeled input/output schemas,
+detects event-stream members from those schemas, and returns the same operation
+protocol interface for every operation shape:
 
 ```csharp
 public interface IServiceProtocol
 {
-    IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
+    IClientOperationProtocol<TInput, TOutput> ForClientOperation<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation);
+
+    IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation);
 }
 ```
+
+Streaming is a property of how a body is framed, not of which operation protocol
+serves it: a protocol resolves each direction into framing delegates at bind
+time, so one operation protocol covers unary, client-streaming,
+server-streaming, and duplex.
 
 The protocol interface is async-capable even when a particular protocol path can
 complete synchronously:

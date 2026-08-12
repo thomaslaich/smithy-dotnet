@@ -43,180 +43,19 @@ runtime libraries configured from the generated schemas.
   resolution and consumer plans are computed at fold time. Nothing is resolved
   per call.
 
-## End-To-End Sketch
+## Layers
 
-A Smithy service defines a protocol, operations, input/output structures, and
-traits:
+The pieces below stack in one direction. Generated **model types** are plain C#
+values. Alongside each, the generator emits a **schema** carrying the Smithy
+shape id, traits, and typed member accessors. A **codec** folds a schema into a
+reader and writer for one wire format, knowing nothing about HTTP. A **protocol**
+interprets service and operation schemas for a transport, using a codec for
+bodies. Generated **clients and servers** hold a bound operation protocol and
+hand typed values to a shared runtime.
 
-```smithy
-$version: "2"
-
-namespace example.weather
-
-use aws.protocols#restJson1
-
-@restJson1
-service WeatherService {
-    operations: [GetForecast]
-}
-
-@http(method: "GET", uri: "/forecast/{city}", code: 200)
-operation GetForecast {
-    input: GetForecastInput
-    output: GetForecastOutput
-}
-
-structure GetForecastInput {
-    @required
-    @httpLabel
-    city: String
-
-    @httpQuery("units")
-    units: String
-}
-
-structure GetForecastOutput {
-    @required
-    summary: String
-
-    temperature: Integer
-}
-```
-
-The generator emits model types that do not know how they are serialized:
-
-```csharp
-public sealed record GetForecastInput(string City, string? Units);
-
-public sealed record GetForecastOutput(string Summary, int? Temperature);
-```
-
-Next to those model types, the generator emits schemas. A structure schema knows
-the Smithy shape id, member traits, how to read members from a value, and how to
-build the value during deserialization:
-
-```csharp
-public static partial class GetForecastInputSchema
-{
-    public static Schema<GetForecastInput> Schema { get; } =
-        Schemas.Structure<GetForecastInput, GetForecastInputBuilder>(
-                ShapeId.Parse("example.weather#GetForecastInput"))
-            .Required(
-                "city",
-                input => input.City,
-                (builder, value) => builder.City = value,
-                Schemas.String,
-                traits: [RestTraits.HttpLabelTrait])
-            .Optional(
-                "units",
-                input => input.Units,
-                (builder, value) => builder.Units = value,
-                Schemas.NullableReference(Schemas.String),
-                traits: [RestTraits.HttpQueryTrait("units")])
-            .Build(
-                () => new GetForecastInputBuilder(),
-                builder => new GetForecastInput(builder.City!, builder.Units));
-}
-```
-
-Operations and services have schemas too. They are the entry point for
-protocols:
-
-```csharp
-public static partial class GetForecastSchema
-{
-    public static OperationSchema<GetForecastInput, GetForecastOutput> Schema { get; } =
-        Schemas.Operation(
-            ShapeId.Parse("example.weather#GetForecast"),
-            GetForecastInputSchema.Schema,
-            GetForecastOutputSchema.Schema,
-            traits: [RestTraits.HttpTrait("GET", "/forecast/{city}")]);
-}
-
-public static partial class WeatherServiceSchema
-{
-    public static ServiceSchema Schema { get; } =
-        Schemas.Service(
-            ShapeId.Parse("example.weather#WeatherService"),
-            traits: [new Trait(ShapeId.Parse("aws.protocols#restJson1"))]);
-}
-```
-
-A body codec compiles a schema into a reader/writer for JSON, XML, or CBOR. It
-does not know about HTTP paths, headers, status codes, or operation routing:
-
-```csharp
-var outputCodec = JsonCodec.FromSchema(GetForecastOutputSchema.Schema);
-
-var body = outputCodec.Serialize(new GetForecastOutput("Cloudy", 18));
-var output = outputCodec.Deserialize(body);
-```
-
-A service protocol interprets service and operation schemas for a concrete
-transport. `restJson1` reads the `@http`, `@httpLabel`, and `@httpQuery` traits,
-builds the request path, and uses JSON for the body:
-
-```csharp
-IServiceProtocol serviceProtocol =
-    new RestJson1Protocol().ForService(WeatherServiceSchema.Schema);
-
-IOperationProtocol<GetForecastInput, GetForecastOutput> getForecastProtocol =
-    serviceProtocol.ForOperation(GetForecastSchema.Schema);
-
-var request = getForecastProtocol.SerializeRequest(
-    new GetForecastInput("Berlin", "metric"));
-
-// GET /forecast/Berlin?units=metric
-```
-
-Generated clients precompute one operation binding per operation in the
-constructor. Operation methods stay protocol-agnostic: they hand the bound
-operation and typed input to the shared client runtime:
-
-```csharp
-public sealed class WeatherServiceClient
-{
-    private readonly SmithyClientRuntime runtime;
-
-    private readonly SmithyOperationBinding<GetForecastInput, GetForecastOutput>
-        GetForecastBinding;
-
-    public WeatherServiceClient(/* endpoint / config / runtime */)
-    {
-        IServiceProtocol serviceProtocol =
-            new RestJson1Protocol().ForService(WeatherServiceSchema.Schema);
-
-        GetForecastBinding = new SmithyOperationBinding<GetForecastInput, GetForecastOutput>(
-            WeatherServiceSchema.Schema.Id,
-            GetForecastSchema.Schema.Id,
-            serviceProtocol.ForOperation(GetForecastSchema.Schema));
-        // ... one binding per operation, plus runtime construction
-    }
-
-    public async Task<GetForecastOutput> GetForecastAsync(
-        GetForecastInput input,
-        CancellationToken cancellationToken = default)
-    {
-        return await runtime
-            .InvokeAsync(GetForecastBinding, input, cancellationToken)
-            .ConfigureAwait(false);
-    }
-}
-```
-
-The binding carries the service and operation shape ids and the bound
-operation protocol. The runtime owns execution — interceptors, auth, retries —
-and modeled-error deserialization runs through the binding's protocol, so the
-generated method has no protocol-specific branches.
-
-On the server, the runtime deserializes the request through the same operation
-protocol, validates the input against the model's constraint traits, and
-invokes the handler; constraint violations never reach handler code (see
-[Validation](#validation)).
-
-For a different protocol, the model types and schemas stay the same. Only the
-protocol instance changes, for example to `new RpcV2CborProtocol()` or
-`new RestXmlProtocol()`.
+Each layer is described in its own section below, with the reasoning behind it.
+For a worked example of what generation produces for a given model, see the
+[Quick Start](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/).
 
 ## Generated Model Types
 
@@ -643,7 +482,10 @@ public interface IProtocol
 
 public interface IServiceProtocol
 {
-    IOperationProtocol<TInput, TOutput> ForOperation<TInput, TOutput>(
+    IClientOperationProtocol<TInput, TOutput> ForClientOperation<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation);
+
+    IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation);
 }
 
@@ -756,7 +598,7 @@ public RpcV2ProtocolClient(/* endpoint / config / runtime */)
         new SmithyOperationBinding<GreetingWithErrorsInput, GreetingWithErrorsOutput>(
         RpcV2ProtocolSchema.Schema.Id,
         GreetingWithErrorsSchema.Schema.Id,
-        serviceProtocol.ForOperation(GreetingWithErrorsSchema.Schema));
+        serviceProtocol.ForClientOperation(GreetingWithErrorsSchema.Schema));
 }
 ```
 

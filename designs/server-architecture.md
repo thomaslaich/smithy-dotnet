@@ -294,8 +294,8 @@ bolted-on feature:
   deals only in typed model values; there is one handler interface per service,
   derived from the operation shapes.
 - All protocol knowledge lives in the operation-protocol binding.
-  `new RestJson1Protocol().ForService(schema).ForOperation(op)` and
-  `new RpcV2CborProtocol().ForService(schema).ForOperation(op)` are two different
+  `new RestJson1Protocol().ForService(schema).ForServerOperation(op)` and
+  `new RpcV2CborProtocol().ForService(schema).ForServerOperation(op)` are two different
   `IServerOperationProtocol<FooInput, FooOutput>` over the same typed contract.
 - Dispatch is parameterized by that binding, so the same handler delegate serves
   every protocol.
