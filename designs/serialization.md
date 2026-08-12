@@ -245,10 +245,49 @@ representable and validated like any other member trait.
 
 ### Recursion
 
-Recursive models form a cyclic schema graph. Generated schemas use
-`Schemas.Lazy(...)` to tie the cycle, and `LazySchema<T>` resolves to the target
-schema before dispatching to a visitor. Consumers see the same typed schema
-interface either way.
+Recursive models form a cyclic schema graph. A schema cannot reference itself
+while it is still being built, so the cycle is tied through `Schemas.Lazy(...)`,
+whose closure captures a variable that is assigned once the schema exists:
+
+```csharp
+// structure TreeNode { @required label: String, child: TreeNode }
+Schema<TreeNode>? node = null;
+node = Schemas
+    .Structure<TreeNode, Builder>(ShapeId.Parse("example#TreeNode"))
+    .Required(
+        "label",
+        static value => value.Label,
+        static (builder, value) => builder.Label = value,
+        Schemas.NullableReference(Schemas.String))
+    .Optional(
+        "child",
+        static value => value.Child,
+        static (builder, value) => builder.Child = value,
+        Schemas.NullableReference(Schemas.Lazy(() => node!)))
+    .Build(
+        static () => new Builder(),
+        static builder => new TreeNode(builder.Label!, builder.Child));
+```
+
+The closure captures the variable, not its value, so `node` being null when
+`Lazy` is constructed does not matter: nothing resolves it until after `Build`
+has assigned it, and `LazySchema<T>` resolves once and caches.
+
+`LazySchema<T>` is invisible to consumers. It forwards `Id`, `Kind`, `Traits`,
+and `Resolved` to its target, and its `Accept` delegates to the target's
+`Accept`, so the visitor is always called by the sealed leaf that knows its own
+type arguments. There is no `VisitLazy` case, and the visitor stays total
+without one.
+
+What recursion does change is that a fold cannot walk the graph eagerly, since
+it would follow the cycle forever. A consumer either defers each member body
+until first use or memoizes what it has already compiled. The validator does the
+first, compiling a member's body lazily; the codecs do the second, through
+`SchemaCompilationCache`, which registers a placeholder for a shape before
+compiling it so a self-reference resolves to the in-progress plan. That cache
+keys on `Schema.Resolved` rather than the schema handed in, because two
+references to the same shape are different objects when one of them is a lazy
+stand-in.
 
 ### Projections
 
