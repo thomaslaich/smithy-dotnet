@@ -146,6 +146,23 @@ states optionality rather than inferring it. And the finalizer is where a
 required member absent from the payload fails, throwing where the codec can turn
 it into a modeled error (see [Validation](#validation)).
 
+The two examples above are constructed differently, and the split follows how
+many typed parts a shape kind has. A shape with none is a constructor
+(`new IntegerSchema(id)`). A shape whose parts are fixed by its kind is a
+factory method, since `Schemas.List(id, element)` takes exactly one element
+schema and `Schemas.Map(id, value)` exactly one value schema. Only a shape with
+an unbounded number of *differently typed* parts is fluent, which means
+structures and unions.
+
+The fluency is there for type inference, not for style. Each `.Required` or
+`.Optional` call infers its own `TValue` from the accessor pair and the target
+schema agreeing on it, and stores a `MemberSchema<T, TBuilder, TValue>` that
+keeps the member's value type. A constructor taking a member collection cannot
+do that: the collection erases `TValue`, so every member would have to spell out
+`MemberSchema<Rating, Builder, string>` at the call site. The builder also
+derives each member id from the shape id, so a member cannot be given an id that
+disagrees with the shape it belongs to.
+
 For each operation, the generator emits an `OperationSchema<TInput, TOutput>`
 that references the input and output schemas plus operation traits and modeled
 error descriptors. For each service, it emits a `ServiceSchema` with the service
