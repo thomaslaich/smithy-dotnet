@@ -86,12 +86,63 @@ public abstract class Schema<T> : Schema;
 annotations. The typed layer is the only real layer; there is no erased
 counterpart.
 
+A scalar is the smallest node in the algebra — an id and a kind, no members and
+no accessors — so the prelude shapes are shared singletons:
+
+```csharp
+public static Schema<int> Integer { get; } =
+    new IntegerSchema(new ShapeId("smithy.api", "Integer"));
+```
+
+One instance serves every integer in every model, because nothing distinguishes
+one use from another: a constraint like `@range` is declared where the shape is
+*used*, so it lives on the member rather than on a private copy of the integer
+schema.
+
 For each shape, the generated schema contains typed member accessors, builder
-factory, builder finalizer, shape traits, and member traits. For each
-operation, the generator emits an `OperationSchema<TInput, TOutput>` that
-references the input and output schemas plus operation traits and modeled
-error descriptors. For each service, it emits a `ServiceSchema` with the
-service shape id and service-level traits.
+factory, builder finalizer, shape traits, and member traits. A structure names
+its members, pairs each with the schema of its target, and closes with the two
+halves of construction — how to make a builder and how to finalize one:
+
+```csharp
+// structure Rating { @required title: String, @range(min: 1, max: 5) score: Integer }
+public static Schema<Rating> Schema { get; } =
+    Schemas.Structure<Rating, Builder>(ShapeId.Parse("example#Rating"))
+        .Required(
+            "title",
+            static value => value.Title,
+            static (builder, value) => builder.Title = value,
+            Schemas.NullableReference(Schemas.String))
+        .Optional(
+            "score",
+            static value => value.Score,
+            static (builder, value) => builder.Score = value,
+            Schemas.Nullable(Schemas.Integer),
+            [new Trait(ShapeId.Parse("smithy.api#range"), Document.From(
+                new Dictionary<string, Document>
+                {
+                    ["min"] = Document.From(1),
+                    ["max"] = Document.From(5),
+                }))])
+        .Build(
+            static () => new Builder(),
+            static builder => new Rating(
+                builder.Title ?? throw new MissingRequiredMemberException("title"),
+                builder.Score));
+```
+
+Three things in that shape matter downstream. The accessors are delegates over
+the concrete type, so reading and writing a member costs no reflection and no
+boxing. The member's target is wrapped to carry presence — `Nullable` for a
+value type, `NullableReference` for a reference type — which is how a schema
+states optionality rather than inferring it. And the finalizer is where a
+required member absent from the payload fails, throwing where the codec can turn
+it into a modeled error (see [Validation](#validation)).
+
+For each operation, the generator emits an `OperationSchema<TInput, TOutput>`
+that references the input and output schemas plus operation traits and modeled
+error descriptors. For each service, it emits a `ServiceSchema` with the service
+shape id and service-level traits.
 
 Traits stay on schemas and members. Core schemas carry any Smithy trait, but
 consumers decide which traits they interpret. REST protocols interpret
