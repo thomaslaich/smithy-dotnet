@@ -77,9 +77,9 @@ public record GetWidgetInput(string Id, string? Filter = null);
 Schema metadata is emitted separately, usually in a generated companion type:
 
 ```csharp
-public static class GetWidgetInputSchemas
+public static partial class GetWidgetInputSchema
 {
-    public static readonly Schema<GetWidgetInput> Schema = ...;
+    public static Schema<GetWidgetInput> Schema { get; } = ...;
 }
 ```
 

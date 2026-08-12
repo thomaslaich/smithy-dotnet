@@ -60,7 +60,7 @@ complete synchronously:
 ```csharp
 public interface IClientOperationProtocol<TInput, TOutput>
 {
-    ValueTask<SmithyHttpRequest> SerializeRequestAsync(
+    SmithyHttpRequest SerializeRequest(
         TInput input,
         CancellationToken cancellationToken = default);
 

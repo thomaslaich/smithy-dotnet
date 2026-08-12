@@ -102,11 +102,16 @@ from the caller:
 ```csharp
 public interface IServerOperationProtocol<TInput, TOutput>
 {
+    // Validates deserialized input against the model's constraint traits before the
+    // handler runs; null when the input carries no constraints. Not defaulted, so an
+    // implementation that skips validation has to say so.
+    ISmithyValidator<TInput>? InputValidator { get; }
+
     ValueTask<TInput> DeserializeRequestAsync(
         SmithyHttpRequest request,
         CancellationToken cancellationToken = default);
 
-    ValueTask<SmithyHttpServerResponse> SerializeResponseAsync(
+    SmithyHttpServerResponse SerializeResponse(
         TOutput output,
         CancellationToken cancellationToken = default);
 
@@ -147,8 +152,7 @@ public sealed class SmithyServerRuntime
         try
         {
             var output = await handler(input, cancellationToken).ConfigureAwait(false);
-            return await protocol.SerializeResponseAsync(output, cancellationToken)
-                .ConfigureAwait(false);
+            return protocol.SerializeResponse(output, cancellationToken);
         }
         catch (Exception ex) when (protocol.TrySerializeError(ex, out var errorResponse))
         {
@@ -213,7 +217,8 @@ public static class SmithyAspNetCoreHost
         HttpContext context,
         IServerOperationProtocol<TInput, TOutput> protocol,
         Func<TInput, CancellationToken, Task<TOutput>> handler,
-        CancellationToken cancellationToken)
+        bool streamRequestBody = false,
+        CancellationToken cancellationToken = default)
     {
         var request = await ToSmithyRequestAsync(context, cancellationToken).ConfigureAwait(false);
         var response = await Runtime.DispatchAsync(protocol, request, handler, cancellationToken).ConfigureAwait(false);
