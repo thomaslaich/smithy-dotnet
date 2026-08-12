@@ -76,9 +76,11 @@ internal sealed class SchemaValidator<T> : ISmithyValidator<T>
     {
         this.validator = validator;
 
-        // Force the top-level body now so a schema the validator cannot compile fails when the
-        // protocol is built rather than on the first request. Nested bodies stay deferred, which
-        // is what keeps recursive schemas from recursing forever at compile time.
+        // Compile the top-level body now, so an invalid @pattern regex surfaces when the protocol
+        // is built rather than on a request. Smithy does not check a pattern against .NET's regex
+        // dialect, so a model can carry one. This covers only the top-level members: nested bodies
+        // stay deferred to keep a recursive schema from recursing forever at compile time, so a bad
+        // pattern deeper down still fails on the first request that reaches it.
         if (validator is IEagerlyCompilable eager)
         {
             eager.Compile();
