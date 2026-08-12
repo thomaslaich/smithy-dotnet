@@ -56,7 +56,7 @@ public sealed class GrpcProtocol : IProtocol
             OperationSchema<TInput, TOutput> operation
         ) => CreateOperation(operation, validateInput: true);
 
-        private IOperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
+        private OperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
             OperationSchema<TInput, TOutput> operation,
             bool validateInput
         )
@@ -74,269 +74,211 @@ public sealed class GrpcProtocol : IProtocol
                 );
             }
 
-            // Decided once here rather than in each protocol below: an event stream changes how the
-            // body is framed, not what the operation's input structure has to satisfy. The events
+            // Decided once here rather than per shape: an event stream changes how the body is
+            // framed, not what the operation's input structure has to satisfy. The events
             // themselves are not covered — the validator skips the event-stream member — since
             // rejecting one mid-stream needs a way to report it after the response has begun.
             var inputValidator = validateInput ? SmithyValidator.FromSchema(operation.Input) : null;
+
+            // Each direction is chosen independently; the four call shapes are their cross product.
             var inputEvent = FindEventStreamEventSchema(operation.Input);
             var outputEvent = FindEventStreamEventSchema(operation.Output);
-            return (inputEvent, outputEvent) switch
-            {
-                (null, null) => new OperationProtocol<TInput, TOutput>(
-                    service,
-                    operation,
-                    inputValidator
-                ),
-                (null, not null) => CreateOutputEventStreamProtocol(
-                    operation,
-                    (dynamic)outputEvent,
-                    inputValidator
-                ),
-                (not null, null) => CreateInputEventStreamProtocol(
-                    operation,
-                    (dynamic)inputEvent,
-                    inputValidator
-                ),
-                (not null, not null) => CreateDuplexEventStreamProtocol(
-                    operation,
-                    (dynamic)inputEvent,
-                    (dynamic)outputEvent,
-                    inputValidator
-                ),
-            };
+            RequestStrategy<TInput> request = inputEvent is null
+                ? UnaryRequest(operation.Input)
+                : StreamingRequest(operation.Input, (dynamic)inputEvent);
+            ResponseStrategy<TOutput> response = outputEvent is null
+                ? UnaryResponse(operation.Output)
+                : StreamingResponse(operation.Output, (dynamic)outputEvent);
+
+            return new OperationProtocol<TInput, TOutput>(
+                service,
+                operation,
+                request,
+                response,
+                inputValidator
+            );
         }
-
-        private OutputEventStreamOperationProtocol<
-            TInput,
-            TOutput,
-            TOutputEvent
-        > CreateOutputEventStreamProtocol<TInput, TOutput, TOutputEvent>(
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TOutputEvent> outputEvent,
-            ISmithyValidator<TInput>? inputValidator
-        ) =>
-            new OutputEventStreamOperationProtocol<TInput, TOutput, TOutputEvent>(
-                service,
-                operation,
-                outputEvent,
-                inputValidator
-            );
-
-        private InputEventStreamOperationProtocol<
-            TInput,
-            TInputEvent,
-            TOutput
-        > CreateInputEventStreamProtocol<TInput, TInputEvent, TOutput>(
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent,
-            ISmithyValidator<TInput>? inputValidator
-        ) =>
-            new InputEventStreamOperationProtocol<TInput, TInputEvent, TOutput>(
-                service,
-                operation,
-                inputEvent,
-                inputValidator
-            );
-
-        private DuplexEventStreamOperationProtocol<
-            TInput,
-            TOutput,
-            TInputEvent,
-            TOutputEvent
-        > CreateDuplexEventStreamProtocol<TInput, TOutput, TInputEvent, TOutputEvent>(
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent,
-            Schema<TOutputEvent> outputEvent,
-            ISmithyValidator<TInput>? inputValidator
-        ) =>
-            new DuplexEventStreamOperationProtocol<TInput, TOutput, TInputEvent, TOutputEvent>(
-                service,
-                operation,
-                inputEvent,
-                outputEvent,
-                inputValidator
-            );
     }
 
-    private sealed class OperationProtocol<TInput, TOutput> : IOperationProtocol<TInput, TOutput>
+    private readonly record struct RequestStrategy<TInput>(
+        Func<TInput, CancellationToken, SmithyHttpBody> Write,
+        Func<SmithyHttpRequest, CancellationToken, ValueTask<TInput>> Read
+    );
+
+    /// <inheritdoc cref="RequestStrategy{TInput}" />
+    private readonly record struct ResponseStrategy<TOutput>(
+        Func<TOutput, CancellationToken, SmithyHttpServerResponse> Write,
+        Func<SmithyHttpClientResponse, CancellationToken, ValueTask<TOutput>> Read,
+        bool IsStreaming
+    );
+
+    private static RequestStrategy<TInput> UnaryRequest<TInput>(Schema<TInput> inputSchema)
     {
-        private readonly string methodPath;
-        private readonly bool inputIsUnit;
-        private readonly bool outputIsUnit;
-        private readonly IProtoCodec<TInput>? requestCodec;
-        private readonly IProtoCodec<TOutput>? responseCodec;
-        private readonly ModeledErrorSerializer serverErrors;
-
-        public OperationProtocol(
-            ServiceSchema service,
-            OperationSchema<TInput, TOutput> operation,
-            ISmithyValidator<TInput>? inputValidator
-        )
+        if (IsUnit<TInput>(inputSchema))
         {
-            InputValidator = inputValidator;
-            // gRPC full method name: "/{package}.{Service}/{Method}". The proto package mirrors the
-            // Smithy namespace, matching what smithy-proto-codegen emits.
-            methodPath = MethodPath(service, operation.Id.Name);
-
-            inputIsUnit = IsUnit<TInput>(operation.Input);
-            outputIsUnit = IsUnit<TOutput>(operation.Output);
-            requestCodec = inputIsUnit ? null : ProtoCodec.FromSchema(operation.Input);
-            responseCodec = outputIsUnit ? null : ProtoCodec.FromSchema(operation.Output);
-            HttpErrors = CompileErrors(operation.Errors);
-            serverErrors = ModeledErrorSerializer.Compile(
-                operation.Errors,
-                error => CompileServerError((dynamic)error)
+            return new RequestStrategy<TInput>(
+                (_, _) => new SmithyHttpBody.Bytes(GrpcMessageFraming.Frame([])),
+                (_, _) => ValueTask.FromResult<TInput>(default!)
             );
         }
 
-        public IReadOnlyList<HttpOperationError> HttpErrors { get; }
+        var codec = ProtoCodec.FromSchema(inputSchema);
+        return new RequestStrategy<TInput>(
+            (input, _) =>
+                new SmithyHttpBody.Bytes(GrpcMessageFraming.Frame(codec.Serialize(input))),
+            (request, _) =>
+                ValueTask.FromResult(
+                    codec.Deserialize(GrpcMessageFraming.ReadSingle(BodyBytes(request.Body)))
+                )
+        );
+    }
 
-        public ISmithyValidator<TInput>? InputValidator { get; }
+    private static RequestStrategy<TInput> StreamingRequest<TInput, TInputEvent>(
+        Schema<TInput> inputSchema,
+        Schema<TInputEvent> eventSchema
+    )
+    {
+        var codec = ProtoCodec.FromSchema(eventSchema);
+        var binding = EventStreamShapeBinding<TInput, TInputEvent>.Create(inputSchema);
+        return new RequestStrategy<TInput>(
+            (input, cancellationToken) =>
+            {
+                ArgumentNullException.ThrowIfNull(input);
+                return new SmithyHttpBody.EventStreaming(
+                    FrameEventsAsync(binding.GetEvents(input), codec, cancellationToken)
+                );
+            },
+            (request, cancellationToken) =>
+                ValueTask.FromResult(
+                    binding.Build(
+                        ReadRequestEventsAsync(RequestStream(request), codec, cancellationToken)
+                    )
+                )
+        );
+    }
+
+    private static ResponseStrategy<TOutput> UnaryResponse<TOutput>(Schema<TOutput> outputSchema)
+    {
+        if (IsUnit<TOutput>(outputSchema))
+        {
+            return new ResponseStrategy<TOutput>(
+                (_, _) => UnaryGrpcResponse(GrpcMessageFraming.Frame([]), OkTrailers),
+                (response, _) =>
+                {
+                    DisposeResponseBody(response);
+                    return ValueTask.FromResult((TOutput)(object)SmithyUnit.Value);
+                },
+                IsStreaming: false
+            );
+        }
+
+        var codec = ProtoCodec.FromSchema(outputSchema);
+        return new ResponseStrategy<TOutput>(
+            (output, _) =>
+                UnaryGrpcResponse(GrpcMessageFraming.Frame(codec.Serialize(output)), OkTrailers),
+            // An all-default message proto-encodes to a zero-length frame; the codec turns that into
+            // an empty instance rather than null.
+            (response, cancellationToken) =>
+                DeserializeSingleResponseAsync(response, codec, cancellationToken),
+            IsStreaming: false
+        );
+    }
+
+    private static ResponseStrategy<TOutput> StreamingResponse<TOutput, TOutputEvent>(
+        Schema<TOutput> outputSchema,
+        Schema<TOutputEvent> eventSchema
+    )
+    {
+        var codec = ProtoCodec.FromSchema(eventSchema);
+        var binding = EventStreamShapeBinding<TOutput, TOutputEvent>.Create(outputSchema);
+        return new ResponseStrategy<TOutput>(
+            (output, cancellationToken) =>
+            {
+                ArgumentNullException.ThrowIfNull(output);
+                return StreamingGrpcResponse(
+                    FrameEventsAsync(binding.GetEvents(output), codec, cancellationToken),
+                    StreamTrailers
+                );
+            },
+            (response, cancellationToken) =>
+                ValueTask.FromResult(
+                    binding.Build(ReadResponseEventsAsync(response, codec, cancellationToken))
+                ),
+            IsStreaming: true
+        );
+    }
+
+    private sealed class OperationProtocol<TInput, TOutput>(
+        ServiceSchema service,
+        OperationSchema<TInput, TOutput> operation,
+        RequestStrategy<TInput> request,
+        ResponseStrategy<TOutput> response,
+        ISmithyValidator<TInput>? inputValidator
+    ) : IOperationProtocol<TInput, TOutput>
+    {
+        // gRPC full method name: "/{package}.{Service}/{Method}". The proto package mirrors the
+        // Smithy namespace, matching what smithy-proto-codegen emits.
+        private readonly string methodPath = MethodPath(service, operation.Id.Name);
+
+        private readonly ModeledErrorSerializer serverErrors = ModeledErrorSerializer.Compile(
+            operation.Errors,
+            error => CompileServerError((dynamic)error)
+        );
+
+        public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
+            CompileErrors(operation.Errors);
+
+        public ISmithyValidator<TInput>? InputValidator { get; } = inputValidator;
 
         public SmithyHttpRequest SerializeRequest(
             TInput input,
             CancellationToken cancellationToken = default
         )
         {
-            var request = new SmithyHttpRequest(HttpMethod.Post, methodPath)
+            var message = new SmithyHttpRequest(HttpMethod.Post, methodPath)
             {
-                Body = new SmithyHttpBody.Bytes(
-                    GrpcMessageFraming.Frame(inputIsUnit ? [] : requestCodec!.Serialize(input))
-                ),
+                Body = request.Write(input, cancellationToken),
                 ContentType = ContentType,
+                ExpectStreamingResponse = response.IsStreaming,
             };
-            request.Headers["te"] = ["trailers"];
-            return request;
-        }
-
-        public ValueTask<TOutput> DeserializeResponseAsync(
-            SmithyHttpClientResponse response,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(response);
-            EnsureGrpcStreamingResponse(response);
-            if (outputIsUnit)
-            {
-                return ValueTask.FromResult((TOutput)(object)SmithyUnit.Value);
-            }
-
-            // An all-default message proto-encodes to zero bytes; deserialize it to an empty instance
-            // rather than null.
-            var payload = GrpcMessageFraming.ReadSingle(response.Content);
-            return ValueTask.FromResult(responseCodec!.Deserialize(payload));
+            message.Headers["te"] = ["trailers"];
+            return message;
         }
 
         public ValueTask<TInput> DeserializeRequestAsync(
-            SmithyHttpRequest request,
+            SmithyHttpRequest message,
             CancellationToken cancellationToken = default
         )
         {
-            ArgumentNullException.ThrowIfNull(request);
-            if (inputIsUnit)
-            {
-                return ValueTask.FromResult<TInput>(default!);
-            }
-
-            var payload = GrpcMessageFraming.ReadSingle(BodyBytes(request.Body));
-            return ValueTask.FromResult(requestCodec!.Deserialize(payload));
+            ArgumentNullException.ThrowIfNull(message);
+            return request.Read(message, cancellationToken);
         }
 
         public SmithyHttpServerResponse SerializeResponse(
             TOutput output,
             CancellationToken cancellationToken = default
-        ) =>
-            UnaryGrpcResponse(
-                GrpcMessageFraming.Frame(outputIsUnit ? [] : responseCodec!.Serialize(output)),
-                OkTrailers
-            );
+        ) => response.Write(output, cancellationToken);
 
-        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
-            GrpcProtocol.IsErrorResponse(response);
-
-        // gRPC errors are discriminated by the error-shape trailer; the HTTP status is always
-        // 200 and maps to no error shape.
-        public ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpClientResponse response,
+        public ValueTask<TOutput> DeserializeResponseAsync(
+            SmithyHttpClientResponse message,
             CancellationToken cancellationToken = default
-        ) =>
-            ValueTask.FromResult(
-                OperationProtocolErrors.DeserializeModeledError(
-                    HttpErrors,
-                    response,
-                    ErrorDiscriminator,
-                    requiresErrorDiscriminator: true,
-                    supportsHttpStatusErrorFallback: false
-                )
-            );
-
-        private static string? ErrorDiscriminator(SmithyHttpClientResponse response)
-        {
-            ArgumentNullException.ThrowIfNull(response);
-            return GrpcProtocol.IsErrorResponse(response)
-                ? response.Trailer?.Invoke(ErrorShapeHeader)
-                : null;
-        }
-
-        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
-            serverErrors.TrySerialize(exception, out response);
-
-        private static (Type, Func<Exception, SmithyHttpServerResponse>) CompileServerError<TError>(
-            OperationErrorSchema<TError> error
-        )
-            where TError : Exception =>
-            (
-                typeof(TError),
-                exception =>
-                    SerializeGrpcError(
-                        error.Schema,
-                        (TError)exception,
-                        error.Id.ToString(),
-                        error.HttpStatusCode
-                    )
-            );
-
-        private static SmithyHttpServerResponse SerializeGrpcError<TError>(
-            Schema<TError> errorSchema,
-            TError value,
-            string errorShapeId,
-            int statusCode
         )
         {
-            var status = GrpcStatusMapping.FromHttpStatus(statusCode);
-            var body = GrpcMessageFraming.Frame(
-                ProtoCodec.FromSchema(errorSchema).Serialize(value)
-            );
-            return UnaryGrpcResponse(
-                body,
-                _ =>
-                    [
-                        new(GrpcStatusHeader, ((int)status).ToString(CultureInfo.InvariantCulture)),
-                        new(GrpcMessageHeader, errorShapeId),
-                        new(ErrorShapeHeader, errorShapeId),
-                    ]
-            );
+            ArgumentNullException.ThrowIfNull(message);
+            EnsureGrpcStreamingResponse(message);
+            return response.Read(message, cancellationToken);
         }
 
-        private static HttpOperationError[] CompileErrors(
-            IReadOnlyList<IOperationErrorSchema> errors
-        ) => errors.Select(error => (HttpOperationError)CompileError((dynamic)error)).ToArray();
+        public bool IsErrorResponse(SmithyHttpClientResponse message) =>
+            GrpcProtocol.IsErrorResponse(message);
 
-        private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
-            where TError : Exception
-        {
-            var codec = ProtoCodec.FromSchema(error.Schema);
-            return new HttpOperationError(
-                error.Id,
-                error.HttpStatusCode,
-                response =>
-                {
-                    var payload = GrpcMessageFraming.ReadSingle(response.Content);
-                    return codec.Deserialize(payload);
-                }
-            );
-        }
+        public ValueTask<Exception?> DeserializeErrorAsync(
+            SmithyHttpClientResponse message,
+            CancellationToken cancellationToken = default
+        ) => DeserializeModeledErrorAsync(HttpErrors, message);
+
+        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse message) =>
+            serverErrors.TrySerialize(exception, out message);
     }
 
     private static ValueTask<Exception?> DeserializeModeledErrorAsync(
@@ -411,315 +353,6 @@ public sealed class GrpcProtocol : IProtocol
                 return codec.Deserialize(payload);
             }
         );
-    }
-
-    private sealed class OutputEventStreamOperationProtocol<TInput, TOutput, TOutputEvent>
-        : IOperationProtocol<TInput, TOutput>
-    {
-        private readonly string methodPath;
-        private readonly bool inputIsUnit;
-        private readonly IProtoCodec<TInput>? requestCodec;
-        private readonly IProtoCodec<TOutputEvent> responseCodec;
-        private readonly EventStreamShapeBinding<TOutput, TOutputEvent> outputBinding;
-        private readonly ModeledErrorSerializer serverErrors;
-
-        public OutputEventStreamOperationProtocol(
-            ServiceSchema service,
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TOutputEvent> outputEvent,
-            ISmithyValidator<TInput>? inputValidator
-        )
-        {
-            InputValidator = inputValidator;
-            methodPath = MethodPath(service, operation.Id.Name);
-            inputIsUnit = IsUnit<TInput>(operation.Input);
-            requestCodec = inputIsUnit ? null : ProtoCodec.FromSchema(operation.Input);
-            responseCodec = ProtoCodec.FromSchema(outputEvent);
-            outputBinding = EventStreamShapeBinding<TOutput, TOutputEvent>.Create(operation.Output);
-            HttpErrors = CompileErrors(operation.Errors);
-            serverErrors = ModeledErrorSerializer.Compile(
-                operation.Errors,
-                error => CompileServerError((dynamic)error)
-            );
-        }
-
-        public IReadOnlyList<HttpOperationError> HttpErrors { get; }
-
-        public ISmithyValidator<TInput>? InputValidator { get; }
-
-        // An output stream's request is unary — one framed message, so an ordinary Bytes body.
-        // The response, however, is a live event stream, so the runtime must read it in Stream mode.
-        public SmithyHttpRequest SerializeRequest(
-            TInput input,
-            CancellationToken cancellationToken = default
-        )
-        {
-            var request = new SmithyHttpRequest(HttpMethod.Post, methodPath)
-            {
-                Body = new SmithyHttpBody.Bytes(
-                    GrpcMessageFraming.Frame(inputIsUnit ? [] : requestCodec!.Serialize(input))
-                ),
-                ContentType = ContentType,
-                ExpectStreamingResponse = true,
-            };
-            request.Headers["te"] = ["trailers"];
-            return request;
-        }
-
-        public ValueTask<TInput> DeserializeRequestAsync(
-            SmithyHttpRequest request,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(request);
-            if (inputIsUnit)
-            {
-                return ValueTask.FromResult<TInput>(default!);
-            }
-
-            var payload = GrpcMessageFraming.ReadSingle(BodyBytes(request.Body));
-            return ValueTask.FromResult(requestCodec!.Deserialize(payload));
-        }
-
-        public ValueTask<TOutput> DeserializeResponseAsync(
-            SmithyHttpClientResponse response,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(response);
-            EnsureGrpcStreamingResponse(response);
-            return ValueTask.FromResult(
-                outputBinding.Build(
-                    ReadResponseEventsAsync(response, responseCodec, cancellationToken)
-                )
-            );
-        }
-
-        public SmithyHttpServerResponse SerializeResponse(
-            TOutput output,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(output);
-            return StreamingGrpcResponse(
-                FrameEventsAsync(outputBinding.GetEvents(output), responseCodec, cancellationToken),
-                StreamTrailers
-            );
-        }
-
-        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
-            GrpcProtocol.IsErrorResponse(response);
-
-        public ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpClientResponse response,
-            CancellationToken cancellationToken = default
-        ) => DeserializeModeledErrorAsync(HttpErrors, response);
-
-        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
-            serverErrors.TrySerialize(exception, out response);
-    }
-
-    private sealed class InputEventStreamOperationProtocol<TInput, TInputEvent, TOutput>
-        : IOperationProtocol<TInput, TOutput>
-    {
-        private readonly string methodPath;
-        private readonly bool outputIsUnit;
-        private readonly IProtoCodec<TInputEvent> requestCodec;
-        private readonly IProtoCodec<TOutput>? responseCodec;
-        private readonly EventStreamShapeBinding<TInput, TInputEvent> inputBinding;
-        private readonly ModeledErrorSerializer serverErrors;
-
-        public InputEventStreamOperationProtocol(
-            ServiceSchema service,
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent,
-            ISmithyValidator<TInput>? inputValidator
-        )
-        {
-            InputValidator = inputValidator;
-            methodPath = MethodPath(service, operation.Id.Name);
-            outputIsUnit = IsUnit<TOutput>(operation.Output);
-            requestCodec = ProtoCodec.FromSchema(inputEvent);
-            responseCodec = outputIsUnit ? null : ProtoCodec.FromSchema(operation.Output);
-            inputBinding = EventStreamShapeBinding<TInput, TInputEvent>.Create(operation.Input);
-            HttpErrors = CompileErrors(operation.Errors);
-            serverErrors = ModeledErrorSerializer.Compile(
-                operation.Errors,
-                error => CompileServerError((dynamic)error)
-            );
-        }
-
-        public IReadOnlyList<HttpOperationError> HttpErrors { get; }
-
-        public ISmithyValidator<TInput>? InputValidator { get; }
-
-        public SmithyHttpRequest SerializeRequest(
-            TInput input,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(input);
-            var request = new SmithyHttpRequest(HttpMethod.Post, methodPath)
-            {
-                Body = new SmithyHttpBody.EventStreaming(
-                    FrameEventsAsync(inputBinding.GetEvents(input), requestCodec, cancellationToken)
-                ),
-                ContentType = ContentType,
-            };
-            request.Headers["te"] = ["trailers"];
-            return request;
-        }
-
-        public ValueTask<TInput> DeserializeRequestAsync(
-            SmithyHttpRequest request,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(request);
-            return ValueTask.FromResult(
-                inputBinding.Build(
-                    ReadRequestEventsAsync(RequestStream(request), requestCodec, cancellationToken)
-                )
-            );
-        }
-
-        public ValueTask<TOutput> DeserializeResponseAsync(
-            SmithyHttpClientResponse response,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(response);
-            EnsureGrpcStreamingResponse(response);
-            if (outputIsUnit)
-            {
-                DisposeResponseBody(response);
-                return ValueTask.FromResult((TOutput)(object)SmithyUnit.Value);
-            }
-
-            return DeserializeSingleResponseAsync(response, responseCodec!, cancellationToken);
-        }
-
-        public SmithyHttpServerResponse SerializeResponse(
-            TOutput output,
-            CancellationToken cancellationToken = default
-        ) =>
-            UnaryGrpcResponse(
-                GrpcMessageFraming.Frame(outputIsUnit ? [] : responseCodec!.Serialize(output)),
-                OkTrailers
-            );
-
-        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
-            GrpcProtocol.IsErrorResponse(response);
-
-        public ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpClientResponse response,
-            CancellationToken cancellationToken = default
-        ) => DeserializeModeledErrorAsync(HttpErrors, response);
-
-        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
-            serverErrors.TrySerialize(exception, out response);
-    }
-
-    private sealed class DuplexEventStreamOperationProtocol<
-        TInput,
-        TOutput,
-        TInputEvent,
-        TOutputEvent
-    >(
-        ServiceSchema service,
-        OperationSchema<TInput, TOutput> operation,
-        Schema<TInputEvent> inputEvent,
-        Schema<TOutputEvent> outputEvent,
-        ISmithyValidator<TInput>? inputValidator
-    ) : IOperationProtocol<TInput, TOutput>
-    {
-        private readonly string methodPath = MethodPath(service, operation.Id.Name);
-        private readonly IProtoCodec<TInputEvent> requestCodec = ProtoCodec.FromSchema(inputEvent);
-        private readonly IProtoCodec<TOutputEvent> responseCodec = ProtoCodec.FromSchema(
-            outputEvent
-        );
-        private readonly ModeledErrorSerializer serverErrors = ModeledErrorSerializer.Compile(
-            operation.Errors,
-            error => CompileServerError((dynamic)error)
-        );
-        private readonly EventStreamShapeBinding<TInput, TInputEvent> inputBinding =
-            EventStreamShapeBinding<TInput, TInputEvent>.Create(operation.Input);
-        private readonly EventStreamShapeBinding<TOutput, TOutputEvent> outputBinding =
-            EventStreamShapeBinding<TOutput, TOutputEvent>.Create(operation.Output);
-
-        public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
-            CompileErrors(operation.Errors);
-
-        public ISmithyValidator<TInput>? InputValidator { get; } = inputValidator;
-
-        // Duplex streams both directions, so the response must be read in Stream mode.
-        public SmithyHttpRequest SerializeRequest(
-            TInput input,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(input);
-            var request = new SmithyHttpRequest(HttpMethod.Post, methodPath)
-            {
-                Body = new SmithyHttpBody.EventStreaming(
-                    FrameEventsAsync(inputBinding.GetEvents(input), requestCodec, cancellationToken)
-                ),
-                ContentType = ContentType,
-                ExpectStreamingResponse = true,
-            };
-            request.Headers["te"] = ["trailers"];
-            return request;
-        }
-
-        public ValueTask<TInput> DeserializeRequestAsync(
-            SmithyHttpRequest request,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(request);
-            return ValueTask.FromResult(
-                inputBinding.Build(
-                    ReadRequestEventsAsync(RequestStream(request), requestCodec, cancellationToken)
-                )
-            );
-        }
-
-        public ValueTask<TOutput> DeserializeResponseAsync(
-            SmithyHttpClientResponse response,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(response);
-            EnsureGrpcResponse(response);
-            return ValueTask.FromResult(
-                outputBinding.Build(
-                    ReadResponseEventsAsync(response, responseCodec, cancellationToken)
-                )
-            );
-        }
-
-        public SmithyHttpServerResponse SerializeResponse(
-            TOutput output,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(output);
-            return StreamingGrpcResponse(
-                FrameEventsAsync(outputBinding.GetEvents(output), responseCodec, cancellationToken),
-                StreamTrailers
-            );
-        }
-
-        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
-            GrpcProtocol.IsErrorResponse(response);
-
-        public ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpClientResponse response,
-            CancellationToken cancellationToken = default
-        ) => DeserializeModeledErrorAsync(HttpErrors, response);
-
-        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
-            serverErrors.TrySerialize(exception, out response);
     }
 
     private abstract class EventStreamShapeBinding<TShape, TEvent>
@@ -1122,22 +755,6 @@ public sealed class GrpcProtocol : IProtocol
 
     private static byte[] BodyBytes(SmithyHttpBody body) =>
         body is SmithyHttpBody.Bytes bytes ? bytes.Content : [];
-
-    private static void EnsureGrpcResponse(SmithyHttpClientResponse response)
-    {
-        if (response.StatusCode == HttpStatusCode.OK && IsGrpcContentType(response))
-        {
-            return;
-        }
-
-        var message =
-            response.Headers.TryGetValue(GrpcMessageHeader, out var values) && values.Count > 0
-                ? values[0]
-                : response.ContentText;
-        throw new InvalidOperationException(
-            $"Expected a gRPC response but received HTTP {(int)response.StatusCode}: {message}"
-        );
-    }
 
     private static bool IsUnit<T>(Schema schema) =>
         typeof(T) == typeof(SmithyUnit)
