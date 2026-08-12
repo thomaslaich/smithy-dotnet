@@ -8,18 +8,12 @@ namespace NSmithy.Core.Validation;
 /// implicit modeled error (see <see cref="OperationSchema{TInput, TOutput}"/>), so protocols
 /// serialize it like any other modeled error and generated clients can deserialize it.
 /// </summary>
-public sealed class ValidationException : Exception
+public sealed class ValidationException(
+    string? message,
+    IReadOnlyList<ValidationExceptionField>? fieldList = null
+) : Exception(message ?? "Validation failed.")
 {
-    public ValidationException(
-        string? message,
-        IReadOnlyList<ValidationExceptionField>? fieldList = null
-    )
-        : base(message ?? "Validation failed.")
-    {
-        FieldList = fieldList ?? [];
-    }
-
-    public IReadOnlyList<ValidationExceptionField> FieldList { get; }
+    public IReadOnlyList<ValidationExceptionField> FieldList { get; } = fieldList ?? [];
 
     public static ValidationException FromErrors(IReadOnlyList<SmithyValidationError> errors)
     {
