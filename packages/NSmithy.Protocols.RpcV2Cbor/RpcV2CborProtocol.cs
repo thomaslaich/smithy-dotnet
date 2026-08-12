@@ -51,816 +51,314 @@ public sealed class RpcV2CborProtocol : IProtocol
             OperationSchema<TInput, TOutput> operation
         ) => CreateOperation(operation, validateInput: true);
 
-        private IOperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
+        private OperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
             OperationSchema<TInput, TOutput> operation,
             bool validateInput
         )
         {
             ArgumentNullException.ThrowIfNull(operation);
 
-            // Decided once here rather than in each protocol below: an event stream changes how the
-            // body is framed, not what the operation's input structure has to satisfy. The events
-            // themselves are not covered — the validator skips the event-stream member — since
+            // Decided once here rather than per shape: an event stream changes how the body is
+            // framed, not what the operation's input structure has to satisfy. The events
+            // themselves are not covered, since the validator skips the event-stream member and
             // rejecting one mid-stream needs a way to report it after the response has begun.
             var inputValidator = validateInput ? SmithyValidator.FromSchema(operation.Input) : null;
+
+            // Each direction is chosen independently; the four call shapes are their cross product.
             var inputEvent = FindEventStreamEventSchema(operation.Input);
             var outputEvent = FindEventStreamEventSchema(operation.Output);
-            return (inputEvent, outputEvent) switch
-            {
-                (null, null) => new OperationProtocol<TInput, TOutput>(
-                    service,
-                    operation,
-                    inputValidator
-                ),
-                (null, not null) => CreateOutputEventStreamProtocol(
-                    operation,
-                    (dynamic)outputEvent,
-                    inputValidator
-                ),
-                (not null, null) => CreateInputEventStreamProtocol(
-                    operation,
-                    (dynamic)inputEvent,
-                    inputValidator
-                ),
-                (not null, not null) => CreateDuplexEventStreamProtocol(
-                    operation,
-                    (dynamic)inputEvent,
-                    (dynamic)outputEvent,
-                    inputValidator
-                ),
-            };
-        }
+            RequestStrategy<TInput> request = inputEvent is null
+                ? UnaryRequestStrategy(operation.Input)
+                : StreamingRequestStrategy(RequireStruct(operation.Input), (dynamic)inputEvent);
+            ResponseStrategy<TOutput> response = outputEvent is null
+                ? UnaryResponseStrategy(operation.Output)
+                : StreamingResponseStrategy(RequireStruct(operation.Output), (dynamic)outputEvent);
 
-        private IOperationProtocol<TInput, TOutput> CreateOutputEventStreamProtocol<
-            TInput,
-            TOutput,
-            TOutputEvent
-        >(
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TOutputEvent> outputEvent,
-            ISmithyValidator<TInput>? inputValidator
-        )
-        {
-            if (operation.Output.Resolved is not IStructSchema<TOutput> outputSchema)
-            {
-                throw new InvalidOperationException(
-                    "rpcv2Cbor event stream output must use a structure shape."
-                );
-            }
-
-            return CreateOutputEventStreamProtocol(
-                operation,
-                outputEvent,
-                (dynamic)outputSchema,
-                inputValidator
-            );
-        }
-
-        private OutputEventStreamOperationProtocol<
-            TInput,
-            TOutput,
-            TOutputEvent,
-            TOutputBuilder
-        > CreateOutputEventStreamProtocol<TInput, TOutput, TOutputEvent, TOutputBuilder>(
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TOutputEvent> outputEvent,
-            IStructSchema<TOutput, TOutputBuilder> outputSchema,
-            ISmithyValidator<TInput>? inputValidator
-        )
-            where TOutputBuilder : notnull =>
-            new OutputEventStreamOperationProtocol<TInput, TOutput, TOutputEvent, TOutputBuilder>(
+            return new OperationProtocol<TInput, TOutput>(
                 service,
                 operation,
-                outputEvent,
-                outputSchema,
-                inputValidator
-            );
-
-        private IOperationProtocol<TInput, TOutput> CreateInputEventStreamProtocol<
-            TInput,
-            TInputEvent,
-            TOutput
-        >(
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent,
-            ISmithyValidator<TInput>? inputValidator
-        )
-        {
-            if (operation.Input.Resolved is not IStructSchema<TInput> inputSchema)
-            {
-                throw new InvalidOperationException(
-                    "rpcv2Cbor event stream input must use a structure shape."
-                );
-            }
-
-            return CreateInputEventStreamProtocol(
-                operation,
-                inputEvent,
-                (dynamic)inputSchema,
+                request,
+                response,
+                SmithyRequestModifiers.Compile(operation),
                 inputValidator
             );
         }
 
-        private InputEventStreamOperationProtocol<
-            TInput,
-            TInputEvent,
-            TOutput,
-            TInputBuilder
-        > CreateInputEventStreamProtocol<TInput, TInputEvent, TOutput, TInputBuilder>(
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent,
-            IStructSchema<TInput, TInputBuilder> inputSchema,
-            ISmithyValidator<TInput>? inputValidator
-        )
-            where TInputBuilder : notnull =>
-            new InputEventStreamOperationProtocol<TInput, TInputEvent, TOutput, TInputBuilder>(
-                service,
-                operation,
-                inputEvent,
-                inputSchema,
-                inputValidator
-            );
-
-        private IOperationProtocol<TInput, TOutput> CreateDuplexEventStreamProtocol<
-            TInput,
-            TOutput,
-            TInputEvent,
-            TOutputEvent
-        >(
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent,
-            Schema<TOutputEvent> outputEvent,
-            ISmithyValidator<TInput>? inputValidator
-        )
-        {
-            if (operation.Input.Resolved is not IStructSchema<TInput> inputSchema)
-            {
-                throw new InvalidOperationException(
-                    "rpcv2Cbor event stream input must use a structure shape."
-                );
-            }
-
-            if (operation.Output.Resolved is not IStructSchema<TOutput> outputSchema)
-            {
-                throw new InvalidOperationException(
-                    "rpcv2Cbor event stream output must use a structure shape."
-                );
-            }
-
-            return CreateDuplexEventStreamProtocol(
-                operation,
-                inputEvent,
-                outputEvent,
-                (dynamic)inputSchema,
-                (dynamic)outputSchema,
-                inputValidator
-            );
-        }
-
-        private DuplexEventStreamOperationProtocol<
-            TInput,
-            TOutput,
-            TInputEvent,
-            TOutputEvent,
-            TInputBuilder,
-            TOutputBuilder
-        > CreateDuplexEventStreamProtocol<
-            TInput,
-            TOutput,
-            TInputEvent,
-            TOutputEvent,
-            TInputBuilder,
-            TOutputBuilder
-        >(
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent,
-            Schema<TOutputEvent> outputEvent,
-            IStructSchema<TInput, TInputBuilder> inputSchema,
-            IStructSchema<TOutput, TOutputBuilder> outputSchema,
-            ISmithyValidator<TInput>? inputValidator
-        )
-            where TInputBuilder : notnull
-            where TOutputBuilder : notnull =>
-            new DuplexEventStreamOperationProtocol<
-                TInput,
-                TOutput,
-                TInputEvent,
-                TOutputEvent,
-                TInputBuilder,
-                TOutputBuilder
-            >(
-                service,
-                operation,
-                inputEvent,
-                outputEvent,
-                inputSchema,
-                outputSchema,
-                inputValidator
+        /// <summary>
+        /// An event-stream shape is always a structure: the stream is one member of it, alongside
+        /// whatever the initial message carries. The builder type comes back erased, so the
+        /// strategy that captures it is reached through dynamic dispatch.
+        /// </summary>
+        private static dynamic RequireStruct<T>(Schema<T> schema) =>
+            schema.Resolved as IStructSchema<T>
+            ?? throw new InvalidOperationException(
+                $"rpcv2Cbor event stream shape '{schema.Id}' must use a structure shape."
             );
     }
 
-    private sealed class OperationProtocol<TInput, TOutput> : IOperationProtocol<TInput, TOutput>
+    /// <summary>
+    /// How one direction of an operation is put on and taken off the wire. Unlike gRPC, the two
+    /// framings genuinely differ: a unary body is bare CBOR at <c>application/cbor</c>, while a
+    /// stream is eventstream-framed, prefixed by an initial-request or initial-response message
+    /// carrying the non-stream members. Resolving that once at bind time into these delegates is
+    /// what lets a single operation protocol serve all four call shapes.
+    /// </summary>
+    private readonly record struct RequestStrategy<TInput>(
+        Action<SmithyHttpRequest, TInput, CancellationToken> Write,
+        Func<SmithyHttpRequest, CancellationToken, ValueTask<TInput>> Read,
+        bool IsStreaming
+    );
+
+    /// <inheritdoc cref="RequestStrategy{TInput}" />
+    private readonly record struct ResponseStrategy<TOutput>(
+        Func<TOutput, CancellationToken, SmithyHttpServerResponse> Write,
+        Func<SmithyHttpClientResponse, CancellationToken, ValueTask<TOutput>> Read,
+        bool IsStreaming
+    );
+
+    private static RequestStrategy<TInput> UnaryRequestStrategy<TInput>(Schema<TInput> inputSchema)
     {
-        private readonly string requestUri;
-        private readonly bool inputIsUnit;
-        private readonly bool outputIsSmithyUnit;
-        private readonly bool outputIsUnit;
-        private readonly ICborCodec<TInput> requestCodec;
-        private readonly ICborCodec<TOutput> responseCodec;
-        private readonly Action<SmithyHttpRequest>? requestTransform;
-        private readonly ModeledErrorSerializer serverErrors;
-
-        public OperationProtocol(
-            ServiceSchema service,
-            OperationSchema<TInput, TOutput> operation,
-            ISmithyValidator<TInput>? inputValidator
-        )
+        if (IsUnit<TInput>(inputSchema))
         {
-            InputValidator = inputValidator;
-            requestTransform = SmithyRequestModifiers.Compile(operation);
-            // The rpcv2Cbor path is service-derived; the protocol owns this wire detail.
-            requestUri = $"/service/{service.Id.Name}/operation/{operation.Id.Name}";
-            inputIsUnit = typeof(TInput) == typeof(SmithyUnit) || IsUnitSchema(operation.Input);
-            outputIsSmithyUnit = typeof(TOutput) == typeof(SmithyUnit);
-            outputIsUnit = outputIsSmithyUnit || IsUnitSchema(operation.Output);
-
-            // Built once per operation; the right materialize policy baked in per direction.
-            requestCodec = CborCodec.FromSchema(
-                operation.Input,
-                materializeTopLevelDefaults: false
-            );
-            responseCodec = CborCodec.FromSchema(
-                operation.Output,
-                materializeTopLevelDefaults: true
-            );
-            HttpErrors = CompileErrors(operation.Errors);
-            serverErrors = ModeledErrorSerializer.Compile(
-                operation.Errors,
-                error => CompileServerError((dynamic)error)
+            return new RequestStrategy<TInput>(
+                static (_, _, _) => { },
+                static (_, _) => ValueTask.FromResult<TInput>(default!),
+                IsStreaming: false
             );
         }
 
-        public IReadOnlyList<HttpOperationError> HttpErrors { get; }
-
-        public ISmithyValidator<TInput>? InputValidator { get; }
-
-        public SmithyHttpRequest SerializeRequest(
-            TInput input,
-            CancellationToken cancellationToken = default
-        )
-        {
-            var request = BaseRequest(requestUri, ContentType);
-            if (!inputIsUnit)
+        var codec = CborCodec.FromSchema(inputSchema, materializeTopLevelDefaults: false);
+        return new RequestStrategy<TInput>(
+            (request, input, _) =>
             {
-                request.Body = new SmithyHttpBody.Bytes(requestCodec.Serialize(input));
+                request.Body = new SmithyHttpBody.Bytes(codec.Serialize(input));
                 request.ContentType = ContentType;
-            }
+            },
+            (request, _) =>
+            {
+                var content = BodyBytes(request.Body);
+                return ValueTask.FromResult(
+                    content.Length == 0 ? default! : codec.Deserialize(content)
+                );
+            },
+            IsStreaming: false
+        );
+    }
 
-            requestTransform?.Invoke(request);
-            return request;
-        }
+    private static RequestStrategy<TInput> StreamingRequestStrategy<
+        TInput,
+        TInputEvent,
+        TInputBuilder
+    >(IStructSchema<TInput, TInputBuilder> inputSchema, Schema<TInputEvent> eventSchema)
+        where TInputBuilder : notnull
+    {
+        var codec = CborCodec.FromSchema(eventSchema);
+        var union = RequireUnion(eventSchema);
+        var binding = EventStreamShapeBinding<TInput, TInputEvent, TInputBuilder>.Create(
+            inputSchema,
+            materializeTopLevelDefaults: false
+        );
+        return new RequestStrategy<TInput>(
+            (request, input, cancellationToken) =>
+            {
+                ArgumentNullException.ThrowIfNull(input);
+                request.Body = new SmithyHttpBody.EventStreaming(
+                    FrameShapeAsync(
+                        input,
+                        binding,
+                        codec,
+                        union,
+                        InitialRequestEventType,
+                        cancellationToken
+                    )
+                );
+                request.ContentType = EventStreamContentType;
+            },
+            (request, cancellationToken) =>
+                ReadShapeAsync(
+                    RequestStream(request),
+                    disposeBody: false,
+                    binding,
+                    codec,
+                    InitialRequestEventType,
+                    cancellationToken
+                ),
+            IsStreaming: true
+        );
+    }
 
-        public ValueTask<TOutput> DeserializeResponseAsync(
-            SmithyHttpClientResponse response,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(response);
-            if (outputIsSmithyUnit)
+    private static ResponseStrategy<TOutput> UnaryResponseStrategy<TOutput>(
+        Schema<TOutput> outputSchema
+    )
+    {
+        // Two different questions. Nothing is written for any unit output, synthetic or not; but
+        // only a literal SmithyUnit can be handed back without deserializing, since a synthetic
+        // unit structure is its own CLR type and casting SmithyUnit to it would throw.
+        var writesNoBody = IsUnit<TOutput>(outputSchema);
+        var readsNoValue = typeof(TOutput) == typeof(SmithyUnit);
+        var codec = CborCodec.FromSchema(outputSchema);
+
+        return new ResponseStrategy<TOutput>(
+            (output, _) =>
+                writesNoBody
+                    ? BufferedResponse(
+                        200,
+                        ReadOnlyMemory<byte>.Empty,
+                        headers => headers["Smithy-Protocol"] = ["rpc-v2-cbor"]
+                    )
+                    : BufferedResponse(
+                        200,
+                        codec.Serialize(output),
+                        headers =>
+                        {
+                            headers["Smithy-Protocol"] = ["rpc-v2-cbor"];
+                            headers["Content-Type"] = [ContentType];
+                        }
+                    ),
+            (response, cancellationToken) =>
             {
                 EnsureResponse(response);
-                return ValueTask.FromResult((TOutput)(object)SmithyUnit.Value);
-            }
-
-            return ValueTask.FromResult(
-                response.Content.Length == 0
-                    ? default!
-                    : responseCodec.Deserialize(response.Content)
-            );
-        }
-
-        public ValueTask<TInput> DeserializeRequestAsync(
-            SmithyHttpRequest request,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(request);
-            if (inputIsUnit)
-            {
-                return ValueTask.FromResult<TInput>(default!);
-            }
-
-            var content = BodyBytes(request.Body);
-            return ValueTask.FromResult(
-                content.Length == 0 ? default! : requestCodec.Deserialize(content)
-            );
-        }
-
-        public SmithyHttpServerResponse SerializeResponse(
-            TOutput output,
-            CancellationToken cancellationToken = default
-        )
-        {
-            if (outputIsUnit)
-            {
-                return BufferedResponse(
-                    200,
-                    ReadOnlyMemory<byte>.Empty,
-                    headers => headers["Smithy-Protocol"] = ["rpc-v2-cbor"]
-                );
-            }
-
-            return BufferedResponse(
-                200,
-                responseCodec.Serialize(output),
-                headers =>
+                if (readsNoValue)
                 {
-                    headers["Smithy-Protocol"] = ["rpc-v2-cbor"];
-                    headers["Content-Type"] = [ContentType];
+                    DisposeResponseBody(response);
+                    return ValueTask.FromResult((TOutput)(object)SmithyUnit.Value);
                 }
-            );
-        }
 
-        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
-            (int)response.StatusCode >= 400;
+                return DeserializeSingleResponseAsync(response, codec, cancellationToken);
+            },
+            IsStreaming: false
+        );
+    }
 
-        // rpcv2Cbor errors always carry an explicit __type discriminator; without one the
-        // response carries no modeled error, and the HTTP status maps to no error shape.
-        public ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpClientResponse response,
-            CancellationToken cancellationToken = default
-        ) =>
-            ValueTask.FromResult(
-                OperationProtocolErrors.DeserializeModeledError(
-                    HttpErrors,
-                    response,
-                    r => HasResponse(r) ? DeserializeErrorType(r) : null,
-                    requiresErrorDiscriminator: true,
-                    supportsHttpStatusErrorFallback: false
-                )
-            );
-
-        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
-            serverErrors.TrySerialize(exception, out response);
-
-        private static (Type, Func<Exception, SmithyHttpServerResponse>) CompileServerError<TError>(
-            OperationErrorSchema<TError> error
-        )
-            where TError : Exception =>
-            (
-                typeof(TError),
-                exception =>
-                    RpcV2CborProtocol.SerializeError(
-                        error.Schema,
-                        (TError)exception,
-                        error.Id.ToString(),
-                        error.HttpStatusCode
+    private static ResponseStrategy<TOutput> StreamingResponseStrategy<
+        TOutput,
+        TOutputEvent,
+        TOutputBuilder
+    >(IStructSchema<TOutput, TOutputBuilder> outputSchema, Schema<TOutputEvent> eventSchema)
+        where TOutputBuilder : notnull
+    {
+        var codec = CborCodec.FromSchema(eventSchema);
+        var union = RequireUnion(eventSchema);
+        var binding = EventStreamShapeBinding<TOutput, TOutputEvent, TOutputBuilder>.Create(
+            outputSchema,
+            materializeTopLevelDefaults: true
+        );
+        return new ResponseStrategy<TOutput>(
+            (output, cancellationToken) =>
+            {
+                ArgumentNullException.ThrowIfNull(output);
+                return StreamingResponse(
+                    FrameShapeAsync(
+                        output,
+                        binding,
+                        codec,
+                        union,
+                        InitialResponseEventType,
+                        cancellationToken
                     )
-            );
-
-        private static HttpOperationError[] CompileErrors(
-            IReadOnlyList<IOperationErrorSchema> errors
-        ) => errors.Select(error => (HttpOperationError)CompileError((dynamic)error)).ToArray();
-
-        private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
-            where TError : Exception
-        {
-            var codec = CborCodec.FromSchema(error.Schema);
-            return new HttpOperationError(
-                error.Id,
-                error.HttpStatusCode,
-                response => DeserializeRequiredBody(codec, response.Content)
-            );
-        }
-
-        private static byte[] BodyBytes(SmithyHttpBody body) =>
-            body is SmithyHttpBody.Bytes bytes ? bytes.Content : [];
-    }
-
-    private sealed class OutputEventStreamOperationProtocol<
-        TInput,
-        TOutput,
-        TOutputEvent,
-        TOutputBuilder
-    > : IOperationProtocol<TInput, TOutput>
-        where TOutputBuilder : notnull
-    {
-        private readonly string requestUri;
-        private readonly bool inputIsUnit;
-        private readonly ICborCodec<TInput>? requestCodec;
-        private readonly ICborCodec<TOutputEvent> responseCodec;
-        private readonly IUnionSchema responseEvent;
-        private readonly EventStreamShapeBinding<
-            TOutput,
-            TOutputEvent,
-            TOutputBuilder
-        > outputBinding;
-        private readonly ModeledErrorSerializer serverErrors;
-
-        public OutputEventStreamOperationProtocol(
-            ServiceSchema service,
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TOutputEvent> outputEvent,
-            IStructSchema<TOutput, TOutputBuilder> outputSchema,
-            ISmithyValidator<TInput>? inputValidator
-        )
-        {
-            InputValidator = inputValidator;
-            requestUri = RequestUri(service, operation);
-            inputIsUnit = IsUnit<TInput>(operation.Input);
-            requestCodec = inputIsUnit
-                ? null
-                : CborCodec.FromSchema(operation.Input, materializeTopLevelDefaults: false);
-            responseCodec = CborCodec.FromSchema(outputEvent);
-            responseEvent =
-                outputEvent.Resolved as IUnionSchema
-                ?? throw new InvalidOperationException(
-                    "rpcv2Cbor event streams must target a union schema."
                 );
-            outputBinding = EventStreamShapeBinding<TOutput, TOutputEvent, TOutputBuilder>.Create(
-                outputSchema,
-                materializeTopLevelDefaults: true
-            );
-            HttpErrors = CompileErrors(operation.Errors);
-            serverErrors = ModeledErrorSerializer.Compile(
-                operation.Errors,
-                error => CompileServerError((dynamic)error)
-            );
-        }
-
-        public IReadOnlyList<HttpOperationError> HttpErrors { get; }
-
-        public ISmithyValidator<TInput>? InputValidator { get; }
-
-        public SmithyHttpRequest SerializeRequest(
-            TInput input,
-            CancellationToken cancellationToken = default
-        )
-        {
-            var request = BaseRequest(requestUri, EventStreamContentType);
-            request.ExpectStreamingResponse = true;
-            if (!inputIsUnit)
+            },
+            (response, cancellationToken) =>
             {
-                request.Body = new SmithyHttpBody.Bytes(requestCodec!.Serialize(input));
-                request.ContentType = ContentType;
-            }
-
-            return request;
-        }
-
-        public ValueTask<TInput> DeserializeRequestAsync(
-            SmithyHttpRequest request,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(request);
-            if (inputIsUnit)
-            {
-                return ValueTask.FromResult<TInput>(default!);
-            }
-
-            var content = BodyBytes(request.Body);
-            return ValueTask.FromResult(
-                content.Length == 0 ? default! : requestCodec!.Deserialize(content)
-            );
-        }
-
-        public ValueTask<TOutput> DeserializeResponseAsync(
-            SmithyHttpClientResponse response,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(response);
-            EnsureEventStreamResponse(response);
-            return ReadShapeAsync(
-                ResponseStream(response),
-                disposeBody: true,
-                outputBinding,
-                responseCodec,
-                InitialResponseEventType,
-                cancellationToken
-            );
-        }
-
-        public SmithyHttpServerResponse SerializeResponse(
-            TOutput output,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(output);
-            return StreamingResponse(
-                FrameShapeAsync(
-                    output,
-                    outputBinding,
-                    responseCodec,
-                    responseEvent,
+                EnsureEventStreamResponse(response);
+                return ReadShapeAsync(
+                    ResponseStream(response),
+                    disposeBody: true,
+                    binding,
+                    codec,
                     InitialResponseEventType,
                     cancellationToken
-                )
-            );
-        }
-
-        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
-            (int)response.StatusCode >= 400;
-
-        public ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpClientResponse response,
-            CancellationToken cancellationToken = default
-        ) => DeserializeModeledErrorAsync(HttpErrors, response);
-
-        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
-            serverErrors.TrySerialize(exception, out response);
+                );
+            },
+            IsStreaming: true
+        );
     }
 
-    private sealed class InputEventStreamOperationProtocol<
-        TInput,
-        TInputEvent,
-        TOutput,
-        TInputBuilder
-    > : IOperationProtocol<TInput, TOutput>
-        where TInputBuilder : notnull
+    private static IUnionSchema RequireUnion<TEvent>(Schema<TEvent> eventSchema) =>
+        eventSchema.Resolved as IUnionSchema
+        ?? throw new InvalidOperationException(
+            "rpcv2Cbor event streams must target a union schema."
+        );
+
+    private sealed class OperationProtocol<TInput, TOutput>(
+        ServiceSchema service,
+        OperationSchema<TInput, TOutput> operation,
+        RequestStrategy<TInput> request,
+        ResponseStrategy<TOutput> response,
+        Action<SmithyHttpRequest>? requestTransform,
+        ISmithyValidator<TInput>? inputValidator
+    ) : IOperationProtocol<TInput, TOutput>
     {
-        private readonly string requestUri;
-        private readonly bool outputIsUnit;
-        private readonly ICborCodec<TInputEvent> requestCodec;
-        private readonly IUnionSchema requestEvent;
-        private readonly ICborCodec<TOutput>? responseCodec;
-        private readonly EventStreamShapeBinding<TInput, TInputEvent, TInputBuilder> inputBinding;
-        private readonly ModeledErrorSerializer serverErrors;
+        // The rpcv2Cbor path is service-derived; the protocol owns this wire detail.
+        private readonly string requestUri = RequestUri(service, operation);
 
-        public InputEventStreamOperationProtocol(
-            ServiceSchema service,
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent,
-            IStructSchema<TInput, TInputBuilder> inputSchema,
-            ISmithyValidator<TInput>? inputValidator
-        )
-        {
-            InputValidator = inputValidator;
-            requestUri = RequestUri(service, operation);
-            outputIsUnit = IsUnit<TOutput>(operation.Output);
-            requestCodec = CborCodec.FromSchema(inputEvent);
-            requestEvent =
-                inputEvent.Resolved as IUnionSchema
-                ?? throw new InvalidOperationException(
-                    "rpcv2Cbor event streams must target a union schema."
-                );
-            responseCodec = outputIsUnit ? null : CborCodec.FromSchema(operation.Output);
-            inputBinding = EventStreamShapeBinding<TInput, TInputEvent, TInputBuilder>.Create(
-                inputSchema,
-                materializeTopLevelDefaults: false
-            );
-            HttpErrors = CompileErrors(operation.Errors);
-            serverErrors = ModeledErrorSerializer.Compile(
-                operation.Errors,
-                error => CompileServerError((dynamic)error)
-            );
-        }
+        private readonly ModeledErrorSerializer serverErrors = ModeledErrorSerializer.Compile(
+            operation.Errors,
+            error => CompileServerError((dynamic)error)
+        );
 
-        public IReadOnlyList<HttpOperationError> HttpErrors { get; }
+        public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
+            CompileErrors(operation.Errors);
 
-        public ISmithyValidator<TInput>? InputValidator { get; }
+        public ISmithyValidator<TInput>? InputValidator { get; } = inputValidator;
 
         public SmithyHttpRequest SerializeRequest(
             TInput input,
             CancellationToken cancellationToken = default
         )
         {
-            ArgumentNullException.ThrowIfNull(input);
-            return BaseStreamingRequest(
+            // Accept advertises what comes back, so it follows the response direction, not the
+            // request's.
+            var message = BaseRequest(
                 requestUri,
-                ContentType,
-                FrameShapeAsync(
-                    input,
-                    inputBinding,
-                    requestCodec,
-                    requestEvent,
-                    InitialRequestEventType,
-                    cancellationToken
-                )
+                response.IsStreaming ? EventStreamContentType : ContentType
             );
+            message.ExpectStreamingResponse = response.IsStreaming;
+            request.Write(message, input, cancellationToken);
+
+            // @requestCompression and @httpChecksumRequired both rewrite a buffered body, so they
+            // have nothing to act on once the request is a live event stream.
+            if (!request.IsStreaming)
+            {
+                requestTransform?.Invoke(message);
+            }
+
+            return message;
         }
 
         public ValueTask<TInput> DeserializeRequestAsync(
-            SmithyHttpRequest request,
+            SmithyHttpRequest message,
             CancellationToken cancellationToken = default
         )
         {
-            ArgumentNullException.ThrowIfNull(request);
-            return ReadShapeAsync(
-                RequestStream(request),
-                disposeBody: false,
-                inputBinding,
-                requestCodec,
-                InitialRequestEventType,
-                cancellationToken
-            );
-        }
-
-        public ValueTask<TOutput> DeserializeResponseAsync(
-            SmithyHttpClientResponse response,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(response);
-            EnsureResponse(response);
-            if (outputIsUnit)
-            {
-                DisposeResponseBody(response);
-                return ValueTask.FromResult((TOutput)(object)SmithyUnit.Value);
-            }
-
-            return DeserializeSingleResponseAsync(response, responseCodec!, cancellationToken);
+            ArgumentNullException.ThrowIfNull(message);
+            return request.Read(message, cancellationToken);
         }
 
         public SmithyHttpServerResponse SerializeResponse(
             TOutput output,
             CancellationToken cancellationToken = default
-        )
-        {
-            if (outputIsUnit)
-            {
-                return BufferedResponse(
-                    200,
-                    ReadOnlyMemory<byte>.Empty,
-                    headers => headers["Smithy-Protocol"] = ["rpc-v2-cbor"]
-                );
-            }
-
-            return BufferedResponse(
-                200,
-                responseCodec!.Serialize(output),
-                headers =>
-                {
-                    headers["Smithy-Protocol"] = ["rpc-v2-cbor"];
-                    headers["Content-Type"] = [ContentType];
-                }
-            );
-        }
-
-        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
-            (int)response.StatusCode >= 400;
-
-        public ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpClientResponse response,
-            CancellationToken cancellationToken = default
-        ) => DeserializeModeledErrorAsync(HttpErrors, response);
-
-        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
-            serverErrors.TrySerialize(exception, out response);
-    }
-
-    private sealed class DuplexEventStreamOperationProtocol<
-        TInput,
-        TOutput,
-        TInputEvent,
-        TOutputEvent,
-        TInputBuilder,
-        TOutputBuilder
-    > : IOperationProtocol<TInput, TOutput>
-        where TInputBuilder : notnull
-        where TOutputBuilder : notnull
-    {
-        private readonly string requestUri;
-        private readonly ICborCodec<TInputEvent> requestCodec;
-        private readonly IUnionSchema requestEvent;
-        private readonly ICborCodec<TOutputEvent> responseCodec;
-        private readonly IUnionSchema responseEvent;
-        private readonly EventStreamShapeBinding<TInput, TInputEvent, TInputBuilder> inputBinding;
-        private readonly EventStreamShapeBinding<
-            TOutput,
-            TOutputEvent,
-            TOutputBuilder
-        > outputBinding;
-        private readonly ModeledErrorSerializer serverErrors;
-
-        public DuplexEventStreamOperationProtocol(
-            ServiceSchema service,
-            OperationSchema<TInput, TOutput> operation,
-            Schema<TInputEvent> inputEvent,
-            Schema<TOutputEvent> outputEvent,
-            IStructSchema<TInput, TInputBuilder> inputSchema,
-            IStructSchema<TOutput, TOutputBuilder> outputSchema,
-            ISmithyValidator<TInput>? inputValidator
-        )
-        {
-            InputValidator = inputValidator;
-            requestUri = RequestUri(service, operation);
-            requestCodec = CborCodec.FromSchema(inputEvent);
-            requestEvent =
-                inputEvent.Resolved as IUnionSchema
-                ?? throw new InvalidOperationException(
-                    "rpcv2Cbor event streams must target a union schema."
-                );
-            responseCodec = CborCodec.FromSchema(outputEvent);
-            responseEvent =
-                outputEvent.Resolved as IUnionSchema
-                ?? throw new InvalidOperationException(
-                    "rpcv2Cbor event streams must target a union schema."
-                );
-            inputBinding = EventStreamShapeBinding<TInput, TInputEvent, TInputBuilder>.Create(
-                inputSchema,
-                materializeTopLevelDefaults: false
-            );
-            outputBinding = EventStreamShapeBinding<TOutput, TOutputEvent, TOutputBuilder>.Create(
-                outputSchema,
-                materializeTopLevelDefaults: true
-            );
-            HttpErrors = CompileErrors(operation.Errors);
-            serverErrors = ModeledErrorSerializer.Compile(
-                operation.Errors,
-                error => CompileServerError((dynamic)error)
-            );
-        }
-
-        public IReadOnlyList<HttpOperationError> HttpErrors { get; }
-
-        public ISmithyValidator<TInput>? InputValidator { get; }
-
-        public SmithyHttpRequest SerializeRequest(
-            TInput input,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(input);
-            // Duplex streams both directions, so the response must be read in Stream mode.
-            var request = BaseStreamingRequest(
-                requestUri,
-                EventStreamContentType,
-                FrameShapeAsync(
-                    input,
-                    inputBinding,
-                    requestCodec,
-                    requestEvent,
-                    InitialRequestEventType,
-                    cancellationToken
-                )
-            );
-            request.ExpectStreamingResponse = true;
-            return request;
-        }
-
-        public ValueTask<TInput> DeserializeRequestAsync(
-            SmithyHttpRequest request,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(request);
-            return ReadShapeAsync(
-                RequestStream(request),
-                disposeBody: false,
-                inputBinding,
-                requestCodec,
-                InitialRequestEventType,
-                cancellationToken
-            );
-        }
+        ) => response.Write(output, cancellationToken);
 
         public ValueTask<TOutput> DeserializeResponseAsync(
-            SmithyHttpClientResponse response,
+            SmithyHttpClientResponse message,
             CancellationToken cancellationToken = default
         )
         {
-            ArgumentNullException.ThrowIfNull(response);
-            EnsureEventStreamResponse(response);
-            return ReadShapeAsync(
-                ResponseStream(response),
-                disposeBody: true,
-                outputBinding,
-                responseCodec,
-                InitialResponseEventType,
-                cancellationToken
-            );
+            ArgumentNullException.ThrowIfNull(message);
+            return response.Read(message, cancellationToken);
         }
 
-        public SmithyHttpServerResponse SerializeResponse(
-            TOutput output,
-            CancellationToken cancellationToken = default
-        )
-        {
-            ArgumentNullException.ThrowIfNull(output);
-            return StreamingResponse(
-                FrameShapeAsync(
-                    output,
-                    outputBinding,
-                    responseCodec,
-                    responseEvent,
-                    InitialResponseEventType,
-                    cancellationToken
-                )
-            );
-        }
-
-        public bool IsErrorResponse(SmithyHttpClientResponse response) =>
-            (int)response.StatusCode >= 400;
+        public bool IsErrorResponse(SmithyHttpClientResponse message) =>
+            (int)message.StatusCode >= 400;
 
         public ValueTask<Exception?> DeserializeErrorAsync(
-            SmithyHttpClientResponse response,
+            SmithyHttpClientResponse message,
             CancellationToken cancellationToken = default
-        ) => DeserializeModeledErrorAsync(HttpErrors, response);
+        ) => DeserializeModeledErrorAsync(HttpErrors, message);
 
-        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
-            serverErrors.TrySerialize(exception, out response);
+        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse message) =>
+            serverErrors.TrySerialize(exception, out message);
     }
 
     /// <summary>
@@ -994,18 +492,6 @@ public sealed class RpcV2CborProtocol : IProtocol
         var request = new SmithyHttpRequest(HttpMethod.Post, requestUri);
         request.Headers["Smithy-Protocol"] = ["rpc-v2-cbor"];
         request.Headers["Accept"] = [accept];
-        return request;
-    }
-
-    private static SmithyHttpRequest BaseStreamingRequest(
-        string requestUri,
-        string accept,
-        IAsyncEnumerable<ReadOnlyMemory<byte>> body
-    )
-    {
-        var request = BaseRequest(requestUri, accept);
-        request.Body = new SmithyHttpBody.EventStreaming(body);
-        request.ContentType = EventStreamContentType;
         return request;
     }
 
