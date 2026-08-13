@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Bench.Domain</RootNamespace>
+    <AssemblyName>Bench.Domain</AssemblyName>
+  </PropertyGroup>
+</Project>

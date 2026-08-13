@@ -1,0 +1,10 @@
+{
+  "scenario": "get-item-hit",
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "bodyLength": 103,
+  "bodySha256": "abc0bbf1392586c8e77951a7f823e14a79ef11e99264fb9ea6f6879e6e58ce5e",
+  "body": "{\"itemId\":\"item-00042\",\"name\":\"Benchmark Item 42 \\u2014 consumables\",\"priceCents\":1753,\"inStock\":false}"
+}

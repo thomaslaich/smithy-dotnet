@@ -1,0 +1,13 @@
+<Project>
+  <!-- MSBuild stops at the first Directory.Build.props it finds walking up, so the
+       repo-root one has to be imported explicitly to keep TFM/nullable/analysis
+       settings consistent with the rest of the tree. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!-- Generated code (NSmithy's, and the third-party emitters') does not carry
+         XML doc comments on every public member. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+</Project>

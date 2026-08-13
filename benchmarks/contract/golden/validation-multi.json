@@ -1,0 +1,11 @@
+{
+  "scenario": "validation-multi",
+  "status": 400,
+  "headers": {
+    "Content-Type": "application/json",
+    "X-Amzn-Errortype": "ValidationException"
+  },
+  "bodyLength": 598,
+  "bodySha256": "4763ea1fc8da4f852b7caf18d403d2a4ad8951c02b10c61996ee40c07087dba1",
+  "body": "{\"message\":\"2 validation errors detected. Value at \\u0027/minPriceCents\\u0027 failed to satisfy constraint: Member must be between 0 and 100000000, inclusive; Value at \\u0027/maxPriceCents\\u0027 failed to satisfy constraint: Member must be between 0 and 100000000, inclusive\",\"fieldList\":[{\"path\":\"/minPriceCents\",\"message\":\"Value at \\u0027/minPriceCents\\u0027 failed to satisfy constraint: Member must be between 0 and 100000000, inclusive\"},{\"path\":\"/maxPriceCents\",\"message\":\"Value at \\u0027/maxPriceCents\\u0027 failed to satisfy constraint: Member must be between 0 and 100000000, inclusive\"}]}"
+}

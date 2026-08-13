@@ -1,0 +1,11 @@
+{
+  "scenario": "validation-length",
+  "status": 400,
+  "headers": {
+    "Content-Type": "application/json",
+    "X-Amzn-Errortype": "ValidationException"
+  },
+  "bodyLength": 349,
+  "bodySha256": "39daa43db1b79ca1bfe7295310da3093f2ae04e92b7edd51762f88d5e1f0a5a4",
+  "body": "{\"message\":\"1 validation error detected. Value with length 0 at \\u0027/customerId\\u0027 failed to satisfy constraint: Member must have length between 1 and 64, inclusive\",\"fieldList\":[{\"path\":\"/customerId\",\"message\":\"Value with length 0 at \\u0027/customerId\\u0027 failed to satisfy constraint: Member must have length between 1 and 64, inclusive\"}]}"
+}

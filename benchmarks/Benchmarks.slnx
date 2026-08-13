@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/harness/">
+    <Project Path="Benchmarks.Corpus/Bench.Corpus.csproj" />
+    <Project Path="Benchmarks.Domain/Bench.Domain.csproj" />
+    <Project Path="Benchmarks.Hosting/Bench.Hosting.csproj" />
+    <Project Path="Benchmarks.Capture/Bench.Capture.csproj" />
+  </Folder>
+  <Folder Name="/stacks/">
+    <Project Path="stacks/MinimalApi/Bench.Stack.MinimalApi.csproj" />
+    <Project Path="stacks/Mvc/Bench.Stack.Mvc.csproj" />
+    <Project Path="stacks/NSmithy/Bench.Stack.NSmithy.csproj" />
+  </Folder>
+  <Folder Name="/suites/">
+    <Project Path="Benchmarks.Micro/Bench.Micro.csproj" />
+    <Project Path="Benchmarks.Parity/Bench.Parity.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,10 @@
+{
+  "scenario": "list-items-1",
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "bodyLength": 153,
+  "bodySha256": "2b79dccbf4a4145cc5f10a2814c674c1a10e8e82f3c4408a1c1d5bd64bc950bd",
+  "body": "{\"items\":[{\"itemId\":\"item-00000\",\"name\":\"Benchmark Item 0 \\u2014 tools\",\"priceCents\":199,\"inStock\":false,\"category\":\"tools\",\"tags\":[\"featured\",\"sale\"]}]}"
+}

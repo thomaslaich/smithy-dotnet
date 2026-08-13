@@ -67,5 +67,40 @@ refresh-examples:
 
 ci: check-format build test pack refresh-examples
 
+bench-build:
+    dotnet build benchmarks/Benchmarks.slnx --configuration Release
+
+# Verify every stack serves byte-identical responses. Run before trusting numbers.
+bench-parity:
+    dotnet test benchmarks/Benchmarks.Parity/Bench.Parity.csproj --configuration Release
+
+# Re-record the golden wire captures from the reference stack. Review the diff.
+bench-capture:
+    dotnet run --project benchmarks/Benchmarks.Capture --configuration Release
+
+# Level A: pure codec, no ASP.NET. Fast, deterministic, best regression signal.
+bench-codec:
+    dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
+        --filter '*SerializationBenchmarks*' '*DeserializationBenchmarks*' \
+        --inProcess \
+        --artifacts benchmarks/results/codec
+
+# Level B, server side: full in-memory HTTP pipeline per stack per scenario.
+bench-server:
+    dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
+        --filter '*ServerBenchmarks*' \
+        --inProcess \
+        --artifacts benchmarks/results/server
+
+# Level A, client side: request building and response parsing, no server.
+bench-client:
+    dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
+        --filter '*ClientBenchmarks*' \
+        --inProcess \
+        --artifacts benchmarks/results/client
+
+# The whole micro suite. Slow.
+bench: bench-parity bench-codec bench-client bench-server
+
 docs:
     cd website && npm install && npm run dev

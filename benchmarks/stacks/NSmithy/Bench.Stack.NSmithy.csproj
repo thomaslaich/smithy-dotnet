@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace></RootNamespace>
+    <AssemblyName>Bench.Stack.NSmithy</AssemblyName>
+    <!-- Both halves: the suite benchmarks the client and the server, and they
+         share the generated shapes. -->
+    <SmithyGenerateClient>true</SmithyGenerateClient>
+    <SmithyGenerateServer>true</SmithyGenerateServer>
+    <SmithyBuildFile>smithy-build.json</SmithyBuildFile>
+    <SmithyBuildOutputPath>$(BaseIntermediateOutputPath)Smithy/</SmithyBuildOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Benchmarks.Domain/Bench.Domain.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Client/NSmithy.Client.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Core/NSmithy.Core.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Http/NSmithy.Http.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Protocols.Rest/NSmithy.Protocols.Rest.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
+  </ItemGroup>
+
+  <Import Project="../../../packages/NSmithy.MSBuild/Targets/NSmithy.MSBuild.targets" />
+
+  <!--
+    Publish the emitted OpenAPI document to a stable path. It is the contract every
+    third-party client stack generates from, and they must not reach into this
+    project's obj/ directory to find it.
+  -->
+  <Target
+    Name="_PublishBenchmarkOpenApi"
+    DependsOnTargets="GenerateSmithyCode"
+    AfterTargets="GenerateSmithyCode"
+  >
+    <ItemGroup>
+      <_BenchOpenApi Include="$(SmithyBuildOutputPath)source/openapi/*.json" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(_BenchOpenApi)"
+      DestinationFolder="$(MSBuildThisFileDirectory)../../contract/openapi"
+      SkipUnchangedFiles="true"
+      Condition="'@(_BenchOpenApi)' != ''"
+    />
+  </Target>
+</Project>

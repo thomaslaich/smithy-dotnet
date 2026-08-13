@@ -12,11 +12,17 @@
       "name": "Examples",
       "path": "examples"
     },
+    {
+      "name": "Benchmarks",
+      "path": "benchmarks"
+    },
   ],
   "settings": {
     "dotnet.defaultSolution": "NSmithy.slnx",
     "files.exclude": {
+      "codegen": true,
       "examples": true,
+      "benchmarks": true,
     },
     "files.watcherExclude": {
       "**/.devenv/**": true,

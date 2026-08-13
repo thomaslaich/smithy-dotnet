@@ -1,0 +1,11 @@
+{
+  "scenario": "validation-range",
+  "status": 400,
+  "headers": {
+    "Content-Type": "application/json",
+    "X-Amzn-Errortype": "ValidationException"
+  },
+  "bodyLength": 294,
+  "bodySha256": "723ad84a81d6d5b9755204a5ed4ebf4bb42f7bb2d435a7f11a27e608ff204b57",
+  "body": "{\"message\":\"1 validation error detected. Value at \\u0027/count\\u0027 failed to satisfy constraint: Member must be between 0 and 10000, inclusive\",\"fieldList\":[{\"path\":\"/count\",\"message\":\"Value at \\u0027/count\\u0027 failed to satisfy constraint: Member must be between 0 and 10000, inclusive\"}]}"
+}

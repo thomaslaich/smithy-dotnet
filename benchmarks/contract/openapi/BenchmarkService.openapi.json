@@ -1,0 +1,462 @@
+{
+    "openapi": "3.0.2",
+    "info": {
+        "title": "NSmithy Benchmark Service",
+        "version": "2026-08-11",
+        "description": "The contract under benchmark.\n\nThis model is the single source of truth for every stack in the suite. It is\nemitted to OpenAPI 3 (see `SmithyOpenApiProtocol` in the NSmithy stack\nproject), and that OpenAPI document is what the TypeSpec stack is imported\nfrom, so all stacks serve a byte-identical wire contract.\n\nEach operation isolates one cost centre. Keep them that way: an operation\nthat mixes, say, a large payload with heavy header binding cannot tell you\nwhich of the two regressed.\n\nConstraint traits are present and enforced. Every stack in the suite must do\nequivalent validation work, or the comparison measures who skips checks\nrather than who is fast, the hand-written baselines validate by hand to\nmatch what NSmithy derives from the model.\n\nThe constraints are chosen so every success scenario in the corpus passes\nthem; only the dedicated validation scenario violates one. That keeps the\nhappy-path numbers measuring the happy path."
+    },
+    "paths": {
+        "/items": {
+            "get": {
+                "description": "Scenario: response body scaling.\n\n`count` controls how many summaries come back. The corpus drives this at\n1 / 100 / 10000 to separate per-request fixed cost from per-element cost.",
+                "operationId": "ListItems",
+                "parameters": [
+                    {
+                        "name": "count",
+                        "in": "query",
+                        "description": "Page size. The corpus drives 1 / 100 / 10000 through this, and the\nvalidation scenario drives 99999 past the maximum.",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 10000,
+                            "minimum": 0,
+                            "description": "Page size. The corpus drives 1 / 100 / 10000 through this, and the\nvalidation scenario drives 99999 past the maximum.",
+                            "format": "int32"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ListItems 200 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ListItemsResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/items/{itemId}": {
+            "get": {
+                "description": "Scenario: minimal work. One path label in, four scalar members out.\n\nThis is the floor, whatever this costs is close to pure framework and\ncodec overhead, with almost no payload to amortise it against.",
+                "operationId": "GetItem",
+                "parameters": [
+                    {
+                        "name": "itemId",
+                        "in": "path",
+                        "description": "Catalog identifier. The pattern matches every id the corpus uses, including\nthe deliberate miss (`item-99999`), so a lookup miss still returns 404 rather\nthan being rejected as malformed.",
+                        "schema": {
+                            "type": "string",
+                            "pattern": "^item-[0-9]{5}$",
+                            "description": "Catalog identifier. The pattern matches every id the corpus uses, including\nthe deliberate miss (`item-99999`), so a lookup miss still returns 404 rather\nthan being rejected as malformed."
+                        },
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "GetItem 200 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/GetItemResponseContent"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "ItemNotFound 404 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ItemNotFoundResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders": {
+            "post": {
+                "description": "Scenario: large nested request body.\n\nDeep-ish structure with two nested addresses, a map, and a list of line\nitems that themselves nest. The corpus drives this to roughly 1 MB so\ndeserialization dominates and buffer/allocation behaviour shows up.",
+                "operationId": "CreateOrder",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateOrderRequestContent"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "CreateOrder 201 response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CreateOrderResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/search/items": {
+            "get": {
+                "description": "Scenario: HTTP binding cost, not body cost.\n\nSix query parameters (one of them a list, one an enum) and four headers, in;\none bound response header, out. The body stays small on purpose so the\nnumbers reflect query/header parsing and serialization.",
+                "operationId": "SearchItems",
+                "parameters": [
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "category",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "minPriceCents",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 100000000,
+                            "minimum": 0,
+                            "format": "int32"
+                        }
+                    },
+                    {
+                        "name": "maxPriceCents",
+                        "in": "query",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 100000000,
+                            "minimum": 0,
+                            "format": "int32"
+                        }
+                    },
+                    {
+                        "name": "sort",
+                        "in": "query",
+                        "schema": {
+                            "$ref": "#/components/schemas/SortOrder"
+                        }
+                    },
+                    {
+                        "name": "tags",
+                        "in": "query",
+                        "style": "form",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "explode": true
+                    },
+                    {
+                        "name": "x-client-version",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "x-correlation-id",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "x-request-id",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "x-tenant-id",
+                        "in": "header",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SearchItems 200 response",
+                        "headers": {
+                            "x-total-count": {
+                                "schema": {
+                                    "type": "integer",
+                                    "format": "int32"
+                                },
+                                "required": true
+                            }
+                        },
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SearchItemsResponseContent"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Address": {
+                "type": "object",
+                "properties": {
+                    "line1": {
+                        "type": "string"
+                    },
+                    "line2": {
+                        "type": "string"
+                    },
+                    "city": {
+                        "type": "string"
+                    },
+                    "region": {
+                        "type": "string"
+                    },
+                    "postalCode": {
+                        "type": "string"
+                    },
+                    "country": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "city",
+                    "country",
+                    "line1",
+                    "postalCode"
+                ]
+            },
+            "CreateOrderRequestContent": {
+                "type": "object",
+                "properties": {
+                    "customerId": {
+                        "type": "string",
+                        "maxLength": 64,
+                        "minLength": 1
+                    },
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OrderLine"
+                        }
+                    },
+                    "shippingAddress": {
+                        "$ref": "#/components/schemas/Address"
+                    },
+                    "billingAddress": {
+                        "$ref": "#/components/schemas/Address"
+                    },
+                    "metadata": {
+                        "$ref": "#/components/schemas/StringMap"
+                    }
+                },
+                "required": [
+                    "customerId",
+                    "lines"
+                ]
+            },
+            "CreateOrderResponseContent": {
+                "type": "object",
+                "properties": {
+                    "orderId": {
+                        "type": "string"
+                    },
+                    "totalCents": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "lineCount": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                },
+                "required": [
+                    "lineCount",
+                    "orderId",
+                    "totalCents"
+                ]
+            },
+            "GetItemResponseContent": {
+                "type": "object",
+                "properties": {
+                    "itemId": {
+                        "type": "string",
+                        "pattern": "^item-[0-9]{5}$",
+                        "description": "Catalog identifier. The pattern matches every id the corpus uses, including\nthe deliberate miss (`item-99999`), so a lookup miss still returns 404 rather\nthan being rejected as malformed."
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "priceCents": {
+                        "type": "integer",
+                        "maximum": 100000000,
+                        "minimum": 0,
+                        "format": "int32"
+                    },
+                    "inStock": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "inStock",
+                    "itemId",
+                    "name",
+                    "priceCents"
+                ]
+            },
+            "ItemNotFoundResponseContent": {
+                "type": "object",
+                "description": "Scenario: modeled error path.\n\nExercises error serialization, which on restJson1 means a distinct status\ncode plus the error shape discriminator, a path that ordinary success\nbenchmarks never touch.",
+                "properties": {
+                    "itemId": {
+                        "type": "string",
+                        "pattern": "^item-[0-9]{5}$",
+                        "description": "Catalog identifier. The pattern matches every id the corpus uses, including\nthe deliberate miss (`item-99999`), so a lookup miss still returns 404 rather\nthan being rejected as malformed."
+                    },
+                    "message": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "itemId"
+                ]
+            },
+            "ItemSummary": {
+                "type": "object",
+                "properties": {
+                    "itemId": {
+                        "type": "string",
+                        "pattern": "^item-[0-9]{5}$",
+                        "description": "Catalog identifier. The pattern matches every id the corpus uses, including\nthe deliberate miss (`item-99999`), so a lookup miss still returns 404 rather\nthan being rejected as malformed."
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "priceCents": {
+                        "type": "integer",
+                        "maximum": 100000000,
+                        "minimum": 0,
+                        "format": "int32"
+                    },
+                    "inStock": {
+                        "type": "boolean"
+                    },
+                    "category": {
+                        "type": "string"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "inStock",
+                    "itemId",
+                    "name",
+                    "priceCents"
+                ]
+            },
+            "ListItemsResponseContent": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ItemSummary"
+                        }
+                    }
+                },
+                "required": [
+                    "items"
+                ]
+            },
+            "OrderLine": {
+                "type": "object",
+                "properties": {
+                    "itemId": {
+                        "type": "string",
+                        "pattern": "^item-[0-9]{5}$",
+                        "description": "Catalog identifier. The pattern matches every id the corpus uses, including\nthe deliberate miss (`item-99999`), so a lookup miss still returns 404 rather\nthan being rejected as malformed."
+                    },
+                    "quantity": {
+                        "type": "integer",
+                        "maximum": 1000,
+                        "minimum": 1,
+                        "format": "int32"
+                    },
+                    "unitPriceCents": {
+                        "type": "integer",
+                        "maximum": 100000000,
+                        "minimum": 0,
+                        "format": "int32"
+                    },
+                    "note": {
+                        "type": "string"
+                    },
+                    "attributes": {
+                        "$ref": "#/components/schemas/StringMap"
+                    }
+                },
+                "required": [
+                    "itemId",
+                    "quantity",
+                    "unitPriceCents"
+                ]
+            },
+            "SearchItemsResponseContent": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ItemSummary"
+                        }
+                    }
+                },
+                "required": [
+                    "items"
+                ]
+            },
+            "SortOrder": {
+                "type": "string",
+                "enum": [
+                    "priceAsc",
+                    "priceDesc",
+                    "nameAsc",
+                    "relevance"
+                ]
+            },
+            "StringMap": {
+                "type": "object",
+                "additionalProperties": {
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

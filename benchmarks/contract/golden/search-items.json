@@ -1,0 +1,11 @@
+{
+  "scenario": "search-items",
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "x-total-count": "4998"
+  },
+  "bodyLength": 1175,
+  "bodySha256": "1b5526dd3e89fd8c3b765c9e0cac485461f3b4b5d4fba14de39699d04e885917",
+  "body": "{\"items\":[{\"itemId\":\"item-00046\",\"name\":\"Benchmark Item 46 \\u2014 consumables\",\"priceCents\":1901,\"inStock\":true,\"category\":\"consumables\",\"tags\":[\"standard\"]},{\"itemId\":\"item-00047\",\"name\":\"Benchmark Item 47 \\u2014 electronics\",\"priceCents\":1938,\"inStock\":true,\"category\":\"electronics\",\"tags\":[\"standard\"]},{\"itemId\":\"item-00048\",\"name\":\"Benchmark Item 48 \\u2014 tools\",\"priceCents\":1975,\"inStock\":false,\"category\":\"tools\",\"tags\":[\"featured\",\"sale\"]},{\"itemId\":\"item-00049\",\"name\":\"Benchmark Item 49 \\u2014 hardware\",\"priceCents\":2012,\"inStock\":true,\"category\":\"hardware\",\"tags\":[\"standard\"]},{\"itemId\":\"item-00050\",\"name\":\"Benchmark Item 50 \\u2014 consumables\",\"priceCents\":2049,\"inStock\":true,\"category\":\"consumables\",\"tags\":[\"standard\"]},{\"itemId\":\"item-00051\",\"name\":\"Benchmark Item 51 \\u2014 electronics\",\"priceCents\":2086,\"inStock\":false,\"category\":\"electronics\",\"tags\":[\"standard\"]},{\"itemId\":\"item-00052\",\"name\":\"Benchmark Item 52 \\u2014 tools\",\"priceCents\":2123,\"inStock\":true,\"category\":\"tools\",\"tags\":[\"featured\",\"sale\"]},{\"itemId\":\"item-00053\",\"name\":\"Benchmark Item 53 \\u2014 hardware\",\"priceCents\":2160,\"inStock\":true,\"category\":\"hardware\",\"tags\":[\"standard\"]}]}"
+}

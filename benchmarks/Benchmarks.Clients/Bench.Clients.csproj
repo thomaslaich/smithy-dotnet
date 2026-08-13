@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Bench.Clients</RootNamespace>
+    <AssemblyName>Bench.Clients</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Benchmarks.Corpus/Bench.Corpus.csproj" />
+    <!-- The generated NSmithy client, and the hand-written baseline's DTOs and
+         source-generated JSON context. Reusing the server baseline's context is
+         deliberate: the hand-written client should be the same quality of
+         hand-written as the hand-written server. -->
+    <ProjectReference Include="../stacks/MinimalApi/Bench.Stack.MinimalApi.csproj" />
+    <ProjectReference Include="../stacks/NSmithy/Bench.Stack.NSmithy.csproj" />
+    <ProjectReference Include="../stacks/NSwag/Bench.Stack.NSwag.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Client/NSmithy.Client.csproj" />
+  </ItemGroup>
+</Project>

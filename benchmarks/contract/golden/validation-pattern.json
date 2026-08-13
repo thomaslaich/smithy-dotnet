@@ -1,0 +1,11 @@
+{
+  "scenario": "validation-pattern",
+  "status": 400,
+  "headers": {
+    "Content-Type": "application/json",
+    "X-Amzn-Errortype": "ValidationException"
+  },
+  "bodyLength": 333,
+  "bodySha256": "1151aa01567ddf3746b51e35fd369765a24fbcbf8526ba43417ac05d7cf1c52d",
+  "body": "{\"message\":\"1 validation error detected. Value at \\u0027/itemId\\u0027 failed to satisfy constraint: Member must satisfy regular expression pattern: ^item-[0-9]{5}$\",\"fieldList\":[{\"path\":\"/itemId\",\"message\":\"Value at \\u0027/itemId\\u0027 failed to satisfy constraint: Member must satisfy regular expression pattern: ^item-[0-9]{5}$\"}]}"
+}
