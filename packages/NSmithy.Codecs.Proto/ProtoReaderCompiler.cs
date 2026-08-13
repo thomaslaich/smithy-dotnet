@@ -446,13 +446,15 @@ internal sealed class ProtoFieldReaderCompiler<TContainer, TBuilder>(
             return;
         }
 
+        var fieldNumber = ProtoWire.FieldNumber(member.Id, member.MemberTraits, readers.Count);
         readers.Add(
             target switch
             {
-                IListSchema list => CreateListReader(member, (dynamic)list),
-                IMapSchema map => CreateMapReader(member, (dynamic)map),
+                IListSchema list => CreateListReader(member, (dynamic)list, fieldNumber),
+                IMapSchema map => CreateMapReader(member, (dynamic)map, fieldNumber),
                 _ => new ValueProtoFieldReader<TContainer, TBuilder, TValue>(
                     member,
+                    fieldNumber,
                     compiler.CompileValue(member.TargetSchema, member.MemberTraits)
                 ),
             }
@@ -480,11 +482,13 @@ internal sealed class ProtoFieldReaderCompiler<TContainer, TBuilder>(
         TCollectionBuilder
     > CreateListReader<TValue, TElement, TCollectionBuilder>(
         IMemberSchema<TContainer, TBuilder, TValue> member,
-        IListSchema<TValue, TElement, TCollectionBuilder> list
+        IListSchema<TValue, TElement, TCollectionBuilder> list,
+        int fieldNumber
     ) =>
         new(
             member,
             list,
+            fieldNumber,
             compiler.CompileValue(
                 list.TypedElementMember.TargetSchema,
                 list.TypedElementMember.MemberTraits
@@ -499,11 +503,13 @@ internal sealed class ProtoFieldReaderCompiler<TContainer, TBuilder>(
         TMapBuilder
     > CreateMapReader<TValue, TMapValue, TMapBuilder>(
         IMemberSchema<TContainer, TBuilder, TValue> member,
-        IMapSchema<TValue, TMapValue, TMapBuilder> map
+        IMapSchema<TValue, TMapValue, TMapBuilder> map,
+        int fieldNumber
     ) =>
         new(
             member,
             map,
+            fieldNumber,
             ProtoWire.IsSparse((Schema)map),
             compiler.CompileValue(
                 map.TypedValueMember.TargetSchema,
@@ -514,10 +520,11 @@ internal sealed class ProtoFieldReaderCompiler<TContainer, TBuilder>(
 
 internal sealed class ValueProtoFieldReader<TContainer, TBuilder, TValue>(
     IMemberSchema<TContainer, TBuilder, TValue> member,
+    int fieldNumber,
     IProtoValueReader<TValue> valueReader
 ) : IProtoFieldReader<TBuilder>
 {
-    public int FieldNumber { get; } = ProtoWire.ProtoIndex(member.MemberTraits);
+    public int FieldNumber { get; } = fieldNumber;
 
     public void ReadInto(
         TBuilder builder,
@@ -549,10 +556,11 @@ internal sealed class ListProtoFieldReader<
 >(
     IMemberSchema<TContainer, TBuilder, TCollection> member,
     IListSchema<TCollection, TElement, TCollectionBuilder> list,
+    int fieldNumber,
     IProtoValueReader<TElement> elementReader
 ) : IProtoFieldReader<TBuilder>
 {
-    public int FieldNumber { get; } = ProtoWire.ProtoIndex(member.MemberTraits);
+    public int FieldNumber { get; } = fieldNumber;
 
     public void ReadInto(
         TBuilder builder,
@@ -594,11 +602,12 @@ internal sealed class ListProtoFieldReader<
 internal sealed class MapProtoFieldReader<TContainer, TBuilder, TDictionary, TValue, TMapBuilder>(
     IMemberSchema<TContainer, TBuilder, TDictionary> member,
     IMapSchema<TDictionary, TValue, TMapBuilder> map,
+    int fieldNumber,
     bool sparse,
     IProtoValueReader<TValue> valueReader
 ) : IProtoFieldReader<TBuilder>
 {
-    public int FieldNumber { get; } = ProtoWire.ProtoIndex(member.MemberTraits);
+    public int FieldNumber { get; } = fieldNumber;
 
     private readonly SparseScalarValueReader<TValue> sparseReader = new(
         map.TypedValueMember.TargetSchema
@@ -668,6 +677,7 @@ internal sealed class InlinedProtoUnionCaseReaderCompiler<TContainer, TBuilder, 
             new InlinedProtoUnionCaseReader<TContainer, TBuilder, TUnion, TValue>(
                 member,
                 unionCase,
+                ProtoWire.FieldNumber(unionCase.Id, unionCase.Traits, readers.Count),
                 compiler.CompileValue(unionCase.TargetSchema, unionCase.Traits)
             )
         );
@@ -676,10 +686,11 @@ internal sealed class InlinedProtoUnionCaseReaderCompiler<TContainer, TBuilder, 
 internal sealed class InlinedProtoUnionCaseReader<TContainer, TBuilder, TUnion, TValue>(
     IMemberSchema<TContainer, TBuilder, TUnion> member,
     IUnionCaseSchema<TUnion, TValue> unionCase,
+    int fieldNumber,
     IProtoValueReader<TValue> valueReader
 ) : IProtoFieldReader<TBuilder>
 {
-    public int FieldNumber { get; } = ProtoWire.ProtoIndex(unionCase.Traits);
+    public int FieldNumber { get; } = fieldNumber;
 
     public void ReadInto(
         TBuilder builder,
@@ -741,6 +752,7 @@ internal sealed class ProtoUnionCaseReaderCompiler<TUnion>(ProtoValueReaderCompi
         readers.Add(
             new ProtoUnionCaseReader<TUnion, TValue>(
                 unionCase,
+                ProtoWire.FieldNumber(unionCase.Id, unionCase.Traits, readers.Count),
                 compiler.CompileValue(unionCase.TargetSchema, unionCase.Traits)
             )
         );
@@ -748,10 +760,11 @@ internal sealed class ProtoUnionCaseReaderCompiler<TUnion>(ProtoValueReaderCompi
 
 internal sealed class ProtoUnionCaseReader<TUnion, TValue>(
     IUnionCaseSchema<TUnion, TValue> unionCase,
+    int fieldNumber,
     IProtoValueReader<TValue> valueReader
 ) : IProtoUnionCaseReader<TUnion>
 {
-    public int FieldNumber { get; } = ProtoWire.ProtoIndex(unionCase.Traits);
+    public int FieldNumber { get; } = fieldNumber;
 
     public TUnion Read(ref ProtoReader reader, WireType wireType) =>
         unionCase.Create(valueReader.ReadBody(ref reader, wireType));

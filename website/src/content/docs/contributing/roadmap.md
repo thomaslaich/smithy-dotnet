@@ -52,24 +52,7 @@ The remaining work closes the gaps:
 - Continuing to harden named client interceptors and the typed per-call
   execution context.
 
-### 3. Reject unparseable input with a structured 400
-
-Constraint traits are enforced and answered with
-`smithy.framework#ValidationException`, covered by Smithy's malformed-request
-conformance suite. Input the codec cannot parse at all is still surfaced as a
-500: a non-numeric integer, an unparseable timestamp, a body that is not JSON, or
-an unsupported content type. Smithy specifies a structured 400 for each.
-
-This work includes:
-
-- Turning deserialization failures into modeled error responses rather than
-  letting them reach the host as unhandled exceptions.
-- Running the remainder of the malformed-request conformance suite, which covers
-  exactly these cases.
-- Validating the legacy `@enum` trait on string shapes, which needs the value set
-  to reach the schema the way enum shapes' values already do.
-
-### 4. Harden streaming operations
+### 3. Harden streaming operations
 
 NSmithy has two experimental event-streaming surfaces: native gRPC (client,
 server, and bidirectional streaming) and `rpcv2Cbor` event streams over
@@ -85,7 +68,7 @@ This work includes:
 - Extending streaming support beyond event streams, especially streaming blob
   payloads.
 
-### 5. Expand to async protocols
+### 4. Expand to async protocols
 
 NSmithy's current protocol work is mostly request/response oriented. A separate
 near-term goal is to validate that the runtime and generator model can also
@@ -100,7 +83,7 @@ This work includes:
 - Using these protocols to pressure-test the existing transport, codec, and
   client/server seams beyond HTTP-centric assumptions.
 
-### 6. Support Smithy AI traits and MCP generation
+### 5. Support Smithy AI traits and MCP generation
 
 Support Smithy's AI-oriented traits so that .NET and protocol artifacts can be
 generated for tool-driven and agent-driven workflows, rather than treating the
@@ -114,7 +97,7 @@ This work includes:
 - Defining the runtime and generation boundaries needed so AI-trait-aware
   models remain inspectable, testable, and versionable.
 
-### 7. Honor protocol HTTP-version traits
+### 6. Honor protocol HTTP-version traits
 
 Protocol traits can declare the HTTP versions a service supports via their `http`
 and `eventStreamHttp` members — a list of ALPN protocol IDs in preference order

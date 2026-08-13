@@ -67,7 +67,7 @@ internal static class TimestampFormat
         }
     }
 
-    public static DateTimeOffset Read(JsonElement value, string format) =>
+    public static DateTimeOffset Read(JsonElement value, string format, WireReadMode readMode) =>
         format switch
         {
             "epoch-seconds" => DateTimeOffset.FromUnixTimeMilliseconds(
@@ -79,10 +79,6 @@ internal static class TimestampFormat
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.None
             ),
-            _ => DateTimeOffset.Parse(
-                value.GetString()!,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind
-            ),
+            _ => Rfc3339.Parse(value.GetString()!, readMode),
         };
 }

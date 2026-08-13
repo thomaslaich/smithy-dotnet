@@ -77,15 +77,13 @@ public static class ValidationExceptionFieldSchema
                 "path",
                 static value => value.Path,
                 static (builder, value) => builder.Path = value,
-                Schemas.NullableReference(Schemas.String),
-                [FrameworkTraits.ProtoIndex(1)]
+                Schemas.NullableReference(Schemas.String)
             )
             .Required(
                 "message",
                 static value => value.Message,
                 static (builder, value) => builder.Message = value,
-                Schemas.NullableReference(Schemas.String),
-                [FrameworkTraits.ProtoIndex(2)]
+                Schemas.NullableReference(Schemas.String)
             )
             .Build(
                 static () => new Builder(),
@@ -94,19 +92,6 @@ public static class ValidationExceptionFieldSchema
                     builder.Message ?? throw new MissingRequiredMemberException("message")
                 )
             );
-}
-
-internal static class FrameworkTraits
-{
-    private static readonly ShapeId ProtoIndexTrait = ShapeId.Parse("alloy.proto#protoIndex");
-
-    /// <summary>
-    /// Every protocol has to be able to put this shape on the wire, because the server runtime can
-    /// return it from any operation. The proto codec requires a field number on every member, and
-    /// unlike a modeled shape there is no model file to carry one, so the framework shape declares
-    /// its own.
-    /// </summary>
-    public static Trait ProtoIndex(int index) => new(ProtoIndexTrait, Document.From(index));
 }
 
 public static class ValidationExceptionSchema
@@ -130,8 +115,7 @@ public static class ValidationExceptionSchema
                 "message",
                 static value => value.Message,
                 static (builder, value) => builder.Message = value,
-                Schemas.NullableReference(Schemas.String),
-                [FrameworkTraits.ProtoIndex(1)]
+                Schemas.NullableReference(Schemas.String)
             )
             .Optional(
                 "fieldList",
@@ -142,8 +126,7 @@ public static class ValidationExceptionSchema
                         ShapeId.Parse("smithy.framework#ValidationExceptionFieldList"),
                         ValidationExceptionFieldSchema.Schema
                     )
-                ),
-                [FrameworkTraits.ProtoIndex(2)]
+                )
             )
             .Build(
                 static () => new Builder(),

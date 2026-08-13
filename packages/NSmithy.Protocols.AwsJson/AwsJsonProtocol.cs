@@ -20,21 +20,11 @@ public sealed class AwsJson11Protocol : AwsJsonProtocol
 
 public abstract class AwsJsonProtocol(string contentType) : IProtocol
 {
-    private static readonly ShapeId SyntheticOriginalShapeId = new(
-        "smithy.synthetic",
-        "originalShapeId"
-    );
-
     public IServiceProtocol ForService(ServiceSchema service)
     {
         ArgumentNullException.ThrowIfNull(service);
         return new ServiceProtocol(service, contentType);
     }
-
-    private static bool IsUnitSchema(Schema schema) =>
-        schema.HasTrait(SyntheticOriginalShapeId)
-        && schema.GetTrait(SyntheticOriginalShapeId)?.Value.Kind == DocumentKind.String
-        && schema.GetTrait(SyntheticOriginalShapeId)?.Value.AsString() == "smithy.api#Unit";
 
     private sealed class ServiceProtocol(ServiceSchema service, string contentType)
         : IServiceProtocol
@@ -75,7 +65,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             this.contentType = contentType;
             target = $"{service.Id.Name}.{operation.Id.Name}";
             outputIsSmithyUnit = typeof(TOutput) == typeof(SmithyUnit);
-            outputIsUnit = outputIsSmithyUnit || IsUnitSchema(operation.Output);
+            outputIsUnit = outputIsSmithyUnit || Schemas.IsSyntheticUnit(operation.Output);
             outputSchema = operation.Output;
             requestCodec = JsonCodec.FromSchema(operation.Input);
             responseCodec = JsonCodec.FromSchema(operation.Output);

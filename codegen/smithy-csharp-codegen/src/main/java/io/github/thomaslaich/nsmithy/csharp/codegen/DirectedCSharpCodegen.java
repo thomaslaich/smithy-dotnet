@@ -169,15 +169,16 @@ final class DirectedCSharpCodegen
   @Override
   public void generateEnumShape(
       GenerateEnumDirective<GenerationContext, CSharpSettings> directive) {
-    EnumShape enumShape =
-        directive
-            .shape()
-            .asEnumShape()
-            .or(() -> directive.shape().asStringShape().flatMap(EnumShape::fromStringShape))
-            .orElseThrow(
-                () ->
-                    new IllegalStateException(
-                        "Expected enum shape for " + directive.shape().getId()));
+    // A string carrying the deprecated @enum trait reaches this directive too, but it stays a
+    // `string` in the generated API: the symbol provider maps every string shape to `string`, and
+    // an @enum entry is not even required to carry the name a C# type would need. Its value set
+    // still reaches the runtime — the trait is inlined onto every member targeting the shape — so a
+    // server rejects a value outside it just as it does for an enum shape.
+    if (directive.shape().asEnumShape().isEmpty()) {
+      return;
+    }
+
+    EnumShape enumShape = directive.shape().asEnumShape().get();
     directive
         .context()
         .writerDelegator()

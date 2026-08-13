@@ -114,6 +114,9 @@ public static class RestProtocol
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(request);
 
+        CheckContentType(binding, request);
+        CheckAccept(binding, request);
+
         var builder = binding.InputSchema.CreateTypedBuilder();
         var labels = ExtractLabels(binding.UriTemplate, request.RequestUri);
         var query = ParseQuery(request.RequestUri);
@@ -1486,9 +1489,37 @@ public static class RestProtocol
     )
     {
         schema = UnwrapNullable(schema);
+        try
+        {
+            return ParseHttpValueCore(schema, traits, value);
+        }
+        catch (Exception exception)
+            when (exception is FormatException or OverflowException or ArgumentException)
+        {
+            // A label, query parameter, or header the model types but the caller did not: on a
+            // server the caller's mistake, answered with a structured 400 rather than a fault.
+            throw MalformedRequestException.Serialization(
+                $"Value '{value}' is not a valid {schema.Kind.ToString().ToLowerInvariant()}."
+            );
+        }
+    }
+
+    private static object? ParseHttpValueCore(
+        Schema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
+        string value
+    )
+    {
         return schema.Kind switch
         {
-            ShapeKind.Boolean => bool.Parse(value),
+            // Only the two literals the model means. bool.Parse also accepts "True" and " TRUE ",
+            // which would let a caller coerce a string into a boolean the model never declared.
+            ShapeKind.Boolean => value switch
+            {
+                "true" => true,
+                "false" => false,
+                _ => throw new FormatException($"'{value}' is not a boolean."),
+            },
             ShapeKind.Byte => sbyte.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.Short => short.Parse(value, CultureInfo.InvariantCulture),
             ShapeKind.Integer => int.Parse(value, CultureInfo.InvariantCulture),
@@ -1696,11 +1727,9 @@ public static class RestProtocol
         {
             "epoch-seconds" => ParseEpochSeconds(value),
             "http-date" => DateTimeOffset.ParseExact(value, "r", CultureInfo.InvariantCulture),
-            "date-time" => DateTimeOffset.Parse(
-                value,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.RoundtripKind
-            ),
+            // A label, query parameter, or header is only ever read from a request, so there is no
+            // looser peer to accommodate here the way there is in a response body.
+            "date-time" => Rfc3339.Parse(value, WireReadMode.Strict),
             var format => throw new NotSupportedException(
                 $"Timestamp format '{format}' is not supported."
             ),
@@ -1731,6 +1760,20 @@ public static class RestProtocol
             ? trait.Value.AsString()
             : null;
     }
+
+    /// <summary>
+    /// Whether an <c>@httpPayload</c> member carries bytes the protocol assigns no meaning to: a blob
+    /// the model does not give a <c>@mediaType</c>. <c>application/octet-stream</c> is what such a
+    /// payload is written as, not what it has to be read as, so a caller may label those bytes
+    /// however it likes and a caller's <c>Accept</c> constrains nothing.
+    /// </summary>
+    internal static bool IsOpaquePayload(
+        Schema target,
+        IReadOnlyDictionary<ShapeId, Trait> traits
+    ) =>
+        GetMediaType(target, traits) is null
+        && target.Resolved is not IEventStreamSchema
+        && UnwrapNullable(target).Kind == ShapeKind.Blob;
 
     private static DateTimeOffset ParseEpochSeconds(string value)
     {
@@ -1953,6 +1996,140 @@ public static class RestProtocol
             entry => (IReadOnlyList<string>)entry.Value,
             StringComparer.Ordinal
         );
+    }
+
+    /// <summary>
+    /// Rejects a request body the operation cannot read. The model fixes exactly one media type per
+    /// operation — the body codec's for a structured body, the <c>@mediaType</c> or implied type for
+    /// an <c>@httpPayload</c> — so anything else is a 415 rather than something to guess at, and so
+    /// is a body sent to an operation that reads none.
+    /// </summary>
+    private static void CheckContentType<TInput, TOutput, TInputBuilder, TOutputBuilder>(
+        RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> binding,
+        SmithyHttpRequest request
+    )
+        where TInputBuilder : notnull
+        where TOutputBuilder : notnull
+    {
+        var declared = TryGetFirstHeader(request.Headers, "Content-Type", out var header)
+            ? header
+            : request.ContentType;
+
+        if (binding.RequestContentType is not { } expected)
+        {
+            // No media type is the right one for an operation that reads no body, so a caller that
+            // announces one is describing a body the server has nowhere to put. Both halves matter:
+            // a Content-Type with no body is a stray header, and a body with no Content-Type
+            // announces nothing — neither is a media type the server would have to reject.
+            if (declared is not null && HasRequestContent(request))
+            {
+                throw MalformedRequestException.UnsupportedMediaType(
+                    $"Operation reads no request body, but one arrived as '{declared}'."
+                );
+            }
+
+            return;
+        }
+
+        if (binding.RequestMediaTypeIsOpaque)
+        {
+            return;
+        }
+
+        // An absent Content-Type is only an omission once there is something to describe: a request
+        // that sends no body at all leaves an optional payload unset, which the model allows.
+        if (declared is null)
+        {
+            if (binding.RequiresDeclaredContentType && HasRequestContent(request))
+            {
+                throw MalformedRequestException.UnsupportedMediaType(
+                    $"Request body requires Content-Type '{expected}' but none was set."
+                );
+            }
+
+            return;
+        }
+
+        if (!MediaTypeEquals(MediaTypeOf(declared), expected))
+        {
+            throw MalformedRequestException.UnsupportedMediaType(
+                $"Expected Content-Type '{expected}' but found '{declared}'."
+            );
+        }
+    }
+
+    /// <summary>
+    /// Rejects a request whose <c>Accept</c> excludes the only media type the operation's response
+    /// can use. An operation with no modeled output has no response media type to negotiate over.
+    /// </summary>
+    private static void CheckAccept<TInput, TOutput, TInputBuilder, TOutputBuilder>(
+        RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> binding,
+        SmithyHttpRequest request
+    )
+        where TInputBuilder : notnull
+        where TOutputBuilder : notnull
+    {
+        if (
+            binding.OutputIsUnit
+            || binding.ResponseMediaTypeIsOpaque
+            || !TryGetFirstHeader(request.Headers, "Accept", out var accept)
+            || accept.Length == 0
+        )
+        {
+            return;
+        }
+
+        foreach (var range in accept.Split(','))
+        {
+            if (MediaRangeAccepts(MediaTypeOf(range), binding.AcceptType))
+            {
+                return;
+            }
+        }
+
+        throw MalformedRequestException.NotAcceptable(
+            $"Response is '{binding.AcceptType}', which Accept '{accept}' excludes."
+        );
+    }
+
+    private static bool HasRequestContent(SmithyHttpRequest request) =>
+        request.Body switch
+        {
+            SmithyHttpBody.Bytes bytes => bytes.Content.Length > 0,
+            // A streaming body is not read here, so its length is all there is to go on. An unknown
+            // length (a chunked request) counts as content: the caller is sending something.
+            SmithyHttpBody.Streaming streaming => streaming.ContentLength is null or > 0,
+            SmithyHttpBody.EventStreaming => true,
+            _ => false,
+        };
+
+    /// <summary>The media type without its parameters — <c>application/json; charset=utf-8</c> is JSON.</summary>
+    private static ReadOnlySpan<char> MediaTypeOf(string headerValue)
+    {
+        var span = headerValue.AsSpan();
+        var separator = span.IndexOf(';');
+        return (separator < 0 ? span : span[..separator]).Trim();
+    }
+
+    private static bool MediaTypeEquals(ReadOnlySpan<char> declared, string expected) =>
+        declared.Equals(expected, StringComparison.OrdinalIgnoreCase);
+
+    private static bool MediaRangeAccepts(ReadOnlySpan<char> range, string mediaType)
+    {
+        if (range.Equals("*/*", StringComparison.Ordinal) || range.IsEmpty)
+        {
+            return true;
+        }
+
+        if (range.EndsWith("/*", StringComparison.Ordinal))
+        {
+            var type = range[..^2];
+            var slash = mediaType.IndexOf('/', StringComparison.Ordinal);
+            return slash > 0
+                && type.Equals(mediaType.AsSpan(0, slash), StringComparison.OrdinalIgnoreCase);
+        }
+
+        return MediaTypeEquals(range, mediaType);
     }
 
     private static bool TryGetFirstHeader(

@@ -10,18 +10,24 @@ namespace NSmithy.Protocols.RestJson;
 /// error discriminator, which live on the protocol (not the format), so a single instance serves
 /// both.
 /// </summary>
-internal sealed class JsonRestBodyCodecFactory : IRestBodyCodecFactory
+internal sealed class JsonRestBodyCodecFactory(WireReadMode readMode) : IRestBodyCodecFactory
 {
-    public static JsonRestBodyCodecFactory Instance { get; } = new();
+    private static readonly JsonRestBodyCodecFactory Lenient = new(WireReadMode.Lenient);
+    private static readonly JsonRestBodyCodecFactory Strict = new(WireReadMode.Strict);
+
+    /// <summary>The instance whose codecs read by the given rules; see <see cref="WireReadMode"/>.</summary>
+    public static IRestBodyCodecFactory For(WireReadMode readMode) =>
+        readMode == WireReadMode.Strict ? Strict : Lenient;
 
     public string ContentType => "application/json";
 
     public string BlobContentType => "application/octet-stream";
 
-    public ICodec<T> CodecFor<T>(Schema<T> schema) => JsonCodec.FromSchema(schema);
+    public ICodec<T> CodecFor<T>(Schema<T> schema) =>
+        JsonCodec.FromSchema(schema, readMode: readMode);
 
     public IProjectionCodec<T, TBuilder> CodecFor<T, TBuilder>(
         StructProjection<T, TBuilder> projection,
         bool materializeTopLevelDefaults
-    ) => JsonCodec.FromProjection(projection, materializeTopLevelDefaults);
+    ) => JsonCodec.FromProjection(projection, materializeTopLevelDefaults, readMode);
 }

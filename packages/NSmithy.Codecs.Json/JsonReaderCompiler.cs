@@ -30,22 +30,25 @@ internal interface IJsonUnionCaseReader<out TUnion>
     TUnion Read(JsonElement value);
 }
 
-internal sealed class JsonReaderCompiler : ISchemaVisitor<object>
+internal sealed class JsonReaderCompiler(WireReadMode readMode) : ISchemaVisitor<object>
 {
     private readonly SchemaCompilationCache cache = new();
 
-    public static IJsonValueReader<T> Compile<T>(Schema<T> schema)
+    public WireReadMode ReadMode => readMode;
+
+    public static IJsonValueReader<T> Compile<T>(Schema<T> schema, WireReadMode readMode)
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new JsonReaderCompiler().CompileValue(schema);
+        return new JsonReaderCompiler(readMode).CompileValue(schema);
     }
 
     public static StructureJsonProjectionReader<TBuilder> Compile<T, TBuilder>(
-        StructProjection<T, TBuilder> projection
+        StructProjection<T, TBuilder> projection,
+        WireReadMode readMode
     )
     {
         ArgumentNullException.ThrowIfNull(projection);
-        var compiler = new JsonReaderCompiler();
+        var compiler = new JsonReaderCompiler(readMode);
         var visitor = new JsonMemberReaderCompiler<T, TBuilder>(compiler);
         projection.VisitMembers(visitor);
         return new StructureJsonProjectionReader<TBuilder>(visitor.Readers);
@@ -102,7 +105,7 @@ internal sealed class JsonReaderCompiler : ISchemaVisitor<object>
     public object VisitBlob(Schema<byte[]> schema) => new BlobJsonValueReader();
 
     public object VisitTimestamp(Schema<DateTimeOffset> schema) =>
-        new TimestampJsonValueReader(TimestampFormat.Resolve(null, schema));
+        new TimestampJsonValueReader(TimestampFormat.Resolve(null, schema), readMode);
 
     public object VisitDocument(Schema<Document> schema) => new DocumentJsonValueReader();
 
@@ -237,7 +240,7 @@ internal sealed class MemberTraitJsonReaderCompiler(
 ) : ISchemaVisitor<object>
 {
     public object VisitTimestamp(Schema<DateTimeOffset> schema) =>
-        new TimestampJsonValueReader(TimestampFormat.Resolve(memberTraits, schema));
+        new TimestampJsonValueReader(TimestampFormat.Resolve(memberTraits, schema), inner.ReadMode);
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct =>
@@ -349,9 +352,7 @@ internal sealed class StructureJsonValueReader<T, TBuilder>(
     {
         if (value.ValueKind != JsonValueKind.Object)
         {
-            throw new InvalidOperationException(
-                $"Expected JSON object but found {value.ValueKind}."
-            );
+            throw Malformed(value, "a JSON object");
         }
 
         var builder = createBuilder();
@@ -404,9 +405,7 @@ internal sealed class StructureJsonProjectionReader<TBuilder>(
     {
         if (value.ValueKind != JsonValueKind.Object)
         {
-            throw new InvalidOperationException(
-                $"Expected JSON object but found {value.ValueKind}."
-            );
+            throw Malformed(value, "a JSON object");
         }
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -553,9 +552,7 @@ internal sealed class UnionJsonValueReader<T> : IJsonValueReader<T>
     {
         if (value.ValueKind != JsonValueKind.Object)
         {
-            throw new InvalidOperationException(
-                $"Expected JSON object but found {value.ValueKind}."
-            );
+            throw Malformed(value, "a JSON object");
         }
 
         var properties = value
@@ -564,16 +561,17 @@ internal sealed class UnionJsonValueReader<T> : IJsonValueReader<T>
             .ToArray();
         if (properties.Length != 1)
         {
-            throw new InvalidOperationException(
-                "Expected union value to contain exactly one member but found "
-                    + $"{properties.Length}."
+            throw MalformedRequestException.Serialization(
+                $"Expected a union with exactly one member set but found {properties.Length}."
             );
         }
 
         var property = properties[0];
         if (!readersByName.TryGetValue(property.Name, out var reader))
         {
-            throw new InvalidOperationException($"Unknown union member '{property.Name}'.");
+            throw MalformedRequestException.Serialization(
+                $"Unknown union member '{property.Name}'."
+            );
         }
 
         return reader.Read(property.Value);
@@ -601,9 +599,7 @@ internal sealed class OpenUnionJsonValueReader<T> : IJsonValueReader<T>
     {
         if (value.ValueKind != JsonValueKind.Object)
         {
-            throw new InvalidOperationException(
-                $"Expected JSON object but found {value.ValueKind}."
-            );
+            throw Malformed(value, "a JSON object");
         }
 
         return discriminatorName.Length == 0
@@ -619,8 +615,8 @@ internal sealed class OpenUnionJsonValueReader<T> : IJsonValueReader<T>
             .ToArray();
         if (properties.Length != 1)
         {
-            throw new InvalidOperationException(
-                $"Expected union value to contain exactly one member but found {properties.Length}."
+            throw MalformedRequestException.Serialization(
+                $"Expected a union with exactly one member set but found {properties.Length}."
             );
         }
 
@@ -632,7 +628,9 @@ internal sealed class OpenUnionJsonValueReader<T> : IJsonValueReader<T>
 
         return unknownReader is not null
             ? unknownReader.ReadUnknown(value)
-            : throw new InvalidOperationException($"Unknown union member '{property.Name}'.");
+            : throw MalformedRequestException.Serialization(
+                $"Unknown union member '{property.Name}'."
+            );
     }
 
     private T ReadDiscriminated(JsonElement value)
@@ -680,9 +678,7 @@ internal sealed class ListJsonValueReader<TCollection, TElement, TBuilder>(
     {
         if (value.ValueKind != JsonValueKind.Array)
         {
-            throw new InvalidOperationException(
-                $"Expected JSON array but found {value.ValueKind}."
-            );
+            throw Malformed(value, "a JSON array");
         }
 
         var builder = schema.CreateTypedBuilder();
@@ -693,8 +689,8 @@ internal sealed class ListJsonValueReader<TCollection, TElement, TBuilder>(
             {
                 if (!sparse)
                 {
-                    throw new InvalidOperationException(
-                        "Non-sparse JSON list cannot contain null."
+                    throw MalformedRequestException.Serialization(
+                        "A list that is not @sparse cannot contain null."
                     );
                 }
 
@@ -731,9 +727,7 @@ internal sealed class MapJsonValueReader<TDictionary, TValue, TBuilder>(
     {
         if (value.ValueKind != JsonValueKind.Object)
         {
-            throw new InvalidOperationException(
-                $"Expected JSON object but found {value.ValueKind}."
-            );
+            throw Malformed(value, "a JSON object");
         }
 
         var builder = schema.CreateTypedBuilder();
@@ -743,7 +737,9 @@ internal sealed class MapJsonValueReader<TDictionary, TValue, TBuilder>(
             {
                 if (!sparse)
                 {
-                    throw new InvalidOperationException("Non-sparse JSON map cannot contain null.");
+                    throw MalformedRequestException.Serialization(
+                        "A map that is not @sparse cannot contain null."
+                    );
                 }
 
                 schema.Add(builder, property.Name, default!);
@@ -774,48 +770,58 @@ internal sealed class NullableJsonValueReader<T>(IJsonValueReader<T> inner) : IJ
 
 internal sealed class BooleanJsonValueReader : IJsonValueReader<bool>
 {
-    public bool Read(JsonElement value) => value.GetBoolean();
+    public bool Read(JsonElement value) =>
+        ReadValue(value, "a boolean", static element => element.GetBoolean());
 }
 
 internal sealed class ByteJsonValueReader : IJsonValueReader<sbyte>
 {
-    public sbyte Read(JsonElement value) => value.GetSByte();
+    public sbyte Read(JsonElement value) =>
+        ReadValue(value, "a byte", static element => element.GetSByte());
 }
 
 internal sealed class ShortJsonValueReader : IJsonValueReader<short>
 {
-    public short Read(JsonElement value) => value.GetInt16();
+    public short Read(JsonElement value) =>
+        ReadValue(value, "a short", static element => element.GetInt16());
 }
 
 internal sealed class IntegerJsonValueReader : IJsonValueReader<int>
 {
-    public int Read(JsonElement value) => value.GetInt32();
+    public int Read(JsonElement value) =>
+        ReadValue(value, "an integer", static element => element.GetInt32());
 }
 
 internal sealed class LongJsonValueReader : IJsonValueReader<long>
 {
-    public long Read(JsonElement value) => value.GetInt64();
+    public long Read(JsonElement value) =>
+        ReadValue(value, "a long", static element => element.GetInt64());
 }
 
 internal sealed class FloatJsonValueReader : IJsonValueReader<float>
 {
-    public float Read(JsonElement value) => ReadFloat(value);
+    public float Read(JsonElement value) => ReadValue(value, "a float", ReadFloat);
 }
 
 internal sealed class DoubleJsonValueReader : IJsonValueReader<double>
 {
-    public double Read(JsonElement value) => ReadDouble(value);
+    public double Read(JsonElement value) => ReadValue(value, "a double", ReadDouble);
 }
 
 internal sealed class BigIntegerJsonValueReader : IJsonValueReader<BigInteger>
 {
     public BigInteger Read(JsonElement value) =>
-        BigInteger.Parse(value.GetRawText(), CultureInfo.InvariantCulture);
+        ReadValue(
+            value,
+            "a bigInteger",
+            static element => BigInteger.Parse(element.GetRawText(), CultureInfo.InvariantCulture)
+        );
 }
 
 internal sealed class BigDecimalJsonValueReader : IJsonValueReader<decimal>
 {
-    public decimal Read(JsonElement value) => value.GetDecimal();
+    public decimal Read(JsonElement value) =>
+        ReadValue(value, "a bigDecimal", static element => element.GetDecimal());
 }
 
 internal sealed class StringJsonValueReader : IJsonValueReader<string>
@@ -823,29 +829,39 @@ internal sealed class StringJsonValueReader : IJsonValueReader<string>
     public string Read(JsonElement value) =>
         value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
             ? null!
-            : value.GetString()!;
+            : ReadValue(value, "a string", static element => element.GetString()!);
 }
 
 internal sealed class StringEnumJsonValueReader<T>(StringEnumSchema<T> schema) : IJsonValueReader<T>
     where T : IStringEnumValue<T>
 {
-    public T Read(JsonElement value) => schema.Create(value.GetString()!);
+    // An unmodeled value is not rejected here: enums stay open on the wire, and it is the
+    // constraint validator that closes them on the server. Only a non-string is malformed.
+    public T Read(JsonElement value) =>
+        schema.Create(ReadValue(value, "a string", static element => element.GetString()!));
 }
 
 internal sealed class IntEnumJsonValueReader<T>(IntEnumSchema<T> schema) : IJsonValueReader<T>
     where T : struct, Enum
 {
-    public T Read(JsonElement value) => schema.Create(value.GetInt32());
+    public T Read(JsonElement value) =>
+        schema.Create(ReadValue(value, "an integer", static element => element.GetInt32()));
 }
 
 internal sealed class BlobJsonValueReader : IJsonValueReader<byte[]>
 {
-    public byte[] Read(JsonElement value) => value.GetBytesFromBase64();
+    public byte[] Read(JsonElement value) =>
+        ReadValue(value, "a base64-encoded blob", static element => element.GetBytesFromBase64());
 }
 
-internal sealed class TimestampJsonValueReader(string format) : IJsonValueReader<DateTimeOffset>
+internal sealed class TimestampJsonValueReader(string format, WireReadMode readMode)
+    : IJsonValueReader<DateTimeOffset>
 {
-    public DateTimeOffset Read(JsonElement value) => TimestampFormat.Read(value, format);
+    private readonly string expected = $"a {format} timestamp";
+    private readonly Func<JsonElement, DateTimeOffset> read = element =>
+        TimestampFormat.Read(element, format, readMode);
+
+    public DateTimeOffset Read(JsonElement value) => ReadValue(value, expected, read);
 }
 
 internal sealed class DocumentJsonValueReader : IJsonValueReader<Document>

@@ -27,16 +27,19 @@ internal static class ServerHttpRequestRunner
             host.Client.BaseAddress!
         );
         using var response = await host.Client.SendAsync(request).ConfigureAwait(false);
-        var responseBody =
-            (int)response.StatusCode >= 500
-                ? await response.Content.ReadAsStringAsync().ConfigureAwait(false)
-                : "";
+        var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         Assert.True(
             (int)response.StatusCode < 500,
             $"Server returned {(int)response.StatusCode} for {testCase.Id}.\n{responseBody}"
         );
 
-        Assert.NotNull(capturedMethod);
+        // A request the server rejected before dispatch never reaches the handler, so report what it
+        // was rejected with rather than a bare null.
+        Assert.True(
+            capturedMethod is not null,
+            $"Handler was not reached for {testCase.Id}; server answered "
+                + $"{(int)response.StatusCode}.\n{responseBody}"
+        );
         Assert.Equal(testCase.OperationName + "Async", capturedMethod!.Name);
         if (testCase.Params is not null)
         {

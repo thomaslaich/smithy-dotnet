@@ -28,7 +28,9 @@ import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.shapes.UnionShape;
+import software.amazon.smithy.model.traits.EnumValueTrait;
 import software.amazon.smithy.model.traits.ErrorTrait;
+import software.amazon.smithy.model.traits.InternalTrait;
 import software.amazon.smithy.model.traits.Trait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -317,10 +319,12 @@ public final class SchemaGenerator {
           writer.write("static (builder, key, value) => builder[key] = value,");
           writer.write("static builder => new $L(builder),", typeName);
           writer.write(
-              "$L, keyTraits: $L, valueTraits: $L);",
+              "$L, keyTraits: $L, valueTraits: $L, key: $L);",
               traitsExpr(shape.getAllTraits().values()),
               memberTraitsExpr(context, shape.getKey()),
-              memberTraitsExpr(context, shape.getValue()));
+              memberTraitsExpr(context, shape.getValue()),
+              shapeSchemaAccessor(
+                  context, context.model().expectShape(shape.getKey().getTarget())));
           writer.dedent();
           writer.dedent();
           writer.write("");
@@ -338,12 +342,14 @@ public final class SchemaGenerator {
             String typeName = CSharpNaming.typeName(shape.getId().getName());
             writer.write(
                 "public static Schema<$L> Schema { get; } ="
-                    + " Schemas.StringEnum<$L>($L, values: $L, traits: $L);",
+                    + " Schemas.StringEnum<$L>($L, values: $L, traits: $L,"
+                    + " internalValues: $L);",
                 typeName,
                 typeName,
                 shapeIdExpr(shape.getId()),
                 stringEnumValuesExpr(shape),
-                traitsExpr(shape.getAllTraits().values()));
+                traitsExpr(shape.getAllTraits().values()),
+                stringEnumInternalValuesExpr(shape));
             writer.write("");
             return;
           }
@@ -587,6 +593,27 @@ public final class SchemaGenerator {
                 e.getEnumValues().values().stream()
                     .map(CSharpNaming::formatString)
                     .collect(Collectors.joining(", ", "[", "]")))
+        .orElse("null");
+  }
+
+  /**
+   * The values an enum shape marks {@code @internal}. They are valid on the wire like any other,
+   * but a server leaves them out of the message it sends back when it rejects a value, so the
+   * schema has to record which ones they are.
+   */
+  public static String stringEnumInternalValuesExpr(Shape shape) {
+    return shape
+        .asEnumShape()
+        .map(
+            e ->
+                e.getAllMembers().values().stream()
+                    .filter(m -> m.hasTrait(InternalTrait.class))
+                    .map(m -> m.expectTrait(EnumValueTrait.class).expectStringValue())
+                    .map(CSharpNaming::formatString)
+                    .collect(Collectors.toList()))
+        .filter(values -> !values.isEmpty())
+        .map(values -> String.join(", ", values))
+        .map(values -> "[" + values + "]")
         .orElse("null");
   }
 

@@ -352,7 +352,16 @@ internal static class ServerConformanceRequestFactory
             request.Headers.TryAddWithoutValidation(name, value);
         }
 
-        if (testCase.BodyMediaType is not null && content is not null)
+        // `bodyMediaType` only says how to compare the body. It stands in for a Content-Type when the
+        // case declares none, but must not be added alongside one the case does declare — two
+        // Content-Type values on one request is itself a malformed request.
+        if (
+            testCase.BodyMediaType is not null
+            && content is not null
+            && !testCase.Headers.Keys.Any(name =>
+                string.Equals(name, "Content-Type", StringComparison.OrdinalIgnoreCase)
+            )
+        )
         {
             content.Headers.TryAddWithoutValidation("Content-Type", testCase.BodyMediaType);
         }

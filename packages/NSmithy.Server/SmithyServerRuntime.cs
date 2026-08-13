@@ -43,10 +43,16 @@ public sealed class SmithyServerRuntime
             // A required member absent from the payload fails in the codec, before the compiled
             // validator ever sees the input. It is still a constraint violation, so it gets the
             // same modeled response rather than surfacing as a server fault.
-            return SerializeValidationFailure(
+            return SerializeRequestFailure(
                 protocol,
                 ValidationException.FromMissingRequiredMember(exception)
             );
+        }
+        catch (MalformedRequestException exception)
+        {
+            // Bytes that never became modeled input at all: an unreadable body, a media type the
+            // operation does not accept. Also the caller's mistake, so also a structured 4xx.
+            return SerializeRequestFailure(protocol, exception);
         }
 
         if (protocol.InputValidator is { } validator)
@@ -54,7 +60,7 @@ public sealed class SmithyServerRuntime
             var validationErrors = validator.GetErrors(input);
             if (validationErrors.Count > 0)
             {
-                return SerializeValidationFailure(
+                return SerializeRequestFailure(
                     protocol,
                     ValidationException.FromErrors(validationErrors)
                 );
@@ -78,12 +84,12 @@ public sealed class SmithyServerRuntime
     }
 
     /// <summary>
-    /// Serialized like any modeled error, since every operation implicitly carries
-    /// smithy.framework#ValidationException. A protocol that cannot serialize server errors
-    /// rethrows, surfaced as a 500 by the host.
+    /// Serialized through the same path as a modeled error: every operation implicitly carries
+    /// smithy.framework#ValidationException, and a protocol answers a framework fault itself. A
+    /// protocol that cannot serialize server errors rethrows, surfaced as a 500 by the host.
     /// </summary>
-    private static SmithyHttpServerResponse SerializeValidationFailure<TInput, TOutput>(
+    private static SmithyHttpServerResponse SerializeRequestFailure<TInput, TOutput>(
         IServerOperationProtocol<TInput, TOutput> protocol,
-        ValidationException exception
+        Exception exception
     ) => protocol.TrySerializeError(exception, out var response) ? response : throw exception;
 }

@@ -17,10 +17,13 @@ public sealed class SimpleRestJsonProtocol : IProtocol
 
     public IServiceProtocol ForService(ServiceSchema service) =>
         new RestServiceProtocol(
-            JsonRestBodyCodecFactory.Instance,
+            JsonRestBodyCodecFactory.For,
             DeserializeErrorType,
             rawStringPayloads: false,
-            errorTypeHeader: ErrorTypeHeader
+            errorTypeHeader: ErrorTypeHeader,
+            // alloy's own protocol tests send JSON bodies with no Content-Type, so simpleRestJson
+            // reads a body whose media type the caller did not declare.
+            requiresDeclaredContentType: false
         );
 
     public static string? DeserializeErrorType(SmithyHttpClientResponse response)

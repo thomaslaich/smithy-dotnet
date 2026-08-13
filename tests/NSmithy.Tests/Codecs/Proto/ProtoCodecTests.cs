@@ -1,6 +1,7 @@
 using NSmithy.Codecs.Proto;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.Core.Validation;
 
 namespace NSmithy.Tests.Codecs.Proto;
 
@@ -653,5 +654,47 @@ public sealed class ProtoCodecTests
         Assert.Equal(36m, result["age"].AsNumber());
         Assert.True(result["admin"].AsBoolean());
         Assert.Equal("y", result["tags"].AsArray()[1].AsString());
+    }
+
+    /// <summary>
+    /// A framework shape carries no <c>@protoIndex</c> — it comes from the runtime, not a model file
+    /// — so the codec numbers its members by declaration order instead. The server runtime can
+    /// return one from any operation, so a gRPC service has to be able to put it on the wire.
+    /// </summary>
+    [Fact]
+    public void NumbersFrameworkShapeMembersByDeclarationOrder()
+    {
+        var codec = ProtoCodec.FromSchema(ValidationExceptionSchema.Schema);
+
+        var bytes = codec.Serialize(
+            new ValidationException("nope", [new ValidationExceptionField("/a", "bad")])
+        );
+
+        // 0A 04 'n' 'o' 'p' 'e'                  (message = field 1, LEN)
+        // 12 09 0A 02 '/' 'a' 12 03 'b' 'a' 'd'  (fieldList = field 2, holding path=1, message=2)
+        Assert.Equal(
+            "0A046E6F706512090A022F611203626164",
+            Convert.ToHexString(bytes),
+            StringComparer.Ordinal
+        );
+
+        var round = codec.Deserialize(bytes);
+        Assert.Equal("nope", round.Message);
+        Assert.Equal("/a", Assert.Single(round.FieldList).Path);
+    }
+
+    /// <summary>A modeled shape still has to say so: order is not a number a model may omit.</summary>
+    [Fact]
+    public void RejectsAModeledMemberWithNoProtoIndex()
+    {
+        var schema = Schemas
+            .Structure<Simple, SimpleBuilder>(ShapeId.Parse("test#Unnumbered"))
+            .Required("name", x => x.Name, (b, v) => b.Name = v, Schemas.String)
+            .Required("value", x => x.Value, (b, v) => b.Value = v, Schemas.Integer, Field(2))
+            .Build(() => new SimpleBuilder(), b => new Simple(b.Name!, b.Value));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => ProtoCodec.FromSchema(schema));
+
+        Assert.Contains("test#Unnumbered$name", ex.Message, StringComparison.Ordinal);
     }
 }

@@ -15,7 +15,7 @@ public sealed class RestJson1Protocol : IProtocol
     /// </summary>
     public IServiceProtocol ForService(ServiceSchema service) =>
         new RestServiceProtocol(
-            JsonRestBodyCodecFactory.Instance,
+            JsonRestBodyCodecFactory.For,
             DeserializeErrorType,
             rawStringPayloads: true,
             errorTypeHeader: "X-Amzn-Errortype"

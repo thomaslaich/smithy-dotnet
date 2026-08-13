@@ -35,11 +35,6 @@ public sealed class GrpcProtocol : IProtocol
     // standard Smithy↔gRPC error binding.
     internal const string ErrorShapeHeader = "x-smithy-grpc-error";
 
-    private static readonly ShapeId SyntheticOriginalShapeId = new(
-        "smithy.synthetic",
-        "originalShapeId"
-    );
-
     public IServiceProtocol ForService(ServiceSchema service)
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -757,11 +752,7 @@ public sealed class GrpcProtocol : IProtocol
         body is SmithyHttpBody.Bytes bytes ? bytes.Content : [];
 
     private static bool IsUnit<T>(Schema schema) =>
-        typeof(T) == typeof(SmithyUnit)
-        || (
-            schema.GetTrait(SyntheticOriginalShapeId)?.Value.Kind == DocumentKind.String
-            && schema.GetTrait(SyntheticOriginalShapeId)?.Value.AsString() == "smithy.api#Unit"
-        );
+        typeof(T) == typeof(SmithyUnit) || Schemas.IsSyntheticUnit(schema);
 
     private static Schema? FindEventStreamEventSchema(Schema schema) =>
         schema.Resolved is IStructSchema structure
