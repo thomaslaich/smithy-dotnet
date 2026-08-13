@@ -32,8 +32,8 @@ public final class MapGenerator implements Runnable {
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     Symbol value = sp.toSymbol(context.model().expectShape(shape.getValue().getTarget()));
     // Always a string, even when the key targets an enum shape: a map key is a JSON object name,
-    // and the runtime's map schema is string-keyed throughout. The enum's value set still reaches
-    // the schema as key traits, so the server holds the key to it.
+    // which has no other form. What the key targets is not lost — the schema carries that shape, so
+    // a server holds the key to whatever it says — but it is not what the key is typed as.
     String keyType = "string";
     String valueType =
         CSharpSymbolProvider.qualified(value) + (ShapeSupport.isSparse(shape) ? "?" : "");
