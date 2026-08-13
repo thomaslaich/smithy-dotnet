@@ -15,15 +15,26 @@ internal sealed class CompiledJsonCodec<T>(
     );
     private readonly IJsonValueReader<T> valueReader = JsonReaderCompiler.Compile(schema, readMode);
 
+    // Size hint carried between calls: a codec instance serializes the same shape
+    // repeatedly, so the previous payload size is a good guess at the next one and
+    // usually avoids growing the scratch buffer at all.
+    private int sizeHint = 256;
+
     public byte[] Serialize(T value)
     {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
+        using var buffer = new PooledByteBufferWriter(sizeHint);
+        var writer = JsonWriterCache.Rent(buffer);
+        try
         {
             valueWriter.Write(writer, value);
+            writer.Flush();
+            sizeHint = buffer.WrittenCount;
+            return buffer.WrittenSpan.ToArray();
         }
-
-        return stream.ToArray();
+        finally
+        {
+            JsonWriterCache.Return(writer);
+        }
     }
 
     public T Deserialize(byte[] payload)
@@ -69,15 +80,23 @@ internal sealed class CompiledJsonProjectionCodec<T, TBuilder>(
     private readonly StructureJsonProjectionReader<TBuilder> valueReader =
         JsonReaderCompiler.Compile(projection, readMode);
 
+    private int sizeHint = 256;
+
     public byte[] Serialize(T value)
     {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
+        using var buffer = new PooledByteBufferWriter(sizeHint);
+        var writer = JsonWriterCache.Rent(buffer);
+        try
         {
             valueWriter.Write(writer, value);
+            writer.Flush();
+            sizeHint = buffer.WrittenCount;
+            return buffer.WrittenSpan.ToArray();
         }
-
-        return stream.ToArray();
+        finally
+        {
+            JsonWriterCache.Return(writer);
+        }
     }
 
     public void ReadInto(byte[] payload, TBuilder builder)

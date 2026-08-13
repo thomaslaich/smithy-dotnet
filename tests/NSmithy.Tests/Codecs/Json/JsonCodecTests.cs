@@ -358,4 +358,58 @@ public sealed class JsonCodecTests
         Assert.Equal(expectedJson, json);
         Assert.Equal(input, decoded);
     }
+
+    // ---------------- explicit null vs absent, on a defaulted member ----------------
+
+    public sealed record Defaulted(int Count);
+
+    public sealed class DefaultedBuilder
+    {
+        // Sentinel, so a member the codec never touched is distinguishable from one
+        // it set to the modelled default of 7.
+        public int Count { get; set; } = -1;
+    }
+
+    private static StructSchema<Defaulted, DefaultedBuilder> DefaultedSchema() =>
+        Schemas
+            .Structure<Defaulted, DefaultedBuilder>(new ShapeId("example", "Defaulted"))
+            .Optional(
+                "count",
+                static s => s.Count,
+                static (b, v) => b.Count = v,
+                Schemas.Integer,
+                [new Trait(new ShapeId("smithy.api", "default"), Document.From(7))]
+            )
+            .Build(static () => new DefaultedBuilder(), static b => new Defaulted(b.Count));
+
+    // A member carrying @default always has a value in Smithy, so an explicit null
+    // must materialize the default rather than leaving the member unset. The value
+    // reader used to skip it, which produced an object the model says cannot exist.
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"count\":null}")]
+    public void DefaultedMemberIsMaterializedWhetherAbsentOrExplicitlyNull(string json)
+    {
+        var codec = JsonCodec.FromSchema(DefaultedSchema());
+
+        Assert.Equal(7, codec.DeserializeText(json).Count);
+    }
+
+    // The projection reader is a separate code path used for shapes whose members
+    // are split across the body and the HTTP envelope. It has to agree.
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"count\":null}")]
+    public void ProjectionReaderAgreesOnDefaultedMembers(string json)
+    {
+        var schema = DefaultedSchema();
+        var codec = JsonCodec.FromProjection(
+            Schemas.Project<Defaulted, DefaultedBuilder>(schema, Schemas.GetMembers(schema))
+        );
+
+        var builder = new DefaultedBuilder();
+        codec.ReadInto(System.Text.Encoding.UTF8.GetBytes(json), builder);
+
+        Assert.Equal(7, builder.Count);
+    }
 }

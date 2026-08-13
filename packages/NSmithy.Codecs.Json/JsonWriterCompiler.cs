@@ -329,6 +329,15 @@ internal sealed class JsonMemberWriter<TContainer, TValue>(
     bool materializeDefault
 ) : IJsonMemberWriter<TContainer>
 {
+    // Resolved once at compile time rather than per write. Previously each member
+    // of each object cost a ShapeId-keyed trait lookup to find any @jsonName, then
+    // handed a string to WritePropertyName, which re-transcoded and re-escaped it
+    // every time. The wire name is constant per member, so all of that is
+    // hoistable — which is what System.Text.Json's source generator does.
+    private readonly JsonEncodedText propertyName = JsonEncodedText.Encode(
+        WireName(member.MemberTraits, member.Name)
+    );
+
     public void Write(Utf8JsonWriter writer, TContainer container)
     {
         var value = member.GetValue(container);
@@ -349,7 +358,7 @@ internal sealed class JsonMemberWriter<TContainer, TValue>(
             value = defaultValue!;
         }
 
-        writer.WritePropertyName(WireName(member.MemberTraits, member.Name));
+        writer.WritePropertyName(propertyName);
         valueWriter.Write(writer, value);
     }
 }
