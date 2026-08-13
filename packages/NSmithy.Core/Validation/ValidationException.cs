@@ -77,15 +77,13 @@ public static class ValidationExceptionFieldSchema
                 "path",
                 static value => value.Path,
                 static (builder, value) => builder.Path = value,
-                Schemas.NullableReference(Schemas.String),
-                [FrameworkTraits.ProtoIndex(1)]
+                Schemas.NullableReference(Schemas.String)
             )
             .Required(
                 "message",
                 static value => value.Message,
                 static (builder, value) => builder.Message = value,
-                Schemas.NullableReference(Schemas.String),
-                [FrameworkTraits.ProtoIndex(2)]
+                Schemas.NullableReference(Schemas.String)
             )
             .Build(
                 static () => new Builder(),
@@ -117,8 +115,7 @@ public static class ValidationExceptionSchema
                 "message",
                 static value => value.Message,
                 static (builder, value) => builder.Message = value,
-                Schemas.NullableReference(Schemas.String),
-                [FrameworkTraits.ProtoIndex(1)]
+                Schemas.NullableReference(Schemas.String)
             )
             .Optional(
                 "fieldList",
@@ -129,8 +126,7 @@ public static class ValidationExceptionSchema
                         ShapeId.Parse("smithy.framework#ValidationExceptionFieldList"),
                         ValidationExceptionFieldSchema.Schema
                     )
-                ),
-                [FrameworkTraits.ProtoIndex(2)]
+                )
             )
             .Build(
                 static () => new Builder(),

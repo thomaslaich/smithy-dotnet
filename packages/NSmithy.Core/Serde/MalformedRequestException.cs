@@ -46,6 +46,10 @@ public sealed class MalformedRequestException(MalformedRequestKind kind, string 
 /// malformed-request suite asserts — but a response a caller cannot read is a poor one, so the
 /// runtime carries the same single <c>message</c> member every Smithy error has.
 /// </summary>
+/// <remarks>
+/// Like every shape the runtime owns rather than reads from a model, it declares only what the
+/// model would: what a particular codec needs on top of that is that codec's problem to solve.
+/// </remarks>
 public static class MalformedRequestSchema
 {
     public static readonly ShapeId Id = ShapeId.Parse("smithy.framework#MalformedRequest");
@@ -65,8 +69,7 @@ public static class MalformedRequestSchema
                 "message",
                 static value => value.Message,
                 static (builder, value) => builder.Message = value,
-                Schemas.NullableReference(Schemas.String),
-                [FrameworkTraits.ProtoIndex(1)]
+                Schemas.NullableReference(Schemas.String)
             )
             .Build(
                 static () => new Builder(),
@@ -88,20 +91,4 @@ public static class MalformedRequestSchema
             MalformedRequestKind.NotAcceptable => ("NotAcceptableException", 406),
             _ => throw new ArgumentOutOfRangeException(nameof(kind)),
         };
-}
-
-/// <summary>
-/// Traits a framework shape declares for itself. A modeled shape gets its traits from a model file;
-/// a shape the runtime owns has none, so anything a codec requires has to be stated here.
-/// </summary>
-internal static class FrameworkTraits
-{
-    private static readonly ShapeId ProtoIndexTrait = ShapeId.Parse("alloy.proto#protoIndex");
-
-    /// <summary>
-    /// Every protocol has to be able to put a framework shape on the wire, because the server
-    /// runtime can return one from any operation. The proto codec requires a field number on every
-    /// member, and unlike a modeled shape there is no model file to carry one.
-    /// </summary>
-    public static Trait ProtoIndex(int index) => new(ProtoIndexTrait, Document.From(index));
 }

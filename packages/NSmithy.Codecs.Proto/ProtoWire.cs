@@ -208,6 +208,9 @@ internal static class ProtoWire
     );
     private static readonly ShapeId SparseTrait = new("smithy.api", "sparse");
 
+    /// <summary>The namespace of the shapes the runtime owns rather than reads from a model.</summary>
+    private const string FrameworkNamespace = "smithy.framework";
+
     // String enums map to proto enums; the declared values (in declaration order) come from the
     // synthetic trait the codegen attaches, matching ProtoGenerator's UNSPECIFIED=0, then 1,2,3…
     private static readonly ShapeId SyntheticEnumTrait = new("smithy.synthetic", "enum");
@@ -739,7 +742,22 @@ internal static class ProtoWire
         return Document.From(items);
     }
 
-    internal static int ProtoIndex(IReadOnlyDictionary<ShapeId, Trait> traits)
+    /// <summary>
+    /// The proto field number for a member: its <c>@protoIndex</c>, which a model has to state
+    /// because proto's compatibility rules hang on it — reordering members must not move a field.
+    /// </summary>
+    /// <remarks>
+    /// A framework shape is the one exception. The server runtime can return
+    /// <c>smithy.framework#ValidationException</c> from any operation, so every codec has to be able
+    /// to put it on the wire, but it comes from the runtime rather than a model file and so has no
+    /// trait to carry. Its numbers come from declaration order instead, which is this codec's rule
+    /// to make: nothing outside it should have to know that proto wants a number per member.
+    /// </remarks>
+    internal static int FieldNumber(
+        ShapeId memberId,
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        int ordinal
+    )
     {
         if (
             traits.TryGetValue(ProtoIndexTrait, out var trait)
@@ -749,8 +767,13 @@ internal static class ProtoWire
             return (int)trait.Value.AsNumber();
         }
 
+        if (memberId.Namespace == FrameworkNamespace)
+        {
+            return ordinal + 1;
+        }
+
         throw new InvalidOperationException(
-            "Proto codec requires every member to carry an @protoIndex trait."
+            $"Proto codec requires every member to carry an @protoIndex trait; '{memberId}' has none."
         );
     }
 

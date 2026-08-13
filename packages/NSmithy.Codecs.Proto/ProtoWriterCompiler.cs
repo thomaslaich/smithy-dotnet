@@ -457,13 +457,15 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
             return;
         }
 
+        var fieldNumber = ProtoWire.FieldNumber(member.Id, member.MemberTraits, writers.Count);
         writers.Add(
             target switch
             {
-                IListSchema list => CreateListWriter(member, (dynamic)list),
-                IMapSchema map => CreateMapWriter(member, (dynamic)map),
+                IListSchema list => CreateListWriter(member, (dynamic)list, fieldNumber),
+                IMapSchema map => CreateMapWriter(member, (dynamic)map, fieldNumber),
                 _ => new ValueProtoMemberWriter<TContainer, TValue>(
                     member,
+                    fieldNumber,
                     compiler.CompileValue(member.TargetSchema, member.MemberTraits)
                 ),
             }
@@ -482,11 +484,13 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
 
     private ListProtoMemberWriter<TContainer, TValue, TElement> CreateListWriter<TValue, TElement>(
         IMemberSchema<TContainer, TValue> member,
-        IListSchema<TValue, TElement> list
+        IListSchema<TValue, TElement> list,
+        int fieldNumber
     ) =>
         new(
             member,
             list,
+            fieldNumber,
             compiler.CompileValue(
                 list.TypedElementMember.TargetSchema,
                 list.TypedElementMember.MemberTraits
@@ -495,11 +499,13 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
 
     private MapProtoMemberWriter<TContainer, TValue, TMapValue> CreateMapWriter<TValue, TMapValue>(
         IMemberSchema<TContainer, TValue> member,
-        IMapSchema<TValue, TMapValue> map
+        IMapSchema<TValue, TMapValue> map,
+        int fieldNumber
     ) =>
         new(
             member,
             map,
+            fieldNumber,
             ProtoWire.IsSparse((Schema)map),
             compiler.CompileValue(
                 map.TypedValueMember.TargetSchema,
@@ -510,11 +516,10 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
 
 internal sealed class ValueProtoMemberWriter<TContainer, TValue>(
     IMemberSchema<TContainer, TValue> member,
+    int fieldNumber,
     IProtoValueWriter<TValue> valueWriter
 ) : IProtoMemberWriter<TContainer>
 {
-    private readonly int fieldNumber = ProtoWire.ProtoIndex(member.MemberTraits);
-
     public void Write(ProtoWriter writer, TContainer value)
     {
         var memberValue = member.GetValue(value);
@@ -531,10 +536,10 @@ internal sealed class ValueProtoMemberWriter<TContainer, TValue>(
 internal sealed class ListProtoMemberWriter<TContainer, TCollection, TElement>(
     IMemberSchema<TContainer, TCollection> member,
     IListSchema<TCollection, TElement> list,
+    int fieldNumber,
     IProtoValueWriter<TElement> elementWriter
 ) : IProtoMemberWriter<TContainer>
 {
-    private readonly int fieldNumber = ProtoWire.ProtoIndex(member.MemberTraits);
     private readonly bool packable = ProtoWire.IsPackableScalar(
         ProtoWire.Unwrap(list.ElementSchema).Kind
     );
@@ -575,11 +580,11 @@ internal sealed class ListProtoMemberWriter<TContainer, TCollection, TElement>(
 internal sealed class MapProtoMemberWriter<TContainer, TDictionary, TValue>(
     IMemberSchema<TContainer, TDictionary> member,
     IMapSchema<TDictionary, TValue> map,
+    int fieldNumber,
     bool sparse,
     IProtoValueWriter<TValue> valueWriter
 ) : IProtoMemberWriter<TContainer>
 {
-    private readonly int fieldNumber = ProtoWire.ProtoIndex(member.MemberTraits);
     private readonly SparseScalarValueWriter<TValue> sparseWriter = new(
         map.TypedValueMember.TargetSchema
     );
@@ -637,6 +642,7 @@ internal sealed class InlinedProtoUnionMemberWriterCompiler<TContainer, TUnion>(
         writers.Add(
             new ProtoUnionCaseWriter<TUnion, TValue>(
                 unionCase,
+                ProtoWire.FieldNumber(unionCase.Id, unionCase.Traits, writers.Count),
                 compiler.CompileValue(unionCase.TargetSchema, unionCase.Traits)
             )
         );
@@ -691,6 +697,7 @@ internal sealed class ProtoUnionCaseWriterCompiler<TUnion>(ProtoValueWriterCompi
         writers.Add(
             new ProtoUnionCaseWriter<TUnion, TValue>(
                 unionCase,
+                ProtoWire.FieldNumber(unionCase.Id, unionCase.Traits, writers.Count),
                 compiler.CompileValue(unionCase.TargetSchema, unionCase.Traits)
             )
         );
@@ -698,11 +705,10 @@ internal sealed class ProtoUnionCaseWriterCompiler<TUnion>(ProtoValueWriterCompi
 
 internal sealed class ProtoUnionCaseWriter<TUnion, TValue>(
     IUnionCaseSchema<TUnion, TValue> unionCase,
+    int fieldNumber,
     IProtoValueWriter<TValue> valueWriter
 ) : IProtoUnionCaseWriter<TUnion>
 {
-    private readonly int fieldNumber = ProtoWire.ProtoIndex(unionCase.Traits);
-
     public bool TryWrite(ProtoWriter writer, TUnion value)
     {
         if (!unionCase.Matches(value))
