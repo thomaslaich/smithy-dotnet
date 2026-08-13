@@ -17,11 +17,11 @@ server is never counted toward client coverage and vice versa.
 | Protocol | Surfaces | Stage | Client | Server |
 | --- | --- | --- | --- | --- |
 | `alloy#simpleRestJson` | both | Preview | 43/43 (100%) | 43/43 (100%) |
-| `aws.protocols#restJson1` | both | Preview | 243/247 (98.4%) | 224/227 (98.7%) |
-| `aws.protocols#awsJson1_1` | client | Early preview | requests 6/57 (10.5%), responses 19/61 (31.1%) | — |
+| `aws.protocols#restJson1` | both | Preview | 246/250 (98.4%) | 209/228 (91.7%) |
+| `aws.protocols#awsJson1_1` | client | Early preview | requests 6/57 (10.5%), responses 18/61 (29.5%) | — |
 | `aws.protocols#awsJson1_0` | client | Early preview | runtime support; no conformance project yet | — |
-| `aws.protocols#restXml` | client | Early preview | requests 4/109 (3.7%), responses 42/84 (50.0%) | — |
-| `smithy.protocols#rpcv2Cbor` | both | Preview | 68/68 (100%) | 60/60 (100%) |
+| `aws.protocols#restXml` | client | Early preview | requests 4/113 (3.5%), responses 39/86 (45.3%) | — |
+| `smithy.protocols#rpcv2Cbor` | both | Preview | 61/68 (89.7%) | 57/60 (95.0%) |
 | `alloy.proto#grpc` | both | Experimental | tested via examples¹ | tested via examples¹ |
 
 ¹ `alloy.proto#grpc` is not covered by Smithy's HTTP conformance suite; it is
@@ -38,6 +38,15 @@ Notes:
   server, cases whose operation has no generated handler (auxiliary services like
   Glacier that ship fixtures but aren't part of the `RestJson` service) are out
   of scope rather than counted as failures.
+- These figures dropped in several places against the previous release, and none
+  of it is a regression. The suites previously compared a response's status,
+  headers and parse success but never the deserialized values, because the
+  assertion matched fixture keys against generated constructor parameter names and
+  silently skipped every member. With that repaired, 30 cases across the protocols
+  now fail honestly rather than passing vacuously. They are listed in each
+  project's `KnownParamGaps` and subtracted from the counts above, and cluster in
+  query-string binding, streaming blobs, content encoding and float special
+  values.
 - restJson1's server additionally runs all 655 of Smithy's
   `httpMalformedRequestTests` cases, which assert what a server owes for a request
   it cannot accept. See [Validation](/smithy-dotnet/servers/validation/).
@@ -50,7 +59,8 @@ Notes:
   subset.
 - `smithy.protocols#rpcv2Cbor`, `alloy#simpleRestJson`, and `aws.protocols#restJson1`
   all exercise both the client and the generated server against their applicable
-  cases.
+  cases. `alloy#simpleRestJson` is the only one currently at 100% on both
+  surfaces.
 
 ## Recommended Use
 

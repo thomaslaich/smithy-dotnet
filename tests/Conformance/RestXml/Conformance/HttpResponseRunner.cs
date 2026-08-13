@@ -430,6 +430,44 @@ internal static class ResponseAssertions
             return;
         }
 
+        // Blobs implement IEnumerable<byte> but must be compared as a payload, not a
+        // sequence of numbers. Without this they fall through to the sequence branch and
+        // fail on a string-vs-array mismatch.
+        // A streaming blob arrives as a Stream rather than a byte[]. Drain it and let
+        // the blob comparison below handle it, otherwise it reaches the scalar branch
+        // and fails with "don't know how to compare scalar ...Stream".
+        if (actual is Stream stream)
+        {
+            using var drained = new MemoryStream();
+            stream.CopyTo(drained);
+            actual = drained.ToArray();
+        }
+
+        if (actual is byte[] bytes)
+        {
+            var text = (string?)expected;
+            byte[] expectedBytes;
+            if (string.IsNullOrEmpty(text))
+            {
+                expectedBytes = [];
+            }
+            else
+            {
+                try
+                {
+                    expectedBytes = Convert.FromBase64String(text);
+                }
+                catch (FormatException)
+                {
+                    // Protocol tests often express a blob as plain text rather than base64.
+                    expectedBytes = System.Text.Encoding.UTF8.GetBytes(text);
+                }
+            }
+
+            Assert.Equal(expectedBytes, bytes);
+            return;
+        }
+
         // Plain enumerable (used for IReadOnlyList<T> directly bound on a structure member).
         if (
             actual is IEnumerable seq
@@ -472,24 +510,59 @@ internal static class ResponseAssertions
             .First();
         foreach (var p in ctor.GetParameters())
         {
-            var memberName = p.Name!;
-            // Property is PascalCase derived from the camelCase ctor param.
-            var propName = char.ToUpperInvariant(memberName[0]) + memberName[1..];
+            // Generated records carry PascalCase constructor parameters, while a test
+            // fixture's `params` uses the model's camelCase member names. Matching them
+            // ordinally silently skipped every member, turning this whole assertion
+            // into a no-op — a wrong expected value passed.
+            var propName = p.Name!;
             var prop =
                 type.GetProperty(propName, BindingFlags.Public | BindingFlags.Instance)
+                // Generated records name the constructor parameter exactly as the
+                // property, but a union case class takes a camelCase parameter and
+                // exposes a PascalCase property, so both spellings have to resolve.
+                ?? type.GetProperty(
+                    char.ToUpperInvariant(propName[0]) + propName[1..],
+                    BindingFlags.Public | BindingFlags.Instance
+                )
                 ?? throw new InvalidOperationException(
                     $"[{path}] Cannot resolve property {propName} on {type.FullName}."
                 );
             var actualValue = prop.GetValue(actual);
-            if (!expected.TryGetPropertyValue(memberName, out var expectedValue))
+            var memberName = ResolveExpectedKey(expected, propName);
+            if (memberName is null)
             {
                 // Member absent from the test fixture's `params`. Smithy protocol-test
                 // semantics: omitted fields are not asserted (could be null, default, or just
                 // "don't care"). Skip the comparison entirely.
                 continue;
             }
-            AssertEqual(expectedValue, actualValue, $"{path}.{memberName}");
+
+            AssertEqual(expected[memberName], actualValue, $"{path}.{memberName}");
         }
+    }
+
+    /// <summary>
+    /// Finds the fixture key matching a generated property, tolerating the
+    /// PascalCase/camelCase difference between generated records and model member
+    /// names. Returns null when the member is genuinely absent from `params`, which
+    /// Smithy protocol-test semantics treat as "not asserted".
+    /// </summary>
+    private static string? ResolveExpectedKey(JsonObject expected, string propName)
+    {
+        if (expected.ContainsKey(propName))
+        {
+            return propName;
+        }
+
+        foreach (var (key, _) in expected)
+        {
+            if (string.Equals(key, propName, StringComparison.OrdinalIgnoreCase))
+            {
+                return key;
+            }
+        }
+
+        return null;
     }
 
     private static void AssertSequence(JsonNode expected, IEnumerable actual, string path)
@@ -559,6 +632,9 @@ internal static class ResponseAssertions
             || actual is long
             || actual is short
             || actual is byte
+            // Smithy's Byte maps to C# sbyte, which was missing here and made every
+            // signed-byte member fail with "don't know how to compare scalar".
+            || actual is sbyte
             || actual is float
             || actual is double
             || actual is decimal
