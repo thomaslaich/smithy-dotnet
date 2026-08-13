@@ -34,11 +34,16 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   rather than a single factory, so each call side compiles codecs that read by
   its own rules. A server holds a caller to exactly what the model declares; a
   client stays permissive with a peer it does not control.
-- **BREAKING: a map with an enum key generates a `string` key.** Smithy map keys
-  are object names, and the runtime's map schema is string-keyed; the enum's value
-  set now reaches the schema as key traits, so the key is still validated. A
-  string shape carrying `@enum` no longer generates an enum type — it was never
-  reachable as one, since every string shape maps to `string`.
+- **BREAKING: a map schema carries the shape its key targets.** `Schemas.Map`
+  takes a `key` schema (defaulting to `Schemas.String`), and
+  `IMapSchema.TypedKeyMember` is replaced by the untyped `IMapSchema.KeyMember`,
+  whose target is that shape rather than a flattened `Schemas.String`. This is
+  what lets a server hold an enum-keyed map's keys to the enum's value set. A map
+  with an enum key generates a `string` key, since a map key is an object name;
+  the enum still types the value.
+- **BREAKING: a string shape carrying `@enum` no longer generates an enum type.**
+  It was never reachable as one — every string shape maps to `string` — and
+  generating it produced a build error. Its value set is enforced from the trait.
 
 ## [0.7.0]
 

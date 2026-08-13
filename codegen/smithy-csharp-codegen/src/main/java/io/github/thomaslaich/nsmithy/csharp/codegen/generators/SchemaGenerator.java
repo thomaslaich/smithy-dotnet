@@ -28,7 +28,6 @@ import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.shapes.UnionShape;
-import software.amazon.smithy.model.traits.EnumTrait;
 import software.amazon.smithy.model.traits.EnumValueTrait;
 import software.amazon.smithy.model.traits.ErrorTrait;
 import software.amazon.smithy.model.traits.InternalTrait;
@@ -320,10 +319,12 @@ public final class SchemaGenerator {
           writer.write("static (builder, key, value) => builder[key] = value,");
           writer.write("static builder => new $L(builder),", typeName);
           writer.write(
-              "$L, keyTraits: $L, valueTraits: $L);",
+              "$L, keyTraits: $L, valueTraits: $L, key: $L);",
               traitsExpr(shape.getAllTraits().values()),
-              mapKeyTraitsExpr(context, shape.getKey()),
-              memberTraitsExpr(context, shape.getValue()));
+              memberTraitsExpr(context, shape.getKey()),
+              memberTraitsExpr(context, shape.getValue()),
+              shapeSchemaAccessor(
+                  context, context.model().expectShape(shape.getKey().getTarget())));
           writer.dedent();
           writer.dedent();
           writer.write("");
@@ -512,38 +513,6 @@ public final class SchemaGenerator {
         }
       }
     }
-    return traitsExpr(traits);
-  }
-
-  /**
-   * A map key is a string in the generated API even when it targets an enum shape, because the
-   * runtime's map schema is string-keyed: a key is a JSON object name, not a value with a type.
-   * That loses the enum's value set, which the server still has to hold the key to, so it is
-   * restated here as the {@code @enum} trait — the same shape the runtime already reads for a
-   * string whose value set comes from a trait rather than from an enum shape.
-   */
-  private static String mapKeyTraitsExpr(GenerationContext context, MemberShape key) {
-    Shape target = context.model().expectShape(key.getTarget());
-    if (!target.isEnumShape()) {
-      return memberTraitsExpr(context, key);
-    }
-
-    List<Node> entries = new ArrayList<>();
-    for (MemberShape member : target.getAllMembers().values()) {
-      ObjectNode.Builder entry =
-          Node.objectNodeBuilder()
-              .withMember("value", member.expectTrait(EnumValueTrait.class).expectStringValue());
-      if (member.hasTrait(InternalTrait.class)) {
-        entry.withMember("tags", Node.fromStrings("internal"));
-      }
-      entries.add(entry.build());
-    }
-
-    List<Trait> traits = new ArrayList<>(key.getAllTraits().values());
-    traits.removeIf(t -> t.toShapeId().equals(EnumTrait.ID));
-    traits.add(
-        new EnumTrait.Provider()
-            .createTrait(EnumTrait.ID, new ArrayNode(entries, key.getSourceLocation())));
     return traitsExpr(traits);
   }
 

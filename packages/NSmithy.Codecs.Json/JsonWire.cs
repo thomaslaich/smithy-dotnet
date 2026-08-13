@@ -195,25 +195,24 @@ internal static class JsonWire
         }
     }
 
-    internal static MalformedRequestException Malformed(JsonElement value, string expected) =>
-        MalformedRequestException.Serialization(
-            $"Expected {expected} but found {Describe(value)}."
-        );
-
-    /// <summary>
-    /// The offending value, echoed back so a caller can see which one it was. Truncated because the
-    /// payload is untrusted and a message is not a place to copy an arbitrary amount of it.
-    /// </summary>
-    private static string Describe(JsonElement value)
+    internal static MalformedRequestException Malformed(JsonElement value, string expected)
     {
+        // The offending value is echoed back so a caller can see which one it was — truncated,
+        // because the payload is untrusted and a message is not a place to copy an arbitrary
+        // amount of it, and summarized for the two kinds whose raw text says nothing useful.
         const int limit = 64;
-        var text = value.ValueKind switch
+        var found = value.ValueKind switch
         {
             JsonValueKind.Object => "an object",
             JsonValueKind.Array => "an array",
             _ => value.GetRawText(),
         };
-        return text.Length <= limit ? text : string.Concat(text.AsSpan(0, limit), "…");
+        if (found.Length > limit)
+        {
+            found = string.Concat(found.AsSpan(0, limit), "…");
+        }
+
+        return MalformedRequestException.Serialization($"Expected {expected} but found {found}.");
     }
 
     // A JSON string is a float only for the three values JSON cannot represent as a number. Parsing

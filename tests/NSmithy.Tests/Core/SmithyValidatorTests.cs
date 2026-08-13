@@ -483,6 +483,41 @@ public sealed class SmithyValidatorTests
     }
 
     [Fact]
+    public void ValidateRejectsMapKeyOutsideItsEnum()
+    {
+        // A map key is a string whatever it targets, so the value set can only come from the shape
+        // the key member targets — there is nowhere on a string for it to live.
+        var validator = SmithyValidator.FromSchema(
+            Schemas.Map(
+                new ShapeId("example", "Palette"),
+                Schemas.String,
+                key: Schemas.StringEnum<Colour>(
+                    new ShapeId("example", "Colour"),
+                    values: ["RED", "GREEN", "PUCE"],
+                    internalValues: ["PUCE"]
+                )
+            )
+        )!;
+
+        Assert.Empty(
+            validator.GetErrors(new Dictionary<string, string> { ["RED"] = "a", ["PUCE"] = "b" })
+        );
+
+        var error = Assert.Single(
+            validator.GetErrors(new Dictionary<string, string> { ["MAUVE"] = "a" })
+        );
+        // Reported at the map, not the entry: the key is not a value sitting at the entry's pointer.
+        Assert.Equal("", error.Path);
+        Assert.Equal(new ShapeId("smithy.api", "enum"), error.ConstraintId);
+        // PUCE is accepted above but withheld here — an @internal value is not advertised.
+        Assert.EndsWith(
+            "Member must satisfy enum value set: [RED, GREEN]",
+            error.Message,
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
     public void FromSchemaSkipsEnumsWithoutDeclaredValues()
     {
         // A schema built without them cannot tell a modeled value from an invented one, so it must

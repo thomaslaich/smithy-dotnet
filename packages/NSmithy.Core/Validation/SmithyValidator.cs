@@ -187,7 +187,7 @@ internal static class ValidatorCompiler
         IMapSchema<TDictionary, TValue> map,
         HashSet<Schema> visited
     ) =>
-        RequiresMemberValidation(map.TypedKeyMember, visited)
+        RequiresMemberValidation(map.KeyMember, visited)
         || RequiresMemberValidation(map.TypedValueMember, visited);
 
     private sealed class StructuralCompiler : ISchemaVisitor<object>
@@ -338,6 +338,20 @@ internal static class ValidatorCompiler
     /// One compilation path for every kind of member — structure members, list elements, map keys
     /// and map values are the same thing here: an edge with its own traits onto a target schema.
     /// </summary>
+    /// <summary>
+    /// A map key is a string whatever it targets, so it cannot be compiled like a typed member: its
+    /// traits constrain the string, while the shape it targets may close the set of strings allowed.
+    /// An enum key is the case that matters — the value set lives on the enum schema, and there is
+    /// nowhere else for it to be.
+    /// </summary>
+    internal static MemberValueValidator<string> CompileMapKey(IMemberSchema key) =>
+        new(
+            ConstraintValidator<string>.FromTraits(key.MemberTraits, key.Id, Schemas.String),
+            key.Target.Resolved is IStringEnumSchema @enum
+                ? new StringKeyEnumValidator(key.Target.Id, @enum)
+                : NoOpValidator<string>.Instance
+        );
+
     internal static MemberValueValidator<TValue> CompileMember<TValue>(
         ITargetedMemberSchema<TValue> member
     ) =>
@@ -528,8 +542,8 @@ internal sealed class ListValidator<TCollection, TElement> : IValueValidator<TCo
 internal sealed class MapValidator<TDictionary, TValue>(IMapSchema<TDictionary, TValue> schema)
     : IValueValidator<TDictionary>
 {
-    private readonly MemberValueValidator<string> keyValidator = ValidatorCompiler.CompileMember(
-        schema.TypedKeyMember
+    private readonly MemberValueValidator<string> keyValidator = ValidatorCompiler.CompileMapKey(
+        schema.KeyMember
     );
     private readonly MemberValueValidator<TValue> valueValidator = ValidatorCompiler.CompileMember(
         schema.TypedValueMember
@@ -883,18 +897,49 @@ internal sealed class StringEnumValidator<T>(StringEnumSchema<T> schema) : IValu
             return;
         }
 
-        errors.Add(
-            new SmithyValidationError(
+        errors.Add(EnumMembership.Error(path, schema.Id, schema.PublishedValues));
+    }
+}
+
+/// <summary>
+/// <inheritdoc cref="StringEnumValidator{T}" path="/summary"/> A key reaches the validator as a
+/// string rather than as the enum's own type, because that is what a map key is, so it is checked
+/// against the enum schema directly.
+/// </summary>
+internal sealed class StringKeyEnumValidator(ShapeId shapeId, IStringEnumSchema schema)
+    : IValueValidator<string>
+{
+    public void Validate(string value, string path, List<SmithyValidationError> errors)
+    {
+        if (value is null || schema.Contains(value))
+        {
+            return;
+        }
+
+        errors.Add(EnumMembership.Error(path, shapeId, schema.PublishedValues));
+    }
+}
+
+/// <summary>
+/// The one place a rejected enum value is worded, so the enum shape, the enum-keyed map, and the
+/// deprecated <c>@enum</c> trait cannot drift from each other.
+/// </summary>
+internal static class EnumMembership
+{
+    public static SmithyValidationError Error(
+        string path,
+        ShapeId shapeId,
+        IReadOnlyList<string> published
+    ) =>
+        new(
+            path,
+            shapeId,
+            ConstraintTraits.Enum,
+            ConstraintMessages.Failed(
                 path,
-                schema.Id,
-                ConstraintTraits.Enum,
-                ConstraintMessages.Failed(
-                    path,
-                    $"Member must satisfy enum value set: [{string.Join(", ", schema.PublishedValues)}]"
-                )
+                $"Member must satisfy enum value set: [{string.Join(", ", published)}]"
             )
         );
-    }
 }
 
 /// <inheritdoc cref="StringEnumValidator{T}" />
@@ -1063,17 +1108,7 @@ internal sealed class EnumTraitConstraint<T>(
             return;
         }
 
-        errors.Add(
-            new SmithyValidationError(
-                path,
-                shapeId,
-                ConstraintTraits.Enum,
-                ConstraintMessages.Failed(
-                    path,
-                    $"Member must satisfy enum value set: [{string.Join(", ", published)}]"
-                )
-            )
-        );
+        errors.Add(EnumMembership.Error(path, shapeId, published));
     }
 }
 

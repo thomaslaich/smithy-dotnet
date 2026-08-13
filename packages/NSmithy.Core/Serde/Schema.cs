@@ -312,6 +312,15 @@ public sealed class NullableSchema<T> : Schema<T?>, INullableSchema
 public interface IStringEnumSchema
 {
     object CreateObject(string value);
+
+    /// <summary>Whether the value is one the model declares.</summary>
+    bool Contains(string value);
+
+    /// <summary>
+    /// The values without <c>@internal</c> — what a caller is told when a value is rejected. See
+    /// <see cref="StringEnumSchema{T}.PublishedValues"/>.
+    /// </summary>
+    IReadOnlyList<string> PublishedValues { get; }
 }
 
 public interface IStringEnumValue
@@ -529,6 +538,14 @@ public interface IListSchema<TCollection, TElement, TBuilder> : IListSchema<TCol
 
 public interface IMapSchema
 {
+    /// <summary>
+    /// The key as the model declares it. A map key is always a string on the wire — that is what a
+    /// JSON object name is — but the shape it targets can still say more about which strings are
+    /// allowed, and an enum shape says exactly that. Keeping the shape rather than flattening it to
+    /// <see cref="Schemas.String"/> is what lets a server hold a key to it.
+    /// </summary>
+    IMemberSchema KeyMember { get; }
+
     Schema Value { get; }
 
     IEnumerable<KeyValuePair<string, object?>> GetEntriesObject(object value);
@@ -542,8 +559,6 @@ public interface IMapSchema
 
 public interface IMapSchema<TDictionary, TValue> : IMapSchema
 {
-    ITargetedMemberSchema<string> TypedKeyMember { get; }
-
     ITargetedMemberSchema<TValue> TypedValueMember { get; }
 
     Schema<TValue> ValueSchema { get; }
@@ -696,6 +711,49 @@ public sealed class CollectionMemberSchema<TValue> : ITargetedMemberSchema<TValu
 
     public Trait? GetTrait(ShapeId id) =>
         MemberTraits.TryGetValue(id, out var trait) ? trait : TargetSchema.GetTrait(id);
+
+    public bool HasTrait(ShapeId id) => GetTrait(id) is not null;
+}
+
+/// <summary>
+/// A map's key member. Untyped, unlike every other member, because a key's CLR type and its modeled
+/// shape need not agree: the key of a map is a <see cref="string"/> whatever it targets — a JSON
+/// object name has no other form — while the shape it targets may be an enum, whose own CLR type is
+/// the generated enum. Carrying the shape is what lets a server hold the key to it.
+/// </summary>
+public sealed class MapKeyMemberSchema : IMemberSchema
+{
+    private readonly IReadOnlyDictionary<ShapeId, Trait> memberTraits;
+
+    internal MapKeyMemberSchema(ShapeId id, Schema target, IEnumerable<Trait>? traits = null)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (!id.IsMember)
+        {
+            throw new ArgumentException(
+                $"Member schema id must include a member name; got '{id}'.",
+                nameof(id)
+            );
+        }
+
+        Id = id;
+        Target = target;
+        memberTraits = Schema.BuildTraits(traits);
+    }
+
+    public ShapeId Id { get; }
+
+    public string Name => Id.MemberName!;
+
+    public IReadOnlyDictionary<ShapeId, Trait> MemberTraits => memberTraits;
+
+    public Schema Target { get; }
+
+    // An entry's key is always present when the map holds the entry.
+    public bool IsRequired => true;
+
+    public Trait? GetTrait(ShapeId id) =>
+        MemberTraits.TryGetValue(id, out var trait) ? trait : Target.GetTrait(id);
 
     public bool HasTrait(ShapeId id) => GetTrait(id) is not null;
 }
@@ -907,16 +965,13 @@ public sealed class MapSchema<TValue>
         Schema<TValue> value,
         IEnumerable<Trait>? traits = null,
         IEnumerable<Trait>? keyTraits = null,
-        IEnumerable<Trait>? valueTraits = null
+        IEnumerable<Trait>? valueTraits = null,
+        Schema? key = null
     )
         : base(id, ShapeKind.Map, traits)
     {
         ArgumentNullException.ThrowIfNull(value);
-        TypedKeyMember = new CollectionMemberSchema<string>(
-            id.WithMember("key"),
-            Schemas.String,
-            keyTraits
-        );
+        KeyMember = new MapKeyMemberSchema(id.WithMember("key"), key ?? Schemas.String, keyTraits);
         TypedValueMember = new CollectionMemberSchema<TValue>(
             id.WithMember("value"),
             value,
@@ -925,7 +980,7 @@ public sealed class MapSchema<TValue>
         ValueSchema = value;
     }
 
-    public ITargetedMemberSchema<string> TypedKeyMember { get; }
+    public IMemberSchema KeyMember { get; }
 
     public ITargetedMemberSchema<TValue> TypedValueMember { get; }
 
@@ -985,7 +1040,8 @@ public sealed class DictionarySchema<TDictionary, TValue, TBuilder>
         Func<TBuilder, TDictionary> build,
         IEnumerable<Trait>? traits = null,
         IEnumerable<Trait>? keyTraits = null,
-        IEnumerable<Trait>? valueTraits = null
+        IEnumerable<Trait>? valueTraits = null,
+        Schema? key = null
     )
         : base(id, ShapeKind.Map, traits)
     {
@@ -995,11 +1051,7 @@ public sealed class DictionarySchema<TDictionary, TValue, TBuilder>
         ArgumentNullException.ThrowIfNull(add);
         ArgumentNullException.ThrowIfNull(build);
 
-        TypedKeyMember = new CollectionMemberSchema<string>(
-            id.WithMember("key"),
-            Schemas.String,
-            keyTraits
-        );
+        KeyMember = new MapKeyMemberSchema(id.WithMember("key"), key ?? Schemas.String, keyTraits);
         TypedValueMember = new CollectionMemberSchema<TValue>(
             id.WithMember("value"),
             value,
@@ -1012,7 +1064,7 @@ public sealed class DictionarySchema<TDictionary, TValue, TBuilder>
         this.build = build;
     }
 
-    public ITargetedMemberSchema<string> TypedKeyMember { get; }
+    public IMemberSchema KeyMember { get; }
 
     public ITargetedMemberSchema<TValue> TypedValueMember { get; }
 
@@ -1769,13 +1821,19 @@ public static class Schemas
             elementTraits
         );
 
+    /// <param name="key">
+    /// The shape the key targets. Defaults to <see cref="String"/>, which is what a map key with no
+    /// shape of its own is; pass the modeled shape when the model gives it one, so a server can hold
+    /// the key to what that shape says.
+    /// </param>
     public static MapSchema<TValue> Map<TValue>(
         ShapeId id,
         Schema<TValue> value,
         IEnumerable<Trait>? traits = null,
         IEnumerable<Trait>? keyTraits = null,
-        IEnumerable<Trait>? valueTraits = null
-    ) => new(id, value, traits, keyTraits, valueTraits);
+        IEnumerable<Trait>? valueTraits = null,
+        Schema? key = null
+    ) => new(id, value, traits, keyTraits, valueTraits, key);
 
     public static DictionarySchema<TDictionary, TValue, TBuilder> Map<
         TDictionary,
@@ -1790,8 +1848,9 @@ public static class Schemas
         Func<TBuilder, TDictionary> build,
         IEnumerable<Trait>? traits = null,
         IEnumerable<Trait>? keyTraits = null,
-        IEnumerable<Trait>? valueTraits = null
-    ) => new(id, value, getEntries, createBuilder, add, build, traits, keyTraits, valueTraits);
+        IEnumerable<Trait>? valueTraits = null,
+        Schema? key = null
+    ) => new(id, value, getEntries, createBuilder, add, build, traits, keyTraits, valueTraits, key);
 
     public static OperationSchema<TInput, TOutput> Operation<TInput, TOutput>(
         ShapeId id,
