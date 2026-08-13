@@ -38,6 +38,9 @@ Notes:
   server, cases whose operation has no generated handler (auxiliary services like
   Glacier that ship fixtures but aren't part of the `RestJson` service) are out
   of scope rather than counted as failures.
+- restJson1's server additionally runs all 655 of Smithy's
+  `httpMalformedRequestTests` cases, which assert what a server owes for a request
+  it cannot accept. See [Validation](/smithy-dotnet/servers/validation/).
 - AWS JSON support is client-only. The current conformance project targets
   `aws.protocols#awsJson1_1`; the runtime also exposes `AwsJson10Protocol` for
   `aws.protocols#awsJson1_0`, but there is not yet a separate `awsJson1_0`

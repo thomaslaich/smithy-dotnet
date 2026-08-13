@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Frozen;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Numerics;
@@ -130,6 +131,7 @@ internal static class ConstraintTraits
             || traits.ContainsKey(Range)
             || traits.ContainsKey(Pattern)
             || traits.ContainsKey(UniqueItems)
+            || traits.ContainsKey(Enum)
         );
 }
 
@@ -648,6 +650,7 @@ internal sealed class ConstraintValidator<T> : IValueValidator<T>
         AddLengthConstraint(traits, shapeId, kind, target, constraints);
         AddRangeConstraint(traits, shapeId, kind, constraints);
         AddPatternConstraint(traits, shapeId, kind, constraints);
+        AddEnumTraitConstraint(traits, shapeId, kind, constraints);
         return constraints.Count == 0
             ? NoOpValidator<T>.Instance
             : new ConstraintValidator<T>(constraints);
@@ -768,6 +771,70 @@ internal sealed class ConstraintValidator<T> : IValueValidator<T>
     }
 
     /// <summary>
+    /// The deprecated <c>@enum</c> trait on a string shape. An enum shape carries its value set on
+    /// the schema and is checked by <see cref="StringEnumValidator{T}"/>; a string that predates enum
+    /// shapes carries its set in this trait instead, and generates a plain <c>string</c>, so the set
+    /// is read from the trait here. Both close the same openness at the same place.
+    /// </summary>
+    private static void AddEnumTraitConstraint(
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        ShapeId shapeId,
+        ShapeKind kind,
+        List<IConstraint<T>> constraints
+    )
+    {
+        if (
+            kind != ShapeKind.String
+            || !traits.TryGetValue(ConstraintTraits.Enum, out var trait)
+            || trait.Value.Kind != DocumentKind.Array
+        )
+        {
+            return;
+        }
+
+        if (typeof(T) != typeof(string))
+        {
+            throw Unenforceable(ConstraintTraits.Enum, shapeId);
+        }
+
+        List<string> values = [];
+        List<string> published = [];
+        foreach (var entry in trait.Value.AsArray())
+        {
+            if (
+                entry.Kind != DocumentKind.Object
+                || !entry.AsObject().TryGetValue("value", out var value)
+                || value.Kind != DocumentKind.String
+            )
+            {
+                continue;
+            }
+
+            values.Add(value.AsString());
+            if (!IsInternal(entry))
+            {
+                published.Add(value.AsString());
+            }
+        }
+
+        if (values.Count > 0)
+        {
+            constraints.Add(new EnumTraitConstraint<T>(shapeId, values, published));
+        }
+    }
+
+    /// <summary>
+    /// A value the model keeps but does not publish. The trait predates <c>@internal</c>, so it says
+    /// so with a tag; either way such a value is accepted on the wire but left out of the message,
+    /// which is what a caller sees.
+    /// </summary>
+    private static bool IsInternal(Document entry) =>
+        entry.AsObject().TryGetValue("tags", out var tags)
+        && tags.Kind == DocumentKind.Array
+        && tags.AsArray()
+            .Any(tag => tag.Kind == DocumentKind.String && tag.AsString() == "internal");
+
+    /// <summary>
     /// Prefers the non-backtracking engine, which has no catastrophic-backtracking failure mode, so
     /// a hostile input cannot stall a request thread. Patterns using constructs it does not support
     /// (backreferences, lookaround) fall back to the backtracking engine under a timeout.
@@ -823,7 +890,7 @@ internal sealed class StringEnumValidator<T>(StringEnumSchema<T> schema) : IValu
                 ConstraintTraits.Enum,
                 ConstraintMessages.Failed(
                     path,
-                    $"Member must satisfy enum value set: [{string.Join(", ", schema.Values)}]"
+                    $"Member must satisfy enum value set: [{string.Join(", ", schema.PublishedValues)}]"
                 )
             )
         );
@@ -973,6 +1040,40 @@ internal sealed class RangeConstraint<T>(
                 )
             );
         }
+    }
+}
+
+/// <summary>
+/// The value set of a deprecated <c>@enum</c> trait. <paramref name="published"/> is what the
+/// message lists — a value the model marks internal is still accepted, but naming it back to a
+/// caller would advertise it.
+/// </summary>
+internal sealed class EnumTraitConstraint<T>(
+    ShapeId shapeId,
+    IReadOnlyList<string> values,
+    IReadOnlyList<string> published
+) : IConstraint<T>
+{
+    private readonly FrozenSet<string> lookup = values.ToFrozenSet(StringComparer.Ordinal);
+
+    public void Validate(T value, string path, List<SmithyValidationError> errors)
+    {
+        if (value is not string text || lookup.Contains(text))
+        {
+            return;
+        }
+
+        errors.Add(
+            new SmithyValidationError(
+                path,
+                shapeId,
+                ConstraintTraits.Enum,
+                ConstraintMessages.Failed(
+                    path,
+                    $"Member must satisfy enum value set: [{string.Join(", ", published)}]"
+                )
+            )
+        );
     }
 }
 

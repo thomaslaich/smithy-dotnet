@@ -170,6 +170,54 @@ internal static class JsonWire
         }
     }
 
+    /// <summary>
+    /// Runs one of <see cref="JsonElement"/>'s accessors and reports what it rejects as a malformed
+    /// request. The accessors say "these bytes are not that type" by throwing — a wrong value kind,
+    /// a number outside the target's range, text that is not base64 — and every one of those is the
+    /// payload's fault, not the server's, so they all become the same fault the runtime answers with
+    /// a structured 400.
+    /// </summary>
+    internal static T ReadValue<T>(JsonElement value, string expected, Func<JsonElement, T> read)
+    {
+        try
+        {
+            return read(value);
+        }
+        catch (Exception exception)
+            when (exception
+                    is FormatException
+                        or InvalidOperationException
+                        or OverflowException
+                        or ArgumentException
+            )
+        {
+            throw Malformed(value, expected);
+        }
+    }
+
+    internal static MalformedRequestException Malformed(JsonElement value, string expected) =>
+        MalformedRequestException.Serialization(
+            $"Expected {expected} but found {Describe(value)}."
+        );
+
+    /// <summary>
+    /// The offending value, echoed back so a caller can see which one it was. Truncated because the
+    /// payload is untrusted and a message is not a place to copy an arbitrary amount of it.
+    /// </summary>
+    private static string Describe(JsonElement value)
+    {
+        const int limit = 64;
+        var text = value.ValueKind switch
+        {
+            JsonValueKind.Object => "an object",
+            JsonValueKind.Array => "an array",
+            _ => value.GetRawText(),
+        };
+        return text.Length <= limit ? text : string.Concat(text.AsSpan(0, limit), "…");
+    }
+
+    // A JSON string is a float only for the three values JSON cannot represent as a number. Parsing
+    // any other string would coerce "123" into a number the caller never sent as one.
     internal static float ReadFloat(JsonElement value) =>
         value.ValueKind == JsonValueKind.String
             ? value.GetString() switch
@@ -177,7 +225,7 @@ internal static class JsonWire
                 "NaN" => float.NaN,
                 "Infinity" => float.PositiveInfinity,
                 "-Infinity" => float.NegativeInfinity,
-                var s => float.Parse(s!, CultureInfo.InvariantCulture),
+                var s => throw new FormatException($"'{s}' is not a float."),
             }
             : value.GetSingle();
 
@@ -188,7 +236,7 @@ internal static class JsonWire
                 "NaN" => double.NaN,
                 "Infinity" => double.PositiveInfinity,
                 "-Infinity" => double.NegativeInfinity,
-                var s => double.Parse(s!, CultureInfo.InvariantCulture),
+                var s => throw new FormatException($"'{s}' is not a double."),
             }
             : value.GetDouble();
 }

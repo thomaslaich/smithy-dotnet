@@ -17,20 +17,6 @@ public sealed class RpcV2CborProtocol : IProtocol
     private const string InitialRequestEventType = "initial-request";
     private const string InitialResponseEventType = "initial-response";
 
-    // Smithy 2.0 wraps `input: Unit` / `output: Unit` in synthetic structures that carry
-    // this trait pointing back to the original `smithy.api#Unit` shape id.
-    private static readonly ShapeId SyntheticOriginalShapeId = new(
-        "smithy.synthetic",
-        "originalShapeId"
-    );
-    private static readonly string UnitShapeIdString = "smithy.api#Unit";
-
-    /// <summary>Returns true for synthetic unit-derived schemas that carry no members.</summary>
-    private static bool IsUnitSchema(Schema schema) =>
-        schema.HasTrait(SyntheticOriginalShapeId)
-        && schema.GetTrait(SyntheticOriginalShapeId)?.Value.Kind == DocumentKind.String
-        && schema.GetTrait(SyntheticOriginalShapeId)?.Value.AsString() == UnitShapeIdString;
-
     /// <summary>
     /// Binds the protocol to a service, yielding per-operation protocols. The service schema
     /// supplies the service shape name used to derive each operation's request path.
@@ -926,7 +912,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         );
 
     private static bool IsUnit<T>(Schema schema) =>
-        typeof(T) == typeof(SmithyUnit) || IsUnitSchema(schema);
+        typeof(T) == typeof(SmithyUnit) || Schemas.IsSyntheticUnit(schema);
 
     private static Schema? FindEventStreamEventSchema(Schema schema) =>
         schema.Resolved is IStructSchema structure

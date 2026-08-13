@@ -28,7 +28,10 @@ import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.shapes.UnionShape;
+import software.amazon.smithy.model.traits.EnumTrait;
+import software.amazon.smithy.model.traits.EnumValueTrait;
 import software.amazon.smithy.model.traits.ErrorTrait;
+import software.amazon.smithy.model.traits.InternalTrait;
 import software.amazon.smithy.model.traits.Trait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -319,7 +322,7 @@ public final class SchemaGenerator {
           writer.write(
               "$L, keyTraits: $L, valueTraits: $L);",
               traitsExpr(shape.getAllTraits().values()),
-              memberTraitsExpr(context, shape.getKey()),
+              mapKeyTraitsExpr(context, shape.getKey()),
               memberTraitsExpr(context, shape.getValue()));
           writer.dedent();
           writer.dedent();
@@ -338,12 +341,14 @@ public final class SchemaGenerator {
             String typeName = CSharpNaming.typeName(shape.getId().getName());
             writer.write(
                 "public static Schema<$L> Schema { get; } ="
-                    + " Schemas.StringEnum<$L>($L, values: $L, traits: $L);",
+                    + " Schemas.StringEnum<$L>($L, values: $L, traits: $L,"
+                    + " internalValues: $L);",
                 typeName,
                 typeName,
                 shapeIdExpr(shape.getId()),
                 stringEnumValuesExpr(shape),
-                traitsExpr(shape.getAllTraits().values()));
+                traitsExpr(shape.getAllTraits().values()),
+                stringEnumInternalValuesExpr(shape));
             writer.write("");
             return;
           }
@@ -510,6 +515,38 @@ public final class SchemaGenerator {
     return traitsExpr(traits);
   }
 
+  /**
+   * A map key is a string in the generated API even when it targets an enum shape, because the
+   * runtime's map schema is string-keyed: a key is a JSON object name, not a value with a type.
+   * That loses the enum's value set, which the server still has to hold the key to, so it is
+   * restated here as the {@code @enum} trait — the same shape the runtime already reads for a
+   * string whose value set comes from a trait rather than from an enum shape.
+   */
+  private static String mapKeyTraitsExpr(GenerationContext context, MemberShape key) {
+    Shape target = context.model().expectShape(key.getTarget());
+    if (!target.isEnumShape()) {
+      return memberTraitsExpr(context, key);
+    }
+
+    List<Node> entries = new ArrayList<>();
+    for (MemberShape member : target.getAllMembers().values()) {
+      ObjectNode.Builder entry =
+          Node.objectNodeBuilder()
+              .withMember("value", member.expectTrait(EnumValueTrait.class).expectStringValue());
+      if (member.hasTrait(InternalTrait.class)) {
+        entry.withMember("tags", Node.fromStrings("internal"));
+      }
+      entries.add(entry.build());
+    }
+
+    List<Trait> traits = new ArrayList<>(key.getAllTraits().values());
+    traits.removeIf(t -> t.toShapeId().equals(EnumTrait.ID));
+    traits.add(
+        new EnumTrait.Provider()
+            .createTrait(EnumTrait.ID, new ArrayNode(entries, key.getSourceLocation())));
+    return traitsExpr(traits);
+  }
+
   private static boolean shouldInlineTargetTraits(Shape target) {
     if ("smithy.api".equals(target.getId().getNamespace())) {
       return false;
@@ -587,6 +624,27 @@ public final class SchemaGenerator {
                 e.getEnumValues().values().stream()
                     .map(CSharpNaming::formatString)
                     .collect(Collectors.joining(", ", "[", "]")))
+        .orElse("null");
+  }
+
+  /**
+   * The values an enum shape marks {@code @internal}. They are valid on the wire like any other,
+   * but a server leaves them out of the message it sends back when it rejects a value, so the
+   * schema has to record which ones they are.
+   */
+  public static String stringEnumInternalValuesExpr(Shape shape) {
+    return shape
+        .asEnumShape()
+        .map(
+            e ->
+                e.getAllMembers().values().stream()
+                    .filter(m -> m.hasTrait(InternalTrait.class))
+                    .map(m -> m.expectTrait(EnumValueTrait.class).expectStringValue())
+                    .map(CSharpNaming::formatString)
+                    .collect(Collectors.toList()))
+        .filter(values -> !values.isEmpty())
+        .map(values -> String.join(", ", values))
+        .map(values -> "[" + values + "]")
         .orElse("null");
   }
 

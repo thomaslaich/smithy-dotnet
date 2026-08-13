@@ -11,6 +11,35 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Structured 4xx for a request the server cannot accept.** Input that never
+  becomes modeled input — a body that is not JSON, a non-numeric integer, an
+  out-of-range number, a timestamp in the wrong format, a blob that is not
+  base64, a dense list holding `null`, a union with two members set — is answered
+  with a 400 `SerializationException` instead of reaching the host as a 500. A
+  request body whose `Content-Type` is not the one the operation reads is
+  answered with 415 `UnsupportedMediaTypeException`, and an `Accept` that
+  excludes the response's media type with 406 `NotAcceptableException`. The
+  generated restJson1 server now passes all 655 cases of Smithy's
+  `httpMalformedRequestTests` suite.
+- **Legacy `@enum` validation.** A string shape carrying the deprecated `@enum`
+  trait has its value set enforced on the server, as an enum shape already did.
+  Values marked `@internal` are accepted but left out of the rejection message.
+
+### Changed
+
+- **BREAKING: `RestServiceProtocol` takes a codec factory per read mode.** Its
+  first constructor parameter is now `Func<WireReadMode, IRestBodyCodecFactory>`
+  rather than a single factory, so each call side compiles codecs that read by
+  its own rules. A server holds a caller to exactly what the model declares; a
+  client stays permissive with a peer it does not control.
+- **BREAKING: a map with an enum key generates a `string` key.** Smithy map keys
+  are object names, and the runtime's map schema is string-keyed; the enum's value
+  set now reaches the schema as key traits, so the key is still validated. A
+  string shape carrying `@enum` no longer generates an enum type — it was never
+  reachable as one, since every string shape maps to `string`.
+
 ## [0.7.0]
 
 This release brings event streaming to NSmithy: a standalone

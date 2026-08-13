@@ -96,19 +96,6 @@ public static class ValidationExceptionFieldSchema
             );
 }
 
-internal static class FrameworkTraits
-{
-    private static readonly ShapeId ProtoIndexTrait = ShapeId.Parse("alloy.proto#protoIndex");
-
-    /// <summary>
-    /// Every protocol has to be able to put this shape on the wire, because the server runtime can
-    /// return it from any operation. The proto codec requires a field number on every member, and
-    /// unlike a modeled shape there is no model file to carry one, so the framework shape declares
-    /// its own.
-    /// </summary>
-    public static Trait ProtoIndex(int index) => new(ProtoIndexTrait, Document.From(index));
-}
-
 public static class ValidationExceptionSchema
 {
     public static readonly ShapeId Id = ShapeId.Parse("smithy.framework#ValidationException");

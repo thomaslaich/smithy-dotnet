@@ -79,27 +79,16 @@ The `http` / `eventStreamHttp` members on protocol traits (for example
 `HttpClient`'s default HTTP version (HTTP/1.1 unless configured), and HTTP/2 is
 forced only for native gRPC. See the [Roadmap](/smithy-dotnet/contributing/roadmap/).
 
-## Malformed Input Is Rejected As A 500, Not A 400
+## Request Rejection Has Two Remaining Gaps
 
-Constraint violations are enforced and answered with
-`smithy.framework#ValidationException` (see [Servers](/smithy-dotnet/servers/)),
-covered by Smithy's malformed-request conformance suite.
+A malformed request is answered with a structured 4xx (see
+[Validation](/smithy-dotnet/servers/validation/)), and the whole of Smithy's
+restJson1 malformed-request conformance suite runs against the generated server.
+Two things the model states are still not enforced:
 
-Input the codec cannot parse at all is a different matter: a non-numeric integer,
-an unparseable timestamp, a body that is not JSON, or an unsupported content type
-currently surfaces as a 500 rather than the structured 400 Smithy specifies. The
-remainder of the malformed-request suite covers exactly those cases and is not
-run yet.
-
-Constraint enforcement itself has three gaps:
-
-- The legacy `@enum` trait on a string is not validated — only enum *shapes* are.
-  A string shape carrying `@enum` is generated as a plain `string`, so the schema
-  carries no value set.
-- `@length` on a `@streaming` blob is not enforced. The stream reaches the handler
-  unread, so its length is not knowable without buffering the whole request.
-- Traits outside the constraint set — `@idRef` reference resolution, for example —
-  are not enforced.
+- `@length` on a `@streaming` blob. The stream reaches the handler unread, so its
+  length is not knowable without buffering the whole request.
+- Traits outside the constraint set — `@idRef` reference resolution, for example.
 
 ## Extra Smithy Maven Dependencies Are External
 

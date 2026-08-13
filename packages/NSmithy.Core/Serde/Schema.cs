@@ -331,19 +331,31 @@ public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
     internal StringEnumSchema(
         ShapeId id,
         IEnumerable<string>? values = null,
-        IEnumerable<Trait>? traits = null
+        IEnumerable<Trait>? traits = null,
+        IEnumerable<string>? internalValues = null
     )
         : base(id, ShapeKind.Enum, traits)
     {
         Values = values is null ? [] : [.. values];
         lookup = Values.ToFrozenSet(StringComparer.Ordinal);
+        var hidden = internalValues is null
+            ? []
+            : internalValues.ToFrozenSet(StringComparer.Ordinal);
+        PublishedValues = hidden.Count == 0 ? Values : [.. Values.Where(v => !hidden.Contains(v))];
     }
 
     private readonly FrozenSet<string> lookup;
 
     public bool Contains(string value) => lookup.Contains(value);
 
+    /// <summary>Every value the model declares, which is what membership is decided against.</summary>
     public IReadOnlyList<string> Values { get; }
+
+    /// <summary>
+    /// The values without <c>@internal</c>. A caller sees these listed when a value is rejected: an
+    /// internal member is still accepted on the wire, but naming it back would advertise it.
+    /// </summary>
+    public IReadOnlyList<string> PublishedValues { get; }
 
     public T Create(string value) => T.FromValue(value);
 
@@ -1582,6 +1594,27 @@ public static class Schemas
 {
     private const string PreludeNamespace = "smithy.api";
 
+    private static readonly ShapeId SyntheticOriginalShapeId = new(
+        "smithy.synthetic",
+        "originalShapeId"
+    );
+
+    private const string UnitShapeId = "smithy.api#Unit";
+
+    /// <summary>
+    /// Whether a schema is the empty structure Smithy synthesizes for an operation whose input or
+    /// output is <c>smithy.api#Unit</c>. The synthetic shape carries
+    /// <c>smithy.synthetic#originalShapeId</c> pointing back at the unit, which is the only thing
+    /// telling it apart from a structure the model really declares with no members — a distinction
+    /// protocols need, because one has no body and the other has an empty one.
+    /// </summary>
+    public static bool IsSyntheticUnit(Schema schema)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        return schema.GetTrait(SyntheticOriginalShapeId)?.Value is { Kind: DocumentKind.String } id
+            && id.AsString() == UnitShapeId;
+    }
+
     public static Schema<bool> Boolean { get; } =
         new BooleanSchema(new ShapeId(PreludeNamespace, "Boolean"));
 
@@ -1650,9 +1683,10 @@ public static class Schemas
     public static StringEnumSchema<T> StringEnum<T>(
         ShapeId id,
         IEnumerable<string>? values = null,
-        IEnumerable<Trait>? traits = null
+        IEnumerable<Trait>? traits = null,
+        IEnumerable<string>? internalValues = null
     )
-        where T : IStringEnumValue<T> => new(id, values, traits);
+        where T : IStringEnumValue<T> => new(id, values, traits, internalValues);
 
     public static IntEnumSchema<T> IntEnum<T>(
         ShapeId id,

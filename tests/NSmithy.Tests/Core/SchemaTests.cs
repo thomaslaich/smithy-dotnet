@@ -424,10 +424,13 @@ public sealed class SchemaTests
             .Build();
         var codec = JsonCodec.FromSchema(choiceSchema);
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        // A payload that does not match the schema is the caller's mistake, not a fault: on a server
+        // the runtime turns this into a structured 400.
+        var ex = Assert.Throws<MalformedRequestException>(() =>
             codec.DeserializeText("{\"missing\":\"hello\"}")
         );
 
+        Assert.Equal(MalformedRequestKind.Serialization, ex.Kind);
         Assert.Equal("Unknown union member 'missing'.", ex.Message);
     }
 

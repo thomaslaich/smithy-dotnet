@@ -34,6 +34,28 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
     /// <summary>Pre-resolved value for the request's <c>Accept</c> header.</summary>
     public required string AcceptType { get; init; }
 
+    /// <summary>
+    /// The <c>Content-Type</c> a request body must carry, or null when the operation models no
+    /// request body at all — in which case a request that sends one is rejected rather than ignored.
+    /// </summary>
+    public required string? RequestContentType { get; init; }
+
+    /// <summary>
+    /// True when the request body is an opaque blob payload, whose <c>Content-Type</c> the protocol
+    /// therefore does not constrain. See <see cref="RestProtocol.IsOpaquePayload"/>.
+    /// </summary>
+    public required bool RequestMediaTypeIsOpaque { get; init; }
+
+    /// <summary>The same for the response, which is what an <c>Accept</c> header is matched against.</summary>
+    public required bool ResponseMediaTypeIsOpaque { get; init; }
+
+    /// <summary>
+    /// Whether a request that sends a body must say what media type it is. AWS's REST protocols
+    /// require it and answer an omission with a 415; alloy's <c>simpleRestJson</c> does not, and its
+    /// own protocol tests send JSON bodies with no <c>Content-Type</c> at all.
+    /// </summary>
+    public required bool RequiresDeclaredContentType { get; init; }
+
     /// <summary>True when the response payload is a streaming blob and must not be buffered.</summary>
     public required bool OutputHasStreamingPayload { get; init; }
 
@@ -75,7 +97,8 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
         IStructSchema<TInput, TInputBuilder> inputSchema,
         IStructSchema<TOutput, TOutputBuilder> outputSchema,
         IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads
+        bool rawStringPayloads,
+        bool requiresDeclaredContentType
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -97,6 +120,13 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
         var outputIsUnit =
             typeof(TOutput) == typeof(SmithyUnit) || operation.Output.Resolved is UnitSchema;
 
+        // A synthetic unit is an input that models no body at all, which is not the same as a
+        // structure the model declares with no members: that one still has a body, an empty object.
+        var inputIsUnit =
+            typeof(TInput) == typeof(SmithyUnit)
+            || operation.Input.Resolved is UnitSchema
+            || Schemas.IsSyntheticUnit(operation.Input);
+
         // Partition input members in a single pass
         var labelMembers = new List<IStructMemberSchema>();
         var queryMembers = new List<QueryMemberBinding>();
@@ -106,9 +136,11 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
         IMemberSchema<TInput>? inputPayloadMember = null;
         var inputBodyMembers = new List<IMemberSchema<TInput>>();
         var boundQueryNames = new HashSet<string>(StringComparer.Ordinal);
+        var inputMemberCount = 0;
 
         foreach (var member in Schemas.GetMembers(inputSchema))
         {
+            inputMemberCount++;
             if (member.MemberTraits.ContainsKey(RestTraits.HttpLabel))
             {
                 labelMembers.Add(member);
@@ -147,6 +179,14 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
                 inputBodyMembers.Add(member);
             }
         }
+
+        // A structure the model declares still has a body when every member is bound elsewhere —
+        // an empty object — but a synthetic unit has none, and an input whose members are all bound
+        // to the URI or headers leaves nothing for the body to carry.
+        var inputHasBody =
+            inputPayloadMember is null
+            && !inputIsUnit
+            && (inputBodyMembers.Count > 0 || inputMemberCount == 0);
 
         // Request bodies don't materialize top-level defaults (the client sends only what was set).
         IProjectionCodec<TInput, TInputBuilder>? inputBodyCodec =
@@ -222,6 +262,29 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
                     codecFactory,
                     rawStringPayloads
                 ),
+            RequestContentType =
+                inputPayloadMember is not null
+                    ? RestProtocol.PayloadContentType(
+                        inputPayloadMember.Target,
+                        inputPayloadMember.MemberTraits,
+                        codecFactory,
+                        rawStringPayloads
+                    )
+                : inputHasBody ? codecFactory.ContentType
+                : null,
+            RequestMediaTypeIsOpaque =
+                inputPayloadMember is not null
+                && RestProtocol.IsOpaquePayload(
+                    inputPayloadMember.Target,
+                    inputPayloadMember.MemberTraits
+                ),
+            ResponseMediaTypeIsOpaque =
+                outputPayloadMember is not null
+                && RestProtocol.IsOpaquePayload(
+                    outputPayloadMember.Target,
+                    outputPayloadMember.MemberTraits
+                ),
+            RequiresDeclaredContentType = requiresDeclaredContentType,
             OutputHasStreamingPayload =
                 outputPayloadMember is not null
                 && (
@@ -305,7 +368,8 @@ public static class RestOperationBinding
         IStructSchema<TInput, TInputBuilder> inputSchema,
         IStructSchema<TOutput, TOutputBuilder> outputSchema,
         IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads
+        bool rawStringPayloads,
+        bool requiresDeclaredContentType = true
     )
         where TInputBuilder : notnull
         where TOutputBuilder : notnull =>
@@ -314,13 +378,15 @@ public static class RestOperationBinding
             inputSchema,
             outputSchema,
             codecFactory,
-            rawStringPayloads
+            rawStringPayloads,
+            requiresDeclaredContentType
         );
 
     public static dynamic From<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation,
         IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads
+        bool rawStringPayloads,
+        bool requiresDeclaredContentType = true
     )
     {
         ArgumentNullException.ThrowIfNull(operation);
@@ -340,7 +406,8 @@ public static class RestOperationBinding
             (dynamic)inputSchema,
             (dynamic)outputSchema,
             codecFactory,
-            rawStringPayloads
+            rawStringPayloads,
+            requiresDeclaredContentType
         );
     }
 }
