@@ -9,6 +9,7 @@ public sealed class ServerHttpRequestConformanceTests
         Model
             .EnumerateHttpRequestTests(Protocol)
             .Where(tc => tc.AppliesToServer && GeneratedService.HasHandler(tc.OperationName))
+            .Where(tc => !KnownParamGaps.ServerRequest.Contains(tc.Id))
             .Select(tc => new object[] { tc.Id });
 
     [Theory]

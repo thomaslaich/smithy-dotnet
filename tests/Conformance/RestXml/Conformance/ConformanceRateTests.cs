@@ -16,7 +16,12 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
         var totalRequests = Model.EnumerateHttpRequestTests(RestXmlAllowlist.Protocol).Count();
         var totalResponses = Model.EnumerateHttpResponseTests(RestXmlAllowlist.Protocol).Count();
         var execRequests = RestXmlAllowlist.ExecutableRequestCases.Count;
-        var execResponses = RestXmlAllowlist.ExecutableResponseCases.Count;
+        // Cases quarantined in KnownParamGaps are subtracted here. They are listed as
+        // executable but no longer run, and counting them would overstate the rate on the
+        // docs Protocol Status page — which is the number this test exists to produce.
+        var execResponses = RestXmlAllowlist.ExecutableResponseCases.Count(id =>
+            !KnownParamGaps.Response.Contains(id)
+        );
 
         output.WriteLine(
             $"[{RestXmlAllowlist.Protocol}] requests: {execRequests}/{totalRequests} ({Pct(execRequests, totalRequests)}), responses: {execResponses}/{totalResponses} ({Pct(execResponses, totalResponses)})"

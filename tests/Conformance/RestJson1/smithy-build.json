@@ -1,7 +1,8 @@
 {
   "version": "1.0",
   "sources": [
-    "model/accept-header-wrapper.smithy"
+    "model/accept-header-wrapper.smithy",
+    "model/defaulted-member-null.smithy"
   ],
   "maven": {
     "repositories": [
@@ -86,6 +87,24 @@
         "csharp-codegen": {
           "service": "aws.protocoltests.restjson.validation#RestJsonValidation",
           "baseNamespace": "Constraints"
+        }
+      }
+    },
+    "restjson1-defaulted-null": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "restjsonone.local#DefaultedMemberNullHarness"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "restjsonone.local#DefaultedMemberNullHarness",
+          "baseNamespace": ""
         }
       }
     }

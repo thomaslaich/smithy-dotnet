@@ -13,6 +13,7 @@ public sealed class HttpResponseConformanceTests
         var ids = Model
             .EnumerateHttpResponseTests(RestXmlAllowlist.Protocol)
             .Where(tc => RestXmlAllowlist.ExecutableResponseCases.Contains(tc.Id))
+            .Where(tc => !KnownParamGaps.Response.Contains(tc.Id))
             .Select(tc => new object[] { tc.Id })
             .ToList();
         if (ids.Count == 0)

@@ -30,11 +30,19 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
         var execClientReq = requests.Count(c =>
             c.AppliesToClient && RestJson1Allowlist.ExecutableRequestCases.Contains(c.Id)
         );
+        // Cases quarantined in KnownResponseParamGaps / KnownServerRequestParamGaps are
+        // subtracted here. They are listed as executable but no longer run, and counting
+        // them would overstate the rate on the docs Protocol Status page — which is the
+        // number this test exists to produce.
         var execClientResp = responses.Count(c =>
-            c.AppliesToClient && RestJson1Allowlist.ExecutableResponseCases.Contains(c.Id)
+            c.AppliesToClient
+            && RestJson1Allowlist.ExecutableResponseCases.Contains(c.Id)
+            && !RestJson1Allowlist.KnownResponseParamGaps.Contains(c.Id)
         );
         var execServerReq = requests.Count(c =>
-            c.AppliesToServer && GeneratedService.HasHandler(c.OperationName)
+            c.AppliesToServer
+            && GeneratedService.HasHandler(c.OperationName)
+            && !RestJson1Allowlist.KnownServerRequestParamGaps.Contains(c.Id)
         );
         var execServerResp = responses.Count(c => c.AppliesToServer);
 
