@@ -42,9 +42,12 @@ jobs:
         # VersionPrefix/VersionSuffix in Directory.Build.props). `just codegen`
         # stages the bundled Maven repo used by in-repo builds; conformance-only
         # Smithy protocol-test artifacts are still resolved from Maven Central.
+        #
+        # `release-ci`, not `ci`: the examples pin the dev version and cannot restore against
+        # release-versioned packages. Pull requests run the full `ci`, examples included.
         env:
           VERSION: ${{ steps.version.outputs.version }}
-        run: devenv shell -- just ci
+        run: devenv shell -- just release-ci
       - name: Upload packages
         uses: actions/upload-artifact@v4
         with:

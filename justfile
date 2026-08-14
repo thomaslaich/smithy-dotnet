@@ -67,6 +67,15 @@ refresh-examples:
 
 ci: check-format build test pack refresh-examples
 
+# The examples pin the fixed `0.0.0-SNAPSHOT` dev version permanently, while a release build packs
+# release-versioned packages, so NuGet resolves a version other than the pinned one and NU1603
+# (warning-as-error) fails the restore. That failure says nothing about the examples: they are a
+# dev-loop check, and `ci` gates them on every pull request, where VERSION is unset and the pins
+# match what `just pack` produced.
+
+# What a release build runs: everything in `ci` except the examples refresh.
+release-ci: check-format build test pack
+
 bench-build:
     dotnet build benchmarks/Benchmarks.slnx --configuration Release
 
