@@ -49,9 +49,10 @@ subprojects {
 
     tasks.withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
-        // Target Java 17 bytecode so the plugin loads inside the JRE bundled
-        // with the Smithy CLI.
-        options.release.set(17)
+        // Target Java 21 bytecode — the toolchain above, and what the JRE 25
+        // bundled with the Smithy CLI since 1.73.0 loads. Consumers pointing
+        // SmithyCliPath at an own install need a CLI at least that new.
+        options.release.set(21)
 
         options.errorprone {
             // Error Prone's default-ERROR checks (real correctness bugs) stay

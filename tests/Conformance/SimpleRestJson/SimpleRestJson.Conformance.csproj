@@ -21,7 +21,7 @@
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <!--
       alloy-protocol-tests 0.3.38 uses HttpRequestTestCase#code and HttpResponseTestCase#{uri,method}
-      which don't exist in smithy-model 1.71.0. The "Error validating trait" text in the WARNING
+      which don't exist in smithy-model 1.73.0. The "Error validating trait" text in the WARNING
       message body causes MSBuild's Exec task to treat it as a build error, so suppress it here.
     -->
     <SmithyExtraArgs>--hide-validators TraitValue.UnknownMember.smithy.test#HttpRequestTestCase.code,TraitValue.UnknownMember.smithy.test#HttpResponseTestCase.uri,TraitValue.UnknownMember.smithy.test#HttpResponseTestCase.method</SmithyExtraArgs>

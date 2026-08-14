@@ -3,7 +3,7 @@
   "sources": ["model"],
   "maven": {
     "dependencies": [
-      "software.amazon.smithy:smithy-protocol-traits:1.71.0"
+      "software.amazon.smithy:smithy-protocol-traits:1.73.0"
     ]
   }
 }

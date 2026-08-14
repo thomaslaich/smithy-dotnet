@@ -3,7 +3,7 @@
 [![NuGet](https://img.shields.io/nuget/v/NSmithy.Client)](https://www.nuget.org/packages/NSmithy.Client)
 [![.NET 10](https://img.shields.io/badge/.NET-net10.0-512BD4)](https://dotnet.microsoft.com/)
 [![License](https://img.shields.io/github/license/thomaslaich/smithy-dotnet)](https://github.com/thomaslaich/smithy-dotnet/blob/main/LICENSE)
-[![Smithy CLI](https://img.shields.io/badge/smithy--cli-1.71.0-orange)](https://github.com/smithy-lang/smithy/releases/tag/1.71.0)
+[![Smithy CLI](https://img.shields.io/badge/smithy--cli-1.73.0-orange)](https://github.com/smithy-lang/smithy/releases/tag/1.73.0)
 
 > **Preview:** NSmithy is in preview; expect some API changes before 1.0. Protocol implementations are not yet on par with the [Smithy reference implementations](https://github.com/smithy-lang/smithy).
 
