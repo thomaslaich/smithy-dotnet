@@ -11,8 +11,24 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.8.0]
+
+This release makes the generated server enforce the model. Modelled constraints
+are validated at the boundary and rejected as `smithy.framework#ValidationException`,
+and a request that never becomes modeled input is answered with the structured
+4xx Smithy specifies rather than reaching the host as a 500. Underneath, the
+codecs are compiled: JSON, CBOR, XML, and Proto build their read and write paths
+from the schema ahead of time instead of walking erased shapes per message.
+
 ### Added
 
+- **Modelled constraint validation.** `@length`, `@range`, `@pattern`,
+  `@required`, and enum value sets declared in the model are enforced by the
+  generated server before the operation runs, and a violation is returned as
+  `smithy.framework#ValidationException` — an implicit modeled error on every
+  operation, so it appears in generated clients too. Validation lives on the
+  server rather than the client: a server cannot trust a caller it does not
+  control. (#131)
 - **Structured 4xx for a request the server cannot accept.** Input that never
   becomes modeled input — a body that is not JSON, a non-numeric integer, an
   out-of-range number, a timestamp in the wrong format, a blob that is not
@@ -22,28 +38,66 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   answered with 415 `UnsupportedMediaTypeException`, and an `Accept` that
   excludes the response's media type with 406 `NotAcceptableException`. The
   generated restJson1 server now passes all 655 cases of Smithy's
-  `httpMalformedRequestTests` suite.
+  `httpMalformedRequestTests` suite. (#135)
 - **Legacy `@enum` validation.** A string shape carrying the deprecated `@enum`
   trait has its value set enforced on the server, as an enum shape already did.
   Values marked `@internal` are accepted but left out of the rejection message.
+  (#131, #135)
+- **XML documentation comments from the model.** Smithy documentation traits are
+  emitted as XML doc comments across the generated model, client, server, and
+  error surfaces, so modelled prose reaches IntelliSense. (#129)
 
 ### Changed
 
+- **BREAKING: compiled schema codecs.** Runtime schema member access is built
+  around typed visitors, and the JSON, CBOR, XML, and Proto codecs compile their
+  paths from the schema instead of traversing erased shapes per message. Top-level
+  default materialization is aligned across the protocol codecs. (#134)
+- **BREAKING: server mappers are protocol-selectable.** The generated
+  protocol-specific mapper methods are replaced by a single mapper taking a
+  protocol flags argument — `app.MapWeatherServiceRpcV2Cbor()` becomes
+  `app.MapWeatherService()` — and routes are checked for conflicts across the
+  selected protocols. (#128)
 - **BREAKING: `RestServiceProtocol` takes a codec factory per read mode.** Its
   first constructor parameter is now `Func<WireReadMode, IRestBodyCodecFactory>`
   rather than a single factory, so each call side compiles codecs that read by
   its own rules. A server holds a caller to exactly what the model declares; a
-  client stays permissive with a peer it does not control.
+  client stays permissive with a peer it does not control. (#135)
 - **BREAKING: a map schema carries the shape its key targets.** `Schemas.Map`
   takes a `key` schema (defaulting to `Schemas.String`), and
   `IMapSchema.TypedKeyMember` is replaced by the untyped `IMapSchema.KeyMember`,
   whose target is that shape rather than a flattened `Schemas.String`. This is
   what lets a server hold an enum-keyed map's keys to the enum's value set. A map
   with an enum key generates a `string` key, since a map key is an object name;
-  the enum still types the value.
+  the enum still types the value. (#134, #135)
 - **BREAKING: a string shape carrying `@enum` no longer generates an enum type.**
   It was never reachable as one — every string shape maps to `string` — and
   generating it produced a build error. Its value set is enforced from the trait.
+  (#131)
+- **Faster JSON codec.** Serialization writes through a pooled buffer with a
+  reused `Utf8JsonWriter`, member property names are encoded once at compile time
+  rather than transcoded per write, and structures are read in a single pass
+  instead of once per member. Serialization is now 1.75–1.86x `System.Text.Json`
+  source-gen (was 2.23–2.52x) at 1.2–1.6x the allocations (was 4.5–5.5x), and
+  deserialization 1.14–1.15x (was 1.38–1.44x). The wire output is unchanged. (#136)
+- **Smithy 1.73.0.** The bundled Smithy CLI and every `software.amazon.smithy:*`
+  pin move to 1.73.0. The CLI now bundles a JRE 25 rather than 17, which grows
+  `NSmithy.MSBuild` by roughly 20 MB and raises the codegen plugin's bytecode
+  target from Java 17 to 21. (#139)
+- **Clearer generator diagnostics.** Codegen reports unsupported prelude schemas,
+  gRPC stream wrappers, and other unsupported model constructs with messages that
+  name the shape and the reason. (#124, #125, #126, #127)
+
+### Fixed
+
+- **A modelled default is applied on explicit null.** An explicit `null` left a
+  member carrying `@default` unset instead of materializing the default, so the
+  codec could produce an object the model says cannot exist. Found while
+  rewriting the JSON read path; no test had covered it. (#136)
+
+### Packages
+
+All packages are published to NuGet at `0.8.0`.
 
 ## [0.7.0]
 

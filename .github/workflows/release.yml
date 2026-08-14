@@ -31,14 +31,13 @@ jobs:
           name: devenv
       - name: Install devenv
         run: nix profile add nixpkgs#devenv
-      - name: Publish codegen JAR to Maven Central
-        env:
-          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
-          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
-        run: devenv shell -- just publish-codegen "${{ steps.version.outputs.version }}"
       - name: Build, test, and pack
+        # Runs before any publish step: a Maven Central coordinate cannot be
+        # replaced or withdrawn, so nothing irreversible may happen until the
+        # build, the tests, and the pack guards have all passed. (A v0.7.0
+        # attempt published the JAR and then failed the templates VERSION guard,
+        # burning that coordinate.)
+        #
         # NSmithy.* .nupkg version comes from the release tag (overrides
         # VersionPrefix/VersionSuffix in Directory.Build.props). `just codegen`
         # stages the bundled Maven repo used by in-repo builds; conformance-only
@@ -52,6 +51,13 @@ jobs:
           name: nuget-packages
           path: artifacts/packages/*.nupkg
           if-no-files-found: error
+      - name: Publish codegen JAR to Maven Central
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: devenv shell -- just publish-codegen "${{ steps.version.outputs.version }}"
       - name: Publish packages to NuGet
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
