@@ -75,7 +75,7 @@ cross-team model sharing outside the solution.
 
 ## Smithy CLI
 
-NSmithy bundles the Smithy CLI (version 1.71.0) inside `NSmithy.MSBuild` and
+NSmithy bundles the Smithy CLI (version 1.73.0) inside `NSmithy.MSBuild` and
 selects the correct platform binary automatically. No separate installation is
 required. The bundle is self-contained and includes a JRE, so Java does not
 need to be installed either.

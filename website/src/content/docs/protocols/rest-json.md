@@ -35,7 +35,7 @@ numbers.
 | Protocol | Dependency |
 | --- | --- |
 | `simpleRestJson` | `com.disneystreaming.alloy:alloy-core:0.3.38` |
-| `restJson1` | `software.amazon.smithy:smithy-aws-traits:1.71.0` |
+| `restJson1` | `software.amazon.smithy:smithy-aws-traits:1.73.0` |
 
 ## NuGet Packages
 

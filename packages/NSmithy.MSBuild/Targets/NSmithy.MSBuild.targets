@@ -35,7 +35,7 @@
        always wins.
        ================================================================ -->
   <PropertyGroup>
-    <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.71.0</SmithyVersion>
+    <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.73.0</SmithyVersion>
     <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''"
       >0.0.0-SNAPSHOT</SmithyCSharpCodegenVersion
     >

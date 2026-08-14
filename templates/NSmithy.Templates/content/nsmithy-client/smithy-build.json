@@ -4,9 +4,9 @@
     "dependencies": [
       "io.github.YOUR_ORG:your-service-contracts:1.0.0",
       //#if (IsRestJson1)
-      "software.amazon.smithy:smithy-aws-traits:1.71.0",
+      "software.amazon.smithy:smithy-aws-traits:1.73.0",
       //#elseif (IsRpcv2Cbor)
-      "software.amazon.smithy:smithy-protocol-traits:1.71.0",
+      "software.amazon.smithy:smithy-protocol-traits:1.73.0",
       //#elseif (IsSimpleRestJson || IsGrpc)
       "com.disneystreaming.alloy:alloy-core:0.3.38",
       //#endif
