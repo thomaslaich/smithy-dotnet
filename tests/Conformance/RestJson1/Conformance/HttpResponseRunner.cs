@@ -432,6 +432,16 @@ internal static class ResponseAssertions
         }
 
         // byte[] implements IEnumerable<byte> but must be compared as a base64 blob.
+        // A streaming blob arrives as a Stream rather than a byte[]. Drain it and let
+        // the blob comparison below handle it, otherwise it reaches the scalar branch
+        // and fails with "don't know how to compare scalar ...Stream".
+        if (actual is Stream stream)
+        {
+            using var drained = new MemoryStream();
+            stream.CopyTo(drained);
+            actual = drained.ToArray();
+        }
+
         if (actual is byte[] bytes)
         {
             var base64 = (string?)expected;
@@ -504,24 +514,59 @@ internal static class ResponseAssertions
             .First();
         foreach (var p in ctor.GetParameters())
         {
-            var memberName = p.Name!;
-            // Property is PascalCase derived from the camelCase ctor param.
-            var propName = char.ToUpperInvariant(memberName[0]) + memberName[1..];
+            // Generated records carry PascalCase constructor parameters, while a test
+            // fixture's `params` uses the model's camelCase member names. Matching them
+            // ordinally silently skipped every member, turning this whole assertion
+            // into a no-op — a wrong expected value passed.
+            var propName = p.Name!;
             var prop =
                 type.GetProperty(propName, BindingFlags.Public | BindingFlags.Instance)
+                // Generated records name the constructor parameter exactly as the
+                // property, but a union case class takes a camelCase parameter and
+                // exposes a PascalCase property, so both spellings have to resolve.
+                ?? type.GetProperty(
+                    char.ToUpperInvariant(propName[0]) + propName[1..],
+                    BindingFlags.Public | BindingFlags.Instance
+                )
                 ?? throw new InvalidOperationException(
                     $"[{path}] Cannot resolve property {propName} on {type.FullName}."
                 );
             var actualValue = prop.GetValue(actual);
-            if (!expected.TryGetPropertyValue(memberName, out var expectedValue))
+            var memberName = ResolveExpectedKey(expected, propName);
+            if (memberName is null)
             {
                 // Member absent from the test fixture's `params`. Smithy protocol-test
                 // semantics: omitted fields are not asserted (could be null, default, or just
                 // "don't care"). Skip the comparison entirely.
                 continue;
             }
-            AssertEqual(expectedValue, actualValue, $"{path}.{memberName}");
+
+            AssertEqual(expected[memberName], actualValue, $"{path}.{memberName}");
         }
+    }
+
+    /// <summary>
+    /// Finds the fixture key matching a generated property, tolerating the
+    /// PascalCase/camelCase difference between generated records and model member
+    /// names. Returns null when the member is genuinely absent from `params`, which
+    /// Smithy protocol-test semantics treat as "not asserted".
+    /// </summary>
+    private static string? ResolveExpectedKey(JsonObject expected, string propName)
+    {
+        if (expected.ContainsKey(propName))
+        {
+            return propName;
+        }
+
+        foreach (var (key, _) in expected)
+        {
+            if (string.Equals(key, propName, StringComparison.OrdinalIgnoreCase))
+            {
+                return key;
+            }
+        }
+
+        return null;
     }
 
     private static void AssertSequence(JsonNode expected, IEnumerable actual, string path)

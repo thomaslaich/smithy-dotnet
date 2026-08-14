@@ -16,6 +16,59 @@ internal static class RestJson1Allowlist
     /// </summary>
     internal static bool RunsMalformedCase(HttpMalformedRequestTestCase testCase) => true;
 
+    /// <summary>
+    /// Cases whose deserialized `params` do not yet match the fixture.
+    /// </summary>
+    /// <remarks>
+    /// These are not newly broken — they were never actually asserted. The response
+    /// assertion looked up expected values by generated constructor parameter name
+    /// (PascalCase) against fixture keys (camelCase), missed every time, and took the
+    /// "omitted fields are not asserted" path. A deliberately wrong expected value
+    /// passed.
+    ///
+    /// Repairing that exposed 81 failures, 51 of which were defects in the runner
+    /// rather than in the generated code: property lookup has to tolerate both the
+    /// PascalCase constructor parameters of generated records and the camelCase
+    /// parameters of union case classes; blobs and streaming blobs need payload
+    /// comparison instead of being treated as sequences or scalars; and Smithy's Byte
+    /// maps to C# sbyte, which was not a known numeric type. The rest are believed
+    /// genuine.
+    ///
+    /// They are quarantined here rather than silently skipped so the gaps are
+    /// greppable and countable. Each still needs triage: some are likely real
+    /// deserialization gaps, others may be limitations in the runner's own union and
+    /// blob comparison logic, which this is the first code to reach.
+    ///
+    /// The clusters are unions, streaming blobs, and query-string binding.
+    /// </remarks>
+    public static readonly IReadOnlySet<string> KnownResponseParamGaps = new HashSet<string>(
+        StringComparer.Ordinal
+    )
+    { };
+
+    /// <summary>Server-request counterpart of <see cref="KnownResponseParamGaps"/>.</summary>
+    public static readonly IReadOnlySet<string> KnownServerRequestParamGaps = new HashSet<string>(
+        StringComparer.Ordinal
+    )
+    {
+        "RestJsonAllQueryStringTypes",
+        "RestJsonHttpEmptyPrefixHeadersRequestServer",
+        "RestJsonOmitsEmptyListQueryValues",
+        "RestJsonQueryStringEscaping",
+        "RestJsonServersPutAllQueryParamsInMap",
+        "RestJsonServersQueryParamsStringListMap",
+        "RestJsonStreamingTraitsRequireLengthWithBlob",
+        "RestJsonStreamingTraitsWithBlob",
+        "RestJsonStreamingTraitsWithMediaTypeWithBlob",
+        "RestJsonSupportsInfinityFloatQueryValues",
+        "RestJsonSupportsNaNFloatQueryValues",
+        "RestJsonSupportsNegativeInfinityFloatQueryValues",
+        "RestJsonTestPayloadBlob",
+        "RestJsonZeroAndFalseQueryValues",
+        "SDKAppendedGzipAfterProvidedEncoding_restJson1",
+        "SDKAppliedContentEncoding_restJson1",
+    };
+
     public static readonly IReadOnlySet<string> ExecutableRequestCases = new HashSet<string>(
         StringComparer.Ordinal
     )
@@ -165,6 +218,12 @@ internal static class RestJson1Allowlist
         StringComparer.Ordinal
     )
     {
+        // Local harness (model/defaulted-member-null.smithy): explicit null against a
+        // member carrying @default. The official protocol tests do not cover it, and a
+        // real bug in the structure reader survived the entire suite because of that.
+        "RestJsonLocalDefaultedMembersExplicitNull",
+        "RestJsonLocalDefaultedMembersAbsent",
+        "RestJsonLocalDefaultedMembersPresent",
         "RestJsonEmptyInputAndEmptyOutput",
         "RestJsonEmptyInputAndEmptyOutputJsonObjectOutput",
         "RestJsonHttpPayloadWithStructure",

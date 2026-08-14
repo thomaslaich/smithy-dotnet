@@ -348,6 +348,13 @@ internal sealed class StructureJsonValueReader<T, TBuilder>(
     IReadOnlyList<IJsonMemberReader<TBuilder>> memberReaders
 ) : IJsonValueReader<T>
 {
+    // Member names as UTF-8, encoded once. Matching a property against these never
+    // transcodes and never allocates a name string.
+    private readonly byte[][] utf8Names =
+    [
+        .. memberReaders.Select(reader => System.Text.Encoding.UTF8.GetBytes(reader.Name)),
+    ];
+
     public T Read(JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.Object)
@@ -356,32 +363,45 @@ internal sealed class StructureJsonValueReader<T, TBuilder>(
         }
 
         var builder = createBuilder();
-        foreach (var memberReader in memberReaders)
+
+        // One pass over the payload, rather than one pass per member. The previous
+        // shape called TryGetProperty for each member, and each of those calls
+        // scanned the object again — so a structure with N members over an object
+        // with M properties walked the document N times.
+        Span<bool> seen =
+            memberReaders.Count <= 64 ? stackalloc bool[64] : new bool[memberReaders.Count];
+
+        foreach (var property in value.EnumerateObject())
         {
-            if (!value.TryGetProperty(memberReader.Name, out var memberValue))
+            var index = IndexOf(property);
+            if (index < 0)
             {
-                if (memberReader.IsRequired)
-                {
-                    throw new MissingRequiredMemberException(memberReader.Name);
-                }
-
-                memberReader.ReadMissing(builder);
                 continue;
             }
 
-            if (memberValue.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            // First occurrence wins, which is what TryGetProperty did for a payload
+            // carrying a duplicate key.
+            if (seen[index])
             {
-                if (memberReader.IsRequired)
-                {
-                    throw new MissingRequiredMemberException(memberReader.Name);
-                }
-
                 continue;
             }
+
+            var memberReader = memberReaders[index];
+
+            if (property.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            {
+                // Left unseen so the trailing loop applies the modelled default, the
+                // same as an absent member. A member carrying @default always has a
+                // value in Smithy, so an explicit null must not leave it unset — and
+                // the trailing loop raises the same error for a required member.
+                continue;
+            }
+
+            seen[index] = true;
 
             try
             {
-                memberReader.ReadInto(builder, memberValue);
+                memberReader.ReadInto(builder, property.Value);
             }
             catch (MissingRequiredMemberException exception)
             {
@@ -390,7 +410,36 @@ internal sealed class StructureJsonValueReader<T, TBuilder>(
             }
         }
 
+        for (var i = 0; i < memberReaders.Count; i++)
+        {
+            if (seen[i])
+            {
+                continue;
+            }
+
+            var memberReader = memberReaders[i];
+            if (memberReader.IsRequired)
+            {
+                throw new MissingRequiredMemberException(memberReader.Name);
+            }
+
+            memberReader.ReadMissing(builder);
+        }
+
         return build(builder);
+    }
+
+    private int IndexOf(JsonProperty property)
+    {
+        for (var i = 0; i < utf8Names.Length; i++)
+        {
+            if (property.NameEquals(utf8Names[i]))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 }
 
