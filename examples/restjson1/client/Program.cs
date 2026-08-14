@@ -1,5 +1,6 @@
 using Example.Weather;
 using NSmithy.Client;
+using NSmithy.Core.Validation;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
@@ -63,4 +64,33 @@ for (var i = 0; i < 3; i++)
 {
     var flaky = await client.GetFlakyForecastAsync(new GetFlakyForecastInput("SEA"));
     Console.WriteLine($"  Attempt group {i + 1}: {flaky.ChanceOfRain:P0} chance of rain");
+}
+
+// Rejected requests come last on purpose: each failed call spends part of the retry strategy's
+// shared budget, and the flaky-forecast loop above needs that budget to retry its way to success.
+
+// "Atlantis" satisfies the model, so it reaches the handler and comes back as the error the
+// operation declares — a modeled error, surfaced as a typed exception.
+try
+{
+    await client.GetCityAsync(new GetCityInput("Atlantis"));
+}
+catch (NoSuchResource error)
+{
+    Console.WriteLine($"No such {error.ResourceType}: Atlantis");
+}
+
+// CityId is @pattern("^[A-Za-z0-9 ]+$"), and constraints are enforced by the server — the client
+// sends what it is handed. The rejection comes back as smithy.framework#ValidationException, an
+// implicit modeled error on every operation, so it deserializes into a typed exception naming the
+// member and the constraint it failed rather than a bare 400.
+try
+{
+    await client.GetCityAsync(new GetCityInput("SEA!"));
+}
+catch (ValidationException error)
+{
+    Console.WriteLine($"Rejected \"SEA!\": {error.Message}");
+    foreach (var field in error.FieldList)
+        Console.WriteLine($"  {field.Path}: {field.Message}");
 }
