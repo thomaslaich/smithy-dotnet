@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Bench.Micro</RootNamespace>
+    <AssemblyName>Bench.Micro</AssemblyName>
+
+    <!-- Pinned and explicit rather than left to defaults, because GC mode changes
+         allocation and latency numbers materially and the results are meant to be
+         reproducible on another machine. Workstation, non-concurrent, keeps
+         run-to-run variance low and attribution clean; a future socket-based macro
+         suite should use Server GC instead, since that is what production runs. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+
+    <!-- BenchmarkDotNet needs optimized, non-tiered-inlined code to measure. -->
+    <Optimize>true</Optimize>
+    <TieredPGO>false</TieredPGO>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Benchmarks.Clients/Bench.Clients.csproj" />
+    <ProjectReference Include="../Benchmarks.Corpus/Bench.Corpus.csproj" />
+    <ProjectReference Include="../Benchmarks.Domain/Bench.Domain.csproj" />
+    <ProjectReference Include="../Benchmarks.Hosting/Bench.Hosting.csproj" />
+    <!-- Level A drives the codecs directly, so it references the stacks and the
+         JSON codec explicitly rather than relying on transitive flow. -->
+    <ProjectReference Include="../stacks/MinimalApi/Bench.Stack.MinimalApi.csproj" />
+    <ProjectReference Include="../stacks/NSmithy/Bench.Stack.NSmithy.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Core/NSmithy.Core.csproj" />
+  </ItemGroup>
+</Project>

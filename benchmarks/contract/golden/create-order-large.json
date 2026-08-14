@@ -1,0 +1,10 @@
+{
+  "scenario": "create-order-large",
+  "status": 201,
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "bodyLength": 77,
+  "bodySha256": "eea15b4460ffa3407ba5488dd883f3dc187f088c3f7f19bb73ed893be58870e6",
+  "body": "{\"orderId\":\"order-cust-000042-6400\",\"totalCents\":1055063005,\"lineCount\":6400}"
+}

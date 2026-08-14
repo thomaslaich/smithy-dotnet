@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "sources": ["../../contract/model"],
+  "maven": {
+    "repositories": [
+      {
+        "url": "https://repo.maven.apache.org/maven2/"
+      }
+    ],
+    "dependencies": [
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
+      "software.amazon.smithy:smithy-aws-traits:1.71.0",
+      "software.amazon.smithy:smithy-openapi:1.71.0"
+    ]
+  },
+  "plugins": {
+    "csharp-codegen": {
+      "service": "nsmithy.bench#BenchmarkService",
+      "baseNamespace": ""
+    },
+    "openapi": {
+      "service": "nsmithy.bench#BenchmarkService",
+      "protocol": "aws.protocols#restJson1",
+      "useIntegerType": true
+    }
+  }
+}

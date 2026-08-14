@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Bench.Capture</RootNamespace>
+    <AssemblyName>Bench.Capture</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Benchmarks.Corpus/Bench.Corpus.csproj" />
+    <ProjectReference Include="../Benchmarks.Hosting/Bench.Hosting.csproj" />
+  </ItemGroup>
+</Project>

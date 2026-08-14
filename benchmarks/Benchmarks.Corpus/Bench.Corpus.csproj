@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Bench.Corpus</RootNamespace>
+    <AssemblyName>Bench.Corpus</AssemblyName>
+  </PropertyGroup>
+</Project>

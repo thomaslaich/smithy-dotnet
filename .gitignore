@@ -31,3 +31,8 @@ build/
 
 # macOS Finder metadata
 .DS_Store
+
+# BenchmarkDotNet's default output location, used when a run is invoked without
+# --artifacts. The `just bench-*` recipes direct output to benchmarks/results
+# instead; this catches ad-hoc runs.
+BenchmarkDotNet.Artifacts/

@@ -1,0 +1,16 @@
+{
+  "name": "bench-stack-typespec",
+  "private": true,
+  "description": "TypeSpec stack for the NSmithy benchmark suite. Generated from the Smithy-emitted OpenAPI document so the wire contract matches by construction.",
+  "scripts": {
+    "import": "tsp-openapi3 ../NSmithy/obj/Smithy/source/openapi/BenchmarkService.openapi.json --output-dir ./tsp",
+    "generate": "tsp compile ./tsp/main.tsp --emit @typespec/http-server-csharp"
+  },
+  "devDependencies": {
+    "@typespec/compiler": "1.14.0",
+    "@typespec/http": "1.14.0",
+    "@typespec/http-server-csharp": "0.58.0-alpha.30",
+    "@typespec/openapi3": "1.14.0",
+    "@typespec/rest": "0.84.0"
+  }
+}

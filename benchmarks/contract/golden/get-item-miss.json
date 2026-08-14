@@ -1,0 +1,11 @@
+{
+  "scenario": "get-item-miss",
+  "status": 404,
+  "headers": {
+    "Content-Type": "application/json",
+    "X-Amzn-Errortype": "ItemNotFound"
+  },
+  "bodyLength": 75,
+  "bodySha256": "4c60c83c7559e92bcf8f0eddef680e2130d3de46e8d48814e20d3f4064b72baf",
+  "body": "{\"itemId\":\"item-99999\",\"message\":\"No item with id \\u0027item-99999\\u0027.\"}"
+}

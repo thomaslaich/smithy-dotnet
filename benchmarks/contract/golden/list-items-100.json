@@ -1,0 +1,10 @@
+{
+  "scenario": "list-items-100",
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "bodyLength": 14538,
+  "bodySha256": "d8128438e3aa3f0d9813a88d1d661fe824950cd5e3019c007e1ff6e07665deb0",
+  "body": null
+}

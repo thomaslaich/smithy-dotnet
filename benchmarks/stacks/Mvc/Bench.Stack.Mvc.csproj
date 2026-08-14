@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Bench.Stacks.Mvc</RootNamespace>
+    <AssemblyName>Bench.Stack.Mvc</AssemblyName>
+    <!-- CA1822 ("can be marked static"): MVC action methods must be instance
+         methods to be routable, so the suggestion is not actionable here. -->
+    <NoWarn>$(NoWarn);CA1822</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Benchmarks.Domain/Bench.Domain.csproj" />
+    <!-- Reuses the minimal-API baseline's DTOs and source-generated JSON context.
+         The two baselines must differ only in the hosting model — sharing the
+         serialization layer is what makes the difference attributable to MVC. -->
+    <ProjectReference Include="../MinimalApi/Bench.Stack.MinimalApi.csproj" />
+  </ItemGroup>
+</Project>

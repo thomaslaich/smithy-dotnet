@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Bench.Hosting</RootNamespace>
+    <AssemblyName>Bench.Hosting</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Benchmarks.Corpus/Bench.Corpus.csproj" />
+    <ProjectReference Include="../stacks/MinimalApi/Bench.Stack.MinimalApi.csproj" />
+    <ProjectReference Include="../stacks/Mvc/Bench.Stack.Mvc.csproj" />
+    <ProjectReference Include="../stacks/NSmithy/Bench.Stack.NSmithy.csproj" />
+  </ItemGroup>
+</Project>

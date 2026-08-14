@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Bench.Stacks</RootNamespace>
+    <AssemblyName>Bench.Stack.MinimalApi</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../Benchmarks.Domain/Bench.Domain.csproj" />
+  </ItemGroup>
+</Project>

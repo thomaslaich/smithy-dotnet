@@ -1,0 +1,9 @@
+# BenchmarkDotNet writes a lot per run: raw measurement CSVs, per-benchmark build
+# directories, and several report formats. Only the GitHub-flavoured markdown
+# reports are worth keeping in history — they carry the full environment block
+# (OS, CPU, SDK, runtime, JIT, job config) alongside the numbers, which is what
+# makes a quoted figure checkable later.
+*
+!.gitignore
+!**/
+!**/*-report-github.md
