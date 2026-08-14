@@ -2,23 +2,11 @@
 
 What the benchmark suite has surfaced, and what is still unexplained.
 
-## Provenance of the numbers
-
-Every measurement here was taken on a tree with the sibling codec and conformance
-changes applied. This branch adds only the suite, so running it here reproduces
-the **pre-fix** numbers instead, serialization at 2.23–2.52× `System.Text.Json`
-rather than 1.75–1.86×, deserialization at 1.38–1.44× rather than 1.14–1.15×, and
-the uncorrected conformance rates.
-
-Land this after those changes and the figures match what the suite reports. The
-"Fixed" entries below likewise describe work that lives in those changes, not in
-this one.
-
 ## How to read this
 
-Every item is tagged with how strongly it is established. The distinction matters
-,  during this work, reading code produced two confident predictions that
-measurement then contradicted:
+Every item is tagged with how strongly it is established. The distinction
+matters: during this work, reading code produced two confident predictions that
+measurement then contradicted.
 
 - The `MemoryStream` → pooled-buffer fix was predicted to buy time as well as
   allocations. It bought a **3.6× allocation reduction and no measurable time**.
@@ -109,8 +97,8 @@ Values = System.Array.AsReadOnly(System.Linq.Enumerable.ToArray(values));
 ```
 
 That is an array copy plus two allocations per list instance, which the
-`System.Text.Json` baselines never pay. It is left in the measurement deliberately
-,  it is a real cost of the generated types, but it is a candidate for removal
+`System.Text.Json` baselines never pay. It is left in the measurement deliberately,
+since it is a real cost of the generated types, but it is a candidate for removal
 when the caller already hands over an array it owns.
 
 ### 5. Codec optimization candidates, by codec
@@ -463,8 +451,8 @@ the main checkout.
   (`JsonProperty.NameEquals`), which is O(properties × members). It is deliberately
   not a dictionary: hashing needs `JsonProperty.Name`, which allocates a string per
   property, whereas the scan allocates nothing. At typical widths it is clearly not
-  dominating, deserialization sits at 1.14–1.15× of `System.Text.Json` source-gen
- , but the widest shape in the benchmark model is six members, so the suite cannot
+  dominating: deserialization sits at 1.14–1.15× of `System.Text.Json` source-gen.
+  But the widest shape in the benchmark model is six members, so the suite cannot
   see a wide-structure cliff. A 64-member shape plus a corpus scenario would settle
   it, and would also show whether the write path is width-sensitive. If it does
   degrade, the fix stays allocation-free: bucket members by name length or dispatch
