@@ -25,10 +25,12 @@ from the schema ahead of time instead of walking erased shapes per message.
 - **Modelled constraint validation.** `@length`, `@range`, `@pattern`,
   `@required`, and enum value sets declared in the model are enforced by the
   generated server before the operation runs, and a violation is returned as
-  `smithy.framework#ValidationException` — an implicit modeled error on every
-  operation, so it appears in generated clients too. Validation lives on the
-  server rather than the client: a server cannot trust a caller it does not
-  control. (#131)
+  `smithy.framework#ValidationException`, carrying the member path and the
+  constraint it failed. It is an implicit modeled error on every operation, so a
+  generated client deserializes it into a typed
+  `NSmithy.Core.Validation.ValidationException` rather than surfacing a bare 400.
+  Validation lives on the server rather than the client: a server cannot trust a
+  caller it does not control. (#131)
 - **Structured 4xx for a request the server cannot accept.** Input that never
   becomes modeled input — a body that is not JSON, a non-numeric integer, an
   out-of-range number, a timestamp in the wrong format, a blob that is not
