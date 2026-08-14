@@ -90,15 +90,14 @@ result.
 
 Stated here rather than discovered later:
 
-- **No constraint validation.** NSmithy does not yet enforce constraint traits
-  server-side, so the model omits them entirely to keep every stack doing equal
-  work. There is consequently no validation-path scenario.
 - **No socket-level macro suite.** Requests per second, tail latency under
   concurrency, and RSS are not measured. Those need separate processes, a load
   generator, and a pinned machine.
-- **No client-side suite yet.** The generated client is built and the contract
-  supports it, but the client-direction benchmarks (request serialization,
-  response deserialization against a stub `HttpMessageHandler`) are not written.
-- **Third-party stacks not yet included.** The OpenAPI document is emitted and
-  ready to generate from; the TypeSpec and NSwag stacks are not wired up.
-- **Single protocol.** `restJson1` only.
+- **One third-party stack, on one side.** NSwag is measured as a client, generated
+  from the emitted OpenAPI. TypeSpec is wired up but excluded: its C# server
+  emitter is alpha and cannot serve the contract, so no third-party server is
+  compared at all.
+- **No wide structures.** The widest shape in the model is six members, so nothing
+  here shows how member lookup or the write path scale with structure width.
+- **Single protocol.** `restJson1` only. CBOR, XML and proto have no coverage,
+  even though the JSON codec fixes have visible analogues in the CBOR codec.

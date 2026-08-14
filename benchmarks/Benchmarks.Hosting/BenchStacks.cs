@@ -11,12 +11,6 @@ namespace Bench.Hosting;
 /// <summary>
 /// The registry of server stacks under measurement.
 /// </summary>
-/// <remarks>
-/// Adding a stack here makes it visible to both the parity gate and the server
-/// pipeline benchmarks at once, which is the point, a stack that is benchmarked
-/// but not parity-checked would be reporting numbers for a contract nobody
-/// verified it serves.
-/// </remarks>
 public static class BenchStacks
 {
     public const string NSmithy = "nsmithy";
@@ -43,12 +37,6 @@ public static class BenchStacks
         BenchServer.StartAsync(MinimalApi, static _ => { }, app => app.MapBenchmarkMinimalApi());
 
     /// <summary>Hand-written MVC controller, sharing the minimal-API baseline's DTOs.</summary>
-    /// <remarks>
-    /// The controller lives in a referenced assembly, so its application part has
-    /// to be registered explicitly, MVC only discovers controllers in the entry
-    /// assembly by default, and would otherwise start with zero routes and 404
-    /// every scenario.
-    /// </remarks>
     public static Task<BenchServer> StartMvcAsync() =>
         BenchServer.StartAsync(
             Mvc,

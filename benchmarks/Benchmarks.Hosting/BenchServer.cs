@@ -11,11 +11,6 @@ namespace Bench.Hosting;
 /// <summary>
 /// One stack, hosted in-process over <see cref="TestServer"/>.
 /// </summary>
-/// <remarks>
-/// No sockets and no Kestrel: loopback TCP would dominate the numbers and add
-/// variance unrelated to the code under test. What is left is routing, model
-/// binding, the codec, and the handler.
-/// </remarks>
 public sealed class BenchServer : IAsyncDisposable
 {
     private readonly WebApplication app;
@@ -67,10 +62,6 @@ public sealed class BenchServer : IAsyncDisposable
     }
 
     /// <summary>Builds a live <see cref="HttpRequestMessage"/> for a corpus scenario.</summary>
-    /// <remarks>
-    /// A fresh message per call is required, <see cref="HttpRequestMessage"/> is
-    /// single-use, so a cached one would throw on the second benchmark iteration.
-    /// </remarks>
     public static HttpRequestMessage BuildRequest(BenchRequest request)
     {
         var message = new HttpRequestMessage(new HttpMethod(request.Method), request.PathAndQuery);

@@ -7,12 +7,6 @@ namespace Bench.Corpus;
 /// The request corpus every stack is measured against, and the parity gate
 /// compares over.
 /// </summary>
-/// <remarks>
-/// Deliberately depends on no stack, it deals in raw method/path/header/body
-/// bytes, so no stack's types leak into the definition of "the same request".
-/// Bodies are built once by a static initializer, so no iteration pays for corpus
-/// construction and two machines compare the same bytes.
-/// </remarks>
 public static class BenchCorpus
 {
     /// <summary>
@@ -57,11 +51,6 @@ public static class BenchCorpus
     /// Scenario: the validation path, via a violated <c>@range</c> on a query
     /// parameter (<c>count</c> is capped at 10000).
     /// </summary>
-    /// <remarks>
-    /// This measures rejection, not work: a stack that validates cheaply should
-    /// answer faster here than it does on any success scenario, because it never
-    /// reaches the handler or the serializer.
-    /// </remarks>
     public static BenchRequest ValidationRange { get; } =
         new("validation-range", "GET", "/items?count=99999", [], null);
 

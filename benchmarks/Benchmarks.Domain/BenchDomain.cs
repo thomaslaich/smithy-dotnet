@@ -3,13 +3,6 @@ namespace Bench.Domain;
 /// <summary>
 /// The business logic every stack in the suite calls into.
 /// </summary>
-/// <remarks>
-/// Fairness rests on this: if each stack shipped its own handler body, a
-/// difference in the handler would read as a difference in the framework. The
-/// catalog is built once and reads hand back slices of it, so the handler adds no
-/// noise of its own. Stacks map these records into their own generated DTOs ,
-/// work a real user does, so it stays in the measurement.
-/// </remarks>
 public static class BenchDomain
 {
     /// <summary>Largest list the corpus asks for; the catalog is sized to match.</summary>
