@@ -362,23 +362,46 @@ public sealed class RpcV2CborProtocol : IProtocol
         ArgumentNullException.ThrowIfNull(errorSchema);
         ArgumentNullException.ThrowIfNull(errorShapeId);
 
-        return BufferedResponse(
+        return SerializeError(
+            CompileErrorMemberWriters(errorSchema),
+            error,
+            errorShapeId,
+            statusCode
+        );
+    }
+
+    private static SmithyHttpServerResponse SerializeError<TError>(
+        ICborMemberWriter<TError>[] memberWriters,
+        TError error,
+        string errorShapeId,
+        int statusCode
+    ) =>
+        BufferedResponse(
             statusCode,
-            SerializeErrorBody(errorSchema, error, errorShapeId),
+            SerializeErrorBody(memberWriters, error, errorShapeId),
             headers =>
             {
                 headers["Smithy-Protocol"] = ["rpc-v2-cbor"];
                 headers["Content-Type"] = [ContentType];
             }
         );
-    }
 
-    private static byte[] SerializeErrorBody<TError>(
-        Schema<TError> errorSchema,
-        TError error,
-        string errorShapeId
+    /// <summary>
+    /// Compiles an error shape's member writers, which is everything the shape determines about how
+    /// its body is written.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="SerializeError"/> compiles on every call, so it is the ad-hoc entry point; the
+    /// server path holds the result of this per error instead. Compiling per response also discarded
+    /// the <c>SchemaCompilationCache</c> that the fresh <c>CborWriterCompiler</c> carries, so a
+    /// shape referenced twice was compiled twice, every time.
+    /// </remarks>
+    internal static ICborMemberWriter<TError>[] CompileErrorMemberWriters<TError>(
+        Schema<TError> errorSchema
     )
     {
+        ArgumentNullException.ThrowIfNull(errorSchema);
+
         if (errorSchema.Resolved is not IStructSchema<TError> structSchema)
         {
             throw new InvalidOperationException(
@@ -391,12 +414,20 @@ public sealed class RpcV2CborProtocol : IProtocol
             materializeDefaults: true
         );
         structSchema.VisitMembers(visitor);
+        return visitor.Writers;
+    }
 
+    private static byte[] SerializeErrorBody<TError>(
+        ICborMemberWriter<TError>[] memberWriters,
+        TError error,
+        string errorShapeId
+    )
+    {
         var writer = new CborWriter(CborConformanceMode.Lax);
         writer.WriteStartMap(null);
         writer.WriteTextString("__type");
         writer.WriteTextString(errorShapeId);
-        foreach (var memberWriter in visitor.Writers)
+        foreach (var memberWriter in memberWriters)
         {
             memberWriter.Write(writer, error);
         }
@@ -422,17 +453,19 @@ public sealed class RpcV2CborProtocol : IProtocol
     private static (Type, Func<Exception, SmithyHttpServerResponse>) CompileServerError<TError>(
         OperationErrorSchema<TError> error
     )
-        where TError : Exception =>
-        (
+        where TError : Exception
+    {
+        // Compiled here rather than inside the returned closure. This previously rebuilt a
+        // CborWriterCompiler and recompiled the error shape's entire writer tree per response.
+        var memberWriters = CompileErrorMemberWriters(error.Schema);
+        var errorShapeId = error.Id.ToString();
+        var statusCode = error.HttpStatusCode;
+
+        return (
             typeof(TError),
-            exception =>
-                SerializeError(
-                    error.Schema,
-                    (TError)exception,
-                    error.Id.ToString(),
-                    error.HttpStatusCode
-                )
+            exception => SerializeError(memberWriters, (TError)exception, errorShapeId, statusCode)
         );
+    }
 
     private static HttpOperationError[] CompileErrors(
         IReadOnlyList<IOperationErrorSchema> errors

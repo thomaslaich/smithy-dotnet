@@ -207,22 +207,30 @@ public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutpu
             )
         );
 
-    public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response)
-    {
-        // A framework fault is not one of the operation's modeled errors — no model declares it —
-        // so it is answered here rather than through the compiled matcher.
-        if (exception is MalformedRequestException malformed && errorTypeHeader is not null)
-        {
-            var (errorType, statusCode) = MalformedRequestSchema.Wire(malformed.Kind);
-            response = RestProtocol.SerializeError(
+    // One shape serves every malformed-request kind, differing only in shape id and status code, so
+    // a single compiled writer covers them all. Compiled eagerly with the rest of the operation:
+    // this is the validation-failure path, which for many services is ordinary traffic.
+    private readonly RestErrorSerializer<MalformedRequestException>? malformedRequestSerializer =
+        errorTypeHeader is null
+            ? null
+            : RestProtocol.CompileErrorSerializer(
                 MalformedRequestSchema.Schema,
-                malformed,
-                errorType,
-                statusCode,
                 codecFactory,
                 rawStringPayloads,
                 errorTypeHeader
             );
+
+    public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response)
+    {
+        // A framework fault is not one of the operation's modeled errors — no model declares it —
+        // so it is answered here rather than through the compiled matcher.
+        if (
+            exception is MalformedRequestException malformed
+            && malformedRequestSerializer is not null
+        )
+        {
+            var (errorType, statusCode) = MalformedRequestSchema.Wire(malformed.Kind);
+            response = malformedRequestSerializer(malformed, errorType, statusCode);
             return true;
         }
 
@@ -235,18 +243,23 @@ public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutpu
         bool rawStringPayloads,
         string errorTypeHeader
     )
-        where TError : Exception =>
-        (
-            typeof(TError),
-            exception =>
-                RestProtocol.SerializeError(
-                    error.Schema,
-                    (TError)exception,
-                    error.Id.ToString(),
-                    error.HttpStatusCode,
-                    codecFactory,
-                    rawStringPayloads,
-                    errorTypeHeader
-                )
+        where TError : Exception
+    {
+        // Compiled here, where the rest of the operation's wire work is compiled, rather than inside
+        // the returned closure. This previously called SerializeError per response, which re-derived
+        // the shape's header/body member split and recompiled the projected body codec every time.
+        var serialize = RestProtocol.CompileErrorSerializer(
+            error.Schema,
+            codecFactory,
+            rawStringPayloads,
+            errorTypeHeader
         );
+        var errorShapeId = error.Id.ToString();
+        var statusCode = error.HttpStatusCode;
+
+        return (
+            typeof(TError),
+            exception => serialize((TError)exception, errorShapeId, statusCode)
+        );
+    }
 }
