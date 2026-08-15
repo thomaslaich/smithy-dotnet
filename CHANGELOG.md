@@ -11,6 +11,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.8.1]
+
+A patch release for the `dotnet new` templates, which scaffolded projects that
+did not build. Nothing in the runtime or the generated code changes.
+
 ### Fixed
 
 - **The `dotnet new` templates no longer scaffold projects that fail to build.**
@@ -19,7 +24,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   codegen never ran, and the gRPC client template passed `protocol:` to a
   constructor that now takes a config object. Every template combination is now
   scaffolded and built in CI (`just smoke-templates`) against the packages built
-  from the working tree.
+  from the working tree, so a codegen rename fails in the pull request that
+  causes it rather than after the next release. (#142)
+
+### Packages
+
+All packages are published to NuGet at `0.8.1`.
 
 ## [0.8.0]
 
@@ -445,7 +455,9 @@ All published to NuGet at `0.1.0`:
 - **Protocols:** `NSmithy.Protocols.Rest`, `NSmithy.Protocols.RestJson`, `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`
 - **Tooling:** `NSmithy.Templates` (project templates), `dotnet-nsmithy` (CLI tool)
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.4.0...v0.5.0
