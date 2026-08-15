@@ -67,6 +67,18 @@ curl http://localhost:5000/hello/world
 # {"message":"Hello, world!"}
 ```
 
+On macOS, AirPlay Receiver also listens on port 5000. If the server fails to
+bind, or `curl` returns a 404 from something that is not your service, either
+turn AirPlay Receiver off under System Settings → General → AirDrop & Handoff,
+or pick another port:
+
+```shell
+ASPNETCORE_URLS=http://localhost:5080 dotnet run --project HelloWorld.Server
+```
+
+The client takes the endpoint as its first argument, so pass the same port to it
+below: `dotnet run --project HelloWorld.Client -- http://localhost:5080`.
+
 With `--with-docs`, two documentation UIs are also available:
 
 - **`/docs`** — Smithy-generated reference docs for your model

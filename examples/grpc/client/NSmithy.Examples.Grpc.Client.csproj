@@ -14,7 +14,7 @@
 
   <!--
     Native gRPC client: no Grpc.Net.Client / Google.Protobuf / protoc. The generated
-    LibraryServiceClient, constructed with `protocol: new GrpcProtocol()`, runs over an
+    LibraryServiceClient, constructed with `Protocol = new GrpcProtocol()`, runs over an
     HTTP/2 HttpClient via NSmithy.Protocols.Grpc.
   -->
   <ItemGroup>

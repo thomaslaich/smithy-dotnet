@@ -65,7 +65,14 @@ refresh-examples:
     dotnet build examples/examples.slnx --verbosity minimal >/dev/null 2>&1 || true
     dotnet build examples/examples.slnx --verbosity minimal
 
-ci: check-format build test pack refresh-examples
+# Scaffold and build every `dotnet new` template combination against the packed packages.
+smoke-templates:
+    # Part of `ci`, so the templates cannot rot unnoticed: their hand-written Program.cs is the
+    # only code in the repo that compiles against generated APIs without being built here, so a
+    # codegen rename breaks `dotnet new` while everything else stays green.
+    bash templates/smoke-test.sh
+
+ci: check-format build test pack refresh-examples smoke-templates
 
 # The examples pin the fixed `0.0.0-SNAPSHOT` dev version permanently, while a release build packs
 # release-versioned packages, so NuGet resolves a version other than the pinned one and NU1603

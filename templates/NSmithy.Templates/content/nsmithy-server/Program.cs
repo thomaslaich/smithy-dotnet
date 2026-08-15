@@ -31,13 +31,8 @@ app.MapSmithyDocs();
 app.MapSmithyDocs();
 
 //#endif
-//#if (IsGrpc)
 app.MapHelloService();
 
-//#else
-app.MapHelloServiceHttp();
-
-//#endif
 app.Run();
 
 internal sealed class HelloHandler : IHelloServiceHandler

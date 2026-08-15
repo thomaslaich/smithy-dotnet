@@ -11,6 +11,16 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The `dotnet new` templates no longer scaffold projects that fail to build.**
+  The server template still called the pre-0.8.0 `Map{Service}Http()` mapper, a
+  server scaffolded without `--contracts` never referenced `NSmithy.MSBuild` so
+  codegen never ran, and the gRPC client template passed `protocol:` to a
+  constructor that now takes a config object. Every template combination is now
+  scaffolded and built in CI (`just smoke-templates`) against the packages built
+  from the working tree.
+
 ## [0.8.0]
 
 This release makes the generated server enforce the model. Modelled constraints
