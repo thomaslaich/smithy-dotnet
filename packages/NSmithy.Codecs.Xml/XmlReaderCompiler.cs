@@ -277,7 +277,7 @@ internal sealed class XmlMemberReaderCompiler<TContainer, TBuilder>(XmlReaderCom
 {
     private readonly List<IXmlMemberReader<TBuilder>> readers = [];
 
-    public IReadOnlyList<IXmlMemberReader<TBuilder>> Readers => readers;
+    public IXmlMemberReader<TBuilder>[] Readers => [.. readers];
 
     public void Visit<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member)
     {
@@ -486,7 +486,7 @@ internal sealed class FlattenedMapXmlMemberReader<
 internal sealed class StructureXmlValueReader<T, TBuilder>(
     Func<TBuilder> createBuilder,
     Func<TBuilder, T> build,
-    IReadOnlyList<IXmlMemberReader<TBuilder>> memberReaders
+    IXmlMemberReader<TBuilder>[] memberReaders
 ) : IXmlValueReader<T>
 {
     public T Read(XElement? element)
@@ -507,7 +507,7 @@ internal sealed class StructureXmlValueReader<T, TBuilder>(
 }
 
 internal sealed class StructureXmlProjectionReader<TBuilder>(
-    IReadOnlyList<IXmlMemberReader<TBuilder>> memberReaders
+    IXmlMemberReader<TBuilder>[] memberReaders
 )
 {
     public void ReadInto(TBuilder builder, XElement element)
@@ -570,7 +570,7 @@ internal sealed class XmlUnionCaseReaderCompiler<TUnion>(XmlReaderCompiler compi
 {
     private readonly List<IXmlUnionCaseReader<TUnion>> readers = [];
 
-    public IReadOnlyList<IXmlUnionCaseReader<TUnion>> Readers => readers;
+    public IXmlUnionCaseReader<TUnion>[] Readers => [.. readers];
 
     public void Visit<TValue>(IUnionCaseSchema<TUnion, TValue> unionCase)
     {
@@ -593,7 +593,7 @@ internal sealed class XmlUnionCaseReader<TUnion, TValue>(
     public TUnion Read(XElement element) => unionCase.Create(valueReader.Read(element));
 }
 
-internal sealed class UnionXmlValueReader<T>(IReadOnlyList<IXmlUnionCaseReader<T>> caseReaders)
+internal sealed class UnionXmlValueReader<T>(IXmlUnionCaseReader<T>[] caseReaders)
     : IXmlValueReader<T>
 {
     private readonly Dictionary<string, IXmlUnionCaseReader<T>> readersByName =

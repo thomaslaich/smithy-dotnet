@@ -25,6 +25,26 @@ internal static class JsonWire
 
     internal static bool IsSparse(Schema schema) => schema.HasTrait(SparseTrait);
 
+    /// <summary>
+    /// Resolves a member's modelled default once, at compile time. Whether a member has a default
+    /// and what it is are both constant per member, so rediscovering them per object cost two trait
+    /// lookups for every optional member that happened to be null.
+    /// </summary>
+    /// <remarks>
+    /// Only the write path may share the resolved instance: it serializes the value and never hands
+    /// it to caller code. The read path's <c>ReadMissing</c> sets the default into a builder, where a
+    /// shared mutable default — a blob, list, map or document — would alias across deserialized
+    /// objects, so it keeps constructing a fresh one per call.
+    /// </remarks>
+    internal static (bool Present, T? Value) ResolveDefault<T>(
+        Schema<T> schema,
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        bool materialize
+    ) =>
+        materialize && TryCreateDefaultValue(schema, traits, out var value)
+            ? (true, value)
+            : (false, default);
+
     internal static bool TryCreateDefaultValue<T>(
         Schema<T> schema,
         IReadOnlyDictionary<ShapeId, Trait> traits,

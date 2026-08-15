@@ -262,7 +262,7 @@ internal sealed class CborMemberReaderCompiler<TContainer, TBuilder>(CborReaderC
 {
     private readonly List<ICborMemberReader<TBuilder>> readers = [];
 
-    public IReadOnlyList<ICborMemberReader<TBuilder>> Readers => readers;
+    public ICborMemberReader<TBuilder>[] Readers => [.. readers];
 
     public void Visit<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member)
     {
@@ -305,7 +305,7 @@ internal sealed class CborMemberReader<TContainer, TBuilder, TValue>(
 internal sealed class StructureCborValueReader<T, TBuilder>(
     Func<TBuilder> createBuilder,
     Func<TBuilder, T> build,
-    IReadOnlyList<ICborMemberReader<TBuilder>> memberReaders
+    ICborMemberReader<TBuilder>[] memberReaders
 ) : ICborValueReader<T>
 {
     private readonly Dictionary<string, ICborMemberReader<TBuilder>> readersByName =
@@ -380,7 +380,7 @@ internal sealed class CborUnionCaseReaderCompiler<TUnion>(CborReaderCompiler com
 {
     private readonly List<ICborUnionCaseReader<TUnion>> readers = [];
 
-    public IReadOnlyList<ICborUnionCaseReader<TUnion>> Readers => readers;
+    public ICborUnionCaseReader<TUnion>[] Readers => [.. readers];
 
     public void Visit<TValue>(IUnionCaseSchema<TUnion, TValue> unionCase)
     {
@@ -403,7 +403,7 @@ internal sealed class CborUnionCaseReader<TUnion, TValue>(
     public TUnion Read(CborReader reader) => unionCase.Create(valueReader.Read(reader));
 }
 
-internal sealed class UnionCborValueReader<T>(IReadOnlyList<ICborUnionCaseReader<T>> caseReaders)
+internal sealed class UnionCborValueReader<T>(ICborUnionCaseReader<T>[] caseReaders)
     : ICborValueReader<T>
 {
     private readonly Dictionary<string, ICborUnionCaseReader<T>> readersByName =

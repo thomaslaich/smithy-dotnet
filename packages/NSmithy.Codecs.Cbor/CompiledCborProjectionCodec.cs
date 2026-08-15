@@ -78,7 +78,7 @@ internal sealed class CborProjectionMemberReaderCompiler<TContainer, TBuilder>(
 {
     private readonly List<ICborProjectionMemberReader<TBuilder>> readers = [];
 
-    public IReadOnlyList<ICborProjectionMemberReader<TBuilder>> Readers => readers;
+    public ICborProjectionMemberReader<TBuilder>[] Readers => [.. readers];
 
     public void Visit<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member)
     {
@@ -119,7 +119,7 @@ internal sealed class CborProjectionMemberReader<TContainer, TBuilder, TValue>(
 }
 
 internal sealed class CborProjectionValueReader<TBuilder>(
-    IReadOnlyList<ICborProjectionMemberReader<TBuilder>> memberReaders
+    ICborProjectionMemberReader<TBuilder>[] memberReaders
 )
 {
     private readonly Dictionary<string, ICborProjectionMemberReader<TBuilder>> readersByName =

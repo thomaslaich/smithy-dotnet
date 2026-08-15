@@ -217,7 +217,10 @@ internal sealed class CborMemberWriterCompiler<TContainer>(
 {
     private readonly List<ICborMemberWriter<TContainer>> writers = [];
 
-    public IReadOnlyList<ICborMemberWriter<TContainer>> Writers => writers;
+    // An array, not the interface: the write path iterates this once per object, and
+    // foreach over IReadOnlyList<T> goes through IEnumerable<T>.GetEnumerator, which
+    // boxes List<T>.Enumerator — a heap allocation per structure written.
+    public ICborMemberWriter<TContainer>[] Writers => [.. writers];
 
     public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
     {
@@ -237,32 +240,35 @@ internal sealed class CborMemberWriter<TContainer, TValue>(
     bool materializeDefault
 ) : ICborMemberWriter<TContainer>
 {
+    private readonly string name = member.Name;
+    private readonly bool isRequired = member.IsRequired;
+
+    // Constant per member, so resolved at compile time rather than per write.
+    private readonly (bool Present, TValue? Value) memberDefault = ResolveDefault(
+        member.TargetSchema,
+        member.MemberTraits,
+        materializeDefault
+    );
+
     public void Write(CborWriter writer, TContainer value)
     {
         var memberValue = member.GetValue(value);
-        if (memberValue is null && !member.IsRequired)
+        if (memberValue is null && !isRequired)
         {
-            if (
-                !materializeDefault
-                || !TryCreateDefaultValue(
-                    member.TargetSchema,
-                    member.MemberTraits,
-                    out TValue? defaultValue
-                )
-            )
+            if (!memberDefault.Present)
             {
                 return;
             }
 
-            memberValue = defaultValue!;
+            memberValue = memberDefault.Value!;
         }
 
-        writer.WriteTextString(member.Name);
+        writer.WriteTextString(name);
         valueWriter.Write(writer, memberValue);
     }
 }
 
-internal sealed class StructureCborValueWriter<T>(IReadOnlyList<ICborMemberWriter<T>> memberWriters)
+internal sealed class StructureCborValueWriter<T>(ICborMemberWriter<T>[] memberWriters)
     : ICborValueWriter<T>
 {
     public void Write(CborWriter writer, T value)
@@ -288,7 +294,7 @@ internal sealed class CborUnionCaseWriterCompiler<TUnion>(CborWriterCompiler com
 {
     private readonly List<ICborUnionCaseWriter<TUnion>> writers = [];
 
-    public IReadOnlyList<ICborUnionCaseWriter<TUnion>> Writers => writers;
+    public ICborUnionCaseWriter<TUnion>[] Writers => [.. writers];
 
     public void Visit<TValue>(IUnionCaseSchema<TUnion, TValue> @case)
     {
@@ -319,7 +325,7 @@ internal sealed class CborUnionCaseWriter<TUnion, TValue>(
     }
 }
 
-internal sealed class UnionCborValueWriter<T>(IReadOnlyList<ICborUnionCaseWriter<T>> caseWriters)
+internal sealed class UnionCborValueWriter<T>(ICborUnionCaseWriter<T>[] caseWriters)
     : ICborValueWriter<T>
 {
     public void Write(CborWriter writer, T value)

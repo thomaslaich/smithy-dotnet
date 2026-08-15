@@ -309,7 +309,10 @@ internal sealed class JsonMemberWriterCompiler<TContainer>(
 {
     private readonly List<IJsonMemberWriter<TContainer>> writers = [];
 
-    public IReadOnlyList<IJsonMemberWriter<TContainer>> Writers => writers;
+    // An array, not the interface: the write path iterates this once per object, and
+    // foreach over IReadOnlyList<T> goes through IEnumerable<T>.GetEnumerator, which
+    // boxes List<T>.Enumerator — a heap allocation per structure written.
+    public IJsonMemberWriter<TContainer>[] Writers => [.. writers];
 
     public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
     {
@@ -338,24 +341,28 @@ internal sealed class JsonMemberWriter<TContainer, TValue>(
         WireName(member.MemberTraits, member.Name)
     );
 
+    private readonly bool isRequired = member.IsRequired;
+
+    // Same reasoning as the wire name: whether this member materializes a default,
+    // and what that default is, are constant per member. Previously every optional
+    // member that happened to be null cost two more trait lookups per object.
+    private readonly (bool Present, TValue? Value) memberDefault = ResolveDefault(
+        member.TargetSchema,
+        member.MemberTraits,
+        materializeDefault
+    );
+
     public void Write(Utf8JsonWriter writer, TContainer container)
     {
         var value = member.GetValue(container);
-        if (value is null && !member.IsRequired)
+        if (value is null && !isRequired)
         {
-            if (
-                !materializeDefault
-                || !TryCreateDefaultValue(
-                    member.TargetSchema,
-                    member.MemberTraits,
-                    out TValue? defaultValue
-                )
-            )
+            if (!memberDefault.Present)
             {
                 return;
             }
 
-            value = defaultValue!;
+            value = memberDefault.Value!;
         }
 
         writer.WritePropertyName(propertyName);
@@ -368,7 +375,7 @@ internal sealed class JsonUnionCaseWriterCompiler<TUnion>(JsonWriterCompiler com
 {
     private readonly List<IJsonUnionCaseWriter<TUnion>> writers = [];
 
-    public IReadOnlyList<IJsonUnionCaseWriter<TUnion>> Writers => writers;
+    public IJsonUnionCaseWriter<TUnion>[] Writers => [.. writers];
 
     public void Visit<TValue>(IUnionCaseSchema<TUnion, TValue> @case)
     {
@@ -404,7 +411,7 @@ internal sealed class JsonOpenUnionCaseWriterCompiler<TUnion>(JsonWriterCompiler
 {
     private readonly List<IJsonOpenUnionCaseWriter<TUnion>> writers = [];
 
-    public IReadOnlyList<IJsonOpenUnionCaseWriter<TUnion>> Writers => writers;
+    public IJsonOpenUnionCaseWriter<TUnion>[] Writers => [.. writers];
 
     public void Visit<TValue>(IUnionCaseSchema<TUnion, TValue> @case)
     {
@@ -482,7 +489,7 @@ internal sealed class JsonOpenUnionCaseWriter<TUnion, TValue>(
     }
 }
 
-internal sealed class StructureJsonValueWriter<T>(IReadOnlyList<IJsonMemberWriter<T>> memberWriters)
+internal sealed class StructureJsonValueWriter<T>(IJsonMemberWriter<T>[] memberWriters)
     : IJsonValueWriter<T>
 {
     public void Write(Utf8JsonWriter writer, T value)
@@ -502,7 +509,7 @@ internal sealed class StructureJsonValueWriter<T>(IReadOnlyList<IJsonMemberWrite
     }
 }
 
-internal sealed class UnionJsonValueWriter<T>(IReadOnlyList<IJsonUnionCaseWriter<T>> caseWriters)
+internal sealed class UnionJsonValueWriter<T>(IJsonUnionCaseWriter<T>[] caseWriters)
     : IJsonValueWriter<T>
 {
     public void Write(Utf8JsonWriter writer, T value)
@@ -528,7 +535,7 @@ internal sealed class UnionJsonValueWriter<T>(IReadOnlyList<IJsonUnionCaseWriter
 }
 
 internal sealed class OpenUnionJsonValueWriter<T>(
-    IReadOnlyList<IJsonOpenUnionCaseWriter<T>> caseWriters,
+    IJsonOpenUnionCaseWriter<T>[] caseWriters,
     string discriminatorName
 ) : IJsonValueWriter<T>
 {
