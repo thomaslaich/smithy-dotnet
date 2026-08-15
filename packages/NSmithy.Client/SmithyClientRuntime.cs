@@ -19,7 +19,11 @@ public sealed class SmithyClientRuntime(
 
     private readonly IHttpTransport transport =
         transport ?? throw new ArgumentNullException(nameof(transport));
-    private readonly IReadOnlyList<IClientInterceptor> interceptors = [.. interceptors ?? []];
+
+    // An array, not IReadOnlyList: this is foreach'd four times per invocation, and foreach over the
+    // interface binds to IEnumerable<T>.GetEnumerator, which boxes an enumerator each time. Same
+    // reasoning as the codec member-writer arrays.
+    private readonly IClientInterceptor[] interceptors = [.. interceptors ?? []];
     private readonly ISmithyRetryStrategy? retryStrategy = retryStrategy;
     private readonly Uri? endpoint =
         endpoint is null || endpoint.IsAbsoluteUri
@@ -69,10 +73,14 @@ public sealed class SmithyClientRuntime(
         var context = CreateContext(binding.ServiceId.Name, binding.OperationId.Name);
 
         // Endpoint resolution runs once per invocation, before any lifecycle hooks, so
-        // interceptors observe the effective endpoint from OnBeforeExecution on. A static
-        // endpoint resolves via StaticEndpointResolver at effectively zero cost.
-        SmithyEndpoint? resolvedEndpoint = null;
-        if (endpointResolver is not null)
+        // interceptors observe the effective endpoint from OnBeforeExecution on.
+        //
+        // A resolver that answers StaticEndpoint returns the same endpoint whatever it is handed, so
+        // the parameters are skipped rather than allocated and discarded. That is the common case —
+        // most clients are configured with one fixed endpoint — and it also keeps the await, and its
+        // state machine, off the path entirely.
+        var resolvedEndpoint = endpointResolver?.StaticEndpoint;
+        if (endpointResolver is not null && resolvedEndpoint is null)
         {
             resolvedEndpoint = await endpointResolver
                 .ResolveEndpointAsync(
@@ -85,6 +93,10 @@ public sealed class SmithyClientRuntime(
                     callerToken
                 )
                 .ConfigureAwait(false);
+        }
+
+        if (resolvedEndpoint is not null)
+        {
             context.Set(SmithyContextKeys.Endpoint, resolvedEndpoint.Uri);
         }
 
@@ -94,14 +106,17 @@ public sealed class SmithyClientRuntime(
             authSchemes
         );
 
+        // Both strings are constant per binding and materialized with it. Building them here meant a
+        // string interpolation and a ShapeId.ToString() on every call, including the overwhelmingly
+        // common case where no listener is subscribed and both results are thrown away.
         var tags = new TagList
         {
             { "rpc.system", "smithy" },
-            { "rpc.service", binding.ServiceId.ToString() },
+            { "rpc.service", binding.ServiceIdTag },
             { "rpc.method", binding.OperationId.Name },
         };
         using var activity = SmithyClientTelemetry.ActivitySource.StartActivity(
-            $"{binding.ServiceId.Name}.{binding.OperationId.Name}",
+            binding.ActivityName,
             ActivityKind.Client
         );
         if (activity is not null)
@@ -156,7 +171,7 @@ public sealed class SmithyClientRuntime(
                 await DisposeBodyAsync(response).ConfigureAwait(false);
                 throw;
             }
-            for (var i = interceptors.Count - 1; i >= 0; i--)
+            for (var i = interceptors.Length - 1; i >= 0; i--)
             {
                 interceptors[i].OnAfterDeserialization(context, output);
             }
@@ -183,7 +198,7 @@ public sealed class SmithyClientRuntime(
         }
         finally
         {
-            for (var i = interceptors.Count - 1; i >= 0; i--)
+            for (var i = interceptors.Length - 1; i >= 0; i--)
             {
                 interceptors[i].OnAfterExecution(context, executionError);
             }
@@ -192,15 +207,24 @@ public sealed class SmithyClientRuntime(
             {
                 activity?.SetStatus(ActivityStatusCode.Error, executionError.Message);
                 activity?.SetTag("error.type", executionError.GetType().FullName);
-                var errorTags = tags;
-                errorTags.Add("error.type", executionError.GetType().FullName);
-                SmithyClientTelemetry.Errors.Add(1, errorTags);
+                if (SmithyClientTelemetry.Errors.Enabled)
+                {
+                    var errorTags = tags;
+                    errorTags.Add("error.type", executionError.GetType().FullName);
+                    SmithyClientTelemetry.Errors.Add(1, errorTags);
+                }
             }
 
-            SmithyClientTelemetry.OperationDuration.Record(
-                Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
-                tags
-            );
+            // Guarded rather than always recorded: with no meter subscribed the instrument discards
+            // the measurement anyway, and the guard keeps the elapsed-time computation and the tag
+            // copy off the unsubscribed path.
+            if (SmithyClientTelemetry.OperationDuration.Enabled)
+            {
+                SmithyClientTelemetry.OperationDuration.Record(
+                    Stopwatch.GetElapsedTime(startTimestamp).TotalSeconds,
+                    tags
+                );
+            }
         }
     }
 
@@ -226,7 +250,10 @@ public sealed class SmithyClientRuntime(
                 ActivityKind.Internal
             );
             attemptActivity?.SetTag("smithy.attempt", attempt);
-            SmithyClientTelemetry.Attempts.Add(1, tags);
+            if (SmithyClientTelemetry.Attempts.Enabled)
+            {
+                SmithyClientTelemetry.Attempts.Add(1, tags);
+            }
 
             var resolvedRequest = ApplyEndpoint(CloneRequest(request), resolvedEndpoint);
             var attemptRequest = await ApplyRequestInterceptorsAsync(
@@ -267,7 +294,7 @@ public sealed class SmithyClientRuntime(
                 continue;
             }
 
-            for (var i = interceptors.Count - 1; i >= 0; i--)
+            for (var i = interceptors.Length - 1; i >= 0; i--)
             {
                 interceptors[i].OnAfterTransmit(context, response);
             }
@@ -382,7 +409,7 @@ public sealed class SmithyClientRuntime(
         TagList tags
     )
     {
-        for (var i = interceptors.Count - 1; i >= 0; i--)
+        for (var i = interceptors.Length - 1; i >= 0; i--)
         {
             interceptors[i].OnAfterExecution(context, executionError);
         }
@@ -509,9 +536,12 @@ public sealed class SmithyClientRuntime(
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
+    // Sized for the four keys an invocation sets: service name, operation name, endpoint, attempt.
+    private const int ContextKeyCount = 4;
+
     private SmithyContext CreateContext(string serviceName, string operationName)
     {
-        var context = new SmithyContext();
+        var context = new SmithyContext(ContextKeyCount);
         context.Set(SmithyContextKeys.ServiceName, serviceName);
         context.Set(SmithyContextKeys.OperationName, operationName);
         if (endpoint is not null)
