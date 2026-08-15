@@ -104,27 +104,36 @@ Against NSwag the same decay is the whole story, and it crosses over:
 
 | Scenario | Time vs NSwag | Allocations vs NSwag |
 | --- | --- | --- |
-| `get-item` | 2.16× | 2.07× |
-| `list-items-1` | 1.88× | 1.79× |
-| `search-items` | 1.58× | 2.36× |
-| `list-items-100` | 1.38× | 2.08× |
-| `list-items-10000` | 1.27× | 2.10× |
-| `create-order-small` | 1.18× | 1.25× |
-| `create-order-large` | **0.89×** | **0.98×** |
+| `get-item` | 2.14× | 2.01× |
+| `list-items-1` | 1.78× | 1.74× |
+| `search-items` | 1.51× | 2.34× |
+| `list-items-100` | 1.35× | 2.07× |
+| `list-items-10000` | 1.17× | 2.10× |
+| `create-order-small` | 1.16× | 1.23× |
+| `create-order-large` | **0.88×** | **0.98×** |
 
 **On the largest request payload NSmithy is faster than NSwag and allocates less.**
 A codec problem would get worse with size, not better; this is a constant being
 amortized. Quote the whole curve rather than its worst point — and note that only
 the small-call end of it is reliable run to run, see below.
 
-The telemetry half of that constant is now fixed (see Fixed). What remains, all
-still unconditional in `SmithyClientRuntime.InvokeCoreAsync`:
+**The two columns are two different problems.** Time decays 2.14× → 0.88×, which
+is a fixed per-call cost. Allocations do not: they sit near 2× across three orders
+of magnitude, which is a *proportional* cost that no per-call feature can explain.
+At 10,000 items NSmithy allocates 8.2 MB against NSwag's 3.9 MB, and no amount of
+retry policy accounts for 4.3 MB. Two named suspects for that half are already in
+this document: the generated list wrappers copying via
+`Array.AsReadOnly(Enumerable.ToArray(values))`, and the JSON reader materialising
+a `JsonDocument` before producing any value. Do not answer the allocation column
+with "we do more" — it is a read-path problem, and it is unsolved.
 
-- `OBSERVED` A `SmithyContext` per invocation.
-- `OBSERVED` `new SmithyEndpointParameters(...)` per invocation plus the resolver's
-  own result allocation, even for a static endpoint.
+Telemetry, endpoint parameters and context sizing are now fixed (see Fixed), which
+together took ~215 bytes and 7.3% of `get-item`. What remains, all still
+unconditional in `SmithyClientRuntime.InvokeCoreAsync`:
+
 - `OBSERVED` Auth-scheme selection per call.
-- `OBSERVED` `CloneRequest` per attempt.
+- `OBSERVED` `CloneRequest` per attempt — genuinely load-bearing, since retry
+  replays the request; the least removable of the set.
 
 Caveat worth keeping: some of this gap is **features, not waste**. Retry,
 interceptors, telemetry and endpoint resolution are things the hand-written and
@@ -280,7 +289,30 @@ same two runs, so the −7.3% is the change and not the machine.
 
 ### Endpoint parameters and context sizing on every call
 
-`OBSERVED`; **measurement pending**, and it should not be quoted until it lands.
+`MEASURED`, client suite. **An allocation win only — time did not move.**
+
+| Scenario | Allocations | Delta |
+| --- | --- | --- |
+| `get-item` | 6.94 → 6.73 KB | **−3.03%** |
+| `list-items-1` | 6.80 → 6.59 KB | **−3.09%** |
+| `create-order-small` | 12.83 → 12.62 KB | −1.64% |
+| `search-items` | 18.60 → 18.39 KB | −1.13% |
+| `list-items-100` | 87.06 → 86.85 KB | −0.24% |
+
+**A flat ~215 bytes per call**, constant in absolute terms and varying only as a
+percentage of payload — the signature of the fixed per-call cost it was meant to
+remove. Times moved less than the controls did, so no time claim is made.
+
+This measurement is unusually clean: `hand-written` and `nswag` allocations moved
+**0.00%** on every scenario, as they must, since nothing touched them. When the
+control is exactly flat, a 215-byte delta on the third client is not noise.
+
+Against NSwag, `get-item` allocations went 2.07× to 2.01×.
+
+Another entry for the lesson at the top of this document: this is the third
+allocation fix here to buy no measurable time, against one that did. The one that
+did — the boxed enumerator — was an allocation *behind a virtual call in an inner
+loop*. These were one record and one dictionary resize per call.
 
 `IEndpointResolver` gained a defaulted `StaticEndpoint` property, so a resolver
 that returns the same endpoint whatever it is handed can say so.
@@ -295,9 +327,9 @@ and then reallocated and rehashed when the fourth (`Attempt`) arrived, on every
 invocation. It now takes a capacity and the runtime sizes it for the four keys it
 sets.
 
-Expected to be smaller than the telemetry fix: that one removed two string
-allocations and four boxed enumerators, this removes one record and one resize.
-Recorded here so the change is not mistaken for a measured win.
+It came in smaller than the telemetry fix, as predicted: that one removed two
+string allocations and four boxed enumerators, this removes one record and one
+dictionary resize.
 
 One redundant write was left in place deliberately: `CreateContext` sets the
 configured endpoint and resolution immediately overwrites it. It is provably dead
