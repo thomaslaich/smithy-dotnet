@@ -23,7 +23,11 @@
     <PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="NSMITHY_VERSION" />
     <!--#endif-->
     <!--#if (WithContracts)-->
+    <!-- Codegen runs off the contracts project, which brings NSmithy.MSBuild with it. -->
     <ProjectReference Include="../ContractsName/ContractsName.csproj" />
+    <!--#else-->
+    <!-- This project owns model/ and runs codegen itself. -->
+    <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" PrivateAssets="all" />
     <!--#endif-->
   </ItemGroup>
 
