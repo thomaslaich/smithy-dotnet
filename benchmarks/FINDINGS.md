@@ -23,34 +23,74 @@ conclusion.
 
 ## Open performance problems
 
-### 1. Serialization is ~1.8× slower than System.Text.Json
+### 1. Serialization is ~1.45× slower than System.Text.Json
 
 `MEASURED`, codec suite, default job, RatioSD ≤ 0.02.
 
 | Items | Time ratio vs STJ source-gen | Allocation ratio |
 | --- | --- | --- |
-| 1 | 1.86× | 1.58× |
-| 100 | 1.84× | 1.23× |
-| 10,000 | 1.75× | 1.22× |
+| 1 | 1.48× | 1.26× |
+| 100 | 1.48× | 1.00× |
+| 10,000 | 1.43× | 1.00× |
 
-Down from 2.23–2.52× after caching member property names (see Fixed, below). The
-ratio is still roughly **flat across three orders of magnitude of payload**, so
-what remains is still a per-element cost in the write path rather than fixed
-setup.
+Down from 2.23–2.52× after caching member property names, then from 1.75–1.86×
+after removing a boxed enumerator per structure (both under Fixed, below).
+**Allocations are now at parity with `System.Text.Json` source-gen** on the 100-
+and 10,000-item payloads; what is left is time, and the ratio is still roughly
+**flat across three orders of magnitude**, so it remains a per-element cost in
+the write path rather than fixed setup.
 
-Two causes are now accounted for and fixed: buffer churn (allocations) and
-per-member name resolution and encoding (time). The remaining ~1.8× has not been
-attributed. Untested leads:
+Three causes are now accounted for and fixed: buffer churn, per-member name
+resolution and encoding, and the per-structure enumerator allocation. The
+remaining ~1.45× has not been attributed. Untested leads:
 
 - Per-member and per-value interface dispatch (`IJsonMemberWriter<T>.Write`,
   `IJsonValueWriter<T>.Write`) where source generation emits straight-line calls
-- `member.GetValue(container)` indirection per member per object
-- The nullable/default-materialization branch evaluated per member per object,
-  including a second trait lookup inside `TryCreateDefaultValue` on the null path
-- Boxing in the value-writer chain for value-typed members
+- `member.GetValue(container)` delegate indirection per member per object
+- `IListSchema.GetElements` returning `IEnumerable<TElement>`, which boxes one
+  enumerator per list (per list, not per element, so a much smaller effect than
+  the structure-level one that was fixed)
 
-A profiler run is still the honest next step; the property-name fix was found by
-reading the code, but three other predictions made the same way were wrong today.
+The default-materialization branch was the fourth lead here. It has been hoisted
+to compile time and **the ratio did not move**, because no benchmark scenario
+reaches it — see Fixed, below. That removes it as an explanation for the gap.
+
+The honest read on the rest is that it is **interpreter tax**, not a defect list:
+a tree of `IJsonValueWriter<T>` objects walked per value, against straight-line
+generated code. Closing it likely means not interpreting on the codegen'd path at
+all. Two ways to stop interpreting, and they are independent choices:
+
+- **Emit at startup.** `CompileStructure` already runs per schema and already
+  knows its protocol, so it can emit a fused lambda calling `Utf8JsonWriter`
+  directly — deleting the delegate hop via `Expression.Property`, the array loop,
+  and both interface calls. No new abstraction, no codegen change; the blast
+  radius stays inside the compiler. The costs are NativeAOT, where
+  `Expression.Compile` falls back to an interpreter *slower* than the current
+  object tree, plus JIT-per-shape cold start and no debuggability. Nothing in this
+  repo sets `PublishAot`, `IsAotCompatible` or `IsTrimmable` today.
+- **Generate at build time.** What `smithy-java` does: codegen emits
+  `SerializableStruct.serializeMembers(ShapeSerializer)` onto each generated
+  shape, leaving the runtime codec responsible only for wire encoding, with the
+  schema-interpreting path kept in a separate `dynamic-schemas` module for
+  runtime-supplied models. This *requires* a protocol-neutral serializer
+  abstraction, because at build time the protocol is not yet known — that
+  abstraction, not the codegen, is the bulk of the work. It would also have to
+  pass member schemas rather than names, so each codec can keep its own
+  precomputed per-member state; flattening that would hand back the 20–24% the
+  property-name fix bought.
+
+`smithy-java`'s own `benchmarks/serde-benchmarks` has **no external baseline** —
+it measures smithy-java against itself across five protocols — so there is no
+published ratio there to compare this one against.
+
+Neither option should be committed to before a throwaway emit prototype for JSON
+alone establishes what the ceiling actually is. Whether deleting all three
+indirections lands at 1.2× or 1.3× is currently a guess, and it decides whether
+the second option is worth its cost at all.
+
+A profiler run is still the honest next step before any of that; the property-name
+and enumerator fixes were both found by reading the code, but three other
+predictions made the same way were wrong.
 
 ### 2. The client pays fixed per-call overhead that dominates small calls
 
@@ -60,31 +100,68 @@ The NSmithy client's ratio against the hand-written ceiling decays as payload
 grows, 2.5× on `get-item`, 1.35× on the 10,000-item response, which is the
 signature of a constant per-call cost being amortized rather than a per-byte one.
 
-Costs visible in `SmithyClientRuntime.InvokeCoreAsync`, all unconditional:
+Against NSwag the same decay is the whole story, and it crosses over:
 
-- `OBSERVED` **Telemetry allocates even with no listener.** The activity name is
-  built with string interpolation and passed to `StartActivity`, which then
-  returns null when nothing is subscribed. `binding.ServiceId.ToString()` is
-  called per invocation to populate a `TagList` only a metrics exporter reads.
-  Both values are constant per binding and could be computed once at construction
-  or guarded behind `ActivitySource.HasListeners()`.
-- `OBSERVED` `SmithyClientTelemetry.OperationDuration.Record(...)` runs in the
-  `finally` on every call.
-- `OBSERVED` A context object per invocation, endpoint resolution with its own
-  parameter and result allocations even for a static endpoint, and auth-scheme
-  selection per call.
+| Scenario | Time vs NSwag | Allocations vs NSwag |
+| --- | --- | --- |
+| `get-item` | 2.16× | 2.07× |
+| `list-items-1` | 1.88× | 1.79× |
+| `search-items` | 1.58× | 2.36× |
+| `list-items-100` | 1.38× | 2.08× |
+| `list-items-10000` | 1.27× | 2.10× |
+| `create-order-small` | 1.18× | 1.25× |
+| `create-order-large` | **0.89×** | **0.98×** |
+
+**On the largest request payload NSmithy is faster than NSwag and allocates less.**
+A codec problem would get worse with size, not better; this is a constant being
+amortized. Quote the whole curve rather than its worst point — and note that only
+the small-call end of it is reliable run to run, see below.
+
+The telemetry half of that constant is now fixed (see Fixed). What remains, all
+still unconditional in `SmithyClientRuntime.InvokeCoreAsync`:
+
+- `OBSERVED` A `SmithyContext` per invocation.
+- `OBSERVED` `new SmithyEndpointParameters(...)` per invocation plus the resolver's
+  own result allocation, even for a static endpoint.
+- `OBSERVED` Auth-scheme selection per call.
+- `OBSERVED` `CloneRequest` per attempt.
 
 Caveat worth keeping: some of this gap is **features, not waste**. Retry,
 interceptors, telemetry and endpoint resolution are things the hand-written and
 NSwag clients do not do at all. The unambiguous waste is only the part paid when
-those features are inactive.
+those features are inactive — which is what the telemetry fix removed, and what
+makes the four items above harder calls than that one was.
 
-### 3. NSmithy's client is the slowest of the three measured
+### The large client scenarios are not comparable across runs
 
-`MEASURED`. Against both the hand-written ceiling and NSwag's generated client, on
-every scenario. NSwag is close to hand-written on small calls despite using
-reflection-based `System.Text.Json`, which suggests the gap is not inherent to
-being generated.
+`MEASURED`, the hard way. `create-order-large` and `list-items-10000` allocate
+megabytes and collect into Gen2, and their run-to-run spread swamps any change
+worth measuring:
+
+- `create-order-large`, **hand-written**, two consecutive runs with no code change
+  touching it: 1,543,550 ns → 1,869,799 ns, **+21.1%**.
+- `list-items-10000`, **nsmithy**, three runs spanning a change that cannot affect
+  the read path: 7,586,168 → 6,879,857 → 7,598,735 ns, a ±5% band with the middle
+  run low.
+
+Ratios *within* one run are sound, because every client runs in the same process
+under the same conditions — that is what the tables above report. Deltas *between*
+runs on these two scenarios are not evidence of anything. A change was nearly
+misread as a 10% regression on this basis; the control clients are what settled
+it. **Always check the untouched clients moved before believing a delta.**
+
+The small-call scenarios do not have this problem: across the same runs
+`hand-written` and `nswag` on `get-item` moved 0.7% and 0.1%.
+
+### 3. NSmithy's client is the slowest of the three on small calls
+
+`MEASURED`. **No longer true on every scenario** — it was when this was written.
+NSmithy now beats NSwag on `create-order-large` on both time (0.89×) and
+allocations (0.98×), after the codec write-path fixes. The gap that remains is
+concentrated in small calls and is open problem 2, not a codec problem.
+
+NSwag is close to hand-written on small calls despite using reflection-based
+`System.Text.Json`, which suggests the gap is not inherent to being generated.
 
 ### 4. List wrapper types defensively copy
 
@@ -165,6 +242,205 @@ needs no server, no HTTP, and no parity gate.
 ---
 
 ## Fixed
+
+### Client telemetry allocated on every call with nothing subscribed
+
+`MEASURED`, client suite.
+
+Two strings were built per invocation and usually thrown away: the span name via
+`$"{ServiceId.Name}.{OperationId.Name}"`, handed to `StartActivity`, which returns
+null when no listener is subscribed but evaluates its argument regardless; and
+`ServiceId.ToString()` for a `rpc.service` tag only a metrics exporter reads. Both
+are constant per binding and are now materialized once in
+`SmithyOperationBinding`'s constructor as `ActivityName` and `ServiceIdTag`
+(internal, so no public surface change).
+
+`OperationDuration.Record`, `Attempts.Add` and `Errors.Add` are now behind
+`Instrument.Enabled`, keeping the elapsed-time computation and tag copies off the
+unsubscribed path. Separately, `SmithyClientRuntime.interceptors` was
+`IReadOnlyList<IClientInterceptor>` and `foreach`'d four times per invocation —
+the same boxed-enumerator pattern fixed in the codecs — and is now an array.
+
+| Scenario | Time | Allocations |
+| --- | --- | --- |
+| `get-item` | **−7.3%** | −2.1% |
+| `list-items-1` | **−5.3%** | −2.4% |
+| `create-order-small` | −3.0% | −1.2% |
+| `search-items` | −0.5% | −0.9% |
+| `list-items-100` | +0.3% | −0.2% |
+| large scenarios | within run-to-run noise | 0.0% |
+
+The gain lands exactly where the fixed per-call cost lives and disappears once
+payload amortizes it, which is the same signature as the problem itself. Against
+NSwag, `get-item` went 2.33× to 2.16×.
+
+Control check, because the large scenarios looked like regressions: on `get-item`
+the untouched clients moved 0.7% (`hand-written`) and 0.1% (`nswag`) across the
+same two runs, so the −7.3% is the change and not the machine.
+
+### Endpoint parameters and context sizing on every call
+
+`OBSERVED`; **measurement pending**, and it should not be quoted until it lands.
+
+`IEndpointResolver` gained a defaulted `StaticEndpoint` property, so a resolver
+that returns the same endpoint whatever it is handed can say so.
+`StaticEndpointResolver` answers it, and the runtime now skips building a
+`SmithyEndpointParameters` it would only discard — which also keeps the `await`
+and its state machine off the path. Defaulted rather than required, so existing
+resolvers compile unchanged; a type check against `StaticEndpointResolver` would
+have worked too, but this lets any genuinely static resolver opt in.
+
+`SmithyContext`'s dictionary was unsized, so it allocated buckets at three entries
+and then reallocated and rehashed when the fourth (`Attempt`) arrived, on every
+invocation. It now takes a capacity and the runtime sizes it for the four keys it
+sets.
+
+Expected to be smaller than the telemetry fix: that one removed two string
+allocations and four boxed enumerators, this removes one record and one resize.
+Recorded here so the change is not mistaken for a measured win.
+
+One redundant write was left in place deliberately: `CreateContext` sets the
+configured endpoint and resolution immediately overwrites it. It is provably dead
+— a non-null `endpoint` is always absolute, which always yields a resolver, which
+always resolves — but it costs nothing now the dictionary is pre-sized, and
+removing it would be a behaviour change for no measurable gain.
+
+### Error responses compiled their writers per response
+
+`MEASURED` for restJson1, `OBSERVED` for rpcv2Cbor. The largest single gap this
+suite has found, and it was invisible until a benchmark isolated it.
+
+Both protocols redid per error response what the success path resolves once.
+
+**rpcv2Cbor** built a fresh `CborWriterCompiler` inside `SerializeErrorBody` and
+recompiled the error shape's entire writer tree, recursively, per response —
+discarding along with it the `SchemaCompilationCache` that exists to stop a shape
+being compiled twice.
+
+**restJson1** reached `SerializeStructuredError` through a `(dynamic)` dispatch
+per response, then called `Schemas.GetMembers` (a member walk plus a list
+allocation), re-derived the header/body member split, rebuilt the projected body
+schema, and **recompiled a whole body codec** — every time.
+
+Both now compile in `CompileServerError`, where the operation's other wire work is
+compiled, and the compiled result is captured in the closure the error matcher
+holds. The shape id and status code stay parameters, because
+`MalformedRequestSchema` is one shape serving several of each; that same
+compiled writer is now built eagerly in `RestOperationProtocol`, which puts the
+validation-failure path on the fast route too.
+
+| | Before | After |
+| --- | --- | --- |
+| modelled error response | 1,218.3 ns | 309.1 ns |
+| vs success response on the same operation | 4.13× | **1.05×** |
+| allocated | 3,968 B | 1,256 B |
+| allocation ratio | 3.91× | 1.24× |
+
+**3.9× faster, 3.2× fewer allocations**, and an error response now costs
+essentially what a success response costs. The residual 1.05×/1.24× is the error
+discriminator header and the shape-id string, which are real work.
+
+`RestProtocol.SerializeError` and `RpcV2CborProtocol.SerializeError` stay public
+and still compile per call, so ad-hoc callers are unaffected; both now document
+that repeat callers should hold the compiled form instead.
+
+A schema-keyed global cache was considered and rejected: `MalformedRequestSchema`
+is shared by restJson1, simpleRestJson and restXml, so keying on the schema alone
+would have served one protocol's body codec to another. Compiling at the
+per-operation seam has the protocol already in hand and cannot alias.
+
+rpcv2Cbor's fix is `OBSERVED` only — it is verified correct by 123 conformance
+tests but cannot be measured, because every benchmark scenario in this suite is
+restJson1. Since it was recompiling a whole writer tree rather than re-walking a
+member list, it was likely worse than 4×.
+
+### Per-member default resolution, hoisted — and unmeasurable here
+
+`OBSERVED`, and **the suite cannot see it**. Recorded as a negative result.
+
+Every write-path member writer called
+`TryCreateDefaultValue(member.TargetSchema, member.MemberTraits, out _)` for each
+optional member that was null, re-entering trait resolution — two dictionary
+lookups — per member per object. Whether a member has a default, and what it is,
+are constant per member, exactly like the wire name was, so both are now resolved
+once at compile time via `ResolveDefault` (JSON, CBOR, and all four XML member
+writers).
+
+It bought nothing measurable: 1.48×/1.48×/1.43× before, 1.49×/1.48×/1.43× after,
+allocations identical. The reason is that **the benchmark model never exercises
+the path**. `ItemSummary` carries four `@required` members, `BenchDomain` always
+populates `category` and `tags`, and `bench.smithy` contains no `@default` at all,
+so the null-optional branch is never taken. The only thing removed from the
+measured path was the `member.IsRequired` interface call per member, which is in
+the noise.
+
+The change is kept: it is strictly less work per null optional member, it is
+small, and it is verified correct by the parity gate and full suite. But it is
+`OBSERVED`, not `MEASURED`, and it should not be cited as a win.
+
+This is also a **gap in the suite, not only in this change**. `@default`
+materialization is idiomatic in Smithy 2.0 models and is exercised by every
+conformance suite, but no benchmark scenario reaches it in any codec. A corpus
+scenario over a shape with several null optional members carrying `@default`
+would measure this, and would also be the first benchmark coverage the default
+path has ever had.
+
+Sharing one resolved default instance is safe on the write path, which only
+serializes it. It is deliberately **not** hoisted on the read path: `ReadMissing`
+sets the default into a builder, where a shared mutable default — a blob, list,
+map or document — would alias across deserialized objects.
+
+### A boxed enumerator per structure written
+
+`MEASURED`. The write-path compilers stored their compiled members as
+`IReadOnlyList<T>` and `foreach`ed over the *interface*, which binds to
+`IEnumerable<T>.GetEnumerator()` and boxes `List<T>.Enumerator` — one heap
+allocation, plus non-inlinable interface dispatch on every `MoveNext`/`Current`,
+**per structure written**.
+
+Found by arithmetic rather than by profiler. A boxed `List<T>.Enumerator` on
+64-bit is exactly 40 bytes (16 header + 8 list reference + 4 index + 4 version +
+8 current), and the allocation gap against `System.Text.Json` divided out to 41.0
+B/item at 100 items and 40.0 B/item at 10,000 — which is the whole gap, at both
+magnitudes.
+
+Changed to `IJsonMemberWriter<T>[]` (and the equivalent for union and open-union
+case writers) so `foreach` binds to the array pattern: no enumerator object, and
+an inlinable loop body. The reader side was already indexing rather than
+enumerating, so only `StructureJsonProjectionReader` changed there; it was
+converted for consistency.
+
+| Items | Time before | Time after | Alloc before | Alloc after |
+| --- | --- | --- | --- | --- |
+| 1 | 1.81× | 1.48× | 392 B | 312 B |
+| 100 | 1.83× | 1.48× | 21,904 B | 17,864 B |
+| 10,000 | 1.77× | 1.43× | 2,204,836 B | 1,804,689 B |
+
+Allocations landed at **1.00× of `System.Text.Json` source-gen** at 100 and
+10,000 items — 17,864 B against 17,800 B, and 1,804,689 B against 1,804,466 B.
+The predicted ~400 KB at 10,000 items is gone, to within 223 bytes.
+
+Unlike the pooled-buffer fix, this one **did** buy time, ~19%, because the
+enumerator was interface dispatch on the hot loop and not only an allocation.
+Worth recording as the counter-example to the lesson at the top of this document:
+allocation fixes buy time when the allocation sits behind a virtual call in the
+inner loop, and do not when it is a one-per-payload buffer.
+
+Deserialization moved 1.14×/1.18× to 1.12×/1.17×, within noise, confirming the
+effect is confined to the write path.
+
+Verified byte-identical output across 86 parity tests and the full suite: 234 unit
+plus 1,125 restJson1, 123 rpcv2Cbor, 87 simpleRestJson, 46 restXml and 27 awsJson
+conformance tests.
+
+The same change was applied to the CBOR and XML codecs, where the pattern was
+identical (`StructureCborValueWriter`, `UnionCborValueWriter`,
+`StructureXmlValueWriter`, `UnionXmlValueWriter`, plus their reader counterparts
+and the CBOR projection reader). **Those two are `OBSERVED`, not `MEASURED`** —
+neither codec has benchmark coverage, so the allocation reduction there is
+inferred from the JSON result and the identical shape of the code, not measured.
+The 123 rpcv2Cbor and 46 restXml conformance tests verify only that they still
+produce correct output. Extending the codec suite to CBOR and XML would settle it.
 
 ### Quadratic member lookup on the read path
 
@@ -444,8 +720,14 @@ the main checkout.
 
 ## What the suite still cannot answer
 
-- **Where the 1.8× serialization time goes.** Open problem 1, and the top
-  priority.
+- **Where the 1.43–1.48× serialization time goes.** Open problem 1, and the top
+  priority. A throwaway runtime-emit prototype for JSON would establish the
+  ceiling before any architectural commitment.
+- **Anything about modelled defaults.** `bench.smithy` contains no `@default`, and
+  `BenchDomain` populates every optional member, so no scenario in any suite ever
+  takes the default-materialization branch that all five codecs carry. This is
+  covered by conformance but invisible to the benchmarks; it made the hoisting fix
+  unmeasurable.
 - **How member lookup scales with structure width.** The read path matches each
   payload property against member names by linear scan over pre-encoded UTF-8
   (`JsonProperty.NameEquals`), which is O(properties × members). It is deliberately
@@ -465,5 +747,7 @@ the main checkout.
 - **Throughput and tail latency under concurrency.** No socket-level macro suite
   exists; everything here is in-memory and single-threaded.
 - **Anything about protocols other than restJson1.** No CBOR, proto, or XML
-  coverage.
+  coverage. This has already cost a real answer once: the error-compilation fix
+  (see Fixed) was measured at 3.9× on restJson1 and shipped unmeasured on
+  rpcv2Cbor, where the same code was almost certainly worse.
 - **Anything about TypeSpec's performance.** It has never run in this suite.
