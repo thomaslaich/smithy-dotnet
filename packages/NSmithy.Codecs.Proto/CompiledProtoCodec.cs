@@ -6,6 +6,7 @@ internal sealed class CompiledProtoCodec<T> : IProtoCodec<T>
 {
     private readonly IProtoMessageWriter<T> writer;
     private readonly IProtoMessageReader<T> reader;
+    private int sizeHint = 64;
 
     public CompiledProtoCodec(Schema<T> schema)
     {
@@ -21,9 +22,18 @@ internal sealed class CompiledProtoCodec<T> : IProtoCodec<T>
             return [];
         }
 
-        var writer = new ProtoWriter();
-        this.writer.Write(writer, value);
-        return writer.ToArray();
+        var writer = ProtoWriterCache.Rent(sizeHint);
+        try
+        {
+            this.writer.Write(writer, value);
+            var result = writer.ToArray();
+            sizeHint = result.Length;
+            return result;
+        }
+        finally
+        {
+            ProtoWriterCache.Return(writer);
+        }
     }
 
     public T Deserialize(byte[] payload)

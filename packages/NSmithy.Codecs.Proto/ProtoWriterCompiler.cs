@@ -367,23 +367,19 @@ internal sealed class ScalarProtoValueWriter<T>(
                 writer.WriteFixed64(BitConverter.DoubleToUInt64Bits((double)(object)value!));
                 break;
             case ShapeKind.String:
-                writer.WriteLengthDelimited(Encoding.UTF8.GetBytes((string)(object)value!));
+                writer.WriteLengthDelimitedUtf8((string)(object)value!);
                 break;
             case ShapeKind.Blob:
                 writer.WriteLengthDelimited((byte[])(object)value!);
                 break;
             case ShapeKind.BigInteger:
-                writer.WriteLengthDelimited(
-                    Encoding.UTF8.GetBytes(
-                        ((BigInteger)(object)value!).ToString(CultureInfo.InvariantCulture)
-                    )
+                writer.WriteLengthDelimitedUtf8(
+                    ((BigInteger)(object)value!).ToString(CultureInfo.InvariantCulture)
                 );
                 break;
             case ShapeKind.BigDecimal:
-                writer.WriteLengthDelimited(
-                    Encoding.UTF8.GetBytes(
-                        ((decimal)(object)value!).ToString(CultureInfo.InvariantCulture)
-                    )
+                writer.WriteLengthDelimitedUtf8(
+                    ((decimal)(object)value!).ToString(CultureInfo.InvariantCulture)
                 );
                 break;
             case ShapeKind.IntEnum:
@@ -392,9 +388,9 @@ internal sealed class ScalarProtoValueWriter<T>(
                 );
                 break;
             case ShapeKind.Timestamp:
-                writer.WriteLengthDelimited(
-                    ProtoWire.EncodeTimestamp((DateTimeOffset)(object)value!)
-                );
+                var timestamp = writer.BeginLengthDelimited();
+                ProtoWire.EncodeTimestamp(writer, (DateTimeOffset)(object)value!);
+                writer.EndLengthDelimited(timestamp);
                 break;
             case ShapeKind.Enum:
                 writer.WriteVarint(
@@ -436,9 +432,9 @@ internal sealed class MessageProtoValueWriter<T>(IProtoMessageWriter<T> messageW
 
     public void WriteBody(ProtoWriter writer, T value)
     {
-        var sub = new ProtoWriter();
-        messageWriter.Write(sub, value);
-        writer.WriteLengthDelimited(sub.ToArray());
+        var prefix = writer.BeginLengthDelimited();
+        messageWriter.Write(writer, value);
+        writer.EndLengthDelimited(prefix);
     }
 }
 
@@ -448,9 +444,9 @@ internal sealed class DocumentProtoValueWriter : IProtoValueWriter<Document>
 
     public void WriteBody(ProtoWriter writer, Document value)
     {
-        var sub = new ProtoWriter();
-        ProtoWire.EncodeDocumentValue(sub, value);
-        writer.WriteLengthDelimited(sub.ToArray());
+        var prefix = writer.BeginLengthDelimited();
+        ProtoWire.EncodeDocumentValue(writer, value);
+        writer.EndLengthDelimited(prefix);
     }
 }
 
@@ -572,16 +568,21 @@ internal sealed class ListProtoMemberPlan<TCollection, TElement>(
 
         if (packable)
         {
-            var packed = new ProtoWriter();
+            var fieldOffset = writer.Length;
+            writer.WriteTag(fieldNumber, WireType.Len);
+            var prefix = writer.BeginLengthDelimited();
             foreach (var item in list.GetElements(memberValue))
             {
-                elementWriter.WriteBody(packed, item);
+                elementWriter.WriteBody(writer, item);
             }
 
-            if (packed.Length > 0)
+            if (writer.Length == prefix + 1)
             {
-                writer.WriteTag(fieldNumber, WireType.Len);
-                writer.WriteLengthDelimited(packed.ToArray());
+                writer.Rewind(fieldOffset);
+            }
+            else
+            {
+                writer.EndLengthDelimited(prefix);
             }
 
             return;
@@ -615,23 +616,23 @@ internal sealed class MapProtoMemberPlan<TDictionary, TValue>(
 
         foreach (var entry in map.GetEntries(memberValue))
         {
-            var sub = new ProtoWriter();
-            sub.WriteTag(1, WireType.Len);
-            sub.WriteLengthDelimited(Encoding.UTF8.GetBytes(entry.Key));
+            writer.WriteTag(fieldNumber, WireType.Len);
+            var entryPrefix = writer.BeginLengthDelimited();
+            writer.WriteTag(1, WireType.Len);
+            writer.WriteLengthDelimitedUtf8(entry.Key);
 
             if (sparse)
             {
-                sub.WriteTag(2, WireType.Len);
-                sparseWriter.WriteBody(sub, entry.Value);
+                writer.WriteTag(2, WireType.Len);
+                sparseWriter.WriteBody(writer, entry.Value);
             }
             else if (entry.Value is not null)
             {
-                sub.WriteTag(2, valueWriter.WireType);
-                valueWriter.WriteBody(sub, entry.Value);
+                writer.WriteTag(2, valueWriter.WireType);
+                valueWriter.WriteBody(writer, entry.Value);
             }
 
-            writer.WriteTag(fieldNumber, WireType.Len);
-            writer.WriteLengthDelimited(sub.ToArray());
+            writer.EndLengthDelimited(entryPrefix);
         }
     }
 }
@@ -640,9 +641,9 @@ internal sealed class SparseScalarValueWriter<T>(Schema<T> schema)
 {
     public void WriteBody(ProtoWriter writer, T? value)
     {
-        var sub = new ProtoWriter();
-        ProtoWire.EncodeScalarValueMessage(sub, schema, value);
-        writer.WriteLengthDelimited(sub.ToArray());
+        var prefix = writer.BeginLengthDelimited();
+        ProtoWire.EncodeScalarValueMessage(writer, schema, value);
+        writer.EndLengthDelimited(prefix);
     }
 }
 

@@ -24,10 +24,13 @@ internal interface IProtoFieldReader<in TBuilder>
         TBuilder builder,
         ref ProtoReader reader,
         WireType wireType,
-        ProtoReadState state
+        ref ProtoReadState state
     );
+}
 
-    void Complete(TBuilder builder, ProtoReadState state);
+internal interface IProtoFieldCompleter<in TBuilder>
+{
+    void Complete(TBuilder builder, ref ProtoReadState state);
 }
 
 internal interface IProtoUnionCaseReader<out TUnion>
@@ -37,24 +40,47 @@ internal interface IProtoUnionCaseReader<out TUnion>
     TUnion Read(ref ProtoReader reader, WireType wireType);
 }
 
-internal sealed class ProtoReadState
+internal struct ProtoReadState(int slotCount)
 {
-    private readonly Dictionary<int, object> builders = [];
-    private readonly HashSet<int> seen = [];
+    private object? firstBuilder;
+    private object?[]? additionalBuilders;
 
-    public bool WasSeen(int fieldNumber) => seen.Contains(fieldNumber);
-
-    public TBuilder GetOrCreate<TBuilder>(int fieldNumber, Func<TBuilder> create)
+    public TBuilder GetOrCreate<TBuilder>(int slot, Func<TBuilder> create)
     {
-        seen.Add(fieldNumber);
-        if (builders.TryGetValue(fieldNumber, out var builder))
+        if (slot == 0)
         {
-            return (TBuilder)builder;
+            if (firstBuilder is TBuilder first)
+            {
+                return first;
+            }
+
+            var created = create();
+            firstBuilder = created;
+            return created;
         }
 
-        var created = create();
-        builders.Add(fieldNumber, created!);
-        return created;
+        additionalBuilders ??= new object?[slotCount - 1];
+        if (additionalBuilders[slot - 1] is TBuilder builder)
+        {
+            return builder;
+        }
+
+        var additional = create();
+        additionalBuilders[slot - 1] = additional;
+        return additional;
+    }
+
+    public bool TryGet<TBuilder>(int slot, out TBuilder builder)
+    {
+        var value = slot == 0 ? firstBuilder : additionalBuilders?[slot - 1];
+        if (value is TBuilder typed)
+        {
+            builder = typed;
+            return true;
+        }
+
+        builder = default!;
+        return false;
     }
 }
 
@@ -156,7 +182,8 @@ internal sealed class ProtoValueReaderCompiler : ISchemaVisitor<object>
             new StructureProtoMessageReader<T, TBuilder>(
                 schema.CreateTypedBuilder,
                 schema.Build,
-                visitor.Readers
+                visitor.Readers,
+                visitor.StateSlotCount
             )
         );
     }
@@ -236,7 +263,8 @@ internal sealed class MessageReaderVisitor(ProtoValueReaderCompiler compiler)
         return new StructureProtoMessageReader<T, TBuilder>(
             schema.CreateTypedBuilder,
             schema.Build,
-            visitor.Readers
+            visitor.Readers,
+            visitor.StateSlotCount
         );
     }
 
@@ -434,8 +462,11 @@ internal sealed class ProtoFieldReaderCompiler<TContainer, TBuilder>(
 ) : IMemberVisitor<TContainer, TBuilder>
 {
     private readonly List<IProtoFieldReader<TBuilder>> readers = [];
+    private int stateSlotCount;
 
     public IReadOnlyList<IProtoFieldReader<TBuilder>> Readers => readers;
+
+    public int StateSlotCount => stateSlotCount;
 
     public void Visit<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member)
     {
@@ -450,8 +481,18 @@ internal sealed class ProtoFieldReaderCompiler<TContainer, TBuilder>(
         readers.Add(
             target switch
             {
-                IListSchema list => CreateListReader(member, (dynamic)list, fieldNumber),
-                IMapSchema map => CreateMapReader(member, (dynamic)map, fieldNumber),
+                IListSchema list => CreateListReader(
+                    member,
+                    (dynamic)list,
+                    fieldNumber,
+                    stateSlotCount++
+                ),
+                IMapSchema map => CreateMapReader(
+                    member,
+                    (dynamic)map,
+                    fieldNumber,
+                    stateSlotCount++
+                ),
                 _ => new ValueProtoFieldReader<TContainer, TBuilder, TValue>(
                     member,
                     fieldNumber,
@@ -483,12 +524,14 @@ internal sealed class ProtoFieldReaderCompiler<TContainer, TBuilder>(
     > CreateListReader<TValue, TElement, TCollectionBuilder>(
         IMemberSchema<TContainer, TBuilder, TValue> member,
         IListSchema<TValue, TElement, TCollectionBuilder> list,
-        int fieldNumber
+        int fieldNumber,
+        int stateSlot
     ) =>
         new(
             member,
             list,
             fieldNumber,
+            stateSlot,
             compiler.CompileValue(
                 list.TypedElementMember.TargetSchema,
                 list.TypedElementMember.MemberTraits
@@ -504,12 +547,14 @@ internal sealed class ProtoFieldReaderCompiler<TContainer, TBuilder>(
     > CreateMapReader<TValue, TMapValue, TMapBuilder>(
         IMemberSchema<TContainer, TBuilder, TValue> member,
         IMapSchema<TValue, TMapValue, TMapBuilder> map,
-        int fieldNumber
+        int fieldNumber,
+        int stateSlot
     ) =>
         new(
             member,
             map,
             fieldNumber,
+            stateSlot,
             ProtoWire.IsSparse((Schema)map),
             compiler.CompileValue(
                 map.TypedValueMember.TargetSchema,
@@ -530,7 +575,7 @@ internal sealed class ValueProtoFieldReader<TContainer, TBuilder, TValue>(
         TBuilder builder,
         ref ProtoReader reader,
         WireType wireType,
-        ProtoReadState state
+        ref ProtoReadState state
     )
     {
         try
@@ -543,8 +588,6 @@ internal sealed class ValueProtoFieldReader<TContainer, TBuilder, TValue>(
             throw;
         }
     }
-
-    public void Complete(TBuilder builder, ProtoReadState state) { }
 }
 
 internal sealed class ListProtoFieldReader<
@@ -557,8 +600,9 @@ internal sealed class ListProtoFieldReader<
     IMemberSchema<TContainer, TBuilder, TCollection> member,
     IListSchema<TCollection, TElement, TCollectionBuilder> list,
     int fieldNumber,
+    int stateSlot,
     IProtoValueReader<TElement> elementReader
-) : IProtoFieldReader<TBuilder>
+) : IProtoFieldReader<TBuilder>, IProtoFieldCompleter<TBuilder>
 {
     public int FieldNumber { get; } = fieldNumber;
 
@@ -566,10 +610,10 @@ internal sealed class ListProtoFieldReader<
         TBuilder builder,
         ref ProtoReader reader,
         WireType wireType,
-        ProtoReadState state
+        ref ProtoReadState state
     )
     {
-        var accumulator = state.GetOrCreate(FieldNumber, list.CreateTypedBuilder);
+        var accumulator = state.GetOrCreate(stateSlot, list.CreateTypedBuilder);
         var element = ProtoWire.Unwrap(list.ElementSchema);
         if (wireType == WireType.Len && ProtoWire.IsPackableScalar(element.Kind))
         {
@@ -590,10 +634,10 @@ internal sealed class ListProtoFieldReader<
         list.Add(accumulator, elementReader.ReadBody(ref reader, wireType));
     }
 
-    public void Complete(TBuilder builder, ProtoReadState state)
+    public void Complete(TBuilder builder, ref ProtoReadState state)
     {
-        var accumulator = state.WasSeen(FieldNumber)
-            ? state.GetOrCreate(FieldNumber, list.CreateTypedBuilder)
+        var accumulator = state.TryGet<TCollectionBuilder>(stateSlot, out var existing)
+            ? existing
             : list.CreateTypedBuilder();
         member.SetValue(builder, list.Build(accumulator));
     }
@@ -603,9 +647,10 @@ internal sealed class MapProtoFieldReader<TContainer, TBuilder, TDictionary, TVa
     IMemberSchema<TContainer, TBuilder, TDictionary> member,
     IMapSchema<TDictionary, TValue, TMapBuilder> map,
     int fieldNumber,
+    int stateSlot,
     bool sparse,
     IProtoValueReader<TValue> valueReader
-) : IProtoFieldReader<TBuilder>
+) : IProtoFieldReader<TBuilder>, IProtoFieldCompleter<TBuilder>
 {
     public int FieldNumber { get; } = fieldNumber;
 
@@ -617,17 +662,17 @@ internal sealed class MapProtoFieldReader<TContainer, TBuilder, TDictionary, TVa
         TBuilder builder,
         ref ProtoReader reader,
         WireType wireType,
-        ProtoReadState state
+        ref ProtoReadState state
     )
     {
-        var accumulator = state.GetOrCreate(FieldNumber, map.CreateTypedBuilder);
+        var accumulator = state.GetOrCreate(stateSlot, map.CreateTypedBuilder);
         ReadMapEntry(accumulator, reader.ReadLengthDelimited());
     }
 
-    public void Complete(TBuilder builder, ProtoReadState state)
+    public void Complete(TBuilder builder, ref ProtoReadState state)
     {
-        var accumulator = state.WasSeen(FieldNumber)
-            ? state.GetOrCreate(FieldNumber, map.CreateTypedBuilder)
+        var accumulator = state.TryGet<TMapBuilder>(stateSlot, out var existing)
+            ? existing
             : map.CreateTypedBuilder();
         member.SetValue(builder, map.Build(accumulator));
     }
@@ -696,35 +741,70 @@ internal sealed class InlinedProtoUnionCaseReader<TContainer, TBuilder, TUnion, 
         TBuilder builder,
         ref ProtoReader reader,
         WireType wireType,
-        ProtoReadState state
+        ref ProtoReadState state
     )
     {
         member.SetValue(builder, unionCase.Create(valueReader.ReadBody(ref reader, wireType)));
     }
-
-    public void Complete(TBuilder builder, ProtoReadState state) { }
 }
 
-internal sealed class StructureProtoMessageReader<T, TBuilder>(
-    Func<TBuilder> createBuilder,
-    Func<TBuilder, T> build,
-    IReadOnlyList<IProtoFieldReader<TBuilder>> fieldReaders
-) : IProtoMessageReader<T>
+internal sealed class StructureProtoMessageReader<T, TBuilder> : IProtoMessageReader<T>
 {
-    private readonly Dictionary<int, IProtoFieldReader<TBuilder>> readersByField =
-        fieldReaders.ToDictionary(reader => reader.FieldNumber);
+    private const int MaxDenseFieldNumber = 256;
+
+    private readonly Func<TBuilder> createBuilder;
+    private readonly Func<TBuilder, T> build;
+    private readonly IReadOnlyList<IProtoFieldCompleter<TBuilder>> completers;
+    private readonly IProtoFieldReader<TBuilder>?[]? denseReaders;
+    private readonly Dictionary<int, IProtoFieldReader<TBuilder>>? sparseReaders;
+    private readonly int stateSlotCount;
+
+    public StructureProtoMessageReader(
+        Func<TBuilder> createBuilder,
+        Func<TBuilder, T> build,
+        IReadOnlyList<IProtoFieldReader<TBuilder>> fieldReaders,
+        int stateSlotCount
+    )
+    {
+        this.createBuilder = createBuilder;
+        this.build = build;
+        this.stateSlotCount = stateSlotCount;
+        completers = fieldReaders.OfType<IProtoFieldCompleter<TBuilder>>().ToArray();
+
+        var maxFieldNumber =
+            fieldReaders.Count == 0 ? 0 : fieldReaders.Max(reader => reader.FieldNumber);
+        if (maxFieldNumber <= MaxDenseFieldNumber)
+        {
+            denseReaders = new IProtoFieldReader<TBuilder>?[maxFieldNumber + 1];
+            foreach (var fieldReader in fieldReaders)
+            {
+                if (denseReaders[fieldReader.FieldNumber] is not null)
+                {
+                    throw new InvalidOperationException(
+                        $"Duplicate protobuf field number {fieldReader.FieldNumber}."
+                    );
+                }
+
+                denseReaders[fieldReader.FieldNumber] = fieldReader;
+            }
+        }
+        else
+        {
+            sparseReaders = fieldReaders.ToDictionary(reader => reader.FieldNumber);
+        }
+    }
 
     public T Read(ReadOnlySpan<byte> bytes)
     {
         var builder = createBuilder();
-        var state = new ProtoReadState();
+        var state = new ProtoReadState(stateSlotCount);
         var reader = new ProtoReader(bytes);
         while (!reader.End)
         {
             var (number, wireType) = reader.ReadTag();
-            if (readersByField.TryGetValue(number, out var fieldReader))
+            if (TryGetFieldReader(number, out var fieldReader))
             {
-                fieldReader.ReadInto(builder, ref reader, wireType, state);
+                fieldReader.ReadInto(builder, ref reader, wireType, ref state);
             }
             else
             {
@@ -732,12 +812,32 @@ internal sealed class StructureProtoMessageReader<T, TBuilder>(
             }
         }
 
-        foreach (var fieldReader in fieldReaders)
+        foreach (var completer in completers)
         {
-            fieldReader.Complete(builder, state);
+            completer.Complete(builder, ref state);
         }
 
         return build(builder);
+    }
+
+    private bool TryGetFieldReader(int fieldNumber, out IProtoFieldReader<TBuilder> fieldReader)
+    {
+        if (denseReaders is not null)
+        {
+            if (
+                (uint)fieldNumber < (uint)denseReaders.Length
+                && denseReaders[fieldNumber] is { } denseReader
+            )
+            {
+                fieldReader = denseReader;
+                return true;
+            }
+
+            fieldReader = default!;
+            return false;
+        }
+
+        return sparseReaders!.TryGetValue(fieldNumber, out fieldReader!);
     }
 }
 

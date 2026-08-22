@@ -51,6 +51,16 @@ public final class ListGenerator implements Runnable {
                     "Values = System.Array.AsReadOnly(System.Linq.Enumerable.ToArray(values));");
               });
           writer.write("");
+          writer.write(
+              "private $L(System.Collections.Generic.List<$L> values)", typeName, memberType);
+          writer.openBlock("{", "}", () -> writer.write("Values = values.AsReadOnly();"));
+          writer.write("");
+          writer.write(
+              "internal static $L FromOwnedList(System.Collections.Generic.List<$L> values)"
+                  + " => new(values);",
+              typeName,
+              memberType);
+          writer.write("");
           writer.writeXmlDocs(shape.getMember());
           writer.write(
               "public System.Collections.Generic.IReadOnlyList<$L> Values { get; }", memberType);

@@ -301,7 +301,7 @@ public final class SchemaGenerator {
           writer.write("static value => value.Values,");
           writer.write("static () => new $L(),", builderType);
           writer.write("static (builder, value) => builder.Add(value),");
-          writer.write("static builder => new $L(builder),", typeName);
+          writer.write("static builder => $L.FromOwnedList(builder),", typeName);
           writer.write(
               "$L, elementTraits: $L);",
               traitsExpr(shape.getAllTraits().values()),
@@ -342,7 +342,7 @@ public final class SchemaGenerator {
           writer.write("static value => value.Values,");
           writer.write("static () => new $L(System.StringComparer.Ordinal),", builderType);
           writer.write("static (builder, key, value) => builder[key] = value,");
-          writer.write("static builder => new $L(builder),", typeName);
+          writer.write("static builder => $L.FromOwnedDictionary(builder),", typeName);
           writer.write(
               "$L, keyTraits: $L, valueTraits: $L, key: $L);",
               traitsExpr(shape.getAllTraits().values()),

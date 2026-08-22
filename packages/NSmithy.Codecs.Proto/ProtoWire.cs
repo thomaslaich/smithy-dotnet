@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Numerics;
@@ -20,15 +21,18 @@ internal enum WireType : byte
 }
 
 /// <summary>
-/// A minimal append-only protobuf encoder. Nested messages, maps, and unions are encoded by
-/// serializing the child into its own buffer and embedding it as a length-delimited field, which
-/// keeps the writer single-pass and the code easy to follow at the cost of some intermediate
-/// allocations — appropriate for the current exploration.
+/// A minimal append-only protobuf encoder backed by a pooled buffer. Nested messages reserve their
+/// length prefix in this buffer and backpatch it when complete.
 /// </summary>
-internal sealed class ProtoWriter
+internal sealed class ProtoWriter : IDisposable
 {
-    private byte[] buffer = new byte[64];
+    private byte[] buffer;
     private int length;
+
+    public ProtoWriter(int initialCapacity = 64)
+    {
+        buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 64));
+    }
 
     public int Length => length;
 
@@ -68,6 +72,74 @@ internal sealed class ProtoWriter
         Append(value);
     }
 
+    public void WriteLengthDelimitedUtf8(string value)
+    {
+        var byteCount = Encoding.UTF8.GetByteCount(value);
+        WriteVarint((ulong)byteCount);
+        EnsureCapacity(byteCount);
+        length += Encoding.UTF8.GetBytes(value, buffer.AsSpan(length, byteCount));
+    }
+
+    public int BeginLengthDelimited()
+    {
+        var prefixOffset = length;
+        Append(0);
+        return prefixOffset;
+    }
+
+    public void EndLengthDelimited(int prefixOffset)
+    {
+        if ((uint)prefixOffset >= (uint)length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(prefixOffset));
+        }
+
+        var valueLength = length - prefixOffset - 1;
+        var prefixLength = VarintLength((ulong)valueLength);
+        if (prefixLength > 1)
+        {
+            var shift = prefixLength - 1;
+            EnsureCapacity(shift);
+            buffer
+                .AsSpan(prefixOffset + 1, valueLength)
+                .CopyTo(buffer.AsSpan(prefixOffset + prefixLength));
+            length += shift;
+        }
+
+        WriteVarintAt(prefixOffset, (ulong)valueLength);
+    }
+
+    public void Rewind(int position)
+    {
+        if ((uint)position > (uint)length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(position));
+        }
+
+        length = position;
+    }
+
+    public void Dispose()
+    {
+        var rented = buffer;
+        buffer = [];
+        length = 0;
+        if (rented.Length != 0)
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    public void Reset(int initialCapacity)
+    {
+        if (buffer.Length != 0)
+        {
+            throw new InvalidOperationException("Proto writer is already in use.");
+        }
+
+        buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 64));
+    }
+
     /// <summary>ZigZag-encodes a signed value for <c>sint32</c>/<c>sint64</c> fields.</summary>
     public static ulong ZigZag(long value) => (ulong)((value << 1) ^ (value >> 63));
 
@@ -86,6 +158,8 @@ internal sealed class ProtoWriter
 
     private void EnsureCapacity(int extra)
     {
+        ObjectDisposedException.ThrowIf(buffer.Length == 0, this);
+
         if (length + extra <= buffer.Length)
         {
             return;
@@ -97,7 +171,58 @@ internal sealed class ProtoWriter
             capacity *= 2;
         }
 
-        Array.Resize(ref buffer, capacity);
+        var replacement = ArrayPool<byte>.Shared.Rent(capacity);
+        buffer.AsSpan(0, length).CopyTo(replacement);
+        ArrayPool<byte>.Shared.Return(buffer);
+        buffer = replacement;
+    }
+
+    private static int VarintLength(ulong value)
+    {
+        var result = 1;
+        while (value >= 0x80)
+        {
+            result++;
+            value >>= 7;
+        }
+
+        return result;
+    }
+
+    private void WriteVarintAt(int offset, ulong value)
+    {
+        while (value >= 0x80)
+        {
+            buffer[offset++] = (byte)(value | 0x80);
+            value >>= 7;
+        }
+
+        buffer[offset] = (byte)value;
+    }
+}
+
+internal static class ProtoWriterCache
+{
+    [ThreadStatic]
+    private static ProtoWriter? cached;
+
+    public static ProtoWriter Rent(int initialCapacity)
+    {
+        var writer = cached;
+        cached = null;
+        if (writer is null)
+        {
+            return new ProtoWriter(initialCapacity);
+        }
+
+        writer.Reset(initialCapacity);
+        return writer;
+    }
+
+    public static void Return(ProtoWriter writer)
+    {
+        writer.Dispose();
+        cached ??= writer;
     }
 }
 
@@ -330,7 +455,7 @@ internal static class ProtoWire
         }
     }
 
-    internal static byte[] EncodeTimestamp(DateTimeOffset value)
+    internal static void EncodeTimestamp(ProtoWriter writer, DateTimeOffset value)
     {
         var ticks = value.UtcTicks - DateTimeOffset.UnixEpoch.UtcTicks;
         var seconds = Math.DivRem(ticks, TimeSpan.TicksPerSecond, out var remainderTicks);
@@ -341,7 +466,6 @@ internal static class ProtoWire
         }
 
         var nanos = (int)remainderTicks * 100;
-        var writer = new ProtoWriter();
         if (seconds != 0)
         {
             writer.WriteTag(1, WireType.Varint);
@@ -353,8 +477,6 @@ internal static class ProtoWire
             writer.WriteTag(2, WireType.Varint);
             writer.WriteVarint((ulong)(long)nanos);
         }
-
-        return writer.ToArray();
     }
 
     internal static DateTimeOffset DecodeTimestamp(ReadOnlySpan<byte> bytes)
@@ -503,7 +625,7 @@ internal static class ProtoWire
         {
             case ShapeKind.String:
                 writer.WriteTag(ValueStringField, WireType.Len);
-                writer.WriteLengthDelimited(Encoding.UTF8.GetBytes((string)(object)value));
+                writer.WriteLengthDelimitedUtf8((string)(object)value);
                 break;
             case ShapeKind.Boolean:
                 writer.WriteTag(ValueBoolField, WireType.Varint);
@@ -595,41 +717,41 @@ internal static class ProtoWire
                 break;
             case DocumentKind.String:
                 writer.WriteTag(ValueStringField, WireType.Len);
-                writer.WriteLengthDelimited(Encoding.UTF8.GetBytes(document.AsString()));
+                writer.WriteLengthDelimitedUtf8(document.AsString());
                 break;
             case DocumentKind.Array:
             {
-                var list = new ProtoWriter();
+                writer.WriteTag(ValueListField, WireType.Len);
+                var listPrefix = writer.BeginLengthDelimited();
                 foreach (var item in document.AsArray())
                 {
-                    var element = new ProtoWriter();
-                    EncodeDocumentValue(element, item);
-                    list.WriteTag(1, WireType.Len);
-                    list.WriteLengthDelimited(element.ToArray());
+                    writer.WriteTag(1, WireType.Len);
+                    var elementPrefix = writer.BeginLengthDelimited();
+                    EncodeDocumentValue(writer, item);
+                    writer.EndLengthDelimited(elementPrefix);
                 }
 
-                writer.WriteTag(ValueListField, WireType.Len);
-                writer.WriteLengthDelimited(list.ToArray());
+                writer.EndLengthDelimited(listPrefix);
                 break;
             }
             case DocumentKind.Object:
             {
-                var structWriter = new ProtoWriter();
+                writer.WriteTag(ValueStructField, WireType.Len);
+                var structPrefix = writer.BeginLengthDelimited();
                 foreach (var (key, item) in document.AsObject())
                 {
-                    var entry = new ProtoWriter();
-                    entry.WriteTag(1, WireType.Len);
-                    entry.WriteLengthDelimited(Encoding.UTF8.GetBytes(key));
-                    var element = new ProtoWriter();
-                    EncodeDocumentValue(element, item);
-                    entry.WriteTag(2, WireType.Len);
-                    entry.WriteLengthDelimited(element.ToArray());
-                    structWriter.WriteTag(1, WireType.Len);
-                    structWriter.WriteLengthDelimited(entry.ToArray());
+                    writer.WriteTag(1, WireType.Len);
+                    var entryPrefix = writer.BeginLengthDelimited();
+                    writer.WriteTag(1, WireType.Len);
+                    writer.WriteLengthDelimitedUtf8(key);
+                    writer.WriteTag(2, WireType.Len);
+                    var elementPrefix = writer.BeginLengthDelimited();
+                    EncodeDocumentValue(writer, item);
+                    writer.EndLengthDelimited(elementPrefix);
+                    writer.EndLengthDelimited(entryPrefix);
                 }
 
-                writer.WriteTag(ValueStructField, WireType.Len);
-                writer.WriteLengthDelimited(structWriter.ToArray());
+                writer.EndLengthDelimited(structPrefix);
                 break;
             }
             default:
