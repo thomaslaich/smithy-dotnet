@@ -115,6 +115,13 @@ bench-client:
         --inProcess \
         --artifacts benchmarks/results/client
 
+# Unary gRPC client, server and Proto codec attribution against Grpc.Net.
+bench-grpc:
+    dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
+        --filter '*Grpc*Benchmarks*' \
+        --inProcess \
+        --artifacts benchmarks/results/grpc
+
 # The whole micro suite. Slow.
 bench: bench-parity bench-codec bench-client bench-server
 
