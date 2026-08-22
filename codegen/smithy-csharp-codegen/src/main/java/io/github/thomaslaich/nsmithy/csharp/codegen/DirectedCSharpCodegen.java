@@ -3,6 +3,7 @@ package io.github.thomaslaich.nsmithy.csharp.codegen;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ClientDependencyInjectionGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ClientGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ErrorGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.IntEnumGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ListGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.MapGenerator;
@@ -91,6 +92,21 @@ final class DirectedCSharpCodegen
               dir + "/" + typeName + ".Server.g.cs",
               csNamespace,
               writer -> new ServerGenerator(ctx, writer, directive.shape()).run());
+    }
+
+    // Opt-in fake handler. The fake implements the handler interfaces of the ".Server" half,
+    // so it cannot exist without it.
+    if (ctx.settings().generateFakes()) {
+      if (!ctx.settings().generateServer()) {
+        throw new software.amazon.smithy.codegen.core.CodegenException(
+            "generateFakes requires generateServer: the fake handler implements the generated"
+                + " server handler interfaces.");
+      }
+      ctx.writerDelegator()
+          .useFileWriter(
+              dir + "/" + typeName + ".Fakes.g.cs",
+              csNamespace,
+              writer -> new FakeGenerator(ctx, writer, directive.shape()).run());
     }
 
     // Opt-in IHttpClientFactory registration. Generated only when requested
