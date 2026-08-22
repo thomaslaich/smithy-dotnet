@@ -12,7 +12,7 @@ internal sealed class CompiledCborProjectionCodec<T, TBuilder>(
     bool materializeTopLevelDefaults
 ) : IProjectionCodec<T, TBuilder>
 {
-    private readonly StructureCborValueWriter<T> valueWriter = CompileWriter(
+    private readonly ICborValueWriter<T> valueWriter = CompileWriter(
         projection,
         materializeTopLevelDefaults
     );
@@ -38,17 +38,30 @@ internal sealed class CompiledCborProjectionCodec<T, TBuilder>(
         valueReader.ReadInto(reader, builder);
     }
 
-    private static StructureCborValueWriter<T> CompileWriter(
+    private static ICborValueWriter<T> CompileWriter(
         StructProjection<T, TBuilder> projection,
         bool materializeTopLevelDefaults
     )
     {
+        if (projection.Source.ValueSerializer is not { } valueSerializer)
+        {
+            var fallback = new CborMemberWriterCompiler<T>(
+                new CborWriterCompiler(),
+                materializeTopLevelDefaults
+            );
+            projection.VisitMembers(fallback);
+            return new FallbackStructureCborValueWriter<T>(fallback.Writers);
+        }
+
+        var included = new CborMemberCollector<T>();
+        projection.VisitMembers(included);
         var visitor = new CborMemberWriterCompiler<T>(
             new CborWriterCompiler(),
-            materializeTopLevelDefaults
+            materializeTopLevelDefaults,
+            included.Members
         );
-        projection.VisitMembers(visitor);
-        return new StructureCborValueWriter<T>(visitor.Writers);
+        projection.Source.VisitMembers(visitor);
+        return new DirectStructureCborValueWriter<T>(valueSerializer, visitor.Plans);
     }
 
     private static CborProjectionValueReader<TBuilder> CompileReader(

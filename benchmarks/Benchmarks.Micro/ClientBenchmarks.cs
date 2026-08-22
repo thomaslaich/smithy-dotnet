@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using Bench.Clients;
 using Bench.Hosting;
 using BenchmarkDotNet.Attributes;
@@ -77,6 +78,53 @@ public class ClientBenchmarks : IDisposable
 
     /// <summary>One client call: build the request, parse the response.</summary>
     /// <returns>The normalized result, so the JIT cannot elide the parse.</returns>
+    [Benchmark]
+    public Task<string> Call() => invoke(client);
+}
+
+/// <summary>
+/// Focused minimal-operation comparison for attributing fixed client invocation overhead without
+/// running every client/scenario combination in the full suite.
+/// </summary>
+[MemoryDiagnoser]
+public class ClientCeremonyBenchmarks : IDisposable
+{
+    private static readonly StubResponse GetItemResponse = new(
+        HttpStatusCode.OK,
+        Encoding.UTF8.GetBytes(
+            "{\"itemId\":\"item-00042\",\"name\":\"Benchmark Item 42 \\u2014 consumables\",\"priceCents\":1753,\"inStock\":false}"
+        )
+    );
+
+    private StubTransport transport = null!;
+    private IBenchClient client = null!;
+    private Func<IBenchClient, Task<string>> invoke = null!;
+
+    [Params(BenchClientFactory.HandWritten, BenchClientFactory.NSmithy)]
+    public string Client { get; set; } = BenchClientFactory.HandWritten;
+
+    [GlobalSetup]
+    public async Task SetupAsync()
+    {
+        invoke = BenchClientScenarios.ByName("client-get-item").Invoke;
+        transport = new StubTransport(_ => GetItemResponse);
+        client = BenchClientFactory.Create(Client, transport);
+        await invoke(client);
+    }
+
+    [GlobalCleanup]
+    public async Task CleanupAsync()
+    {
+        await client.DisposeAsync();
+        Dispose();
+    }
+
+    public void Dispose()
+    {
+        transport?.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
     [Benchmark]
     public Task<string> Call() => invoke(client);
 }

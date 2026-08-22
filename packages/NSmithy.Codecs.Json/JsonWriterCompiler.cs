@@ -48,7 +48,7 @@ internal sealed class JsonWriterCompiler : ISchemaVisitor<object>
         return CompileValue(schema);
     }
 
-    public static StructureJsonValueWriter<T> Compile<T, TBuilder>(
+    public static IJsonValueWriter<T> Compile<T, TBuilder>(
         StructProjection<T, TBuilder> projection,
         bool materializeTopLevelDefaults = true
     )
@@ -150,27 +150,42 @@ internal sealed class JsonWriterCompiler : ISchemaVisitor<object>
     internal static IntEnumJsonValueWriter<T> CompileIntEnum<T>(IntEnumSchema<T> schema)
         where T : struct, Enum => new IntEnumJsonValueWriter<T>(schema);
 
-    internal StructureJsonValueWriter<T> CompileStructure<T>(IStructSchema<T> schema) =>
+    internal IJsonValueWriter<T> CompileStructure<T>(IStructSchema<T> schema) =>
         CompileStructure(schema, materializeDefaults: true);
 
-    private StructureJsonValueWriter<T> CompileStructure<T>(
+    private IJsonValueWriter<T> CompileStructure<T>(
         IStructSchema<T> schema,
         bool materializeDefaults
     )
     {
         var visitor = new JsonMemberWriterCompiler<T>(this, materializeDefaults);
         schema.VisitMembers(visitor);
-        return new StructureJsonValueWriter<T>(visitor.Writers);
+        return schema.ValueSerializer is { } valueSerializer
+            ? new DirectStructureJsonValueWriter<T>(valueSerializer, visitor.Plans)
+            : new FallbackStructureJsonValueWriter<T>(visitor.Writers);
     }
 
-    internal StructureJsonValueWriter<T> CompileProjection<T, TBuilder>(
+    internal IJsonValueWriter<T> CompileProjection<T, TBuilder>(
         StructProjection<T, TBuilder> projection,
         bool materializeTopLevelDefaults
     )
     {
-        var visitor = new JsonMemberWriterCompiler<T>(this, materializeTopLevelDefaults);
-        projection.VisitMembers(visitor);
-        return new StructureJsonValueWriter<T>(visitor.Writers);
+        if (projection.Source.ValueSerializer is not { } valueSerializer)
+        {
+            var fallback = new JsonMemberWriterCompiler<T>(this, materializeTopLevelDefaults);
+            projection.VisitMembers(fallback);
+            return new FallbackStructureJsonValueWriter<T>(fallback.Writers);
+        }
+
+        var included = new JsonMemberCollector<T>();
+        projection.VisitMembers(included);
+        var visitor = new JsonMemberWriterCompiler<T>(
+            this,
+            materializeTopLevelDefaults,
+            included.Members
+        );
+        projection.Source.VisitMembers(visitor);
+        return new DirectStructureJsonValueWriter<T>(valueSerializer, visitor.Plans);
     }
 
     internal ListJsonValueWriter<TCollection, TElement> CompileList<TCollection, TElement>(
@@ -304,33 +319,60 @@ internal sealed class MemberTraitJsonWriterCompiler(
 
 internal sealed class JsonMemberWriterCompiler<TContainer>(
     JsonWriterCompiler compiler,
-    bool materializeDefaults
+    bool materializeDefaults,
+    ISet<IMemberSchema<TContainer>>? includedMembers = null
 ) : IMemberVisitor<TContainer>
 {
     private readonly List<IJsonMemberWriter<TContainer>> writers = [];
+    private readonly List<object?> plans = [];
 
     // An array, not the interface: the write path iterates this once per object, and
     // foreach over IReadOnlyList<T> goes through IEnumerable<T>.GetEnumerator, which
     // boxes List<T>.Enumerator — a heap allocation per structure written.
     public IJsonMemberWriter<TContainer>[] Writers => [.. writers];
 
+    public object?[] Plans => [.. plans];
+
     public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
     {
-        writers.Add(
-            new JsonMemberWriter<TContainer, TValue>(
-                member,
-                compiler.CompileValue(member.TargetSchema, member.MemberTraits),
-                materializeDefaults
-            )
+        if (includedMembers is not null && !includedMembers.Contains(member))
+        {
+            plans.Add(null);
+            return;
+        }
+
+        var plan = new JsonMemberPlan<TValue>(
+            member,
+            compiler.CompileValue(member.TargetSchema, member.MemberTraits),
+            materializeDefaults
         );
+        plans.Add(plan);
+        writers.Add(new JsonMemberWriter<TContainer, TValue>(member, plan));
     }
+}
+
+internal sealed class JsonMemberCollector<TContainer> : IMemberVisitor<TContainer>
+{
+    public ISet<IMemberSchema<TContainer>> Members { get; } =
+        new HashSet<IMemberSchema<TContainer>>(ReferenceEqualityComparer.Instance);
+
+    public void Visit<TValue>(IMemberSchema<TContainer, TValue> member) => Members.Add(member);
 }
 
 internal sealed class JsonMemberWriter<TContainer, TValue>(
     IMemberSchema<TContainer, TValue> member,
+    JsonMemberPlan<TValue> plan
+) : IJsonMemberWriter<TContainer>
+{
+    public void Write(Utf8JsonWriter writer, TContainer container) =>
+        plan.Write(writer, member.GetValue(container));
+}
+
+internal sealed class JsonMemberPlan<TValue>(
+    ITargetedMemberSchema<TValue> member,
     IJsonValueWriter<TValue> valueWriter,
     bool materializeDefault
-) : IJsonMemberWriter<TContainer>
+)
 {
     // Resolved once at compile time rather than per write. Previously each member
     // of each object cost a ShapeId-keyed trait lookup to find any @jsonName, then
@@ -352,9 +394,8 @@ internal sealed class JsonMemberWriter<TContainer, TValue>(
         materializeDefault
     );
 
-    public void Write(Utf8JsonWriter writer, TContainer container)
+    public void Write(Utf8JsonWriter writer, TValue value)
     {
-        var value = member.GetValue(container);
         if (value is null && !isRequired)
         {
             if (!memberDefault.Present)
@@ -489,7 +530,40 @@ internal sealed class JsonOpenUnionCaseWriter<TUnion, TValue>(
     }
 }
 
-internal sealed class StructureJsonValueWriter<T>(IJsonMemberWriter<T>[] memberWriters)
+internal readonly struct JsonStructMemberWriter(Utf8JsonWriter writer, object?[] memberPlans)
+    : IStructMemberWriter
+{
+    public void WriteMember<TValue>(int index, TValue value)
+    {
+        var plan = memberPlans[index];
+        if (plan is not null)
+        {
+            ((JsonMemberPlan<TValue>)plan).Write(writer, value);
+        }
+    }
+}
+
+internal sealed class DirectStructureJsonValueWriter<T>(
+    IStructValueSerializer<T> valueSerializer,
+    object?[] memberPlans
+) : IJsonValueWriter<T>
+{
+    public void Write(Utf8JsonWriter writer, T value)
+    {
+        if (value is null)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        writer.WriteStartObject();
+        var memberWriter = new JsonStructMemberWriter(writer, memberPlans);
+        valueSerializer.WriteMembers(value, ref memberWriter);
+        writer.WriteEndObject();
+    }
+}
+
+internal sealed class FallbackStructureJsonValueWriter<T>(IJsonMemberWriter<T>[] memberWriters)
     : IJsonValueWriter<T>
 {
     public void Write(Utf8JsonWriter writer, T value)

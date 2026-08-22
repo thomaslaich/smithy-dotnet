@@ -155,6 +155,16 @@ final class ClientGeneratorTest {
   }
 
   @Test
+  void outputOperationsReturnRuntimeTaskDirectly() throws Exception {
+    String generated = renderClient();
+
+    assertTrue(
+        generated.contains("return runtime.InvokeAsync(WatchBinding, input, cancellationToken);"),
+        generated);
+    assertFalse(generated.contains("return await runtime.InvokeAsync"), generated);
+  }
+
+  @Test
   void grpcStreamingOperationsRejectSiblingMembers() {
     CodegenException ex =
         assertThrows(

@@ -40,7 +40,7 @@ internal sealed class CompiledXmlProjectionCodec<T, TBuilder>(
     bool materializeTopLevelDefaults
 ) : IProjectionCodec<T, TBuilder>
 {
-    private readonly StructureXmlValueWriter<T> valueWriter = XmlWriterCompiler.Compile(
+    private readonly IXmlValueWriter<T> valueWriter = XmlWriterCompiler.Compile(
         projection,
         materializeTopLevelDefaults
     );

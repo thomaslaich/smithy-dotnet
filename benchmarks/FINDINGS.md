@@ -23,78 +23,48 @@ conclusion.
 
 ## Open performance problems
 
-### 1. Serialization is ~1.45× slower than System.Text.Json
+### 1. Full JSON serialization is 1.17–1.35× slower than System.Text.Json with PGO
 
-`MEASURED`, codec suite, default job, RatioSD ≤ 0.02.
+`MEASURED`, codec suite. Generated structures now supply statically typed values
+through `IStructValueSerializer<T>` while `JsonCodec.FromSchema(schema)` remains
+the public entry point. This removes `member.GetValue(container)` and the
+per-structure member-writer loop from generated shapes without generating any
+JSON-specific code.
 
-| Items | Time ratio vs STJ source-gen | Allocation ratio |
-| --- | --- | --- |
-| 1 | 1.48× | 1.26× |
-| 100 | 1.48× | 1.00× |
-| 10,000 | 1.43× | 1.00× |
+| Items | PGO disabled | PGO enabled | Execution only, PGO enabled |
+| --- | --- | --- | --- |
+| 1 | 1.42× | 1.35× | 1.23× |
+| 100 | 1.37× | 1.26× | 1.15× |
+| 10,000 | 1.29× | **1.17×** | **1.13×** |
 
-Down from 2.23–2.52× after caching member property names, then from 1.75–1.86×
-after removing a boxed enumerator per structure (both under Fixed, below).
-**Allocations are now at parity with `System.Text.Json` source-gen** on the 100-
-and 10,000-item payloads; what is left is time, and the ratio is still roughly
-**flat across three orders of magnitude**, so it remains a per-element cost in
-the write path rather than fixed setup.
+The execution-only column reuses the writer and destination buffer. The gap
+between it and the full-codec column is therefore setup and output handling, not
+member dispatch. A hand-written writer using the same reusable benchmark harness
+lands at 1.03×/0.99×/0.99×, establishing that the remaining execution gap is in
+the schema-driven writer stack rather than `Utf8JsonWriter` itself.
 
-Three causes are now accounted for and fixed: buffer churn, per-member name
-resolution and encoding, and the per-structure enumerator allocation. The
-remaining ~1.45× has not been attributed. Untested leads:
-
-- Per-member and per-value interface dispatch (`IJsonMemberWriter<T>.Write`,
-  `IJsonValueWriter<T>.Write`) where source generation emits straight-line calls
-- `member.GetValue(container)` delegate indirection per member per object
-- `IListSchema.GetElements` returning `IEnumerable<TElement>`, which boxes one
-  enumerator per list (per list, not per element, so a much smaller effect than
-  the structure-level one that was fixed)
-
-The default-materialization branch was the fourth lead here. It has been hoisted
-to compile time and **the ratio did not move**, because no benchmark scenario
-reaches it — see Fixed, below. That removes it as an explanation for the gap.
-
-The honest read on the rest is that it is **interpreter tax**, not a defect list:
-a tree of `IJsonValueWriter<T>` objects walked per value, against straight-line
-generated code. Closing it likely means not interpreting on the codegen'd path at
-all. Two ways to stop interpreting, and they are independent choices:
-
-- **Emit at startup.** `CompileStructure` already runs per schema and already
-  knows its protocol, so it can emit a fused lambda calling `Utf8JsonWriter`
-  directly — deleting the delegate hop via `Expression.Property`, the array loop,
-  and both interface calls. No new abstraction, no codegen change; the blast
-  radius stays inside the compiler. The costs are NativeAOT, where
-  `Expression.Compile` falls back to an interpreter *slower* than the current
-  object tree, plus JIT-per-shape cold start and no debuggability. Nothing in this
-  repo sets `PublishAot`, `IsAotCompatible` or `IsTrimmable` today.
-- **Generate at build time.** What `smithy-java` does: codegen emits
-  `SerializableStruct.serializeMembers(ShapeSerializer)` onto each generated
-  shape, leaving the runtime codec responsible only for wire encoding, with the
-  schema-interpreting path kept in a separate `dynamic-schemas` module for
-  runtime-supplied models. This *requires* a protocol-neutral serializer
-  abstraction, because at build time the protocol is not yet known — that
-  abstraction, not the codegen, is the bulk of the work. It would also have to
-  pass member schemas rather than names, so each codec can keep its own
-  precomputed per-member state; flattening that would hand back the 20–24% the
-  property-name fix bought.
-
-`smithy-java`'s own `benchmarks/serde-benchmarks` has **no external baseline** —
-it measures smithy-java against itself across five protocols — so there is no
-published ratio there to compare this one against.
-
-Neither option should be committed to before a throwaway emit prototype for JSON
-alone establishes what the ceiling actually is. Whether deleting all three
-indirections lands at 1.2× or 1.3× is currently a guess, and it decides whether
-the second option is worth its cost at all.
-
-A profiler run is still the honest next step before any of that; the property-name
-and enumerator fixes were both found by reading the code, but three other
-predictions made the same way were wrong.
+The original 1.1× target is not reached end to end, but the large payload is
+close at 1.17× and allocations remain at parity for the 100- and 10,000-item
+payloads. Further improvement should be profiler-led. Likely remaining costs are
+per-value codec dispatch and list-schema enumeration; removing those may require
+more specialized generated code, while startup expression compilation would be a
+poor NativeAOT trade.
 
 ### 2. The client pays fixed per-call overhead that dominates small calls
 
-`MEASURED` for the shape, `HYPOTHESIS` for the causes.
+`MEASURED`. A focused invocation benchmark now isolates client ceremony from
+serialization and response parsing.
+
+| Path | PGO disabled | PGO enabled | Allocated |
+| --- | --- | --- | --- |
+| NSmithy | 1.791 µs | 1.388 µs | 4.90 KB |
+| Hand-written ceiling | 1.027 µs | 0.838 µs | 2.66 KB |
+| Ratio | 1.74× | **1.66×** | 1.84× |
+
+The default path now avoids a `SmithyContext`, endpoint parameters, protocol
+delegate bindings, request cloning, interceptor state machines, eager content
+header dictionaries, empty response dictionaries, and an unused trailer closure.
+Generated output-returning methods also return the runtime task directly.
 
 The NSmithy client's ratio against the hand-written ceiling decays as payload
 grows, 2.5× on `get-item`, 1.35× on the 10,000-item response, which is the
@@ -127,19 +97,11 @@ this document: the generated list wrappers copying via
 a `JsonDocument` before producing any value. Do not answer the allocation column
 with "we do more" — it is a read-path problem, and it is unsolved.
 
-Telemetry, endpoint parameters and context sizing are now fixed (see Fixed), which
-together took ~215 bytes and 7.3% of `get-item`. What remains, all still
-unconditional in `SmithyClientRuntime.InvokeCoreAsync`:
-
-- `OBSERVED` Auth-scheme selection per call.
-- `OBSERVED` `CloneRequest` per attempt — genuinely load-bearing, since retry
-  replays the request; the least removable of the set.
-
-Caveat worth keeping: some of this gap is **features, not waste**. Retry,
-interceptors, telemetry and endpoint resolution are things the hand-written and
-NSwag clients do not do at all. The unambiguous waste is only the part paid when
-those features are inactive — which is what the telemetry fix removed, and what
-makes the four items above harder calls than that one was.
+The remaining focused ratio includes the public runtime, protocol and transport
+abstractions plus HTTP request/response objects. Retry, interceptors, telemetry,
+dynamic endpoint resolution and auth intentionally select the full path. The
+hand-written benchmark implements none of those features, so its number is a
+ceiling, not a feature-equivalent comparison.
 
 ### The large client scenarios are not comparable across runs
 
@@ -189,8 +151,8 @@ when the caller already hands over an array it owns.
 
 ### 5. Codec optimization candidates, by codec
 
-`OBSERVED` from source. None isolated by measurement, and only JSON is benchmarked
-at all, CBOR, XML and proto have no coverage in this suite.
+`OBSERVED` from source unless a measurement is listed. The microbenchmark suite
+now covers JSON, CBOR, XML and proto serialization.
 
 **JSON read path, materializes a DOM.**
 
@@ -233,8 +195,8 @@ var root = XElement.Parse(Encoding.UTF8.GetString(payload));
 
 Each direction builds a full LINQ-to-XML document *and* a full intermediate
 string, so a payload is materialized three times over. `XmlWriter`/`XmlReader`
-over a pooled buffer would avoid the DOM and both string copies. This is
-unmeasured, but structurally it is the most expensive codec in the repo.
+over a pooled buffer would avoid the DOM and both string copies. The direct-member
+benchmark below was neutral because this architecture dominates the write.
 
 **Shared: a second trait lookup on the null path.** Both the JSON and CBOR member
 writers call `TryCreateDefaultValue(member.TargetSchema, member.MemberTraits, ...)`
@@ -242,15 +204,27 @@ for every optional member that is null, which re-enters trait resolution per mem
 per object. Whether a member has a default is constant per member and resolvable at
 compile time, like the property name was.
 
-**No coverage at all for CBOR, XML or proto.** Every number in this document is
-restJson1. The fixes already landed in the JSON codec have visible analogues in
-CBOR, and nothing verifies whether they would help or whether the other codecs have
-different problems entirely. Extending the codec suite to the others is cheap, it
-needs no server, no HTTP, and no parity gate.
+The generated direct-member path measured as follows: CBOR improved about 4% for
+one item and 3% for 100 items with unchanged allocations; proto improved from
+86.78 ns/248 B to 65.66 ns/208 B, about 24% faster and 16% less allocation; XML
+was neutral at 1.90 µs for one item and about 105 µs for 100 items.
 
 ---
 
 ## Fixed
+
+### Generated structures write typed values directly across codecs
+
+`MEASURED` for JSON, CBOR, XML and proto. Codegen now attaches an
+`IStructValueSerializer<T>` to each generated structure schema. It emits only a
+format-neutral sequence of indexed, statically typed member values; JSON, CBOR,
+XML and proto retain ownership of names, traits, defaults and wire encoding.
+
+This preserves the schema-driven API and one protocol-neutral generated path:
+`JsonCodec.FromSchema(personSchema)` still compiles the codec. Hand-built and
+projected schemas retain the visitor-based fallback, which keeps existing public
+schema construction and projection behavior intact. The full 1,642-test suite
+and all 86 benchmark parity cases pass.
 
 ### Client telemetry allocated on every call with nothing subscribed
 

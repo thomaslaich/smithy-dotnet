@@ -208,6 +208,30 @@ public final class SchemaGenerator {
                 }
               });
           writer.write("");
+          writer.write(
+              "private sealed class ValueSerializer : IStructValueSerializer<$L>", typeName);
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                writer.write(
+                    "public void WriteMembers<TWriter>($L value, ref TWriter writer)", typeName);
+                writer.write("    where TWriter : struct, IStructMemberWriter");
+                writer.openBlock(
+                    "{",
+                    "}",
+                    () -> {
+                      for (int index = 0; index < members.size(); index++) {
+                        MemberShape member = members.get(index);
+                        writer.write(
+                            "writer.WriteMember<$L>($L, value.$L);",
+                            ShapeSupport.memberTypeExpr(context.model(), sp, member, true),
+                            index,
+                            CSharpNaming.propertyName(member.getMemberName()));
+                      }
+                    });
+              });
+          writer.write("");
           writer.write("public static Schema<$L> Schema { get; } =", typeName);
           writer.indent();
           writer.write(
@@ -233,9 +257,10 @@ public final class SchemaGenerator {
           writer.indent();
           writer.write("static () => new Builder(),");
           writer.write(
-              "static builder => new $L($L))",
+              "static builder => new $L($L),",
               typeName,
               constructorArguments(context, shape, members));
+          writer.write("new ValueSerializer())");
           writer.dedent();
           writer.write(";");
           writer.dedent();

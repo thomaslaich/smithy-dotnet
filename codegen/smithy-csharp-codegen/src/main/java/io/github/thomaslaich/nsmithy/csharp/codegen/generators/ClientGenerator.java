@@ -469,7 +469,7 @@ public final class ClientGenerator implements Runnable {
     String opName = CSharpNaming.typeName(op.getId().getName());
     String inputArg = hasInput ? "input" : "SmithyUnit.Value";
 
-    writer.write("public async $L", operationSignature(sp, op));
+    writer.write(hasOutput ? "public $L" : "public async $L", operationSignature(sp, op));
     writer.openBlock(
         "{",
         "}",
@@ -482,10 +482,7 @@ public final class ClientGenerator implements Runnable {
 
           if (hasOutput) {
             writer.write(
-                "return await runtime.InvokeAsync($LBinding, $L,"
-                    + " cancellationToken).ConfigureAwait(false);",
-                opName,
-                inputArg);
+                "return runtime.InvokeAsync($LBinding, $L, cancellationToken);", opName, inputArg);
           } else {
             writer.write(
                 "await runtime.InvokeAsync($LBinding, $L,"

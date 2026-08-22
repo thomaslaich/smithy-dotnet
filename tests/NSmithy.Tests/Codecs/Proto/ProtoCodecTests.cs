@@ -34,12 +34,26 @@ public sealed class ProtoCodecTests
         public int Value { get; set; }
     }
 
+    private sealed class SimpleSerializer : IStructValueSerializer<Simple>
+    {
+        public void WriteMembers<TWriter>(Simple value, ref TWriter writer)
+            where TWriter : struct, IStructMemberWriter
+        {
+            writer.WriteMember(0, value.Name);
+            writer.WriteMember(1, value.Value);
+        }
+    }
+
     private static Schema<Simple> SimpleSchema { get; } =
         Schemas
             .Structure<Simple, SimpleBuilder>(ShapeId.Parse("test#Simple"))
             .Required("name", x => x.Name, (b, v) => b.Name = v, Schemas.String, Field(1))
             .Required("value", x => x.Value, (b, v) => b.Value = v, Schemas.Integer, Field(2))
-            .Build(() => new SimpleBuilder(), b => new Simple(b.Name!, b.Value));
+            .Build(
+                static () => new SimpleBuilder(),
+                static builder => new Simple(builder.Name!, builder.Value),
+                new SimpleSerializer()
+            );
 
     [Fact]
     public void EncodesScalarsToCanonicalProtoBytes()

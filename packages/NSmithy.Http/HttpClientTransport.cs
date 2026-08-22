@@ -5,6 +5,11 @@ namespace NSmithy.Http;
 
 public sealed class HttpClientTransport : IHttpTransport
 {
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> NoHeaders =
+        new System.Collections.ObjectModel.ReadOnlyDictionary<string, IReadOnlyList<string>>(
+            new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        );
+
     private readonly HttpClient httpClient;
 
     public HttpClientTransport(HttpClient httpClient)
@@ -35,7 +40,7 @@ public sealed class HttpClientTransport : IHttpTransport
         if (responseMode == SmithyHttpClientResponseMode.Stream)
         {
             var contentHeaders = response.Content is null
-                ? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+                ? NoHeaders
                 : ToHeaderDictionary(response.Content.Headers);
             return new SmithyHttpClientResponse(
                 response.StatusCode,
@@ -67,16 +72,18 @@ public sealed class HttpClientTransport : IHttpTransport
         // which is disposed the moment this method returns.
         var headers = ToHeaderDictionary(response.Headers);
         var trailers = ToHeaderDictionary(response.TrailingHeaders);
+        Func<string, string?>? getTrailer =
+            trailers.Count == 0 && headers.Count == 0
+                ? null
+                : name => GetCapturedTrailer(trailers, headers, name);
 
         return new SmithyHttpClientResponse(
             response.StatusCode,
             response.ReasonPhrase,
             content.Length == 0 ? SmithyHttpBody.Empty : new SmithyHttpBody.Bytes(content),
             headers,
-            response.Content is null
-                ? new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
-                : ToHeaderDictionary(response.Content.Headers),
-            name => GetCapturedTrailer(trailers, headers, name)
+            response.Content is null ? NoHeaders : ToHeaderDictionary(response.Content.Headers),
+            getTrailer
         );
     }
 
@@ -84,8 +91,8 @@ public sealed class HttpClientTransport : IHttpTransport
     // before the closure runs). Trailer first, then a leading header — some HTTP stacks surface a
     // trailers-only gRPC response as an initial header block.
     private static string? GetCapturedTrailer(
-        Dictionary<string, IReadOnlyList<string>> trailers,
-        Dictionary<string, IReadOnlyList<string>> headers,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> trailers,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> headers,
         string name
     ) =>
         trailers.TryGetValue(name, out var trailerValues) && trailerValues.Count > 0
@@ -110,9 +117,9 @@ public sealed class HttpClientTransport : IHttpTransport
             message.Headers.TryAddWithoutValidation(header.Key, header.Value);
         }
 
-        if (message.Content is not null)
+        if (message.Content is not null && request.ExistingContentHeaders is { } contentHeaders)
         {
-            foreach (var header in request.ContentHeaders)
+            foreach (var header in contentHeaders)
             {
                 message.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
             }
@@ -173,15 +180,20 @@ public sealed class HttpClientTransport : IHttpTransport
             : null;
     }
 
-    private static Dictionary<string, IReadOnlyList<string>> ToHeaderDictionary(
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> ToHeaderDictionary(
         IEnumerable<KeyValuePair<string, IEnumerable<string>>> headers
     )
     {
-        return headers.ToDictionary(
-            header => header.Key,
-            header => (IReadOnlyList<string>)header.Value.ToArray(),
-            StringComparer.OrdinalIgnoreCase
-        );
+        Dictionary<string, IReadOnlyList<string>>? result = null;
+        foreach (var header in headers)
+        {
+            result ??= new Dictionary<string, IReadOnlyList<string>>(
+                StringComparer.OrdinalIgnoreCase
+            );
+            result[header.Key] = header.Value.ToArray();
+        }
+
+        return result ?? NoHeaders;
     }
 
     private sealed class ChunkedBodyContent : HttpContent
