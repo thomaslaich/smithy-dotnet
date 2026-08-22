@@ -41,6 +41,36 @@ const langs = [
 ];
 ---
 
+<script is:inline>
+  // Scroll reveal: add `reveal-ready` synchronously (before content paints) so
+  // .reveal elements start hidden without a flash, then reveal as they enter view.
+  (function () {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    document.documentElement.classList.add('reveal-ready');
+    function init() {
+      var els = document.querySelectorAll('.reveal');
+      if (!('IntersectionObserver' in window)) {
+        els.forEach(function (el) { el.classList.add('is-visible'); });
+        return;
+      }
+      var io = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (e) {
+            if (e.isIntersecting) {
+              e.target.classList.add('is-visible');
+              io.unobserve(e.target);
+            }
+          });
+        },
+        { threshold: 0.1, rootMargin: '0px 0px -8% 0px' }
+      );
+      els.forEach(function (el) { io.observe(el); });
+    }
+    if (document.readyState !== 'loading') init();
+    else document.addEventListener('DOMContentLoaded', init);
+  })();
+</script>
+
 <div class="nsl not-content">
   <!-- Header -->
   <header class="nsl-header">
@@ -64,19 +94,19 @@ const langs = [
   <section class="nsl-hero">
     <div class="nsl-hero-inner">
       <div class="nsl-hero-copy">
-        <a class="nsl-badge" href="https://smithy.io">
+        <a class="nsl-badge reveal" href="https://smithy.io">
           Built on the Smithy IDL&nbsp;·&nbsp;smithy.io <span aria-hidden="true">↗</span>
         </a>
-        <h1 class="nsl-h1">Smithy code generation for&nbsp;.NET</h1>
-        <p class="nsl-lead">
+        <h1 class="nsl-h1 reveal" style="--reveal-delay: 60ms">Smithy code generation for&nbsp;.NET</h1>
+        <p class="nsl-lead reveal" style="--reveal-delay: 120ms">
           NSmithy generates typed servers, clients, and API documentation for .NET from a single
           Smithy model. Code generation runs as part of <code>dotnet build</code>.
         </p>
-        <div class="nsl-hero-actions">
+        <div class="nsl-hero-actions reveal" style="--reveal-delay: 180ms">
           <a class="nsl-btn nsl-btn-primary" href={intro}>Get Started</a>
           <a class="nsl-btn nsl-btn-ghost" href={repo}>View on GitHub</a>
         </div>
-        <div class="nsl-chips">
+        <div class="nsl-chips reveal" style="--reveal-delay: 240ms">
           <span class="nsl-chip">REST</span>
           <span class="nsl-chip">JSON-RPC</span>
           <span class="nsl-chip">CBOR-RPC</span>
@@ -90,27 +120,27 @@ const langs = [
 
   <!-- Workflow -->
   <section id="workflow" class="nsl-section">
-    <div class="nsl-sechead">
+    <div class="nsl-sechead reveal">
       <h2 class="nsl-h2">From model to runtime</h2>
       <p class="nsl-secp">Describe operations, shapes, and traits once. <code>dotnet&nbsp;build</code> emits the server stub, the client, and the docs.</p>
     </div>
-    <div><Walkthrough /></div>
+    <div class="reveal"><Walkthrough /></div>
   </section>
 
   <!-- Protocols -->
   <section id="protocols" class="nsl-section">
-    <div class="nsl-sechead nsl-sechead-wide">
+    <div class="nsl-sechead nsl-sechead-wide reveal">
       <h2 class="nsl-h2">The protocol is a trait on the model</h2>
       <p class="nsl-secp">Handler and client code stay the same. Changing the protocol trait on the service changes the wire format — REST, JSON-RPC, binary CBOR, or gRPC over HTTP/2.</p>
     </div>
-    <div><ProtocolSwitch /></div>
+    <div class="reveal"><ProtocolSwitch /></div>
   </section>
 
   <!-- Ecosystem -->
   <section id="ecosystem" class="nsl-section nsl-eco">
-    <h2 class="nsl-h2">Part of the Smithy ecosystem</h2>
-    <p class="nsl-secp nsl-eco-p">Smithy is the IDL behind AWS's public APIs. The same model works with the official Smithy code generators for other languages.</p>
-    <div class="nsl-langs">
+    <h2 class="nsl-h2 reveal">Part of the Smithy ecosystem</h2>
+    <p class="nsl-secp nsl-eco-p reveal" style="--reveal-delay: 60ms">Smithy is the IDL behind AWS's public APIs. The same model works with the official Smithy code generators for other languages.</p>
+    <div class="nsl-langs reveal" style="--reveal-delay: 120ms">
       {
         langs.map((l) => (
           <a
@@ -131,7 +161,7 @@ const langs = [
     <div class="nsl-cards">
       {
         features.map((f, i) => (
-          <div class="nsl-card">
+          <div class="nsl-card reveal" style={`--reveal-delay: ${(i % 3) * 60}ms`}>
             <span class="nsl-card-mark" />
             <h3 class="nsl-card-t">{f.t}</h3>
             <p class="nsl-card-d" set:html={f.d} />
@@ -143,7 +173,7 @@ const langs = [
 
   <!-- Docs -->
   <section class="nsl-section">
-    <div class="nsl-docs">
+    <div class="nsl-docs reveal">
       <div>
         <h2 class="nsl-h2 nsl-docs-h">Generated API documentation</h2>
         <p class="nsl-secp nsl-docs-p">
@@ -174,7 +204,7 @@ const langs = [
 
   <!-- CTA -->
   <section class="nsl-section">
-    <div class="nsl-cta">
+    <div class="nsl-cta reveal">
       <div class="nsl-cta-inner">
         <h2 class="nsl-cta-h">Get started</h2>
         <p class="nsl-cta-p">The quick start walks through modeling, building, and calling a small service.</p>
@@ -230,6 +260,29 @@ const langs = [
     --accentText: #5b35e0;
     --accentSoft: rgba(109, 74, 255, 0.09);
     --pill: #f1f1f5;
+  }
+
+  /* ── Scroll reveal (deliberately subtle: short rise, gentle fade) ────────── */
+  .reveal {
+    transition:
+      opacity 0.5s ease-out,
+      transform 0.5s ease-out;
+    transition-delay: var(--reveal-delay, 0s);
+  }
+  html.reveal-ready .reveal {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  html.reveal-ready .reveal.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      opacity: 1 !important;
+      transform: none !important;
+      transition: none !important;
+    }
   }
 
   /* ── Neutralise Starlight chrome on the landing page only ────────────────── */
