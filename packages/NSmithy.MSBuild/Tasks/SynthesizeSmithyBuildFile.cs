@@ -62,6 +62,12 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
     public bool GenerateDependencyInjection { get; set; }
 
     /// <summary>
+    /// When true, sets generateFakes on the csharp-codegen plugin so the fake handler
+    /// ({Service}.Fakes.g.cs) is generated. Requires the server surface.
+    /// </summary>
+    public bool GenerateFakes { get; set; }
+
+    /// <summary>
     /// When non-empty, injects the smithy-openapi Maven dep and openapi plugin entry
     /// using this value as the protocol (e.g. aws.protocols#restJson1).
     /// </summary>
@@ -231,6 +237,8 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
             writer.WriteBoolean("generateServer", false);
         if (GenerateDependencyInjection)
             writer.WriteBoolean("generateDependencyInjection", true);
+        if (GenerateFakes)
+            writer.WriteBoolean("generateFakes", true);
         writer.WriteEndObject();
 
         if (GenerateDocs)

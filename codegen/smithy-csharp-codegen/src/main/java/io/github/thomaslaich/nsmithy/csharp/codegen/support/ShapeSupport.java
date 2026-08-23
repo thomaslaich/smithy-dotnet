@@ -197,7 +197,7 @@ public final class ShapeSupport {
     return sb.append("})").toString();
   }
 
-  private static String documentLiteral(software.amazon.smithy.model.node.Node node) {
+  public static String documentLiteral(software.amazon.smithy.model.node.Node node) {
     if (node.isNullNode()) return "NSmithy.Core.Document.Null";
     if (node.isBooleanNode())
       return "NSmithy.Core.Document.From(" + node.expectBooleanNode().getValue() + ")";

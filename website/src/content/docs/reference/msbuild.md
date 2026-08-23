@@ -19,6 +19,7 @@ with the .NET toolchain.
 | `SmithyGenerateServer` | `true` | Emit server stub types. Set to `false` in client-only projects. |
 | `SmithyGenerateClient` | `true` | Emit client types. Set to `false` in server-only projects. |
 | `SmithyGenerateDependencyInjection` | `false` | Generate the `Add{Service}Client` IHttpClientFactory extension (flows into `smithy-build.json` as the `csharp-codegen` `generateDependencyInjection` setting). Requires referencing `Microsoft.Extensions.Http` (or the `Microsoft.AspNetCore.App` shared framework). See [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/). |
+| `SmithyGenerateFakes` | `false` | Generate `Fake{Service}Handler` (flows into `smithy-build.json` as the `csharp-codegen` `generateFakes` setting). The fake returns each operation's first non-error `@examples` output when present, otherwise deterministic placeholder values synthesized from the model. Requires `SmithyGenerateServer`. See [Fake Handlers](/smithy-dotnet/servers/fake-handlers/). |
 | `SmithyBuildFile` | `$(MSBuildProjectDirectory)/smithy-build.json` | Path to the Smithy build configuration file. When absent and `SmithySource` items are present, NSmithy synthesizes one under `obj/`. |
 | `SmithyProjection` | `source` | Smithy build projection to use. |
 | `SmithyPlugin` | `csharp-codegen` | Smithy build plugin name. |
