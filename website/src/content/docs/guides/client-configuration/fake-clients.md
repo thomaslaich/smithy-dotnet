@@ -26,8 +26,11 @@ services.AddSingleton<IWeatherClient, FakeWeatherClient>();
 
 Responses come from the same synthesis as
 [fake handlers](/smithy-dotnet/servers/fake-handlers/#where-the-responses-come-from):
-the output of each operation's first non-error `@examples` entry when
-present, deterministic placeholders otherwise. The fake client is generated
+with several `@examples` entries the input is matched against the example
+inputs and the first match decides the response, with a matched error example
+throwing the modeled error; otherwise the output of the first non-error
+`@examples` entry when present, deterministic placeholders everywhere else.
+The fake client is generated
 with the client surface (`SmithyGenerateClient`, on by default). Projects
 with an explicit `smithy-build.json` set `"generateFakes": true` on the
 `csharp-codegen` plugin instead.
@@ -35,7 +38,8 @@ with an explicit `smithy-build.json` set `"generateFakes": true` on the
 ## Differences from the real client
 
 - No serialization, protocol, or validation is involved. Every call returns
-  the canned response, including calls a real client or server would reject.
+  its canned response (or throws its matched error example), including calls
+  a real client or server would reject.
 - Paginators yield a single page. The canned output's continuation token may
   be non-null, and following it would never terminate.
 - Every operation responds, including event-stream operations the real

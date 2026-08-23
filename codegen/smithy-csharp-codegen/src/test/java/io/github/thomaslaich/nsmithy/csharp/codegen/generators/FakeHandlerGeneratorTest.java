@@ -32,7 +32,7 @@ final class FakeHandlerGeneratorTest {
 
       service Fakeable {
           version: "1"
-          operations: [GetCity, GetStatus, GetTree, Ping, Watch]
+          operations: [GetCity, GetStatus, GetTree, Lookup, Ping, Watch]
       }
 
       @examples([
@@ -76,6 +76,49 @@ final class FakeHandlerGeneratorTest {
               @required
               root: TreeNode
           }
+      }
+
+      @examples([
+          {
+              title: "Lookup Zurich",
+              input: { query: "zrh", limit: 1 },
+              output: { label: "Zurich" }
+          },
+          {
+              title: "Lookup by filter",
+              input: { filter: { tags: ["a", "b"] } },
+              output: { label: "Filtered" }
+          },
+          {
+              title: "Lookup missing",
+              input: { query: "nope" },
+              error: {
+                  shapeId: "example.fake#LookupError",
+                  content: { message: "no such city", hint: "try zrh" }
+              }
+          }
+      ])
+      operation Lookup {
+          input := {
+              query: String
+              limit: Integer
+              filter: Filter
+          }
+          output := {
+              @required
+              label: String
+          }
+          errors: [LookupError]
+      }
+
+      structure Filter {
+          tags: TagList
+      }
+
+      @error("client")
+      structure LookupError {
+          message: String
+          hint: String
       }
 
       operation Ping {}
@@ -214,6 +257,62 @@ final class FakeHandlerGeneratorTest {
             "yield return Example.Example.Fake.ChatEvent.FromMessage(new"
                 + " Example.Example.Fake.MessageEvent(Text: \"text\"));"),
         generated);
+  }
+
+  @Test
+  void multipleExamplesMatchInputInModelOrderWithFallback() throws Exception {
+    String generated = renderFake();
+
+    assertTrue(generated.contains("if (MatchesLookupExample0(input))"), generated);
+    assertTrue(generated.contains("if (MatchesLookupExample1(input))"), generated);
+    assertTrue(generated.contains("if (MatchesLookupExample2(input))"), generated);
+    assertTrue(
+        generated.contains(
+            "private static bool MatchesLookupExample0(Example.Example.Fake.LookupInput input)"),
+        generated);
+    assertTrue(generated.contains("if (!(input.Query == \"zrh\"))"), generated);
+    assertTrue(generated.contains("if (!(input.Limit == 1))"), generated);
+    assertTrue(
+        generated.contains(
+            "return System.Threading.Tasks.Task.FromResult(new"
+                + " Example.Example.Fake.LookupOutput(Label: \"Filtered\"));"),
+        generated);
+    // The fallback stays the first non-error example output.
+    assertTrue(
+        generated.contains(
+            "return System.Threading.Tasks.Task.FromResult(new"
+                + " Example.Example.Fake.LookupOutput(Label: \"Zurich\"));"),
+        generated);
+  }
+
+  @Test
+  void nestedStructureAndListExampleInputsCompareStructurally() throws Exception {
+    String generated = renderFake();
+
+    assertTrue(generated.contains("if (!(input.Filter is { } v0))"), generated);
+    assertTrue(generated.contains("if (!(v0.Tags is { } v1))"), generated);
+    assertTrue(generated.contains("if (!(v1.Values.Count == 2))"), generated);
+    assertTrue(generated.contains("if (!(v1.Values[0] == \"a\"))"), generated);
+    assertTrue(generated.contains("if (!(v1.Values[1] == \"b\"))"), generated);
+  }
+
+  @Test
+  void matchedErrorExampleThrowsTheModeledError() throws Exception {
+    String generated = renderFake();
+
+    assertTrue(
+        generated.contains(
+            "return System.Threading.Tasks.Task.FromException<Example.Example.Fake.LookupOutput>("
+                + "new Example.Example.Fake.LookupError(message: \"no such city\","
+                + " hint: \"try zrh\"));"),
+        generated);
+  }
+
+  @Test
+  void singleNonErrorExampleGeneratesNoMatching() throws Exception {
+    String generated = renderFake();
+
+    assertFalse(generated.contains("MatchesGetCityExample"), generated);
   }
 
   private String renderFake() throws Exception {

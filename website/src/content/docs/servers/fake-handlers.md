@@ -37,12 +37,20 @@ with the client surface.
 Responses are compiled into the generated code, so they are deterministic
 across calls, runs, and rebuilds of an unchanged model. For each operation:
 
-1. **`@examples` output.** When the operation carries the
-   [`@examples` trait](https://smithy.io/2.0/spec/documentation-traits.html#examples-trait),
-   the fake returns the output of the first non-error example. Optional
-   members absent from the example are omitted.
+1. **`@examples` input matching.** When the operation carries several
+   [`@examples`](https://smithy.io/2.0/spec/documentation-traits.html#examples-trait)
+   entries, the incoming input is matched against the example inputs in model
+   order and the first match decides the response. Matching is a subset
+   comparison: members present in the example input must equal the incoming
+   input, members absent from the example match anything, at every nesting
+   level. A matched error example throws the modeled error, which the server
+   serializes like any handler-thrown error.
 
-2. **Synthesized placeholders.** Without an example, strings echo the member
+2. **`@examples` output.** When no example input matches (or the operation
+   has a single example), the fake returns the output of the first non-error
+   example. Optional members absent from the example are omitted.
+
+3. **Synthesized placeholders.** Without an example, strings echo the member
    name (`"name"`, `"nextToken"`), numbers are `0`, enums and unions take
    their first variant, lists and maps contain a single entry, and timestamps
    are a fixed instant. `@length` and `@range` minimums are honored;
@@ -56,6 +64,19 @@ across calls, runs, and rebuilds of an unchanged model. For each operation:
         input: { cityId: "zrh" }
         output: { name: "Zurich", coordinates: { latitude: 47.3769, longitude: 8.5417 } }
     }
+    {
+        title: "Get Geneva"
+        input: { cityId: "gva" }
+        output: { name: "Geneva", coordinates: { latitude: 46.2044, longitude: 6.1432 } }
+    }
+    {
+        title: "Get unknown city"
+        input: { cityId: "xxx" }
+        error: {
+            shapeId: "example.weather#NoSuchCity"
+            content: { message: "no city with ID xxx" }
+        }
+    }
 ])
 operation GetCity {
     // ...
@@ -63,7 +84,17 @@ operation GetCity {
 ```
 
 ```json
-// GET /cities/zrh: from the example
+// GET /cities/zrh: from the matched example
+{"name":"Zurich","coordinates":{"latitude":47.3769,"longitude":8.5417}}
+
+// GET /cities/gva: from the matched example
+{"name":"Geneva","coordinates":{"latitude":46.2044,"longitude":6.1432}}
+
+// GET /cities/xxx: the matched error example, served as a modeled error
+// (404, X-Amzn-Errortype: NoSuchCity)
+{"message":"no city with ID xxx"}
+
+// GET /cities/brn: no match, first non-error example
 {"name":"Zurich","coordinates":{"latitude":47.3769,"longitude":8.5417}}
 
 // GET /cities: no example, synthesized
