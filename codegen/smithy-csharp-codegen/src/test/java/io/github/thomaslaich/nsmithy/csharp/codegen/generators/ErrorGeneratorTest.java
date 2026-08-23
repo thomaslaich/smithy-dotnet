@@ -86,6 +86,19 @@ final class ErrorGeneratorTest {
     assertFalse(generated.contains("ISmithyRetryableError"), generated);
   }
 
+  @Test
+  void structuresGenerateDirectMemberSerialization() throws Exception {
+    String generated = renderError("example.weather#ValidationError");
+
+    assertTrue(
+        generated.contains(
+            "private sealed class ValueSerializer :"
+                + " IStructValueSerializer<Example.Example.Weather.ValidationError>"),
+        generated);
+    assertTrue(generated.contains("writer.WriteMember<string?>(0, value.Message);"), generated);
+    assertTrue(generated.contains("new ValueSerializer())"), generated);
+  }
+
   private String renderError(String shapeId) throws Exception {
     Model model = Model.assembler().addUnparsedModel("model.smithy", MODEL).assemble().unwrap();
     CSharpSettings settings =

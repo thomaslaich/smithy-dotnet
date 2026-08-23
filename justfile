@@ -97,7 +97,7 @@ bench-capture:
 # Level A: pure codec, no ASP.NET. Fast, deterministic, best regression signal.
 bench-codec:
     dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
-        --filter '*SerializationBenchmarks*' '*DeserializationBenchmarks*' \
+        --filter '*SerializationBenchmarks*' '*DeserializationBenchmarks*' '*ErrorBenchmarks*' \
         --inProcess \
         --artifacts benchmarks/results/codec
 

@@ -14,6 +14,19 @@ public interface IEndpointResolver
         SmithyEndpointParameters parameters,
         CancellationToken cancellationToken = default
     );
+
+    /// <summary>
+    /// The endpoint this resolver returns for every operation regardless of its parameters, or null
+    /// when resolution genuinely depends on them. Defaulted to null, so existing resolvers keep
+    /// working unchanged.
+    /// </summary>
+    /// <remarks>
+    /// A resolver that answers here lets the runtime skip building a
+    /// <see cref="SmithyEndpointParameters"/> it would only discard — the common case, since the
+    /// overwhelming majority of clients are configured with one fixed endpoint. Only return a value
+    /// if the result truly does not vary by service, operation, or input.
+    /// </remarks>
+    SmithyEndpoint? StaticEndpoint => null;
 }
 
 /// <summary>
@@ -57,4 +70,6 @@ public sealed class StaticEndpointResolver(Uri uri) : IEndpointResolver
         SmithyEndpointParameters parameters,
         CancellationToken cancellationToken = default
     ) => ValueTask.FromResult(endpoint);
+
+    public SmithyEndpoint? StaticEndpoint => endpoint;
 }

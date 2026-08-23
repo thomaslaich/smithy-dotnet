@@ -479,9 +479,30 @@ public interface IStructSchema
 
 public interface IStructSchema<T> : IStructSchema
 {
+    IStructValueSerializer<T>? ValueSerializer => null;
+
     void VisitMembers(IMemberVisitor<T> visitor);
 
     T BuildEmpty();
+}
+
+/// <summary>
+/// Receives statically typed structure members during serialization. Member indexes follow the
+/// structure schema's declaration order.
+/// </summary>
+public interface IStructMemberWriter
+{
+    void WriteMember<TValue>(int index, TValue value);
+}
+
+/// <summary>
+/// Supplies a structure's values directly to a wire-format serializer without using member getter
+/// delegates.
+/// </summary>
+public interface IStructValueSerializer<T>
+{
+    void WriteMembers<TWriter>(T value, ref TWriter writer)
+        where TWriter : struct, IStructMemberWriter;
 }
 
 public interface IStructSchema<T, TBuilder> : IStructSchema<T>
@@ -1314,7 +1335,8 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
         Func<TBuilder> createBuilder,
         Func<TBuilder, T> build,
         IReadOnlyList<IMemberSchema> members,
-        IEnumerable<Trait>? traits = null
+        IEnumerable<Trait>? traits = null,
+        IStructValueSerializer<T>? valueSerializer = null
     )
         : base(id, ShapeKind.Structure, traits)
     {
@@ -1324,7 +1346,10 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
             members.Cast<IMemberSchema<T>>().ToArray()
         );
         membersByName = BuildMembersByName(this.members);
+        ValueSerializer = valueSerializer;
     }
+
+    public IStructValueSerializer<T>? ValueSerializer { get; }
 
     public IMemberSchema? GetMember(string name)
     {
@@ -1462,12 +1487,23 @@ public sealed class StructSchemaBuilder<T, TBuilder>
         IEnumerable<Trait>? traits = null
     ) => Member(name, isRequired: false, get, set, target, traits);
 
-    public StructSchema<T, TBuilder> Build(Func<TBuilder> createBuilder, Func<TBuilder, T> build)
+    public StructSchema<T, TBuilder> Build(
+        Func<TBuilder> createBuilder,
+        Func<TBuilder, T> build,
+        IStructValueSerializer<T>? valueSerializer = null
+    )
     {
         ArgumentNullException.ThrowIfNull(createBuilder);
         ArgumentNullException.ThrowIfNull(build);
 
-        return new StructSchema<T, TBuilder>(id, createBuilder, build, members, traits);
+        return new StructSchema<T, TBuilder>(
+            id,
+            createBuilder,
+            build,
+            members,
+            traits,
+            valueSerializer
+        );
     }
 
     private StructSchemaBuilder<T, TBuilder> Member<TValue>(

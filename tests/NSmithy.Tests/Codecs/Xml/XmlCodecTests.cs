@@ -24,6 +24,23 @@ public sealed class XmlCodecTests
         public Address? Address { get; set; }
     }
 
+    private sealed class AddressSerializer : IStructValueSerializer<Address>
+    {
+        public void WriteMembers<TWriter>(Address value, ref TWriter writer)
+            where TWriter : struct, IStructMemberWriter => writer.WriteMember(0, value.City);
+    }
+
+    private sealed class PersonSerializer : IStructValueSerializer<Person>
+    {
+        public void WriteMembers<TWriter>(Person value, ref TWriter writer)
+            where TWriter : struct, IStructMemberWriter
+        {
+            writer.WriteMember(0, value.Name);
+            writer.WriteMember(1, value.Age);
+            writer.WriteMember(2, value.Address);
+        }
+    }
+
     public sealed record Catalog(IReadOnlyList<string> Items);
 
     public sealed class CatalogBuilder
@@ -142,7 +159,11 @@ public sealed class XmlCodecTests
                 static (builder, value) => builder.City = value,
                 Schemas.String
             )
-            .Build(static () => new AddressBuilder(), static builder => new Address(builder.City!));
+            .Build(
+                static () => new AddressBuilder(),
+                static builder => new Address(builder.City!),
+                new AddressSerializer()
+            );
         var personSchema = Schemas
             .Structure<Person, PersonBuilder>(new ShapeId("example", "Person"))
             .Required(
@@ -165,7 +186,8 @@ public sealed class XmlCodecTests
             )
             .Build(
                 static () => new PersonBuilder(),
-                static builder => new Person(builder.Name!, builder.Age, builder.Address!)
+                static builder => new Person(builder.Name!, builder.Age, builder.Address!),
+                new PersonSerializer()
             );
         var codec = XmlCodec.FromSchema(personSchema);
 

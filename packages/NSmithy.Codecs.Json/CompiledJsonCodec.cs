@@ -73,7 +73,7 @@ internal sealed class CompiledJsonProjectionCodec<T, TBuilder>(
     WireReadMode readMode
 ) : IProjectionCodec<T, TBuilder>
 {
-    private readonly StructureJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(
+    private readonly IJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(
         projection,
         materializeTopLevelDefaults
     );

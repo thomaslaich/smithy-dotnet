@@ -11,11 +11,14 @@ not a comparison; the stack doing less work just wins.
 
 ## What is measured
 
-Three suites, because they answer different questions.
+Four suites, because they answer different questions. The error suite runs under
+`just bench-codec` with the others, since it is the same level: no HTTP pipeline
+in the measurement.
 
 | Suite | What runs | Answers |
 | --- | --- | --- |
 | **codec** | Typed object ↔ bytes. No ASP.NET at all. | *What does serialization alone cost?* |
+| **error** | A modelled error response vs the success response on the same operation. No ASP.NET. | *What does an error response cost beyond a success?* |
 | **client** | Request building + response parsing, against a stub transport. | *What does one client call cost?* |
 | **server** | Raw HTTP bytes in → bytes out, through an in-memory host. | *What does serving one request cost?* |
 

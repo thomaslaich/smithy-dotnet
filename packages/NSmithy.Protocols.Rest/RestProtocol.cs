@@ -33,6 +33,16 @@ public interface IRestBodyCodecFactory
 public delegate void RestPayloadReader(byte[]? content, Stream? streamingContent, object builder);
 
 /// <summary>A serialized REST body: buffered bytes or a stream plus the Content-Type to advertise.</summary>
+/// <summary>
+/// An error-response writer with every schema-derived decision already made. Produced by
+/// <c>RestProtocol.CompileErrorSerializer</c> once per error shape and invoked per response.
+/// </summary>
+internal delegate SmithyHttpServerResponse RestErrorSerializer<in TError>(
+    TError value,
+    string errorShapeId,
+    int statusCode
+);
+
 public readonly record struct RestBody(
     byte[] Content,
     string? ContentType,
@@ -433,40 +443,63 @@ public static class RestProtocol
             );
         }
 
-        return SerializeStructuredError(
+        return CompileErrorSerializer(
+            errorSchema,
+            codecFactory,
+            rawStringPayloads,
+            errorTypeHeader
+        )(value, errorShapeId, statusCode);
+    }
+
+    /// <summary>
+    /// Compiles an error shape into a response writer, resolving everything the shape determines —
+    /// which members bind to headers, which to the body, the projected body codec — once instead of
+    /// per response.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="SerializeError"/> compiles on every call, so it is the ad-hoc entry point; anything
+    /// serializing the same error repeatedly should hold the result of this instead. The shape id and
+    /// status code stay parameters rather than being baked in, because the malformed-request schema
+    /// is one shape serving several of each.
+    /// </remarks>
+    internal static RestErrorSerializer<TError> CompileErrorSerializer<TError>(
+        Schema<TError> errorSchema,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads,
+        string errorTypeHeader
+    )
+    {
+        ArgumentNullException.ThrowIfNull(errorSchema);
+        ArgumentNullException.ThrowIfNull(codecFactory);
+
+        if (errorSchema.Resolved is not IStructSchema<TError> schema)
+        {
+            throw new InvalidOperationException(
+                $"Error schema '{errorSchema.Id}' must be a structure schema."
+            );
+        }
+
+        return CompileStructuredError(
             (dynamic)schema,
-            value,
-            errorShapeId,
-            statusCode,
             codecFactory,
             rawStringPayloads,
             errorTypeHeader
         );
     }
 
-    private static SmithyHttpServerResponse SerializeStructuredError<TError, TBuilder>(
+    private static RestErrorSerializer<TError> CompileStructuredError<TError, TBuilder>(
         IStructSchema<TError, TBuilder> schema,
-        TError value,
-        string errorShapeId,
-        int statusCode,
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads,
         string errorTypeHeader
     )
         where TBuilder : notnull
     {
-        var headers = new Dictionary<string, IReadOnlyList<string>>(
-            StringComparer.OrdinalIgnoreCase
-        )
-        {
-            [errorTypeHeader] = [LocalName(errorShapeId)],
-        };
-        var contentHeaders = new Dictionary<string, IReadOnlyList<string>>(
-            StringComparer.OrdinalIgnoreCase
-        );
-
-        IMemberSchema<TError>? payloadMember = null;
+        var headerMembers = new List<(string Name, IMemberSchema<TError> Member)>();
+        var prefixHeaderMembers = new List<(string Prefix, IMemberSchema<TError> Member)>();
         var bodyMembers = new List<IMemberSchema<TError>>();
+        IMemberSchema<TError>? payloadMember = null;
+
         foreach (var member in Schemas.GetMembers(schema))
         {
             if (member.MemberTraits.ContainsKey(RestTraits.HttpResponseCode))
@@ -476,13 +509,13 @@ public static class RestProtocol
 
             if (member.MemberTraits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
             {
-                AddHeader(headers, headerTrait.Value.AsString(), member, value);
+                headerMembers.Add((headerTrait.Value.AsString(), member));
             }
             else if (
                 member.MemberTraits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait)
             )
             {
-                AddPrefixedHeaders(headers, prefixTrait.Value.AsString(), member, value);
+                prefixHeaderMembers.Add((prefixTrait.Value.AsString(), member));
             }
             else if (member.MemberTraits.ContainsKey(RestTraits.HttpPayload))
             {
@@ -494,28 +527,60 @@ public static class RestProtocol
             }
         }
 
-        byte[] content;
+        var headerBindings = headerMembers.ToArray();
+        var prefixHeaderBindings = prefixHeaderMembers.ToArray();
+
+        // The body writer is where the bulk of the per-response cost was: without this the projected
+        // schema was rebuilt and a whole codec recompiled for every error served.
+        Func<TError, RestBody> writeBody;
         if (payloadMember is not null)
         {
-            var body = BuildPayloadWriter(
+            writeBody = BuildPayloadWriter(
                 payloadMember,
                 codecFactory,
                 rawStringPayloads,
                 emptyStructOnNull: false
-            )(value);
-            content = body.Content;
-            if (body.ContentType is not null)
-                contentHeaders["Content-Type"] = [body.ContentType];
+            );
         }
         else
         {
-            content = codecFactory
-                .CodecFor(Schemas.Project(schema, bodyMembers), materializeTopLevelDefaults: true)
-                .Serialize(value);
-            contentHeaders["Content-Type"] = [codecFactory.ContentType];
+            var codec = codecFactory.CodecFor(
+                Schemas.Project(schema, bodyMembers),
+                materializeTopLevelDefaults: true
+            );
+            var contentType = codecFactory.ContentType;
+            writeBody = value => new RestBody(codec.Serialize(value), contentType);
         }
 
-        return ToServerResponse(statusCode, ToHttpBody(content), headers, contentHeaders);
+        return (value, errorShapeId, statusCode) =>
+        {
+            var headers = new Dictionary<string, IReadOnlyList<string>>(
+                StringComparer.OrdinalIgnoreCase
+            )
+            {
+                [errorTypeHeader] = [LocalName(errorShapeId)],
+            };
+            foreach (var (name, member) in headerBindings)
+            {
+                AddHeader(headers, name, member, value);
+            }
+
+            foreach (var (prefix, member) in prefixHeaderBindings)
+            {
+                AddPrefixedHeaders(headers, prefix, member, value);
+            }
+
+            var contentHeaders = new Dictionary<string, IReadOnlyList<string>>(
+                StringComparer.OrdinalIgnoreCase
+            );
+            var body = writeBody(value);
+            if (body.ContentType is not null)
+            {
+                contentHeaders["Content-Type"] = [body.ContentType];
+            }
+
+            return ToServerResponse(statusCode, ToHttpBody(body.Content), headers, contentHeaders);
+        };
     }
 
     private static SmithyHttpServerResponse ToServerResponse(

@@ -23,6 +23,11 @@ internal interface IProtoMemberWriter<in TContainer>
     void Write(ProtoWriter writer, TContainer value);
 }
 
+internal interface IProtoMemberPlan<in TValue>
+{
+    void Write(ProtoWriter writer, TValue value);
+}
+
 internal interface IProtoUnionCaseWriter<in TUnion>
 {
     bool TryWrite(ProtoWriter writer, TUnion value);
@@ -122,7 +127,7 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
     {
         var visitor = new ProtoMemberWriterCompiler<T>(this);
         schema.VisitMembers(visitor);
-        return new MessageProtoValueWriter<T>(new StructureProtoMessageWriter<T>(visitor.Writers));
+        return new MessageProtoValueWriter<T>(CreateStructureWriter(schema, visitor));
     }
 
     public object VisitUnion<T>(IUnionSchema<T> schema)
@@ -147,6 +152,14 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
         throw new NotSupportedException(
             "Proto codec cannot encode list or map schemas as standalone protobuf values."
         );
+
+    internal static IProtoMessageWriter<T> CreateStructureWriter<T>(
+        IStructSchema<T> schema,
+        ProtoMemberWriterCompiler<T> compiler
+    ) =>
+        schema.ValueSerializer is { } valueSerializer
+            ? new DirectStructureProtoMessageWriter<T>(valueSerializer, compiler.Plans)
+            : new FallbackStructureProtoMessageWriter<T>(compiler.Writers);
 }
 
 internal sealed class MessageWriterVisitor(ProtoValueWriterCompiler compiler)
@@ -197,7 +210,7 @@ internal sealed class MessageWriterVisitor(ProtoValueWriterCompiler compiler)
     {
         var visitor = new ProtoMemberWriterCompiler<T>(compiler);
         schema.VisitMembers(visitor);
-        return new StructureProtoMessageWriter<T>(visitor.Writers);
+        return ProtoValueWriterCompiler.CreateStructureWriter(schema, visitor);
     }
 
     public object VisitUnion<T>(IUnionSchema<T> schema)
@@ -445,50 +458,52 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
     : IMemberVisitor<TContainer>
 {
     private readonly List<IProtoMemberWriter<TContainer>> writers = [];
+    private readonly List<object> plans = [];
 
-    public IReadOnlyList<IProtoMemberWriter<TContainer>> Writers => writers;
+    public IProtoMemberWriter<TContainer>[] Writers => [.. writers];
+
+    public object[] Plans => [.. plans];
 
     public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
     {
         var target = ProtoWire.Unwrap(member.TargetSchema);
         if (target is IUnionSchema union && ProtoWire.IsInlinedUnion(target))
         {
-            AddInlinedOneOfWriter(member, (dynamic)union);
+            AddInlinedOneOfPlan(member, (dynamic)union);
             return;
         }
 
         var fieldNumber = ProtoWire.FieldNumber(member.Id, member.MemberTraits, writers.Count);
-        writers.Add(
-            target switch
-            {
-                IListSchema list => CreateListWriter(member, (dynamic)list, fieldNumber),
-                IMapSchema map => CreateMapWriter(member, (dynamic)map, fieldNumber),
-                _ => new ValueProtoMemberWriter<TContainer, TValue>(
-                    member,
-                    fieldNumber,
-                    compiler.CompileValue(member.TargetSchema, member.MemberTraits)
-                ),
-            }
-        );
+        IProtoMemberPlan<TValue> plan = target switch
+        {
+            IListSchema list => CreateListPlan((dynamic)list, fieldNumber),
+            IMapSchema map => CreateMapPlan((dynamic)map, fieldNumber),
+            _ => new ValueProtoMemberPlan<TValue>(
+                fieldNumber,
+                compiler.CompileValue(member.TargetSchema, member.MemberTraits)
+            ),
+        };
+        plans.Add(plan);
+        writers.Add(new ProtoMemberWriter<TContainer, TValue>(member, plan));
     }
 
-    private void AddInlinedOneOfWriter<TUnion>(
+    private void AddInlinedOneOfPlan<TUnion>(
         IMemberSchema<TContainer, TUnion> member,
         IUnionSchema<TUnion> union
     )
     {
         var visitor = new InlinedProtoUnionMemberWriterCompiler<TContainer, TUnion>(compiler);
         union.VisitCases(visitor);
-        writers.Add(new InlinedProtoUnionMemberWriter<TContainer, TUnion>(member, visitor.Writers));
+        var plan = new InlinedProtoUnionMemberPlan<TUnion>(visitor.Writers);
+        plans.Add(plan);
+        writers.Add(new ProtoMemberWriter<TContainer, TUnion>(member, plan));
     }
 
-    private ListProtoMemberWriter<TContainer, TValue, TElement> CreateListWriter<TValue, TElement>(
-        IMemberSchema<TContainer, TValue> member,
+    private ListProtoMemberPlan<TValue, TElement> CreateListPlan<TValue, TElement>(
         IListSchema<TValue, TElement> list,
         int fieldNumber
     ) =>
         new(
-            member,
             list,
             fieldNumber,
             compiler.CompileValue(
@@ -497,13 +512,11 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
             )
         );
 
-    private MapProtoMemberWriter<TContainer, TValue, TMapValue> CreateMapWriter<TValue, TMapValue>(
-        IMemberSchema<TContainer, TValue> member,
+    private MapProtoMemberPlan<TValue, TMapValue> CreateMapPlan<TValue, TMapValue>(
         IMapSchema<TValue, TMapValue> map,
         int fieldNumber
     ) =>
         new(
-            member,
             map,
             fieldNumber,
             ProtoWire.IsSparse((Schema)map),
@@ -514,15 +527,22 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
         );
 }
 
-internal sealed class ValueProtoMemberWriter<TContainer, TValue>(
+internal sealed class ProtoMemberWriter<TContainer, TValue>(
     IMemberSchema<TContainer, TValue> member,
-    int fieldNumber,
-    IProtoValueWriter<TValue> valueWriter
+    IProtoMemberPlan<TValue> plan
 ) : IProtoMemberWriter<TContainer>
 {
-    public void Write(ProtoWriter writer, TContainer value)
+    public void Write(ProtoWriter writer, TContainer value) =>
+        plan.Write(writer, member.GetValue(value));
+}
+
+internal sealed class ValueProtoMemberPlan<TValue>(
+    int fieldNumber,
+    IProtoValueWriter<TValue> valueWriter
+) : IProtoMemberPlan<TValue>
+{
+    public void Write(ProtoWriter writer, TValue memberValue)
     {
-        var memberValue = member.GetValue(value);
         if (memberValue is null)
         {
             return;
@@ -533,20 +553,18 @@ internal sealed class ValueProtoMemberWriter<TContainer, TValue>(
     }
 }
 
-internal sealed class ListProtoMemberWriter<TContainer, TCollection, TElement>(
-    IMemberSchema<TContainer, TCollection> member,
+internal sealed class ListProtoMemberPlan<TCollection, TElement>(
     IListSchema<TCollection, TElement> list,
     int fieldNumber,
     IProtoValueWriter<TElement> elementWriter
-) : IProtoMemberWriter<TContainer>
+) : IProtoMemberPlan<TCollection>
 {
     private readonly bool packable = ProtoWire.IsPackableScalar(
         ProtoWire.Unwrap(list.ElementSchema).Kind
     );
 
-    public void Write(ProtoWriter writer, TContainer value)
+    public void Write(ProtoWriter writer, TCollection memberValue)
     {
-        var memberValue = member.GetValue(value);
         if (memberValue is null)
         {
             return;
@@ -577,21 +595,19 @@ internal sealed class ListProtoMemberWriter<TContainer, TCollection, TElement>(
     }
 }
 
-internal sealed class MapProtoMemberWriter<TContainer, TDictionary, TValue>(
-    IMemberSchema<TContainer, TDictionary> member,
+internal sealed class MapProtoMemberPlan<TDictionary, TValue>(
     IMapSchema<TDictionary, TValue> map,
     int fieldNumber,
     bool sparse,
     IProtoValueWriter<TValue> valueWriter
-) : IProtoMemberWriter<TContainer>
+) : IProtoMemberPlan<TDictionary>
 {
     private readonly SparseScalarValueWriter<TValue> sparseWriter = new(
         map.TypedValueMember.TargetSchema
     );
 
-    public void Write(ProtoWriter writer, TContainer value)
+    public void Write(ProtoWriter writer, TDictionary memberValue)
     {
-        var memberValue = member.GetValue(value);
         if (memberValue is null)
         {
             return;
@@ -648,14 +664,12 @@ internal sealed class InlinedProtoUnionMemberWriterCompiler<TContainer, TUnion>(
         );
 }
 
-internal sealed class InlinedProtoUnionMemberWriter<TContainer, TUnion>(
-    IMemberSchema<TContainer, TUnion> member,
+internal sealed class InlinedProtoUnionMemberPlan<TUnion>(
     IReadOnlyList<IProtoUnionCaseWriter<TUnion>> caseWriters
-) : IProtoMemberWriter<TContainer>
+) : IProtoMemberPlan<TUnion>
 {
-    public void Write(ProtoWriter writer, TContainer value)
+    public void Write(ProtoWriter writer, TUnion unionValue)
     {
-        var unionValue = member.GetValue(value);
         if (unionValue is null)
         {
             return;
@@ -673,9 +687,27 @@ internal sealed class InlinedProtoUnionMemberWriter<TContainer, TUnion>(
     }
 }
 
-internal sealed class StructureProtoMessageWriter<T>(
-    IReadOnlyList<IProtoMemberWriter<T>> memberWriters
+internal readonly struct ProtoStructMemberWriter(ProtoWriter writer, object[] memberPlans)
+    : IStructMemberWriter
+{
+    public void WriteMember<TValue>(int index, TValue value) =>
+        ((IProtoMemberPlan<TValue>)memberPlans[index]).Write(writer, value);
+}
+
+internal sealed class DirectStructureProtoMessageWriter<T>(
+    IStructValueSerializer<T> valueSerializer,
+    object[] memberPlans
 ) : IProtoMessageWriter<T>
+{
+    public void Write(ProtoWriter writer, T value)
+    {
+        var memberWriter = new ProtoStructMemberWriter(writer, memberPlans);
+        valueSerializer.WriteMembers(value, ref memberWriter);
+    }
+}
+
+internal sealed class FallbackStructureProtoMessageWriter<T>(IProtoMemberWriter<T>[] memberWriters)
+    : IProtoMessageWriter<T>
 {
     public void Write(ProtoWriter writer, T value)
     {

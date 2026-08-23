@@ -300,7 +300,7 @@ internal sealed class JsonMemberReaderCompiler<TContainer, TBuilder>(JsonReaderC
 {
     private readonly List<IJsonMemberReader<TBuilder>> readers = [];
 
-    public IReadOnlyList<IJsonMemberReader<TBuilder>> Readers => readers;
+    public IJsonMemberReader<TBuilder>[] Readers => [.. readers];
 
     public void Visit<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member)
     {
@@ -345,7 +345,7 @@ internal sealed class JsonMemberReader<TContainer, TBuilder, TValue>(
 internal sealed class StructureJsonValueReader<T, TBuilder>(
     Func<TBuilder> createBuilder,
     Func<TBuilder, T> build,
-    IReadOnlyList<IJsonMemberReader<TBuilder>> memberReaders
+    IJsonMemberReader<TBuilder>[] memberReaders
 ) : IJsonValueReader<T>
 {
     // Member names as UTF-8, encoded once. Matching a property against these never
@@ -369,7 +369,7 @@ internal sealed class StructureJsonValueReader<T, TBuilder>(
         // scanned the object again — so a structure with N members over an object
         // with M properties walked the document N times.
         Span<bool> seen =
-            memberReaders.Count <= 64 ? stackalloc bool[64] : new bool[memberReaders.Count];
+            memberReaders.Length <= 64 ? stackalloc bool[64] : new bool[memberReaders.Length];
 
         foreach (var property in value.EnumerateObject())
         {
@@ -410,7 +410,7 @@ internal sealed class StructureJsonValueReader<T, TBuilder>(
             }
         }
 
-        for (var i = 0; i < memberReaders.Count; i++)
+        for (var i = 0; i < memberReaders.Length; i++)
         {
             if (seen[i])
             {
@@ -444,7 +444,7 @@ internal sealed class StructureJsonValueReader<T, TBuilder>(
 }
 
 internal sealed class StructureJsonProjectionReader<TBuilder>(
-    IReadOnlyList<IJsonMemberReader<TBuilder>> memberReaders
+    IJsonMemberReader<TBuilder>[] memberReaders
 )
 {
     private readonly Dictionary<string, IJsonMemberReader<TBuilder>> readersByName =
@@ -509,7 +509,7 @@ internal sealed class JsonUnionCaseReaderCompiler<TUnion>(JsonReaderCompiler com
 {
     private readonly List<IJsonUnionCaseReader<TUnion>> readers = [];
 
-    public IReadOnlyList<IJsonUnionCaseReader<TUnion>> Readers => readers;
+    public IJsonUnionCaseReader<TUnion>[] Readers => [.. readers];
 
     public void Visit<TValue>(IUnionCaseSchema<TUnion, TValue> unionCase)
     {
@@ -537,7 +537,7 @@ internal sealed class JsonOpenUnionCaseReaderCompiler<TUnion>(JsonReaderCompiler
 {
     private readonly List<IJsonOpenUnionCaseReader<TUnion>> readers = [];
 
-    public IReadOnlyList<IJsonOpenUnionCaseReader<TUnion>> Readers => readers;
+    public IJsonOpenUnionCaseReader<TUnion>[] Readers => [.. readers];
 
     public IJsonUnknownUnionCaseReader<TUnion>? UnknownReader { get; private set; }
 
@@ -592,7 +592,7 @@ internal sealed class UnionJsonValueReader<T> : IJsonValueReader<T>
 {
     private readonly Dictionary<string, IJsonUnionCaseReader<T>> readersByName;
 
-    public UnionJsonValueReader(IReadOnlyList<IJsonUnionCaseReader<T>> readers)
+    public UnionJsonValueReader(IJsonUnionCaseReader<T>[] readers)
     {
         readersByName = readers.ToDictionary(reader => reader.Name, StringComparer.Ordinal);
     }
@@ -634,7 +634,7 @@ internal sealed class OpenUnionJsonValueReader<T> : IJsonValueReader<T>
     private readonly string discriminatorName;
 
     public OpenUnionJsonValueReader(
-        IReadOnlyList<IJsonOpenUnionCaseReader<T>> readers,
+        IJsonOpenUnionCaseReader<T>[] readers,
         IJsonUnknownUnionCaseReader<T>? unknownReader,
         string discriminatorName
     )

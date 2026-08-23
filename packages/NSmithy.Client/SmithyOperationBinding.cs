@@ -27,6 +27,8 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
         OperationId = operationId;
         Protocol = protocol;
         AuthSchemeIds = authSchemeIds ?? [];
+        ActivityName = $"{serviceId.Name}.{operationId.Name}";
+        ServiceIdTag = serviceId.ToString();
     }
 
     public ShapeId ServiceId { get; }
@@ -34,6 +36,21 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
     public ShapeId OperationId { get; }
 
     public IClientOperationProtocol<TInput, TOutput> Protocol { get; }
+
+    /// <summary>
+    /// The span name for this operation, built once here rather than interpolated per invocation.
+    /// <see cref="System.Diagnostics.ActivitySource.StartActivity(string, System.Diagnostics.ActivityKind)"/>
+    /// returns null when nothing is subscribed, but its argument is evaluated either way, so
+    /// interpolating at the call site allocated a string on every call to hand to a method that
+    /// usually discards it.
+    /// </summary>
+    internal string ActivityName { get; }
+
+    /// <summary>
+    /// The <c>rpc.service</c> metric dimension. <see cref="ShapeId.ToString"/> allocates, and the
+    /// value is constant per binding, so it is materialized once with the binding.
+    /// </summary>
+    internal string ServiceIdTag { get; }
 
     /// <summary>
     /// The operation's effective modeled auth scheme ids in Smithy priority order — the

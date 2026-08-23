@@ -277,6 +277,19 @@ internal static class CborWire
     internal static readonly ShapeId ClientOptionalTrait = new("smithy.api", "clientOptional");
     internal static readonly ShapeId DefaultTrait = new("smithy.api", "default");
 
+    /// <summary>
+    /// Resolves a member's modelled default once, at compile time; see the equivalent on
+    /// <c>JsonWire</c> for why only the write path may share the resolved instance.
+    /// </summary>
+    internal static (bool Present, T? Value) ResolveDefault<T>(
+        Schema<T> schema,
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        bool materialize
+    ) =>
+        materialize && TryCreateDefaultValue(schema, traits, out var value)
+            ? (true, value)
+            : (false, default);
+
     internal static bool TryCreateDefaultValue<T>(
         Schema<T> schema,
         IReadOnlyDictionary<ShapeId, Trait> traits,

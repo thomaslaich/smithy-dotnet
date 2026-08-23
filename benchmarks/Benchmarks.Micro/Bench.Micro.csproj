@@ -31,7 +31,13 @@
          JSON codec explicitly rather than relying on transitive flow. -->
     <ProjectReference Include="../stacks/MinimalApi/Bench.Stack.MinimalApi.csproj" />
     <ProjectReference Include="../stacks/NSmithy/Bench.Stack.NSmithy.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Codecs.Proto/NSmithy.Codecs.Proto.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Core/NSmithy.Core.csproj" />
+    <!-- The error suite drives the protocol's own serialization entry points. -->
+    <ProjectReference Include="../../packages/NSmithy.Http/NSmithy.Http.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
   </ItemGroup>
 </Project>

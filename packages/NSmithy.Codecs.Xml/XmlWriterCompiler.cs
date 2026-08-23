@@ -16,6 +16,11 @@ internal interface IXmlMemberWriter<in TContainer>
     void Write(XElement element, TContainer container);
 }
 
+internal interface IXmlMemberPlan<in TValue>
+{
+    void Write(XElement element, TValue value);
+}
+
 internal interface IXmlUnionCaseWriter<in TUnion>
 {
     bool TryWrite(XElement element, TUnion value);
@@ -37,16 +42,29 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
         return new XmlWriterCompiler().CompileTopLevelValue(schema, materializeTopLevelDefaults);
     }
 
-    public static StructureXmlValueWriter<T> Compile<T, TBuilder>(
+    public static IXmlValueWriter<T> Compile<T, TBuilder>(
         StructProjection<T, TBuilder> projection,
         bool materializeTopLevelDefaults = true
     )
     {
         ArgumentNullException.ThrowIfNull(projection);
         var compiler = new XmlWriterCompiler();
-        var visitor = new XmlMemberWriterCompiler<T>(compiler, materializeTopLevelDefaults);
-        projection.VisitMembers(visitor);
-        return new StructureXmlValueWriter<T>(visitor.Writers);
+        if (projection.Source.ValueSerializer is not { } valueSerializer)
+        {
+            var fallback = new XmlMemberWriterCompiler<T>(compiler, materializeTopLevelDefaults);
+            projection.VisitMembers(fallback);
+            return new FallbackStructureXmlValueWriter<T>(fallback.Writers);
+        }
+
+        var included = new XmlMemberCollector<T>();
+        projection.VisitMembers(included);
+        var visitor = new XmlMemberWriterCompiler<T>(
+            compiler,
+            materializeTopLevelDefaults,
+            included.Members
+        );
+        projection.Source.VisitMembers(visitor);
+        return new DirectStructureXmlValueWriter<T>(valueSerializer, visitor.Plans);
     }
 
     private IXmlValueWriter<T> CompileTopLevelValue<T>(
@@ -144,9 +162,7 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
 
     public object VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
     {
-        var visitor = new XmlMemberWriterCompiler<T>(this, materializeDefaults: true);
-        schema.VisitMembers(visitor);
-        return new StructureXmlValueWriter<T>(visitor.Writers);
+        return CompileStructure(schema, materializeDefaults: true);
     }
 
     public object VisitUnion<T>(IUnionSchema<T> schema)
@@ -167,14 +183,16 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
         IReadOnlyDictionary<ShapeId, Trait> traits
     ) => new(schema, traits);
 
-    private StructureXmlValueWriter<T> CompileStructure<T>(
+    private IXmlValueWriter<T> CompileStructure<T>(
         IStructSchema<T> schema,
         bool materializeDefaults
     )
     {
         var visitor = new XmlMemberWriterCompiler<T>(this, materializeDefaults);
         schema.VisitMembers(visitor);
-        return new StructureXmlValueWriter<T>(visitor.Writers);
+        return schema.ValueSerializer is { } valueSerializer
+            ? new DirectStructureXmlValueWriter<T>(valueSerializer, visitor.Plans)
+            : new FallbackStructureXmlValueWriter<T>(visitor.Writers);
     }
 }
 
@@ -303,40 +321,49 @@ internal sealed class NullableXmlValueWriter<T>(IXmlValueWriter<T> inner) : IXml
 
 internal sealed class XmlMemberWriterCompiler<TContainer>(
     XmlWriterCompiler compiler,
-    bool materializeDefaults
+    bool materializeDefaults,
+    ISet<IMemberSchema<TContainer>>? includedMembers = null
 ) : IMemberVisitor<TContainer>
 {
     private readonly List<IXmlMemberWriter<TContainer>> writers = [];
+    private readonly List<object?> plans = [];
 
-    public IReadOnlyList<IXmlMemberWriter<TContainer>> Writers => writers;
+    // An array, not the interface: the write path iterates this once per object, and
+    // foreach over IReadOnlyList<T> goes through IEnumerable<T>.GetEnumerator, which
+    // boxes List<T>.Enumerator — a heap allocation per structure written.
+    public IXmlMemberWriter<TContainer>[] Writers => [.. writers];
+
+    public object?[] Plans => [.. plans];
 
     public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
     {
-        if (XmlTraits.IsXmlFlattened(member))
+        if (includedMembers is not null && !includedMembers.Contains(member))
         {
-            writers.Add(CreateFlattenedWriter(member));
+            plans.Add(null);
             return;
         }
 
-        writers.Add(
-            new XmlMemberWriter<TContainer, TValue>(
+        var plan = XmlTraits.IsXmlFlattened(member)
+            ? CreateFlattenedPlan(member)
+            : new XmlMemberPlan<TValue>(
                 member,
                 compiler.CompileValue(member.TargetSchema, member.MemberTraits),
                 materializeDefaults
-            )
-        );
+            );
+        plans.Add(plan);
+        writers.Add(new FallbackXmlMemberWriter<TContainer, TValue>(member, plan));
     }
 
-    private IXmlMemberWriter<TContainer> CreateFlattenedWriter<TValue>(
+    private IXmlMemberPlan<TValue> CreateFlattenedPlan<TValue>(
         IMemberSchema<TContainer, TValue> member
     )
     {
         var target = member.TargetSchema.Resolved;
         return target switch
         {
-            IListSchema list => CreateFlattenedListWriter(member, (dynamic)list),
-            IMapSchema map => CreateFlattenedMapWriter(member, (dynamic)map),
-            _ => new FlattenedXmlMemberWriter<TContainer, TValue>(
+            IListSchema list => CreateFlattenedListPlan(member, (dynamic)list),
+            IMapSchema map => CreateFlattenedMapPlan(member, (dynamic)map),
+            _ => new FlattenedXmlMemberPlan<TValue>(
                 member,
                 compiler.CompileValue(member.TargetSchema, member.MemberTraits),
                 materializeDefaults
@@ -344,10 +371,10 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(
         };
     }
 
-    private FlattenedListXmlMemberWriter<TContainer, TValue, TElement> CreateFlattenedListWriter<
-        TValue,
-        TElement
-    >(IMemberSchema<TContainer, TValue> member, IListSchema<TValue, TElement> list) =>
+    private FlattenedListXmlMemberPlan<TValue, TElement> CreateFlattenedListPlan<TValue, TElement>(
+        IMemberSchema<TContainer, TValue> member,
+        IListSchema<TValue, TElement> list
+    ) =>
         new(
             member,
             list,
@@ -358,10 +385,10 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(
             materializeDefaults
         );
 
-    private FlattenedMapXmlMemberWriter<TContainer, TValue, TMapValue> CreateFlattenedMapWriter<
-        TValue,
-        TMapValue
-    >(IMemberSchema<TContainer, TValue> member, IMapSchema<TValue, TMapValue> map) =>
+    private FlattenedMapXmlMemberPlan<TValue, TMapValue> CreateFlattenedMapPlan<TValue, TMapValue>(
+        IMemberSchema<TContainer, TValue> member,
+        IMapSchema<TValue, TMapValue> map
+    ) =>
         new(
             member,
             map,
@@ -373,30 +400,48 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(
         );
 }
 
-internal sealed class XmlMemberWriter<TContainer, TValue>(
+internal sealed class XmlMemberCollector<TContainer> : IMemberVisitor<TContainer>
+{
+    public ISet<IMemberSchema<TContainer>> Members { get; } =
+        new HashSet<IMemberSchema<TContainer>>(ReferenceEqualityComparer.Instance);
+
+    public void Visit<TValue>(IMemberSchema<TContainer, TValue> member) => Members.Add(member);
+}
+
+internal sealed class FallbackXmlMemberWriter<TContainer, TValue>(
     IMemberSchema<TContainer, TValue> member,
-    IXmlValueWriter<TValue> valueWriter,
-    bool materializeDefault
+    IXmlMemberPlan<TValue> plan
 ) : IXmlMemberWriter<TContainer>
 {
-    public void Write(XElement element, TContainer container)
+    public void Write(XElement element, TContainer container) =>
+        plan.Write(element, member.GetValue(container));
+}
+
+internal sealed class XmlMemberPlan<TValue>(
+    ITargetedMemberSchema<TValue> member,
+    IXmlValueWriter<TValue> valueWriter,
+    bool materializeDefault
+) : IXmlMemberPlan<TValue>
+{
+    private readonly bool isRequired = member.IsRequired;
+
+    // Constant per member, so resolved at compile time rather than per write.
+    private readonly (bool Present, TValue? Value) memberDefault = ResolveDefault(
+        member.TargetSchema,
+        member.MemberTraits,
+        materializeDefault
+    );
+
+    public void Write(XElement element, TValue value)
     {
-        var value = member.GetValue(container);
-        if (value is null && !member.IsRequired)
+        if (value is null && !isRequired)
         {
-            if (
-                !materializeDefault
-                || !TryCreateDefaultValue(
-                    member.TargetSchema,
-                    member.MemberTraits,
-                    out TValue? defaultValue
-                )
-            )
+            if (!memberDefault.Present)
             {
                 return;
             }
 
-            value = defaultValue!;
+            value = memberDefault.Value!;
         }
 
         if (XmlTraits.IsXmlAttribute(member))
@@ -421,30 +466,31 @@ internal sealed class XmlMemberWriter<TContainer, TValue>(
     }
 }
 
-internal sealed class FlattenedXmlMemberWriter<TContainer, TValue>(
-    IMemberSchema<TContainer, TValue> member,
+internal sealed class FlattenedXmlMemberPlan<TValue>(
+    ITargetedMemberSchema<TValue> member,
     IXmlValueWriter<TValue> valueWriter,
     bool materializeDefault
-) : IXmlMemberWriter<TContainer>
+) : IXmlMemberPlan<TValue>
 {
-    public void Write(XElement element, TContainer container)
+    private readonly bool isRequired = member.IsRequired;
+
+    // Constant per member, so resolved at compile time rather than per write.
+    private readonly (bool Present, TValue? Value) memberDefault = ResolveDefault(
+        member.TargetSchema,
+        member.MemberTraits,
+        materializeDefault
+    );
+
+    public void Write(XElement element, TValue value)
     {
-        var value = member.GetValue(container);
-        if (value is null && !member.IsRequired)
+        if (value is null && !isRequired)
         {
-            if (
-                !materializeDefault
-                || !TryCreateDefaultValue(
-                    member.TargetSchema,
-                    member.MemberTraits,
-                    out TValue? defaultValue
-                )
-            )
+            if (!memberDefault.Present)
             {
                 return;
             }
 
-            value = defaultValue!;
+            value = memberDefault.Value!;
         }
 
         var child = new XElement(ElementName(member));
@@ -453,31 +499,32 @@ internal sealed class FlattenedXmlMemberWriter<TContainer, TValue>(
     }
 }
 
-internal sealed class FlattenedListXmlMemberWriter<TContainer, TCollection, TElement>(
-    IMemberSchema<TContainer, TCollection> member,
+internal sealed class FlattenedListXmlMemberPlan<TCollection, TElement>(
+    ITargetedMemberSchema<TCollection> member,
     IListSchema<TCollection, TElement> list,
     IXmlValueWriter<TElement> elementWriter,
     bool materializeDefault
-) : IXmlMemberWriter<TContainer>
+) : IXmlMemberPlan<TCollection>
 {
-    public void Write(XElement element, TContainer container)
+    private readonly bool isRequired = member.IsRequired;
+
+    // Constant per member, so resolved at compile time rather than per write.
+    private readonly (bool Present, TCollection? Value) memberDefault = ResolveDefault(
+        member.TargetSchema,
+        member.MemberTraits,
+        materializeDefault
+    );
+
+    public void Write(XElement element, TCollection value)
     {
-        var value = member.GetValue(container);
-        if (value is null && !member.IsRequired)
+        if (value is null && !isRequired)
         {
-            if (
-                !materializeDefault
-                || !TryCreateDefaultValue(
-                    member.TargetSchema,
-                    member.MemberTraits,
-                    out TCollection? defaultValue
-                )
-            )
+            if (!memberDefault.Present)
             {
                 return;
             }
 
-            value = defaultValue!;
+            value = memberDefault.Value!;
         }
 
         if (value is null)
@@ -494,31 +541,32 @@ internal sealed class FlattenedListXmlMemberWriter<TContainer, TCollection, TEle
     }
 }
 
-internal sealed class FlattenedMapXmlMemberWriter<TContainer, TDictionary, TValue>(
-    IMemberSchema<TContainer, TDictionary> member,
+internal sealed class FlattenedMapXmlMemberPlan<TDictionary, TValue>(
+    ITargetedMemberSchema<TDictionary> member,
     IMapSchema<TDictionary, TValue> map,
     IXmlValueWriter<TValue> valueWriter,
     bool materializeDefault
-) : IXmlMemberWriter<TContainer>
+) : IXmlMemberPlan<TDictionary>
 {
-    public void Write(XElement element, TContainer container)
+    private readonly bool isRequired = member.IsRequired;
+
+    // Constant per member, so resolved at compile time rather than per write.
+    private readonly (bool Present, TDictionary? Value) memberDefault = ResolveDefault(
+        member.TargetSchema,
+        member.MemberTraits,
+        materializeDefault
+    );
+
+    public void Write(XElement element, TDictionary value)
     {
-        var value = member.GetValue(container);
-        if (value is null && !member.IsRequired)
+        if (value is null && !isRequired)
         {
-            if (
-                !materializeDefault
-                || !TryCreateDefaultValue(
-                    member.TargetSchema,
-                    member.MemberTraits,
-                    out TDictionary? defaultValue
-                )
-            )
+            if (!memberDefault.Present)
             {
                 return;
             }
 
-            value = defaultValue!;
+            value = memberDefault.Value!;
         }
 
         if (value is null)
@@ -538,7 +586,36 @@ internal sealed class FlattenedMapXmlMemberWriter<TContainer, TDictionary, TValu
     }
 }
 
-internal sealed class StructureXmlValueWriter<T>(IReadOnlyList<IXmlMemberWriter<T>> memberWriters)
+internal readonly struct XmlStructMemberWriter(XElement element, object?[] memberPlans)
+    : IStructMemberWriter
+{
+    public void WriteMember<TValue>(int index, TValue value)
+    {
+        if (memberPlans[index] is { } plan)
+        {
+            ((IXmlMemberPlan<TValue>)plan).Write(element, value);
+        }
+    }
+}
+
+internal sealed class DirectStructureXmlValueWriter<T>(
+    IStructValueSerializer<T> valueSerializer,
+    object?[] memberPlans
+) : IXmlValueWriter<T>
+{
+    public void Write(XElement element, T value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        var memberWriter = new XmlStructMemberWriter(element, memberPlans);
+        valueSerializer.WriteMembers(value, ref memberWriter);
+    }
+}
+
+internal sealed class FallbackStructureXmlValueWriter<T>(IXmlMemberWriter<T>[] memberWriters)
     : IXmlValueWriter<T>
 {
     public void Write(XElement element, T value)
@@ -606,7 +683,7 @@ internal sealed class XmlUnionCaseWriterCompiler<TUnion>(XmlWriterCompiler compi
 {
     private readonly List<IXmlUnionCaseWriter<TUnion>> writers = [];
 
-    public IReadOnlyList<IXmlUnionCaseWriter<TUnion>> Writers => writers;
+    public IXmlUnionCaseWriter<TUnion>[] Writers => [.. writers];
 
     public void Visit<TValue>(IUnionCaseSchema<TUnion, TValue> unionCase)
     {
@@ -638,7 +715,7 @@ internal sealed class XmlUnionCaseWriter<TUnion, TValue>(
     }
 }
 
-internal sealed class UnionXmlValueWriter<T>(IReadOnlyList<IXmlUnionCaseWriter<T>> caseWriters)
+internal sealed class UnionXmlValueWriter<T>(IXmlUnionCaseWriter<T>[] caseWriters)
     : IXmlValueWriter<T>
 {
     public void Write(XElement element, T value)
