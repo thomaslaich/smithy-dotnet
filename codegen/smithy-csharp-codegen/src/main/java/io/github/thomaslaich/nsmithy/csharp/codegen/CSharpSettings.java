@@ -9,7 +9,7 @@
  *     "generateClient": true,             // optional; emit the client surface (default true)
  *     "generateServer": true,             // optional; emit the server surface (default true)
  *     "generateDependencyInjection": true, // optional; emit the IHttpClientFactory extension
- *     "generateFakes": false              // optional; emit the fake handler (default false)
+ *     "generateFakes": false              // optional; emit fakes per surface (default false)
  *   }
  *
  * If baseNamespace is omitted, the C# namespace is just PascalCase of the

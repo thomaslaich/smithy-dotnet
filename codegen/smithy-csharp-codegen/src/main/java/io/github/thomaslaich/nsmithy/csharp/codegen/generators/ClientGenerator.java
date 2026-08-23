@@ -49,7 +49,6 @@ public final class ClientGenerator implements Runnable {
 
   @Override
   public void run() {
-    SymbolProvider sp = context.symbolProvider();
     Model model = context.model();
     TopDownIndex idx = TopDownIndex.of(model);
     List<OperationShape> operations =
@@ -76,13 +75,13 @@ public final class ClientGenerator implements Runnable {
           writer.write("");
           for (OperationShape op : operations) {
             writer.writeXmlDocs(op, operationParameterDocs(model, op));
-            writer.write("$L;", operationSignature(sp, op));
-            paginationInfo(op)
+            writer.write("$L;", operationSignature(context, op));
+            paginationInfo(context, service, op)
                 .ifPresent(
                     info -> {
                       writer.writeXmlDocs(op, operationParameterDocs(model, op));
-                      writer.write("$L;", paginatorPagesSignature(sp, op));
-                      paginatorItemsSignature(sp, info)
+                      writer.write("$L;", paginatorPagesSignature(context, op));
+                      paginatorItemsSignature(context, info)
                           .ifPresent(
                               signature -> {
                                 writer.writeXmlDocs(op, operationParameterDocs(model, op));
@@ -105,7 +104,7 @@ public final class ClientGenerator implements Runnable {
     // callers selecting another declared protocol reference its namespace from their own code.
     writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kinds.get(0)));
 
-    writeClient(sp, model, operations, typeName, interfaceName, kinds);
+    writeClient(model, operations, typeName, interfaceName, kinds);
   }
 
   // =====================================================================
@@ -113,7 +112,6 @@ public final class ClientGenerator implements Runnable {
   // =====================================================================
 
   private void writeClient(
-      SymbolProvider sp,
       Model model,
       List<OperationShape> operations,
       String typeName,
@@ -335,8 +333,8 @@ public final class ClientGenerator implements Runnable {
           writer.write("");
 
           for (OperationShape op : operations) {
-            writeOperationMethod(sp, model, op);
-            paginationInfo(op).ifPresent(info -> writePaginatorMethods(sp, op, info));
+            writeOperationMethod(model, op);
+            paginationInfo(context, service, op).ifPresent(info -> writePaginatorMethods(op, info));
           }
         });
     writer.write("");
@@ -449,10 +447,10 @@ public final class ClientGenerator implements Runnable {
 
   // ---------------- per-operation method ----------------
 
-  private void writeOperationMethod(SymbolProvider sp, Model model, OperationShape op) {
+  private void writeOperationMethod(Model model, OperationShape op) {
     writer.writeXmlDocs(op, operationParameterDocs(model, op));
     if (!canBindOperation(op)) {
-      writer.write("public $L", operationSignature(sp, op));
+      writer.write("public $L", operationSignature(context, op));
       writer.openBlock(
           "{",
           "}",
@@ -469,7 +467,7 @@ public final class ClientGenerator implements Runnable {
     String opName = CSharpNaming.typeName(op.getId().getName());
     String inputArg = hasInput ? "input" : "SmithyUnit.Value";
 
-    writer.write(hasOutput ? "public $L" : "public async $L", operationSignature(sp, op));
+    writer.write(hasOutput ? "public $L" : "public async $L", operationSignature(context, op));
     writer.openBlock(
         "{",
         "}",
@@ -521,16 +519,19 @@ public final class ClientGenerator implements Runnable {
 
   /**
    * Resolved pagination for an operation: present when the operation carries {@code @paginated}
-   * (merged with the service-level defaults). Event-stream operations are never paginated.
+   * (merged with the service-level defaults). Event-stream operations are never paginated. Static
+   * (like the signature helpers below) so FakeClientGenerator renders the same paginator surface.
    */
-  private Optional<PaginationInfo> paginationInfo(OperationShape op) {
+  static Optional<PaginationInfo> paginationInfo(
+      GenerationContext context, ServiceShape service, OperationShape op) {
     if (isEventStreamOperation(context.model(), op)) {
       return Optional.empty();
     }
     return PaginatedIndex.of(context.model()).getPaginationInfo(service, op);
   }
 
-  private String paginatorPagesSignature(SymbolProvider sp, OperationShape op) {
+  static String paginatorPagesSignature(GenerationContext context, OperationShape op) {
+    SymbolProvider sp = context.symbolProvider();
     Model model = context.model();
     String inputType =
         CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())));
@@ -550,8 +551,8 @@ public final class ClientGenerator implements Runnable {
    * member that resolves to a list. Map-valued items are rare and not generated yet — the pages
    * paginator still covers them.
    */
-  private Optional<String> paginatorItemsSignature(SymbolProvider sp, PaginationInfo info) {
-    return paginatorItemElementType(sp, info)
+  static Optional<String> paginatorItemsSignature(GenerationContext context, PaginationInfo info) {
+    return paginatorItemElementType(context, info)
         .map(
             elementType ->
                 "System.Collections.Generic.IAsyncEnumerable<"
@@ -560,12 +561,15 @@ public final class ClientGenerator implements Runnable {
                     + CSharpNaming.typeName(info.getOperation().getId().getName())
                     + "ItemsAsync("
                     + CSharpSymbolProvider.qualified(
-                        sp.toSymbol(
-                            context.model().expectShape(info.getOperation().getInputShape())))
+                        context
+                            .symbolProvider()
+                            .toSymbol(
+                                context.model().expectShape(info.getOperation().getInputShape())))
                     + " input, System.Threading.CancellationToken cancellationToken = default)");
   }
 
-  private Optional<String> paginatorItemElementType(SymbolProvider sp, PaginationInfo info) {
+  private static Optional<String> paginatorItemElementType(
+      GenerationContext context, PaginationInfo info) {
     List<MemberShape> path = info.getItemsMemberPath();
     if (path.isEmpty()) {
       return Optional.empty();
@@ -575,11 +579,11 @@ public final class ClientGenerator implements Runnable {
       return Optional.empty();
     }
     var element = context.model().expectShape(target.asListShape().get().getMember().getTarget());
-    return Optional.of(CSharpSymbolProvider.qualified(sp.toSymbol(element)));
+    return Optional.of(CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(element)));
   }
 
   /** Renders a null-safe property access chain for a member path, e.g. {@code output.A?.B}. */
-  private static String memberPathExpr(String root, List<MemberShape> path) {
+  static String memberPathExpr(String root, List<MemberShape> path) {
     StringBuilder expr = new StringBuilder(root);
     for (int i = 0; i < path.size(); i++) {
       expr.append(i == 0 ? "." : "?.")
@@ -593,19 +597,14 @@ public final class ClientGenerator implements Runnable {
    * while the response carries a continuation token, so every page flows through the normal client
    * lifecycle (auth, retries, endpoint resolution, telemetry).
    */
-  private void writePaginatorMethods(SymbolProvider sp, OperationShape op, PaginationInfo info) {
+  private void writePaginatorMethods(OperationShape op, PaginationInfo info) {
     String opName = CSharpNaming.typeName(op.getId().getName());
     String tokenProperty = CSharpNaming.propertyName(info.getInputTokenMember().getMemberName());
     String outputTokenExpr = memberPathExpr("output", info.getOutputTokenMemberPath());
 
     writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
     writer.write(
-        "public async $L",
-        paginatorPagesSignature(sp, op)
-            .replace(
-                "System.Threading.CancellationToken cancellationToken",
-                "[System.Runtime.CompilerServices.EnumeratorCancellation]"
-                    + " System.Threading.CancellationToken cancellationToken"));
+        "public async $L", withEnumeratorCancellation(paginatorPagesSignature(context, op)));
     writer.openBlock(
         "{",
         "}",
@@ -631,17 +630,12 @@ public final class ClientGenerator implements Runnable {
         });
     writer.write("");
 
-    paginatorItemsSignature(sp, info)
+    paginatorItemsSignature(context, info)
         .ifPresent(
             signature -> {
               String itemsExpr = memberPathExpr("page", info.getItemsMemberPath());
               writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
-              writer.write(
-                  "public async $L",
-                  signature.replace(
-                      "System.Threading.CancellationToken cancellationToken",
-                      "[System.Runtime.CompilerServices.EnumeratorCancellation]"
-                          + " System.Threading.CancellationToken cancellationToken"));
+              writer.write("public async $L", withEnumeratorCancellation(signature));
               writer.openBlock(
                   "{",
                   "}",
@@ -680,7 +674,16 @@ public final class ClientGenerator implements Runnable {
         .collect(Collectors.toList());
   }
 
-  private String operationSignature(SymbolProvider sp, OperationShape op) {
+  /** Adds [EnumeratorCancellation] to a paginator signature's cancellation-token parameter. */
+  static String withEnumeratorCancellation(String signature) {
+    return signature.replace(
+        "System.Threading.CancellationToken cancellationToken",
+        "[System.Runtime.CompilerServices.EnumeratorCancellation]"
+            + " System.Threading.CancellationToken cancellationToken");
+  }
+
+  static String operationSignature(GenerationContext context, OperationShape op) {
+    SymbolProvider sp = context.symbolProvider();
     Model model = context.model();
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
@@ -718,7 +721,7 @@ public final class ClientGenerator implements Runnable {
     return docs;
   }
 
-  private boolean isEventStreamOperation(Model model, OperationShape op) {
+  private static boolean isEventStreamOperation(Model model, OperationShape op) {
     return isInputStreaming(model, op) || isOutputStreaming(model, op);
   }
 
@@ -730,11 +733,11 @@ public final class ClientGenerator implements Runnable {
         .anyMatch(ProtocolSupport::supportsEventStreams);
   }
 
-  private boolean isInputStreaming(Model model, OperationShape op) {
+  private static boolean isInputStreaming(Model model, OperationShape op) {
     return ShapeSupport.isEventStreamShape(model, op.getInputShape());
   }
 
-  private boolean isOutputStreaming(Model model, OperationShape op) {
+  private static boolean isOutputStreaming(Model model, OperationShape op) {
     return ShapeSupport.isEventStreamShape(model, op.getOutputShape());
   }
 }
