@@ -185,10 +185,11 @@
       >false</SmithyGenerateDependencyInjection
     >
     <!--
-      Opt-in: generate the fake handler ({Service}.Fakes.g.cs), a Fake{Service}Handler returning
-      deterministic canned responses (@examples output when present, synthesized placeholders
-      otherwise) plus an AddFake{Service}Handler registration extension. Requires the server
-      surface (SmithyGenerateServer). Projects with an explicit smithy-build.json set
+      Opt-in: generate fakes returning deterministic canned responses (@examples output when
+      present, synthesized placeholders otherwise): Fake{Service}Handler
+      ({Service}.Fakes.Server.g.cs) with the server surface and Fake{Service}Client
+      ({Service}.Fakes.Client.g.cs) with the client surface. Requires at least one of
+      SmithyGenerateServer / SmithyGenerateClient. Projects with an explicit smithy-build.json set
       "generateFakes": true on the csharp-codegen plugin instead.
     -->
     <SmithyGenerateFakes Condition="'$(SmithyGenerateFakes)' == ''">false</SmithyGenerateFakes>

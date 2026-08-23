@@ -3,7 +3,8 @@ package io.github.thomaslaich.nsmithy.csharp.codegen;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ClientDependencyInjectionGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ClientGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ErrorGenerator;
-import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeClientGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeHandlerGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.IntEnumGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ListGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.MapGenerator;
@@ -95,19 +96,30 @@ final class DirectedCSharpCodegen
               writer -> new ServerGenerator(ctx, writer, directive.shape()).run());
     }
 
-    // Opt-in fake handler. The fake implements the handler interfaces of the ".Server" half,
-    // so it cannot exist without it.
+    // Opt-in fakes, one per generated surface: the fake handler implements the ".Server" half's
+    // handler interfaces and the fake client the ".Client" half's client interface, so each fake
+    // exists only alongside its surface. The ".Fakes.Server"/".Fakes.Client" suffixes keep the
+    // files inside the MSBuild *.Server.g.cs / *.Client.g.cs include/exclude globs.
     if (ctx.settings().generateFakes()) {
-      if (!ctx.settings().generateServer()) {
+      if (!ctx.settings().generateServer() && !ctx.settings().generateClient()) {
         throw new CodegenException(
-            "generateFakes requires generateServer: the fake handler implements the generated"
-                + " server handler interfaces.");
+            "generateFakes requires generateServer or generateClient: the fakes implement the"
+                + " generated server handler and client interfaces.");
       }
-      ctx.writerDelegator()
-          .useFileWriter(
-              dir + "/" + typeName + ".Fakes.g.cs",
-              csNamespace,
-              writer -> new FakeGenerator(ctx, writer, directive.shape()).run());
+      if (ctx.settings().generateServer()) {
+        ctx.writerDelegator()
+            .useFileWriter(
+                dir + "/" + typeName + ".Fakes.Server.g.cs",
+                csNamespace,
+                writer -> new FakeHandlerGenerator(ctx, writer, directive.shape()).run());
+      }
+      if (ctx.settings().generateClient()) {
+        ctx.writerDelegator()
+            .useFileWriter(
+                dir + "/" + typeName + ".Fakes.Client.g.cs",
+                csNamespace,
+                writer -> new FakeClientGenerator(ctx, writer, directive.shape()).run());
+      }
     }
 
     // Opt-in IHttpClientFactory registration. Generated only when requested

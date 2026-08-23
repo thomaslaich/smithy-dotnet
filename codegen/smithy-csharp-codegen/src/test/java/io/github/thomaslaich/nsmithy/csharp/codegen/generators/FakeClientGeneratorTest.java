@@ -18,7 +18,7 @@ import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.ShapeId;
 
-final class FakeGeneratorTest {
+final class FakeClientGeneratorTest {
 
   @TempDir java.nio.file.Path tempDir;
 
@@ -32,14 +32,14 @@ final class FakeGeneratorTest {
 
       service Fakeable {
           version: "1"
-          operations: [GetCity, GetStatus, GetTree, Ping, Watch]
+          operations: [GetCity, ListCities, Ping, Watch]
       }
 
       @examples([
           {
               title: "Get city",
               input: { id: "c1" },
-              output: { name: "Zurich", population: 400000, tags: ["alpine"] }
+              output: { name: "Zurich", population: 400000 }
           }
       ])
       operation GetCity {
@@ -51,30 +51,17 @@ final class FakeGeneratorTest {
               @required
               name: String
               population: Integer
-              tags: TagList
-              mood: Mood
           }
       }
 
-      operation GetStatus {
-          output := {
-              @required
-              label: String
-              @length(min: 6)
-              code: String
-              @range(min: 5)
-              count: Integer
-              when: Timestamp
-              mood: Mood
-              choice: Choice
-              attrs: AttrMap
+      @paginated(inputToken: "nextToken", outputToken: "nextToken", items: "items")
+      operation ListCities {
+          input := {
+              nextToken: String
           }
-      }
-
-      operation GetTree {
           output := {
-              @required
-              root: TreeNode
+              nextToken: String
+              items: CityList
           }
       }
 
@@ -86,34 +73,12 @@ final class FakeGeneratorTest {
           }
       }
 
-      list TagList {
-          member: String
+      list CityList {
+          member: CitySummary
       }
 
-      map AttrMap {
-          key: String
-          value: String
-      }
-
-      enum Mood {
-          HAPPY
-          SAD
-      }
-
-      union Choice {
-          num: Integer
-          word: String
-      }
-
-      structure TreeNode {
-          @required
-          id: String
-          child: TreeNode
-          children: TreeList
-      }
-
-      list TreeList {
-          member: TreeNode
+      structure CitySummary {
+          name: String
       }
 
       @streaming
@@ -127,12 +92,10 @@ final class FakeGeneratorTest {
       """;
 
   @Test
-  void emitsOverridableFakeHandlerClass() throws Exception {
+  void emitsOverridableFakeClientClass() throws Exception {
     String generated = renderFake();
 
-    assertTrue(
-        generated.contains("public class FakeFakeableServiceHandler : IFakeableServiceHandler"),
-        generated);
+    assertTrue(generated.contains("public class FakeFakeableClient : IFakeableClient"), generated);
     assertTrue(
         generated.contains(
             "public virtual"
@@ -140,48 +103,59 @@ final class FakeGeneratorTest {
                 + " GetCityAsync(Example.Example.Fake.GetCityInput input,"
                 + " System.Threading.CancellationToken cancellationToken = default)"),
         generated);
-    assertFalse(generated.contains("AddFakeFakeableServiceHandler"), generated);
+    assertTrue(generated.contains("public virtual void Dispose() { }"), generated);
   }
 
   @Test
-  void usesExampleOutputWhenPresentAndOmitsAbsentOptionalMembers() throws Exception {
+  void usesExampleOutputWhenPresent() throws Exception {
     String generated = renderFake();
 
     assertTrue(
         generated.contains(
             "return System.Threading.Tasks.Task.FromResult(new Example.Example.Fake.GetCityOutput("
-                + "Name: \"Zurich\", Population: 400000, Tags: new Example.Example.Fake.TagList("
-                + "new string[] { \"alpine\" })));"),
-        generated);
-    assertFalse(generated.contains("GetCityOutput(Name: \"Zurich\", Mood:"), generated);
-  }
-
-  @Test
-  void synthesizesConstraintAwarePlaceholdersWithoutExamples() throws Exception {
-    String generated = renderFake();
-
-    assertTrue(
-        generated.contains(
-            "new Example.Example.Fake.GetStatusOutput(Label: \"label\","
-                + " Attrs: new Example.Example.Fake.AttrMap(new"
-                + " System.Collections.Generic.Dictionary<string, string> { { \"key\", \"value\" }"
-                + " }), Choice: Example.Example.Fake.Choice.FromNum(0), Code: \"codexx\","
-                + " Count: 5, Mood: Example.Example.Fake.Mood.HAPPY,"
-                + " When: System.DateTimeOffset.FromUnixTimeSeconds(1704067200))"),
+                + "Name: \"Zurich\", Population: 400000));"),
         generated);
   }
 
   @Test
-  void breaksRecursionThroughOptionalMembersAndCollections() throws Exception {
+  void paginatorsYieldASinglePage() throws Exception {
     String generated = renderFake();
 
     assertTrue(
         generated.contains(
-            "new Example.Example.Fake.GetTreeOutput(Root: new Example.Example.Fake.TreeNode("
-                + "Id: \"id\", Children: new Example.Example.Fake.TreeList("
-                + "System.Array.Empty<Example.Example.Fake.TreeNode>())))"),
+            "public virtual async"
+                + " System.Collections.Generic.IAsyncEnumerable<Example.Example.Fake.ListCitiesOutput>"
+                + " ListCitiesPagesAsync(Example.Example.Fake.ListCitiesInput input,"
+                + " [System.Runtime.CompilerServices.EnumeratorCancellation]"
+                + " System.Threading.CancellationToken cancellationToken = default)"),
         generated);
-    assertFalse(generated.contains("Child: new Example.Example.Fake.TreeNode"), generated);
+    assertTrue(
+        generated.contains(
+            "yield return await ListCitiesAsync(input, cancellationToken).ConfigureAwait(false);"),
+        generated);
+    // Unpaginated operations get no paginators.
+    assertFalse(generated.contains("GetCityPagesAsync"), generated);
+  }
+
+  @Test
+  void itemsPaginatorFlattensThePage() throws Exception {
+    String generated = renderFake();
+
+    assertTrue(
+        generated.contains(
+            "public virtual async"
+                + " System.Collections.Generic.IAsyncEnumerable<Example.Example.Fake.CitySummary>"
+                + " ListCitiesItemsAsync(Example.Example.Fake.ListCitiesInput input,"
+                + " [System.Runtime.CompilerServices.EnumeratorCancellation]"
+                + " System.Threading.CancellationToken cancellationToken = default)"),
+        generated);
+    assertTrue(
+        generated.contains(
+            "await foreach (var page in ListCitiesPagesAsync(input,"
+                + " cancellationToken).ConfigureAwait(false))"),
+        generated);
+    assertTrue(generated.contains("var items = page.Items;"), generated);
+    assertTrue(generated.contains("foreach (var item in items.Values)"), generated);
   }
 
   @Test
@@ -209,11 +183,6 @@ final class FakeGeneratorTest {
                 + " System.Collections.Generic.IAsyncEnumerable<Example.Example.Fake.ChatEvent>"
                 + " FakeWatchEventsEvents()"),
         generated);
-    assertTrue(
-        generated.contains(
-            "yield return Example.Example.Fake.ChatEvent.FromMessage(new"
-                + " Example.Example.Fake.MessageEvent(Text: \"text\"));"),
-        generated);
   }
 
   private String renderFake() throws Exception {
@@ -237,7 +206,7 @@ final class FakeGeneratorTest {
     var writer = new CSharpWriter("Example.Example.Fake");
     var service = model.expectShape(ShapeId.from("example.fake#Fakeable"), ServiceShape.class);
 
-    new FakeGenerator(context, writer, service).run();
+    new FakeClientGenerator(context, writer, service).run();
 
     return writer.toString();
   }

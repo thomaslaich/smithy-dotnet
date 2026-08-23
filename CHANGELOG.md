@@ -22,6 +22,13 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   (constraint-aware, recursion-safe). Real handlers take over individual
   operations by registering the per-operation interface after the fake, or by
   overriding the fake's virtual methods in a subclass.
+- **Fake clients: run client consumers against canned responses with no
+  network call.** The same `SmithyGenerateFakes` setting now also emits
+  `Fake{Service}Client`, implementing `I{Service}Client` so it drops into any
+  code that depends on the generated client interface. Responses come from the
+  same deterministic synthesis as fake handlers, with no serialization or
+  protocol involvement. Paginators yield a single page, and operation methods
+  are virtual so a subclass can replace individual operations.
 
 ## [0.8.1]
 

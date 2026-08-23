@@ -85,6 +85,7 @@ export default defineConfig({
 						{ label: 'Pagination', slug: 'guides/client-configuration/pagination' },
 						{ label: 'Transport', slug: 'guides/client-configuration/transport' },
 						{ label: 'Dependency Injection', slug: 'guides/client-configuration/dependency-injection' },
+						{ label: 'Fake Clients', slug: 'guides/client-configuration/fake-clients' },
 					],
 				},
 				{

@@ -62,8 +62,9 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
     public bool GenerateDependencyInjection { get; set; }
 
     /// <summary>
-    /// When true, sets generateFakes on the csharp-codegen plugin so the fake handler
-    /// ({Service}.Fakes.g.cs) is generated. Requires the server surface.
+    /// When true, sets generateFakes on the csharp-codegen plugin so the fakes are generated:
+    /// the fake handler ({Service}.Fakes.Server.g.cs) with the server surface and the fake
+    /// client ({Service}.Fakes.Client.g.cs) with the client surface.
     /// </summary>
     public bool GenerateFakes { get; set; }
 

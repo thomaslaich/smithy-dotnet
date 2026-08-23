@@ -27,8 +27,10 @@ validation still runs in front of the fake: invalid requests are rejected
 with the same `ValidationException` responses a real handler gets.
 
 Projects with an explicit `smithy-build.json` set `"generateFakes": true` on
-the `csharp-codegen` plugin instead. The setting requires the server surface
-(`SmithyGenerateServer`, on by default).
+the `csharp-codegen` plugin instead. The fake handler is generated with the
+server surface (`SmithyGenerateServer`, on by default); the same setting also
+generates a [fake client](/smithy-dotnet/guides/client-configuration/fake-clients/)
+with the client surface.
 
 ## Where the responses come from
 
