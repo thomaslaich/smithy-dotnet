@@ -15,12 +15,13 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 - **Fake handlers: boot a working server from a contract with no
   implementation.** Opt-in via `SmithyGenerateFakes` (or `"generateFakes"` on
-  the `csharp-codegen` plugin), codegen emits `Fake{Service}Handler` plus an
-  `AddFake{Service}Handler` registration extension. Each operation returns the
-  output of its first non-error `@examples` entry when present, otherwise
-  deterministic placeholder values synthesized from the model
-  (constraint-aware, recursion-safe). Real handlers can take over individual
-  operations by registering the per-operation interface after the fake.
+  the `csharp-codegen` plugin), codegen emits `Fake{Service}Handler`,
+  registered like any handler via `Add{Service}Handler<T>()`. Each operation
+  returns the output of its first non-error `@examples` entry when present,
+  otherwise deterministic placeholder values synthesized from the model
+  (constraint-aware, recursion-safe). Real handlers take over individual
+  operations by registering the per-operation interface after the fake, or by
+  overriding the fake's virtual methods in a subclass.
 
 ## [0.8.1]
 

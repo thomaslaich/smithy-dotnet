@@ -127,22 +127,20 @@ final class FakeGeneratorTest {
       """;
 
   @Test
-  void emitsFakeHandlerClassAndRegistrationExtension() throws Exception {
+  void emitsOverridableFakeHandlerClass() throws Exception {
     String generated = renderFake();
 
     assertTrue(
-        generated.contains(
-            "public sealed class FakeFakeableServiceHandler" + " : IFakeableServiceHandler"),
+        generated.contains("public class FakeFakeableServiceHandler : IFakeableServiceHandler"),
         generated);
     assertTrue(
         generated.contains(
-            "public static IServiceCollection AddFakeFakeableServiceHandler(this"
-                + " IServiceCollection services)"),
+            "public virtual"
+                + " System.Threading.Tasks.Task<Example.Example.Fake.GetCityOutput>"
+                + " GetCityAsync(Example.Example.Fake.GetCityInput input,"
+                + " System.Threading.CancellationToken cancellationToken = default)"),
         generated);
-    assertTrue(
-        generated.contains(
-            "return services.AddFakeableServiceHandler<FakeFakeableServiceHandler>();"),
-        generated);
+    assertFalse(generated.contains("AddFakeFakeableServiceHandler"), generated);
   }
 
   @Test
@@ -192,7 +190,7 @@ final class FakeGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "public System.Threading.Tasks.Task"
+            "public virtual System.Threading.Tasks.Task"
                 + " PingAsync(System.Threading.CancellationToken cancellationToken = default)"),
         generated);
     assertTrue(generated.contains("return System.Threading.Tasks.Task.CompletedTask;"), generated);

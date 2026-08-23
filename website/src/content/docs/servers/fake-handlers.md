@@ -4,9 +4,10 @@ description: Boot a working server from a contract with no handler implementatio
 ---
 
 With `SmithyGenerateFakes` enabled, codegen emits a `Fake{Service}Handler`
-implementing the full service handler interface, plus a registration
-extension. Registering it gives a bootable server for the whole contract with
-no hand-written handler code:
+implementing the full service handler interface. It is an ordinary handler
+class — registered through the same `Add{Service}Handler` extension as a real
+one — so a bootable server for the whole contract needs no hand-written
+handler code:
 
 ```xml
 <PropertyGroup>
@@ -16,7 +17,7 @@ no hand-written handler code:
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddFakeWeatherServiceHandler();
+builder.Services.AddWeatherServiceHandler<FakeWeatherServiceHandler>();
 
 var app = builder.Build();
 app.MapWeatherService();
@@ -75,15 +76,42 @@ so gaps are visible at build time.
 
 ## Replacing fakes one operation at a time
 
-`AddFake{Service}Handler` registers the fake for the aggregate interface and
-every per-operation interface. Endpoint dispatch resolves the per-operation
-interfaces, so a real handler can take over individual operations while the
-fake keeps serving the rest — register the real implementation after the fake:
+Real handlers can take over individual operations while the fake keeps serving
+the rest, in either of two ways.
+
+**Per-operation registration.** `Add{Service}Handler` registers the handler
+for the aggregate interface and every per-operation interface, and endpoint
+dispatch resolves the per-operation interfaces — the last registration wins.
+Register real implementations after the fake:
 
 ```csharp
-builder.Services.AddFakeWeatherServiceHandler();
+builder.Services.AddWeatherServiceHandler<FakeWeatherServiceHandler>();
 builder.Services.AddSingleton<IGetCityHandler, GetCityHandler>();
+builder.Services.AddSingleton<IListCitiesHandler, ListCitiesHandler>();
 ```
+
+Each operation lives in its own class with its own dependencies, so this is
+the natural shape for larger projects: implementations land one registration
+at a time, independent of each other.
+
+**Subclassing.** The fake's operation methods are `virtual`, so a subclass can
+override selected operations in one place and inherit the canned responses for
+everything else:
+
+```csharp
+internal sealed class WeatherHandler : FakeWeatherServiceHandler
+{
+    public override Task<GetCityOutput> GetCityAsync(
+        GetCityInput input,
+        CancellationToken cancellationToken = default
+    ) => /* real implementation */;
+}
+
+builder.Services.AddWeatherServiceHandler<WeatherHandler>();
+```
+
+This keeps everything in a single registration and makes the fake/real split
+visible in one class — a good fit for small services and tests.
 
 Event-stream outputs are served as a short finite stream (the example's
 events, or a single synthesized event); streaming blob outputs return an

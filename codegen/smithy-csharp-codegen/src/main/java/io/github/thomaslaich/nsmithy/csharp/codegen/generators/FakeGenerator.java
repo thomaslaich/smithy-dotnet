@@ -4,7 +4,10 @@
  *     output of the operation's first non-error @examples entry when present, otherwise
  *     placeholder values synthesized from the shapes (self-describing strings, first enum and
  *     union variants, single-element collections, constraint minimums).
- *   - `{Service}FakeExtensions.AddFake{Service}Handler(IServiceCollection)`
+ *
+ * The class is registered through the ordinary Add{Service}Handler<T>() extension. Its operation
+ * methods are virtual so a subclass can replace individual operations; registering a real
+ * per-operation handler after the fake works too, since the last DI registration wins.
  *
  * All values are compiled in as literals, so responses are deterministic across calls, runs, and
  * regenerations of an unchanged model.
@@ -80,7 +83,6 @@ public final class FakeGenerator implements Runnable {
             .collect(Collectors.toList());
 
     writer.addImport(RuntimeTypes.NSMITHY_CORE);
-    writer.addImport(RuntimeTypes.MS_EXT_DI);
 
     String serviceTypeName = CSharpNaming.typeName(service.getId().getName());
     String contract =
@@ -93,9 +95,11 @@ public final class FakeGenerator implements Runnable {
             + aggInterface
             + " returning canned responses: the output of each operation's first non-error"
             + " @examples entry when present, otherwise placeholder values synthesized from the"
-            + " model. Responses are deterministic.",
+            + " model. Responses are deterministic. Override an operation method in a subclass, or"
+            + " register a real per-operation handler after this one, to replace individual"
+            + " operations.",
         Map.of());
-    writer.write("public sealed class $L : $L", fakeClass, aggInterface);
+    writer.write("public class $L : $L", fakeClass, aggInterface);
     writer.openBlock(
         "{",
         "}",
@@ -113,20 +117,6 @@ public final class FakeGenerator implements Runnable {
             writeIterator(iterator);
           }
         });
-    writer.write("");
-    writer.write("public static class $LFakeExtensions", contract);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write(
-              "public static IServiceCollection AddFake$LHandler(this IServiceCollection services)",
-              contract);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> writer.write("return services.Add$LHandler<$L>();", contract, fakeClass));
-        });
   }
 
   // ---------------- operation methods ----------------
@@ -134,7 +124,7 @@ public final class FakeGenerator implements Runnable {
   private void writeOperationMethod(OperationShape op) {
     Model model = context.model();
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
-    writer.write("public $L", operationSignature(op));
+    writer.write("public virtual $L", operationSignature(op));
     if (!hasOutput) {
       writer.openBlock(
           "{", "}", () -> writer.write("return System.Threading.Tasks.Task.CompletedTask;"));
