@@ -88,50 +88,45 @@ public class SerializationBenchmarks
 }
 
 /// <summary>
-/// Cross-format write cost for the same generated nested structure. This isolates whether generated
-/// member access benefits each schema-driven codec rather than only JSON.
+/// CBOR write cost for the same generated nested structure as the JSON codec benchmark.
 /// </summary>
 [MemoryDiagnoser]
-public class CrossFormatSerializationBenchmarks
+public class CborSerializationBenchmarks
 {
-    private ListItemsOutput value = null!;
-    private Func<ListItemsOutput, byte[]> serialize = null!;
+    private static readonly ICborCodec<ListItemsOutput> Codec = CborCodec.FromSchema(
+        ListItemsOutputSchema.Schema
+    );
 
-    [Params("cbor", "xml")]
-    public string Format { get; set; } = "cbor";
+    private ListItemsOutput value = null!;
 
     [Params(1, 100)]
     public int ItemCount { get; set; }
 
     [GlobalSetup]
-    public void Setup()
-    {
-        var items = BenchDomain.ListItems(ItemCount);
-        value = new ListItemsOutput(
-            new ItemSummaries(
-                items.Select(item => new ItemSummary(
-                    InStock: item.InStock,
-                    ItemId: item.ItemId,
-                    Name: item.Name,
-                    PriceCents: item.PriceCents,
-                    Category: item.Category,
-                    Tags: item.Tags is null ? null : new StringList(item.Tags)
-                ))
-            )
-        );
-
-        serialize = Format switch
-        {
-            "cbor" => CborCodec.FromSchema(ListItemsOutputSchema.Schema).Serialize,
-            "xml" => XmlCodec.FromSchema(ListItemsOutputSchema.Schema).Serialize,
-            _ => throw new InvalidOperationException($"Unknown codec format '{Format}'."),
-        };
-
-        _ = serialize(value);
-    }
+    public void Setup() => value = CodecBenchmarkValues.CreateListItemsOutput(ItemCount);
 
     [Benchmark]
-    public byte[] Serialize() => serialize(value);
+    public byte[] Serialize() => Codec.Serialize(value);
+}
+
+/// <summary>XML write cost for the same generated nested structure as the JSON codec benchmark.</summary>
+[MemoryDiagnoser]
+public class XmlSerializationBenchmarks
+{
+    private static readonly IXmlCodec<ListItemsOutput> Codec = XmlCodec.FromSchema(
+        ListItemsOutputSchema.Schema
+    );
+
+    private ListItemsOutput value = null!;
+
+    [Params(1, 100)]
+    public int ItemCount { get; set; }
+
+    [GlobalSetup]
+    public void Setup() => value = CodecBenchmarkValues.CreateListItemsOutput(ItemCount);
+
+    [Benchmark]
+    public byte[] Serialize() => Codec.Serialize(value);
 }
 
 /// <summary>Generated-style protobuf structure serialization with canonical field indexes.</summary>
@@ -370,4 +365,24 @@ public class DeserializationBenchmarks
 
     [Benchmark(Description = "NSmithy schema codec")]
     public CreateOrderInput Smithy() => OrderCodec.Deserialize(payload);
+}
+
+internal static class CodecBenchmarkValues
+{
+    public static ListItemsOutput CreateListItemsOutput(int itemCount)
+    {
+        var items = BenchDomain.ListItems(itemCount);
+        return new ListItemsOutput(
+            new ItemSummaries(
+                items.Select(item => new ItemSummary(
+                    InStock: item.InStock,
+                    ItemId: item.ItemId,
+                    Name: item.Name,
+                    PriceCents: item.PriceCents,
+                    Category: item.Category,
+                    Tags: item.Tags is null ? null : new StringList(item.Tags)
+                ))
+            )
+        );
+    }
 }

@@ -11,9 +11,8 @@ not a comparison; the stack doing less work just wins.
 
 ## What is measured
 
-Four suites, because they answer different questions. The error suite runs under
-`just bench-codec` with the others, since it is the same level: no HTTP pipeline
-in the measurement.
+The suites are grouped first by measurement boundary, then by protocol or codec.
+The error suite runs with the JSON codecs because it contains no HTTP pipeline.
 
 | Suite | What runs | Answers |
 | --- | --- | --- |
@@ -139,6 +138,10 @@ just bench-server     # full server path
 just bench-grpc       # unary gRPC plus isolated Proto codec attribution
 just bench            # all of the above
 ```
+
+Each aggregate has protocol-specific recipes such as `bench-codec-cbor`,
+`bench-client-grpc`, and `bench-server-rest-json`. Committed reports follow the
+same layout under `results/{client,codec,server}/<protocol-or-codec>/`.
 
 The benchmark suite is a separate solution and is intentionally **not** part of
 `just build`, `just test`, or `just ci`. It is slow, and machine-dependent

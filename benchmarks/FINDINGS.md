@@ -211,13 +211,13 @@ wire-format shootout.
 | NSmithy format | One item, time / allocated | 100 items, time / allocated |
 | --- | --- | --- |
 | REST JSON codec | 282.9 ns / 312 B | 21.40 us / 17.45 KB |
-| RPCv2 CBOR codec | 479.7 ns / 1.63 KB | 31.86 us / 46.97 KB |
+| RPCv2 CBOR codec | 389.3 ns / **208 B** | 28.53 us / **14.48 KB** |
 | gRPC Proto codec | **217.6 ns / 120 B** | **19.73 us / 8.92 KB** |
 
 Proto is the fastest and lowest-allocation serializer in these current NSmithy
-measurements. CBOR is 1.70x slower than JSON for one item and 1.49x slower for
-100, while allocating substantially more because `CborWriter.Encode()` still
-copies into a new output array.
+measurements. CBOR is 1.38x slower than JSON for one item and 1.33x slower for
+100. It now allocates less than JSON in both cases, helped by its smaller encoded
+payload, but still more than Proto.
 
 The REST and gRPC suites also share comparable canned-client and in-memory-server
 workloads. There is not yet an equivalent end-to-end RPCv2 CBOR benchmark.
@@ -254,18 +254,26 @@ allocation gap that remains after the member-lookup fix below (now 1.14–1.15×
 time, 1.11–1.24× allocations). Worth noting the CBOR codec already reads
 forward-only via `CborReader`, so JSON is the outlier here, not the norm.
 
-**CBOR write path, both JSON fixes apply unchanged.**
+**CBOR write path, now close to its allocation floor.**
 
-`CompiledCborCodec.Serialize` allocates a fresh `CborWriter` per call and returns
-`writer.Encode()`, a newly allocated array, the same pattern that was fixed in
-JSON. `CborWriter` exposes `Reset()` and `TryEncode(Span<byte>, out int)`, so the
-pooled-buffer and reused-writer treatment transfers directly.
+The codec now reuses a thread-local `CborWriter` via `Reset()`, capped at 64 KB
+of written data so a one-off large response is not retained per worker thread.
+List and map writers use the existing non-enumerated count when available
+instead of copying every generated collection to an array merely to obtain its
+length. Unknown enumerables are still materialized so the encoder can emit the
+definite lengths required by the protocol.
 
-`CborMemberWriter` calls `writer.WriteTextString(member.Name)` per member per
-object, re-encoding a constant name to UTF-8 every time. CBOR has no
-`JsonEncodedText` equivalent, but the encoded text-string bytes can be computed
-once and emitted with `WriteEncodedValue`, which is the same fix in a different
-shape.
+| Items | Time before -> after | Allocated before -> after | Encoded size |
+| --- | --- | --- | --- |
+| 1 | 479.7 ns -> **389-415 ns** | 1.63 KB -> **208 B** | 119 B |
+| 100 | 31.86 us -> **28.5-30.1 us** | 46.97 KB -> **14.48 KB** | 11,573 B |
+
+The remaining output array is required by the public `byte[]` return type.
+Allocations were identical across repeated runs; the timing range records
+run-to-run movement rather than claiming more precision than the comparison has.
+Pre-encoding member names was tested and rejected: `WriteEncodedValue` validation
+made serialization substantially slower (606 ns and 45.3 us in the isolated
+spike) than `WriteTextString` (404 ns and 30.3 us).
 
 **XML codec, worse than JSON ever was, on both sides.**
 

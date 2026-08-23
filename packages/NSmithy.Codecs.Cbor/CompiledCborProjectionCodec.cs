@@ -20,9 +20,16 @@ internal sealed class CompiledCborProjectionCodec<T, TBuilder>(
 
     public byte[] Serialize(T value)
     {
-        var writer = new CborWriter(CborConformanceMode.Lax);
-        valueWriter.Write(writer, value);
-        return writer.Encode();
+        var writer = CborWriterCache.Rent();
+        try
+        {
+            valueWriter.Write(writer, value);
+            return writer.Encode();
+        }
+        finally
+        {
+            CborWriterCache.Return(writer);
+        }
     }
 
     public void ReadInto(byte[] payload, TBuilder builder)

@@ -18,9 +18,16 @@ internal sealed class CompiledCborCodec<T>(Schema<T> schema, bool materializeTop
 
     public byte[] Serialize(T value)
     {
-        var writer = new CborWriter(CborConformanceMode.Lax);
-        valueWriter.Write(writer, value);
-        return writer.Encode();
+        var writer = CborWriterCache.Rent();
+        try
+        {
+            valueWriter.Write(writer, value);
+            return writer.Encode();
+        }
+        finally
+        {
+            CborWriterCache.Return(writer);
+        }
     }
 
     public T Deserialize(byte[] payload)

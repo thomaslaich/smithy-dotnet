@@ -94,33 +94,65 @@ bench-parity:
 bench-capture:
     dotnet run --project benchmarks/Benchmarks.Capture --configuration Release
 
-# Level A: pure codec, no ASP.NET. Fast, deterministic, best regression signal.
-bench-codec:
+# Level A: pure codecs, no ASP.NET. Fast, deterministic, best regression signal.
+bench-codec-json:
     dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
-        --filter '*SerializationBenchmarks*' '*DeserializationBenchmarks*' '*ErrorBenchmarks*' \
+        --filter '*Bench.Micro.SerializationBenchmarks*' '*Bench.Micro.SerializationExecutionBenchmarks*' '*Bench.Micro.DeserializationBenchmarks*' '*ErrorBenchmarks*' \
         --inProcess \
-        --artifacts benchmarks/results/codec
+        --artifacts benchmarks/results/codec/json
+
+bench-codec-cbor:
+    dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
+        --filter '*CborSerializationBenchmarks*' \
+        --inProcess \
+        --artifacts benchmarks/results/codec/cbor
+
+bench-codec-xml:
+    dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
+        --filter '*XmlSerializationBenchmarks*' \
+        --inProcess \
+        --artifacts benchmarks/results/codec/xml
+
+bench-codec-proto:
+    dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
+        --filter '*ProtoSerializationBenchmarks*' '*GrpcSerializationBenchmarks*' '*GrpcDeserializationBenchmarks*' \
+        --inProcess \
+        --artifacts benchmarks/results/codec/proto
+
+bench-codec: bench-codec-json bench-codec-cbor bench-codec-xml bench-codec-proto
 
 # Level B, server side: full in-memory HTTP pipeline per stack per scenario.
-bench-server:
+bench-server-rest-json:
     dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
-        --filter '*ServerBenchmarks*' \
+        --filter '*Bench.Micro.ServerBenchmarks*' \
         --inProcess \
-        --artifacts benchmarks/results/server
+        --artifacts benchmarks/results/server/rest-json
+
+bench-server-grpc:
+    dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
+        --filter '*GrpcServerBenchmarks*' \
+        --inProcess \
+        --artifacts benchmarks/results/server/grpc
+
+bench-server: bench-server-rest-json bench-server-grpc
 
 # Level A, client side: request building and response parsing, no server.
-bench-client:
+bench-client-rest-json:
     dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
-        --filter '*ClientBenchmarks*' \
+        --filter '*Bench.Micro.ClientBenchmarks*' '*ClientCeremonyBenchmarks*' \
         --inProcess \
-        --artifacts benchmarks/results/client
+        --artifacts benchmarks/results/client/rest-json
+
+bench-client-grpc:
+    dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
+        --filter '*GrpcClientBenchmarks*' \
+        --inProcess \
+        --artifacts benchmarks/results/client/grpc
+
+bench-client: bench-client-rest-json bench-client-grpc
 
 # Unary gRPC client, server and Proto codec attribution against Grpc.Net.
-bench-grpc:
-    dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
-        --filter '*Grpc*Benchmarks*' \
-        --inProcess \
-        --artifacts benchmarks/results/grpc
+bench-grpc: bench-codec-proto bench-client-grpc bench-server-grpc
 
 # The whole micro suite. Slow.
 bench: bench-parity bench-codec bench-client bench-server

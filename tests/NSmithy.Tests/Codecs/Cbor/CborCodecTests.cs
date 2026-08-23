@@ -104,4 +104,17 @@ public sealed class CborCodecTests
 
         Assert.Equal(1.5f, decoded);
     }
+
+    [Fact]
+    public void CborCodecResetsReusedWriterBetweenSerializations()
+    {
+        var codec = CborCodec.FromSchema(Schemas.String);
+
+        _ = codec.Serialize("a longer first value");
+        var bytes = codec.Serialize("x");
+
+        var reader = new CborReader(bytes);
+        Assert.Equal("x", reader.ReadTextString());
+        Assert.Equal(CborReaderState.Finished, reader.PeekState());
+    }
 }
