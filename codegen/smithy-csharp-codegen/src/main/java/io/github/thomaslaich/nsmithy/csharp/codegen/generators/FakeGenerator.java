@@ -26,6 +26,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -50,6 +51,7 @@ import software.amazon.smithy.model.traits.ExamplesTrait;
 import software.amazon.smithy.model.traits.HttpResponseCodeTrait;
 import software.amazon.smithy.model.traits.LengthTrait;
 import software.amazon.smithy.model.traits.RangeTrait;
+import software.amazon.smithy.model.traits.Trait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -197,7 +199,7 @@ public final class FakeGenerator implements Runnable {
         .flatMap(trait -> trait.getExamples().stream())
         .filter(example -> example.getError().isEmpty())
         .map(example -> example.getOutput().orElse(null))
-        .filter(java.util.Objects::nonNull)
+        .filter(Objects::nonNull)
         .findFirst()
         .orElse(null);
   }
@@ -565,7 +567,7 @@ public final class FakeGenerator implements Runnable {
     return length == null ? 0 : length.getMin().orElse(0L);
   }
 
-  private <T extends software.amazon.smithy.model.traits.Trait> T trait(
+  private <T extends Trait> T trait(
       Class<T> traitClass, MemberShape member, Shape target) {
     if (member != null && member.hasTrait(traitClass)) {
       return member.expectTrait(traitClass);

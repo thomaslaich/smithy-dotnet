@@ -16,6 +16,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.UnionGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;
+import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.codegen.core.directed.CreateContextDirective;
 import software.amazon.smithy.codegen.core.directed.CreateSymbolProviderDirective;
@@ -98,7 +99,7 @@ final class DirectedCSharpCodegen
     // so it cannot exist without it.
     if (ctx.settings().generateFakes()) {
       if (!ctx.settings().generateServer()) {
-        throw new software.amazon.smithy.codegen.core.CodegenException(
+        throw new CodegenException(
             "generateFakes requires generateServer: the fake handler implements the generated"
                 + " server handler interfaces.");
       }
