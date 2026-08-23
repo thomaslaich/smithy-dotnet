@@ -72,9 +72,8 @@ Operations without an example produce a codegen warning naming the operation.
 
 ## Replacing fakes one operation at a time
 
-**Per-operation registration** is the way to go for larger projects.
-`Add{Service}Handler` registers the handler under every per-operation
-interface, and the last registration wins:
+**Per-operation registration.** `Add{Service}Handler` registers the handler
+under every per-operation interface, and the last registration wins:
 
 ```csharp
 builder.Services.AddWeatherServiceHandler<FakeWeatherServiceHandler>();
