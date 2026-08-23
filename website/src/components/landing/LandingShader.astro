@@ -1,0 +1,235 @@
+---
+/**
+ * LandingShader — animated aurora ribbons behind the whole landing page,
+ * rendered on a fixed full-viewport canvas so the effect stays continuous
+ * while scrolling (a hero-clipped canvas leaves a visible seam).
+ *
+ * Adapted from "Aurora Veil" in Radiant (https://github.com/pbakaus/radiant,
+ * MIT © Paul Bakaus): keeps the ribbon math, drops the stars/ice/vignette
+ * scene, and retints to the landing's violet palette. Renders additively over
+ * a transparent canvas so the page background shows through.
+ *
+ * Theme-aware: dark mode blends the ribbons additively as glowing light;
+ * light mode renders the same ribbon field as a faint lavender wash (additive
+ * glow reads as mud over a near-white background). The theme toggle flips
+ * `data-theme` without a reload, so a MutationObserver keeps the uniform in
+ * sync. Respects prefers-reduced-motion by drawing a single static frame.
+ */
+---
+
+<canvas class="nsl-shader-canvas" aria-hidden="true"></canvas>
+
+<style>
+  .nsl-shader-canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    pointer-events: none;
+    z-index: 0;
+  }
+</style>
+
+<script>
+  (function () {
+    const canvas = document.querySelector<HTMLCanvasElement>('.nsl-shader-canvas');
+    if (!canvas) return;
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const gl = canvas.getContext('webgl', {
+      alpha: true,
+      antialias: false,
+      preserveDrawingBuffer: false,
+    });
+    if (!gl) return; // static CSS glow remains as the fallback
+
+    const vertSrc = 'attribute vec2 a_pos; void main(){gl_Position=vec4(a_pos,0.0,1.0);}';
+
+    const fragSrc = `
+precision highp float;
+uniform float u_time;
+uniform vec2 u_res;
+uniform float u_light; // 1.0 when the light theme is active
+
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+float noise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash(i);
+  float b = hash(i + vec2(1.0, 0.0));
+  float c = hash(i + vec2(0.0, 1.0));
+  float d = hash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float auroraRibbon(vec2 uv, float t, float ribbonX, float ribbonWidth, float waveFreq, float waveAmp, float phase) {
+  float centerX = ribbonX + sin(t * 0.15 + phase) * 0.25;
+
+  float wave1 = sin(uv.y * waveFreq + t * 0.9 + phase) * waveAmp;
+  float wave2 = sin(uv.y * waveFreq * 2.3 + t * 1.3 + phase * 1.7) * waveAmp * 0.5;
+  float wave3 = sin(uv.y * waveFreq * 0.4 + t * 0.35 + phase * 0.6) * waveAmp * 1.2;
+  float waveOffset = wave1 + wave2 + wave3;
+
+  float dx = uv.x - (centerX + waveOffset);
+  float ribbon = exp(-dx * dx / (ribbonWidth * ribbonWidth));
+
+  float brightBand = 0.5 + 0.5 * sin(uv.y * 2.5 + t * 0.7 + phase * 2.0);
+  brightBand *= 0.6 + 0.4 * sin(uv.y * 5.0 - t * 0.9 + phase);
+
+  float shimmer = 0.8 + 0.2 * sin(t * 2.5 + phase * 3.0 + uv.y * 8.0);
+
+  float detail = 0.7 + 0.3 * noise(vec2(uv.x * 6.0, uv.y * 10.0 + t * 0.5 + phase));
+
+  return ribbon * brightBand * detail * shimmer;
+}
+
+void main() {
+  vec2 uv = (gl_FragCoord.xy - u_res * 0.5) / min(u_res.x, u_res.y);
+  float t = u_time * 0.4;
+
+  // Violet family from the landing tokens (accent #6d4aff, accentText #b8a5ff)
+  float r1 = auroraRibbon(uv, t, 0.0, 0.30, 2.2, 0.30, 0.0);
+  vec3 r1color = mix(vec3(0.28, 0.17, 0.85), vec3(0.43, 0.29, 1.0),
+    0.5 + 0.5 * sin(uv.y * 3.5 + t * 0.3));
+
+  float r2 = auroraRibbon(uv, t * 0.85, 0.55, 0.22, 2.6, 0.26, 2.1);
+  vec3 r2color = mix(vec3(0.55, 0.42, 1.0), vec3(0.72, 0.63, 1.0),
+    0.5 + 0.5 * sin(uv.y * 4.0 - t * 0.4 + 1.0));
+
+  float r3 = auroraRibbon(uv, t * 0.7, -0.55, 0.24, 2.9, 0.24, 4.3);
+  vec3 r3color = mix(vec3(0.40, 0.15, 0.75), vec3(0.58, 0.24, 0.85),
+    0.5 + 0.5 * sin(uv.y * 5.0 + t * 0.2 + 2.0));
+
+  float r4 = auroraRibbon(uv, t * 0.55, 0.10, 0.42, 1.6, 0.34, 1.0);
+  vec3 r4color = vec3(0.18, 0.10, 0.55);
+
+  vec3 light = r1color * r1 * 0.50
+             + r2color * r2 * 0.38
+             + r3color * r3 * 0.34
+             + r4color * r4 * 0.28;
+
+  // Gentle breathing
+  light *= 0.85 + 0.15 * sin(t * 0.8) * sin(t * 0.53 + 1.0);
+
+  // Feather toward the viewport's top and bottom edges
+  float edgeFade = smoothstep(-0.75, -0.35, uv.y) * smoothstep(0.75, 0.35, uv.y);
+  light *= edgeFade;
+
+  if (u_light > 0.5) {
+    // Light theme: the ribbon field as a faint lavender wash. Premultiplied
+    // alpha blends toward the wash color instead of adding light.
+    float s = clamp(dot(light, vec3(0.5)), 0.0, 1.0);
+    vec3 wash = mix(vec3(0.82, 0.76, 1.0), vec3(0.58, 0.44, 0.98), clamp(s * 1.3, 0.0, 1.0));
+    float a = s * 0.30;
+    gl_FragColor = vec4(wash * a, a);
+  } else {
+    // Dark theme: additive glow — premultiplied output with a small alpha
+    // keeps the page background visible underneath.
+    float a = clamp(dot(light, vec3(0.45)), 0.0, 0.85);
+    gl_FragColor = vec4(light, a);
+  }
+}`;
+
+    function compile(type: number, src: string) {
+      const s = gl.createShader(type)!;
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+        console.error('HeroShader compile error:', gl.getShaderInfoLog(s));
+      }
+      return s;
+    }
+
+    const prog = gl.createProgram()!;
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, vertSrc));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, fragSrc));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+      console.error('HeroShader link error:', gl.getProgramInfoLog(prog));
+      return;
+    }
+    gl.useProgram(prog);
+
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const aPos = gl.getAttribLocation(prog, 'a_pos');
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+    const uTime = gl.getUniformLocation(prog, 'u_time');
+    const uRes = gl.getUniformLocation(prog, 'u_res');
+    const uLight = gl.getUniformLocation(prog, 'u_light');
+
+    const isLight = () => document.documentElement.getAttribute('data-theme') === 'light';
+    gl.uniform1f(uLight, isLight() ? 1.0 : 0.0);
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    let needsResize = true;
+    let running = false;
+    let rafId = 0;
+
+    function resize() {
+      needsResize = false;
+      const w = Math.round(canvas.clientWidth * dpr);
+      const h = Math.round(canvas.clientHeight * dpr);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+        gl.viewport(0, 0, w, h);
+        gl.uniform2f(uRes, w, h);
+      }
+    }
+
+    function draw(timeSec: number) {
+      if (needsResize) resize();
+      gl.uniform1f(uTime, timeSec);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
+    function frame(now: number) {
+      if (!running) return;
+      draw(now * 0.001);
+      rafId = requestAnimationFrame(frame);
+    }
+
+    function start() {
+      if (running || prefersReduced) return;
+      running = true;
+      rafId = requestAnimationFrame(frame);
+    }
+
+    function stop() {
+      running = false;
+      cancelAnimationFrame(rafId);
+    }
+
+    window.addEventListener('resize', () => {
+      needsResize = true;
+    });
+
+    resize();
+
+    // The theme toggle flips data-theme in place — track it.
+    new MutationObserver(() => {
+      gl.uniform1f(uLight, isLight() ? 1.0 : 0.0);
+      if (prefersReduced) draw(30.0);
+    }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    if (prefersReduced) {
+      // One static frame at a time offset that shows the ribbons mid-drift.
+      draw(30.0);
+    } else {
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) stop();
+        else start();
+      });
+      start();
+    }
+  })();
+</script>

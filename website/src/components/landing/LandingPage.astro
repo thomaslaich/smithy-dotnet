@@ -10,6 +10,7 @@
  */
 import Walkthrough from './Walkthrough.astro';
 import ProtocolSwitch from './ProtocolSwitch.astro';
+import LandingShader from './LandingShader.astro';
 
 // Base-relative so it works on the local dev server and the deployed site
 // (the GitHub Pages base is /smithy-dotnet). `repo` stays absolute — it's external.
@@ -72,6 +73,8 @@ const langs = [
 </script>
 
 <div class="nsl not-content">
+  <LandingShader />
+
   <!-- Header -->
   <header class="nsl-header">
     <a class="nsl-brand" href="/smithy-dotnet/">
@@ -519,7 +522,10 @@ const langs = [
   }
 
   /* ── Sections ────────────────────────────────────────────────────────────── */
+  /* Positioned so they paint above the fixed shader canvas (z-index 0). */
   .nsl-section {
+    position: relative;
+    z-index: 1;
     max-width: 1180px;
     margin: 0 auto;
     padding: 0 40px 100px;
@@ -722,6 +728,8 @@ const langs = [
 
   /* Footer */
   .nsl-footer {
+    position: relative;
+    z-index: 1;
     border-top: 1px solid var(--borderSoft);
     padding: 30px 40px;
   }
