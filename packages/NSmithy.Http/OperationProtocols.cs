@@ -14,12 +14,11 @@ public interface IProtocol
     IServiceProtocol ForService(ServiceSchema service);
 
     /// <summary>
-    /// Whether this protocol requires an HTTP/2 transport. The generated client uses this to
-    /// configure the default <see cref="System.Net.Http.HttpClient"/> it creates when the caller
-    /// doesn't supply one — native gRPC needs HTTP/2; REST and rpcv2Cbor run on HTTP/1.1. A
-    /// caller-supplied <c>HttpClient</c> is used as-is and must be configured for the protocol.
+    /// The protocol's default HTTP version preference. Generated clients replace this default
+    /// with modeled <c>http</c> or <c>eventStreamHttp</c> preferences when present. A
+    /// caller-supplied <see cref="System.Net.Http.HttpClient"/> is used as-is.
     /// </summary>
-    bool RequiresHttp2 => false;
+    SmithyHttpVersionPreference HttpVersionPreference => SmithyHttpVersionPreference.Http11;
 }
 
 /// <summary>

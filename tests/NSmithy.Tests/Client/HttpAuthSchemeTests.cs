@@ -9,9 +9,10 @@ namespace NSmithy.Tests.Client;
 
 public sealed class HttpAuthSchemeTests
 {
-    private static readonly SmithyAuthSchemeContext Context = new(
-        new Uri("http://localhost"),
-        Schemas.Service(new ShapeId("example", "Svc"))
+    private static readonly SmithyIdentityProperties IdentityProperties = new(
+        new ShapeId("example", "Svc"),
+        new ShapeId("example", "Op"),
+        new SmithyEndpoint(new Uri("http://localhost"))
     );
 
     [Fact]
@@ -86,9 +87,9 @@ public sealed class HttpAuthSchemeTests
         context.Set(SmithyContextKeys.ServiceName, "Svc");
         context.Set(SmithyContextKeys.OperationName, "Op");
 
-        return await scheme
-            .CreateInterceptor(Context)
-            .OnBeforeTransmitAsync(context, new SmithyHttpRequest(HttpMethod.Get, uri))
+        var identity = await scheme.IdentityResolver.ResolveIdentityAsync(IdentityProperties);
+        return await scheme.Signer
+            .SignAsync(context, new SmithyHttpRequest(HttpMethod.Get, uri), identity)
             .ConfigureAwait(false);
     }
 }

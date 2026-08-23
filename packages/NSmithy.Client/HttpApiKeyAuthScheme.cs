@@ -16,19 +16,33 @@ public enum ApiKeyLocation
 public sealed class HttpApiKeyAuthScheme : ISmithyAuthScheme
 {
     private readonly string name;
-    private readonly string apiKey;
-    private readonly ApiKeyLocation location;
-    private readonly string? scheme;
-
     public HttpApiKeyAuthScheme(
         string name,
         string apiKey,
         ApiKeyLocation location = ApiKeyLocation.Header,
         string? scheme = null
     )
+        : this(
+            name,
+            new StaticSmithyIdentityResolver(
+                new SmithyTokenIdentity(
+                    string.IsNullOrWhiteSpace(apiKey)
+                        ? throw new ArgumentException("API key must be set.", nameof(apiKey))
+                        : apiKey
+                )
+            ),
+            location,
+            scheme
+        ) { }
+
+    public HttpApiKeyAuthScheme(
+        string name,
+        ISmithyIdentityResolver identityResolver,
+        ApiKeyLocation location = ApiKeyLocation.Header,
+        string? scheme = null
+    )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentException.ThrowIfNullOrWhiteSpace(apiKey);
         if (location is ApiKeyLocation.Query && scheme is not null)
         {
             throw new ArgumentException(
@@ -38,29 +52,19 @@ public sealed class HttpApiKeyAuthScheme : ISmithyAuthScheme
         }
 
         this.name = name;
-        this.apiKey = apiKey;
-        this.location = location;
-        this.scheme = scheme;
+        IdentityResolver =
+            identityResolver ?? throw new ArgumentNullException(nameof(identityResolver));
+        Signer = location switch
+        {
+            ApiKeyLocation.Header => new HeaderAuthSigner(name, scheme),
+            ApiKeyLocation.Query => new QueryParameterAuthSigner(name),
+            _ => throw new ArgumentOutOfRangeException(nameof(location)),
+        };
     }
 
     public string SchemeId => AuthSchemeIds.HttpApiKeyAuth;
 
-    public IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-        return CreateAuthHandler();
-    }
+    public ISmithyIdentityResolver IdentityResolver { get; }
 
-    private ISmithyAuthHandler CreateAuthHandler()
-    {
-        return location switch
-        {
-            ApiKeyLocation.Header => new HeaderAuthInterceptor(
-                name,
-                scheme is null ? apiKey : $"{scheme} {apiKey}"
-            ),
-            ApiKeyLocation.Query => new QueryParameterAuthInterceptor(name, apiKey),
-            _ => throw new ArgumentOutOfRangeException(nameof(location)),
-        };
-    }
+    public ISmithySigner Signer { get; }
 }

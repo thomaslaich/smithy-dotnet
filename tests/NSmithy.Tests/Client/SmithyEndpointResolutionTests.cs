@@ -27,6 +27,71 @@ public sealed class SmithyEndpointResolutionTests
     }
 
     [Fact]
+    public async Task ModeledHostPrefixExpandsAgainstResolvedEndpoint()
+    {
+        var transport = new RecordingTransport();
+        var runtime = new SmithyClientRuntime(
+            transport,
+            endpoint: new Uri("https://api.example.com/base")
+        );
+
+        await runtime.InvokeAsync(
+            Binding(hostPrefix: input =>
+                SmithyHostPrefix.Expand(
+                    "{account}.data.",
+                    new SmithyHostLabel("account", input)
+                )
+            ),
+            "tenant"
+        );
+
+        Assert.Equal("https://tenant.data.api.example.com/base/tenant", transport.Request!.RequestUri);
+    }
+
+    [Fact]
+    public async Task HostPrefixInjectionCanBeDisabled()
+    {
+        var transport = new RecordingTransport();
+        var runtime = new SmithyClientRuntime(
+            transport,
+            endpoint: new Uri("https://api.example.com"),
+            disableHostPrefixInjection: true
+        );
+
+        await runtime.InvokeAsync(
+            Binding(hostPrefix: input =>
+                SmithyHostPrefix.Expand("{account}.", new SmithyHostLabel("account", input))
+            ),
+            "tenant"
+        );
+
+        Assert.Equal("https://api.example.com/tenant", transport.Request!.RequestUri);
+    }
+
+    [Fact]
+    public async Task DefaultUserAgentDoesNotOverwriteModeledHeader()
+    {
+        var defaultTransport = new RecordingTransport();
+        await new SmithyClientRuntime(defaultTransport, endpoint: new Uri("https://api.example.com"))
+            .InvokeAsync(Binding(), "input");
+
+        Assert.StartsWith(
+            "NSmithy.Client/",
+            Assert.Single(defaultTransport.Request!.Headers["User-Agent"]),
+            StringComparison.Ordinal
+        );
+
+        var modeledTransport = new RecordingTransport();
+        await new SmithyClientRuntime(
+            modeledTransport,
+            endpoint: new Uri("https://api.example.com"),
+            userAgent: "configured/2.0"
+        ).InvokeAsync(Binding(modeledUserAgent: "modeled/1.0"), "input");
+
+        Assert.Equal(["modeled/1.0"], modeledTransport.Request!.Headers["User-Agent"]);
+    }
+
+    [Fact]
     public async Task ResolverSeesOperationIdentifiersConfiguredEndpointAndInput()
     {
         SmithyEndpointParameters? seen = null;
@@ -48,6 +113,25 @@ public sealed class SmithyEndpointResolutionTests
         Assert.Equal(ShapeId.Parse("example.weather#GetForecast"), seen.OperationId);
         Assert.Equal(configured, seen.ConfiguredEndpoint);
         Assert.Equal("input", seen.Input);
+    }
+
+    [Fact]
+    public async Task EndpointResolutionFailuresRunCompletionInterceptors()
+    {
+        List<Exception?> observed = [];
+        var runtime = new SmithyClientRuntime(
+            new RecordingTransport(),
+            [new CompletionRecordingInterceptor(observed)],
+            endpointResolver: new DelegateResolver(_ =>
+                throw new InvalidOperationException("resolution failed")
+            )
+        );
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runtime.InvokeAsync(Binding(), "input")
+        );
+
+        Assert.Same(error, Assert.Single(observed));
     }
 
     [Fact]
@@ -86,6 +170,29 @@ public sealed class SmithyEndpointResolutionTests
     }
 
     [Fact]
+    public async Task TypedContextCarriesOperationEndpointAndSelectedAuth()
+    {
+        ContextSnapshot? snapshot = null;
+        var runtime = new SmithyClientRuntime(
+            new RecordingTransport(),
+            [new ContextRecordingInterceptor(value => snapshot = value)],
+            endpoint: new Uri("https://api.example.com"),
+            authSchemes: new Dictionary<string, ISmithyAuthScheme>(StringComparer.Ordinal)
+            {
+                ["scheme#a"] = new HeaderStampingAuthScheme("scheme#a", "x-auth", "a"),
+            }
+        );
+
+        await runtime.InvokeAsync(Binding(authSchemeIds: ["scheme#a"]), "input");
+
+        Assert.NotNull(snapshot);
+        Assert.Equal(ShapeId.Parse("example.weather#Weather"), snapshot!.ServiceId);
+        Assert.Equal(ShapeId.Parse("example.weather#GetForecast"), snapshot.OperationId);
+        Assert.Equal(new Uri("https://api.example.com"), snapshot.Endpoint.Uri);
+        Assert.Equal("scheme#a", snapshot.AuthSchemeId);
+    }
+
+    [Fact]
     public async Task EndpointAuthNarrowingSelectsTheNarrowedScheme()
     {
         var transport = new RecordingTransport();
@@ -95,10 +202,10 @@ public sealed class SmithyEndpointResolutionTests
                 new Uri("https://api.example.com"),
                 AuthSchemes: ["scheme#b"]
             )),
-            authSchemes: new Dictionary<string, IClientInterceptor>(StringComparer.Ordinal)
+            authSchemes: new Dictionary<string, ISmithyAuthScheme>(StringComparer.Ordinal)
             {
-                ["scheme#a"] = new HeaderStampingInterceptor("x-auth", "a"),
-                ["scheme#b"] = new HeaderStampingInterceptor("x-auth", "b"),
+                ["scheme#a"] = new HeaderStampingAuthScheme("scheme#a", "x-auth", "a"),
+                ["scheme#b"] = new HeaderStampingAuthScheme("scheme#b", "x-auth", "b"),
             }
         );
 
@@ -114,9 +221,9 @@ public sealed class SmithyEndpointResolutionTests
         var runtime = new SmithyClientRuntime(
             transport,
             endpoint: new Uri("https://api.example.com"),
-            authSchemes: new Dictionary<string, IClientInterceptor>(StringComparer.Ordinal)
+            authSchemes: new Dictionary<string, ISmithyAuthScheme>(StringComparer.Ordinal)
             {
-                ["scheme#a"] = new HeaderStampingInterceptor("x-auth", "a"),
+                ["scheme#a"] = new HeaderStampingAuthScheme("scheme#a", "x-auth", "a"),
             }
         );
 
@@ -132,9 +239,9 @@ public sealed class SmithyEndpointResolutionTests
         var runtime = new SmithyClientRuntime(
             transport,
             endpoint: new Uri("https://api.example.com"),
-            authSchemes: new Dictionary<string, IClientInterceptor>(StringComparer.Ordinal)
+            authSchemes: new Dictionary<string, ISmithyAuthScheme>(StringComparer.Ordinal)
             {
-                ["scheme#a"] = new HeaderStampingInterceptor("x-auth", "a"),
+                ["scheme#a"] = new HeaderStampingAuthScheme("scheme#a", "x-auth", "a"),
             }
         );
 
@@ -151,25 +258,28 @@ public sealed class SmithyEndpointResolutionTests
             new RecordingTransport(),
             [new PhaseRecordingInterceptor("user", order)],
             endpoint: new Uri("https://api.example.com"),
-            authSchemes: new Dictionary<string, IClientInterceptor>(StringComparer.Ordinal)
+            authSchemes: new Dictionary<string, ISmithyAuthScheme>(StringComparer.Ordinal)
             {
-                ["scheme#a"] = new PhaseRecordingInterceptor("auth", order),
+                ["scheme#a"] = new PhaseRecordingAuthScheme("scheme#a", "auth", order),
             }
         );
 
         await runtime.InvokeAsync(Binding(authSchemeIds: ["scheme#a"]), "input");
 
-        Assert.Equal(["user:signing", "auth:signing", "user:transmit", "auth:transmit"], order);
+        Assert.Equal(["user:signing", "auth:signing", "user:transmit"], order);
     }
 
     private static SmithyOperationBinding<string, string> Binding(
-        IReadOnlyList<string>? authSchemeIds = null
+        IReadOnlyList<string>? authSchemeIds = null,
+        Func<string, string>? hostPrefix = null,
+        string? modeledUserAgent = null
     ) =>
         new(
             ShapeId.Parse("example.weather#Weather"),
             ShapeId.Parse("example.weather#GetForecast"),
-            new TextProtocol(),
-            authSchemeIds
+            new TextProtocol(modeledUserAgent),
+            authSchemeIds,
+            hostPrefix
         );
 
     private sealed class DelegateResolver(Func<SmithyEndpointParameters, SmithyEndpoint> resolve)
@@ -212,11 +322,49 @@ public sealed class SmithyEndpointResolutionTests
         }
     }
 
-    private sealed class HeaderStampingInterceptor(string name, string value) : IClientInterceptor
+    private sealed class CompletionRecordingInterceptor(List<Exception?> observed)
+        : IClientInterceptor
     {
-        public ValueTask<SmithyHttpRequest> OnBeforeSigningAsync(
+        public void OnAfterExecution(SmithyContext context, Exception? exception) =>
+            observed.Add(exception);
+    }
+
+    private sealed record ContextSnapshot(
+        ShapeId ServiceId,
+        ShapeId OperationId,
+        SmithyEndpoint Endpoint,
+        string AuthSchemeId
+    );
+
+    private sealed class ContextRecordingInterceptor(Action<ContextSnapshot> record)
+        : IClientInterceptor
+    {
+        public void OnBeforeExecution(SmithyContext context) =>
+            record(
+                new ContextSnapshot(
+                    context.Get(SmithyContextKeys.ServiceId),
+                    context.Get(SmithyContextKeys.OperationId),
+                    context.Get(SmithyContextKeys.ResolvedEndpoint),
+                    context.Get(SmithyContextKeys.AuthSchemeId)
+                )
+            );
+    }
+
+    private sealed class HeaderStampingAuthScheme(string schemeId, string name, string value)
+        : ISmithyAuthScheme,
+            ISmithySigner
+    {
+        public string SchemeId => schemeId;
+
+        public ISmithyIdentityResolver IdentityResolver { get; } =
+            new StaticSmithyIdentityResolver(new FakeIdentity());
+
+        public ISmithySigner Signer => this;
+
+        public ValueTask<SmithyHttpRequest> SignAsync(
             SmithyContext context,
             SmithyHttpRequest request,
+            ISmithyIdentity identity,
             CancellationToken cancellationToken = default
         )
         {
@@ -224,6 +372,31 @@ public sealed class SmithyEndpointResolutionTests
             return ValueTask.FromResult(request);
         }
     }
+
+    private sealed class PhaseRecordingAuthScheme(string schemeId, string tag, List<string> order)
+        : ISmithyAuthScheme,
+            ISmithySigner
+    {
+        public string SchemeId => schemeId;
+
+        public ISmithyIdentityResolver IdentityResolver { get; } =
+            new StaticSmithyIdentityResolver(new FakeIdentity());
+
+        public ISmithySigner Signer => this;
+
+        public ValueTask<SmithyHttpRequest> SignAsync(
+            SmithyContext context,
+            SmithyHttpRequest request,
+            ISmithyIdentity identity,
+            CancellationToken cancellationToken = default
+        )
+        {
+            order.Add($"{tag}:signing");
+            return ValueTask.FromResult(request);
+        }
+    }
+
+    private sealed class FakeIdentity : ISmithyIdentity;
 
     private sealed class PhaseRecordingInterceptor(string tag, List<string> order)
         : IClientInterceptor
@@ -252,12 +425,22 @@ public sealed class SmithyEndpointResolutionTests
     private static IReadOnlyDictionary<string, IReadOnlyList<string>> EmptyHeaders { get; } =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
 
-    private sealed class TextProtocol : IClientOperationProtocol<string, string>
+    private sealed class TextProtocol(string? userAgent = null)
+        : IClientOperationProtocol<string, string>
     {
         public SmithyHttpRequest SerializeRequest(
             string input,
             CancellationToken cancellationToken = default
-        ) => new(HttpMethod.Post, $"/{input}");
+        )
+        {
+            var request = new SmithyHttpRequest(HttpMethod.Post, $"/{input}");
+            if (userAgent is not null)
+            {
+                request.Headers["User-Agent"] = [userAgent];
+            }
+
+            return request;
+        }
 
         public ValueTask<string> DeserializeResponseAsync(
             SmithyHttpClientResponse response,

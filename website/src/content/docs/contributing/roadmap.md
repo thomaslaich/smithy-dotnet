@@ -38,19 +38,12 @@ The priorities below are what remains.
 
 ### 2. Move the client runtime to the target architecture
 
-The core client runtime pipeline, standard retry, operation timeouts,
-telemetry, and paginators have landed; the desired
-end-state is documented in
+The client runtime pipeline, standard retry, operation timeouts, telemetry,
+paginators, split identity/signing auth, operation endpoint host labels,
+User-Agent behavior, and typed execution context have landed. The end-state is documented in
 [`designs/client-architecture.md`](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/client-architecture.md).
-The remaining work closes the gaps:
-
-- Splitting auth into scheme resolution, identity resolution, and signing;
-  adding per-operation `@auth` overrides and identity caching/refresh.
-- Adding per-operation endpoint resolution beyond the static resolver,
-  including host labels and endpoint auth-scheme overrides.
-- Setting a modeled/default User-Agent.
-- Continuing to harden named client interceptors and the typed per-call
-  execution context.
+Further changes in this area should be driven by conformance gaps and concrete
+extension requirements.
 
 ### 3. Harden streaming operations
 
@@ -99,22 +92,10 @@ This work includes:
 
 ### 6. Honor protocol HTTP-version traits
 
-Protocol traits can declare the HTTP versions a service supports via their `http`
-and `eventStreamHttp` members — a list of ALPN protocol IDs in preference order
-(for example `@rpcv2Cbor(http: ["h2", "http/1.1"])`). These are currently
-ignored: generated clients use the `HttpClient`'s default version (HTTP/1.1
-unless configured), with HTTP/2 forced only for native gRPC.
-
-This work includes:
-
-- Reading the `http` / `eventStreamHttp` members at codegen.
-- Replacing the runtime's coarse `IProtocol.RequiresHttp2` bool with a
-  preferred-version + downgrade-policy model that maps the preference list onto
-  ALPN negotiation (request the first supported version, allow downgrade).
-- Applying the selected version when the client creates its own `HttpClient` (the
-  endpoint constructor and the generated DI helper); documenting that the
-  bring-your-own-`HttpClient` and IHttpClientFactory paths configure it
-  themselves, since there the caller owns the `HttpClient`.
+Generated clients honor the protocol trait's ordered `http` and
+`eventStreamHttp` ALPN preferences. Client-owned and generated-DI `HttpClient`
+instances request the first supported version and allow downgrade when the
+modeled list does; caller-owned clients remain caller-configured.
 
 ## Later Work
 

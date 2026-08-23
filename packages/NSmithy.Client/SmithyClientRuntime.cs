@@ -11,11 +11,15 @@ public sealed class SmithyClientRuntime(
     Uri? endpoint = null,
     TimeSpan? operationTimeout = null,
     IEndpointResolver? endpointResolver = null,
-    IReadOnlyDictionary<string, IClientInterceptor>? authSchemes = null
+    IReadOnlyDictionary<string, ISmithyAuthScheme>? authSchemes = null,
+    bool disableHostPrefixInjection = false,
+    string? userAgent = null
 )
 {
-    private static readonly IReadOnlyDictionary<string, IClientInterceptor> NoAuthSchemes =
-        new Dictionary<string, IClientInterceptor>(StringComparer.Ordinal);
+    private static readonly IReadOnlyDictionary<string, ISmithyAuthScheme> NoAuthSchemes =
+        new Dictionary<string, ISmithyAuthScheme>(StringComparer.Ordinal);
+    private static readonly string DefaultUserAgent =
+        $"NSmithy.Client/{typeof(SmithyClientRuntime).Assembly.GetName().Version?.ToString(3) ?? "unknown"}";
 
     private readonly IHttpTransport transport =
         transport ?? throw new ArgumentNullException(nameof(transport));
@@ -32,8 +36,14 @@ public sealed class SmithyClientRuntime(
     private readonly IEndpointResolver? endpointResolver =
         endpointResolver
         ?? (endpoint is { IsAbsoluteUri: true } ? new StaticEndpointResolver(endpoint) : null);
-    private readonly IReadOnlyDictionary<string, IClientInterceptor> authSchemes =
+    private readonly IReadOnlyDictionary<string, ISmithyAuthScheme> authSchemes =
         authSchemes ?? NoAuthSchemes;
+    private readonly bool disableHostPrefixInjection = disableHostPrefixInjection;
+    private readonly string userAgent = userAgent is null
+        ? DefaultUserAgent
+        : !string.IsNullOrWhiteSpace(userAgent)
+            ? userAgent
+            : throw new ArgumentException("User-Agent must not be empty.", nameof(userAgent));
     private readonly TimeSpan? operationTimeout =
         operationTimeout is null || operationTimeout > TimeSpan.Zero
             ? operationTimeout
@@ -78,9 +88,14 @@ public sealed class SmithyClientRuntime(
     )
     {
         var protocol = binding.Protocol;
+        var resolvedEndpoint = ApplyHostPrefix(
+            binding,
+            input,
+            endpointResolver?.StaticEndpoint
+        );
         var request = PrepareAttemptRequest(
             protocol.SerializeRequest(input, cancellationToken),
-            endpointResolver?.StaticEndpoint,
+            resolvedEndpoint,
             clone: false
         );
         var response = await transport
@@ -123,10 +138,10 @@ public sealed class SmithyClientRuntime(
         CancellationToken callerToken
     )
     {
-        // The operation timeout is a deadline over establishing the exchange — serialization, every
-        // retry attempt, backoff delays, and receiving the response. Established streaming response
-        // bodies are consumed lazily by the caller after this method returns, so they use the caller
-        // token rather than this timeout source.
+        // The operation timeout is a deadline over establishing the exchange — endpoint resolution,
+        // serialization, every retry attempt, backoff delays, and receiving the response. Established
+        // streaming response bodies are consumed lazily by the caller after this method returns, so
+        // they use the caller token rather than this timeout source.
         using var timeoutSource = operationTimeout is null
             ? null
             : CancellationTokenSource.CreateLinkedTokenSource(callerToken);
@@ -134,44 +149,11 @@ public sealed class SmithyClientRuntime(
         var cancellationToken = timeoutSource?.Token ?? callerToken;
 
         var protocol = binding.Protocol;
-
-        // Endpoint resolution runs once per invocation, before any lifecycle hooks, so
-        // interceptors observe the effective endpoint from OnBeforeExecution on.
-        //
-        // A resolver that answers StaticEndpoint returns the same endpoint whatever it is handed, so
-        // the parameters are skipped rather than allocated and discarded. That is the common case —
-        // most clients are configured with one fixed endpoint — and it also keeps the await, and its
-        // state machine, off the path entirely.
-        var resolvedEndpoint = endpointResolver?.StaticEndpoint;
-        if (endpointResolver is not null && resolvedEndpoint is null)
-        {
-            resolvedEndpoint = await endpointResolver
-                .ResolveEndpointAsync(
-                    new SmithyEndpointParameters(
-                        binding.ServiceId,
-                        binding.OperationId,
-                        endpoint,
-                        input
-                    ),
-                    callerToken
-                )
-                .ConfigureAwait(false);
-        }
-
-        var authInterceptor = SmithyAuthSchemeResolver.SelectInterceptor(
-            binding.AuthSchemeIds,
-            resolvedEndpoint?.AuthSchemes,
-            authSchemes
-        );
         var needsContext =
-            interceptors.Length > 0 || retryStrategy is not null || authInterceptor is not null;
-        var context = needsContext
-            ? CreateContext(binding.ServiceId.Name, binding.OperationId.Name)
-            : null;
-        if (context is not null && resolvedEndpoint is not null)
-        {
-            context.Set(SmithyContextKeys.Endpoint, resolvedEndpoint.Uri);
-        }
+            interceptors.Length > 0
+            || retryStrategy is not null
+            || (binding.AuthSchemeIds.Count > 0 && authSchemes.Count > 0);
+        var context = needsContext ? CreateContext(binding) : null;
 
         // Both strings are constant per binding and materialized with it. Building them here meant a
         // string interpolation and a ShapeId.ToString() on every call, including the overwhelmingly
@@ -196,14 +178,62 @@ public sealed class SmithyClientRuntime(
 
         var startTimestamp = Stopwatch.GetTimestamp();
 
-        foreach (var interceptor in interceptors)
-        {
-            interceptor.OnBeforeExecution(context!);
-        }
-
         Exception? executionError = null;
         try
         {
+            // Endpoint resolution runs once per invocation, before any lifecycle hooks, so
+            // interceptors observe the effective endpoint from OnBeforeExecution on. It remains
+            // inside the execution scope so deadlines and completion interceptors observe failures.
+            //
+            // A resolver that answers StaticEndpoint returns the same endpoint whatever it is handed,
+            // so the parameters are skipped rather than allocated and discarded. That is the common
+            // case — most clients are configured with one fixed endpoint — and it also keeps the await,
+            // and its state machine, off the path entirely.
+            var resolvedEndpoint = endpointResolver?.StaticEndpoint;
+            if (endpointResolver is not null && resolvedEndpoint is null)
+            {
+                resolvedEndpoint = await endpointResolver
+                    .ResolveEndpointAsync(
+                        new SmithyEndpointParameters(
+                            binding.ServiceId,
+                            binding.OperationId,
+                            endpoint,
+                            input
+                        ),
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
+            }
+
+            resolvedEndpoint = ApplyHostPrefix(binding, input, resolvedEndpoint);
+
+            var authScheme = SmithyAuthSchemeResolver.SelectScheme(
+                binding.AuthSchemeIds,
+                resolvedEndpoint?.AuthSchemes,
+                authSchemes
+            );
+            if (context is not null && resolvedEndpoint is not null)
+            {
+                context.Set(SmithyContextKeys.Endpoint, resolvedEndpoint.Uri);
+                context.Set(SmithyContextKeys.ResolvedEndpoint, resolvedEndpoint);
+            }
+            if (context is not null && authScheme is not null)
+            {
+                context.Set(SmithyContextKeys.AuthSchemeId, authScheme.SchemeId);
+            }
+            var identityProperties = authScheme is null
+                ? null
+                : new SmithyIdentityProperties(
+                    binding.ServiceId,
+                    binding.OperationId,
+                    resolvedEndpoint
+                );
+
+            foreach (var interceptor in interceptors)
+            {
+                interceptor.OnBeforeExecution(context!);
+            }
+
             foreach (var interceptor in interceptors)
             {
                 interceptor.OnBeforeSerialization(context!, input);
@@ -216,7 +246,8 @@ public sealed class SmithyClientRuntime(
                     protocol,
                     tags,
                     resolvedEndpoint,
-                    authInterceptor,
+                    authScheme,
+                    identityProperties,
                     cancellationToken
                 )
                 .ConfigureAwait(false);
@@ -300,7 +331,8 @@ public sealed class SmithyClientRuntime(
         IClientOperationProtocol<TInput, TOutput> protocol,
         TagList tags,
         SmithyEndpoint? resolvedEndpoint,
-        IClientInterceptor? authInterceptor,
+        ISmithyAuthScheme? authScheme,
+        SmithyIdentityProperties? identityProperties,
         CancellationToken cancellationToken
     )
     {
@@ -321,12 +353,13 @@ public sealed class SmithyClientRuntime(
             }
 
             var attemptRequest = PrepareAttemptRequest(request, resolvedEndpoint, canRetry);
-            if (interceptors.Length > 0 || authInterceptor is not null)
+            if (interceptors.Length > 0 || authScheme is not null)
             {
                 attemptRequest = await ApplyRequestInterceptorsAsync(
                         context!,
                         attemptRequest,
-                        authInterceptor,
+                        authScheme,
+                        identityProperties,
                         cancellationToken
                     )
                     .ConfigureAwait(false);
@@ -416,44 +449,56 @@ public sealed class SmithyClientRuntime(
     private async Task<SmithyHttpRequest> ApplyRequestInterceptorsAsync(
         SmithyContext context,
         SmithyHttpRequest request,
-        IClientInterceptor? authInterceptor,
+        ISmithyAuthScheme? authScheme,
+        SmithyIdentityProperties? identityProperties,
         CancellationToken cancellationToken
     )
     {
-        // The selected auth interceptor runs after user interceptors in each request phase, so
-        // signing sees the final request and nothing mutates it afterwards.
+        // User interceptors finish request preparation before the selected signer sees it.
         foreach (var interceptor in interceptors)
         {
-            request = await interceptor
-                .OnBeforeSigningAsync(context, request, cancellationToken)
-                .ConfigureAwait(false);
+            request =
+                await interceptor
+                    .OnBeforeSigningAsync(context, request, cancellationToken)
+                    .ConfigureAwait(false)
+                ?? throw new InvalidOperationException(
+                    $"{interceptor.GetType().Name}.{nameof(IClientInterceptor.OnBeforeSigningAsync)} returned null."
+                );
         }
 
-        if (authInterceptor is not null)
+        if (authScheme is not null)
         {
-            request = await authInterceptor
-                .OnBeforeSigningAsync(context, request, cancellationToken)
-                .ConfigureAwait(false);
+            var identity =
+                await authScheme
+                    .IdentityResolver.ResolveIdentityAsync(identityProperties!, cancellationToken)
+                    .ConfigureAwait(false)
+                ?? throw new InvalidOperationException(
+                    $"{authScheme.IdentityResolver.GetType().Name} returned a null identity."
+                );
+            request =
+                await authScheme
+                    .Signer.SignAsync(context, request, identity, cancellationToken)
+                    .ConfigureAwait(false)
+                ?? throw new InvalidOperationException(
+                    $"{authScheme.Signer.GetType().Name}.{nameof(ISmithySigner.SignAsync)} returned null."
+                );
         }
 
         foreach (var interceptor in interceptors)
         {
-            request = await interceptor
-                .OnBeforeTransmitAsync(context, request, cancellationToken)
-                .ConfigureAwait(false);
-        }
-
-        if (authInterceptor is not null)
-        {
-            request = await authInterceptor
-                .OnBeforeTransmitAsync(context, request, cancellationToken)
-                .ConfigureAwait(false);
+            request =
+                await interceptor
+                    .OnBeforeTransmitAsync(context, request, cancellationToken)
+                    .ConfigureAwait(false)
+                ?? throw new InvalidOperationException(
+                    $"{interceptor.GetType().Name}.{nameof(IClientInterceptor.OnBeforeTransmitAsync)} returned null."
+                );
         }
 
         return request;
     }
 
-    private static SmithyHttpRequest PrepareAttemptRequest(
+    private SmithyHttpRequest PrepareAttemptRequest(
         SmithyHttpRequest request,
         SmithyEndpoint? resolvedEndpoint,
         bool clone
@@ -471,6 +516,11 @@ public sealed class SmithyClientRuntime(
             {
                 resolved.Headers[header.Key] = [header.Value];
             }
+        }
+
+        if (!resolved.Headers.ContainsKey("User-Agent"))
+        {
+            resolved.Headers["User-Agent"] = [userAgent];
         }
 
         return resolved;
@@ -512,14 +562,39 @@ public sealed class SmithyClientRuntime(
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
-    // Sized for the four keys an invocation sets: service name, operation name, endpoint, attempt.
-    private const int ContextKeyCount = 4;
+    private SmithyEndpoint? ApplyHostPrefix<TInput, TOutput>(
+        SmithyOperationBinding<TInput, TOutput> binding,
+        TInput input,
+        SmithyEndpoint? resolvedEndpoint
+    )
+    {
+        if (disableHostPrefixInjection || binding.HostPrefix is null)
+        {
+            return resolvedEndpoint;
+        }
 
-    private SmithyContext CreateContext(string serviceName, string operationName)
+        if (resolvedEndpoint is null)
+        {
+            throw new InvalidOperationException(
+                $"Operation '{binding.OperationId}' models an endpoint host prefix, but no endpoint was resolved."
+            );
+        }
+
+        return SmithyHostPrefix.Apply(resolvedEndpoint, binding.HostPrefix(input));
+    }
+
+    // Service/operation ids and names, resolved endpoint/URI, auth scheme, and attempt.
+    private const int ContextKeyCount = 8;
+
+    private SmithyContext CreateContext<TInput, TOutput>(
+        SmithyOperationBinding<TInput, TOutput> binding
+    )
     {
         var context = new SmithyContext(ContextKeyCount);
-        context.Set(SmithyContextKeys.ServiceName, serviceName);
-        context.Set(SmithyContextKeys.OperationName, operationName);
+        context.Set(SmithyContextKeys.ServiceId, binding.ServiceId);
+        context.Set(SmithyContextKeys.ServiceName, binding.ServiceId.Name);
+        context.Set(SmithyContextKeys.OperationId, binding.OperationId);
+        context.Set(SmithyContextKeys.OperationName, binding.OperationId.Name);
         if (endpoint is not null)
         {
             context.Set(SmithyContextKeys.Endpoint, endpoint);

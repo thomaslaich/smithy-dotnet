@@ -1,5 +1,3 @@
-using NSmithy.Core.Serde;
-
 namespace NSmithy.Client;
 
 /// <summary>
@@ -12,7 +10,9 @@ public interface ISmithyAuthScheme
     /// <summary>Absolute shape id of the auth trait this scheme implements.</summary>
     string SchemeId { get; }
 
-    IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context);
-}
+    /// <summary>Resolves credentials or tokens for this scheme.</summary>
+    ISmithyIdentityResolver IdentityResolver { get; }
 
-public sealed record SmithyAuthSchemeContext(Uri Endpoint, ServiceSchema Service);
+    /// <summary>Applies a resolved identity to a serialized request.</summary>
+    ISmithySigner Signer { get; }
+}

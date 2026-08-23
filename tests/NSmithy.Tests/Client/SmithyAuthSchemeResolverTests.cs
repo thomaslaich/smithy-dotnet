@@ -1,19 +1,18 @@
 using NSmithy.Client;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.Http;
 
 namespace NSmithy.Tests.Client;
 
 public sealed class SmithyAuthSchemeResolverTests
 {
-    private static readonly Uri Endpoint = new("http://localhost:4566");
     private static readonly ServiceSchema Service = Schemas.Service(new ShapeId("example", "Svc"));
 
     [Fact]
-    public void ResolveInterceptorsWithoutAuthSchemesReturnsEmptyMap()
+    public void ResolveSchemesWithoutAuthSchemesReturnsEmptyMap()
     {
-        var resolved = SmithyAuthSchemeResolver.ResolveInterceptors(
-            Endpoint,
+        var resolved = SmithyAuthSchemeResolver.ResolveSchemes(
             Service,
             ["aws.auth#sigv4"],
             authSchemes: null
@@ -23,16 +22,15 @@ public sealed class SmithyAuthSchemeResolverTests
     }
 
     [Fact]
-    public void ResolveInterceptorsCreatesOneInterceptorPerConfiguredScheme()
+    public void ResolveSchemesIndexesConfiguredSchemes()
     {
-        var a = new MarkerInterceptor("a");
-        var b = new MarkerInterceptor("b");
+        var a = new FakeScheme("scheme#a", "a");
+        var b = new FakeScheme("scheme#b", "b");
 
-        var resolved = SmithyAuthSchemeResolver.ResolveInterceptors(
-            Endpoint,
+        var resolved = SmithyAuthSchemeResolver.ResolveSchemes(
             Service,
             ["scheme#a", "scheme#b"],
-            authSchemes: [new FakeScheme("scheme#a", a), new FakeScheme("scheme#b", b)]
+            authSchemes: [a, b]
         );
 
         Assert.Same(a, resolved["scheme#a"]);
@@ -40,14 +38,13 @@ public sealed class SmithyAuthSchemeResolverTests
     }
 
     [Fact]
-    public void ResolveInterceptorsThrowsWhenNoConfiguredSchemeMatchesServiceSchemes()
+    public void ResolveSchemesThrowsWhenNoConfiguredSchemeMatchesServiceSchemes()
     {
         var error = Assert.Throws<InvalidOperationException>(() =>
-            SmithyAuthSchemeResolver.ResolveInterceptors(
-                Endpoint,
+            SmithyAuthSchemeResolver.ResolveSchemes(
                 Service,
                 ["scheme#a", "scheme#b"],
-                authSchemes: [new FakeScheme("scheme#c", new MarkerInterceptor("c"))]
+                authSchemes: [new FakeScheme("scheme#c", "c")]
             )
         );
 
@@ -60,13 +57,13 @@ public sealed class SmithyAuthSchemeResolverTests
     {
         var interceptors = Map(("scheme#b", "b"), ("scheme#a", "a"));
 
-        var selected = SmithyAuthSchemeResolver.SelectInterceptor(
+        var selected = SmithyAuthSchemeResolver.SelectScheme(
             ["scheme#a", "scheme#b"],
             endpointAuthSchemes: null,
             interceptors
         );
 
-        Assert.Equal("a", Assert.IsType<MarkerInterceptor>(selected).Tag);
+        Assert.Equal("a", Assert.IsType<FakeScheme>(selected).Tag);
     }
 
     [Fact]
@@ -74,13 +71,13 @@ public sealed class SmithyAuthSchemeResolverTests
     {
         var interceptors = Map(("scheme#b", "b"));
 
-        var selected = SmithyAuthSchemeResolver.SelectInterceptor(
+        var selected = SmithyAuthSchemeResolver.SelectScheme(
             ["scheme#a", "scheme#b"],
             endpointAuthSchemes: null,
             interceptors
         );
 
-        Assert.Equal("b", Assert.IsType<MarkerInterceptor>(selected).Tag);
+        Assert.Equal("b", Assert.IsType<FakeScheme>(selected).Tag);
     }
 
     [Fact]
@@ -89,7 +86,7 @@ public sealed class SmithyAuthSchemeResolverTests
         var interceptors = Map(("scheme#a", "a"));
 
         Assert.Null(
-            SmithyAuthSchemeResolver.SelectInterceptor([], endpointAuthSchemes: null, interceptors)
+            SmithyAuthSchemeResolver.SelectScheme([], endpointAuthSchemes: null, interceptors)
         );
     }
 
@@ -98,13 +95,13 @@ public sealed class SmithyAuthSchemeResolverTests
     {
         var interceptors = Map(("scheme#a", "a"), ("scheme#b", "b"));
 
-        var selected = SmithyAuthSchemeResolver.SelectInterceptor(
+        var selected = SmithyAuthSchemeResolver.SelectScheme(
             ["scheme#a", "scheme#b"],
             endpointAuthSchemes: ["scheme#b"],
             interceptors
         );
 
-        Assert.Equal("b", Assert.IsType<MarkerInterceptor>(selected).Tag);
+        Assert.Equal("b", Assert.IsType<FakeScheme>(selected).Tag);
     }
 
     [Fact]
@@ -113,7 +110,7 @@ public sealed class SmithyAuthSchemeResolverTests
         var interceptors = Map(("scheme#a", "a"));
 
         Assert.Null(
-            SmithyAuthSchemeResolver.SelectInterceptor(
+            SmithyAuthSchemeResolver.SelectScheme(
                 ["scheme#a"],
                 endpointAuthSchemes: ["scheme#other"],
                 interceptors
@@ -127,7 +124,7 @@ public sealed class SmithyAuthSchemeResolverTests
         var interceptors = Map(("scheme#c", "c"));
 
         var error = Assert.Throws<InvalidOperationException>(() =>
-            SmithyAuthSchemeResolver.SelectInterceptor(
+            SmithyAuthSchemeResolver.SelectScheme(
                 ["scheme#a"],
                 endpointAuthSchemes: null,
                 interceptors
@@ -138,29 +135,40 @@ public sealed class SmithyAuthSchemeResolverTests
         Assert.Contains("scheme#c", error.Message, StringComparison.Ordinal);
     }
 
-    private static Dictionary<string, IClientInterceptor> Map(
+    private static Dictionary<string, ISmithyAuthScheme> Map(
         params (string SchemeId, string Tag)[] schemes
     )
     {
-        var map = new Dictionary<string, IClientInterceptor>(StringComparer.Ordinal);
+        var map = new Dictionary<string, ISmithyAuthScheme>(StringComparer.Ordinal);
         foreach (var (schemeId, tag) in schemes)
         {
-            map[schemeId] = new MarkerInterceptor(tag);
+            map[schemeId] = new FakeScheme(schemeId, tag);
         }
 
         return map;
     }
 
-    private sealed class FakeScheme(string schemeId, IClientInterceptor interceptor)
-        : ISmithyAuthScheme
+    private sealed class FakeScheme(string schemeId, string tag) : ISmithyAuthScheme
     {
         public string SchemeId => schemeId;
 
-        public IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context) => interceptor;
+        public string Tag => tag;
+
+        public ISmithyIdentityResolver IdentityResolver { get; } =
+            new StaticSmithyIdentityResolver(new FakeIdentity());
+
+        public ISmithySigner Signer { get; } = new FakeSigner();
     }
 
-    private sealed class MarkerInterceptor(string tag) : IClientInterceptor
+    private sealed class FakeIdentity : ISmithyIdentity;
+
+    private sealed class FakeSigner : ISmithySigner
     {
-        public string Tag => tag;
+        public ValueTask<SmithyHttpRequest> SignAsync(
+            SmithyContext context,
+            SmithyHttpRequest request,
+            ISmithyIdentity identity,
+            CancellationToken cancellationToken = default
+        ) => ValueTask.FromResult(request);
     }
 }

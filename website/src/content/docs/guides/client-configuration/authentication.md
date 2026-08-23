@@ -19,13 +19,29 @@ var client = new WeatherClient(
 ```
 
 At construction time, NSmithy validates your configured schemes against the
-auth schemes modeled by the service and prepares one signer per configured
-scheme. On each call it selects the first of the *operation's* effective
+auth schemes modeled by the service. On each call it selects the first of the
+*operation's* effective
 modeled schemes (a per-operation `@auth` trait overrides the service default)
-for which you supplied configuration; operations modeled as anonymous send no
+for which you supplied configuration, resolves that scheme's identity, and
+signs each attempt after user request interceptors have run. Operations modeled as anonymous send no
 credentials, and an [endpoint resolver](/smithy-dotnet/guides/client-configuration/)
 can narrow the candidate schemes per endpoint. If `AuthSchemes` is empty,
 requests are sent anonymously.
+
+Identity resolution is separate from signing, so expiring tokens can refresh
+without rebuilding the client. Built-in HTTP auth schemes accept an
+`ISmithyIdentityResolver`; wrap a resolver with `SmithyCachingIdentityResolver`
+to share an identity until its `Expiration` approaches:
+
+```csharp
+var identities = new SmithyCachingIdentityResolver(tokenResolver);
+config.AuthSchemes.Add(new HttpBearerAuthScheme(identities));
+```
+
+`tokenResolver` returns `SmithyTokenIdentity` values. The cache coalesces
+concurrent refreshes and refreshes five minutes before expiration by default.
+`AwsSigV4AuthScheme` applies the same cache to `AwsCredentials`; credential
+providers can set `AwsCredentials.Expiration` for refreshable sessions.
 
 The generated client sends credentials. Server-side authorization is still
 application code in this preview: generated ASP.NET Core handlers can read

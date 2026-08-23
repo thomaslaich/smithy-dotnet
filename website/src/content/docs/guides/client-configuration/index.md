@@ -43,6 +43,8 @@ when you want to set client options.
 | `Endpoint` | The service endpoint. Set by the endpoint constructor, and optional for the `HttpClient` constructor. |
 | `Protocol` | The wire protocol. Defaults to the service's primary declared [protocol](/smithy-dotnet/protocols/overview/). |
 | `EndpointResolver` | Per-operation endpoint resolution. Overrides the static `Endpoint` for request routing; can vary the endpoint by operation, add endpoint headers, and narrow auth schemes. |
+| `DisableHostPrefixInjection` | Disables generated `@endpoint(hostPrefix)` / `@hostLabel` expansion. |
+| `UserAgent` | User-Agent used when the modeled request does not set one. Defaults to `NSmithy.Client/{version}`. |
 | `AuthSchemes` | Configured auth schemes; the resolver installs the first scheme the service models. An empty list means anonymous. |
 | `RetryStrategy` | Runtime-owned retry policy. `null` disables runtime retries. |
 | `OperationTimeout` | Deadline for one operation execution, spanning all retry attempts and backoff delays. Throws `TimeoutException` when exceeded; `null` (default) means no deadline. |
