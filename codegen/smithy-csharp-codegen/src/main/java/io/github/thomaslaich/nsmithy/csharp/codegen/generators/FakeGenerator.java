@@ -567,8 +567,7 @@ public final class FakeGenerator implements Runnable {
     return length == null ? 0 : length.getMin().orElse(0L);
   }
 
-  private <T extends Trait> T trait(
-      Class<T> traitClass, MemberShape member, Shape target) {
+  private <T extends Trait> T trait(Class<T> traitClass, MemberShape member, Shape target) {
     if (member != null && member.hasTrait(traitClass)) {
       return member.expectTrait(traitClass);
     }
