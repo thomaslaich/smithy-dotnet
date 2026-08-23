@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "sources": ["../../contract/grpc"],
+  "maven": {
+    "repositories": [
+      {
+        "url": "https://repo.maven.apache.org/maven2/"
+      }
+    ],
+    "dependencies": [
+      "com.disneystreaming.alloy:alloy-core:0.3.38",
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
+      "io.github.thomaslaich.nsmithy:smithy-proto-codegen:0.0.0-SNAPSHOT"
+    ]
+  },
+  "plugins": {
+    "csharp-codegen": {
+      "service": "nsmithy.bench.grpc#GrpcBenchmarkService",
+      "baseNamespace": ""
+    },
+    "proto-codegen": {
+      "service": "nsmithy.bench.grpc#GrpcBenchmarkService",
+      "baseNamespace": "",
+      "fileOptions": {
+        "csharp_namespace": "Bench.GrpcNet"
+      }
+    }
+  }
+}

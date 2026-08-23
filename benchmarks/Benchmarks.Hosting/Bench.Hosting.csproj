@@ -6,6 +6,8 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Grpc.Net.Client" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
   </ItemGroup>
 
@@ -13,6 +15,8 @@
     <ProjectReference Include="../Benchmarks.Corpus/Bench.Corpus.csproj" />
     <ProjectReference Include="../stacks/MinimalApi/Bench.Stack.MinimalApi.csproj" />
     <ProjectReference Include="../stacks/Mvc/Bench.Stack.Mvc.csproj" />
+    <ProjectReference Include="../stacks/GrpcNet/Bench.Stack.GrpcNet.csproj" />
     <ProjectReference Include="../stacks/NSmithy/Bench.Stack.NSmithy.csproj" />
+    <ProjectReference Include="../stacks/NSmithyGrpc/Bench.Stack.NSmithyGrpc.csproj" />
   </ItemGroup>
 </Project>

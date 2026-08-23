@@ -31,6 +31,12 @@ dominate the measurement and add run-to-run variance unrelated to the code under
 test. A socket-based macro suite answering "requests per second under load" is a
 separate concern and is not built here.
 
+The gRPC benchmark applies the same split to two unary operations: an NSmithy
+client/server using the generated schema-driven Proto codec and a Grpc.Net
+client/server using Google.Protobuf-generated messages. The committed `.proto`
+is emitted from the same Smithy model, and parity tests require both stacks to
+produce identical framed request and response bytes before they are timed.
+
 ## The servers
 
 | Server | What it is | Role |
@@ -130,6 +136,7 @@ just bench-parity     # verify every server and client agrees, byte for byte
 just bench-codec      # codec only, no ASP.NET
 just bench-client     # client request building and response parsing
 just bench-server     # full server path
+just bench-grpc       # unary gRPC plus isolated Proto codec attribution
 just bench            # all of the above
 ```
 

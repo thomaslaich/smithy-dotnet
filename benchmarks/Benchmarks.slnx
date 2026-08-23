@@ -8,7 +8,9 @@
   <Folder Name="/stacks/">
     <Project Path="stacks/MinimalApi/Bench.Stack.MinimalApi.csproj" />
     <Project Path="stacks/Mvc/Bench.Stack.Mvc.csproj" />
+    <Project Path="stacks/GrpcNet/Bench.Stack.GrpcNet.csproj" />
     <Project Path="stacks/NSmithy/Bench.Stack.NSmithy.csproj" />
+    <Project Path="stacks/NSmithyGrpc/Bench.Stack.NSmithyGrpc.csproj" />
   </Folder>
   <Folder Name="/suites/">
     <Project Path="Benchmarks.Micro/Bench.Micro.csproj" />

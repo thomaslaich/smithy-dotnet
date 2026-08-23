@@ -20,6 +20,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Google.Protobuf" />
   </ItemGroup>
 
   <ItemGroup>
@@ -30,7 +31,9 @@
     <!-- Level A drives the codecs directly, so it references the stacks and the
          JSON codec explicitly rather than relying on transitive flow. -->
     <ProjectReference Include="../stacks/MinimalApi/Bench.Stack.MinimalApi.csproj" />
+    <ProjectReference Include="../stacks/GrpcNet/Bench.Stack.GrpcNet.csproj" />
     <ProjectReference Include="../stacks/NSmithy/Bench.Stack.NSmithy.csproj" />
+    <ProjectReference Include="../stacks/NSmithyGrpc/Bench.Stack.NSmithyGrpc.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Codecs.Proto/NSmithy.Codecs.Proto.csproj" />

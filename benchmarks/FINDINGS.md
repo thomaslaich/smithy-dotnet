@@ -149,7 +149,45 @@ That is an array copy plus two allocations per list instance, which the
 since it is a real cost of the generated types, but it is a candidate for removal
 when the caller already hands over an array it owns.
 
-### 5. Codec optimization candidates, by codec
+### 5. Proto dominates the measured gRPC gap
+
+`MEASURED`, unary gRPC suite, in-process toolchain, Tiered PGO disabled.
+
+| Layer | Scenario | Time ratio vs Grpc.Net / Google.Protobuf | Allocation ratio |
+| --- | --- | --- | --- |
+| client | get-item | 1.51x | 1.80x |
+| client | list-items-100 | 2.86x | 3.56x |
+| server | get-item | 1.21x | 1.25x |
+| server | list-items-100 | 1.50x | 3.98x |
+| deserialize only | get-item | 2.72x | 2.54x |
+| deserialize only | list-items-100 | 2.91x | 3.26x |
+| serialize only | get-item | 1.79x | 4.05x |
+| serialize only | list-items-100 | 1.92x | 10.84x |
+
+The payload-dependent client gap is almost entirely explained by Proto
+deserialization: 2.86x for the full 100-item client call versus 2.91x for the
+codec alone. The server has a larger shared ASP.NET Core cost, which dilutes the
+1.92x serialization gap to 1.50x end to end. This does not support client
+invocation ceremony as the primary gRPC bottleneck.
+
+The allocation mechanisms are visible in source:
+
+- `OBSERVED` Each nested message creates a 64-byte `ProtoWriter`, grows its own
+  buffer, calls `ToArray()`, and is copied again into its parent. Each string is
+  first materialized with `Encoding.UTF8.GetBytes`.
+- `OBSERVED` Each decoded structure creates its generated builder plus a
+  `ProtoReadState` containing a dictionary and hash set. Field dispatch also uses
+  a dictionary lookup, while Google.Protobuf-generated parsers use direct field
+  switches.
+- `OBSERVED` Generated list wrappers copy their builder into an array and wrap it
+  in `ReadOnlyCollection<T>`, adding two allocations per decoded list.
+
+These measurements include the generated direct Proto write path from PR #143.
+Against the pre-#143 run, serialization moved from 2.30x/2.35x to 1.79x/1.92x
+for one/100 items, and the small full-client ratio moved from 2.09x to 1.51x.
+Deserialization is unchanged and still dominates the large client result.
+
+### 6. Codec optimization candidates, by codec
 
 `OBSERVED` from source unless a measurement is listed. The microbenchmark suite
 now covers JSON, CBOR, XML and proto serialization.
