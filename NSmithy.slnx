@@ -27,6 +27,7 @@
     <Project Path="tools/dotnet-nsmithy/dotnet-nsmithy.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Fakes/Fakes.Tests.csproj" />
     <Project Path="tests/NSmithy.Tests/NSmithy.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Conformance/">

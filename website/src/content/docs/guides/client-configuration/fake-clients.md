@@ -43,15 +43,26 @@ with an explicit `smithy-build.json` set `"generateFakes": true` on the
 
 ## Replacing fakes one operation at a time
 
-The fake's operation methods are `virtual`:
+The fake's operation methods are `virtual`. In a test, override the operations
+whose data the test asserts on; everything else keeps its canned response:
 
 ```csharp
-internal sealed class TestWeatherClient : FakeWeatherClient
+internal sealed class TwoCitiesWeatherClient : FakeWeatherClient
 {
-    public override Task<GetCityOutput> GetCityAsync(
-        GetCityInput input,
+    public override Task<ListCitiesOutput> ListCitiesAsync(
+        ListCitiesInput input,
         CancellationToken cancellationToken = default
-    ) => Task.FromResult(new GetCityOutput(Name: "Bern"));
+    ) =>
+        Task.FromResult(
+            new ListCitiesOutput(
+                Items: new CitySummaries(
+                    [
+                        new CitySummary(CityId: "SEA", Name: "Seattle"),
+                        new CitySummary(CityId: "HOU", Name: "Houston"),
+                    ]
+                )
+            )
+        );
 }
 ```
 

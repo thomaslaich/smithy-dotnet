@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "sources": ["model/weather.smithy"],
+  "maven": {
+    "repositories": [
+      {
+        "url": "https://repo.maven.apache.org/maven2/"
+      }
+    ],
+    "dependencies": [
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
+      "software.amazon.smithy:smithy-aws-traits:1.73.0"
+    ]
+  },
+  "projections": {
+    "source": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "example.weather#Weather",
+          "baseNamespace": "",
+          "generateFakes": true
+        }
+      }
+    }
+  }
+}
