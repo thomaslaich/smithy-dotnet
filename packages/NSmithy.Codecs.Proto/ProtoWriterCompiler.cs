@@ -80,27 +80,31 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
         );
     }
 
-    public object VisitBoolean(Schema<bool> schema) => Scalar(schema, EmptyTraits);
+    public object VisitBoolean(Schema<bool> schema) => new BooleanProtoValueWriter();
 
-    public object VisitByte(Schema<sbyte> schema) => Scalar(schema, EmptyTraits);
+    public object VisitByte(Schema<sbyte> schema) =>
+        new ByteProtoValueWriter(ShapeKind.Byte, EmptyTraits);
 
-    public object VisitShort(Schema<short> schema) => Scalar(schema, EmptyTraits);
+    public object VisitShort(Schema<short> schema) =>
+        new ShortProtoValueWriter(ShapeKind.Short, EmptyTraits);
 
-    public object VisitInteger(Schema<int> schema) => Scalar(schema, EmptyTraits);
+    public object VisitInteger(Schema<int> schema) =>
+        new IntegerProtoValueWriter(ShapeKind.Integer, EmptyTraits);
 
-    public object VisitLong(Schema<long> schema) => Scalar(schema, EmptyTraits);
+    public object VisitLong(Schema<long> schema) =>
+        new LongProtoValueWriter(ShapeKind.Long, EmptyTraits);
 
-    public object VisitFloat(Schema<float> schema) => Scalar(schema, EmptyTraits);
+    public object VisitFloat(Schema<float> schema) => new FloatProtoValueWriter();
 
-    public object VisitDouble(Schema<double> schema) => Scalar(schema, EmptyTraits);
+    public object VisitDouble(Schema<double> schema) => new DoubleProtoValueWriter();
 
     public object VisitBigInteger(Schema<BigInteger> schema) => Scalar(schema, EmptyTraits);
 
     public object VisitBigDecimal(Schema<decimal> schema) => Scalar(schema, EmptyTraits);
 
-    public object VisitString(Schema<string> schema) => Scalar(schema, EmptyTraits);
+    public object VisitString(Schema<string> schema) => new StringProtoValueWriter();
 
-    public object VisitBlob(Schema<byte[]> schema) => Scalar(schema, EmptyTraits);
+    public object VisitBlob(Schema<byte[]> schema) => new BlobProtoValueWriter();
 
     public object VisitTimestamp(Schema<DateTimeOffset> schema) => Scalar(schema, EmptyTraits);
 
@@ -237,26 +241,23 @@ internal sealed class MemberTraitProtoWriterCompiler(
     IReadOnlyDictionary<ShapeId, Trait> traits
 ) : ISchemaVisitor<object>
 {
-    public object VisitBoolean(Schema<bool> schema) =>
-        new ScalarProtoValueWriter<bool>(schema, traits);
+    public object VisitBoolean(Schema<bool> schema) => new BooleanProtoValueWriter();
 
     public object VisitByte(Schema<sbyte> schema) =>
-        new ScalarProtoValueWriter<sbyte>(schema, traits);
+        new ByteProtoValueWriter(ShapeKind.Byte, traits);
 
     public object VisitShort(Schema<short> schema) =>
-        new ScalarProtoValueWriter<short>(schema, traits);
+        new ShortProtoValueWriter(ShapeKind.Short, traits);
 
     public object VisitInteger(Schema<int> schema) =>
-        new ScalarProtoValueWriter<int>(schema, traits);
+        new IntegerProtoValueWriter(ShapeKind.Integer, traits);
 
     public object VisitLong(Schema<long> schema) =>
-        new ScalarProtoValueWriter<long>(schema, traits);
+        new LongProtoValueWriter(ShapeKind.Long, traits);
 
-    public object VisitFloat(Schema<float> schema) =>
-        new ScalarProtoValueWriter<float>(schema, traits);
+    public object VisitFloat(Schema<float> schema) => new FloatProtoValueWriter();
 
-    public object VisitDouble(Schema<double> schema) =>
-        new ScalarProtoValueWriter<double>(schema, traits);
+    public object VisitDouble(Schema<double> schema) => new DoubleProtoValueWriter();
 
     public object VisitBigInteger(Schema<BigInteger> schema) =>
         new ScalarProtoValueWriter<BigInteger>(schema, traits);
@@ -264,11 +265,9 @@ internal sealed class MemberTraitProtoWriterCompiler(
     public object VisitBigDecimal(Schema<decimal> schema) =>
         new ScalarProtoValueWriter<decimal>(schema, traits);
 
-    public object VisitString(Schema<string> schema) =>
-        new ScalarProtoValueWriter<string>(schema, traits);
+    public object VisitString(Schema<string> schema) => new StringProtoValueWriter();
 
-    public object VisitBlob(Schema<byte[]> schema) =>
-        new ScalarProtoValueWriter<byte[]>(schema, traits);
+    public object VisitBlob(Schema<byte[]> schema) => new BlobProtoValueWriter();
 
     public object VisitTimestamp(Schema<DateTimeOffset> schema) =>
         new ScalarProtoValueWriter<DateTimeOffset>(schema, traits);
@@ -331,6 +330,96 @@ internal sealed class DeferredProtoValueWriter<T>
 
         inner.WriteBody(writer, value);
     }
+}
+
+internal sealed class BooleanProtoValueWriter : IProtoValueWriter<bool>
+{
+    public WireType WireType => WireType.Varint;
+
+    public void WriteBody(ProtoWriter writer, bool value) => writer.WriteVarint(value ? 1UL : 0UL);
+}
+
+internal sealed class ByteProtoValueWriter(
+    ShapeKind kind,
+    IReadOnlyDictionary<ShapeId, Trait> traits
+) : IProtoValueWriter<sbyte>
+{
+    private readonly ProtoWire.IntEncoding encoding = ProtoWire.IntEncodingOf(kind, traits);
+
+    public WireType WireType { get; } = ProtoWire.WireTypeOf(kind, traits);
+
+    public void WriteBody(ProtoWriter writer, sbyte value) =>
+        ProtoWire.WriteInteger(writer, encoding, value);
+}
+
+internal sealed class ShortProtoValueWriter(
+    ShapeKind kind,
+    IReadOnlyDictionary<ShapeId, Trait> traits
+) : IProtoValueWriter<short>
+{
+    private readonly ProtoWire.IntEncoding encoding = ProtoWire.IntEncodingOf(kind, traits);
+
+    public WireType WireType { get; } = ProtoWire.WireTypeOf(kind, traits);
+
+    public void WriteBody(ProtoWriter writer, short value) =>
+        ProtoWire.WriteInteger(writer, encoding, value);
+}
+
+internal sealed class IntegerProtoValueWriter(
+    ShapeKind kind,
+    IReadOnlyDictionary<ShapeId, Trait> traits
+) : IProtoValueWriter<int>
+{
+    private readonly ProtoWire.IntEncoding encoding = ProtoWire.IntEncodingOf(kind, traits);
+
+    public WireType WireType { get; } = ProtoWire.WireTypeOf(kind, traits);
+
+    public void WriteBody(ProtoWriter writer, int value) =>
+        ProtoWire.WriteInteger(writer, encoding, value);
+}
+
+internal sealed class LongProtoValueWriter(
+    ShapeKind kind,
+    IReadOnlyDictionary<ShapeId, Trait> traits
+) : IProtoValueWriter<long>
+{
+    private readonly ProtoWire.IntEncoding encoding = ProtoWire.IntEncodingOf(kind, traits);
+
+    public WireType WireType { get; } = ProtoWire.WireTypeOf(kind, traits);
+
+    public void WriteBody(ProtoWriter writer, long value) =>
+        ProtoWire.WriteInteger(writer, encoding, value);
+}
+
+internal sealed class FloatProtoValueWriter : IProtoValueWriter<float>
+{
+    public WireType WireType => WireType.I32;
+
+    public void WriteBody(ProtoWriter writer, float value) =>
+        writer.WriteFixed32(BitConverter.SingleToUInt32Bits(value));
+}
+
+internal sealed class DoubleProtoValueWriter : IProtoValueWriter<double>
+{
+    public WireType WireType => WireType.I64;
+
+    public void WriteBody(ProtoWriter writer, double value) =>
+        writer.WriteFixed64(BitConverter.DoubleToUInt64Bits(value));
+}
+
+internal sealed class StringProtoValueWriter : IProtoValueWriter<string>
+{
+    public WireType WireType => WireType.Len;
+
+    public void WriteBody(ProtoWriter writer, string value) =>
+        writer.WriteLengthDelimitedUtf8(value);
+}
+
+internal sealed class BlobProtoValueWriter : IProtoValueWriter<byte[]>
+{
+    public WireType WireType => WireType.Len;
+
+    public void WriteBody(ProtoWriter writer, byte[] value) => writer.WriteLengthDelimited(value);
 }
 
 internal sealed class ScalarProtoValueWriter<T>(
@@ -537,6 +626,8 @@ internal sealed class ValueProtoMemberPlan<TValue>(
     IProtoValueWriter<TValue> valueWriter
 ) : IProtoMemberPlan<TValue>
 {
+    private readonly WireType wireType = valueWriter.WireType;
+
     public void Write(ProtoWriter writer, TValue memberValue)
     {
         if (memberValue is null)
@@ -544,7 +635,7 @@ internal sealed class ValueProtoMemberPlan<TValue>(
             return;
         }
 
-        writer.WriteTag(fieldNumber, valueWriter.WireType);
+        writer.WriteTag(fieldNumber, wireType);
         valueWriter.WriteBody(writer, memberValue);
     }
 }
@@ -558,6 +649,7 @@ internal sealed class ListProtoMemberPlan<TCollection, TElement>(
     private readonly bool packable = ProtoWire.IsPackableScalar(
         ProtoWire.Unwrap(list.ElementSchema).Kind
     );
+    private readonly WireType elementWireType = elementWriter.WireType;
 
     public void Write(ProtoWriter writer, TCollection memberValue)
     {
@@ -590,7 +682,7 @@ internal sealed class ListProtoMemberPlan<TCollection, TElement>(
 
         foreach (var item in list.GetElements(memberValue))
         {
-            writer.WriteTag(fieldNumber, elementWriter.WireType);
+            writer.WriteTag(fieldNumber, elementWireType);
             elementWriter.WriteBody(writer, item);
         }
     }
@@ -606,6 +698,7 @@ internal sealed class MapProtoMemberPlan<TDictionary, TValue>(
     private readonly SparseScalarValueWriter<TValue> sparseWriter = new(
         map.TypedValueMember.TargetSchema
     );
+    private readonly WireType valueWireType = valueWriter.WireType;
 
     public void Write(ProtoWriter writer, TDictionary memberValue)
     {
@@ -628,7 +721,7 @@ internal sealed class MapProtoMemberPlan<TDictionary, TValue>(
             }
             else if (entry.Value is not null)
             {
-                writer.WriteTag(2, valueWriter.WireType);
+                writer.WriteTag(2, valueWireType);
                 valueWriter.WriteBody(writer, entry.Value);
             }
 

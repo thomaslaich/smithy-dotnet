@@ -345,7 +345,7 @@ internal static class ProtoWire
     private static readonly IReadOnlyDictionary<ShapeId, Trait> NoTraits =
         new Dictionary<ShapeId, Trait>();
 
-    private enum IntEncoding
+    internal enum IntEncoding
     {
         VarInt32,
         VarInt64,
@@ -359,7 +359,7 @@ internal static class ProtoWire
         SFixed64,
     }
 
-    private static IntEncoding IntEncodingOf(
+    internal static IntEncoding IntEncodingOf(
         ShapeKind kind,
         IReadOnlyDictionary<ShapeId, Trait> traits
     )
@@ -388,7 +388,7 @@ internal static class ProtoWire
         long value
     ) => WriteInteger(writer, IntEncodingOf(kind, traits), value);
 
-    private static void WriteInteger(ProtoWriter writer, IntEncoding encoding, long value)
+    internal static void WriteInteger(ProtoWriter writer, IntEncoding encoding, long value)
     {
         switch (encoding)
         {
@@ -427,7 +427,7 @@ internal static class ProtoWire
         IReadOnlyDictionary<ShapeId, Trait> traits
     ) => ReadInteger(ref reader, IntEncodingOf(kind, traits));
 
-    private static long ReadInteger(ref ProtoReader reader, IntEncoding encoding)
+    internal static long ReadInteger(ref ProtoReader reader, IntEncoding encoding)
     {
         switch (encoding)
         {
