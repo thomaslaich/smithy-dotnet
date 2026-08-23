@@ -23,30 +23,34 @@ conclusion.
 
 ## Open performance problems
 
-### 1. Full JSON serialization is 1.17–1.35× slower than System.Text.Json with PGO
+### 1. Full JSON serialization is 1.08–1.33× slower than System.Text.Json with PGO
 
 `MEASURED`, codec suite. Generated structures now supply statically typed values
 through `IStructValueSerializer<T>` while `JsonCodec.FromSchema(schema)` remains
 the public entry point. This removes `member.GetValue(container)` and the
 per-structure member-writer loop from generated shapes without generating any
-JSON-specific code.
+JSON-specific code. The JSON writer also indexes `IReadOnlyList<T>` values
+directly instead of allocating an `IEnumerator<T>` for every generated list, and
+reuses the pooled-buffer wrapper between calls.
 
 | Items | PGO disabled | PGO enabled | Execution only, PGO enabled |
 | --- | --- | --- | --- |
-| 1 | 1.42× | 1.35× | 1.23× |
-| 100 | 1.37× | 1.26× | 1.15× |
-| 10,000 | 1.29× | **1.17×** | **1.13×** |
+| 1 | 1.42× | 1.33× | 1.15× |
+| 100 | 1.45× | 1.25× | 1.16× |
+| 10,000 | 1.23× | **1.08×** | **1.14×** |
 
 The execution-only column reuses the writer and destination buffer. The gap
 between it and the full-codec column is therefore setup and output handling, not
 member dispatch. A hand-written writer using the same reusable benchmark harness
-lands at 1.03×/0.99×/0.99×, establishing that the remaining execution gap is in
+lands at 0.98×/0.99×/0.99×, establishing that the remaining execution gap is in
 the schema-driven writer stack rather than `Utf8JsonWriter` itself.
 
-The original 1.1× target is not reached end to end, but the large payload is
-close at 1.17× and allocations remain at parity for the 100- and 10,000-item
-payloads. Further improvement should be profiler-led. Likely remaining costs are
-per-value codec dispatch and list-schema enumeration; removing those may require
+The original 1.1× target is now reached end to end for the large payload. NSmithy
+also allocates less than the STJ baseline at every size: 0.87× for one item,
+0.82× for 100, and 0.70× for 10,000. The execution-only schema path no longer
+allocates for list traversal, while preserving the enumerable fallback for sets
+and custom collection schemas. Further improvement should be profiler-led;
+per-member codec dispatch is the likely remaining scalable cost and may require
 more specialized generated code, while startup expression compilation would be a
 poor NativeAOT trade.
 
@@ -57,45 +61,49 @@ serialization and response parsing.
 
 | Path | PGO disabled | PGO enabled | Allocated |
 | --- | --- | --- | --- |
-| NSmithy | 1.791 µs | 1.388 µs | 4.90 KB |
-| Hand-written ceiling | 1.027 µs | 0.838 µs | 2.66 KB |
-| Ratio | 1.74× | **1.66×** | 1.84× |
+| NSmithy | 1.788 µs | 1.388 µs | 4.90 KB |
+| Hand-written ceiling | 0.957 µs | 0.838 µs | 2.66 KB |
+| Ratio | 1.87× | **1.66×** | 1.84× |
 
 The default path now avoids a `SmithyContext`, endpoint parameters, protocol
 delegate bindings, request cloning, interceptor state machines, eager content
 header dictionaries, empty response dictionaries, and an unused trailer closure.
 Generated output-returning methods also return the runtime task directly.
 
-The NSmithy client's ratio against the hand-written ceiling decays as payload
-grows, 2.5× on `get-item`, 1.35× on the 10,000-item response, which is the
-signature of a constant per-call cost being amortized rather than a per-byte one.
+In the current PGO-disabled end-to-end run, the NSmithy client's ratio against
+the hand-written reference decays as payload grows, 1.87× on `get-item` and
+0.91× on the 10,000-item response. That is the signature of a constant per-call
+cost being amortized rather than a per-byte one. The large-response comparison
+also has the baseline caveat documented below.
 
-Against NSwag the same decay is the whole story, and it crosses over:
+Against NSwag the same decay is the whole story, and it crosses over. These are
+within-run ratios from the current PGO-disabled report:
 
 | Scenario | Time vs NSwag | Allocations vs NSwag |
 | --- | --- | --- |
-| `get-item` | 2.14× | 2.01× |
-| `list-items-1` | 1.78× | 1.74× |
-| `search-items` | 1.51× | 2.34× |
-| `list-items-100` | 1.35× | 2.07× |
-| `list-items-10000` | 1.17× | 2.10× |
-| `create-order-small` | 1.16× | 1.23× |
-| `create-order-large` | **0.88×** | **0.98×** |
+| `get-item` | 1.62× | 1.46× |
+| `list-items-1` | 1.34× | 1.24× |
+| `search-items` | 1.34× | 2.02× |
+| `list-items-100` | 1.30× | 1.93× |
+| `list-items-10000` | 1.14× | 2.00× |
+| `create-order-small` | **0.97×** | 1.05× |
+| `create-order-large` | **0.78×** | **0.98×** |
 
 **On the largest request payload NSmithy is faster than NSwag and allocates less.**
 A codec problem would get worse with size, not better; this is a constant being
 amortized. Quote the whole curve rather than its worst point — and note that only
 the small-call end of it is reliable run to run, see below.
 
-**The two columns are two different problems.** Time decays 2.14× → 0.88×, which
+**The two columns are two different problems.** Time decays 1.62× → 0.78×, which
 is a fixed per-call cost. Allocations do not: they sit near 2× across three orders
 of magnitude, which is a *proportional* cost that no per-call feature can explain.
-At 10,000 items NSmithy allocates 8.2 MB against NSwag's 3.9 MB, and no amount of
-retry policy accounts for 4.3 MB. Two named suspects for that half are already in
-this document: the generated list wrappers copying via
-`Array.AsReadOnly(Enumerable.ToArray(values))`, and the JSON reader materialising
-a `JsonDocument` before producing any value. Do not answer the allocation column
-with "we do more" — it is a read-path problem, and it is unsolved.
+At 10,000 items NSmithy allocates 7.66 MB against NSwag's 3.84 MB, and no amount
+of retry policy accounts for 3.82 MB. The read-path backing-array copy has already
+been removed. The remaining named suspects are the JSON reader materialising a
+`JsonDocument` before producing any value, plus the immutable generated model and
+collection-wrapper objects that NSwag's mutable DTOs do not need. Do not answer
+the allocation column with "we do more" — it is a read-path problem, and it is
+unsolved.
 
 The remaining focused ratio includes the public runtime, protocol and transport
 abstractions plus HTTP request/response objects. Retry, interceptors, telemetry,
@@ -124,10 +132,10 @@ it. **Always check the untouched clients moved before believing a delta.**
 The small-call scenarios do not have this problem: across the same runs
 `hand-written` and `nswag` on `get-item` moved 0.7% and 0.1%.
 
-### 3. NSmithy's client is the slowest of the three on small calls
+### 3. NSmithy's client is usually the slowest of the three on small calls
 
 `MEASURED`. **No longer true on every scenario** — it was when this was written.
-NSmithy now beats NSwag on `create-order-large` on both time (0.89×) and
+NSmithy now beats NSwag on `create-order-large` on both time (0.78×) and
 allocations (0.98×), after the codec write-path fixes. The gap that remains is
 concentrated in small calls and is open problem 2, not a codec problem.
 
@@ -235,28 +243,28 @@ wire-format shootout.
 
 | NSmithy format | One item, time / allocated | 100 items, time / allocated |
 | --- | --- | --- |
-| REST JSON codec | 282.9 ns / 312 B | 21.40 us / 17.45 KB |
+| REST JSON codec | 284.9 ns / 216 B | 21.68 us / **14.26 KB** |
 | RPCv2 CBOR codec | 389.3 ns / **208 B** | 28.53 us / **14.48 KB** |
 | gRPC Proto codec | **150.4 ns / 120 B** | **13.89 us / 8.92 KB** |
 
 Proto is the fastest and lowest-allocation serializer in these current NSmithy
-measurements. CBOR is 1.38x slower than JSON for one item and 1.33x slower for
-100. It now allocates less than JSON in both cases, helped by its smaller encoded
-payload, but still more than Proto.
+measurements. CBOR is 1.37x slower than JSON for one item and 1.32x slower for
+100. It allocates slightly less than JSON for one item and slightly more for 100,
+but still more than Proto in both cases.
 
 The REST and gRPC suites also share comparable canned-client and in-memory-server
 workloads. There is not yet an equivalent end-to-end RPCv2 CBOR benchmark.
 
 | Layer | Scenario | REST JSON | gRPC |
 | --- | --- | --- | --- |
-| client | get-item | 1.797 us / 4.90 KB | **1.507 us / 4.79 KB** |
-| client | list-items-100 | 63.04 us / 80.90 KB | **25.68 us / 69.71 KB** |
-| server | get-item | **10.92 us / 13.03 KB** | 14.82 us / 14.75 KB |
-| server | list-items-100 | 46.46 us / 73.59 KB | **39.09 us / 40.75 KB** |
+| client | get-item | 1.799 us / 4.90 KB | **1.507 us / 4.79 KB** |
+| client | list-items-100 | 61.66 us / 80.90 KB | **25.68 us / 69.71 KB** |
+| server | get-item | **11.94 us / 13.00 KB** | 14.82 us / 14.75 KB |
+| server | list-items-100 | 47.05 us / 70.40 KB | **39.09 us / 40.75 KB** |
 
 The result is mixed for small end-to-end calls because fixed HTTP and runtime
-costs dominate. For the 100-item workload, gRPC is 59% faster on the client and
-16% faster on the server; its allocation is 14% lower on the client and 45%
+costs dominate. For the 100-item workload, gRPC is 58% faster on the client and
+17% faster on the server; its allocation is 14% lower on the client and 42%
 lower on the server.
 
 ### 6. Codec optimization candidates, by codec
@@ -316,12 +324,6 @@ string, so a payload is materialized three times over. `XmlWriter`/`XmlReader`
 over a pooled buffer would avoid the DOM and both string copies. The direct-member
 benchmark below was neutral because this architecture dominates the write.
 
-**Shared: a second trait lookup on the null path.** Both the JSON and CBOR member
-writers call `TryCreateDefaultValue(member.TargetSchema, member.MemberTraits, ...)`
-for every optional member that is null, which re-enters trait resolution per member
-per object. Whether a member has a default is constant per member and resolvable at
-compile time, like the property name was.
-
 The generated direct-member path measured as follows: CBOR improved about 4% for
 one item and 3% for 100 items with unchanged allocations; proto improved from
 86.78 ns/248 B to 65.66 ns/208 B, about 24% faster and 16% less allocation; XML
@@ -341,8 +343,8 @@ XML and proto retain ownership of names, traits, defaults and wire encoding.
 This preserves the schema-driven API and one protocol-neutral generated path:
 `JsonCodec.FromSchema(personSchema)` still compiles the codec. Hand-built and
 projected schemas retain the visitor-based fallback, which keeps existing public
-schema construction and projection behavior intact. The full 1,642-test suite
-and all 86 benchmark parity cases pass.
+schema construction and projection behavior intact. The full 1,649-test suite
+and all 90 benchmark parity cases pass.
 
 ### Client telemetry allocated on every call with nothing subscribed
 
@@ -474,7 +476,7 @@ would have served one protocol's body codec to another. Compiling at the
 per-operation seam has the protocol already in hand and cannot alias.
 
 rpcv2Cbor's fix is `OBSERVED` only — it is verified correct by 123 conformance
-tests but cannot be measured, because every benchmark scenario in this suite is
+tests but cannot be measured, because every error-response benchmark scenario is
 restJson1. Since it was recompiling a whole writer tree rather than re-walking a
 member list, it was likely worse than 4×.
 
@@ -553,18 +555,17 @@ inner loop, and do not when it is a one-per-payload buffer.
 Deserialization moved 1.14×/1.18× to 1.12×/1.17×, within noise, confirming the
 effect is confined to the write path.
 
-Verified byte-identical output across 86 parity tests and the full suite: 234 unit
-plus 1,125 restJson1, 123 rpcv2Cbor, 87 simpleRestJson, 46 restXml and 27 awsJson
-conformance tests.
+Verified byte-identical output across 90 parity tests and the full suite: 5 fake,
+236 unit, 1,125 restJson1, 123 rpcv2Cbor, 87 simpleRestJson, 46 restXml and 27
+awsJson tests.
 
 The same change was applied to the CBOR and XML codecs, where the pattern was
 identical (`StructureCborValueWriter`, `UnionCborValueWriter`,
 `StructureXmlValueWriter`, `UnionXmlValueWriter`, plus their reader counterparts
-and the CBOR projection reader). **Those two are `OBSERVED`, not `MEASURED`** —
-neither codec has benchmark coverage, so the allocation reduction there is
-inferred from the JSON result and the identical shape of the code, not measured.
-The 123 rpcv2Cbor and 46 restXml conformance tests verify only that they still
-produce correct output. Extending the codec suite to CBOR and XML would settle it.
+and the CBOR projection reader). **Those two remain `OBSERVED`, not `MEASURED`,
+for this particular change**: both codecs now have serialization benchmarks, but
+there is no isolated before/after run for the array conversion. The 123 rpcv2Cbor
+and 46 restXml conformance tests verify that they still produce correct output.
 
 ### Quadratic member lookup on the read path
 
@@ -592,7 +593,7 @@ On a payload with a duplicate key the first occurrence still wins, matching what
 
 The rewrite surfaced a latent correctness bug, fixed separately, see below.
 
-Verified across 86 parity tests and the full 1,203-test suite.
+Verified across 90 parity tests and the full 1,649-test suite.
 
 ### Per-member property name resolution and encoding
 
@@ -614,8 +615,8 @@ Allocations were unchanged, as expected, this was never an allocation problem.
 The deserialization benchmarks, which the change does not touch, moved 1.35×/1.45×
 to 1.38×/1.44×, confirming the effect is confined to the write path.
 
-Verified byte-identical output across 86 parity tests and the full 1,203-test
-suite (unit plus all five protocol conformance suites).
+Verified byte-identical output across 90 parity tests and the full 1,649-test
+suite.
 
 ### Serialization buffer churn
 
@@ -632,8 +633,8 @@ via `Reset()`, and a per-instance size hint. Allocations dropped 2.9–3.9×:
 | 100 | 85,032 B | 21,904 B |
 | 10,000 | 8,044,360 B | 2,205,234 B |
 
-Verified byte-identical output: 48 parity + 189 unit + 480 restJson1 + 28 AwsJson
-tests. **Bought no measurable time**, see open problem 1.
+Verified byte-identical output across 90 parity tests and the full 1,649-test
+suite. **Bought no measurable time**, see open problem 1.
 
 ---
 
@@ -672,9 +673,9 @@ serializes it, so it could never emit that body).
 
 Writing that harness uncovered something larger, see below.
 
-### Conformance response assertions were a silent no-op
+### Conformance response assertions were a silent no-op, now fixed in every suite
 
-`MEASURED`, fixed for restJson1, **still present in four other protocol suites**.
+`MEASURED`, fixed across all five protocol suites.
 
 `AssertStructure` looked up expected values by generated constructor parameter
 name, which codegen emits as PascalCase (`Nested`), against fixture `params` keys,
@@ -807,9 +808,9 @@ the baseline before believing the generator is fast.
 
 ### MVC hosting costs more than generated code does
 
-`MEASURED`. On `create-order-large` the hand-written MVC baseline allocates
-13,055 KB, worse than NSmithy's 9,067 KB and 2.7× the minimal-API baseline's
-4,768 KB.
+`MEASURED`, current PGO-disabled server report. On `create-order-large` the
+hand-written MVC baseline allocates 15,923 KB, worse than NSmithy's 11,893 KB and
+2.09× the minimal-API baseline's 7,636 KB.
 
 This is why the suite carries a hand-written MVC baseline. Both TypeSpec and NSwag
 generate MVC controllers, so without it a chunk of MVC hosting overhead would be
@@ -833,20 +834,23 @@ happens before the build, where no timeout applies.
 Worked around with `--inProcess` in every `just bench-*` recipe. Which specific
 BenchmarkDotNet code path computes that root is still unknown.
 
-### Formatting cannot run in this worktree
+### Formatting could not run in the original benchmark worktree
 
 `OBSERVED`. `csharpier` finds zero files anywhere under
 `.claude/worktrees/performance-suite`, because the whole path is inside gitignored
-`.claude/`. The benchmark sources have never been formatted; that needs a run from
-the main checkout.
+`.claude/`. The benchmark sources were subsequently formatted from the main
+checkout; the limitation remains relevant when using a worktree below an ignored
+directory.
 
 ---
 
 ## What the suite still cannot answer
 
-- **Where the 1.43–1.48× serialization time goes.** Open problem 1, and the top
-  priority. A throwaway runtime-emit prototype for JSON would establish the
-  ceiling before any architectural commitment.
+- **Where the remaining 1.08–1.33× full JSON serialization time goes.** Open
+  problem 1. The reusable execution path is still 1.14–1.16× slower, while full
+  serialization reaches 1.08× only for the largest payload. Profiling should
+  separate per-value schema dispatch from setup and output handling before any
+  architectural commitment.
 - **Anything about modelled defaults.** `bench.smithy` contains no `@default`, and
   `BenchDomain` populates every optional member, so no scenario in any suite ever
   takes the default-materialization branch that all five codecs carry. This is
@@ -864,14 +868,16 @@ the main checkout.
   degrade, the fix stays allocation-free: bucket members by name length or dispatch
   on length plus first byte, which is roughly what source generation compiles to.
   Deferred until the conformance work has landed, to avoid perturbing it.
-- **How much client overhead is telemetry versus features.** Needs a
-  config-stripped variant, deliberately not built, tuning one contender to win is
-  what the parity gate exists to prevent. A before/after on the unconditional
-  telemetry allocations would answer it without that risk.
+- **How much of the remaining client overhead belongs to each optional feature.**
+  The unconditional telemetry cost was isolated and removed, but the focused
+  ceremony benchmark still includes the public runtime, protocol and transport
+  abstractions. Separating retry, interceptors, auth, endpoint resolution and
+  telemetry needs feature-specific before/after probes rather than a permanently
+  stripped contender.
 - **Throughput and tail latency under concurrency.** No socket-level macro suite
   exists; everything here is in-memory and single-threaded.
-- **Anything about protocols other than restJson1.** No CBOR, proto, or XML
-  coverage. This has already cost a real answer once: the error-compilation fix
-  (see Fixed) was measured at 3.9× on restJson1 and shipped unmeasured on
-  rpcv2Cbor, where the same code was almost certainly worse.
+- **End-to-end behavior for RPCv2 CBOR and XML.** Codec microbenchmarks now cover
+  JSON, CBOR, XML and proto, and the gRPC suite covers proto end to end. There is
+  still no comparable client/server RPCv2 CBOR or XML suite. This leaves the CBOR
+  error-compilation fix (see Fixed) verified but unmeasured.
 - **Anything about TypeSpec's performance.** It has never run in this suite.

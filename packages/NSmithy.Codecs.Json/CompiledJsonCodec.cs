@@ -22,7 +22,7 @@ internal sealed class CompiledJsonCodec<T>(
 
     public byte[] Serialize(T value)
     {
-        using var buffer = new PooledByteBufferWriter(sizeHint);
+        var buffer = PooledByteBufferWriterCache.Rent(sizeHint);
         var writer = JsonWriterCache.Rent(buffer);
         try
         {
@@ -34,6 +34,7 @@ internal sealed class CompiledJsonCodec<T>(
         finally
         {
             JsonWriterCache.Return(writer);
+            PooledByteBufferWriterCache.Return(buffer);
         }
     }
 
@@ -84,7 +85,7 @@ internal sealed class CompiledJsonProjectionCodec<T, TBuilder>(
 
     public byte[] Serialize(T value)
     {
-        using var buffer = new PooledByteBufferWriter(sizeHint);
+        var buffer = PooledByteBufferWriterCache.Rent(sizeHint);
         var writer = JsonWriterCache.Rent(buffer);
         try
         {
@@ -96,6 +97,7 @@ internal sealed class CompiledJsonProjectionCodec<T, TBuilder>(
         finally
         {
             JsonWriterCache.Return(writer);
+            PooledByteBufferWriterCache.Return(buffer);
         }
     }
 

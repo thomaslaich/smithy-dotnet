@@ -647,9 +647,20 @@ internal sealed class ListJsonValueWriter<TCollection, TElement>(
         }
 
         writer.WriteStartArray();
-        foreach (var element in schema.GetElements(value))
+        var elements = schema.GetElements(value);
+        if (elements is IReadOnlyList<TElement> list)
         {
-            elementWriter.Write(writer, element);
+            for (var index = 0; index < list.Count; index++)
+            {
+                elementWriter.Write(writer, list[index]);
+            }
+        }
+        else
+        {
+            foreach (var element in elements)
+            {
+                elementWriter.Write(writer, element);
+            }
         }
         writer.WriteEndArray();
     }

@@ -21,6 +21,17 @@ internal sealed class PooledByteBufferWriter : IBufferWriter<byte>, IDisposable
     public PooledByteBufferWriter(int initialCapacity) =>
         buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 256));
 
+    public void Reset(int initialCapacity)
+    {
+        if (buffer is not null)
+        {
+            throw new InvalidOperationException("The buffer writer is already in use.");
+        }
+
+        buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 256));
+        written = 0;
+    }
+
     public int WrittenCount => written;
 
     public ReadOnlySpan<byte> WrittenSpan => Current.AsSpan(0, written);
@@ -74,6 +85,35 @@ internal sealed class PooledByteBufferWriter : IBufferWriter<byte>, IDisposable
 }
 
 /// <summary>
+/// Reuses the small <see cref="PooledByteBufferWriter"/> wrapper while continuing to return its
+/// potentially large byte array to <see cref="ArrayPool{T}"/> after every serialization.
+/// </summary>
+internal static class PooledByteBufferWriterCache
+{
+    [ThreadStatic]
+    private static PooledByteBufferWriter? cached;
+
+    public static PooledByteBufferWriter Rent(int initialCapacity)
+    {
+        var writer = cached;
+        cached = null;
+        if (writer is null)
+        {
+            return new PooledByteBufferWriter(initialCapacity);
+        }
+
+        writer.Reset(initialCapacity);
+        return writer;
+    }
+
+    public static void Return(PooledByteBufferWriter writer)
+    {
+        writer.Dispose();
+        cached ??= writer;
+    }
+}
+
+/// <summary>
 /// A per-thread <see cref="Utf8JsonWriter"/> that is reset rather than
 /// reallocated between serialize calls.
 /// </summary>
@@ -95,11 +135,10 @@ internal static class JsonWriterCache
     public static Utf8JsonWriter Rent(IBufferWriter<byte> destination)
     {
         var writer = cached;
+        cached = null;
         if (writer is null)
         {
-            writer = new Utf8JsonWriter(destination);
-            cached = writer;
-            return writer;
+            return new Utf8JsonWriter(destination);
         }
 
         writer.Reset(destination);
@@ -110,5 +149,9 @@ internal static class JsonWriterCache
     /// Detaches the writer from the pooled buffer, so a returned buffer is not
     /// still referenced by the cached writer.
     /// </summary>
-    public static void Return(Utf8JsonWriter writer) => writer.Reset(Stream.Null);
+    public static void Return(Utf8JsonWriter writer)
+    {
+        writer.Reset(Stream.Null);
+        cached ??= writer;
+    }
 }

@@ -8,7 +8,7 @@ Apple M4 Max, 1 CPU, 16 logical and 16 physical cores
 Toolchain=InProcessEmitToolchain
 
 ```
-| Method | Client       | Mean       | Error   | StdDev  | Gen0   | Gen1   | Allocated |
-|------- |------------- |-----------:|--------:|--------:|-------:|-------:|----------:|
-| **Call**   | **hand-written** |   **985.6 ns** | **2.47 ns** | **2.31 ns** | **0.3242** |      **-** |   **2.66 KB** |
-| **Call**   | **nsmithy**      | **1,728.3 ns** | **8.09 ns** | **7.57 ns** | **0.5989** | **0.0019** |    **4.9 KB** |
+| Method | Client       | Mean       | Error    | StdDev   | Gen0   | Gen1   | Allocated |
+|------- |------------- |-----------:|---------:|---------:|-------:|-------:|----------:|
+| **Call**   | **hand-written** |   **956.7 ns** | **11.53 ns** | **10.22 ns** | **0.3242** |      **-** |   **2.66 KB** |
+| **Call**   | **nsmithy**      | **1,788.4 ns** | **17.12 ns** | **16.01 ns** | **0.5989** | **0.0019** |    **4.9 KB** |
