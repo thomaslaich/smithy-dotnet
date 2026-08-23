@@ -134,58 +134,105 @@ concentrated in small calls and is open problem 2, not a codec problem.
 NSwag is close to hand-written on small calls despite using reflection-based
 `System.Text.Json`, which suggests the gap is not inherent to being generated.
 
-### 4. List wrapper types defensively copy
+### 4. Collection construction remains visible
 
-`OBSERVED`, cost not isolated.
+`OBSERVED`, remaining cost not isolated.
 
-Generated list shapes wrap their contents:
+Generated collection constructors still defensively copy caller-owned inputs.
+Schema-driven deserializers now transfer ownership of their private builders
+instead, so decoded lists and maps avoid the backing collection copy while
+retaining a read-only wrapper. That removes the avoidable copy without weakening
+the public model API's immutability.
 
-```csharp
-Values = System.Array.AsReadOnly(System.Linq.Enumerable.ToArray(values));
-```
+The wrapper and generated model object are still real allocations that the
+mutable Google.Protobuf message model does not necessarily mirror.
 
-That is an array copy plus two allocations per list instance, which the
-`System.Text.Json` baselines never pay. It is left in the measurement deliberately,
-since it is a real cost of the generated types, but it is a candidate for removal
-when the caller already hands over an array it owns.
-
-### 5. Proto dominates the measured gRPC gap
+### 5. Proto remains the largest measured gRPC gap
 
 `MEASURED`, unary gRPC suite, in-process toolchain, Tiered PGO disabled.
 
-| Layer | Scenario | Time ratio vs Grpc.Net / Google.Protobuf | Allocation ratio |
+| Layer | Scenario | Time ratio before -> after | Allocation ratio before -> after |
 | --- | --- | --- | --- |
-| client | get-item | 1.51x | 1.80x |
-| client | list-items-100 | 2.86x | 3.56x |
-| server | get-item | 1.21x | 1.25x |
-| server | list-items-100 | 1.50x | 3.98x |
-| deserialize only | get-item | 2.72x | 2.54x |
-| deserialize only | list-items-100 | 2.91x | 3.26x |
-| serialize only | get-item | 1.79x | 4.05x |
-| serialize only | list-items-100 | 1.92x | 10.84x |
+| client | get-item | 1.51x -> **1.35x** | 1.80x -> **1.53x** |
+| client | list-items-100 | 2.86x -> **1.98x** | 3.56x -> **2.27x** |
+| server | get-item | 1.21x -> 1.22x | 1.25x -> **1.19x** |
+| server | list-items-100 | 1.50x -> **1.41x** | 3.98x -> **1.70x** |
+| deserialize only | get-item | 2.72x -> **1.80x** | 2.54x -> **1.24x** |
+| deserialize only | list-items-100 | 2.91x -> **2.00x** | 3.26x -> **1.88x** |
+| serialize only | get-item | 1.79x -> **1.70x** | 4.05x -> **0.79x** |
+| serialize only | list-items-100 | 1.92x -> **1.67x** | 10.84x -> **1.53x** |
 
-The payload-dependent client gap is almost entirely explained by Proto
-deserialization: 2.86x for the full 100-item client call versus 2.91x for the
+The before column is the rebased gRPC benchmark branch, including PR #143's
+generated direct Proto write path. The after column is the combined
+`perf/proto-codec` branch from a fresh run on the same machine. Ratios normalize
+small movement in the unchanged Grpc.Net and Google.Protobuf controls.
+
+The optimized large client call fell from 50.77 us to 35.79 us and from 148.45 KB
+to 94.71 KB. Proto deserialization fell from 47.72 us to 33.11 us and from
+130,032 B to 75,120 B. Serialization improved less in time, 5% for get-item and
+13% for list-items-100, but its allocations fell by 81% and 86%. The large server
+allocation fell from 95.30 KB to 40.76 KB.
+
+The remaining payload-dependent client gap is still explained by Proto
+deserialization: 1.98x for the full 100-item client call versus 2.00x for the
 codec alone. The server has a larger shared ASP.NET Core cost, which dilutes the
-1.92x serialization gap to 1.50x end to end. This does not support client
+1.67x serialization gap to 1.41x end to end. This still does not support client
 invocation ceremony as the primary gRPC bottleneck.
 
-The allocation mechanisms are visible in source:
+The baseline allocation mechanisms were visible in source:
 
-- `OBSERVED` Each nested message creates a 64-byte `ProtoWriter`, grows its own
-  buffer, calls `ToArray()`, and is copied again into its parent. Each string is
-  first materialized with `Encoding.UTF8.GetBytes`.
-- `OBSERVED` Each decoded structure creates its generated builder plus a
-  `ProtoReadState` containing a dictionary and hash set. Field dispatch also uses
+- `OBSERVED` Each nested message created a 64-byte `ProtoWriter`, grew its own
+  buffer, called `ToArray()`, and was copied again into its parent. Each string
+  was first materialized with `Encoding.UTF8.GetBytes`.
+- `OBSERVED` Each decoded structure created its generated builder plus a
+  `ProtoReadState` containing a dictionary and hash set. Field dispatch also used
   a dictionary lookup, while Google.Protobuf-generated parsers use direct field
   switches.
-- `OBSERVED` Generated list wrappers copy their builder into an array and wrap it
+- `OBSERVED` Generated list wrappers copied their builder into an array and wrapped it
   in `ReadOnlyCollection<T>`, adding two allocations per decoded list.
 
-These measurements include the generated direct Proto write path from PR #143.
-Against the pre-#143 run, serialization moved from 2.30x/2.35x to 1.79x/1.92x
-for one/100 items, and the small full-client ratio moved from 2.09x to 1.51x.
-Deserialization is unchanged and still dominates the large client result.
+The changes directly address all three allocation mechanisms above: one pooled
+writer now backpatches nested lengths and transcodes strings in place; read state
+is stack-local with dense field dispatch and lazily allocated collection slots;
+and generated schema builds can consume codec-owned collection builders without
+copying them.
+
+The remaining 1.7-2.0x codec gap is no longer explained by obvious temporary
+buffers. Generated model construction and the per-field schema dispatch are the
+next profiler targets.
+
+#### Post-improvement protocol comparison
+
+`MEASURED`, current combined branch, Tiered PGO disabled. JSON and CBOR serialize
+the same generated `ListItemsOutput`; the Proto rows use the analogous gRPC
+response shape, so the cross-format numbers are directional rather than a strict
+wire-format shootout.
+
+| NSmithy format | One item, time / allocated | 100 items, time / allocated |
+| --- | --- | --- |
+| REST JSON codec | 282.9 ns / 312 B | 21.40 us / 17.45 KB |
+| RPCv2 CBOR codec | 479.7 ns / 1.63 KB | 31.86 us / 46.97 KB |
+| gRPC Proto codec | **217.6 ns / 120 B** | **19.73 us / 8.92 KB** |
+
+Proto is the fastest and lowest-allocation serializer in these current NSmithy
+measurements. CBOR is 1.70x slower than JSON for one item and 1.49x slower for
+100, while allocating substantially more because `CborWriter.Encode()` still
+copies into a new output array.
+
+The REST and gRPC suites also share comparable canned-client and in-memory-server
+workloads. There is not yet an equivalent end-to-end RPCv2 CBOR benchmark.
+
+| Layer | Scenario | REST JSON | gRPC |
+| --- | --- | --- | --- |
+| client | get-item | 1.797 us / 4.90 KB | **1.611 us / 4.98 KB** |
+| client | list-items-100 | 63.04 us / **80.90 KB** | **35.79 us** / 94.71 KB |
+| server | get-item | **10.92 us / 13.03 KB** | 12.86 us / 14.75 KB |
+| server | list-items-100 | 46.46 us / 73.59 KB | **41.52 us / 40.76 KB** |
+
+The result is mixed for small end-to-end calls because fixed HTTP and runtime
+costs dominate. For the 100-item workload, gRPC is 43% faster on the client and
+11% faster on the server; its server allocation is 45% lower, while its client
+allocation is 17% higher.
 
 ### 6. Codec optimization candidates, by codec
 

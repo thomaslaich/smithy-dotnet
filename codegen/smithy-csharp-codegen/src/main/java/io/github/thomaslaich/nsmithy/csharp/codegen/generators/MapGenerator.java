@@ -63,6 +63,28 @@ public final class MapGenerator implements Runnable {
                     valueType);
               });
           writer.write("");
+          writer.write(
+              "private $L(System.Collections.Generic.Dictionary<$L, $L> values)",
+              typeName,
+              keyType,
+              valueType);
+          writer.openBlock(
+              "{",
+              "}",
+              () ->
+                  writer.write(
+                      "Values = new System.Collections.ObjectModel.ReadOnlyDictionary<$L,"
+                          + " $L>(values);",
+                      keyType,
+                      valueType));
+          writer.write("");
+          writer.write(
+              "internal static $L FromOwnedDictionary("
+                  + "System.Collections.Generic.Dictionary<$L, $L> values) => new(values);",
+              typeName,
+              keyType,
+              valueType);
+          writer.write("");
           writer.writeXmlDocs(shape.getValue());
           writer.write(
               "public System.Collections.Generic.IReadOnlyDictionary<$L, $L> Values { get; }",

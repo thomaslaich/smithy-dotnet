@@ -670,6 +670,29 @@ public sealed class ProtoCodecTests
         Assert.Equal("y", result["tags"].AsArray()[1].AsString());
     }
 
+    [Fact]
+    public void BackpatchesMultiByteNestedMessageLengths()
+    {
+        var codec = ProtoCodec.FromSchema(
+            Schemas
+                .Structure<Envelope, EnvelopeBuilder>(ShapeId.Parse("test#LargeEnvelope"))
+                .Required(
+                    "payload",
+                    x => x.Payload,
+                    (b, v) => b.Payload = v,
+                    Schemas.Document,
+                    Field(1)
+                )
+                .Build(() => new EnvelopeBuilder(), b => new Envelope(b.Payload))
+        );
+        var payload = Document.From(new string('x', 128));
+
+        var bytes = codec.Serialize(new Envelope(payload));
+
+        Assert.Equal([0x0A, 0x83, 0x01, 0x1A, 0x80, 0x01], bytes[..6]);
+        Assert.Equal(payload, codec.Deserialize(bytes).Payload);
+    }
+
     /// <summary>
     /// A framework shape carries no <c>@protoIndex</c> — it comes from the runtime, not a model file
     /// — so the codec numbers its members by declaration order instead. The server runtime can
