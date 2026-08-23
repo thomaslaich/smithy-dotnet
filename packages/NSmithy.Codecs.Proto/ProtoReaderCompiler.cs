@@ -131,27 +131,31 @@ internal sealed class ProtoValueReaderCompiler : ISchemaVisitor<object>
         );
     }
 
-    public object VisitBoolean(Schema<bool> schema) => Scalar(schema, EmptyTraits);
+    public object VisitBoolean(Schema<bool> schema) => new BooleanProtoValueReader();
 
-    public object VisitByte(Schema<sbyte> schema) => Scalar(schema, EmptyTraits);
+    public object VisitByte(Schema<sbyte> schema) =>
+        new ByteProtoValueReader(ShapeKind.Byte, EmptyTraits);
 
-    public object VisitShort(Schema<short> schema) => Scalar(schema, EmptyTraits);
+    public object VisitShort(Schema<short> schema) =>
+        new ShortProtoValueReader(ShapeKind.Short, EmptyTraits);
 
-    public object VisitInteger(Schema<int> schema) => Scalar(schema, EmptyTraits);
+    public object VisitInteger(Schema<int> schema) =>
+        new IntegerProtoValueReader(ShapeKind.Integer, EmptyTraits);
 
-    public object VisitLong(Schema<long> schema) => Scalar(schema, EmptyTraits);
+    public object VisitLong(Schema<long> schema) =>
+        new LongProtoValueReader(ShapeKind.Long, EmptyTraits);
 
-    public object VisitFloat(Schema<float> schema) => Scalar(schema, EmptyTraits);
+    public object VisitFloat(Schema<float> schema) => new FloatProtoValueReader();
 
-    public object VisitDouble(Schema<double> schema) => Scalar(schema, EmptyTraits);
+    public object VisitDouble(Schema<double> schema) => new DoubleProtoValueReader();
 
     public object VisitBigInteger(Schema<BigInteger> schema) => Scalar(schema, EmptyTraits);
 
     public object VisitBigDecimal(Schema<decimal> schema) => Scalar(schema, EmptyTraits);
 
-    public object VisitString(Schema<string> schema) => Scalar(schema, EmptyTraits);
+    public object VisitString(Schema<string> schema) => new StringProtoValueReader();
 
-    public object VisitBlob(Schema<byte[]> schema) => Scalar(schema, EmptyTraits);
+    public object VisitBlob(Schema<byte[]> schema) => new BlobProtoValueReader();
 
     public object VisitTimestamp(Schema<DateTimeOffset> schema) => Scalar(schema, EmptyTraits);
 
@@ -292,26 +296,23 @@ internal sealed class MemberTraitProtoReaderCompiler(
     IReadOnlyDictionary<ShapeId, Trait> traits
 ) : ISchemaVisitor<object>
 {
-    public object VisitBoolean(Schema<bool> schema) =>
-        new ScalarProtoValueReader<bool>(schema, traits);
+    public object VisitBoolean(Schema<bool> schema) => new BooleanProtoValueReader();
 
     public object VisitByte(Schema<sbyte> schema) =>
-        new ScalarProtoValueReader<sbyte>(schema, traits);
+        new ByteProtoValueReader(ShapeKind.Byte, traits);
 
     public object VisitShort(Schema<short> schema) =>
-        new ScalarProtoValueReader<short>(schema, traits);
+        new ShortProtoValueReader(ShapeKind.Short, traits);
 
     public object VisitInteger(Schema<int> schema) =>
-        new ScalarProtoValueReader<int>(schema, traits);
+        new IntegerProtoValueReader(ShapeKind.Integer, traits);
 
     public object VisitLong(Schema<long> schema) =>
-        new ScalarProtoValueReader<long>(schema, traits);
+        new LongProtoValueReader(ShapeKind.Long, traits);
 
-    public object VisitFloat(Schema<float> schema) =>
-        new ScalarProtoValueReader<float>(schema, traits);
+    public object VisitFloat(Schema<float> schema) => new FloatProtoValueReader();
 
-    public object VisitDouble(Schema<double> schema) =>
-        new ScalarProtoValueReader<double>(schema, traits);
+    public object VisitDouble(Schema<double> schema) => new DoubleProtoValueReader();
 
     public object VisitBigInteger(Schema<BigInteger> schema) =>
         new ScalarProtoValueReader<BigInteger>(schema, traits);
@@ -319,11 +320,9 @@ internal sealed class MemberTraitProtoReaderCompiler(
     public object VisitBigDecimal(Schema<decimal> schema) =>
         new ScalarProtoValueReader<decimal>(schema, traits);
 
-    public object VisitString(Schema<string> schema) =>
-        new ScalarProtoValueReader<string>(schema, traits);
+    public object VisitString(Schema<string> schema) => new StringProtoValueReader();
 
-    public object VisitBlob(Schema<byte[]> schema) =>
-        new ScalarProtoValueReader<byte[]>(schema, traits);
+    public object VisitBlob(Schema<byte[]> schema) => new BlobProtoValueReader();
 
     public object VisitTimestamp(Schema<DateTimeOffset> schema) =>
         new ScalarProtoValueReader<DateTimeOffset>(schema, traits);
@@ -382,6 +381,79 @@ internal sealed class DeferredProtoValueReader<T>
 
         return inner.ReadBody(ref reader, wireType);
     }
+}
+
+internal sealed class BooleanProtoValueReader : IProtoValueReader<bool>
+{
+    public bool ReadBody(ref ProtoReader reader, WireType wireType) => reader.ReadVarint() != 0;
+}
+
+internal sealed class ByteProtoValueReader(
+    ShapeKind kind,
+    IReadOnlyDictionary<ShapeId, Trait> traits
+) : IProtoValueReader<sbyte>
+{
+    private readonly ProtoWire.IntEncoding encoding = ProtoWire.IntEncodingOf(kind, traits);
+
+    public sbyte ReadBody(ref ProtoReader reader, WireType wireType) =>
+        (sbyte)ProtoWire.ReadInteger(ref reader, encoding);
+}
+
+internal sealed class ShortProtoValueReader(
+    ShapeKind kind,
+    IReadOnlyDictionary<ShapeId, Trait> traits
+) : IProtoValueReader<short>
+{
+    private readonly ProtoWire.IntEncoding encoding = ProtoWire.IntEncodingOf(kind, traits);
+
+    public short ReadBody(ref ProtoReader reader, WireType wireType) =>
+        (short)ProtoWire.ReadInteger(ref reader, encoding);
+}
+
+internal sealed class IntegerProtoValueReader(
+    ShapeKind kind,
+    IReadOnlyDictionary<ShapeId, Trait> traits
+) : IProtoValueReader<int>
+{
+    private readonly ProtoWire.IntEncoding encoding = ProtoWire.IntEncodingOf(kind, traits);
+
+    public int ReadBody(ref ProtoReader reader, WireType wireType) =>
+        (int)ProtoWire.ReadInteger(ref reader, encoding);
+}
+
+internal sealed class LongProtoValueReader(
+    ShapeKind kind,
+    IReadOnlyDictionary<ShapeId, Trait> traits
+) : IProtoValueReader<long>
+{
+    private readonly ProtoWire.IntEncoding encoding = ProtoWire.IntEncodingOf(kind, traits);
+
+    public long ReadBody(ref ProtoReader reader, WireType wireType) =>
+        ProtoWire.ReadInteger(ref reader, encoding);
+}
+
+internal sealed class FloatProtoValueReader : IProtoValueReader<float>
+{
+    public float ReadBody(ref ProtoReader reader, WireType wireType) =>
+        BitConverter.UInt32BitsToSingle(reader.ReadFixed32());
+}
+
+internal sealed class DoubleProtoValueReader : IProtoValueReader<double>
+{
+    public double ReadBody(ref ProtoReader reader, WireType wireType) =>
+        BitConverter.UInt64BitsToDouble(reader.ReadFixed64());
+}
+
+internal sealed class StringProtoValueReader : IProtoValueReader<string>
+{
+    public string ReadBody(ref ProtoReader reader, WireType wireType) =>
+        Encoding.UTF8.GetString(reader.ReadLengthDelimited());
+}
+
+internal sealed class BlobProtoValueReader : IProtoValueReader<byte[]>
+{
+    public byte[] ReadBody(ref ProtoReader reader, WireType wireType) =>
+        reader.ReadLengthDelimited().ToArray();
 }
 
 internal sealed class ScalarProtoValueReader<T>(
@@ -604,6 +676,17 @@ internal sealed class ListProtoFieldReader<
     IProtoValueReader<TElement> elementReader
 ) : IProtoFieldReader<TBuilder>, IProtoFieldCompleter<TBuilder>
 {
+    private readonly Func<TCollectionBuilder> createBuilder = list.CreateTypedBuilder;
+    private readonly Action<TCollectionBuilder, TElement> add = list.Add;
+    private readonly Func<TCollectionBuilder, TCollection> build = list.Build;
+    private readonly bool packable = ProtoWire.IsPackableScalar(
+        ProtoWire.Unwrap(list.ElementSchema).Kind
+    );
+    private readonly WireType elementWireType = ProtoWire.WireTypeOf(
+        ProtoWire.Unwrap(list.ElementSchema).Kind,
+        list.TypedElementMember.MemberTraits
+    );
+
     public int FieldNumber { get; } = fieldNumber;
 
     public void ReadInto(
@@ -613,33 +696,26 @@ internal sealed class ListProtoFieldReader<
         ref ProtoReadState state
     )
     {
-        var accumulator = state.GetOrCreate(stateSlot, list.CreateTypedBuilder);
-        var element = ProtoWire.Unwrap(list.ElementSchema);
-        if (wireType == WireType.Len && ProtoWire.IsPackableScalar(element.Kind))
+        var accumulator = state.GetOrCreate(stateSlot, createBuilder);
+        if (wireType == WireType.Len && packable)
         {
             var packed = new ProtoReader(reader.ReadLengthDelimited());
             while (!packed.End)
             {
-                list.Add(
-                    accumulator,
-                    elementReader.ReadBody(
-                        ref packed,
-                        ProtoWire.WireTypeOf(element.Kind, list.TypedElementMember.MemberTraits)
-                    )
-                );
+                add(accumulator, elementReader.ReadBody(ref packed, elementWireType));
             }
             return;
         }
 
-        list.Add(accumulator, elementReader.ReadBody(ref reader, wireType));
+        add(accumulator, elementReader.ReadBody(ref reader, wireType));
     }
 
     public void Complete(TBuilder builder, ref ProtoReadState state)
     {
         var accumulator = state.TryGet<TCollectionBuilder>(stateSlot, out var existing)
             ? existing
-            : list.CreateTypedBuilder();
-        member.SetValue(builder, list.Build(accumulator));
+            : createBuilder();
+        member.SetValue(builder, build(accumulator));
     }
 }
 
@@ -652,6 +728,9 @@ internal sealed class MapProtoFieldReader<TContainer, TBuilder, TDictionary, TVa
     IProtoValueReader<TValue> valueReader
 ) : IProtoFieldReader<TBuilder>, IProtoFieldCompleter<TBuilder>
 {
+    private readonly Func<TMapBuilder> createBuilder = map.CreateTypedBuilder;
+    private readonly Action<TMapBuilder, string, TValue> add = map.Add;
+    private readonly Func<TMapBuilder, TDictionary> build = map.Build;
     public int FieldNumber { get; } = fieldNumber;
 
     private readonly SparseScalarValueReader<TValue> sparseReader = new(
@@ -665,7 +744,7 @@ internal sealed class MapProtoFieldReader<TContainer, TBuilder, TDictionary, TVa
         ref ProtoReadState state
     )
     {
-        var accumulator = state.GetOrCreate(stateSlot, map.CreateTypedBuilder);
+        var accumulator = state.GetOrCreate(stateSlot, createBuilder);
         ReadMapEntry(accumulator, reader.ReadLengthDelimited());
     }
 
@@ -673,8 +752,8 @@ internal sealed class MapProtoFieldReader<TContainer, TBuilder, TDictionary, TVa
     {
         var accumulator = state.TryGet<TMapBuilder>(stateSlot, out var existing)
             ? existing
-            : map.CreateTypedBuilder();
-        member.SetValue(builder, map.Build(accumulator));
+            : createBuilder();
+        member.SetValue(builder, build(accumulator));
     }
 
     private void ReadMapEntry(TMapBuilder builder, ReadOnlySpan<byte> bytes)
@@ -702,7 +781,7 @@ internal sealed class MapProtoFieldReader<TContainer, TBuilder, TDictionary, TVa
             }
         }
 
-        map.Add(builder, key, value!);
+        add(builder, key, value!);
     }
 }
 

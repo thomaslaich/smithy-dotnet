@@ -8,10 +8,10 @@ Apple M4 Max, 1 CPU, 16 logical and 16 physical cores
 Toolchain=InProcessEmitToolchain
 
 ```
-| Method                        | Scenario       | Mean        | Error     | StdDev    | Ratio | Gen0   | Gen1   | Allocated | Alloc Ratio |
-|------------------------------ |--------------- |------------:|----------:|----------:|------:|-------:|-------:|----------:|------------:|
-| **&#39;Google.Protobuf deserialize&#39;** | **get-item**       |    **184.9 ns** |   **0.81 ns** |   **0.76 ns** |  **1.00** | **0.0687** |      **-** |     **576 B** |        **1.00** |
-| &#39;NSmithy Proto deserialize&#39;   | get-item       |    333.4 ns |   0.91 ns |   0.85 ns |  1.80 | 0.0849 |      - |     712 B |        1.24 |
-|                               |                |             |           |           |       |        |        |           |             |
-| **&#39;Google.Protobuf deserialize&#39;** | **list-items-100** | **16,574.5 ns** |  **80.20 ns** |  **71.10 ns** |  **1.00** | **4.7607** | **0.5188** |   **39936 B** |        **1.00** |
-| &#39;NSmithy Proto deserialize&#39;   | list-items-100 | 33,107.4 ns | 136.91 ns | 121.36 ns |  2.00 | 8.9722 | 0.9766 |   75120 B |        1.88 |
+| Method                        | Scenario       | Mean        | Error     | StdDev    | Ratio | RatioSD | Gen0   | Gen1   | Allocated | Alloc Ratio |
+|------------------------------ |--------------- |------------:|----------:|----------:|------:|--------:|-------:|-------:|----------:|------------:|
+| **&#39;Google.Protobuf deserialize&#39;** | **get-item**       |    **174.2 ns** |   **0.71 ns** |   **0.60 ns** |  **1.00** |    **0.00** | **0.0687** |      **-** |     **576 B** |        **1.00** |
+| &#39;NSmithy Proto deserialize&#39;   | get-item       |    229.0 ns |   1.97 ns |   1.85 ns |  1.31 |    0.01 | 0.0620 |      - |     520 B |        0.90 |
+|                               |                |             |           |           |       |         |        |        |           |             |
+| **&#39;Google.Protobuf deserialize&#39;** | **list-items-100** | **15,369.5 ns** | **130.43 ns** | **115.62 ns** |  **1.00** |    **0.01** | **4.7607** | **0.5341** |   **39936 B** |        **1.00** |
+| &#39;NSmithy Proto deserialize&#39;   | list-items-100 | 21,152.3 ns | 197.94 ns | 185.15 ns |  1.38 |    0.02 | 5.9204 | 0.6714 |   49520 B |        1.24 |

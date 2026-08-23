@@ -147,7 +147,7 @@ the public model API's immutability.
 The wrapper and generated model object are still real allocations that the
 mutable Google.Protobuf message model does not necessarily mirror.
 
-### 5. Proto remains the largest measured gRPC gap
+### 5. Proto codec performance is now within 1.5x of Google.Protobuf
 
 `MEASURED`, unary gRPC suite, in-process toolchain, Tiered PGO disabled.
 
@@ -173,10 +173,10 @@ to 94.71 KB. Proto deserialization fell from 47.72 us to 33.11 us and from
 13% for list-items-100, but its allocations fell by 81% and 86%. The large server
 allocation fell from 95.30 KB to 40.76 KB.
 
-The remaining payload-dependent client gap is still explained by Proto
-deserialization: 1.98x for the full 100-item client call versus 2.00x for the
-codec alone. The server has a larger shared ASP.NET Core cost, which dilutes the
-1.67x serialization gap to 1.41x end to end. This still does not support client
+At that stage, the remaining payload-dependent client gap was still explained by
+Proto deserialization: 1.98x for the full 100-item client call versus 2.00x for
+the codec alone. The server had a larger shared ASP.NET Core cost, which diluted
+the 1.67x serialization gap to 1.41x end to end. This did not support client
 invocation ceremony as the primary gRPC bottleneck.
 
 The baseline allocation mechanisms were visible in source:
@@ -197,9 +197,34 @@ is stack-local with dense field dispatch and lazily allocated collection slots;
 and generated schema builds can consume codec-owned collection builders without
 copying them.
 
-The remaining 1.7-2.0x codec gap is no longer explained by obvious temporary
-buffers. Generated model construction and the per-field schema dispatch are the
-next profiler targets.
+A follow-up pass removed per-value schema interpretation from the common scalar
+readers and writers. Integer encoding, scalar wire types, list packability, and
+element wire types are now resolved when the codec is compiled. Collection
+readers also cache the schema's builder, add, and build delegates. Previously,
+the closed `CreateTypedBuilder` delegate was recreated for every repeated field
+occurrence, accounting for 192 B on the one-item read and 25,600 B on the
+100-item read.
+
+| Codec operation | Previous | Current | Google.Protobuf ratio | Allocation change |
+| --- | --- | --- | --- | --- |
+| serialize get-item | 217.6 ns | **150.4 ns** | **1.22x** | 120 B -> 120 B |
+| serialize list-items-100 | 19.73 us | **13.89 us** | **1.24x** | 9,136 B -> 9,136 B |
+| deserialize get-item | 333.4 ns | **229.0 ns** | **1.31x** | 712 B -> **520 B** |
+| deserialize list-items-100 | 33.11 us | **21.15 us** | **1.38x** | 75,120 B -> **49,520 B** |
+
+The schema-driven `ProtoCodec.FromSchema(...)` API and generated model/schema
+surface are unchanged. The remaining difference is primarily per-field schema
+dispatch and immutable generated model construction.
+
+The end-to-end gRPC rerun shows the codec improvement carrying through the
+client and server stacks:
+
+| Layer | Scenario | Current time | Grpc.Net ratio | Current allocation | Allocation ratio |
+| --- | --- | --- | --- | --- | --- |
+| client | get-item | 1.507 us | **1.26x** | 4.79 KB | 1.47x |
+| client | list-items-100 | 25.68 us | **1.42x** | 69.71 KB | 1.67x |
+| server | get-item | 14.82 us | **1.13x** | 14.75 KB | 1.19x |
+| server | list-items-100 | 39.09 us | **1.21x** | 40.75 KB | 1.70x |
 
 #### Post-improvement protocol comparison
 
@@ -212,7 +237,7 @@ wire-format shootout.
 | --- | --- | --- |
 | REST JSON codec | 282.9 ns / 312 B | 21.40 us / 17.45 KB |
 | RPCv2 CBOR codec | 389.3 ns / **208 B** | 28.53 us / **14.48 KB** |
-| gRPC Proto codec | **217.6 ns / 120 B** | **19.73 us / 8.92 KB** |
+| gRPC Proto codec | **150.4 ns / 120 B** | **13.89 us / 8.92 KB** |
 
 Proto is the fastest and lowest-allocation serializer in these current NSmithy
 measurements. CBOR is 1.38x slower than JSON for one item and 1.33x slower for
@@ -224,15 +249,15 @@ workloads. There is not yet an equivalent end-to-end RPCv2 CBOR benchmark.
 
 | Layer | Scenario | REST JSON | gRPC |
 | --- | --- | --- | --- |
-| client | get-item | 1.797 us / 4.90 KB | **1.611 us / 4.98 KB** |
-| client | list-items-100 | 63.04 us / **80.90 KB** | **35.79 us** / 94.71 KB |
-| server | get-item | **10.92 us / 13.03 KB** | 12.86 us / 14.75 KB |
-| server | list-items-100 | 46.46 us / 73.59 KB | **41.52 us / 40.76 KB** |
+| client | get-item | 1.797 us / 4.90 KB | **1.507 us / 4.79 KB** |
+| client | list-items-100 | 63.04 us / 80.90 KB | **25.68 us / 69.71 KB** |
+| server | get-item | **10.92 us / 13.03 KB** | 14.82 us / 14.75 KB |
+| server | list-items-100 | 46.46 us / 73.59 KB | **39.09 us / 40.75 KB** |
 
 The result is mixed for small end-to-end calls because fixed HTTP and runtime
-costs dominate. For the 100-item workload, gRPC is 43% faster on the client and
-11% faster on the server; its server allocation is 45% lower, while its client
-allocation is 17% higher.
+costs dominate. For the 100-item workload, gRPC is 59% faster on the client and
+16% faster on the server; its allocation is 14% lower on the client and 45%
+lower on the server.
 
 ### 6. Codec optimization candidates, by codec
 
