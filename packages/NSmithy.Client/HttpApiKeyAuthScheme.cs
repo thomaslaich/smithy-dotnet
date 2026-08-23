@@ -16,6 +16,7 @@ public enum ApiKeyLocation
 public sealed class HttpApiKeyAuthScheme : ISmithyAuthScheme
 {
     private readonly string name;
+
     public HttpApiKeyAuthScheme(
         string name,
         string apiKey,

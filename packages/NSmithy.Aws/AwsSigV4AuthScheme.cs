@@ -14,8 +14,7 @@ public sealed class AwsSigV4AuthScheme(
     public ISmithyIdentityResolver IdentityResolver { get; } =
         new SmithyCachingIdentityResolver(
             new AwsCredentialsIdentityResolver(
-                credentialsProvider
-                    ?? throw new ArgumentNullException(nameof(credentialsProvider))
+                credentialsProvider ?? throw new ArgumentNullException(nameof(credentialsProvider))
             ),
             timeProvider: timeProvider
         );
@@ -31,9 +30,6 @@ public sealed class AwsSigV4AuthScheme(
         public async ValueTask<ISmithyIdentity> ResolveIdentityAsync(
             SmithyIdentityProperties properties,
             CancellationToken cancellationToken = default
-        ) =>
-            await provider
-                .GetCredentialsAsync(cancellationToken)
-                .ConfigureAwait(false);
+        ) => await provider.GetCredentialsAsync(cancellationToken).ConfigureAwait(false);
     }
 }

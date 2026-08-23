@@ -37,15 +37,15 @@ public sealed class SmithyEndpointResolutionTests
 
         await runtime.InvokeAsync(
             Binding(hostPrefix: input =>
-                SmithyHostPrefix.Expand(
-                    "{account}.data.",
-                    new SmithyHostLabel("account", input)
-                )
+                SmithyHostPrefix.Expand("{account}.data.", new SmithyHostLabel("account", input))
             ),
             "tenant"
         );
 
-        Assert.Equal("https://tenant.data.api.example.com/base/tenant", transport.Request!.RequestUri);
+        Assert.Equal(
+            "https://tenant.data.api.example.com/base/tenant",
+            transport.Request!.RequestUri
+        );
     }
 
     [Fact]
@@ -72,8 +72,10 @@ public sealed class SmithyEndpointResolutionTests
     public async Task DefaultUserAgentDoesNotOverwriteModeledHeader()
     {
         var defaultTransport = new RecordingTransport();
-        await new SmithyClientRuntime(defaultTransport, endpoint: new Uri("https://api.example.com"))
-            .InvokeAsync(Binding(), "input");
+        await new SmithyClientRuntime(
+            defaultTransport,
+            endpoint: new Uri("https://api.example.com")
+        ).InvokeAsync(Binding(), "input");
 
         Assert.StartsWith(
             "NSmithy.Client/",

@@ -88,8 +88,8 @@ public sealed class HttpAuthSchemeTests
         context.Set(SmithyContextKeys.OperationName, "Op");
 
         var identity = await scheme.IdentityResolver.ResolveIdentityAsync(IdentityProperties);
-        return await scheme.Signer
-            .SignAsync(context, new SmithyHttpRequest(HttpMethod.Get, uri), identity)
+        return await scheme
+            .Signer.SignAsync(context, new SmithyHttpRequest(HttpMethod.Get, uri), identity)
             .ConfigureAwait(false);
     }
 }

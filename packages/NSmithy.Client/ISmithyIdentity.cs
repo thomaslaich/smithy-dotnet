@@ -45,8 +45,7 @@ public sealed record SmithyIdentityProperties(
 );
 
 /// <summary>Returns one immutable identity for every request.</summary>
-public sealed class StaticSmithyIdentityResolver(ISmithyIdentity identity)
-    : ISmithyIdentityResolver
+public sealed class StaticSmithyIdentityResolver(ISmithyIdentity identity) : ISmithyIdentityResolver
 {
     private readonly ISmithyIdentity identity =
         identity ?? throw new ArgumentNullException(nameof(identity));

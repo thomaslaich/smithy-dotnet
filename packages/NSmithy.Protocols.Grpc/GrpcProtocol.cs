@@ -26,8 +26,7 @@ public sealed class GrpcProtocol : IProtocol
     internal const string ContentType = "application/grpc+proto";
 
     /// <summary>Native gRPC requires HTTP/2 without downgrade.</summary>
-    public SmithyHttpVersionPreference HttpVersionPreference =>
-        SmithyHttpVersionPreference.Http2;
+    public SmithyHttpVersionPreference HttpVersionPreference => SmithyHttpVersionPreference.Http2;
     internal const string GrpcStatusHeader = "grpc-status";
     internal const string GrpcMessageHeader = "grpc-message";
 

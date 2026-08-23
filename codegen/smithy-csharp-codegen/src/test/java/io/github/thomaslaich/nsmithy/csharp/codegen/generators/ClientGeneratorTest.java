@@ -422,8 +422,8 @@ final class ClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "SmithyHttpVersionPreference? modeledHttpVersionPreference = config.Protocol is null ? new"
-                + " SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
+            "SmithyHttpVersionPreference? modeledHttpVersionPreference = config.Protocol is null ?"
+                + " new SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
                 + " allowDowngrade: true) : null;"),
         generated);
     assertTrue(

@@ -32,9 +32,13 @@ public sealed class AwsSigV4Signer : ISmithySigner
         TimeProvider? timeProvider = null
     )
     {
-        this.endpoint = endpoint is null || endpoint.IsAbsoluteUri
-            ? endpoint
-            : throw new ArgumentException("Endpoint must be an absolute URI.", nameof(endpoint));
+        this.endpoint =
+            endpoint is null || endpoint.IsAbsoluteUri
+                ? endpoint
+                : throw new ArgumentException(
+                    "Endpoint must be an absolute URI.",
+                    nameof(endpoint)
+                );
         this.service = string.IsNullOrWhiteSpace(service)
             ? throw new ArgumentException("Service must be set.", nameof(service))
             : service;
@@ -53,7 +57,8 @@ public sealed class AwsSigV4Signer : ISmithySigner
     {
         ArgumentNullException.ThrowIfNull(context);
         cancellationToken.ThrowIfCancellationRequested();
-        var credentials = identity as AwsCredentials
+        var credentials =
+            identity as AwsCredentials
             ?? throw new ArgumentException(
                 $"AWS SigV4 requires an {nameof(AwsCredentials)} identity.",
                 nameof(identity)

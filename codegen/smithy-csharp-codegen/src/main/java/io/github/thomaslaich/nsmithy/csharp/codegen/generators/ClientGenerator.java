@@ -122,9 +122,7 @@ public final class ClientGenerator implements Runnable {
     String modeledHttpVersionPreference =
         httpVersionPreferenceLiteral(
             ProtocolSupport.httpVersionPreference(
-                service,
-                kinds.get(0),
-                ProtocolSupport.hasEventStreamOperations(model, service)));
+                service, kinds.get(0), ProtocolSupport.hasEventStreamOperations(model, service)));
     String serviceSchema = SchemaGenerator.serviceSchemaAccessor(context, service);
     // The idempotency-token provider is only stored/used when an operation has a nullable
     // @idempotencyToken member; emitting the field unconditionally would be an unused private
@@ -322,7 +320,8 @@ public final class ClientGenerator implements Runnable {
               "}",
               () -> {
                 writer.write("var client = new System.Net.Http.HttpClient();");
-                writer.write("(modeledPreference ?? protocol.HttpVersionPreference).Apply(client);");
+                writer.write(
+                    "(modeledPreference ?? protocol.HttpVersionPreference).Apply(client);");
                 writer.write("return client;");
               });
           if (needsIdempotency) {
@@ -373,8 +372,8 @@ public final class ClientGenerator implements Runnable {
   /**
    * Renders every auth scheme that can be effective for an operation in the service. Service-level
    * schemes are followed by schemes introduced by operation-level {@code @auth} overrides, with
-   * duplicates removed while preserving their first occurrence. An empty result renders as an
-   * empty array.
+   * duplicates removed while preserving their first occurrence. An empty result renders as an empty
+   * array.
    */
   private String modeledAuthSchemesLiteral() {
     var serviceIndex = ServiceIndex.of(context.model());
@@ -475,8 +474,7 @@ public final class ClientGenerator implements Runnable {
       return "null";
     }
 
-    StructureShape input =
-        context.model().expectShape(op.getInputShape(), StructureShape.class);
+    StructureShape input = context.model().expectShape(op.getInputShape(), StructureShape.class);
     String labels =
         endpoint.get().getHostPrefix().getLabels().stream()
             .map(

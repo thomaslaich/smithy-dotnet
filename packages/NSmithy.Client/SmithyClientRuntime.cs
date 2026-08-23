@@ -39,11 +39,10 @@ public sealed class SmithyClientRuntime(
     private readonly IReadOnlyDictionary<string, ISmithyAuthScheme> authSchemes =
         authSchemes ?? NoAuthSchemes;
     private readonly bool disableHostPrefixInjection = disableHostPrefixInjection;
-    private readonly string userAgent = userAgent is null
-        ? DefaultUserAgent
-        : !string.IsNullOrWhiteSpace(userAgent)
-            ? userAgent
-            : throw new ArgumentException("User-Agent must not be empty.", nameof(userAgent));
+    private readonly string userAgent =
+        userAgent is null ? DefaultUserAgent
+        : !string.IsNullOrWhiteSpace(userAgent) ? userAgent
+        : throw new ArgumentException("User-Agent must not be empty.", nameof(userAgent));
     private readonly TimeSpan? operationTimeout =
         operationTimeout is null || operationTimeout > TimeSpan.Zero
             ? operationTimeout
@@ -88,11 +87,7 @@ public sealed class SmithyClientRuntime(
     )
     {
         var protocol = binding.Protocol;
-        var resolvedEndpoint = ApplyHostPrefix(
-            binding,
-            input,
-            endpointResolver?.StaticEndpoint
-        );
+        var resolvedEndpoint = ApplyHostPrefix(binding, input, endpointResolver?.StaticEndpoint);
         var request = PrepareAttemptRequest(
             protocol.SerializeRequest(input, cancellationToken),
             resolvedEndpoint,
