@@ -207,7 +207,7 @@ public final class FakeGenerator implements Runnable {
   /**
    * Structure construction uses named arguments so members absent from an example are simply
    * omitted regardless of their constructor position. `op` is non-null only for the operation's own
-   * output structure — the one place event-stream and streaming-blob members can appear.
+   * output structure, the one place event-stream and streaming-blob members can appear.
    */
   private String structureExpr(
       StructureShape shape, ObjectNode example, Set<ShapeId> stack, OperationShape op) {

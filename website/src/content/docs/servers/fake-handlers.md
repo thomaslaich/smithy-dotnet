@@ -1,10 +1,10 @@
 ---
 title: Fake Handlers
-description: Boot a working server from a contract with no handler implementation — canned responses from @examples, placeholders everywhere else.
+description: Boot a working server from a contract with no handler implementation. Canned responses from @examples, placeholders everywhere else.
 ---
 
 With `SmithyGenerateFakes` enabled, codegen emits a `Fake{Service}Handler`
-implementing the full service handler interface — a working server without
+implementing the full service handler interface. A working server without
 writing a handler:
 
 ```xml
@@ -60,10 +60,10 @@ operation GetCity {
 ```
 
 ```json
-// GET /cities/zrh — from the example
+// GET /cities/zrh: from the example
 {"name":"Zurich","coordinates":{"latitude":47.3769,"longitude":8.5417}}
 
-// GET /cities — no example, synthesized
+// GET /cities: no example, synthesized
 {"nextToken":"nextToken","items":[{"cityId":"cityId","name":"name"}]}
 ```
 
@@ -71,7 +71,7 @@ Operations without an example produce a codegen warning.
 
 ## Replacing fakes one operation at a time
 
-**Per-operation registration** — the way to go for larger projects.
+**Per-operation registration** is the way to go for larger projects.
 `Add{Service}Handler` registers the handler under every per-operation
 interface, and the last registration wins:
 
@@ -81,7 +81,7 @@ builder.Services.AddSingleton<IGetCityHandler, GetCityHandler>();
 builder.Services.AddSingleton<IListCitiesHandler, ListCitiesHandler>();
 ```
 
-**Subclassing** — the fake's operation methods are `virtual`:
+**Subclassing.** The fake's operation methods are `virtual`:
 
 ```csharp
 internal sealed class WeatherHandler : FakeWeatherServiceHandler

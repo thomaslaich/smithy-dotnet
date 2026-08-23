@@ -185,7 +185,7 @@
       >false</SmithyGenerateDependencyInjection
     >
     <!--
-      Opt-in: generate the fake handler ({Service}.Fakes.g.cs) — a Fake{Service}Handler returning
+      Opt-in: generate the fake handler ({Service}.Fakes.g.cs), a Fake{Service}Handler returning
       deterministic canned responses (@examples output when present, synthesized placeholders
       otherwise) plus an AddFake{Service}Handler registration extension. Requires the server
       surface (SmithyGenerateServer). Projects with an explicit smithy-build.json set
