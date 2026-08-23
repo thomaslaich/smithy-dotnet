@@ -80,11 +80,11 @@ computed by hand across separate runs are not.
 
 ## Recording a run
 
-Results land under `benchmarks/results/` (`codec/` and `pipeline/`).
-BenchmarkDotNet writes the full environment block, OS, CPU, SDK and runtime
-version, JIT, and job configuration, into every report. Keep that block with any
-number that gets quoted; a benchmark figure without its environment is not a
-result.
+Results land under `benchmarks/results/`, grouped by measurement boundary
+(`client`, `codec`, or `server`) and then protocol or codec. BenchmarkDotNet
+writes the full environment block, OS, CPU, SDK and runtime version, JIT, and job
+configuration into every report. Keep that block with any number that gets
+quoted; a benchmark figure without its environment is not a result.
 
 ## Known gaps
 
@@ -99,5 +99,6 @@ Stated here rather than discovered later:
   compared at all.
 - **No wide structures.** The widest shape in the model is six members, so nothing
   here shows how member lookup or the write path scale with structure width.
-- **Single protocol.** `restJson1` only. CBOR, XML and proto have no coverage,
-  even though the JSON codec fixes have visible analogues in the CBOR codec.
+- **No end-to-end RPCv2 CBOR or XML comparison.** JSON and gRPC have client and
+  server coverage. CBOR and XML currently have codec serialization coverage
+  only.

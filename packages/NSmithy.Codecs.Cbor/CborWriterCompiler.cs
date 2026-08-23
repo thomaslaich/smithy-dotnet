@@ -423,8 +423,15 @@ internal sealed class ListCborValueWriter<TCollection, TElement>(
             return;
         }
 
-        var elements = schema.GetElements(value).ToArray();
-        writer.WriteStartArray(elements.Length);
+        var elements = schema.GetElements(value);
+        if (!elements.TryGetNonEnumeratedCount(out var count))
+        {
+            var materialized = elements.ToArray();
+            elements = materialized;
+            count = materialized.Length;
+        }
+
+        writer.WriteStartArray(count);
         foreach (var element in elements)
         {
             elementWriter.Write(writer, element);
@@ -447,8 +454,15 @@ internal sealed class MapCborValueWriter<TDictionary, TValue>(
             return;
         }
 
-        var entries = schema.GetEntries(value).ToArray();
-        writer.WriteStartMap(entries.Length);
+        var entries = schema.GetEntries(value);
+        if (!entries.TryGetNonEnumeratedCount(out var count))
+        {
+            var materialized = entries.ToArray();
+            entries = materialized;
+            count = materialized.Length;
+        }
+
+        writer.WriteStartMap(count);
         foreach (var entry in entries)
         {
             writer.WriteTextString(entry.Key);
