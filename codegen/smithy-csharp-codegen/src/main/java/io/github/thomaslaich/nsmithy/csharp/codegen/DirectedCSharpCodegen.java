@@ -4,7 +4,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ClientDependencyI
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ClientGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ErrorGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeClientGenerator;
-import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeHandlerGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.IntEnumGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ListGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.MapGenerator;
@@ -111,7 +111,7 @@ final class DirectedCSharpCodegen
             .useFileWriter(
                 dir + "/" + typeName + ".Fakes.Server.g.cs",
                 csNamespace,
-                writer -> new FakeGenerator(ctx, writer, directive.shape()).run());
+                writer -> new FakeHandlerGenerator(ctx, writer, directive.shape()).run());
       }
       if (ctx.settings().generateClient()) {
         ctx.writerDelegator()

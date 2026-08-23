@@ -28,14 +28,14 @@ import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
-public final class FakeGenerator implements Runnable {
+public final class FakeHandlerGenerator implements Runnable {
 
   private final GenerationContext context;
   private final CSharpWriter writer;
   private final ServiceShape service;
   private final FakeValueSynthesizer values;
 
-  public FakeGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
+  public FakeHandlerGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
     this.writer = w;
     this.service = s;

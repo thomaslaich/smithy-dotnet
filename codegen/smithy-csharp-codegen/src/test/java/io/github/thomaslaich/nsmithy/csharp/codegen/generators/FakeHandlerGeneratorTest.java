@@ -18,7 +18,7 @@ import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.ShapeId;
 
-final class FakeGeneratorTest {
+final class FakeHandlerGeneratorTest {
 
   @TempDir java.nio.file.Path tempDir;
 
@@ -237,7 +237,7 @@ final class FakeGeneratorTest {
     var writer = new CSharpWriter("Example.Example.Fake");
     var service = model.expectShape(ShapeId.from("example.fake#Fakeable"), ServiceShape.class);
 
-    new FakeGenerator(context, writer, service).run();
+    new FakeHandlerGenerator(context, writer, service).run();
 
     return writer.toString();
   }

@@ -1,5 +1,5 @@
 /*
- * Shared value synthesis for the generated fakes (FakeGenerator and FakeClientGenerator).
+ * Shared value synthesis for the generated fakes (FakeHandlerGenerator and FakeClientGenerator).
  * Produces C# expressions for canned operation outputs: the output of the operation's first
  * non-error @examples entry when present, otherwise placeholder values synthesized from the
  * shapes (self-describing strings, first enum and union variants, single-element collections,
