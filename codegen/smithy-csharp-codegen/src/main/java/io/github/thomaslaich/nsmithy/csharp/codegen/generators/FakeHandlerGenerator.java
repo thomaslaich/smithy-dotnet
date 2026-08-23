@@ -1,8 +1,10 @@
 /*
  * Fake handler generator, opt-in via generateFakes. Emits:
  *   - `Fake{Service}Handler : I{Service}Handler` whose methods return canned responses
- *     synthesized by FakeValueSynthesizer (the first non-error @examples output when present,
- *     deterministic placeholders otherwise).
+ *     synthesized by FakeValueSynthesizer. Operations with multiple @examples entries (or error
+ *     examples) match the incoming input against the example inputs via FakeExampleMatcher to
+ *     pick the response; otherwise the first non-error @examples output is returned when present,
+ *     deterministic placeholders otherwise.
  *
  * The class is registered through the ordinary Add{Service}Handler<T>() extension. Its operation
  * methods are virtual so a subclass can replace individual operations; registering a real
@@ -34,12 +36,14 @@ public final class FakeHandlerGenerator implements Runnable {
   private final CSharpWriter writer;
   private final ServiceShape service;
   private final FakeValueSynthesizer values;
+  private final FakeExampleMatcher matcher;
 
   public FakeHandlerGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
     this.writer = w;
     this.service = s;
     this.values = new FakeValueSynthesizer(c, "fake handler");
+    this.matcher = new FakeExampleMatcher(c, values);
   }
 
   @Override
@@ -62,9 +66,12 @@ public final class FakeHandlerGenerator implements Runnable {
     writer.writeXmlDocs(
         "Fake "
             + aggInterface
-            + " returning canned responses: the output of each operation's first non-error"
-            + " @examples entry when present, otherwise placeholder values synthesized from the"
-            + " model. Responses are deterministic. Override an operation method in a subclass, or"
+            + " returning canned responses. When an operation has multiple @examples entries the"
+            + " input is matched against the example inputs in model order (members absent from an"
+            + " example are wildcards) and the first match decides the response; a matched error"
+            + " example throws the modeled error. Otherwise the first non-error @examples output is"
+            + " returned when present, placeholder values synthesized from the model otherwise."
+            + " Responses are deterministic. Override an operation method in a subclass, or"
             + " register a real per-operation handler after this one, to replace individual"
             + " operations.",
         Map.of());
@@ -81,6 +88,7 @@ public final class FakeHandlerGenerator implements Runnable {
             first = false;
             writeOperationMethod(op);
           }
+          matcher.writePendingMatchers(writer);
           values.writePendingIterators(writer);
         });
   }
@@ -88,17 +96,8 @@ public final class FakeHandlerGenerator implements Runnable {
   // ---------------- operation methods ----------------
 
   private void writeOperationMethod(OperationShape op) {
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     writer.write("public virtual $L", operationSignature(op));
-    if (!hasOutput) {
-      writer.openBlock(
-          "{", "}", () -> writer.write("return System.Threading.Tasks.Task.CompletedTask;"));
-      return;
-    }
-
-    String expr = values.outputExpr(op);
-    writer.openBlock(
-        "{", "}", () -> writer.write("return System.Threading.Tasks.Task.FromResult($L);", expr));
+    writer.openBlock("{", "}", () -> matcher.writeOperationBody(writer, op));
   }
 
   /** Same delegate shape the handler interfaces declare; see ServerGenerator. */

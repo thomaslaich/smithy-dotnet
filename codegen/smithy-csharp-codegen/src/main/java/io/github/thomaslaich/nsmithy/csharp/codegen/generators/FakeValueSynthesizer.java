@@ -1,7 +1,8 @@
 /*
  * Shared value synthesis for the generated fakes (FakeHandlerGenerator and FakeClientGenerator).
- * Produces C# expressions for canned operation outputs: the output of the operation's first
- * non-error @examples entry when present, otherwise placeholder values synthesized from the
+ * Produces C# expressions for canned operation outputs and errors: the output of a specific
+ * @examples entry (FakeExampleMatcher picks which one by matching the input), the fallback output
+ * of the operation's first non-error @examples entry, or placeholder values synthesized from the
  * shapes (self-describing strings, first enum and union variants, single-element collections,
  * constraint minimums). All values are compiled in as literals, so responses are deterministic
  * across calls, runs, and regenerations of an unchanged model.
@@ -60,6 +61,10 @@ final class FakeValueSynthesizer {
     this.subject = subject;
   }
 
+  String subject() {
+    return subject;
+  }
+
   /** The full C# expression for the operation's fake output; the output must not be Unit. */
   String outputExpr(OperationShape op) {
     Model model = context.model();
@@ -80,6 +85,60 @@ final class FakeValueSynthesizer {
           "Cannot synthesize a fake output for operation " + op.getId() + ".");
     }
     return expr;
+  }
+
+  /** The C# expression for the operation's output built from a specific @examples output node. */
+  String outputExprFor(OperationShape op, ObjectNode example) {
+    StructureShape output = context.model().expectShape(op.getOutputShape(), StructureShape.class);
+    String expr = structureExpr(output, example, new LinkedHashSet<>(), op);
+    if (expr == null) {
+      throw new CodegenException(
+          "Cannot synthesize a fake output for operation " + op.getId() + ".");
+    }
+    return expr;
+  }
+
+  /**
+   * The C# expression constructing a generated error (an Exception subclass, so the first
+   * constructor parameter is the message and the remaining parameters are camelCase named
+   * arguments) from an @examples error content node. Members absent from the content are omitted
+   * when optional and synthesized as placeholders when required.
+   */
+  String errorExpr(ShapeId errorId, ObjectNode content) {
+    Model model = context.model();
+    StructureShape error = model.expectShape(errorId, StructureShape.class);
+    MemberShape messageMember = ShapeSupport.errorMessageMember(model, error).orElse(null);
+
+    List<String> args = new ArrayList<>();
+    Node messageNode =
+        messageMember == null
+            ? null
+            : content.getMember(messageMember.getMemberName()).orElse(null);
+    args.add(
+        "message: "
+            + (messageNode != null && messageNode.isStringNode()
+                ? CSharpNaming.formatString(messageNode.expectStringNode().getValue())
+                : "null"));
+
+    for (MemberShape member : ShapeSupport.constructorMembers(error, messageMember)) {
+      Node valueNode = content.getMember(member.getMemberName()).orElse(null);
+      if (valueNode != null && valueNode.isNullNode()) {
+        valueNode = null;
+      }
+      if (valueNode == null && !ShapeSupport.isRequired(member)) {
+        continue;
+      }
+      String expr = memberExpr(member, valueNode, new LinkedHashSet<>());
+      if (expr == null) {
+        if (ShapeSupport.isRequired(member)) {
+          throw new CodegenException(
+              "Cannot synthesize a fake value for required error member " + member.getId() + ".");
+        }
+        continue;
+      }
+      args.add(CSharpNaming.parameterName(member.getMemberName()) + ": " + expr);
+    }
+    return "new " + qualifiedType(error) + "(" + String.join(", ", args) + ")";
   }
 
   /** Writes the async iterators recorded for event-stream members, one blank line before each. */
@@ -205,7 +264,7 @@ final class FakeValueSynthesizer {
     };
   }
 
-  private String enumExpr(Shape target, Node node) {
+  String enumExpr(Shape target, Node node) {
     String typeName = qualifiedType(target);
     if (node != null && node.isStringNode()) {
       return "new "
@@ -218,7 +277,7 @@ final class FakeValueSynthesizer {
     return typeName + "." + CSharpNaming.propertyName(members.get(0).getMemberName());
   }
 
-  private String intEnumExpr(Shape target, Node node) {
+  String intEnumExpr(Shape target, Node node) {
     String typeName = qualifiedType(target);
     if (node != null && node.isNumberNode()) {
       return "(" + typeName + ")" + node.expectNumberNode().getValue().longValue();
@@ -374,16 +433,27 @@ final class FakeValueSynthesizer {
       return null;
     }
 
-    String name =
+    String base =
         "Fake"
             + CSharpNaming.typeName(op.getId().getName())
             + CSharpNaming.propertyName(member.getMemberName())
             + "Events";
+    // One iterator per synthesized expression: match arms for different @examples entries of the
+    // same event-stream operation each need their own method.
+    String name = base;
+    int suffix = 1;
+    while (hasPendingIterator(name)) {
+      name = base + suffix++;
+    }
     pendingIterators.add(new PendingIterator(name, eventType, events));
     return name + "()";
   }
 
-  private String blobBytesExpr(Node node, String hint) {
+  private boolean hasPendingIterator(String name) {
+    return pendingIterators.stream().anyMatch(iterator -> iterator.name().equals(name));
+  }
+
+  String blobBytesExpr(Node node, String hint) {
     if (node != null && node.isStringNode()) {
       return "System.Convert.FromBase64String("
           + CSharpNaming.formatString(node.expectStringNode().getValue())
@@ -392,7 +462,7 @@ final class FakeValueSynthesizer {
     return "System.Text.Encoding.UTF8.GetBytes(" + CSharpNaming.formatString(hint) + ")";
   }
 
-  private String timestampExpr(Node node) {
+  String timestampExpr(Node node) {
     if (node != null && node.isNumberNode()) {
       return "System.DateTimeOffset.FromUnixTimeSeconds("
           + node.expectNumberNode().getValue().longValue()
@@ -406,7 +476,7 @@ final class FakeValueSynthesizer {
     return "System.DateTimeOffset.FromUnixTimeSeconds(" + PLACEHOLDER_EPOCH_SECONDS + ")";
   }
 
-  private String numberExpr(ShapeType type, Node node, MemberShape member, Shape target) {
+  String numberExpr(ShapeType type, Node node, MemberShape member, Shape target) {
     if (node != null
         && node.isStringNode()
         && (type == ShapeType.FLOAT || type == ShapeType.DOUBLE)) {
@@ -480,7 +550,7 @@ final class FakeValueSynthesizer {
     return target.getTrait(traitClass).orElse(null);
   }
 
-  private String qualifiedType(Shape shape) {
+  String qualifiedType(Shape shape) {
     return CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(shape));
   }
 }

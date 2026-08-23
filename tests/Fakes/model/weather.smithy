@@ -22,6 +22,22 @@ service Weather {
             coordinates: { latitude: 47.6, longitude: -122.3 }
         }
     }
+    {
+        title: "Get Houston"
+        input: { cityId: "HOU" }
+        output: {
+            name: "Houston"
+            coordinates: { latitude: 29.8, longitude: -95.4 }
+        }
+    }
+    {
+        title: "Get unknown city"
+        input: { cityId: "UNK" }
+        error: {
+            shapeId: "example.weather#NoSuchCity"
+            content: { message: "no city with ID UNK" }
+        }
+    }
 ])
 @readonly
 @http(method: "GET", uri: "/cities/{cityId}")
@@ -38,6 +54,16 @@ operation GetCity {
         @required
         coordinates: CityCoordinates
     }
+
+    errors: [NoSuchCity]
+}
+
+/// The requested city does not exist.
+@error("client")
+@httpError(404)
+structure NoSuchCity {
+    @required
+    message: String
 }
 
 /// Returns the current server time in UTC.

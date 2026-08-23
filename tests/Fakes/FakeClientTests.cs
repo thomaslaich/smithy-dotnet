@@ -28,7 +28,8 @@ public class FakeClientTests
     public async Task ConsumerLogicRunsAgainstTheFakeWithoutAServer()
     {
         // Out of the box: ListCities has no @examples, so the fake returns one
-        // synthesized summary; GetCity returns its @examples entry (Seattle).
+        // synthesized summary; its city ID matches no GetCity example, so
+        // GetCity falls back to its first @examples entry (Seattle).
         using IWeatherClient client = new FakeWeatherClient();
 
         var names = await CityReport.NorthernCityNamesAsync(client);
@@ -44,6 +45,34 @@ public class FakeClientTests
         var names = await CityReport.NorthernCityNamesAsync(client);
 
         Assert.Equal(["Seattle"], names);
+    }
+
+    [Fact]
+    public async Task InputMatchingPicksTheExampleResponse()
+    {
+        using var client = new FakeWeatherClient();
+
+        var seattle = await client.GetCityAsync(new GetCityInput("SEA"));
+        var houston = await client.GetCityAsync(new GetCityInput("HOU"));
+        var fallback = await client.GetCityAsync(new GetCityInput("nowhere"));
+
+        Assert.Equal("Seattle", seattle.Name);
+        Assert.Equal("Houston", houston.Name);
+        Assert.Equal(29.8f, houston.Coordinates.Latitude);
+        // Unmatched inputs fall back to the first non-error example.
+        Assert.Equal("Seattle", fallback.Name);
+    }
+
+    [Fact]
+    public async Task MatchedErrorExampleThrowsTheModeledError()
+    {
+        using var client = new FakeWeatherClient();
+
+        var error = await Assert.ThrowsAsync<NoSuchCity>(() =>
+            client.GetCityAsync(new GetCityInput("UNK"))
+        );
+
+        Assert.Equal("no city with ID UNK", error.Message);
     }
 
     [Fact]

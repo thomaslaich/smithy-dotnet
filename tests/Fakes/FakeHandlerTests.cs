@@ -27,6 +27,17 @@ public class FakeHandlerTests
         Assert.Equal("Seattle", city.Name);
         Assert.Equal(47.6f, city.Coordinates.Latitude);
 
+        // The fake handler matches the input against the @examples inputs, so
+        // each example's data (including its error example) survives the round
+        // trip over the wire.
+        var houston = await client.GetCityAsync(new GetCityInput("HOU"));
+        Assert.Equal("Houston", houston.Name);
+
+        var error = await Assert.ThrowsAsync<NoSuchCity>(() =>
+            client.GetCityAsync(new GetCityInput("UNK"))
+        );
+        Assert.Equal("no city with ID UNK", error.Message);
+
         await app.StopAsync();
     }
 }

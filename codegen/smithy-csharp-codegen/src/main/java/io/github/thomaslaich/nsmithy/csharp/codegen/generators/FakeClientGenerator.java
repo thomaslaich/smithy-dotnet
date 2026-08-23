@@ -2,6 +2,8 @@
  * Fake client generator, opt-in via generateFakes. Emits:
  *   - `Fake{Service}Client : I{Service}Client` whose methods return canned responses synthesized
  *     by FakeValueSynthesizer, with no network call, serialization, or protocol involvement.
+ *     Operations with multiple @examples entries (or error examples) match the incoming input
+ *     against the example inputs via FakeExampleMatcher to pick the response.
  *
  * Operation methods are virtual so a subclass can replace individual operations. Because no wire
  * protocol is involved, every operation responds, including event-stream operations the real
@@ -12,7 +14,6 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
 import java.util.List;
@@ -32,12 +33,14 @@ public final class FakeClientGenerator implements Runnable {
   private final CSharpWriter writer;
   private final ServiceShape service;
   private final FakeValueSynthesizer values;
+  private final FakeExampleMatcher matcher;
 
   public FakeClientGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
     this.writer = w;
     this.service = s;
     this.values = new FakeValueSynthesizer(c, "fake client");
+    this.matcher = new FakeExampleMatcher(c, values);
   }
 
   @Override
@@ -58,9 +61,12 @@ public final class FakeClientGenerator implements Runnable {
     writer.writeXmlDocs(
         "Fake "
             + interfaceName
-            + " returning canned responses without any network call: the output of each"
-            + " operation's first non-error @examples entry when present, otherwise placeholder"
-            + " values synthesized from the model. Responses are deterministic. Override an"
+            + " returning canned responses without any network call. When an operation has"
+            + " multiple @examples entries the input is matched against the example inputs in"
+            + " model order (members absent from an example are wildcards) and the first match"
+            + " decides the response; a matched error example throws the modeled error. Otherwise"
+            + " the first non-error @examples output is returned when present, placeholder values"
+            + " synthesized from the model otherwise. Responses are deterministic. Override an"
             + " operation method in a subclass to replace individual operations.",
         Map.of());
     writer.write("public class $L : $L", fakeClass, interfaceName);
@@ -75,6 +81,7 @@ public final class FakeClientGenerator implements Runnable {
             writer.write("");
           }
           writer.write("public virtual void Dispose() { }");
+          matcher.writePendingMatchers(writer);
           values.writePendingIterators(writer);
         });
   }
@@ -82,17 +89,8 @@ public final class FakeClientGenerator implements Runnable {
   // ---------------- operation methods ----------------
 
   private void writeOperationMethod(OperationShape op) {
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     writer.write("public virtual $L", ClientGenerator.operationSignature(context, op));
-    if (!hasOutput) {
-      writer.openBlock(
-          "{", "}", () -> writer.write("return System.Threading.Tasks.Task.CompletedTask;"));
-      return;
-    }
-
-    String expr = values.outputExpr(op);
-    writer.openBlock(
-        "{", "}", () -> writer.write("return System.Threading.Tasks.Task.FromResult($L);", expr));
+    writer.openBlock("{", "}", () -> matcher.writeOperationBody(writer, op));
   }
 
   /**

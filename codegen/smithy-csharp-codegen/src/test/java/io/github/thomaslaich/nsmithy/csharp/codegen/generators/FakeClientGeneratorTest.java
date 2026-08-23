@@ -40,6 +40,14 @@ final class FakeClientGeneratorTest {
               title: "Get city",
               input: { id: "c1" },
               output: { name: "Zurich", population: 400000 }
+          },
+          {
+              title: "Get missing city",
+              input: { id: "nope" },
+              error: {
+                  shapeId: "example.fake#NoSuchCity",
+                  content: { message: "unknown city" }
+              }
           }
       ])
       operation GetCity {
@@ -52,6 +60,13 @@ final class FakeClientGeneratorTest {
               name: String
               population: Integer
           }
+          errors: [NoSuchCity]
+      }
+
+      @error("client")
+      structure NoSuchCity {
+          @required
+          message: String
       }
 
       @paginated(inputToken: "nextToken", outputToken: "nextToken", items: "items")
@@ -114,6 +129,23 @@ final class FakeClientGeneratorTest {
         generated.contains(
             "return System.Threading.Tasks.Task.FromResult(new Example.Example.Fake.GetCityOutput("
                 + "Name: \"Zurich\", Population: 400000));"),
+        generated);
+  }
+
+  @Test
+  void matchesExampleInputsAndThrowsMatchedErrorExamples() throws Exception {
+    String generated = renderFake();
+
+    assertTrue(generated.contains("if (MatchesGetCityExample0(input))"), generated);
+    assertTrue(
+        generated.contains(
+            "private static bool MatchesGetCityExample1(Example.Example.Fake.GetCityInput input)"),
+        generated);
+    assertTrue(generated.contains("if (!(input.Id == \"nope\"))"), generated);
+    assertTrue(
+        generated.contains(
+            "return System.Threading.Tasks.Task.FromException<Example.Example.Fake.GetCityOutput>("
+                + "new Example.Example.Fake.NoSuchCity(message: \"unknown city\"));"),
         generated);
   }
 
