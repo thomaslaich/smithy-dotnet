@@ -36,16 +36,7 @@ The priorities below are what remains.
 - Keep the scope driven by conformance and observed runtime behavior rather
   than by protocol checklists.
 
-### 2. Move the client runtime to the target architecture
-
-The client runtime pipeline, standard retry, operation timeouts, telemetry,
-paginators, split identity/signing auth, operation endpoint host labels,
-User-Agent behavior, and typed execution context have landed. The end-state is documented in
-[`designs/client-architecture.md`](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/client-architecture.md).
-Further changes in this area should be driven by conformance gaps and concrete
-extension requirements.
-
-### 3. Harden streaming operations
+### 2. Harden streaming operations
 
 NSmithy has two experimental event-streaming surfaces: native gRPC (client,
 server, and bidirectional streaming) and `rpcv2Cbor` event streams over
@@ -61,7 +52,7 @@ This work includes:
 - Extending streaming support beyond event streams, especially streaming blob
   payloads.
 
-### 4. Expand to async protocols
+### 3. Expand to async protocols
 
 NSmithy's current protocol work is mostly request/response oriented. A separate
 near-term goal is to validate that the runtime and generator model can also
@@ -76,7 +67,7 @@ This work includes:
 - Using these protocols to pressure-test the existing transport, codec, and
   client/server seams beyond HTTP-centric assumptions.
 
-### 5. Support Smithy AI traits and MCP generation
+### 4. Support Smithy AI traits and MCP generation
 
 Support Smithy's AI-oriented traits so that .NET and protocol artifacts can be
 generated for tool-driven and agent-driven workflows, rather than treating the
@@ -89,13 +80,6 @@ This work includes:
   modeled contract maps cleanly to MCP tools, resources, and prompts.
 - Defining the runtime and generation boundaries needed so AI-trait-aware
   models remain inspectable, testable, and versionable.
-
-### 6. Honor protocol HTTP-version traits
-
-Generated clients honor the protocol trait's ordered `http` and
-`eventStreamHttp` ALPN preferences. Client-owned and generated-DI `HttpClient`
-instances request the first supported version and allow downgrade when the
-modeled list does; caller-owned clients remain caller-configured.
 
 ## Later Work
 
