@@ -1,32 +1,34 @@
 ---
 title: RPC v2 CBOR
-description: smithy.protocols#rpcv2Cbor — binary CBOR encoding over HTTP. Client and server support.
+description: Binary CBOR RPC over HTTP using smithy.protocols#rpcv2Cbor, with unary and streaming client and server support.
 ---
 
-`smithy.protocols#rpcv2Cbor` is Smithy's binary protocol. Messages are encoded
-as [CBOR](https://cbor.io/) and carried over HTTP POST requests on a fixed
-path derived from the service and operation names. Status: **Preview**.
+`smithy.protocols#rpcv2Cbor` is a compact binary RPC protocol defined by Smithy.
+NSmithy generates typed clients and ASP.NET Core servers for unary and event
+stream operations.
 
-See [Protocol Status](/smithy-dotnet/protocols/status/) for current conformance
-numbers.
+Use it when you control both peers and want smaller binary messages without
+adding protobuf field numbers to the model. Use [REST JSON](../rest-json/) when
+HTTP resources, routes, and broad REST tooling are more important.
 
-## Maven Dependency
+See [Protocol Status](../status/) for maturity and current conformance numbers.
 
-No extra Maven dependency beyond the codegen plugin — `smithy.protocols` shapes
-are bundled with the Smithy CLI.
+## Protocol behavior
 
-## NuGet Packages
-
-| Purpose | Packages |
+| Area | rpcv2Cbor |
 | --- | --- |
-| Client | `NSmithy.Client`, `NSmithy.Codecs.Cbor`, `NSmithy.Protocols.RpcV2Cbor` |
-| Server (ASP.NET Core) | `NSmithy.Server.AspNetCore`, `NSmithy.Codecs.Cbor`, `NSmithy.Protocols.RpcV2Cbor` |
+| Route | `POST /service/{Service}/operation/{Operation}` |
+| Body | Binary CBOR |
+| Content type | `application/cbor` |
+| Operation header | `Smithy-Protocol: rpc-v2-cbor` |
+| Errors | Modeled type in the CBOR `__type` member |
+| Streaming | Input, output, and duplex event streams |
+| HTTP bindings | Not used |
 
 ## Modeling
 
-Apply `@rpcv2Cbor` to the service. Operations do not carry `@http` traits —
-the protocol maps each operation to a fixed
-`POST /service/{Service}/operation/{Operation}` path automatically:
+Apply `@rpcv2Cbor` to the service. The protocol derives routes automatically,
+so operations do not use `@http`:
 
 ```smithy
 $version: "2"
@@ -60,11 +62,13 @@ structure NoSuchResource {
 }
 ```
 
-## On the Wire
+No additional Maven dependency is needed. The `smithy.protocols` shapes are
+bundled with the Smithy CLI.
 
-rpcv2Cbor is RPC-style over a fixed path with a CBOR body. The bodies below are
-shown in CBOR diagnostic notation; on the wire they are binary CBOR (structures
-are encoded as indefinite-length maps):
+## On the wire
+
+Every operation is a POST to a path derived from the service and operation
+names:
 
 ```http
 POST /service/Weather/operation/GetCity HTTP/1.1
@@ -73,27 +77,41 @@ Smithy-Protocol: rpc-v2-cbor
 Content-Type: application/cbor
 Accept: application/cbor
 
-{"cityId": "123"}      # CBOR, diagnostic notation
+<CBOR {"cityId": "123"}>
 
 HTTP/1.1 200 OK
 Smithy-Protocol: rpc-v2-cbor
 Content-Type: application/cbor
 
-{"name": "Seattle"}    # CBOR, diagnostic notation
+<CBOR {"name": "Seattle"}>
 ```
 
-The path is always `/service/{Service}/operation/{Operation}` — operations carry
-no `@http` traits. Errors carry a `__type` discriminator in the CBOR body.
+The notation above describes the decoded values. The actual body contains CBOR
+bytes.
 
-## Usage
+## Streaming
 
-The generated handler and client are identical to every other protocol — see the
-[Protocols Overview](/smithy-dotnet/protocols/overview/) for the canonical
-example. The CBOR codec is wired up automatically; the only thing specific to
-this protocol is the `@rpcv2Cbor` trait and the binary wire format on the fixed
-operation path.
+A streaming operation places an `@streaming` union in its input, output, or
+both. Generated shapes expose the stream as `IAsyncEnumerable<TEvent>`.
 
-## Example
+rpcv2Cbor carries event messages in a framed stream and encodes modeled event
+payloads as CBOR. NSmithy supports server streaming, client streaming, and
+bidirectional streaming. Initial non-streaming members stay on the modeled input
+or output around the event stream.
 
-A complete working server+client example is available in
-[`examples/rpcv2cbor`](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/rpcv2cbor).
+## Packages
+
+| Surface | Packages |
+| --- | --- |
+| Client | `NSmithy.Client`, `NSmithy.Codecs.Cbor`, `NSmithy.Protocols.RpcV2Cbor` |
+| Server | `NSmithy.Server.AspNetCore`, `NSmithy.Codecs.Cbor`, `NSmithy.Protocols.RpcV2Cbor` |
+
+## Examples
+
+- [Unary rpcv2Cbor weather service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/rpcv2cbor)
+- [Streaming rpcv2Cbor chat service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/rpcv2cbor-streaming)
+
+## Specification and tests
+
+- [Smithy RPC v2 CBOR specification](https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html)
+- [Official rpcv2Cbor protocol tests](https://github.com/smithy-lang/smithy/tree/main/smithy-protocol-tests/model/rpcv2Cbor)

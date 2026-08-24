@@ -1,94 +1,83 @@
 ---
 title: Protocol Status
-description: Where protocol support stands in the current NSmithy preview.
+description: Maturity and official conformance coverage for every NSmithy protocol.
 ---
 
-NSmithy is still preview-stage. "Supported" here means there is working
-generator and runtime support for a usable slice, not that the protocol is
-complete or fully conformant across the Smithy surface.
+This page is the source of truth for protocol maturity and conformance. The
+individual protocol pages describe behavior without repeating status labels or
+test totals.
 
-## Current Status
+## Current status
 
-Conformance is reported separately for the generated **client** and **server**,
-each counted against the official cases that actually apply to that direction
-(`appliesTo`) in the pinned protocol-test models. A case that only applies to a
-server is never counted toward client coverage and vice versa.
-
-| Protocol | Surfaces | Stage | Client | Server |
+| Protocol | Surfaces | Stage | Client conformance | Server conformance |
 | --- | --- | --- | --- | --- |
-| `alloy#simpleRestJson` | both | Preview | 43/43 (100%) | 43/43 (100%) |
-| `aws.protocols#restJson1` | both | Preview | 246/250 (98.4%) | 209/228 (91.7%) |
-| `aws.protocols#awsJson1_1` | client | Early preview | requests 6/57 (10.5%), responses 18/61 (29.5%) | — |
-| `aws.protocols#awsJson1_0` | client | Early preview | runtime support; no conformance project yet | — |
-| `aws.protocols#awsQuery` | client | Preview | requests 38/38 (100%), responses 39/39 (100%) | — |
-| `aws.protocols#ec2Query` | client | Preview | requests 30/30 (100%), responses 29/29 (100%) | — |
-| `aws.protocols#restXml` | client | Early preview | requests 4/113 (3.5%), responses 39/86 (45.3%) | — |
-| `smithy.protocols#rpcv2Cbor` | both | Preview | 61/68 (89.7%) | 57/60 (95.0%) |
-| `alloy.proto#grpc` | both | Experimental | tested via examples¹ | tested via examples¹ |
+| [`aws.protocols#restJson1`](../rest-json/) | Client and server | Preview | Requests 137/142 (96.5%), responses 106/108 (98.1%) | Requests 118/134 (88.1%), responses 92/92 (100%), malformed 655/655 (100%) |
+| [`aws.protocols#awsJson1_1`](../aws-json/) | Client | Early preview | Requests 6/57 (10.5%), responses 18/62 (29.0%) | N/A |
+| [`aws.protocols#awsJson1_0`](../aws-json/) | Client | Early preview | Runtime support, no conformance project | N/A |
+| [`aws.protocols#awsQuery`](../aws-query/) | Client | Preview | Requests 38/38 (100%), responses 39/39 (100%) | N/A |
+| [`aws.protocols#ec2Query`](../aws-ec2-query/) | Client | Preview | Requests 30/30 (100%), responses 29/29 (100%) | N/A |
+| [`aws.protocols#restXml`](../rest-xml/) | Client | Early preview | Requests 4/113 (3.5%), responses 39/86 (45.3%) | N/A |
+| [`smithy.protocols#rpcv2Cbor`](../rpc-v2-cbor/) | Client and server | Preview | Requests 27/29 (93.1%), responses 34/43 (79.1%) | Requests 32/37 (86.5%), responses 25/27 (92.6%) |
+| [`alloy#simpleRestJson`](../rest-json/) | Client and server | Preview | Requests 23/23 (100%), responses 20/20 (100%) | Requests 23/23 (100%), responses 20/20 (100%) |
+| [`alloy.proto#grpc`](../grpc/) | Client and server | Experimental | End-to-end examples | End-to-end examples |
 
-¹ `alloy.proto#grpc` is not covered by Smithy's HTTP conformance suite; it is
-validated through end-to-end examples instead, and has the least maturity, the
-smallest test surface, and more explicit model requirements such as
-`alloy.proto#protoIndex`.
+## How the numbers are counted
 
-Notes:
+Each fraction is:
 
-- `alloy#simpleRestJson`'s protocol tests all declare `appliesTo: both`; both the
-  client and the generated ASP.NET Core server now run every applicable case.
-- AWS restJson1 exercises both surfaces against nearly every applicable case.
-  The handful of unmet cases are curated out of the client allowlist; on the
-  server, cases whose operation has no generated handler (auxiliary services like
-  Glacier that ship fixtures but aren't part of the `RestJson` service) are out
-  of scope rather than counted as failures.
-- These figures dropped in several places against the previous release, and none
-  of it is a regression. The suites previously compared a response's status,
-  headers and parse success but never the deserialized values, because the
-  assertion matched fixture keys against generated constructor parameter names and
-  silently skipped every member. With that repaired, 30 cases across the protocols
-  now fail honestly rather than passing vacuously. They are listed in each
-  project's `KnownParamGaps` and subtracted from the counts above, and cluster in
-  query-string binding, streaming blobs, content encoding and float special
-  values.
-- restJson1's server additionally runs all 655 of Smithy's
-  `httpMalformedRequestTests` cases, which assert what a server owes for a request
-  it cannot accept. See [Validation](/smithy-dotnet/servers/validation/).
-- AWS JSON support is client-only. The current conformance project targets
-  `aws.protocols#awsJson1_1`; the runtime also exposes `AwsJson10Protocol` for
-  `aws.protocols#awsJson1_0`, but there is not yet a separate `awsJson1_0`
-  conformance project.
-- AWS restXml is client-only and now runs a verified slice of the official AWS
-  protocol tests, mostly response deserialization plus a small request-binding
-  subset.
-- AWS Query and EC2 Query are client-only and run every applicable official
-  request and response case, including collection flattening, XML wrappers,
-  custom error codes, endpoint paths, and request compression.
-- `smithy.protocols#rpcv2Cbor`, `alloy#simpleRestJson`, and `aws.protocols#restJson1`
-  all exercise both the client and the generated server against their applicable
-  cases. `alloy#simpleRestJson` is the only one currently at 100% on both
+```text
+passing executable official cases / official cases applicable to that surface
+```
+
+Client and server totals are separate because Smithy test cases declare an
+`appliesTo` direction. A server-only case does not enter the client denominator,
+and a client-only case does not enter the server denominator.
+
+Cases listed in a conformance project's known-gap set remain in the denominator
+but not the numerator. Local regression fixtures run in the suites but do not
+count as official conformance.
+
+## Coverage notes
+
+- restJson1 client response coverage includes all official modeled-error cases.
+  The client passes 13/14 applicable error cases, and the server passes 3/3. The
+  remaining client case uses an `X-Amzn-Errortype` URI with a different
+  namespace.
+- The restJson1 server passes all 655 applicable
+  `httpMalformedRequestTests`. These cases verify structured responses for
+  requests that cannot be deserialized or validated.
+- Auxiliary fixture services without a generated handler are excluded from the
+  restJson1 server denominator. Local response regression cases are also
+  excluded from the official totals.
+- simpleRestJson passes every case in Alloy's protocol suite on both generated
   surfaces.
+- AWS Query and EC2 Query pass every applicable official client request and
+  response case.
+- The AWS JSON conformance project currently targets `awsJson1_1`.
+  `AwsJson10Protocol` has runtime support but no separate project.
+- gRPC is not part of Smithy's HTTP protocol test suite. Its codec and transport
+  tests cover complex messages, numeric encodings, collections, oneofs,
+  documents, errors, trailers, and all three streaming modes. Grpc.Net
+  interoperability is demonstrated by runnable examples but is not yet an
+  automated cross-implementation test matrix.
 
-## Recommended Use
+See [Validation](/smithy-dotnet/servers/validation/) for malformed request
+behavior.
 
-- Use simpleRestJson when your consumers are primarily .NET or Scala
-  (via [Smithy4s](https://disneystreaming.github.io/smithy4s/)).
-- Use AWS restJson1 when you need generated AWS-style REST/JSON clients or
-  ASP.NET Core server surfaces, broad cross-ecosystem compatibility (most
-  official Smithy generators target it), OpenAPI/Scalar generation, or
-  capabilities simpleRestJson lacks such as event streaming.
-- Use `smithy.protocols#rpcv2Cbor` for binary CBOR-encoded services; client and
-  server generation are both available.
-- Use AWS Query or EC2 Query for generated AWS-compatible clients with complete
-  official client conformance coverage. AWS JSON and AWS restXml still have a
-  smaller verified preview slice.
-- Treat `alloy.proto#grpc` as experimental: it has the smallest test surface and
-  the most explicit model requirements (see the footnote above).
+## Maturity labels
 
-## What "Early Stage" Means Here
+- **Preview:** useful end-to-end support with meaningful conformance coverage.
+  Some protocol features or convenience APIs are still incomplete.
+- **Early preview:** a narrower verified slice. Check the conformance totals and
+  known limitations before adopting it.
+- **Experimental:** the API and supported model surface can still change.
 
-In practice, earlier-stage protocols may still have one or more of these traits:
+## Reproducing the report
 
-- narrower protocol binding coverage
-- fewer end-to-end examples
-- less conformance-suite coverage
-- more implementation details that are still expected to move
-- more explicit project wiring or modeling constraints
+Each conformance project has a
+`ConformanceRateTests.ReportConformanceRate` test. Run it after `just codegen`
+and copy the emitted totals to this page.
+
+The fixtures come from the pinned Smithy and Alloy protocol-test model JARs.
+The upstream restJson1 sources are in the [Smithy
+repository](https://github.com/smithy-lang/smithy/tree/main/smithy-aws-protocol-tests/model/restJson1).

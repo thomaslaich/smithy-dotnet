@@ -1,38 +1,37 @@
 ---
 title: AWS restXml
-description: aws.protocols#restXml — XML over HTTP. Client-only, early preview.
+description: XML over HTTP client support for aws.protocols#restXml.
 ---
 
-`aws.protocols#restXml` is the XML-over-HTTP protocol used by AWS services such
-as S3 and Route 53. NSmithy generates a typed client that encodes request bodies
-as XML and decodes XML responses. Status: **Early preview, client-only**.
+`aws.protocols#restXml` is the XML over HTTP protocol used by AWS services such
+as S3 and Route 53. NSmithy generates typed clients with Smithy HTTP bindings,
+XML request bodies, and XML response bodies. Server generation and event
+streaming are not available.
 
-The passing slice is weighted toward response deserialization. Request binding
-coverage is still narrow and is expected to grow behind the conformance
-allowlist.
+Use restXml to call an existing AWS XML service or a compatible emulator. For a
+new service, prefer [restJson1](../rest-json/),
+[rpcv2Cbor](../rpc-v2-cbor/), or [gRPC](../grpc/).
 
-See [Protocol Status](/smithy-dotnet/protocols/status/) for current conformance
-numbers.
+See [Protocol Status](../status/) for maturity and current conformance numbers.
 
-## Maven Dependency
+## Protocol behavior
 
-```json
-"software.amazon.smithy:smithy-aws-traits:1.56.0"
-```
-
-## NuGet Packages
-
-| Purpose | Packages |
+| Area | restXml |
 | --- | --- |
-| Client | `NSmithy.Client`, `NSmithy.Protocols.RestXml` |
+| Route and method | Defined by `@http` |
+| Body | XML |
+| Content type | `application/xml` |
+| Member bindings | Standard Smithy HTTP binding traits |
+| Errors | Modeled code in an XML `Error` or `ErrorResponse` body |
+| Server | Not generated |
+| NSmithy streaming | Not implemented |
 
-`NSmithy.Protocols.RestXml` pulls in `NSmithy.Codecs.Xml` (the XML codec)
-transitively.
+restXml does not support document shapes.
 
 ## Modeling
 
-Apply `@restXml` to the service and `@http` to each operation, the same as
-`simpleRestJson`. Use `@xmlName` to override the XML element name for a member:
+Apply `@restXml` to the service and `@http` to each operation. XML traits
+control element names, namespaces, and collection layout.
 
 ```smithy
 $version: "2"
@@ -60,27 +59,19 @@ operation GetCity {
         @xmlName("Name")
         name: String
     }
-    errors: [NoSuchResource]
-}
-
-@error("client")
-structure NoSuchResource {
-    @required
-    resourceType: String
 }
 ```
 
-`@xmlName` overrides the element name in the serialized XML. Without it the
-member name is used as-is.
+Members without an HTTP binding are serialized in the XML body. `@xmlName`
+changes an element name, `@xmlNamespace` declares a namespace, `@xmlAttribute`
+moves a value to an attribute, and `@xmlFlattened` removes the normal collection
+wrapper.
 
-HTTP binding traits (`@httpLabel`, `@httpQuery`, `@httpHeader`, `@httpPayload`)
-work the same way as in the [REST JSON](/smithy-dotnet/protocols/rest-json/)
-protocols — members without an explicit binding go into the XML body.
+The standard REST binding traits place values in URI labels, query parameters,
+headers, prefix headers, response status codes, or a complete `@httpPayload`
+body.
 
-## On the Wire
-
-`GetCity` binds `cityId` to the URI path label; the response body is XML. The
-`@xmlName("Name")` on the output member sets its element name:
+## On the wire
 
 ```http
 GET /cities/123 HTTP/1.1
@@ -93,17 +84,36 @@ Content-Type: application/xml
 <GetCityOutput><Name>Seattle</Name></GetCityOutput>
 ```
 
-Members without an HTTP binding are carried in the XML body.
+A modeled error is selected from the `Code` element. NSmithy accepts both a
+direct `Error` body and the common `ErrorResponse > Error` envelope.
 
-## Usage
+## Dependencies
 
-The XML codec is wired up automatically by the generated client, which is used
-exactly like every other NSmithy client — see the [Protocols
-Overview](/smithy-dotnet/protocols/overview/). Only the `@restXml` trait and the
-XML wire format are specific to this protocol. NSmithy does not generate restXml
-servers.
+Add the AWS trait package to `smithy-build.json`:
 
-Explicit SigV4 signing exists in early preview; see
-[Authentication](/smithy-dotnet/guides/client-configuration/authentication/). For production calls to
-AWS XML services such as S3, prefer the official AWS SDK for .NET until NSmithy's
-AWS auth, endpoint resolution, retries, and pagination support mature.
+```json
+"software.amazon.smithy:smithy-aws-traits:1.73.0"
+```
+
+The client uses `NSmithy.Client`, `NSmithy.Codecs.Xml`, and
+`NSmithy.Protocols.RestXml`.
+
+## Calling AWS
+
+AWS endpoints normally require SigV4, regional endpoint resolution, and
+credentials. See
+[Authentication](/smithy-dotnet/guides/client-configuration/authentication/)
+for the NSmithy setup and [AWS Protocols](../aws-overview/) for current runtime
+gaps.
+
+## Example
+
+The [AWS LocalStack
+example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/aws-localstack)
+uses a restXml client to call S3 `ListBuckets`. NSmithy does not implement
+restXml streaming yet, so there is no streaming example.
+
+## Specification and tests
+
+- [AWS restXml specification](https://smithy.io/2.0/aws/protocols/aws-restxml-protocol.html)
+- [Official restXml protocol tests](https://github.com/smithy-lang/smithy/tree/main/smithy-aws-protocol-tests/model/restXml)

@@ -1,75 +1,94 @@
 ---
-title: AWS Protocols Overview
-description: Important context before using NSmithy's AWS protocol support.
+title: AWS Protocols
+description: Choose an AWS wire protocol and understand the runtime features needed to call AWS services.
 ---
 
-NSmithy's AWS protocol support exists primarily as a **proof of concept** — a
-vehicle for validating the generator's protocol abstraction, codec layer, and
-conformance test infrastructure against real AWS protocol definitions. This is
-especially true for `aws.protocols#restXml` and the AWS JSON protocols.
+NSmithy supports several wire protocols used by AWS services. AWS JSON, AWS
+Query, EC2 Query, and restXml are primarily useful for calling those services or
+compatible emulators such as LocalStack. restJson1 is the exception: it is also
+a practical protocol for APIs outside AWS.
 
-AWS restJson1 is the exception — see below.
+Protocol support is separate from the rest of the AWS SDK runtime. A successful
+production AWS client also needs authentication, endpoint rules, retries,
+credentials, and service-level conveniences.
 
-(`smithy.protocols#rpcv2Cbor` is a Smithy-standard binary protocol, not AWS-specific;
-it is documented as a top-level protocol rather than under this AWS section.)
+## Supported AWS protocols
 
-## Use the Official AWS SDK for .NET Instead
+| Protocol | Generated surfaces | Typical use |
+| --- | --- | --- |
+| [restJson1](../rest-json/) | Client and server | REST APIs, event streams, and AWS-compatible services |
+| [awsJson1_0 and awsJson1_1](../aws-json/) | Client | JSON RPC services such as DynamoDB |
+| [awsQuery](../aws-query/) | Client | Existing AWS Query services such as SQS |
+| [ec2Query](../aws-ec2-query/) | Client | EC2 Query services |
+| [restXml](../rest-xml/) | Client | XML services such as S3 |
 
-If your goal is to call AWS services in production with an AWS protocol,
-you should use the **[AWS SDK for .NET](https://github.com/aws/aws-sdk-net)**
-instead:
+See [Protocol Status](../status/) for maturity and conformance numbers.
 
-- It is officially supported and maintained by AWS.
-- It covers the full breadth of AWS services.
-- It includes authentication (SigV4/SigV4a), retries, endpoint resolution,
-  pagination helpers, and the complete set of service-specific endpoint rules.
+## New services
 
-## AWS restJson1 Is Different
+`restJson1` is useful beyond AWS and is a strong default for a new REST API.
+It has broad Smithy tooling support, standard HTTP bindings, raw and streaming
+payloads, Amazon Event Stream, request compression, checksums, and
+AWS-compatible error handling.
 
-`aws.protocols#restJson1` is not AWS-specific in practice — it is a
-well-defined REST/JSON wire format usable by any HTTP service, whether or not
-it runs on AWS. Many teams use it to define internal or public APIs that follow
-the same protocol as AWS services. For that reason it is documented as a
-top-level protocol, alongside `simpleRestJson`, on the [REST
-JSON](/smithy-dotnet/protocols/rest-json/) page rather than under this AWS
-section.
+The other AWS protocols exist mainly for compatibility with established
+services. Smithy deprecates AWS Query for new service design.
 
-For AWS restJson1, NSmithy targets more than proof-of-concept use:
+## Calling AWS from .NET
 
-- **Non-AWS services** — generated clients and servers work today and are a
-  reasonable choice for services modelled with `restJson1` outside of AWS.
-- **AWS services in production** — the goal is for NSmithy-generated `restJson1`
-  clients to be usable against real AWS services. Explicit SigV4 signing exists
-  in preview with regional endpoint resolution, profile/SSO/IMDS credentials,
-  and presigning, but service-specific endpoint rules, the full credential
-  chain, retries, and pagination helpers are not there yet.
+If you want to use AWS from .NET, you most likely want the official [AWS SDK
+for .NET](https://github.com/aws/aws-sdk-net). It is the supported client for the
+full AWS service catalog and includes the complete set of service-specific
+features.
 
-Until those pieces exist, use the official SDK when targeting AWS directly.
+NSmithy is not intended to replace the AWS SDK. It does, however, cover a useful
+part of the AWS client stack:
 
-## AWS SigV4 Is Early Preview
+- SigV4 signing and presigning
+- Standard regional endpoint resolution
+- Environment, shared-profile, SSO, and IMDS credentials
+- Standard retries with jitter, retry quotas, `Retry-After`, and modeled
+  `@retryable` errors
+- Generated page and item paginators for modeled `@paginated` operations
+- Clients for the supported AWS protocols when supplied with a Smithy model
 
-`NSmithy.Aws` includes explicit SigV4 signing through `AwsSigV4AuthScheme`.
-Callers provide the signing service name and region. The package includes a
-standard regional endpoint resolver, a default environment/profile/SSO/IMDS
-credential chain, and presigning. This is enough for LocalStack and focused AWS
-integrations, but it is not yet the complete production stack of the official SDK.
+NSmithy does not yet provide:
 
-See [Authentication](/smithy-dotnet/guides/client-configuration/authentication/) for configuration
-details and current limitations.
+- SigV4a
+- Modeled service-specific endpoint rule sets
+- The complete credential provider chain, including assume-role, web identity,
+  and ECS container credentials
+- AWS service-specific retry, paginator, and utility behavior
+- Maintained coverage for the full AWS service catalog or official AWS support
 
-## AWS JSON Is Client-Only
+This makes NSmithy useful for focused integrations, emulators, and clients built
+from your own Smithy models. See
+[Authentication](/smithy-dotnet/guides/client-configuration/authentication/),
+[Retry](/smithy-dotnet/guides/client-configuration/retry/), and
+[Pagination](/smithy-dotnet/guides/client-configuration/pagination/) for details.
 
-NSmithy includes early client runtime support for `aws.protocols#awsJson1_1` and
-`aws.protocols#awsJson1_0`. The current conformance project exercises an initial
-`awsJson1_1` slice: target/header construction, empty input/output behavior,
-special floating-point values, and client-side error discrimination.
+## AWS as a proving ground
 
-There is no AWS JSON server generation, and production AWS concerns such as
-modeled endpoint rule sets, additional credential sources, retries, and
-pagination helpers are still outside the generated client.
+AWS is also a demanding test bed for NSmithy. The official AWS protocol test
+suites exercise a wide range of HTTP bindings, data shapes, error responses,
+and edge cases. LocalStack and real service calls add interoperability coverage
+beyond the fixtures.
 
-## AWS Query Protocols Are Client-Only
+Supporting these protocols helps find weaknesses in serialization, transport,
+authentication, and generated clients. Those improvements also harden the same
+runtime used for non-AWS Smithy services, especially `restJson1` services.
 
-`aws.protocols#awsQuery` and `aws.protocols#ec2Query` have generated client
-support and pass every applicable request and response case in Smithy's official
-AWS protocol fixtures. They intentionally do not generate servers.
+## Examples
+
+The [AWS LocalStack
+example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/aws-localstack)
+uses generated clients for all five supported AWS HTTP protocols:
+
+- DynamoDB over AWS JSON 1.0
+- S3 over restXml
+- Lambda over restJson1
+- SQS over AWS Query
+- EC2 over EC2 Query
+
+For restJson1 event streams, see the [streaming
+example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/restjson1-streaming).

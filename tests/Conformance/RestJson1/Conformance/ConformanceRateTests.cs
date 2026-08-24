@@ -8,20 +8,35 @@ namespace RestJson1.Conformance;
 /// </summary>
 public sealed class ConformanceRateTests(ITestOutputHelper output)
 {
+    private const string LocalFixtureNamespace = "restjsonone.local#";
     private static readonly SmithyTestModel Model = SmithyTestModel.Load();
 
     [Fact]
     public void ReportConformanceRate()
     {
-        var requests = Model.EnumerateHttpRequestTests(RestJson1Allowlist.Protocol).ToList();
-        var responses = Model.EnumerateHttpResponseTests(RestJson1Allowlist.Protocol).ToList();
+        // The docs report official Smithy/AWS conformance only. Local regression fixtures still
+        // run in the suite, but mixing them into the numerator would inflate the published rate.
+        var requests = Model
+            .EnumerateHttpRequestTests(RestJson1Allowlist.Protocol)
+            .Where(c => IsOfficial(c.ShapeId))
+            .ToList();
+        var responses = Model
+            .EnumerateHttpResponseTests(RestJson1Allowlist.Protocol)
+            .Where(c => IsOfficial(c.ShapeId))
+            .ToList();
+
+        // Auxiliary services in the fixture bundle are not part of the generated RestJson
+        // service. Keep their cases out of both sides of the server-request ratio.
+        var serverRequests = requests
+            .Where(c => c.AppliesToServer && GeneratedService.HasHandler(c.OperationName))
+            .ToList();
 
         // Each side's denominator is the number of cases that actually apply to that side
         // (a server-only case never applies to the client and vice versa). Client and server
         // are reported separately so neither direction masks the other.
         var clientReqTotal = requests.Count(c => c.AppliesToClient);
         var clientRespTotal = responses.Count(c => c.AppliesToClient);
-        var serverReqTotal = requests.Count(c => c.AppliesToServer);
+        var serverReqTotal = serverRequests.Count;
         var serverRespTotal = responses.Count(c => c.AppliesToServer);
 
         // Client still runs a curated allowlist; the server runs every applicable case whose
@@ -39,10 +54,8 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
             && RestJson1Allowlist.ExecutableResponseCases.Contains(c.Id)
             && !RestJson1Allowlist.KnownResponseParamGaps.Contains(c.Id)
         );
-        var execServerReq = requests.Count(c =>
-            c.AppliesToServer
-            && GeneratedService.HasHandler(c.OperationName)
-            && !RestJson1Allowlist.KnownServerRequestParamGaps.Contains(c.Id)
+        var execServerReq = serverRequests.Count(c =>
+            !RestJson1Allowlist.KnownServerRequestParamGaps.Contains(c.Id)
         );
         var execServerResp = responses.Count(c => c.AppliesToServer);
 
@@ -52,11 +65,11 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
         // 400 rather than a 500, which the server does not implement yet.
         var malformed = Model
             .EnumerateHttpMalformedRequestTests(RestJson1Allowlist.Protocol)
+            .Where(c => IsOfficial(c.ShapeId))
+            .Where(c => GeneratedService.HasHandler(c.OperationName))
             .ToList();
         var malformedTotal = malformed.Count;
-        var execMalformed = malformed.Count(c =>
-            GeneratedService.HasHandler(c.OperationName) && RestJson1Allowlist.RunsMalformedCase(c)
-        );
+        var execMalformed = malformed.Count(RestJson1Allowlist.RunsMalformedCase);
 
         output.WriteLine(
             $"[{RestJson1Allowlist.Protocol}] "
@@ -70,4 +83,7 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
 
     private static string Pct(int part, int whole) =>
         whole == 0 ? "n/a" : $"{(double)part / whole * 100:0.0}%";
+
+    private static bool IsOfficial(string shapeId) =>
+        !shapeId.StartsWith(LocalFixtureNamespace, StringComparison.Ordinal);
 }

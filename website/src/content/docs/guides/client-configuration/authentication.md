@@ -62,8 +62,9 @@ validates the header sent by `HttpApiKeyAuthScheme`.
 ## AWS SigV4
 
 :::caution[Early preview]
-AWS SigV4 support is early preview. It is useful for narrow smoke tests and
-LocalStack-style examples, but it is not a replacement for the AWS SDK for .NET.
+For most applications that call AWS from .NET, use the official AWS SDK for
+.NET. NSmithy's AWS integration support is intended for focused integrations,
+emulators, and protocol validation, not as a complete SDK replacement.
 
 NSmithy now provides standard regional endpoint resolution, environment and
 shared-profile credentials (including cached IAM Identity Center sessions),
@@ -106,7 +107,6 @@ For presigned requests, construct an `AwsSigV4Presigner`, serialize the generate
 operation request, and call `PresignAsync`. Durations are limited to AWS's range
 of one second through seven days.
 
-For production AWS integrations, prefer the official
-[AWS SDK for .NET](https://github.com/aws/aws-sdk-net) until NSmithy's AWS auth,
-modeled endpoint rules, additional credential sources, retries, and pagination
-support mature.
+See [AWS Protocols](/smithy-dotnet/protocols/aws-overview/) for the supported AWS
+runtime features and the remaining gaps. NSmithy also provides standard retries
+and generated paginators for modeled `@paginated` operations.
