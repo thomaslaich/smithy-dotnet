@@ -13,19 +13,15 @@ public interface ISmithyIdentity
 }
 
 /// <summary>A token, API key, or encoded credential used by the built-in HTTP auth schemes.</summary>
-public sealed class SmithyTokenIdentity : ISmithyIdentity
+public sealed class SmithyTokenIdentity(string value, DateTimeOffset? expiration = null)
+    : ISmithyIdentity
 {
-    public SmithyTokenIdentity(string value, DateTimeOffset? expiration = null)
-    {
-        Value = string.IsNullOrWhiteSpace(value)
+    public string Value { get; } =
+        string.IsNullOrWhiteSpace(value)
             ? throw new ArgumentException("Identity value must be set.", nameof(value))
             : value;
-        Expiration = expiration;
-    }
 
-    public string Value { get; }
-
-    public DateTimeOffset? Expiration { get; }
+    public DateTimeOffset? Expiration { get; } = expiration;
 }
 
 /// <summary>Resolves an identity for one operation invocation.</summary>

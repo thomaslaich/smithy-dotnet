@@ -16,7 +16,7 @@ public sealed class HttpBearerAuthScheme : ISmithyAuthScheme
             )
         ) { }
 
-    public HttpBearerAuthScheme(ISmithyIdentityResolver identityResolver)
+    private HttpBearerAuthScheme(ISmithyIdentityResolver identityResolver)
     {
         IdentityResolver =
             identityResolver ?? throw new ArgumentNullException(nameof(identityResolver));

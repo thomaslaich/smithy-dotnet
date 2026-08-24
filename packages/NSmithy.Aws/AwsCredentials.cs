@@ -1,6 +1,8 @@
+using NSmithy.Client;
+
 namespace NSmithy.Aws;
 
-public sealed class AwsCredentials : NSmithy.Client.ISmithyIdentity
+public sealed class AwsCredentials : ISmithyIdentity
 {
     public AwsCredentials(
         string accessKeyId,

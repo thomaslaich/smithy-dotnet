@@ -21,7 +21,7 @@ public sealed class HttpBasicAuthScheme : ISmithyAuthScheme
             )
         ) { }
 
-    public HttpBasicAuthScheme(ISmithyIdentityResolver identityResolver)
+    private HttpBasicAuthScheme(ISmithyIdentityResolver identityResolver)
     {
         IdentityResolver =
             identityResolver ?? throw new ArgumentNullException(nameof(identityResolver));

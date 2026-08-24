@@ -28,21 +28,6 @@ credentials, and an [endpoint resolver](/smithy-dotnet/guides/client-configurati
 can narrow the candidate schemes per endpoint. If `AuthSchemes` is empty,
 requests are sent anonymously.
 
-Identity resolution is separate from signing, so expiring tokens can refresh
-without rebuilding the client. Built-in HTTP auth schemes accept an
-`ISmithyIdentityResolver`; wrap a resolver with `SmithyCachingIdentityResolver`
-to share an identity until its `Expiration` approaches:
-
-```csharp
-var identities = new SmithyCachingIdentityResolver(tokenResolver);
-config.AuthSchemes.Add(new HttpBearerAuthScheme(identities));
-```
-
-`tokenResolver` returns `SmithyTokenIdentity` values. The cache coalesces
-concurrent refreshes and refreshes five minutes before expiration by default.
-`AwsSigV4AuthScheme` applies the same cache to `AwsCredentials`; credential
-providers can set `AwsCredentials.Expiration` for refreshable sessions.
-
 The generated client sends credentials. Server-side authorization is still
 application code in this preview: generated ASP.NET Core handlers can read
 modeled auth headers or the ASP.NET Core request context, but NSmithy does not

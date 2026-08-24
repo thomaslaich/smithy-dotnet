@@ -15,8 +15,6 @@ public enum ApiKeyLocation
 /// </summary>
 public sealed class HttpApiKeyAuthScheme : ISmithyAuthScheme
 {
-    private readonly string name;
-
     public HttpApiKeyAuthScheme(
         string name,
         string apiKey,
@@ -36,7 +34,7 @@ public sealed class HttpApiKeyAuthScheme : ISmithyAuthScheme
             scheme
         ) { }
 
-    public HttpApiKeyAuthScheme(
+    private HttpApiKeyAuthScheme(
         string name,
         ISmithyIdentityResolver identityResolver,
         ApiKeyLocation location = ApiKeyLocation.Header,
@@ -52,7 +50,6 @@ public sealed class HttpApiKeyAuthScheme : ISmithyAuthScheme
             );
         }
 
-        this.name = name;
         IdentityResolver =
             identityResolver ?? throw new ArgumentNullException(nameof(identityResolver));
         Signer = location switch
