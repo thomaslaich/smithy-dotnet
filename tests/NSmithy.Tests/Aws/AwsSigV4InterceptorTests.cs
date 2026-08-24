@@ -90,10 +90,7 @@ public sealed class AwsSigV4InterceptorTests
         await signer.SignAsync(
             new SmithyContext(),
             request,
-            new AwsCredentials(
-                "AKIAIOSFODNN7EXAMPLE",
-                "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-            )
+            new AwsCredentials("AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
         );
 
         Assert.Equal(
@@ -105,7 +102,10 @@ public sealed class AwsSigV4InterceptorTests
     [Fact]
     public async Task SigningTheSameRequestTwiceIsDeterministic()
     {
-        var request = new SmithyHttpRequest(HttpMethod.Get, "https://service.us-east-1.amazonaws.com/");
+        var request = new SmithyHttpRequest(
+            HttpMethod.Get,
+            "https://service.us-east-1.amazonaws.com/"
+        );
         var signer = new AwsSigV4Signer(
             "service",
             "us-east-1",
@@ -135,10 +135,7 @@ public sealed class AwsSigV4InterceptorTests
 
         var uri = signer.Presign(
             request,
-            new AwsCredentials(
-                "AKIAIOSFODNN7EXAMPLE",
-                "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
-            ),
+            new AwsCredentials("AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"),
             TimeSpan.FromDays(1)
         );
 
@@ -181,7 +178,11 @@ public sealed class AwsSigV4InterceptorTests
         var signer = new AwsSigV4Signer("s3", "us-east-1");
 
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            signer.Presign(request, new AwsCredentials("access", "secret"), TimeSpan.FromSeconds(seconds))
+            signer.Presign(
+                request,
+                new AwsCredentials("access", "secret"),
+                TimeSpan.FromSeconds(seconds)
+            )
         );
     }
 

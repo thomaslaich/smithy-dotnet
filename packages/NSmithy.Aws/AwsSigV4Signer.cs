@@ -145,11 +145,8 @@ public sealed class AwsSigV4Signer : ISmithySigner
     /// Presigning uses <c>UNSIGNED-PAYLOAD</c>, the standard AWS query-signing behavior. AWS caps
     /// SigV4 presigned URLs at seven days because the derived signing key is date-scoped.
     /// </remarks>
-    public Uri Presign(
-        SmithyHttpRequest request,
-        AwsCredentials credentials,
-        TimeSpan expires
-    ) => Presign(request, credentials, expires, timeProvider.GetUtcNow());
+    public Uri Presign(SmithyHttpRequest request, AwsCredentials credentials, TimeSpan expires) =>
+        Presign(request, credentials, expires, timeProvider.GetUtcNow());
 
     internal Uri Presign(
         SmithyHttpRequest request,
@@ -270,7 +267,10 @@ public sealed class AwsSigV4Signer : ISmithySigner
     {
         var builder = new UriBuilder(uri)
         {
-            Query = string.Join('&', query.Select(parameter => $"{parameter.Key}={parameter.Value}")),
+            Query = string.Join(
+                '&',
+                query.Select(parameter => $"{parameter.Key}={parameter.Value}")
+            ),
         };
         return builder.Uri;
     }

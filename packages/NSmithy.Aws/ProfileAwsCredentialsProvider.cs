@@ -29,8 +29,7 @@ public sealed class ProfileAwsCredentialsProvider : IAwsCredentialsProvider
         this.ssoCacheDirectory = ssoCacheDirectory;
         this.httpClient = httpClient ?? SharedHttpClient;
         this.timeProvider = timeProvider ?? TimeProvider.System;
-        this.getEnvironmentVariable =
-            getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
+        this.getEnvironmentVariable = getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
     }
 
     public ValueTask<AwsCredentials> GetCredentialsAsync(
@@ -153,7 +152,9 @@ public sealed class ProfileAwsCredentialsProvider : IAwsCredentialsProvider
     }
 
     private static string ConfigSection(string profile) =>
-        string.Equals(profile, "default", StringComparison.Ordinal) ? profile : "profile " + profile;
+        string.Equals(profile, "default", StringComparison.Ordinal)
+            ? profile
+            : "profile " + profile;
 
     private static bool TryGetSsoSettings(
         Dictionary<string, string> values,

@@ -174,7 +174,8 @@ public sealed class AwsQueryProtocolTests
             InputSchema(),
             OutputSchema(),
             withError
-                ? [
+                ?
+                [
                     Schemas.OperationError(
                         new ShapeId("example", "GreetingError"),
                         ErrorSchema(),
@@ -229,15 +230,14 @@ public sealed class AwsQueryProtocolTests
             )
             .Build(
                 static () => new QueryInputBuilder(),
-                static builder =>
-                    new QueryInput(
-                        builder.Text,
-                        builder.When,
-                        builder.Items,
-                        builder.FlatItems,
-                        builder.Tags,
-                        builder.Nested
-                    )
+                static builder => new QueryInput(
+                    builder.Text,
+                    builder.When,
+                    builder.Items,
+                    builder.FlatItems,
+                    builder.Tags,
+                    builder.Nested
+                )
             );
     }
 

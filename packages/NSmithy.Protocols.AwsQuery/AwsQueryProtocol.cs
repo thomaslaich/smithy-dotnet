@@ -53,7 +53,10 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
 
         public IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
             OperationSchema<TInput, TOutput> operation
-        ) => throw new NotSupportedException("AWS Query protocols do not support serving operations.");
+        ) =>
+            throw new NotSupportedException(
+                "AWS Query protocols do not support serving operations."
+            );
     }
 
     private sealed class OperationProtocol<TInput, TOutput>
@@ -180,7 +183,8 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
             {
                 return null;
             }
-            return value.AsObject().TryGetValue("code", out var code)
+            return
+                value.AsObject().TryGetValue("code", out var code)
                 && code.Kind == DocumentKind.String
                 ? code.AsString()
                 : null;
@@ -213,11 +217,14 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
     private static XElement ExtractErrorElement(byte[] content, QueryProtocolKind kind)
     {
         var root = XElement.Parse(Encoding.UTF8.GetString(content));
-        var error = kind == QueryProtocolKind.AwsQuery
-            ? Child(root, "Error")
-            : Child(Child(root, "Errors"), "Error");
+        var error =
+            kind == QueryProtocolKind.AwsQuery
+                ? Child(root, "Error")
+                : Child(Child(root, "Errors"), "Error");
         return error
-            ?? throw new InvalidOperationException("Response body was missing its query error element.");
+            ?? throw new InvalidOperationException(
+                "Response body was missing its query error element."
+            );
     }
 
     private static XElement? Child(XElement? parent, string localName) =>

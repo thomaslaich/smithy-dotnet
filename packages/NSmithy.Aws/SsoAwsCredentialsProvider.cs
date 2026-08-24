@@ -63,8 +63,8 @@ public sealed class SsoAwsCredentialsProvider : IAwsCredentialsProvider
             );
         }
 
-        var payload = await response.Content
-            .ReadFromJsonAsync<SsoRoleCredentialsResponse>(cancellationToken)
+        var payload = await response
+            .Content.ReadFromJsonAsync<SsoRoleCredentialsResponse>(cancellationToken)
             .ConfigureAwait(false);
         var credentials = payload?.RoleCredentials;
         if (

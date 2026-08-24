@@ -13,7 +13,8 @@ public sealed class DefaultAwsCredentialsProvider : IAwsCredentialsProvider
         this.providers =
         [
             .. providers
-                ?? [
+                ??
+                [
                     new EnvironmentAwsCredentialsProvider(),
                     new ProfileAwsCredentialsProvider(),
                     new InstanceMetadataAwsCredentialsProvider(),
@@ -21,7 +22,10 @@ public sealed class DefaultAwsCredentialsProvider : IAwsCredentialsProvider
         ];
         if (this.providers.Length == 0)
         {
-            throw new ArgumentException("At least one credentials provider is required.", nameof(providers));
+            throw new ArgumentException(
+                "At least one credentials provider is required.",
+                nameof(providers)
+            );
         }
     }
 

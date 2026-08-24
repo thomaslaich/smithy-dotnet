@@ -93,8 +93,7 @@ internal sealed class QueryFormSerializer(QueryProtocolKind kind)
     )
     {
         var elements = schema.GetElementsObject(value).ToArray();
-        var flattened =
-            kind == QueryProtocolKind.Ec2Query || HasDirectTrait(traits, XmlFlattened);
+        var flattened = kind == QueryProtocolKind.Ec2Query || HasDirectTrait(traits, XmlFlattened);
         if (elements.Length == 0)
         {
             if (kind == QueryProtocolKind.AwsQuery && !flattened)
@@ -110,7 +109,11 @@ internal sealed class QueryFormSerializer(QueryProtocolKind kind)
                 : null;
         for (var index = 0; index < elements.Length; index++)
         {
-            var itemPrefix = Join(prefix, itemName, (index + 1).ToString(CultureInfo.InvariantCulture));
+            var itemPrefix = Join(
+                prefix,
+                itemName,
+                (index + 1).ToString(CultureInfo.InvariantCulture)
+            );
             WriteValue(
                 schema.Element,
                 elements[index],
@@ -260,10 +263,8 @@ internal sealed class QueryFormSerializer(QueryProtocolKind kind)
             ? trait.Value.AsString()
             : null;
 
-    private static bool HasDirectTrait(
-        IReadOnlyDictionary<ShapeId, Trait>? traits,
-        ShapeId id
-    ) => traits?.ContainsKey(id) == true;
+    private static bool HasDirectTrait(IReadOnlyDictionary<ShapeId, Trait>? traits, ShapeId id) =>
+        traits?.ContainsKey(id) == true;
 
     private static Schema UnwrapNullable(Schema schema) =>
         schema.Resolved is INullableSchema nullable ? nullable.Target.Resolved : schema.Resolved;

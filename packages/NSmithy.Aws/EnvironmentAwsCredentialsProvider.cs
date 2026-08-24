@@ -14,8 +14,7 @@ public sealed class EnvironmentAwsCredentialsProvider(
         cancellationToken.ThrowIfCancellationRequested();
 
         var accessKeyId =
-            getEnvironmentVariable("AWS_ACCESS_KEY_ID")
-            ?? getEnvironmentVariable("AWS_ACCESS_KEY");
+            getEnvironmentVariable("AWS_ACCESS_KEY_ID") ?? getEnvironmentVariable("AWS_ACCESS_KEY");
         var secretAccessKey =
             getEnvironmentVariable("AWS_SECRET_ACCESS_KEY")
             ?? getEnvironmentVariable("AWS_SECRET_KEY");
@@ -24,7 +23,8 @@ public sealed class EnvironmentAwsCredentialsProvider(
         if (string.IsNullOrWhiteSpace(accessKeyId) || string.IsNullOrWhiteSpace(secretAccessKey))
         {
             var noneConfigured =
-                string.IsNullOrWhiteSpace(accessKeyId) && string.IsNullOrWhiteSpace(secretAccessKey);
+                string.IsNullOrWhiteSpace(accessKeyId)
+                && string.IsNullOrWhiteSpace(secretAccessKey);
             throw new AwsCredentialsProviderException(
                 nameof(EnvironmentAwsCredentialsProvider),
                 "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY must both be set.",

@@ -6,7 +6,10 @@ namespace NSmithy.Aws;
 /// <summary>Loads EC2 role credentials through IMDSv2, with the standard optional IMDSv1 fallback.</summary>
 public sealed class InstanceMetadataAwsCredentialsProvider : IAwsCredentialsProvider
 {
-    private static readonly HttpClient SharedHttpClient = new() { Timeout = TimeSpan.FromSeconds(2) };
+    private static readonly HttpClient SharedHttpClient = new()
+    {
+        Timeout = TimeSpan.FromSeconds(2),
+    };
     private static readonly Uri DefaultEndpoint = new("http://169.254.169.254/");
 
     private readonly HttpClient httpClient;
@@ -28,8 +31,7 @@ public sealed class InstanceMetadataAwsCredentialsProvider : IAwsCredentialsProv
             throw new ArgumentException("IMDS endpoint must be absolute.", nameof(endpoint));
         }
         this.allowV1Fallback = allowV1Fallback;
-        this.getEnvironmentVariable =
-            getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
+        this.getEnvironmentVariable = getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
     }
 
     public async ValueTask<AwsCredentials> GetCredentialsAsync(
@@ -53,10 +55,17 @@ public sealed class InstanceMetadataAwsCredentialsProvider : IAwsCredentialsProv
 
         var token = await GetTokenAsync(cancellationToken).ConfigureAwait(false);
         var roleName = (
-            await GetStringAsync("latest/meta-data/iam/security-credentials/", token, cancellationToken)
+            await GetStringAsync(
+                    "latest/meta-data/iam/security-credentials/",
+                    token,
+                    cancellationToken
+                )
                 .ConfigureAwait(false)
         )
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Split(
+                ['\r', '\n'],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+            )
             .FirstOrDefault();
         if (string.IsNullOrWhiteSpace(roleName))
         {
@@ -103,7 +112,9 @@ public sealed class InstanceMetadataAwsCredentialsProvider : IAwsCredentialsProv
             .ConfigureAwait(false);
         if (response.IsSuccessStatusCode)
         {
-            return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            return await response
+                .Content.ReadAsStringAsync(cancellationToken)
+                .ConfigureAwait(false);
         }
         if (
             IsV1FallbackEnabled()

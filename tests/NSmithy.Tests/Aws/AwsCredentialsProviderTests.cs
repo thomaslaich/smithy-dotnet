@@ -17,7 +17,9 @@ public sealed class AwsCredentialsProviderTests
             ["AWS_SECRET_ACCESS_KEY"] = "secret",
             ["AWS_SESSION_TOKEN"] = "token",
         };
-        var provider = new EnvironmentAwsCredentialsProvider(name => environment.GetValueOrDefault(name));
+        var provider = new EnvironmentAwsCredentialsProvider(name =>
+            environment.GetValueOrDefault(name)
+        );
 
         var credentials = await provider.GetCredentialsAsync();
 
@@ -67,9 +69,20 @@ public sealed class AwsCredentialsProviderTests
         );
         var handler = new RecordingHandler(request =>
         {
-            Assert.Equal("cached-token", request.Headers.GetValues("x-amz-sso_bearer_token").Single());
-            Assert.Contains("account_id=123456789012", request.RequestUri!.Query, StringComparison.Ordinal);
-            Assert.Contains("role_name=Developer", request.RequestUri.Query, StringComparison.Ordinal);
+            Assert.Equal(
+                "cached-token",
+                request.Headers.GetValues("x-amz-sso_bearer_token").Single()
+            );
+            Assert.Contains(
+                "account_id=123456789012",
+                request.RequestUri!.Query,
+                StringComparison.Ordinal
+            );
+            Assert.Contains(
+                "role_name=Developer",
+                request.RequestUri.Query,
+                StringComparison.Ordinal
+            );
             return JsonResponse(
                 """
                 {"roleCredentials":{"accessKeyId":"sso-access","secretAccessKey":"sso-secret","sessionToken":"sso-token","expiration":1787598000000}}
@@ -155,8 +168,7 @@ public sealed class AwsCredentialsProviderTests
         var provider = new InstanceMetadataAwsCredentialsProvider(
             httpClient,
             new Uri("http://127.0.0.1/"),
-            getEnvironmentVariable: name =>
-                name == "AWS_EC2_METADATA_V1_DISABLED" ? "true" : null
+            getEnvironmentVariable: name => name == "AWS_EC2_METADATA_V1_DISABLED" ? "true" : null
         );
 
         var exception = await Assert.ThrowsAsync<AwsCredentialsProviderException>(async () =>
@@ -170,14 +182,16 @@ public sealed class AwsCredentialsProviderTests
     public async Task DefaultChainContinuesOnlyPastUnconfiguredProviders()
     {
         var expected = new AwsCredentials("access", "secret");
-        var chain = new DefaultAwsCredentialsProvider(
-            [
-                new StubProvider(
-                    new AwsCredentialsProviderException("first", "not configured", isNotConfigured: true)
-                ),
-                new StubProvider(expected),
-            ]
-        );
+        var chain = new DefaultAwsCredentialsProvider([
+            new StubProvider(
+                new AwsCredentialsProviderException(
+                    "first",
+                    "not configured",
+                    isNotConfigured: true
+                )
+            ),
+            new StubProvider(expected),
+        ]);
 
         var credentials = await chain.GetCredentialsAsync();
 
@@ -239,7 +253,8 @@ public sealed class AwsCredentialsProviderTests
 
     private sealed class TemporaryDirectory : IDisposable
     {
-        public TemporaryDirectory() => Path = Directory.CreateTempSubdirectory("nsmithy-aws-").FullName;
+        public TemporaryDirectory() =>
+            Path = Directory.CreateTempSubdirectory("nsmithy-aws-").FullName;
 
         public string Path { get; }
 
