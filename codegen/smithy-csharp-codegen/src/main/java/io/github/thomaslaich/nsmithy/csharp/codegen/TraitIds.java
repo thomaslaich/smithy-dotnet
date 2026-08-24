@@ -11,6 +11,9 @@ public final class TraitIds {
   public static final ShapeId SIMPLE_REST_JSON = ShapeId.from("alloy#simpleRestJson");
   public static final ShapeId AWS_JSON_1_0 = ShapeId.from("aws.protocols#awsJson1_0");
   public static final ShapeId AWS_JSON_1_1 = ShapeId.from("aws.protocols#awsJson1_1");
+  public static final ShapeId AWS_QUERY = ShapeId.from("aws.protocols#awsQuery");
+  public static final ShapeId EC2_QUERY = ShapeId.from("aws.protocols#ec2Query");
+  public static final ShapeId AWS_QUERY_ERROR = ShapeId.from("aws.protocols#awsQueryError");
   public static final ShapeId REST_JSON_1 = ShapeId.from("aws.protocols#restJson1");
   public static final ShapeId REST_XML = ShapeId.from("aws.protocols#restXml");
   public static final ShapeId RPC_V2_CBOR = ShapeId.from("smithy.protocols#rpcv2Cbor");

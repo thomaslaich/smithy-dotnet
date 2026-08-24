@@ -4,7 +4,7 @@
  *   public static partial class {Service}Schema
  *   {
  *       public static ServiceSchema Schema { get; } =
- *           Schemas.Service(ShapeId.Parse("ns#Service"), traits);
+ *           Schemas.Service(ShapeId.Parse("ns#Service"), "2020-01-01", traits);
  *   }
  *
  * The service schema is service-scoped (carries the service shape id + service-level traits) and is
@@ -43,8 +43,9 @@ public final class ServiceSchemaGenerator implements Runnable {
           writer.write("public static ServiceSchema Schema { get; } =");
           writer.indent();
           writer.write(
-              "Schemas.Service($L, $L);",
+              "Schemas.Service($L, $S, $L);",
               SchemaGenerator.shapeIdExpr(service.getId()),
+              service.getVersion(),
               SchemaGenerator.traitsExpr(service.getAllTraits().values()));
           writer.dedent();
         });

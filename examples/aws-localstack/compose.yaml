@@ -6,11 +6,11 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=dynamodb,s3,lambda
+      - SERVICES=dynamodb,s3,lambda,sqs,ec2
       - DEBUG=0
     volumes:
       # Required so the Lambda service can spawn function containers.
       - "/var/run/docker.sock:/var/run/docker.sock"
       # Seed a little data once the gateway is ready (DynamoDB tables, S3
-      # buckets, a Lambda function) so the example's List* calls return data.
+      # buckets, queues, and a Lambda function) so the example's List* calls return data.
       - "./init/ready.d:/etc/localstack/init/ready.d"

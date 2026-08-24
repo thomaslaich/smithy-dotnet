@@ -33,6 +33,7 @@ need Gradle and can stay in the .NET build system.
 
 NSmithy currently supports `alloy#simpleRestJson`, `aws.protocols#restJson1`,
 `aws.protocols#awsJson1_1`, `aws.protocols#awsJson1_0`,
-`aws.protocols#restXml`, `smithy.protocols#rpcv2Cbor`, and `alloy#grpc`.
+`aws.protocols#awsQuery`, `aws.protocols#ec2Query`, `aws.protocols#restXml`,
+`smithy.protocols#rpcv2Cbor`, and `alloy#grpc`.
 
 See the [Quick Start](/smithy-dotnet/getting-started/quick-start/) to build your first service.

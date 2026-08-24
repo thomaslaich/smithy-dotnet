@@ -9,6 +9,7 @@
     <Project Path="packages/NSmithy.EventStream/NSmithy.EventStream.csproj" />
     <Project Path="packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <Project Path="packages/NSmithy.Protocols.AwsJson/NSmithy.Protocols.AwsJson.csproj" />
+    <Project Path="packages/NSmithy.Protocols.AwsQuery/NSmithy.Protocols.AwsQuery.csproj" />
     <Project Path="packages/NSmithy.Protocols.Rest/NSmithy.Protocols.Rest.csproj" />
     <Project Path="packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
     <Project Path="packages/NSmithy.Protocols.RestXml/NSmithy.Protocols.RestXml.csproj" />
@@ -31,7 +32,9 @@
     <Project Path="tests/NSmithy.Tests/NSmithy.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Conformance/">
+    <Project Path="tests/Conformance/AwsQuery/AwsQuery.Conformance.csproj" />
     <Project Path="tests/Conformance/AwsJson/AwsJson.Conformance.csproj" />
+    <Project Path="tests/Conformance/Ec2Query/Ec2Query.Conformance.csproj" />
     <Project Path="tests/Conformance/RestJson1/RestJson1.Conformance.csproj" />
     <Project Path="tests/Conformance/RestXml/RestXml.Conformance.csproj" />
     <Project Path="tests/Conformance/RpcV2Cbor/RpcV2Cbor.Conformance.csproj" />

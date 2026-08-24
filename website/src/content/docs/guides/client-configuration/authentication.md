@@ -65,10 +65,12 @@ validates the header sent by `HttpApiKeyAuthScheme`.
 AWS SigV4 support is early preview. It is useful for narrow smoke tests and
 LocalStack-style examples, but it is not a replacement for the AWS SDK for .NET.
 
-Callers must provide the endpoint, signing service name, region, and credentials.
-NSmithy does not yet provide AWS SDK-style endpoint resolution, profile/SSO/IMDS
-credential chains, retries, paginators, presigning, or golden-vector coverage
-against AWS's SigV4 test suite.
+NSmithy now provides standard regional endpoint resolution, environment and
+shared-profile credentials (including cached IAM Identity Center sessions),
+IMDSv2 role credentials, presigning, and golden coverage against AWS's published
+S3 signing vectors. Modeled per-service endpoint rule sets, assume-role and web
+identity providers, ECS container credentials, SigV4a, and the full production
+hardening of the official AWS SDK are still outside this preview.
 :::
 
 Add `NSmithy.Aws` and configure `AwsSigV4AuthScheme`:
@@ -77,13 +79,14 @@ Add `NSmithy.Aws` and configure `AwsSigV4AuthScheme`:
 using NSmithy.Aws;
 
 var region = Environment.GetEnvironmentVariable("AWS_REGION") ?? "us-east-1";
-var endpoint = new Uri($"https://lambda.{region}.amazonaws.com");
-var credentials = new EnvironmentAwsCredentialsProvider();
+var endpoint = new AwsRegionalEndpointResolver("lambda", region);
+var credentials = new DefaultAwsCredentialsProvider();
 
 using var lambda = new LambdaClient(
-    endpoint,
-    new()
+    new HttpClient(),
+    new LambdaClientConfig
     {
+        EndpointResolver = endpoint,
         AuthSchemes = { new AwsSigV4AuthScheme("lambda", region, credentials) },
     });
 ```
@@ -94,7 +97,16 @@ Available credential providers:
 | --- | --- |
 | `StaticAwsCredentialsProvider` | Explicit `AwsCredentials` instance |
 | `EnvironmentAwsCredentialsProvider` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, optional `AWS_SESSION_TOKEN` |
+| `ProfileAwsCredentialsProvider` | Static shared profiles or cached IAM Identity Center/SSO sessions |
+| `SsoAwsCredentialsProvider` | Explicit IAM Identity Center account/role using the AWS CLI token cache |
+| `InstanceMetadataAwsCredentialsProvider` | EC2 role credentials over IMDSv2 (optional IMDSv1 fallback) |
+| `DefaultAwsCredentialsProvider` | Environment → shared profile/SSO → IMDS |
+
+For presigned requests, construct an `AwsSigV4Presigner`, serialize the generated
+operation request, and call `PresignAsync`. Durations are limited to AWS's range
+of one second through seven days.
 
 For production AWS integrations, prefer the official
 [AWS SDK for .NET](https://github.com/aws/aws-sdk-net) until NSmithy's AWS auth,
-endpoint resolution, retries, and pagination support mature.
+modeled endpoint rules, additional credential sources, retries, and pagination
+support mature.

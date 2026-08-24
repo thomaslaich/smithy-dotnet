@@ -22,12 +22,10 @@ official Smithy / AWS protocol tests (`tests/Conformance`):
   design; early conformance coverage for `awsJson1_1`.
 - **AWS restXml (`aws.protocols#restXml`)** — client only by design (see the server note
   below); narrower coverage than the JSON paths.
+- **AWS Query (`aws.protocols#awsQuery`) / EC2 Query (`aws.protocols#ec2Query`)** —
+  client only by design; all applicable official client conformance cases pass.
 - **`alloy.proto#grpc`** — native client and server (see below); the least
   mature path.
-
-Not yet implemented (planned as **clients** — servers are not, see below):
-
-- EC2 Query and AWS Query
 
 ## Streaming Support Is Narrow
 
@@ -38,7 +36,7 @@ server streaming, client streaming, and bidirectional streaming as
 
 Streaming is still limited:
 
-- Event streaming is implemented for native gRPC only.
+- Event streaming is implemented for native gRPC and `rpcv2Cbor`.
 - Streaming payload blobs are not implemented; blob payloads are still buffered
   as `byte[]`.
 - Other protocols still use unary request/response operation surfaces.
@@ -63,8 +61,8 @@ implement a service in: `alloy#simpleRestJson`, `aws.protocols#restJson1`,
 
 The AWS-facing protocols — `aws.protocols#restXml`, AWS JSON, and AWS / EC2
 Query — are **client-only by design**. NSmithy generates clients for the
-implemented protocols to call AWS-compatible services; servers for those
-protocols are not planned.
+protocols to call AWS-compatible services; servers for those protocols are not
+planned.
 
 Other constraints:
 

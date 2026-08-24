@@ -20,6 +20,8 @@ server is never counted toward client coverage and vice versa.
 | `aws.protocols#restJson1` | both | Preview | 246/250 (98.4%) | 209/228 (91.7%) |
 | `aws.protocols#awsJson1_1` | client | Early preview | requests 6/57 (10.5%), responses 18/61 (29.5%) | — |
 | `aws.protocols#awsJson1_0` | client | Early preview | runtime support; no conformance project yet | — |
+| `aws.protocols#awsQuery` | client | Preview | requests 38/38 (100%), responses 39/39 (100%) | — |
+| `aws.protocols#ec2Query` | client | Preview | requests 30/30 (100%), responses 29/29 (100%) | — |
 | `aws.protocols#restXml` | client | Early preview | requests 4/113 (3.5%), responses 39/86 (45.3%) | — |
 | `smithy.protocols#rpcv2Cbor` | both | Preview | 61/68 (89.7%) | 57/60 (95.0%) |
 | `alloy.proto#grpc` | both | Experimental | tested via examples¹ | tested via examples¹ |
@@ -57,6 +59,9 @@ Notes:
 - AWS restXml is client-only and now runs a verified slice of the official AWS
   protocol tests, mostly response deserialization plus a small request-binding
   subset.
+- AWS Query and EC2 Query are client-only and run every applicable official
+  request and response case, including collection flattening, XML wrappers,
+  custom error codes, endpoint paths, and request compression.
 - `smithy.protocols#rpcv2Cbor`, `alloy#simpleRestJson`, and `aws.protocols#restJson1`
   all exercise both the client and the generated server against their applicable
   cases. `alloy#simpleRestJson` is the only one currently at 100% on both
@@ -72,8 +77,9 @@ Notes:
   capabilities simpleRestJson lacks such as event streaming.
 - Use `smithy.protocols#rpcv2Cbor` for binary CBOR-encoded services; client and
   server generation are both available.
-- Use AWS JSON or AWS restXml when you want to evaluate AWS-compatible client
-  generation and are comfortable with a smaller preview slice.
+- Use AWS Query or EC2 Query for generated AWS-compatible clients with complete
+  official client conformance coverage. AWS JSON and AWS restXml still have a
+  smaller verified preview slice.
 - Treat `alloy.proto#grpc` as experimental: it has the smallest test surface and
   the most explicit model requirements (see the footnote above).
 
@@ -86,9 +92,3 @@ In practice, earlier-stage protocols may still have one or more of these traits:
 - less conformance-suite coverage
 - more implementation details that are still expected to move
 - more explicit project wiring or modeling constraints
-
-## Not Supported Yet
-
-These protocols are not current NSmithy targets:
-
-- EC2 Query and AWS Query

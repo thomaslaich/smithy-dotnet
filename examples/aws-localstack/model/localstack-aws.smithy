@@ -4,6 +4,8 @@ namespace localstack.aws
 
 use aws.auth#sigv4
 use aws.protocols#awsJson1_0
+use aws.protocols#awsQuery
+use aws.protocols#ec2Query
 use aws.protocols#restJson1
 use aws.protocols#restXml
 
@@ -71,6 +73,56 @@ structure S3Bucket {
 service Lambda {
     version: "2015-03-31"
     operations: [ListFunctions]
+}
+
+@awsQuery
+@sigv4(name: "sqs")
+@xmlNamespace(uri: "http://queue.amazonaws.com/doc/2012-11-05/")
+service SQS {
+    version: "2012-11-05"
+    operations: [ListQueues]
+}
+
+operation ListQueues {
+    input := {}
+    output := {
+        @xmlFlattened
+        @xmlName("QueueUrl")
+        queueUrls: QueueUrlList
+    }
+}
+
+list QueueUrlList {
+    member: String
+}
+
+@ec2Query
+@sigv4(name: "ec2")
+@xmlNamespace(uri: "http://ec2.amazonaws.com/doc/2016-11-15/")
+service EC2 {
+    version: "2016-11-15"
+    operations: [DescribeRegions]
+}
+
+operation DescribeRegions {
+    input := {}
+    output := {
+        @xmlName("regionInfo")
+        regions: RegionList
+    }
+}
+
+list RegionList {
+    @xmlName("item")
+    member: Region
+}
+
+structure Region {
+    @xmlName("regionName")
+    name: String
+
+    @xmlName("regionEndpoint")
+    endpoint: String
 }
 
 @http(method: "GET", uri: "/2015-03-31/functions/")

@@ -461,6 +461,9 @@ internal sealed class FlattenedMapXmlMemberReader<
     IXmlValueReader<TValue> valueReader
 ) : IXmlMemberReader<TBuilder>
 {
+    private readonly string keyName = MapKeyName(map);
+    private readonly string valueName = MapValueName(map.TypedValueMember);
+
     public string Name => ElementName(member);
 
     public bool IsRequired => member.IsRequired;
@@ -470,13 +473,13 @@ internal sealed class FlattenedMapXmlMemberReader<
         var mapBuilder = map.CreateTypedBuilder();
         foreach (var child in ChildElements(element, Name))
         {
-            var key = ChildElement(child, "key")?.Value;
+            var key = ChildElement(child, keyName)?.Value;
             if (key is null)
             {
                 continue;
             }
 
-            map.Add(mapBuilder, key, valueReader.Read(ChildElement(child, "value")));
+            map.Add(mapBuilder, key, valueReader.Read(ChildElement(child, valueName)));
         }
 
         member.SetValue(builder, map.Build(mapBuilder));
@@ -544,6 +547,9 @@ internal sealed class MapXmlValueReader<TDictionary, TValue, TBuilder>(
     IXmlValueReader<TValue> valueReader
 ) : IXmlValueReader<TDictionary>
 {
+    private readonly string keyName = MapKeyName(schema);
+    private readonly string valueName = MapValueName(schema.TypedValueMember);
+
     public TDictionary Read(XElement? element)
     {
         var builder = schema.CreateTypedBuilder();
@@ -551,13 +557,13 @@ internal sealed class MapXmlValueReader<TDictionary, TValue, TBuilder>(
         {
             foreach (var entry in element.Elements())
             {
-                var key = ChildElement(entry, "key")?.Value;
+                var key = ChildElement(entry, keyName)?.Value;
                 if (key is null)
                 {
                     continue;
                 }
 
-                schema.Add(builder, key, valueReader.Read(ChildElement(entry, "value")));
+                schema.Add(builder, key, valueReader.Read(ChildElement(entry, valueName)));
             }
         }
 

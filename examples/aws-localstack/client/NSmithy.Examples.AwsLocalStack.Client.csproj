@@ -18,6 +18,7 @@
     <PackageReference Include="NSmithy.Codecs.Json" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Codecs.Xml" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Protocols.AwsJson" Version="0.0.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.Protocols.AwsQuery" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Protocols.RestXml" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.MSBuild" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />

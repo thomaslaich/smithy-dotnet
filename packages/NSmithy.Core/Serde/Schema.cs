@@ -1664,12 +1664,23 @@ public sealed class OperationErrorSchema<TError>(
 public sealed class ServiceSchema
 {
     internal ServiceSchema(ShapeId id, IEnumerable<Trait>? traits = null)
+        : this(id, string.Empty, traits) { }
+
+    internal ServiceSchema(ShapeId id, string version, IEnumerable<Trait>? traits = null)
     {
         Id = id;
+        Version = version ?? throw new ArgumentNullException(nameof(version));
         Traits = Schema.BuildTraits(traits);
     }
 
     public ShapeId Id { get; }
+
+    /// <summary>
+    /// The service's Smithy <c>version</c>. Protocols such as AWS Query and EC2 Query serialize
+    /// this value in every request. Manually constructed schemas that use the compatibility
+    /// overload expose an empty version.
+    /// </summary>
+    public string Version { get; }
 
     public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
 
@@ -1912,6 +1923,12 @@ public static class Schemas
 
     public static ServiceSchema Service(ShapeId id, IEnumerable<Trait>? traits = null) =>
         new(id, traits);
+
+    public static ServiceSchema Service(
+        ShapeId id,
+        string version,
+        IEnumerable<Trait>? traits = null
+    ) => new(id, version, traits);
 
     public static StructProjection<T, TBuilder> Project<T, TBuilder>(
         IStructSchema<T, TBuilder> source,

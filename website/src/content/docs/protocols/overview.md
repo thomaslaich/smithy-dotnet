@@ -59,6 +59,8 @@ wiring is required.
 | `aws.protocols#restJson1` | `@restJson1` | .NET client, ASP.NET Core server | Preview |
 | `aws.protocols#awsJson1_1` | `@awsJson1_1` | .NET client | Early preview |
 | `aws.protocols#awsJson1_0` | `@awsJson1_0` | .NET client | Early preview |
+| `aws.protocols#awsQuery` | `@awsQuery` | .NET client | Preview |
+| `aws.protocols#ec2Query` | `@ec2Query` | .NET client | Preview |
 | `aws.protocols#restXml` | `@restXml` | .NET client | Early preview |
 | `smithy.protocols#rpcv2Cbor` | `@rpcv2Cbor` | .NET client, ASP.NET Core server | Preview |
 | `alloy.proto#grpc` | `@grpc` | gRPC client, ASP.NET Core gRPC server | Experimental |
