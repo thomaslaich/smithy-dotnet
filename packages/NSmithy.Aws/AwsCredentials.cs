@@ -1,8 +1,15 @@
+using NSmithy.Client;
+
 namespace NSmithy.Aws;
 
-public sealed class AwsCredentials
+public sealed class AwsCredentials : ISmithyIdentity
 {
-    public AwsCredentials(string accessKeyId, string secretAccessKey, string? sessionToken = null)
+    public AwsCredentials(
+        string accessKeyId,
+        string secretAccessKey,
+        string? sessionToken = null,
+        DateTimeOffset? expiration = null
+    )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(accessKeyId);
         ArgumentException.ThrowIfNullOrWhiteSpace(secretAccessKey);
@@ -10,6 +17,7 @@ public sealed class AwsCredentials
         AccessKeyId = accessKeyId;
         SecretAccessKey = secretAccessKey;
         SessionToken = sessionToken;
+        Expiration = expiration;
     }
 
     public string AccessKeyId { get; }
@@ -17,4 +25,6 @@ public sealed class AwsCredentials
     public string SecretAccessKey { get; }
 
     public string? SessionToken { get; }
+
+    public DateTimeOffset? Expiration { get; }
 }

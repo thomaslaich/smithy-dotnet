@@ -16,7 +16,8 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
         ShapeId serviceId,
         ShapeId operationId,
         IClientOperationProtocol<TInput, TOutput> protocol,
-        IReadOnlyList<string>? authSchemeIds = null
+        IReadOnlyList<string>? authSchemeIds = null,
+        Func<TInput, string>? hostPrefix = null
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceId.Name, nameof(serviceId));
@@ -27,6 +28,7 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
         OperationId = operationId;
         Protocol = protocol;
         AuthSchemeIds = authSchemeIds ?? [];
+        HostPrefix = hostPrefix;
         ActivityName = $"{serviceId.Name}.{operationId.Name}";
         ServiceIdTag = serviceId.ToString();
     }
@@ -58,4 +60,10 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
     /// anonymous operations.
     /// </summary>
     public IReadOnlyList<string> AuthSchemeIds { get; }
+
+    /// <summary>
+    /// Expands this operation's modeled endpoint host prefix from its typed input, or null when the
+    /// operation has no <c>@endpoint</c> trait.
+    /// </summary>
+    public Func<TInput, string>? HostPrefix { get; }
 }

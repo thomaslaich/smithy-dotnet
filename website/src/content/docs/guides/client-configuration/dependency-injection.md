@@ -95,13 +95,15 @@ services.AddWeatherClient(
     });
 ```
 
-The helper configures the `HttpClient` for HTTP/2 automatically when the chosen
-protocol requires it (native gRPC).
+The helper applies the service protocol's modeled `http` / `eventStreamHttp`
+preference to the `HttpClient`, including downgrade policy. The
+`configureClient` callback runs afterwards and can override that setup. Native
+gRPC defaults to exact HTTP/2.
 
 ## Manual registration
 
 The generated helper is preferred. It configures the typed client and applies
-protocol-specific `HttpClient` settings such as HTTP/2 for gRPC.
+protocol-specific `HttpClient` version preferences.
 
 Generated clients are still plain typed clients, so manual registration works:
 

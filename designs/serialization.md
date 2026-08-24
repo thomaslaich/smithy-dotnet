@@ -565,7 +565,7 @@ Protocols bind operation schemas to transports. The abstraction lives in
 public interface IProtocol
 {
     IServiceProtocol ForService(ServiceSchema service);
-    bool RequiresHttp2 => false;
+    SmithyHttpVersionPreference HttpVersionPreference { get; }
 }
 
 public interface IServiceProtocol

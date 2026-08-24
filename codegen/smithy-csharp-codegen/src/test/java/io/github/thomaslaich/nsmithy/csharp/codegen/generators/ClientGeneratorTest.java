@@ -210,6 +210,7 @@ final class ClientGeneratorTest {
       @restJson1
       @httpBearerAuth
       @httpApiKeyAuth(name: "x-api-key", in: "header")
+      @auth([httpBearerAuth])
       service Secured {
           version: "1"
           operations: [ReadThing, AdminThing]
@@ -263,6 +264,97 @@ final class ClientGeneratorTest {
       }
       """;
 
+  private static final String ENDPOINT_MODEL =
+      """
+      $version: "2"
+
+      namespace example.endpoint
+
+      use aws.protocols#restJson1
+
+      @restJson1
+      service EndpointService {
+          version: "1"
+          operations: [GetData]
+      }
+
+      @endpoint(hostPrefix: "{account}.data.")
+      @http(method: "POST", uri: "/data")
+      operation GetData {
+          input := {
+              @required
+              @hostLabel
+              account: String
+          }
+          output := {}
+      }
+      """;
+
+  private static final String VERSIONED_RPC_PROTOCOL_TRAITS =
+      """
+      $version: "2"
+
+      namespace smithy.protocols
+
+      use smithy.api#protocolDefinition
+      use smithy.api#trait
+
+      list HttpVersions { member: String }
+
+      @trait(selector: "service")
+      @protocolDefinition
+      structure rpcv2Cbor {
+          http: HttpVersions
+          eventStreamHttp: HttpVersions
+      }
+      """;
+
+  private static final String VERSIONED_RPC_MODEL =
+      """
+      $version: "2"
+
+      namespace example.versioned
+
+      use smithy.protocols#rpcv2Cbor
+
+      @rpcv2Cbor(http: ["h2", "http/1.1"])
+      service VersionedService {
+          version: "1"
+          operations: [Ping]
+      }
+
+      operation Ping {
+          input := {}
+          output := {}
+      }
+      """;
+
+  private static final String VERSIONED_STREAMING_RPC_MODEL =
+      """
+      $version: "2"
+
+      namespace example.versionedstream
+
+      use smithy.api#streaming
+      use smithy.protocols#rpcv2Cbor
+
+      @rpcv2Cbor(http: ["http/1.1", "h2"], eventStreamHttp: ["h2"])
+      service VersionedStreamingService {
+          version: "1"
+          operations: [Watch]
+      }
+
+      operation Watch {
+          input := {}
+          output := { events: Events }
+      }
+
+      @streaming
+      union Events { message: Message }
+
+      structure Message { value: String }
+      """;
+
   @Test
   void restJson1EventStreamOperationsAreBoundThroughSharedRuntime() throws Exception {
     String generated =
@@ -287,21 +379,97 @@ final class ClientGeneratorTest {
   }
 
   @Test
+  void operationBindingsExpandModeledHostLabels() throws Exception {
+    String generated =
+        renderClient(
+            REST_PROTOCOL_TRAITS,
+            ENDPOINT_MODEL,
+            "example.endpoint#EndpointService",
+            "Example.Endpoint");
+
+    assertTrue(
+        generated.contains(
+            "static input => SmithyHostPrefix.Expand(\"{account}.data.\", new"
+                + " SmithyHostLabel(\"account\", input.Account))"),
+        generated);
+  }
+
+  @Test
+  void modeledHttpPreferencesConfigureOwnedClientWithDowngrade() throws Exception {
+    String generated =
+        renderClient(
+            VERSIONED_RPC_PROTOCOL_TRAITS,
+            VERSIONED_RPC_MODEL,
+            "example.versioned#VersionedService",
+            "Example.Versioned");
+
+    assertTrue(
+        generated.contains(
+            "config.Protocol is null ? new"
+                + " SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
+                + " allowDowngrade: true) : null"),
+        generated);
+  }
+
+  @Test
+  void modeledHttpPreferencesConfigureGeneratedDiClient() throws Exception {
+    String generated =
+        renderDependencyInjection(
+            VERSIONED_RPC_PROTOCOL_TRAITS,
+            VERSIONED_RPC_MODEL,
+            "example.versioned#VersionedService",
+            "Example.Versioned");
+
+    assertTrue(
+        generated.contains(
+            "SmithyHttpVersionPreference? modeledHttpVersionPreference = config.Protocol is null ?"
+                + " new SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
+                + " allowDowngrade: true) : null;"),
+        generated);
+    assertTrue(
+        generated.indexOf("resolvedProtocol.HttpVersionPreference).Apply(client);")
+            < generated.indexOf("configureClient?.Invoke(client);"),
+        generated);
+  }
+
+  @Test
+  void eventStreamHttpPreferencesWinForStreamingClients() throws Exception {
+    String generated =
+        renderClient(
+            VERSIONED_RPC_PROTOCOL_TRAITS,
+            VERSIONED_STREAMING_RPC_MODEL,
+            "example.versionedstream#VersionedStreamingService",
+            "Example.VersionedStream");
+
+    assertTrue(
+        generated.contains(
+            "config.Protocol is null ? new"
+                + " SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
+                + " allowDowngrade: false) : null"),
+        generated);
+  }
+
+  @Test
   void operationBindingsCarryEffectiveAuthSchemes() throws Exception {
     String generated =
         renderClient(REST_PROTOCOL_TRAITS, AUTH_MODEL, "example.auth#Secured", "Example.Auth");
 
-    // ReadThing inherits the service's effective schemes (alphabetical by shape id).
+    assertTrue(
+        generated.contains(
+            "ModeledAuthSchemes = new string[] { \"smithy.api#httpBearerAuth\","
+                + " \"smithy.api#httpApiKeyAuth\" };"),
+        generated);
+    // ReadThing inherits the service's explicitly selected default.
     assertTrue(
         generated.contains(
             "serviceProtocol.ForClientOperation(Example.Example.Auth.ReadThingSchema.Schema), new"
-                + " string[] { \"smithy.api#httpApiKeyAuth\", \"smithy.api#httpBearerAuth\" });"),
+                + " string[] { \"smithy.api#httpBearerAuth\" }, null);"),
         generated);
     // AdminThing's @auth trait overrides the service default.
     assertTrue(
         generated.contains(
             "serviceProtocol.ForClientOperation(Example.Example.Auth.AdminThingSchema.Schema), new"
-                + " string[] { \"smithy.api#httpApiKeyAuth\" });"),
+                + " string[] { \"smithy.api#httpApiKeyAuth\" }, null);"),
         generated);
   }
 
@@ -444,6 +612,41 @@ final class ClientGeneratorTest {
     var service = model.expectShape(ShapeId.from(serviceId), ServiceShape.class);
 
     new ClientGenerator(context, writer, service).run();
+
+    return writer.toString();
+  }
+
+  private String renderDependencyInjection(
+      String protocolTraits, String serviceModel, String serviceId, String writerNamespace)
+      throws Exception {
+    Model model =
+        Model.assembler()
+            .addUnparsedModel("protocol-traits.smithy", protocolTraits)
+            .addUnparsedModel("model.smithy", serviceModel)
+            .assemble()
+            .unwrap();
+    CSharpSettings settings =
+        CSharpSettings.fromNode(
+            ObjectNode.builder()
+                .withMember("service", Node.from(serviceId))
+                .withMember("baseNamespace", Node.from("Example"))
+                .build());
+    var symbolProvider = new CSharpSymbolProvider(model, settings);
+    var manifest =
+        FileManifest.create(
+            Files.createDirectory(tempDir.resolve("di-" + serviceId.replace('#', '-'))));
+    var context =
+        GenerationContext.builder()
+            .model(model)
+            .settings(settings)
+            .symbolProvider(symbolProvider)
+            .fileManifest(manifest)
+            .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
+            .build();
+    var writer = new CSharpWriter(writerNamespace);
+    var service = model.expectShape(ShapeId.from(serviceId), ServiceShape.class);
+
+    new ClientDependencyInjectionGenerator(context, writer, service).run();
 
     return writer.toString();
   }

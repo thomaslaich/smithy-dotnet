@@ -5,25 +5,31 @@ namespace NSmithy.Aws;
 public sealed class AwsSigV4AuthScheme(
     string service,
     string region,
-    IAwsCredentialsProvider credentialsProvider
+    IAwsCredentialsProvider credentialsProvider,
+    TimeProvider? timeProvider = null
 ) : ISmithyAuthScheme
 {
-    private readonly string service = string.IsNullOrWhiteSpace(service)
-        ? throw new ArgumentException("Service must be set.", nameof(service))
-        : service;
-
-    private readonly string region = string.IsNullOrWhiteSpace(region)
-        ? throw new ArgumentException("Region must be set.", nameof(region))
-        : region;
-
-    private readonly IAwsCredentialsProvider credentialsProvider =
-        credentialsProvider ?? throw new ArgumentNullException(nameof(credentialsProvider));
-
     public string SchemeId => "aws.auth#sigv4";
 
-    public IClientInterceptor CreateInterceptor(SmithyAuthSchemeContext context)
+    public ISmithyIdentityResolver IdentityResolver { get; } =
+        new SmithyCachingIdentityResolver(
+            new AwsCredentialsIdentityResolver(
+                credentialsProvider ?? throw new ArgumentNullException(nameof(credentialsProvider))
+            ),
+            timeProvider: timeProvider
+        );
+
+    public ISmithySigner Signer { get; } = new AwsSigV4Signer(service, region, timeProvider);
+
+    private sealed class AwsCredentialsIdentityResolver(IAwsCredentialsProvider provider)
+        : ISmithyIdentityResolver
     {
-        ArgumentNullException.ThrowIfNull(context);
-        return new AwsSigV4Interceptor(context.Endpoint, service, region, credentialsProvider);
+        private readonly IAwsCredentialsProvider provider =
+            provider ?? throw new ArgumentNullException(nameof(provider));
+
+        public async ValueTask<ISmithyIdentity> ResolveIdentityAsync(
+            SmithyIdentityProperties properties,
+            CancellationToken cancellationToken = default
+        ) => await provider.GetCredentialsAsync(cancellationToken).ConfigureAwait(false);
     }
 }

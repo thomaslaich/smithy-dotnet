@@ -82,6 +82,8 @@ public class SmithyClientConfig
     public Uri? Endpoint { get; set; }
     public IProtocol? Protocol { get; set; }
     public IEndpointResolver? EndpointResolver { get; set; }
+    public bool DisableHostPrefixInjection { get; set; }
+    public string? UserAgent { get; set; }
     public IList<IClientInterceptor> Interceptors { get; }
     public IList<ISmithyAuthScheme> AuthSchemes { get; }
     public ISmithyRetryStrategy? RetryStrategy { get; set; }
@@ -141,8 +143,9 @@ public interface IClientInterceptor
 
 Every hook has a default implementation, so an interceptor overrides only the
 stages it cares about. The signing and transmit hooks are async so they can do
-I/O — fetching credentials or tokens — before the request goes out. Auth signing
-is itself modeled as an interceptor.
+I/O before the request goes out. The selected auth scheme resolves its identity
+and invokes its signer between the user `OnBeforeSigningAsync` and
+`OnBeforeTransmitAsync` hooks.
 
 `OnAfterExecution` runs on both success and failure; on failure it receives the
 exception that will propagate to the caller (a modeled error, a client
@@ -207,11 +210,10 @@ Auth schemes are keyed by Smithy auth trait shape id. Per-operation `@auth`
 overrides, endpoint-driven auth overrides, and anonymous operations all feed the
 same resolver: each operation binding carries the operation's effective modeled
 scheme ids (the service default, overridden by `@auth`), the resolved endpoint
-may narrow that list, and the runtime selects the first scheme with a
-configured interceptor per invocation. Configured schemes create their
-interceptors once at client construction; selection is per call. The selected
-auth interceptor runs after user interceptors in each request phase, so signing
-sees the final request.
+may narrow that list, and the runtime selects the first configured scheme per
+invocation. Configured schemes expose an identity resolver and signer; selection
+is per call. Identity resolution and signing run once per attempt after user
+request preparation, so retries are re-signed.
 
 Identity providers own caching and refresh. Signers are stateless or explicitly
 thread-safe services that operate on a request plus context.

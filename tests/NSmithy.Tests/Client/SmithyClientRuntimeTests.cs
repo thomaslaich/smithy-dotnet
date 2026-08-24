@@ -528,6 +528,31 @@ public sealed class SmithyClientRuntimeTests
     }
 
     [Fact]
+    public async Task AfterExecutionRunsWhenBeforeExecutionFails()
+    {
+        List<Exception?> observed = [];
+        var runtime = new SmithyClientRuntime(
+            new RecordingTransport(
+                new SmithyHttpClientResponse(
+                    HttpStatusCode.OK,
+                    "OK",
+                    [],
+                    EmptyHeaders,
+                    EmptyHeaders
+                )
+            ),
+            [new ThrowingBeforeExecutionInterceptor(observed)]
+        );
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            runtime.InvokeAsync(Binding(new TextProtocol()), "input")
+        );
+
+        Assert.Equal("before failed", error.Message);
+        Assert.Same(error, Assert.Single(observed));
+    }
+
+    [Fact]
     public async Task RuntimeDisposesStreamingResponseBodyWhenRetrying()
     {
         var abandoned = new TrackingStream();
@@ -868,6 +893,16 @@ public sealed class SmithyClientRuntimeTests
                 )
             );
         }
+    }
+
+    private sealed class ThrowingBeforeExecutionInterceptor(List<Exception?> observed)
+        : IClientInterceptor
+    {
+        public void OnBeforeExecution(SmithyContext context) =>
+            throw new InvalidOperationException("before failed");
+
+        public void OnAfterExecution(SmithyContext context, Exception? exception) =>
+            observed.Add(exception);
     }
 
     // The runtime depends only on the client half of the protocol contract, so test protocols

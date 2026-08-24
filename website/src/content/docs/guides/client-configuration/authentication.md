@@ -19,10 +19,11 @@ var client = new WeatherClient(
 ```
 
 At construction time, NSmithy validates your configured schemes against the
-auth schemes modeled by the service and prepares one signer per configured
-scheme. On each call it selects the first of the *operation's* effective
+auth schemes modeled by the service. On each call it selects the first of the
+*operation's* effective
 modeled schemes (a per-operation `@auth` trait overrides the service default)
-for which you supplied configuration; operations modeled as anonymous send no
+for which you supplied configuration, resolves that scheme's identity, and
+signs each attempt after user request interceptors have run. Operations modeled as anonymous send no
 credentials, and an [endpoint resolver](/smithy-dotnet/guides/client-configuration/)
 can narrow the candidate schemes per endpoint. If `AuthSchemes` is empty,
 requests are sent anonymously.

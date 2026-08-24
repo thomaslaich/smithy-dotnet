@@ -45,7 +45,9 @@ URIs against the effective endpoint before handing the request to the transport.
 For long-lived applications, prefer the generated
 [`Add{Service}Client`](/smithy-dotnet/guides/client-configuration/dependency-injection/)
 helper. It uses `IHttpClientFactory` and applies protocol-specific HTTP settings,
-including HTTP/2 for native gRPC.
+including modeled ALPN preferences and exact HTTP/2 for native gRPC. When you
+supply an `HttpClient` directly, configure its `DefaultRequestVersion` and
+`DefaultVersionPolicy` yourself.
 
 ## Custom runtime
 

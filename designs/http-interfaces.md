@@ -71,9 +71,9 @@ constructor signatures. The endpoint constructor writes the positional endpoint
 into config and then delegates to a private config constructor. The positional
 endpoint wins over any `config.Endpoint` value.
 
-When the caller supplies no `HttpClient`, the client creates one, configured for
-HTTP/2 when the protocol requires it (`IProtocol.RequiresHttp2`, true for native
-gRPC).
+When the caller supplies no `HttpClient`, the client creates one using the
+protocol trait's modeled `http` / `eventStreamHttp` preference and downgrade
+policy. Native gRPC defaults to exact HTTP/2.
 
 The protocol implementation composes the transport with the codec and the
 protocol binding to produce a complete request pipeline. The generated client
@@ -151,8 +151,8 @@ carries them.
 
 ## gRPC
 
-gRPC is just another `IProtocol` (`GrpcProtocol`) over this same transport: it needs
-HTTP/2 (`IProtocol.RequiresHttp2`) but otherwise uses `HttpClientTransport` like the
+gRPC is just another `IProtocol` (`GrpcProtocol`) over this same transport: it uses
+an exact HTTP/2 `HttpVersionPreference` but otherwise uses `HttpClientTransport` like the
 REST and rpcv2Cbor protocols, with trailers exposed through `SmithyHttpClientResponse.Trailer`.
 The wire format, framing, proto codec, and error model are covered in
 [native-grpc.md](native-grpc.md).

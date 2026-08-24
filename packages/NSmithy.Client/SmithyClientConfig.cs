@@ -25,6 +25,8 @@ public class SmithyClientConfig
         Endpoint = source.Endpoint;
         Protocol = source.Protocol;
         EndpointResolver = source.EndpointResolver;
+        DisableHostPrefixInjection = source.DisableHostPrefixInjection;
+        UserAgent = source.UserAgent;
         RetryStrategy = source.RetryStrategy;
         OperationTimeout = source.OperationTimeout;
         IdempotencyTokenProvider = source.IdempotencyTokenProvider;
@@ -56,6 +58,14 @@ public class SmithyClientConfig
     /// operation, add endpoint headers, and narrow auth schemes.
     /// </summary>
     public IEndpointResolver? EndpointResolver { get; set; }
+
+    /// <summary>Disables modeled <c>@endpoint(hostPrefix)</c> injection when true.</summary>
+    public bool DisableHostPrefixInjection { get; set; }
+
+    /// <summary>
+    /// User-Agent sent when an operation does not model one itself. Null uses the NSmithy default.
+    /// </summary>
+    public string? UserAgent { get; set; }
 
     /// <summary>Protocol-agnostic hooks for observing and modifying client execution.</summary>
     public IList<IClientInterceptor> Interceptors { get; } = [];

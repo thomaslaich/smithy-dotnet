@@ -18,6 +18,8 @@ public sealed class SmithyClientConfigTests
             EndpointResolver = endpointResolver,
             RetryStrategy = strategy,
             OperationTimeout = TimeSpan.FromSeconds(10),
+            DisableHostPrefixInjection = true,
+            UserAgent = "weather-app/1.0",
             IdempotencyTokenProvider = tokenProvider,
             Interceptors = { interceptor },
             AuthSchemes = { authScheme },
@@ -28,6 +30,8 @@ public sealed class SmithyClientConfigTests
         Assert.Equal(source.Endpoint, copy.Endpoint);
         Assert.Same(endpointResolver, copy.EndpointResolver);
         Assert.Equal(TimeSpan.FromSeconds(10), copy.OperationTimeout);
+        Assert.True(copy.DisableHostPrefixInjection);
+        Assert.Equal("weather-app/1.0", copy.UserAgent);
         // Shallow on purpose: shared strategy instances share client-wide state (retry quota).
         Assert.Same(strategy, copy.RetryStrategy);
         Assert.Same(tokenProvider, copy.IdempotencyTokenProvider);

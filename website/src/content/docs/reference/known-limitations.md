@@ -72,13 +72,6 @@ Other constraints:
 - Response binding and error behavior still need broader conformance coverage,
   especially for AWS JSON and AWS restXml.
 
-## HTTP Version Negotiation Traits Are Ignored
-
-The `http` / `eventStreamHttp` members on protocol traits (for example
-`@rpcv2Cbor(http: ["h2"])`) are not honored. Generated clients use the
-`HttpClient`'s default HTTP version (HTTP/1.1 unless configured), and HTTP/2 is
-forced only for native gRPC. See the [Roadmap](/smithy-dotnet/contributing/roadmap/).
-
 ## Request Rejection Has Two Remaining Gaps
 
 A malformed request is answered with a structured 4xx (see

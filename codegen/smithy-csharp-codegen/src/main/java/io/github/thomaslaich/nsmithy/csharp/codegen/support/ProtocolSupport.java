@@ -14,8 +14,13 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import software.amazon.smithy.codegen.core.CodegenException;
+import software.amazon.smithy.model.Model;
+import software.amazon.smithy.model.knowledge.TopDownIndex;
+import software.amazon.smithy.model.node.ArrayNode;
 import software.amazon.smithy.model.shapes.ServiceShape;
+import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -30,6 +35,8 @@ public final class ProtocolSupport {
     RPC_V2_CBOR,
     GRPC
   }
+
+  public record HttpVersionPreference(String alpnId, boolean allowDowngrade) {}
 
   private ProtocolSupport() {}
 
@@ -95,6 +102,89 @@ public final class ProtocolSupport {
     if (isRestJson1Service(s)) kinds.add(Kind.REST_JSON_1);
     if (isGrpcService(s)) kinds.add(Kind.GRPC);
     return kinds;
+  }
+
+  public static ShapeId traitId(Kind kind) {
+    return switch (kind) {
+      case AWS_JSON_1_0 -> TraitIds.AWS_JSON_1_0;
+      case AWS_JSON_1_1 -> TraitIds.AWS_JSON_1_1;
+      case SIMPLE_REST_JSON -> TraitIds.SIMPLE_REST_JSON;
+      case REST_JSON_1 -> TraitIds.REST_JSON_1;
+      case REST_XML -> TraitIds.REST_XML;
+      case RPC_V2_CBOR -> TraitIds.RPC_V2_CBOR;
+      case GRPC -> TraitIds.GRPC;
+    };
+  }
+
+  /** Reads the selected protocol trait's ordered ALPN preferences, when modeled. */
+  public static Optional<HttpVersionPreference> httpVersionPreference(
+      ServiceShape service, Kind kind, boolean eventStream) {
+    var trait = service.findTrait(traitId(kind));
+    if (trait.isEmpty() || !trait.get().toNode().isObjectNode()) {
+      return Optional.empty();
+    }
+
+    var object = trait.get().toNode().expectObjectNode();
+    Optional<ArrayNode> values =
+        eventStream ? object.getArrayMember("eventStreamHttp") : Optional.empty();
+    if (values.isEmpty()) {
+      values = object.getArrayMember("http");
+    }
+    if (values.isEmpty() || values.get().isEmpty()) {
+      return Optional.empty();
+    }
+
+    List<String> ids =
+        values.get().getElements().stream()
+            .map(node -> node.expectStringNode().getValue())
+            .toList();
+    int selectedIndex = -1;
+    int selectedRank = -1;
+    for (int i = 0; i < ids.size(); i++) {
+      int rank = httpVersionRank(ids.get(i));
+      if (rank >= 0) {
+        selectedIndex = i;
+        selectedRank = rank;
+        break;
+      }
+    }
+    if (selectedIndex < 0) {
+      throw new CodegenException(
+          "Protocol "
+              + traitId(kind)
+              + " on service "
+              + service.getId()
+              + " has no supported HTTP ALPN id in "
+              + ids
+              + ". Supported ids: h3, h2, http/1.1.");
+    }
+
+    boolean allowDowngrade = false;
+    for (int i = selectedIndex + 1; i < ids.size(); i++) {
+      int rank = httpVersionRank(ids.get(i));
+      if (rank >= 0 && rank < selectedRank) {
+        allowDowngrade = true;
+        break;
+      }
+    }
+    return Optional.of(new HttpVersionPreference(ids.get(selectedIndex), allowDowngrade));
+  }
+
+  public static boolean hasEventStreamOperations(Model model, ServiceShape service) {
+    return TopDownIndex.of(model).getContainedOperations(service).stream()
+        .anyMatch(
+            operation ->
+                ShapeSupport.isEventStreamShape(model, operation.getInputShape())
+                    || ShapeSupport.isEventStreamShape(model, operation.getOutputShape()));
+  }
+
+  private static int httpVersionRank(String alpnId) {
+    return switch (alpnId) {
+      case "http/1.1" -> 1;
+      case "h2" -> 2;
+      case "h3" -> 3;
+      default -> -1;
+    };
   }
 
   /** The default protocol for the client: the first declared kind by precedence. */

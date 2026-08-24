@@ -143,8 +143,9 @@ internal sealed class WeatherHandler : IWeatherServiceHandler
 ## Client
 
 The generated `WeatherClient` is a native NSmithy client over an HTTP/2
-`HttpClient` — no `GrpcChannel`. Pass `GrpcProtocol` to select gRPC; the client
-configures the HTTP/2 `HttpClient` for you:
+`HttpClient` — no `GrpcChannel`. Pass `GrpcProtocol` to select gRPC. With the
+endpoint constructor shown here, the client creates the `HttpClient` and
+automatically requests exact HTTP/2:
 
 ```csharp
 using Example.Weather;
@@ -158,11 +159,22 @@ var city = await client.GetCityAsync(new GetCityInput("SEA"));
 Console.WriteLine(city.Name); // Seattle
 ```
 
-For a service that also declares an HTTP protocol (e.g. `@simpleRestJson` +
-`@grpc`), the same client speaks either — set `Protocol = new GrpcProtocol()` for
-gRPC, or leave `Protocol` unset for the default (primary) protocol. To reuse a
-pre-configured `HttpClient`, pass it as the first argument (it must be HTTP/2 for
-gRPC). See [Client Configuration](/smithy-dotnet/guides/client-configuration/).
+The generated `AddWeatherClient(...)` DI helper also applies exact HTTP/2
+automatically. For a service that declares an HTTP protocol alongside `@grpc`,
+the same client speaks either: set `Protocol = new GrpcProtocol()` for gRPC, or
+leave `Protocol` unset for the default (primary) protocol.
+
+When you pass a caller-owned `HttpClient` directly, the generated client uses it
+as configured. Set the required version and policy yourself:
+
+```csharp
+httpClient.DefaultRequestVersion = System.Net.HttpVersion.Version20;
+httpClient.DefaultVersionPolicy =
+    System.Net.Http.HttpVersionPolicy.RequestVersionExact;
+```
+
+See [Client Configuration](/smithy-dotnet/guides/client-configuration/) for the
+constructor and DI ownership rules.
 
 ## Streaming
 

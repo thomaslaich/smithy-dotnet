@@ -36,23 +36,7 @@ The priorities below are what remains.
 - Keep the scope driven by conformance and observed runtime behavior rather
   than by protocol checklists.
 
-### 2. Move the client runtime to the target architecture
-
-The core client runtime pipeline, standard retry, operation timeouts,
-telemetry, and paginators have landed; the desired
-end-state is documented in
-[`designs/client-architecture.md`](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/client-architecture.md).
-The remaining work closes the gaps:
-
-- Splitting auth into scheme resolution, identity resolution, and signing;
-  adding per-operation `@auth` overrides and identity caching/refresh.
-- Adding per-operation endpoint resolution beyond the static resolver,
-  including host labels and endpoint auth-scheme overrides.
-- Setting a modeled/default User-Agent.
-- Continuing to harden named client interceptors and the typed per-call
-  execution context.
-
-### 3. Harden streaming operations
+### 2. Harden streaming operations
 
 NSmithy has two experimental event-streaming surfaces: native gRPC (client,
 server, and bidirectional streaming) and `rpcv2Cbor` event streams over
@@ -68,7 +52,7 @@ This work includes:
 - Extending streaming support beyond event streams, especially streaming blob
   payloads.
 
-### 4. Expand to async protocols
+### 3. Expand to async protocols
 
 NSmithy's current protocol work is mostly request/response oriented. A separate
 near-term goal is to validate that the runtime and generator model can also
@@ -83,7 +67,7 @@ This work includes:
 - Using these protocols to pressure-test the existing transport, codec, and
   client/server seams beyond HTTP-centric assumptions.
 
-### 5. Support Smithy AI traits and MCP generation
+### 4. Support Smithy AI traits and MCP generation
 
 Support Smithy's AI-oriented traits so that .NET and protocol artifacts can be
 generated for tool-driven and agent-driven workflows, rather than treating the
@@ -96,25 +80,6 @@ This work includes:
   modeled contract maps cleanly to MCP tools, resources, and prompts.
 - Defining the runtime and generation boundaries needed so AI-trait-aware
   models remain inspectable, testable, and versionable.
-
-### 6. Honor protocol HTTP-version traits
-
-Protocol traits can declare the HTTP versions a service supports via their `http`
-and `eventStreamHttp` members — a list of ALPN protocol IDs in preference order
-(for example `@rpcv2Cbor(http: ["h2", "http/1.1"])`). These are currently
-ignored: generated clients use the `HttpClient`'s default version (HTTP/1.1
-unless configured), with HTTP/2 forced only for native gRPC.
-
-This work includes:
-
-- Reading the `http` / `eventStreamHttp` members at codegen.
-- Replacing the runtime's coarse `IProtocol.RequiresHttp2` bool with a
-  preferred-version + downgrade-policy model that maps the preference list onto
-  ALPN negotiation (request the first supported version, allow downgrade).
-- Applying the selected version when the client creates its own `HttpClient` (the
-  endpoint constructor and the generated DI helper); documenting that the
-  bring-your-own-`HttpClient` and IHttpClientFactory paths configure it
-  themselves, since there the caller owns the `HttpClient`.
 
 ## Later Work
 

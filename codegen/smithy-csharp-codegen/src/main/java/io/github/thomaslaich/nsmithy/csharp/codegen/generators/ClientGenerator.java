@@ -31,6 +31,7 @@ import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.model.traits.DocumentationTrait;
+import software.amazon.smithy.model.traits.EndpointTrait;
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -118,6 +119,10 @@ public final class ClientGenerator implements Runnable {
       String interfaceName,
       List<Kind> kinds) {
     String primaryProtocol = ProtocolSupport.protocolType(kinds.get(0));
+    String modeledHttpVersionPreference =
+        httpVersionPreferenceLiteral(
+            ProtocolSupport.httpVersionPreference(
+                service, kinds.get(0), ProtocolSupport.hasEventStreamOperations(model, service)));
     String serviceSchema = SchemaGenerator.serviceSchemaAccessor(context, service);
     // The idempotency-token provider is only stored/used when an operation has a nullable
     // @idempotencyToken member; emitting the field unconditionally would be an unused private
@@ -180,7 +185,10 @@ public final class ClientGenerator implements Runnable {
                           + " an HttpClient.\", nameof(config));");
                   writer.write(
                       "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
-                  writer.write("var httpClient = CreateDefaultHttpClient(resolvedProtocol);");
+                  writer.write(
+                      "var httpClient = CreateDefaultHttpClient(resolvedProtocol,"
+                          + " config.Protocol is null ? $L : null);",
+                      modeledHttpVersionPreference);
                   writer.write("this.ownedHttpClient = httpClient;");
                   writer.write(
                       "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
@@ -192,8 +200,9 @@ public final class ClientGenerator implements Runnable {
                           + " endpoint,"
                           + " config.OperationTimeout,"
                           + " config.EndpointResolver,"
-                          + " SmithyAuthSchemeResolver.ResolveInterceptors(endpoint, $L,"
-                          + " ModeledAuthSchemes, config.AuthSchemes));",
+                          + " SmithyAuthSchemeResolver.ResolveSchemes($L,"
+                          + " ModeledAuthSchemes, config.AuthSchemes),"
+                          + " config.DisableHostPrefixInjection, config.UserAgent);",
                       serviceSchema);
                 }
                 writeIdempotencyAssignment(needsIdempotency);
@@ -235,8 +244,9 @@ public final class ClientGenerator implements Runnable {
                           + " endpoint,"
                           + " config.OperationTimeout,"
                           + " config.EndpointResolver,"
-                          + " SmithyAuthSchemeResolver.ResolveInterceptors(endpoint, $L,"
-                          + " ModeledAuthSchemes, config.AuthSchemes));",
+                          + " SmithyAuthSchemeResolver.ResolveSchemes($L,"
+                          + " ModeledAuthSchemes, config.AuthSchemes),"
+                          + " config.DisableHostPrefixInjection, config.UserAgent);",
                       serviceSchema);
                 }
                 writeIdempotencyAssignment(needsIdempotency);
@@ -293,9 +303,9 @@ public final class ClientGenerator implements Runnable {
               });
           writer.write("");
 
-          // The auth schemes the service models, in Smithy's effective priority order (the @auth
-          // trait, or all of the service's auth traits in alphabetical order by shape id). The
-          // resolver installs the first of these for which the caller configured a matching scheme.
+          // Every auth scheme that can be effective for a service operation. This includes schemes
+          // introduced solely by an operation-level @auth override, so constructor validation does
+          // not reject a client configured specifically for such an operation.
           writer.write(
               "private static readonly System.Collections.Generic.IReadOnlyList<string>"
                   + " ModeledAuthSchemes = $L;",
@@ -304,16 +314,16 @@ public final class ClientGenerator implements Runnable {
 
           writer.write(
               "private static System.Net.Http.HttpClient CreateDefaultHttpClient(IProtocol"
-                  + " protocol) =>");
-          writer.write("    protocol.RequiresHttp2");
-          writer.write("        ? new System.Net.Http.HttpClient");
-          writer.write("        {");
-          writer.write("            DefaultRequestVersion = System.Net.HttpVersion.Version20,");
-          writer.write(
-              "            DefaultVersionPolicy ="
-                  + " System.Net.Http.HttpVersionPolicy.RequestVersionExact,");
-          writer.write("        }");
-          writer.write("        : new System.Net.Http.HttpClient();");
+                  + " protocol, SmithyHttpVersionPreference? modeledPreference)");
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                writer.write("var client = new System.Net.Http.HttpClient();");
+                writer.write(
+                    "(modeledPreference ?? protocol.HttpVersionPreference).Apply(client);");
+                writer.write("return client;");
+              });
           if (needsIdempotency) {
             writer.write("");
             writer.write(
@@ -360,16 +370,27 @@ public final class ClientGenerator implements Runnable {
   }
 
   /**
-   * Renders the service's effective auth schemes as a C# array literal of shape-id strings, in
-   * Smithy priority order. {@link ServiceIndex#getEffectiveAuthSchemes} applies the spec rules: the
-   * {@code @auth} trait when present, otherwise every auth trait on the service ordered
-   * alphabetically by absolute shape id. An empty result renders as an empty array.
+   * Renders every auth scheme that can be effective for an operation in the service. Service-level
+   * schemes are followed by schemes introduced by operation-level {@code @auth} overrides, with
+   * duplicates removed while preserving their first occurrence. An empty result renders as an empty
+   * array.
    */
   private String modeledAuthSchemesLiteral() {
-    List<String> ids =
-        ServiceIndex.of(context.model()).getEffectiveAuthSchemes(service).keySet().stream()
-            .map(ShapeId::toString)
-            .collect(Collectors.toList());
+    var serviceIndex = ServiceIndex.of(context.model());
+    Map<String, Boolean> uniqueIds = new LinkedHashMap<>();
+    serviceIndex
+        .getEffectiveAuthSchemes(service)
+        .keySet()
+        .forEach(id -> uniqueIds.put(id.toString(), Boolean.TRUE));
+    TopDownIndex.of(context.model()).getContainedOperations(service).stream()
+        .sorted(Comparator.comparing(operation -> operation.getId().toString()))
+        .forEach(
+            operation ->
+                serviceIndex
+                    .getEffectiveAuthSchemes(service, operation)
+                    .keySet()
+                    .forEach(id -> uniqueIds.put(id.toString(), Boolean.TRUE)));
+    List<String> ids = uniqueIds.keySet().stream().toList();
     if (ids.isEmpty()) {
       return "System.Array.Empty<string>()";
     }
@@ -415,21 +436,22 @@ public final class ClientGenerator implements Runnable {
       String operationSchema = SchemaGenerator.operationSchemaAccessor(context, op);
       writer.write(
           "this.$LBinding = new SmithyOperationBinding<$L, $L>($L.Id, $L.Id,"
-              + " serviceProtocol.ForClientOperation($L), $L);",
+              + " serviceProtocol.ForClientOperation($L), $L, $L);",
           CSharpNaming.typeName(op.getId().getName()),
           SchemaGenerator.operationShapeType(context, op.getInputShape()),
           SchemaGenerator.operationShapeType(context, op.getOutputShape()),
           SchemaGenerator.serviceSchemaAccessor(context, service),
           operationSchema,
           operationSchema,
-          operationAuthSchemesLiteral(op));
+          operationAuthSchemesLiteral(op),
+          operationHostPrefixLiteral(op));
     }
   }
 
   /**
    * The operation's effective auth schemes in Smithy priority order: the service's effective
    * schemes, overridden by a per-operation {@code @auth} trait. Rendered as a C# array literal of
-   * shape-id strings for the operation binding; the runtime selects the configured interceptor per
+   * shape-id strings for the operation binding; the runtime selects the configured auth scheme per
    * invocation from this list.
    */
   private String operationAuthSchemesLiteral(OperationShape op) {
@@ -443,6 +465,53 @@ public final class ClientGenerator implements Runnable {
     return "new string[] { "
         + ids.stream().map(CSharpNaming::formatString).collect(Collectors.joining(", "))
         + " }";
+  }
+
+  /** Renders a typed host-prefix expander for an operation's {@code @endpoint} trait. */
+  private String operationHostPrefixLiteral(OperationShape op) {
+    Optional<EndpointTrait> endpoint = op.getTrait(EndpointTrait.class);
+    if (endpoint.isEmpty()) {
+      return "null";
+    }
+
+    StructureShape input = context.model().expectShape(op.getInputShape(), StructureShape.class);
+    String labels =
+        endpoint.get().getHostPrefix().getLabels().stream()
+            .map(
+                label -> {
+                  String name = label.getContent();
+                  MemberShape member = input.getMember(name).orElseThrow();
+                  return "new SmithyHostLabel("
+                      + CSharpNaming.formatString(name)
+                      + ", input."
+                      + CSharpNaming.propertyName(member.getMemberName())
+                      + ")";
+                })
+            .collect(Collectors.joining(", "));
+    String arguments =
+        labels.isEmpty()
+            ? CSharpNaming.formatString(endpoint.get().getHostPrefix().toString())
+            : CSharpNaming.formatString(endpoint.get().getHostPrefix().toString()) + ", " + labels;
+    return "static input => SmithyHostPrefix.Expand(" + arguments + ")";
+  }
+
+  static String httpVersionPreferenceLiteral(
+      Optional<ProtocolSupport.HttpVersionPreference> preference) {
+    if (preference.isEmpty()) {
+      return "null";
+    }
+    String version =
+        switch (preference.get().alpnId()) {
+          case "h3" -> "System.Net.HttpVersion.Version30";
+          case "h2" -> "System.Net.HttpVersion.Version20";
+          case "http/1.1" -> "System.Net.HttpVersion.Version11";
+          default -> throw new IllegalArgumentException(preference.get().alpnId());
+        };
+    return "new SmithyHttpVersionPreference("
+        + version
+        + ", allowDowngrade: "
+        + preference.get().allowDowngrade()
+        + ")";
   }
 
   // ---------------- per-operation method ----------------
