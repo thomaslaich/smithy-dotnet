@@ -26,6 +26,11 @@ done
 awslocal s3api put-object \
   --bucket nsmithy-demo-assets --key hello.txt --body /etc/hostname >/dev/null 2>&1 || true
 
+echo "[seed] SQS queues"
+for queue in nsmithy-demo-jobs nsmithy-demo-events; do
+  awslocal sqs create-queue --queue-name "$queue" >/dev/null 2>&1 || true
+done
+
 echo "[seed] Lambda function"
 # Build a minimal deployment package with python3 (always present in the image),
 # so we don't depend on `zip` being installed. LocalStack doesn't enforce IAM,

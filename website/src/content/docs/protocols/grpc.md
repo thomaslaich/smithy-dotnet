@@ -1,44 +1,34 @@
 ---
 title: gRPC
-description: alloy.proto#grpc — generate native gRPC client and server surfaces from a Smithy model, with no protoc or Grpc.Tools.
+description: Generate native gRPC clients and servers from alloy.proto#grpc without protoc or Grpc.Tools.
 ---
 
-`alloy.proto#grpc` generates native gRPC client and server surfaces directly
-from a Smithy model. NSmithy implements the gRPC wire contract itself — a
-schema-driven protobuf codec (`NSmithy.Codecs.Proto`) plus a gRPC transport
-binding (`NSmithy.Protocols.Grpc`) — so there is no `protoc`, `Grpc.Tools`, or
-`Grpc.Net` dependency. The generated surfaces match the same protocol-agnostic
-handler and client interfaces used by the HTTP protocols. Status:
-**Experimental**.
+`alloy.proto#grpc` generates native gRPC clients and ASP.NET Core servers from a
+Smithy model. NSmithy provides its own protobuf codec and gRPC transport, so an
+NSmithy service does not need `protoc`, `Grpc.Tools`, `Google.Protobuf`, or
+`Grpc.Net`.
 
-Because the bytes on the wire are standard protobuf over gRPC/HTTP/2, an NSmithy
-peer interoperates with a `Grpc.Net` peer in either direction. A `.proto` file can
-still be emitted (see [Generating a `.proto`](#generating-a-proto-for-external-peers))
-when you need to build a non-NSmithy peer the conventional way.
+The wire contract is standard protobuf over gRPC and HTTP/2. NSmithy peers can
+interoperate with conventional gRPC implementations through a generated
+`.proto` file.
 
-See [Protocol Status](/smithy-dotnet/protocols/status/) for current maturity
-details.
+See [Protocol Status](../status/) for maturity and test coverage.
 
-## Maven Dependency
+## Protocol behavior
 
-```json
-"com.disneystreaming.alloy:alloy-core:0.3.38"
-```
-
-## NuGet Packages
-
-| Purpose | Packages |
+| Area | gRPC |
 | --- | --- |
-| gRPC server (ASP.NET Core) | `NSmithy.Server.AspNetCore`, `NSmithy.Protocols.Grpc` |
-| gRPC client | `NSmithy.Client`, `NSmithy.Protocols.Grpc` |
-
-`NSmithy.Protocols.Grpc` pulls in `NSmithy.Codecs.Proto` (the protobuf codec)
-transitively. No protobuf toolchain is required.
+| Route | `/{namespace}.{Service}/{Operation}` |
+| Body | Protobuf |
+| Framing | Standard gRPC message frames over HTTP/2 |
+| Errors | `grpc-status` plus Smithy error metadata |
+| Streaming | Server, client, and bidirectional event streams |
+| Smithy requirement | `@protoIndex` on protobuf fields |
 
 ## Modeling
 
-Apply `@grpc` to the service and `@protoIndex` to every member in an operation's
-input or output:
+Apply `@grpc` to the service and give each protobuf field a stable
+`@protoIndex`:
 
 ```smithy
 $version: "2"
@@ -68,54 +58,15 @@ operation GetCity {
 }
 ```
 
-`@protoIndex` assigns the proto field number. It is currently required on every
-member that appears in a proto message — omitting it is a model error.
-`@protoNumType` selects integer wire types (`sint`/`uint`/`fixed`/`sfixed`).
-
-## On the Wire
-
-NSmithy uses standard gRPC framing — length-prefixed protobuf over HTTP/2 — and
-interoperates with any gRPC peer. Each member's `@protoIndex` is its protobuf
-field number.
-
-A unary `GetCity { cityId: "123" }` call posts to
-`/{namespace}.{Service}/{Method}`:
-
-```
-POST /example.weather.Weather/GetCity HTTP/2
-content-type: application/grpc+proto
-te: trailers
-
-<gRPC frame><protobuf message>
-```
-
-Each message is a gRPC frame — a 1-byte compression flag, a 4-byte big-endian
-length, then the protobuf payload. For `cityId: "123"`:
-
-```
-00              compression flag (0 = uncompressed)
-00 00 00 05     message length = 5 bytes (big-endian)
-0a              field 1, wire type 2 (LEN)   ← cityId, @protoIndex(1)
-03              string length = 3
-31 32 33        "123"
-```
-
-The response returns the output in the same framing and signals the result with
-the `grpc-status` trailer (`0` = OK). Modeled errors return HTTP 200 with a
-non-zero `grpc-status`; NSmithy carries the Smithy error shape id in the
-`grpc-message` / `x-smithy-grpc-error` trailer for typed dispatch.
+`@protoIndex` is the protobuf field number and is part of the stable wire
+contract. Omitting it from an input or output member is a model error.
+`@protoNumType` selects integer encodings such as `sint32`, `uint64`, or
+`fixed32`.
 
 ## Server
 
-gRPC is the one protocol where the hosting and client code differs from the
-[shared example](/smithy-dotnet/protocols/overview/): it needs HTTP/2
-transport and a gRPC-specific client protocol. The generated handler interface
-itself works the same way — you implement one method per operation.
-
-Configure Kestrel to serve HTTP/2 on a dedicated port. Cleartext gRPC requires
-HTTP/2; mixing HTTP/1.1 REST and cleartext gRPC on the same port is unreliable
-without TLS/ALPN. There is no `AddGrpc()` call — the generated `MapWeatherService`
-maps the gRPC method routes itself:
+gRPC requires HTTP/2. Configure a dedicated cleartext HTTP/2 port for local
+development, then map the generated service:
 
 ```csharp
 using Example.Weather;
@@ -124,28 +75,24 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.ListenLocalhost(5001, o => o.Protocols = HttpProtocols.Http2);
+    options.ListenLocalhost(5001, listener =>
+        listener.Protocols = HttpProtocols.Http2);
 });
 builder.Services.AddWeatherServiceHandler<WeatherHandler>();
 
 var app = builder.Build();
 app.MapWeatherService();
 app.Run();
-
-internal sealed class WeatherHandler : IWeatherServiceHandler
-{
-    public Task<GetCityOutput> GetCityAsync(
-        GetCityInput input, CancellationToken ct = default) =>
-        Task.FromResult(new GetCityOutput("Seattle"));
-}
 ```
+
+There is no `AddGrpc()` call. The generated mapping registers the gRPC method
+routes directly. Cleartext REST and gRPC should use separate ports unless TLS
+and ALPN negotiate the HTTP version.
 
 ## Client
 
-The generated `WeatherClient` is a native NSmithy client over an HTTP/2
-`HttpClient` — no `GrpcChannel`. Pass `GrpcProtocol` to select gRPC. With the
-endpoint constructor shown here, the client creates the `HttpClient` and
-automatically requests exact HTTP/2:
+The generated client uses an HTTP/2 `HttpClient`. Select `GrpcProtocol` in the
+client configuration:
 
 ```csharp
 using Example.Weather;
@@ -156,39 +103,16 @@ var client = new WeatherClient(
     new() { Protocol = new GrpcProtocol() });
 
 var city = await client.GetCityAsync(new GetCityInput("SEA"));
-Console.WriteLine(city.Name); // Seattle
 ```
 
-The generated `AddWeatherClient(...)` DI helper also applies exact HTTP/2
-automatically. For a service that declares an HTTP protocol alongside `@grpc`,
-the same client speaks either: set `Protocol = new GrpcProtocol()` for gRPC, or
-leave `Protocol` unset for the default (primary) protocol.
-
-When you pass a caller-owned `HttpClient` directly, the generated client uses it
-as configured. Set the required version and policy yourself:
-
-```csharp
-httpClient.DefaultRequestVersion = System.Net.HttpVersion.Version20;
-httpClient.DefaultVersionPolicy =
-    System.Net.Http.HttpVersionPolicy.RequestVersionExact;
-```
-
-See [Client Configuration](/smithy-dotnet/guides/client-configuration/) for the
-constructor and DI ownership rules.
+The endpoint constructor and generated dependency injection helper request exact
+HTTP/2 automatically. A caller-owned `HttpClient` must set
+`DefaultRequestVersion` to HTTP/2 and `DefaultVersionPolicy` to
+`RequestVersionExact`.
 
 ## Streaming
 
-Native gRPC supports event streaming operations whose streaming member targets an
-event union. Generated clients and handlers use the modeled operation
-input/output shapes; the streaming member inside those shapes is
-`IAsyncEnumerable<TEvent>`:
-
-- server streaming returns an output shape with an `IAsyncEnumerable<TEvent>` member
-- client streaming accepts an input shape with an `IAsyncEnumerable<TEvent>` member
-- bidirectional streaming uses input and output shapes with stream members
-
-Model a streaming operation by targeting a `@streaming` union. Each event member
-carries a `@protoIndex`, the same as any other gRPC member:
+Model an event stream with an `@streaming` union:
 
 ```smithy
 @streaming
@@ -197,7 +121,6 @@ union ChatEvent {
     message: MessageEvent
 }
 
-/// Server-streaming: one request, many events.
 operation WatchRoom {
     input := {
         @required
@@ -210,65 +133,46 @@ operation WatchRoom {
 }
 ```
 
-The handler returns the modeled output and supplies an async event sequence:
+Generated input and output shapes expose streaming members as
+`IAsyncEnumerable<TEvent>`. An output stream provides server streaming, an
+input stream provides client streaming, and streams on both sides provide
+bidirectional streaming.
 
-```csharp
-public Task<WatchRoomOutput> WatchRoomAsync(
-    WatchRoomInput input,
-    CancellationToken ct = default) =>
-    Task.FromResult(new WatchRoomOutput(WatchRoomEventsAsync(input, ct)));
+Streaming blob payloads are separate from gRPC event streaming and are not
+implemented.
 
-private static async IAsyncEnumerable<ChatEvent> WatchRoomEventsAsync(
-    WatchRoomInput input,
-    [EnumeratorCancellation] CancellationToken ct = default)
-{
-    for (var i = 1; i <= 3; i++)
-    {
-        await Task.Delay(25, ct);
-        yield return ChatEvent.FromMessage(
-            new MessageEvent(User: "server", Text: $"{input.Room}: update {i}"));
-    }
-}
+## Interoperability and `.proto` generation
+
+NSmithy can emit a `.proto` file from the Smithy model through `SmithyGrpc` or
+`smithy-proto-codegen`. Use that file with `protoc` or `Grpc.Tools` when the
+other peer uses a conventional gRPC stack. The Smithy model remains the source
+of truth.
+
+The supported protobuf surface includes scalars, `@protoNumType`, lists, maps,
+`@sparse`, string and integer enums, unions, `@protoInlinedOneOf`,
+`Timestamp`, and `Document`.
+
+## Dependencies
+
+Add the Alloy model package to `smithy-build.json`:
+
+```json
+"com.disneystreaming.alloy:alloy-core:0.3.38"
 ```
 
-The client consumes the stream with `await foreach`:
+| Surface | Packages |
+| --- | --- |
+| Client | `NSmithy.Client`, `NSmithy.Protocols.Grpc` |
+| Server | `NSmithy.Server.AspNetCore`, `NSmithy.Protocols.Grpc` |
 
-```csharp
-var output = await client.WatchRoomAsync(new WatchRoomInput("general"), ct);
-await foreach (var evt in output.Events.WithCancellation(ct))
-{
-    if (evt is ChatEvent.Message m)
-        Console.WriteLine($"{m.Value.User}: {m.Value.Text}");
-}
-```
+`NSmithy.Protocols.Grpc` includes the NSmithy protobuf codec transitively.
 
-Client-streaming and bidirectional operations follow the same shape — the
-streaming member is an `IAsyncEnumerable<TEvent>` property on the modeled input,
-output, or both. See the runnable
-[`examples/grpc-streaming`](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/grpc-streaming)
-project for all three.
+## Examples
 
-Streaming payload blobs are not implemented yet. The streaming support here is
-for event streams, matching the common gRPC shape.
+- [Unary gRPC library service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/grpc)
+- [Streaming and Grpc.Net interoperability](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/grpc-streaming)
 
-## Interoperating with `Grpc.Net`
+## Protocol source
 
-NSmithy needs no `Grpc.Net` — but because it speaks the standard gRPC HTTP/2 wire
-contract, a `Grpc.Net` client or server interoperates with an NSmithy peer, and
-you can use `Grpc.Net` on one side if you prefer.
-
-You never hand-author a `.proto`. Setting `SmithyGrpc` (or running
-`smithy-proto-codegen`) generates the `.proto` **from the Smithy model**; feed
-that generated file to `protoc`/`Grpc.Tools` to build the `Grpc.Net` peer. The
-model stays the single source of truth for both sides.
-
-## Current Limitations
-
-- `@protoIndex` is required on every input and output member.
-- Streaming support is event-stream oriented and still early; streaming payload
-  blobs, stream errors, and cancellation behavior need more coverage.
-- The full unary surface — scalars and `@protoNumType`, lists/maps, `@sparse`
-  maps, string and int enums, unions and `@protoInlinedOneOf`, `Timestamp`, and
-  `Document` — is supported.
-- Cleartext development requires separate HTTP/1.1 and HTTP/2 ports.
-- Smallest conformance test surface of any supported protocol.
+- [Alloy repository](https://github.com/disneystreaming/alloy)
+- [Native gRPC design](https://github.com/thomaslaich/smithy-dotnet/blob/main/designs/native-grpc.md)

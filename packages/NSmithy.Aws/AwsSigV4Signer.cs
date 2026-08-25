@@ -7,46 +7,47 @@ using NSmithy.Http;
 namespace NSmithy.Aws;
 
 /// <summary>Signs HTTP requests with AWS Signature Version 4.</summary>
-public sealed class AwsSigV4Signer : ISmithySigner
+public sealed class AwsSigV4Signer(
+    Uri? endpoint,
+    string service,
+    string region,
+    TimeProvider? timeProvider = null
+) : ISmithySigner
 {
     private const string Algorithm = "AWS4-HMAC-SHA256";
+    private static readonly HashSet<string> PresignAuthenticationParameters = new(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        "X-Amz-Algorithm",
+        "X-Amz-Credential",
+        "X-Amz-Date",
+        "X-Amz-Expires",
+        "X-Amz-Signature",
+        "X-Amz-SignedHeaders",
+        "X-Amz-Security-Token",
+    };
     private static readonly DateTimeFormatInfo InvariantDateTime = CultureInfo
         .InvariantCulture
         .DateTimeFormat;
 
-    private readonly Uri? endpoint;
+    private readonly Uri? endpoint =
+        endpoint is null || endpoint.IsAbsoluteUri
+            ? endpoint
+            : throw new ArgumentException("Endpoint must be an absolute URI.", nameof(endpoint));
 
-    private readonly string service;
+    private readonly string service = string.IsNullOrWhiteSpace(service)
+        ? throw new ArgumentException("Service must be set.", nameof(service))
+        : service;
 
-    private readonly string region;
+    private readonly string region = string.IsNullOrWhiteSpace(region)
+        ? throw new ArgumentException("Region must be set.", nameof(region))
+        : region;
 
-    private readonly TimeProvider timeProvider;
+    private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
 
     public AwsSigV4Signer(string service, string region, TimeProvider? timeProvider = null)
         : this(null, service, region, timeProvider) { }
-
-    public AwsSigV4Signer(
-        Uri? endpoint,
-        string service,
-        string region,
-        TimeProvider? timeProvider = null
-    )
-    {
-        this.endpoint =
-            endpoint is null || endpoint.IsAbsoluteUri
-                ? endpoint
-                : throw new ArgumentException(
-                    "Endpoint must be an absolute URI.",
-                    nameof(endpoint)
-                );
-        this.service = string.IsNullOrWhiteSpace(service)
-            ? throw new ArgumentException("Service must be set.", nameof(service))
-            : service;
-        this.region = string.IsNullOrWhiteSpace(region)
-            ? throw new ArgumentException("Region must be set.", nameof(region))
-            : region;
-        this.timeProvider = timeProvider ?? TimeProvider.System;
-    }
 
     public ValueTask<SmithyHttpRequest> SignAsync(
         SmithyContext context,
@@ -72,6 +73,9 @@ public sealed class AwsSigV4Signer : ISmithySigner
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(credentials);
 
+        // A retry or caller may hand the signer a previously signed request. Authentication
+        // material is output, never canonical input; remove it before rebuilding the signature.
+        request.Headers.Remove("Authorization");
         var requestUri = ResolveRequestUri(request.RequestUri);
         var amzDate = now.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", InvariantDateTime);
         var date = now.UtcDateTime.ToString("yyyyMMdd", InvariantDateTime);
@@ -83,6 +87,10 @@ public sealed class AwsSigV4Signer : ISmithySigner
         if (!string.IsNullOrEmpty(credentials.SessionToken))
         {
             request.Headers["X-Amz-Security-Token"] = [credentials.SessionToken];
+        }
+        else
+        {
+            request.Headers.Remove("X-Amz-Security-Token");
         }
 
         var canonicalHeaders = CanonicalHeaders(request);
@@ -116,6 +124,144 @@ public sealed class AwsSigV4Signer : ISmithySigner
         [
             $"{Algorithm} Credential={credentials.AccessKeyId}/{credentialScope}, SignedHeaders={signedHeaders}, Signature={signature}",
         ];
+    }
+
+    /// <summary>
+    /// Adds SigV4 authentication query parameters to a request and returns its absolute presigned
+    /// URI. The request is mutated so it can be sent directly after this call.
+    /// </summary>
+    /// <remarks>
+    /// Presigning uses <c>UNSIGNED-PAYLOAD</c>, the standard AWS query-signing behavior. AWS caps
+    /// SigV4 presigned URLs at seven days because the derived signing key is date-scoped.
+    /// </remarks>
+    public Uri Presign(SmithyHttpRequest request, AwsCredentials credentials, TimeSpan expires) =>
+        Presign(request, credentials, expires, timeProvider.GetUtcNow());
+
+    internal Uri Presign(
+        SmithyHttpRequest request,
+        AwsCredentials credentials,
+        TimeSpan expires,
+        DateTimeOffset now
+    )
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(credentials);
+        if (expires < TimeSpan.FromSeconds(1) || expires > TimeSpan.FromDays(7))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(expires),
+                expires,
+                "SigV4 presigning duration must be between one second and seven days."
+            );
+        }
+
+        request.Headers.Remove("Authorization");
+        request.Headers.Remove("X-Amz-Date");
+        request.Headers.Remove("X-Amz-Security-Token");
+        var requestUri = ResolveRequestUri(request.RequestUri);
+        request.Headers["Host"] = [HostHeader(requestUri)];
+
+        var amzDate = now.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", InvariantDateTime);
+        var date = now.UtcDateTime.ToString("yyyyMMdd", InvariantDateTime);
+        var credentialScope = $"{date}/{region}/{service}/aws4_request";
+        var canonicalHeaders = CanonicalHeaders(request);
+        var signedHeaders = string.Join(';', canonicalHeaders.Select(header => header.Name));
+
+        var query = QueryWithoutAuthentication(requestUri);
+        AddQueryParameter(query, "X-Amz-Algorithm", Algorithm);
+        AddQueryParameter(
+            query,
+            "X-Amz-Credential",
+            $"{credentials.AccessKeyId}/{credentialScope}"
+        );
+        AddQueryParameter(query, "X-Amz-Date", amzDate);
+        AddQueryParameter(
+            query,
+            "X-Amz-Expires",
+            ((long)expires.TotalSeconds).ToString(CultureInfo.InvariantCulture)
+        );
+        AddQueryParameter(query, "X-Amz-SignedHeaders", signedHeaders);
+        if (!string.IsNullOrEmpty(credentials.SessionToken))
+        {
+            AddQueryParameter(query, "X-Amz-Security-Token", credentials.SessionToken);
+        }
+
+        var unsignedUri = WithQuery(requestUri, query);
+        var canonicalRequest = string.Join(
+            '\n',
+            request.Method.Method.ToUpperInvariant(),
+            CanonicalPath(unsignedUri),
+            CanonicalQuery(unsignedUri),
+            string.Concat(canonicalHeaders.Select(header => $"{header.Name}:{header.Value}\n")),
+            signedHeaders,
+            "UNSIGNED-PAYLOAD"
+        );
+        var stringToSign = string.Join(
+            '\n',
+            Algorithm,
+            amzDate,
+            credentialScope,
+            Sha256Hex(Encoding.UTF8.GetBytes(canonicalRequest))
+        );
+        var signature = ToHex(
+            HmacSha256(
+                DeriveSigningKey(credentials.SecretAccessKey, date, region, service),
+                stringToSign
+            )
+        );
+        AddQueryParameter(query, "X-Amz-Signature", signature);
+
+        var presigned = WithQuery(requestUri, query);
+        request.RequestUri = presigned.AbsoluteUri;
+        return presigned;
+    }
+
+    private static List<KeyValuePair<string, string>> QueryWithoutAuthentication(Uri uri)
+    {
+        var result = new List<KeyValuePair<string, string>>();
+        if (string.IsNullOrEmpty(uri.Query) || uri.Query == "?")
+        {
+            return result;
+        }
+
+        foreach (var part in uri.Query[1..].Split('&', StringSplitOptions.None))
+        {
+            var equals = part.IndexOf('=', StringComparison.Ordinal);
+            var name = equals >= 0 ? part[..equals] : part;
+            var decodedName = Uri.UnescapeDataString(name);
+            if (PresignAuthenticationParameters.Contains(decodedName))
+            {
+                continue;
+            }
+            result.Add(
+                new KeyValuePair<string, string>(name, equals >= 0 ? part[(equals + 1)..] : "")
+            );
+        }
+        return result;
+    }
+
+    private static void AddQueryParameter(
+        List<KeyValuePair<string, string>> query,
+        string name,
+        string value
+    ) =>
+        query.Add(
+            new KeyValuePair<string, string>(
+                EscapeQueryComponent(name),
+                EscapeQueryComponent(value)
+            )
+        );
+
+    private static Uri WithQuery(Uri uri, IEnumerable<KeyValuePair<string, string>> query)
+    {
+        var builder = new UriBuilder(uri)
+        {
+            Query = string.Join(
+                '&',
+                query.Select(parameter => $"{parameter.Key}={parameter.Value}")
+            ),
+        };
+        return builder.Uri;
     }
 
     private Uri ResolveRequestUri(string requestUri)

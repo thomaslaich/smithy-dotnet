@@ -36,3 +36,23 @@ var functionNames = functions.Functions?.Values.Select(f => f.FunctionName) ?? [
 Console.WriteLine(
     $"restJson1 / Lambda ListFunctions: {functions.Functions?.Values.Count ?? 0} function(s) [{string.Join(", ", functionNames)}]"
 );
+
+using var sqs = new SQSClient(
+    endpoint,
+    new() { AuthSchemes = { new AwsSigV4AuthScheme("sqs", region, credentials) } }
+);
+var queues = await sqs.ListQueuesAsync(new ListQueuesInput());
+var queueUrls = queues.QueueUrls?.Values ?? [];
+Console.WriteLine(
+    $"AWS Query / SQS ListQueues: {queueUrls.Count} queue(s) [{string.Join(", ", queueUrls)}]"
+);
+
+using var ec2 = new EC2Client(
+    endpoint,
+    new() { AuthSchemes = { new AwsSigV4AuthScheme("ec2", region, credentials) } }
+);
+var regions = await ec2.DescribeRegionsAsync(new DescribeRegionsInput());
+var regionNames = regions.Regions?.Values.Select(value => value.Name) ?? [];
+Console.WriteLine(
+    $"EC2 Query / EC2 DescribeRegions: {regions.Regions?.Values.Count ?? 0} region(s) [{string.Join(", ", regionNames)}]"
+);

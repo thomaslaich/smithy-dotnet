@@ -41,7 +41,7 @@ export default defineConfig({
 				starlightLlmsTxt({
 					projectName: 'NSmithy',
 					description:
-						'NSmithy generates C# models, typed HTTP clients, and ASP.NET Core minimal-API servers from Smithy models at build time — no separate codegen step and no JRE required by consumers.',
+						'NSmithy generates C# models, typed HTTP clients, and ASP.NET Core minimal-API servers from Smithy models at build time. Consumers need no separate codegen step or JRE.',
 				}),
 			],
 			social: [
@@ -54,8 +54,8 @@ export default defineConfig({
 			components: {
 				ThemeSelect: './src/components/StarlightThemeToggle.astro',
 			},
-			// Shared code-block styling (src/styles/code.css) + landing/docs theme
-			// alignment — fonts and a near-black dark mode (src/styles/docs-theme.css).
+			// Shared code-block styling (src/styles/code.css), plus landing/docs theme
+			// alignment, fonts, and a near-black dark mode (src/styles/docs-theme.css).
 			customCss: ['./src/styles/code.css', './src/styles/docs-theme.css'],
 			expressiveCode: {
 				// Match TypeHintCode's highlighter (github-dark / github-light) so
@@ -104,15 +104,17 @@ export default defineConfig({
 						{ label: 'Overview', slug: 'protocols/overview' },
 						{ label: 'REST JSON', slug: 'protocols/rest-json' },
 						{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor' },
-						{ label: 'gRPC', slug: 'protocols/grpc' },
 						{
 							label: 'AWS Protocols',
 							items: [
 								{ label: 'Overview', slug: 'protocols/aws-overview' },
 								{ label: 'AWS JSON', slug: 'protocols/aws-json' },
+								{ label: 'AWS Query', slug: 'protocols/aws-query' },
+								{ label: 'AWS EC2 Query', slug: 'protocols/aws-ec2-query' },
 								{ label: 'AWS restXml', slug: 'protocols/rest-xml' },
 							],
 						},
+						{ label: 'gRPC', slug: 'protocols/grpc' },
 						{ label: 'Protocol Status', slug: 'protocols/status' },
 					],
 				},

@@ -5,6 +5,8 @@ This example exercises one generated AWS client for each AWS HTTP protocol suppo
 - AWS JSON 1.0: DynamoDB `ListTables`
 - AWS restXml: S3 `ListBuckets`
 - AWS restJson1: Lambda `ListFunctions`
+- AWS Query: SQS `ListQueues`
+- EC2 Query: EC2 `DescribeRegions`
 
 On startup, an init hook (`init/ready.d/seed.sh`) seeds a little data into each
 service so the `List*` calls return populated responses, so you should see:
@@ -13,6 +15,8 @@ service so the `List*` calls return populated responses, so you should see:
 AWS JSON / DynamoDB ListTables: 2 table(s) [Authors, Books]
 restXml / S3 ListBuckets: 2 bucket(s) [nsmithy-demo-assets, nsmithy-demo-logs]
 restJson1 / Lambda ListFunctions: 1 function(s) [nsmithy-greeter]
+AWS Query / SQS ListQueues: 2 queue(s) [...nsmithy-demo-events, ...nsmithy-demo-jobs]
+EC2 Query / EC2 DescribeRegions: one or more LocalStack regions
 ```
 
 Run it against LocalStack (runs in Docker, so a running Docker daemon is

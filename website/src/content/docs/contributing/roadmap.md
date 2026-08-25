@@ -23,36 +23,20 @@ The priorities below are what remains.
 
 ### 1. Expand AWS protocol coverage and AWS readiness
 
-- Expand AWS protocol coverage beyond the initial AWS JSON client support,
-  especially AWS Query and EC2 Query.
+- Keep the fully conformant AWS Query and EC2 Query client surfaces green while
+  expanding real-service coverage.
 - Continue hardening `aws.protocols#restJson1`, `aws.protocols#restXml`, and
   `smithy.protocols#rpcv2Cbor` as preview surfaces.
-- Mature AWS authentication beyond the early-preview SigV4 signing — endpoint
-  resolution, profile/SSO/IMDS credential chains, presigning, and golden-vector
-  coverage against AWS's SigV4 test suite.
+- Build on regional endpoint resolution, profile/SSO/IMDS credentials,
+  presigning, and published AWS golden vectors with modeled endpoint rule sets,
+  additional credential sources, and SigV4a.
 - Grow the LocalStack integration coverage beyond the initial example into a
   broader suite that validates generated AWS clients against realistic protocol,
   signing, and endpoint behavior.
 - Keep the scope driven by conformance and observed runtime behavior rather
   than by protocol checklists.
 
-### 2. Harden streaming operations
-
-NSmithy has two experimental event-streaming surfaces: native gRPC (client,
-server, and bidirectional streaming) and `rpcv2Cbor` event streams over
-`vnd.amazon.eventstream` message framing, sharing the `NSmithy.EventStream`
-framing layer. The next step is to harden these paths and keep the abstractions
-usable across additional streaming protocols.
-
-This work includes:
-
-- Adding end-to-end tests that cover backpressure, cancellation, errors, and
-  stream completion behavior across both surfaces.
-- Adding interop tests with `Grpc.Net` peers generated from the emitted `.proto`.
-- Extending streaming support beyond event streams, especially streaming blob
-  payloads.
-
-### 3. Expand to async protocols
+### 2. Expand to async protocols
 
 NSmithy's current protocol work is mostly request/response oriented. A separate
 near-term goal is to validate that the runtime and generator model can also
@@ -67,7 +51,7 @@ This work includes:
 - Using these protocols to pressure-test the existing transport, codec, and
   client/server seams beyond HTTP-centric assumptions.
 
-### 4. Support Smithy AI traits and MCP generation
+### 3. Support Smithy AI traits and MCP generation
 
 Support Smithy's AI-oriented traits so that .NET and protocol artifacts can be
 generated for tool-driven and agent-driven workflows, rather than treating the

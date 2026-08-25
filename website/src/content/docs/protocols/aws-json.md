@@ -1,39 +1,35 @@
 ---
 title: AWS JSON
-description: aws.protocols#awsJson1_1 and aws.protocols#awsJson1_0 — client-only JSON RPC for AWS-compatible services.
+description: Client support for the aws.protocols#awsJson1_0 and aws.protocols#awsJson1_1 JSON RPC protocols.
 ---
 
-`aws.protocols#awsJson1_1` and `aws.protocols#awsJson1_0` are AWS JSON-RPC
-protocols. NSmithy generates typed clients for both through
-`AwsJson11Protocol` and `AwsJson10Protocol`. Status: **Early preview,
-client-only**.
+`aws.protocols#awsJson1_0` and `aws.protocols#awsJson1_1` are JSON RPC
+protocols used by AWS services such as DynamoDB. NSmithy generates typed clients
+for both. Server generation and event streaming are not available.
 
-The currently verified slice covers `X-Amz-Target`, AWS JSON content types,
-empty input/output handling, special floating-point values, and common
-client-side error discriminator formats. `awsJson1_0` has runtime support but no
-separate conformance project yet.
+Use AWS JSON to call an existing AWS JSON RPC service or a compatible emulator.
+For a new service, prefer [restJson1](../rest-json/),
+[rpcv2Cbor](../rpc-v2-cbor/), or [gRPC](../grpc/).
 
-See [Protocol Status](/smithy-dotnet/protocols/status/) for current conformance
-numbers.
+See [Protocol Status](../status/) for maturity and current conformance numbers.
 
-## Maven Dependency
+## Protocol behavior
 
-```json
-"software.amazon.smithy:smithy-aws-traits:1.73.0"
-```
-
-## NuGet Packages
-
-| Purpose | Packages |
+| Area | AWS JSON |
 | --- | --- |
-| Client | `NSmithy.Client`, `NSmithy.Protocols.AwsJson` |
-
-`NSmithy.Protocols.AwsJson` pulls in `NSmithy.Codecs.Json` (the JSON codec)
-transitively.
+| Route | `POST /` |
+| Operation | `X-Amz-Target: {Service}.{Operation}` |
+| Body | JSON |
+| JSON 1.0 content type | `application/x-amz-json-1.0` |
+| JSON 1.1 content type | `application/x-amz-json-1.1` |
+| Errors | `X-Amzn-Errortype`, `__type`, `code`, or HTTP status fallback |
+| HTTP bindings | Not used |
+| NSmithy streaming | Not implemented |
 
 ## Modeling
 
-Apply the AWS JSON protocol trait to the service:
+Apply one AWS JSON protocol trait to the service. Operations do not use `@http`
+because the protocol always posts to the root path.
 
 ```smithy
 $version: "2"
@@ -62,15 +58,13 @@ operation GetCity {
 
 @error("client")
 structure NoSuchResource {
-    @required
-    resourceType: String
+    message: String
 }
 ```
 
-## On the Wire
+Use `aws.protocols#awsJson1_0` and `@awsJson1_0` for a JSON 1.0 service.
 
-AWS JSON is RPC-style: every call is a `POST /`, the operation is selected by the
-`X-Amz-Target` header, and input/output are JSON:
+## On the wire
 
 ```http
 POST / HTTP/1.1
@@ -87,18 +81,43 @@ Content-Type: application/x-amz-json-1.1
 {"name":"Seattle"}
 ```
 
-`X-Amz-Target` is `{Service}.{Operation}` (`awsJson1_0` uses the
-`application/x-amz-json-1.0` content type). Errors are discriminated by the
-`X-Amzn-Errortype` header or a `__type` field in the body.
+The service and operation names select the target. Empty inputs serialize as an
+empty JSON object. Clients accept empty output bodies when the modeled output can
+be constructed without response members.
 
-## Usage
+For errors, NSmithy accepts the modeled type from `X-Amzn-Errortype`, `__type`,
+or `code`. It removes common namespace and qualifier forms before matching a
+generated error. If a response has no discriminator, the client can fall back to
+the modeled HTTP status code.
 
-The generated client selects the declared protocol by default and is used
-exactly like every other NSmithy client — see the [Protocols
-Overview](/smithy-dotnet/protocols/overview/) for the client code. Only the
-`@awsJson1_1` (or `@awsJson1_0`) trait is specific to this protocol.
+## Dependencies
 
-AWS JSON support is client-only. NSmithy does not generate AWS JSON servers and
-does not yet provide AWS SDK-style endpoint resolution, credential chains,
-retries, or pagination helpers. Explicit SigV4 signing exists in early preview;
-see [Authentication](/smithy-dotnet/guides/client-configuration/authentication/).
+Add the AWS trait package to `smithy-build.json`:
+
+```json
+"software.amazon.smithy:smithy-aws-traits:1.73.0"
+```
+
+The client uses `NSmithy.Client`, `NSmithy.Codecs.Json`, and
+`NSmithy.Protocols.AwsJson`.
+
+## Calling AWS
+
+AWS endpoints normally require SigV4, regional endpoint resolution, and
+credentials. See
+[Authentication](/smithy-dotnet/guides/client-configuration/authentication/)
+for the NSmithy setup and [AWS Protocols](../aws-overview/) for current runtime
+gaps.
+
+## Example
+
+The [AWS LocalStack
+example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/aws-localstack)
+uses an AWS JSON 1.0 client to call DynamoDB `ListTables`. NSmithy does not
+implement AWS JSON streaming yet, so there is no streaming example.
+
+## Specification and tests
+
+- [AWS JSON 1.0 specification](https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html)
+- [AWS JSON 1.1 specification](https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html)
+- [Official AWS JSON protocol tests](https://github.com/smithy-lang/smithy/tree/main/smithy-aws-protocol-tests/model/awsJson1_1)

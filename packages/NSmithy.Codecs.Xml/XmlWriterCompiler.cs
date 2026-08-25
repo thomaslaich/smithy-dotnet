@@ -549,6 +549,8 @@ internal sealed class FlattenedMapXmlMemberPlan<TDictionary, TValue>(
 ) : IXmlMemberPlan<TDictionary>
 {
     private readonly bool isRequired = member.IsRequired;
+    private readonly string keyName = MapKeyName(map);
+    private readonly string valueName = MapValueName(map.TypedValueMember);
 
     // Constant per member, so resolved at compile time rather than per write.
     private readonly (bool Present, TDictionary? Value) memberDefault = ResolveDefault(
@@ -577,8 +579,8 @@ internal sealed class FlattenedMapXmlMemberPlan<TDictionary, TValue>(
         foreach (var entry in map.GetEntries(value))
         {
             var child = new XElement(ElementName(member));
-            child.Add(new XElement("key", entry.Key));
-            var valueElement = new XElement("value");
+            child.Add(new XElement(keyName, entry.Key));
+            var valueElement = new XElement(valueName);
             valueWriter.Write(valueElement, entry.Value);
             child.Add(valueElement);
             element.Add(child);
@@ -659,6 +661,9 @@ internal sealed class MapXmlValueWriter<TDictionary, TValue>(
     IXmlValueWriter<TValue> valueWriter
 ) : IXmlValueWriter<TDictionary>
 {
+    private readonly string keyName = MapKeyName(schema);
+    private readonly string valueName = MapValueName(schema.TypedValueMember);
+
     public void Write(XElement element, TDictionary value)
     {
         if (value is null)
@@ -669,8 +674,8 @@ internal sealed class MapXmlValueWriter<TDictionary, TValue>(
         foreach (var entry in schema.GetEntries(value))
         {
             var entryElement = new XElement("entry");
-            entryElement.Add(new XElement("key", entry.Key));
-            var valueElement = new XElement("value");
+            entryElement.Add(new XElement(keyName, entry.Key));
+            var valueElement = new XElement(valueName);
             valueWriter.Write(valueElement, entry.Value);
             entryElement.Add(valueElement);
             element.Add(entryElement);

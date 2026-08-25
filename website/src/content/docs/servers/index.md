@@ -136,7 +136,7 @@ response format, and what is not covered yet.
 ## Which protocols generate a server
 
 Server generation exists for `simpleRestJson`, `restJson1`, `rpcv2Cbor`, and
-`gRPC`. `awsJson1_1`/`awsJson1_0` and `restXml` are **client-only** today. See
+`gRPC`. AWS JSON, AWS Query, EC2 Query, and restXml are **client-only** today. See
 [Protocol Status](/smithy-dotnet/protocols/status/) for the current matrix.
 
 gRPC needs HTTP/2 transport and its own listener — see

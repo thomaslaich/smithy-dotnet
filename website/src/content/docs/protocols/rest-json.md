@@ -1,64 +1,63 @@
 ---
 title: REST JSON
-description: alloy#simpleRestJson and aws.protocols#restJson1 — JSON over HTTP with Smithy REST bindings. Client and server support.
+description: Compare alloy#simpleRestJson and aws.protocols#restJson1, two JSON over HTTP protocols with Smithy REST bindings.
 ---
 
-NSmithy supports two JSON-over-HTTP protocols with Smithy HTTP bindings, and
-generates a typed .NET client and an ASP.NET Core minimal-API server for each:
+NSmithy supports two REST JSON protocols. Both generate a typed .NET client and
+an ASP.NET Core minimal API server, and both use Smithy HTTP binding traits.
+Their simplest operations can look identical on the wire, but the protocols are
+not equivalent.
 
-| Trait | Namespace | Status |
+## Which protocol should I use?
+
+Choose `restJson1` for most new services. It has a broader wire contract, a
+larger interoperability surface, protocol-defined streaming, and AWS-compatible
+error handling.
+
+Choose `simpleRestJson` when you need compatibility with
+[Alloy](https://github.com/disneystreaming/alloy) or
+[Smithy4s](https://disneystreaming.github.io/smithy4s/), or when your model uses
+Alloy JSON features such as `@discriminated` and `@jsonUnknown`.
+
+| Protocol | Trait | Best fit |
 | --- | --- | --- |
-| `@simpleRestJson` | `alloy#simpleRestJson` | Preview |
-| `@restJson1` | `aws.protocols#restJson1` | Preview |
+| AWS restJson1 | `aws.protocols#restJson1` | General REST APIs, broad Smithy tooling support, streaming, or AWS-compatible services |
+| simpleRestJson | `alloy#simpleRestJson` | Alloy and Smithy4s interoperability, with a deliberately smaller JSON-only wire contract |
 
-The two are the same shape on the wire — JSON body, Smithy HTTP binding traits,
-an error type carried in a response header. They differ only in ecosystem and a
-few AWS-specific behaviors.
+Coverage and maturity are tracked on the [Protocol
+Status](/smithy-dotnet/protocols/status/) page.
 
-## Choosing between them
+## Key differences
 
-- **`simpleRestJson`** — the [alloy](https://github.com/disneystreaming/alloy)
-  variant. Choose it when your consumers are primarily .NET or Scala
-  (via [Smithy4s](https://disneystreaming.github.io/smithy4s/)).
-- **`restJson1`** — AWS's REST/JSON protocol, but useful for non-AWS services
-  too. Choose it when you want broad Smithy ecosystem compatibility or OpenAPI
-  generation through `smithy-openapi`. It also supports capabilities
-  `simpleRestJson` does not: event streaming (the `vnd.amazon.eventstream`
-  framing), raw string/blob payloads, `@requestCompression`,
-  `@httpChecksumRequired`, and AWS-style error deserialization.
+| Area | simpleRestJson | restJson1 |
+| --- | --- | --- |
+| HTTP bindings | Standard Smithy REST bindings | Standard Smithy REST bindings |
+| Structured bodies | JSON | JSON |
+| `@httpPayload` | JSON values, including JSON-encoded strings | JSON structures and documents, plus raw strings and blobs with media-type-aware content types |
+| Streaming | Not defined by the Alloy protocol | Streaming blobs and Amazon Event Stream input, output, and duplex operations |
+| Request body controls | JSON body rules | `@requestCompression` and `@httpChecksumRequired` |
+| Error type | `X-Error-Type`, with `__type` accepted by clients | `X-Amzn-Errortype`, plus compatible `__type` and `code` body fields |
+| Error compatibility | Normalizes common namespace and qualifier forms | Accepts more discriminator locations and normalizes AWS namespace and qualifier forms |
+| JSON traits | Alloy traits including `@discriminated` and `@jsonUnknown` | Standard Smithy and AWS JSON rules |
 
-See [Protocol Status](/smithy-dotnet/protocols/status/) for current conformance
-numbers.
-
-## Maven Dependency
-
-| Protocol | Dependency |
-| --- | --- |
-| `simpleRestJson` | `com.disneystreaming.alloy:alloy-core:0.3.38` |
-| `restJson1` | `software.amazon.smithy:smithy-aws-traits:1.73.0` |
-
-## NuGet Packages
-
-| Purpose | Package |
-| --- | --- |
-| Client | `NSmithy.Client` |
-| Server (ASP.NET Core) | `NSmithy.Server.AspNetCore` + `Microsoft.AspNetCore.App` |
+The shared part is useful but small: ordinary structure members are serialized
+as JSON, and the standard HTTP traits decide what moves into the URI, query
+string, headers, status code, or payload. restJson1 adds the transport behavior
+needed by a wider range of services.
 
 ## Modeling
 
-Apply the protocol trait to the service and Smithy's standard HTTP binding
-traits on operations and members. The model is identical apart from the trait
-and its `use` statement — swap `alloy#simpleRestJson` / `@simpleRestJson` for
-`aws.protocols#restJson1` / `@restJson1` to switch protocols:
+Apply the protocol trait to the service and `@http` to each operation. The
+example uses `restJson1`:
 
 ```smithy
 $version: "2"
 
 namespace example.weather
 
-use alloy#simpleRestJson
+use aws.protocols#restJson1
 
-@simpleRestJson
+@restJson1
 service Weather {
     version: "2026-01-01"
     operations: [GetCity]
@@ -86,20 +85,26 @@ structure NoSuchResource {
 }
 ```
 
-Members without an explicit HTTP binding are serialized in the JSON body. The
-HTTP binding traits control where each other member lives:
+For `simpleRestJson`, replace the import and service trait with
+`alloy#simpleRestJson` and `@simpleRestJson`. That swap is safe while the model
+uses only the shared feature set.
 
-| Trait | Binds member to |
+Members without an explicit HTTP binding are serialized in the JSON body.
+
+| Trait | Location |
 | --- | --- |
 | `@httpLabel` | URI path segment |
-| `@httpQuery("key")` | query string parameter |
-| `@httpHeader("name")` | request or response header |
-| `@httpPayload` | raw request/response body |
+| `@httpQuery` | Query string |
+| `@httpQueryParams` | Open-ended query string parameters |
+| `@httpHeader` | Request or response header |
+| `@httpPrefixHeaders` | Headers with a modeled prefix |
+| `@httpResponseCode` | Response status code |
+| `@httpPayload` | Entire request or response body |
 
-## On the Wire
+## Ordinary requests
 
-`GetCity` binds `cityId` to the URI path label; the response comes back as a JSON
-body. The request and response are byte-for-byte the same across both protocols:
+For an operation that only uses the shared feature set, both protocols produce
+the same request and response:
 
 ```http
 GET /cities/123 HTTP/1.1
@@ -112,32 +117,75 @@ Content-Type: application/json
 {"name":"Seattle"}
 ```
 
-Members without an HTTP binding are carried in the JSON body. Errors are
-discriminated by a response header — the one difference on the wire:
+This equivalence does not extend to raw payloads, event streams, request body
+modifiers, or error discrimination.
 
-| Protocol | Error header |
+## restJson1 payloads and streaming
+
+restJson1 supports more than JSON object bodies:
+
+- String payloads use raw UTF-8 text and `text/plain` by default.
+- Blob payloads use raw bytes and `application/octet-stream` by default.
+- `@mediaType` overrides the content type for an opaque payload.
+- `@streaming` blob payloads flow through the client and server without being
+  buffered in memory.
+- Event stream inputs, outputs, and duplex operations use Amazon Event Stream
+  framing with `application/vnd.amazon.eventstream`.
+- `@requestCompression` and `@httpChecksumRequired` can compress or checksum a
+  buffered request body.
+
+## Error handling
+
+A simpleRestJson error carries its modeled shape name in `X-Error-Type`.
+
+restJson1 servers write `X-Amzn-Errortype`. Clients also accept the error type
+from `__type` or `code` in a JSON response body. NSmithy removes namespace and
+qualifier forms used by AWS services before matching the value to a generated
+error type. This makes restJson1 clients tolerant of the error formats found
+across AWS and AWS-compatible services.
+
+## Dependencies
+
+Add the model package for the selected protocol to `smithy-build.json`:
+
+| Protocol | Maven dependency |
 | --- | --- |
-| `simpleRestJson` | `X-Error-Type` |
-| `restJson1` | `X-Amzn-Errortype` |
+| simpleRestJson | `com.disneystreaming.alloy:alloy-core:0.3.38` |
+| restJson1 | `software.amazon.smithy:smithy-aws-traits:1.73.0` |
 
-## Usage
+| Surface | Packages |
+| --- | --- |
+| Client | `NSmithy.Client`, `NSmithy.Codecs.Json`, `NSmithy.Protocols.RestJson` |
+| Server | `NSmithy.Server.AspNetCore` |
 
-NSmithy generates one `IWeatherServiceHandler` interface with a method per
-operation, plus a typed `WeatherClient`. Implement the handler once; the
-generated ASP.NET Core adapter handles routing, serialization, and error
-dispatch. This handler-and-client shape is the same across every protocol — the
-protocol trait never reaches your code. See the [Protocols
-Overview](/smithy-dotnet/protocols/overview/) for the canonical example and
-[Servers](/smithy-dotnet/servers/) for the full server walkthrough.
+The server package includes the REST JSON protocol and JSON codec transitively.
 
-## AWS restJson1 notes
+## Generated API
 
-`restJson1` lives under `aws.protocols`, but it is not AWS-specific in practice —
-it is a well-defined REST/JSON wire format usable by any HTTP service. For
-production calls to real AWS services, explicit SigV4 signing exists in early
-preview (see
-[Authentication](/smithy-dotnet/guides/client-configuration/authentication/)),
-but AWS SDK-style endpoint resolution, credential chains, retries, and pagination
-helpers are not there yet — use the official AWS SDK for .NET until they mature.
-See the [AWS Protocols Overview](/smithy-dotnet/protocols/aws-overview/) for more
-context.
+Both protocols generate the same application-facing API: a typed client and one
+handler interface per service. The selected protocol controls routing,
+serialization, streaming, and error dispatch without changing handler code.
+See the [Protocols Overview](/smithy-dotnet/protocols/overview/) for the client
+and server pattern.
+
+## Calling AWS services
+
+restJson1 is useful outside AWS. When calling AWS itself, the request normally
+also needs SigV4 signing, regional endpoint resolution, credentials, retries,
+and service-specific endpoint rules. NSmithy provides early SigV4 support and a
+standard credential chain, but it does not yet cover the complete AWS SDK
+runtime. See [Authentication](/smithy-dotnet/guides/client-configuration/authentication/)
+and the [AWS Protocols Overview](/smithy-dotnet/protocols/aws-overview/).
+
+## Examples
+
+- [Unary restJson1 weather service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/restjson1)
+- [Streaming restJson1 chat service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/restjson1-streaming)
+- [simpleRestJson pizza service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/simplerestjson)
+
+## Specifications and tests
+
+- [AWS restJson1 specification](https://smithy.io/2.0/aws/protocols/aws-restjson1-protocol.html)
+- [Official restJson1 protocol test models](https://github.com/smithy-lang/smithy/tree/main/smithy-aws-protocol-tests/model/restJson1)
+- [Alloy repository](https://github.com/disneystreaming/alloy)
+- [Smithy4s simpleRestJson documentation](https://disneystreaming.github.io/smithy4s/docs/protocols/simple-rest-json/overview/)
