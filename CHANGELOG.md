@@ -11,24 +11,86 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.9.0]
+
+This release completes the generated client's endpoint, auth, and HTTP target
+behavior, and substantially expands the AWS client stack. AWS Query and EC2
+Query join the supported protocols, standard AWS credentials and endpoints are
+available out of the box, and generated fakes can stand in for either side of a
+service. The JSON, CBOR, and Proto hot paths also receive another round of
+performance work.
+
 ### Added
 
 - **Fake handlers: boot a working server from a contract with no
   implementation.** Opt-in via `SmithyGenerateFakes` (or `"generateFakes"` on
   the `csharp-codegen` plugin), codegen emits `Fake{Service}Handler`,
-  registered like any handler via `Add{Service}Handler<T>()`. Each operation
-  returns the output of its first non-error `@examples` entry when present,
-  otherwise deterministic placeholder values synthesized from the model
-  (constraint-aware, recursion-safe). Real handlers take over individual
-  operations by registering the per-operation interface after the fake, or by
-  overriding the fake's virtual methods in a subclass.
+  registered like any handler via `Add{Service}Handler<T>()`. With several
+  `@examples`, the fake matches the incoming input and returns the corresponding
+  output or throws the corresponding modeled error. Without a match it returns
+  the first non-error example, then falls back to deterministic placeholder
+  values synthesized from the model (constraint-aware and recursion-safe). Real
+  handlers take over individual operations by registering the per-operation
+  interface after the fake, or by overriding the fake's virtual methods in a
+  subclass. (#147, #150)
 - **Fake clients: run client consumers against canned responses with no
   network call.** The same `SmithyGenerateFakes` setting now also emits
   `Fake{Service}Client`, implementing `I{Service}Client` so it drops into any
-  code that depends on the generated client interface. Responses come from the
-  same deterministic synthesis as fake handlers, with no serialization or
-  protocol involvement. Paginators yield a single page, and operation methods
-  are virtual so a subclass can replace individual operations.
+  code that depends on the generated client interface. Responses and modeled
+  errors use the same input-matched examples and deterministic synthesis as fake
+  handlers, with no serialization or protocol involvement. Paginators yield a
+  single page, and operation methods are virtual so a subclass can replace
+  individual operations. (#148, #150)
+- **AWS Query and EC2 Query clients.** The new
+  `NSmithy.Protocols.AwsQuery` package generates form-encoded requests and reads
+  the protocols' XML success and error envelopes. Both implementations pass
+  every applicable official client conformance case: AWS Query 38/38 requests
+  and 39/39 responses, and EC2 Query 30/30 requests and 29/29 responses. The
+  LocalStack example now exercises all five supported AWS HTTP protocols. (#155)
+- **Standard AWS client facilities.** `NSmithy.Aws` adds regional endpoint
+  resolution across AWS partitions; environment, shared-profile, IAM Identity
+  Center/SSO, and IMDSv2 credential providers; a default provider chain;
+  expiration-aware credential caching; and SigV4 presigning. SigV4 signing is
+  separated from identity resolution and covered against AWS's published S3
+  signing vectors. (#152, #155)
+- **Complete modeled client target behavior.** Generated clients apply
+  operation `@endpoint(hostPrefix)` traits, per-operation auth overrides,
+  endpoint-provided auth narrowing, modeled `http` / `eventStreamHttp` ALPN
+  preferences, and a default NSmithy user agent. Host-prefix injection and the
+  user agent are configurable through `SmithyClientConfig`; caller-owned
+  `HttpClient` instances remain untouched. (#152)
+
+### Changed
+
+- **BREAKING: auth schemes now separate identity resolution from signing.**
+  `ISmithyAuthScheme.CreateInterceptor` is replaced by `IdentityResolver` and
+  `Signer`; custom schemes should implement `ISmithyIdentityResolver` and
+  `ISmithySigner`. `SmithyAuthSchemeContext`, `ISmithyAuthHandler`,
+  `HeaderAuthInterceptor`, and `QueryParameterAuthInterceptor` are removed, and
+  the low-level `SmithyClientRuntime` auth map now contains
+  `ISmithyAuthScheme` values. Built-in HTTP and SigV4 schemes already use the new
+  lifecycle, including per-attempt credential resolution and re-signing. (#152)
+- **BREAKING: protocol HTTP requirements are expressed as a preference.**
+  `IProtocol.RequiresHttp2` is replaced by `HttpVersionPreference`, which can
+  express HTTP/1.1, HTTP/2, or HTTP/3 plus downgrade policy. Existing custom
+  protocols that relied on the default continue to use HTTP/1.1; implementations
+  that declared `RequiresHttp2` must expose the equivalent preference. (#152)
+- **Lower codec and client overhead.** Generated structures write typed members
+  directly; model defaults and error writers are compiled once; the common
+  uninstrumented client path avoids unused telemetry, endpoint, retry, and auth
+  machinery; CBOR reuses writers; and Proto and JSON specialize their hot paths.
+  Together these changes reduce time and allocations across JSON, CBOR, Proto,
+  modeled-error, and end-to-end client benchmarks without changing the wire
+  format. (#143, #146, #149, #151, #154)
+- **Documentation and landing page refresh.** Protocol documentation now
+  separates behavior, maturity, and conformance more clearly, and the landing
+  page restores scroll reveals and adds the animated aurora backdrop. (#144,
+  #153, #155)
+
+### Packages
+
+All packages are published to NuGet at `0.9.0`, including the new
+`NSmithy.Protocols.AwsQuery` package.
 
 ## [0.8.1]
 
@@ -474,7 +536,8 @@ All published to NuGet at `0.1.0`:
 - **Protocols:** `NSmithy.Protocols.Rest`, `NSmithy.Protocols.RestJson`, `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`
 - **Tooling:** `NSmithy.Templates` (project templates), `dotnet-nsmithy` (CLI tool)
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.6.0...v0.7.0
