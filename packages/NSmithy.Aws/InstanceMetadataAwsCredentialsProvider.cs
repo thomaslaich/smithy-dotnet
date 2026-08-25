@@ -10,6 +10,7 @@ public sealed class InstanceMetadataAwsCredentialsProvider : IAwsCredentialsProv
     {
         Timeout = TimeSpan.FromSeconds(2),
     };
+    // AWS exposes the EC2 Instance Metadata Service at this link-local address.
     private static readonly Uri DefaultEndpoint = new("http://169.254.169.254/");
 
     private readonly HttpClient httpClient;

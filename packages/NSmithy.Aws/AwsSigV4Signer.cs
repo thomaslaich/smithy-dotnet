@@ -7,7 +7,12 @@ using NSmithy.Http;
 namespace NSmithy.Aws;
 
 /// <summary>Signs HTTP requests with AWS Signature Version 4.</summary>
-public sealed class AwsSigV4Signer : ISmithySigner
+public sealed class AwsSigV4Signer(
+    Uri? endpoint,
+    string service,
+    string region,
+    TimeProvider? timeProvider = null
+) : ISmithySigner
 {
     private const string Algorithm = "AWS4-HMAC-SHA256";
     private static readonly HashSet<string> PresignAuthenticationParameters = new(
@@ -26,39 +31,23 @@ public sealed class AwsSigV4Signer : ISmithySigner
         .InvariantCulture
         .DateTimeFormat;
 
-    private readonly Uri? endpoint;
+    private readonly Uri? endpoint =
+        endpoint is null || endpoint.IsAbsoluteUri
+            ? endpoint
+            : throw new ArgumentException("Endpoint must be an absolute URI.", nameof(endpoint));
 
-    private readonly string service;
+    private readonly string service = string.IsNullOrWhiteSpace(service)
+        ? throw new ArgumentException("Service must be set.", nameof(service))
+        : service;
 
-    private readonly string region;
+    private readonly string region = string.IsNullOrWhiteSpace(region)
+        ? throw new ArgumentException("Region must be set.", nameof(region))
+        : region;
 
-    private readonly TimeProvider timeProvider;
+    private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
 
     public AwsSigV4Signer(string service, string region, TimeProvider? timeProvider = null)
         : this(null, service, region, timeProvider) { }
-
-    public AwsSigV4Signer(
-        Uri? endpoint,
-        string service,
-        string region,
-        TimeProvider? timeProvider = null
-    )
-    {
-        this.endpoint =
-            endpoint is null || endpoint.IsAbsoluteUri
-                ? endpoint
-                : throw new ArgumentException(
-                    "Endpoint must be an absolute URI.",
-                    nameof(endpoint)
-                );
-        this.service = string.IsNullOrWhiteSpace(service)
-            ? throw new ArgumentException("Service must be set.", nameof(service))
-            : service;
-        this.region = string.IsNullOrWhiteSpace(region)
-            ? throw new ArgumentException("Region must be set.", nameof(region))
-            : region;
-        this.timeProvider = timeProvider ?? TimeProvider.System;
-    }
 
     public ValueTask<SmithyHttpRequest> SignAsync(
         SmithyContext context,

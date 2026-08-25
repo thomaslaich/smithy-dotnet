@@ -278,10 +278,9 @@ public final class ProtocolSupport {
   /** Runtime namespace housing the codec singleton. */
   public static String codecNamespace(Kind kind) {
     return switch (kind) {
-      case AWS_JSON_1_0, AWS_JSON_1_1 -> RuntimeTypes.NSMITHY_CODECS_JSON;
-      case AWS_QUERY, EC2_QUERY -> RuntimeTypes.NSMITHY_CODECS_XML;
-      case SIMPLE_REST_JSON, REST_JSON_1 -> RuntimeTypes.NSMITHY_CODECS_JSON;
-      case REST_XML -> RuntimeTypes.NSMITHY_CODECS_XML;
+      case AWS_JSON_1_0, AWS_JSON_1_1, SIMPLE_REST_JSON, REST_JSON_1 ->
+          RuntimeTypes.NSMITHY_CODECS_JSON;
+      case AWS_QUERY, EC2_QUERY, REST_XML -> RuntimeTypes.NSMITHY_CODECS_XML;
       case RPC_V2_CBOR -> RuntimeTypes.NSMITHY_CODECS_CBOR;
       case GRPC -> RuntimeTypes.NSMITHY_CODECS_PROTO;
     };

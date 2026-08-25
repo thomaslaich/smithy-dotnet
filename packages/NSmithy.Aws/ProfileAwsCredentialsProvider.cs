@@ -1,36 +1,26 @@
 namespace NSmithy.Aws;
 
 /// <summary>Loads static or IAM Identity Center credentials from AWS shared profile files.</summary>
-public sealed class ProfileAwsCredentialsProvider : IAwsCredentialsProvider
+public sealed class ProfileAwsCredentialsProvider(
+    string? profileName = null,
+    string? credentialsPath = null,
+    string? configPath = null,
+    string? ssoCacheDirectory = null,
+    HttpClient? httpClient = null,
+    TimeProvider? timeProvider = null,
+    Func<string, string?>? getEnvironmentVariable = null
+) : IAwsCredentialsProvider
 {
     private static readonly HttpClient SharedHttpClient = new();
 
-    private readonly string? profileName;
-    private readonly string? credentialsPath;
-    private readonly string? configPath;
-    private readonly string? ssoCacheDirectory;
-    private readonly HttpClient httpClient;
-    private readonly Func<string, string?> getEnvironmentVariable;
-    private readonly TimeProvider timeProvider;
-
-    public ProfileAwsCredentialsProvider(
-        string? profileName = null,
-        string? credentialsPath = null,
-        string? configPath = null,
-        string? ssoCacheDirectory = null,
-        HttpClient? httpClient = null,
-        TimeProvider? timeProvider = null,
-        Func<string, string?>? getEnvironmentVariable = null
-    )
-    {
-        this.profileName = profileName;
-        this.credentialsPath = credentialsPath;
-        this.configPath = configPath;
-        this.ssoCacheDirectory = ssoCacheDirectory;
-        this.httpClient = httpClient ?? SharedHttpClient;
-        this.timeProvider = timeProvider ?? TimeProvider.System;
-        this.getEnvironmentVariable = getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
-    }
+    private readonly string? profileName = profileName;
+    private readonly string? credentialsPath = credentialsPath;
+    private readonly string? configPath = configPath;
+    private readonly string? ssoCacheDirectory = ssoCacheDirectory;
+    private readonly HttpClient httpClient = httpClient ?? SharedHttpClient;
+    private readonly Func<string, string?> getEnvironmentVariable =
+        getEnvironmentVariable ?? Environment.GetEnvironmentVariable;
+    private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
 
     public ValueTask<AwsCredentials> GetCredentialsAsync(
         CancellationToken cancellationToken = default
