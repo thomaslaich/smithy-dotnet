@@ -2,14 +2,16 @@ using System.Security.Cryptography;
 using NSmithy.Client;
 using NSmithy.Http;
 
-namespace RestJson1.Conformance;
+namespace NSmithy.Aws;
 
 /// <summary>
-/// Supplies the service-specific customizations required by the Glacier protocol fixtures. These
-/// behaviors are not modeled as Smithy traits, so applications provide them through the public
-/// interceptor seam rather than baking AWS service knowledge into the RestJson1 protocol.
+/// Applies the service-specific request customizations required by Amazon Glacier.
 /// </summary>
-internal sealed class GlacierConformanceInterceptor : IClientInterceptor
+/// <remarks>
+/// Glacier's version header, default account identifier, and upload checksums are SDK behaviors
+/// that are not represented by traits in the service model.
+/// </remarks>
+public sealed class GlacierInterceptor : IClientInterceptor
 {
     private const int TreeHashChunkSize = 1024 * 1024;
 
@@ -22,8 +24,7 @@ internal sealed class GlacierConformanceInterceptor : IClientInterceptor
         request.Headers["X-Amz-Glacier-Version"] = ["2012-06-01"];
 
         var operation = context.Get(SmithyContextKeys.OperationName);
-        if (operation == "UploadArchive")
-            NormalizeEmptyAccountId(request);
+        NormalizeEmptyAccountId(request);
 
         if (operation is "UploadArchive" or "UploadMultipartPart")
         {
@@ -71,7 +72,10 @@ internal sealed class GlacierConformanceInterceptor : IClientInterceptor
 
     private static void NormalizeEmptyAccountId(SmithyHttpRequest request)
     {
-        if (Uri.TryCreate(request.RequestUri, UriKind.Absolute, out var absolute))
+        if (
+            Uri.TryCreate(request.RequestUri, UriKind.Absolute, out var absolute)
+            && absolute.Scheme is "http" or "https"
+        )
         {
             var path = absolute.AbsolutePath;
             if (path.StartsWith("/vaults/", StringComparison.Ordinal))

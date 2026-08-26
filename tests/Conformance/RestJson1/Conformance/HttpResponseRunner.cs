@@ -278,13 +278,7 @@ internal static class ConformanceClients
         // live on the per-client {Service}ClientConfig; build one reflectively only when needed.
         httpClient.BaseAddress = endpoint;
         object? config = null;
-        if (
-            idempotencyTokenProvider is not null
-            || clientType.FullName?.StartsWith(
-                "Auxiliary.Com.Amazonaws.Glacier.",
-                StringComparison.Ordinal
-            ) == true
-        )
+        if (idempotencyTokenProvider is not null)
         {
             var configType =
                 clientType.Assembly.GetType(clientType.FullName + "Config")
@@ -292,21 +286,9 @@ internal static class ConformanceClients
                     $"Config type {clientType.FullName}Config not found."
                 );
             config = Activator.CreateInstance(configType)!;
-            if (idempotencyTokenProvider is not null)
-            {
-                configType
-                    .GetProperty("IdempotencyTokenProvider")!
-                    .SetValue(config, idempotencyTokenProvider);
-            }
-            if (
-                clientType.FullName?.StartsWith(
-                    "Auxiliary.Com.Amazonaws.Glacier.",
-                    StringComparison.Ordinal
-                ) == true
-            )
-            {
-                ((SmithyClientConfig)config).Interceptors.Add(new GlacierConformanceInterceptor());
-            }
+            configType
+                .GetProperty("IdempotencyTokenProvider")!
+                .SetValue(config, idempotencyTokenProvider);
         }
         return Activator.CreateInstance(clientType, [httpClient, config])!;
     }
