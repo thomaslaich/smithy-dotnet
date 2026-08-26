@@ -278,7 +278,13 @@ internal static class ConformanceClients
         // live on the per-client {Service}ClientConfig; build one reflectively only when needed.
         httpClient.BaseAddress = endpoint;
         object? config = null;
-        if (idempotencyTokenProvider is not null)
+        if (
+            idempotencyTokenProvider is not null
+            || clientType.FullName?.StartsWith(
+                "Auxiliary.Com.Amazonaws.Glacier.",
+                StringComparison.Ordinal
+            ) == true
+        )
         {
             var configType =
                 clientType.Assembly.GetType(clientType.FullName + "Config")
@@ -286,9 +292,21 @@ internal static class ConformanceClients
                     $"Config type {clientType.FullName}Config not found."
                 );
             config = Activator.CreateInstance(configType)!;
-            configType
-                .GetProperty("IdempotencyTokenProvider")!
-                .SetValue(config, idempotencyTokenProvider);
+            if (idempotencyTokenProvider is not null)
+            {
+                configType
+                    .GetProperty("IdempotencyTokenProvider")!
+                    .SetValue(config, idempotencyTokenProvider);
+            }
+            if (
+                clientType.FullName?.StartsWith(
+                    "Auxiliary.Com.Amazonaws.Glacier.",
+                    StringComparison.Ordinal
+                ) == true
+            )
+            {
+                ((SmithyClientConfig)config).Interceptors.Add(new GlacierConformanceInterceptor());
+            }
         }
         return Activator.CreateInstance(clientType, [httpClient, config])!;
     }
@@ -309,7 +327,9 @@ internal static class ConformanceClients
 /// </summary>
 internal static class ResponseAssertions
 {
-    private static ShapeKind? GetSchemaKind(Type type)
+    private static readonly ShapeId HttpPayloadTraitId = ShapeId.Parse("smithy.api#httpPayload");
+
+    private static Schema? GetSchema(Type type)
     {
         // The functional schema lives on the generated companion `{Type}Schema` class.
         var schemaType = type.Assembly.GetType(type.FullName + "Schema");
@@ -317,8 +337,10 @@ internal static class ResponseAssertions
             "Schema",
             BindingFlags.Public | BindingFlags.Static
         );
-        return (schemaProp?.GetValue(null) as Schema)?.Kind;
+        return schemaProp?.GetValue(null) as Schema;
     }
+
+    private static ShapeKind? GetSchemaKind(Type type) => GetSchema(type)?.Kind;
 
     public static void AssertEquivalent(JsonNode? expected, object actual, string ownerLabel)
     {
@@ -330,7 +352,33 @@ internal static class ResponseAssertions
         AssertEqual(expected, actual, ownerLabel);
     }
 
-    private static void AssertEqual(JsonNode? expected, object? actual, string path)
+    public static async Task AssertEquivalentAsync(
+        JsonNode? expected,
+        object actual,
+        string ownerLabel
+    )
+    {
+        if (expected is null)
+            return;
+
+        if (
+            expected is JsonObject expectedObject
+            && GetSchemaKind(actual.GetType()) == ShapeKind.Structure
+        )
+        {
+            await AssertStructureAsync(expectedObject, actual, ownerLabel).ConfigureAwait(false);
+            return;
+        }
+
+        AssertEqual(expected, actual, ownerLabel);
+    }
+
+    private static void AssertEqual(
+        JsonNode? expected,
+        object? actual,
+        string path,
+        bool rawBlob = false
+    )
     {
         if (expected is null)
         {
@@ -446,7 +494,11 @@ internal static class ResponseAssertions
         {
             var base64 = (string?)expected;
             byte[] expectedBytes;
-            if (string.IsNullOrEmpty(base64))
+            if (rawBlob)
+            {
+                expectedBytes = System.Text.Encoding.UTF8.GetBytes(base64 ?? string.Empty);
+            }
+            else if (string.IsNullOrEmpty(base64))
             {
                 expectedBytes = [];
             }
@@ -509,6 +561,7 @@ internal static class ResponseAssertions
     private static void AssertStructure(JsonObject expected, object actual, string path)
     {
         var type = actual.GetType();
+        var schema = GetSchema(type) as IStructSchema;
         var ctor = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
             .OrderByDescending(c => c.GetParameters().Length)
             .First();
@@ -541,7 +594,46 @@ internal static class ResponseAssertions
                 continue;
             }
 
-            AssertEqual(expected[memberName], actualValue, $"{path}.{memberName}");
+            var rawBlob =
+                schema?.GetMember(memberName)?.MemberTraits.ContainsKey(HttpPayloadTraitId) == true;
+            AssertEqual(expected[memberName], actualValue, $"{path}.{memberName}", rawBlob);
+        }
+    }
+
+    private static async Task AssertStructureAsync(JsonObject expected, object actual, string path)
+    {
+        var type = actual.GetType();
+        var schema = GetSchema(type) as IStructSchema;
+        var ctor = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
+            .OrderByDescending(c => c.GetParameters().Length)
+            .First();
+        foreach (var p in ctor.GetParameters())
+        {
+            var propName = p.Name!;
+            var prop =
+                type.GetProperty(propName, BindingFlags.Public | BindingFlags.Instance)
+                ?? type.GetProperty(
+                    char.ToUpperInvariant(propName[0]) + propName[1..],
+                    BindingFlags.Public | BindingFlags.Instance
+                )
+                ?? throw new InvalidOperationException(
+                    $"[{path}] Cannot resolve property {propName} on {type.FullName}."
+                );
+            var memberName = ResolveExpectedKey(expected, propName);
+            if (memberName is null)
+                continue;
+
+            var actualValue = prop.GetValue(actual);
+            if (actualValue is Stream stream)
+            {
+                using var drained = new MemoryStream();
+                await stream.CopyToAsync(drained).ConfigureAwait(false);
+                actualValue = drained.ToArray();
+            }
+
+            var rawBlob =
+                schema?.GetMember(memberName)?.MemberTraits.ContainsKey(HttpPayloadTraitId) == true;
+            AssertEqual(expected[memberName], actualValue, $"{path}.{memberName}", rawBlob);
         }
     }
 

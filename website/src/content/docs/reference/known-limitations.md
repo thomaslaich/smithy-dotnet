@@ -13,9 +13,8 @@ levels. Each implemented protocol has a conformance suite run against the
 official Smithy / AWS protocol tests (`tests/Conformance`):
 
 - **simpleRestJson (`alloy#simpleRestJson`)** — client and ASP.NET Core server.
-- **AWS restJson1 (`aws.protocols#restJson1`)** — client and ASP.NET Core server. The main
-  remaining corpus gap is the Glacier-specific fixture set, which needs broader
-  projection support.
+- **AWS restJson1 (`aws.protocols#restJson1`)** — client and ASP.NET Core server;
+  all applicable official conformance cases pass.
 - **`smithy.protocols#rpcv2Cbor`** — client and ASP.NET Core server, with
   conformance coverage.
 - **`aws.protocols#awsJson1_1` / `aws.protocols#awsJson1_0`** — client only by

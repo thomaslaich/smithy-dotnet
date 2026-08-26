@@ -171,7 +171,10 @@ public static class RestProtocol
                 throw new MissingRequiredMemberException(member.Name);
         }
         if (binding.QueryParamsMember is { } qpMember)
-            qpMember.SetObject(builder, ReadQueryParams(qpMember, query, binding.BoundQueryNames));
+            // On clients, explicitly bound @httpQuery members take precedence over entries in an
+            // @httpQueryParams map. On servers the map represents the request as received and must
+            // include every query parameter, including names that are also explicitly bound.
+            qpMember.SetObject(builder, ReadQueryParams(qpMember, query));
         if (binding.InputPayloadReader is { } readPayload)
             readPayload(BodyBytesOrNull(request.Body), BodyStreamOrNull(request.Body), builder);
         else if (
@@ -1281,6 +1284,7 @@ public static class RestProtocol
         {
             if (
                 !header.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                || (prefix.Length == 0 && IsTransportManagedHeader(header.Key))
                 || header.Value.Count == 0
             )
             {
@@ -1299,15 +1303,14 @@ public static class RestProtocol
 
     private static object ReadQueryParams(
         IStructMemberSchema member,
-        Dictionary<string, IReadOnlyList<string>> query,
-        HashSet<string> excludedNames
+        Dictionary<string, IReadOnlyList<string>> query
     )
     {
         var mapSchema = RequireMap(member);
         var builder = mapSchema.CreateBuilder();
         foreach (var entry in query)
         {
-            if (entry.Value.Count == 0 || excludedNames.Contains(entry.Key))
+            if (entry.Value.Count == 0)
             {
                 continue;
             }
@@ -1321,6 +1324,10 @@ public static class RestProtocol
 
         return mapSchema.BuildObject(builder);
     }
+
+    private static bool IsTransportManagedHeader(string name) =>
+        name.Equals("Host", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase);
 
     private static string AppendQuery<TInput>(
         string requestUri,

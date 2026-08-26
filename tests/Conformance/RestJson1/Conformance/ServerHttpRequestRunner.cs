@@ -17,7 +17,23 @@ internal static class ServerHttpRequestRunner
                 {
                     capturedMethod = method;
                     capturedInput = args?.FirstOrDefault(arg => arg is not CancellationToken);
-                    return CreateSuccessfulResult(method);
+                    return CreateSuccessfulResult(
+                        method,
+                        async () =>
+                        {
+                            if (testCase.Params is null)
+                                return;
+
+                            Assert.NotNull(capturedInput);
+                            await ResponseAssertions
+                                .AssertEquivalentAsync(
+                                    testCase.Params,
+                                    capturedInput!,
+                                    testCase.OperationName
+                                )
+                                .ConfigureAwait(false);
+                        }
+                    );
                 }
             )
             .ConfigureAwait(false);
@@ -41,30 +57,26 @@ internal static class ServerHttpRequestRunner
                 + $"{(int)response.StatusCode}.\n{responseBody}"
         );
         Assert.Equal(testCase.OperationName + "Async", capturedMethod!.Name);
-        if (testCase.Params is not null)
-        {
-            Assert.NotNull(capturedInput);
-            ResponseAssertions.AssertEquivalent(
-                testCase.Params,
-                capturedInput!,
-                testCase.OperationName
-            );
-        }
     }
 
-    private static object CreateSuccessfulResult(MethodInfo method)
+    private static object CreateSuccessfulResult(MethodInfo method, Func<Task> assertInput)
     {
         if (method.ReturnType == typeof(Task))
         {
-            return Task.CompletedTask;
+            return assertInput();
         }
 
         var resultType = method.ReturnType.GetGenericArguments()[0];
         var result = ConformanceObjectFactory.BuildDefault(resultType);
-        return typeof(Task)
-            .GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .Single(m => m.Name == nameof(Task.FromResult))
+        return typeof(ServerHttpRequestRunner)
+            .GetMethod(nameof(AssertThenReturnAsync), BindingFlags.NonPublic | BindingFlags.Static)!
             .MakeGenericMethod(resultType)
-            .Invoke(null, [result])!;
+            .Invoke(null, [assertInput, result])!;
+    }
+
+    private static async Task<T> AssertThenReturnAsync<T>(Func<Task> assertInput, T result)
+    {
+        await assertInput().ConfigureAwait(false);
+        return result;
     }
 }

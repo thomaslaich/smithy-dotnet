@@ -50,24 +50,7 @@ internal static class RestJson1Allowlist
     public static readonly IReadOnlySet<string> KnownServerRequestParamGaps = new HashSet<string>(
         StringComparer.Ordinal
     )
-    {
-        "RestJsonAllQueryStringTypes",
-        "RestJsonHttpEmptyPrefixHeadersRequestServer",
-        "RestJsonOmitsEmptyListQueryValues",
-        "RestJsonQueryStringEscaping",
-        "RestJsonServersPutAllQueryParamsInMap",
-        "RestJsonServersQueryParamsStringListMap",
-        "RestJsonStreamingTraitsRequireLengthWithBlob",
-        "RestJsonStreamingTraitsWithBlob",
-        "RestJsonStreamingTraitsWithMediaTypeWithBlob",
-        "RestJsonSupportsInfinityFloatQueryValues",
-        "RestJsonSupportsNaNFloatQueryValues",
-        "RestJsonSupportsNegativeInfinityFloatQueryValues",
-        "RestJsonTestPayloadBlob",
-        "RestJsonZeroAndFalseQueryValues",
-        "SDKAppendedGzipAfterProvidedEncoding_restJson1",
-        "SDKAppliedContentEncoding_restJson1",
-    };
+    { };
 
     public static readonly IReadOnlySet<string> ExecutableRequestCases = new HashSet<string>(
         StringComparer.Ordinal
@@ -108,6 +91,7 @@ internal static class RestJson1Allowlist
         "RestJsonSerializeMapUnionValue",
         "RestJsonSerializeStructureUnionValue",
         "RestJsonSerializeRenamedStructureUnionValue",
+        "RestJsonSerializeNestedUnionValue",
         "RestJsonInputAndOutputWithStringHeaders",
         "RestJsonInputAndOutputWithNumericHeaders",
         "RestJsonInputAndOutputWithBooleanHeaders",
@@ -212,6 +196,10 @@ internal static class RestJson1Allowlist
         "SDKAppendedGzipAfterProvidedEncoding_restJson1",
         "RestJsonRecursiveStructuresValidate",
         "ApiGatewayAccept",
+        "GlacierAccountId",
+        "GlacierChecksums",
+        "GlacierMultipartChecksums",
+        "GlacierVersionHeader",
     };
 
     public static readonly IReadOnlySet<string> ExecutableResponseCases = new HashSet<string>(
@@ -255,6 +243,7 @@ internal static class RestJson1Allowlist
         "RestJsonDeserializeMapUnionValue",
         "RestJsonDeserializeStructureUnionValue",
         "RestJsonDeserializeIgnoreType",
+        "RestJsonDeserializeNestedUnionValue",
         "RestJsonInputAndOutputWithStringHeaders",
         "RestJsonInputAndOutputWithNumericHeaders",
         "RestJsonInputAndOutputWithBooleanHeaders",
@@ -300,6 +289,7 @@ internal static class RestJson1Allowlist
         "RestJsonFooErrorUsingXAmznErrorType",
         "RestJsonFooErrorUsingXAmznErrorTypeWithUri",
         "RestJsonFooErrorUsingXAmznErrorTypeWithUriAndNamespace",
+        "RestJsonFooErrorUsingXAmznErrorTypeWithUriAndDifferentNamespace",
         "RestJsonFooErrorWithDunderType",
         "RestJsonFooErrorWithDunderTypeAndNamespace",
         "RestJsonFooErrorWithDunderTypeUriAndNamespace",

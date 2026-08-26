@@ -11,7 +11,7 @@ test totals.
 
 | Protocol | Surfaces | Stage | Client conformance | Server conformance |
 | --- | --- | --- | --- | --- |
-| [`aws.protocols#restJson1`](../rest-json/) | Client and server | Preview | Requests 137/142 (96.5%), responses 106/108 (98.1%) | Requests 118/134 (88.1%), responses 92/92 (100%), malformed 655/655 (100%) |
+| [`aws.protocols#restJson1`](../rest-json/) | Client and server | Preview | Requests 142/142 (100%), responses 108/108 (100%) | Requests 132/132 (100%), responses 92/92 (100%), malformed 655/655 (100%) |
 | [`aws.protocols#awsJson1_1`](../aws-json/) | Client | Early preview | Requests 6/57 (10.5%), responses 18/62 (29.0%) | N/A |
 | [`aws.protocols#awsJson1_0`](../aws-json/) | Client | Early preview | Runtime support, no conformance project | N/A |
 | [`aws.protocols#awsQuery`](../aws-query/) | Client | Preview | Requests 38/38 (100%), responses 39/39 (100%) | N/A |
@@ -39,10 +39,8 @@ count as official conformance.
 
 ## Coverage notes
 
-- restJson1 client response coverage includes all official modeled-error cases.
-  The client passes 13/14 applicable error cases, and the server passes 3/3. The
-  remaining client case uses an `X-Amzn-Errortype` URI with a different
-  namespace.
+- restJson1 passes every applicable official request, response, modeled-error,
+  and malformed-request case on both generated surfaces.
 - The restJson1 server passes all 655 applicable
   `httpMalformedRequestTests`. These cases verify structured responses for
   requests that cannot be deserialized or validated.
