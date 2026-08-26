@@ -38,6 +38,8 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 @SmithyInternalApi
 public final class ClientGenerator implements Runnable {
 
+  private static final ShapeId GLACIER_SERVICE = ShapeId.from("com.amazonaws.glacier#Glacier");
+
   private final GenerationContext context;
   private final CSharpWriter writer;
   private final ServiceShape service;
@@ -363,7 +365,15 @@ public final class ClientGenerator implements Runnable {
         "{",
         "}",
         () -> {
-          writer.write("public $LConfig() { }", typeName);
+          if (service.getId().equals(GLACIER_SERVICE)) {
+            writer.write("public $LConfig()", typeName);
+            writer.openBlock(
+                "{",
+                "}",
+                () -> writer.write("Interceptors.Add(new NSmithy.Aws.GlacierInterceptor());"));
+          } else {
+            writer.write("public $LConfig() { }", typeName);
+          }
           writer.write("");
           writer.write("public $LConfig($LConfig source) : base(source) { }", typeName, typeName);
         });

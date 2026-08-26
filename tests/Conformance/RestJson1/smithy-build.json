@@ -72,6 +72,24 @@
         }
       }
     },
+    "restjson1-glacier": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "com.amazonaws.glacier#Glacier"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "com.amazonaws.glacier#Glacier",
+          "baseNamespace": "Auxiliary"
+        }
+      }
+    },
     "restjson1-constraints": {
       "transforms": [
         {

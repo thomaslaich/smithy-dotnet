@@ -405,7 +405,7 @@ public sealed class RestJson1ProtocolTests
                 static input => input.ExtraHeaders,
                 static (builder, value) => builder.ExtraHeaders = value,
                 stringMapSchema,
-                traits: [RestTraits.HttpPrefixHeadersTrait("X-Extra-")]
+                traits: [RestTraits.HttpPrefixHeadersTrait("")]
             )
             .Build(
                 static () => new GetUserInputBuilder(),
@@ -431,6 +431,8 @@ public sealed class RestJson1ProtocolTests
             "/users/ada%20lovelace?includeDetails=true&tag=admin&tag=staff&debug=true"
         );
         request.Headers["X-Extra-Trace"] = ["abc"];
+        request.Headers["Host"] = ["example.com"];
+        request.Headers["Content-Length"] = ["0"];
 
         var input = Protocol(operation).DeserializeRequest(request);
 
@@ -438,9 +440,11 @@ public sealed class RestJson1ProtocolTests
         Assert.True(input.IncludeDetails);
         Assert.Equal(["admin", "staff"], input.Tags);
         Assert.Equal("true", input.ExtraQuery["debug"]);
-        Assert.DoesNotContain("includeDetails", input.ExtraQuery.Keys);
-        Assert.DoesNotContain("tag", input.ExtraQuery.Keys);
-        Assert.Equal("abc", input.ExtraHeaders["Trace"]);
+        Assert.Equal("true", input.ExtraQuery["includeDetails"]);
+        Assert.Equal("admin", input.ExtraQuery["tag"]);
+        Assert.Equal("abc", input.ExtraHeaders["X-Extra-Trace"]);
+        Assert.DoesNotContain("Host", input.ExtraHeaders.Keys);
+        Assert.DoesNotContain("Content-Length", input.ExtraHeaders.Keys);
     }
 
     public sealed record RequestValueParityInput(

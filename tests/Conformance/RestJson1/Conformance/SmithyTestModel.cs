@@ -48,7 +48,7 @@ internal sealed class SmithyTestModel
             {
                 if (node is not JsonObject c || (string?)c["protocol"] != protocol)
                     continue;
-                yield return HttpRequestTestCase.From(id, c);
+                yield return HttpRequestTestCase.From(id, c, traits);
             }
         }
     }
@@ -129,7 +129,11 @@ internal sealed record HttpRequestTestCase(
 
     public bool AppliesToServer => AppliesTo is "server" or "both";
 
-    public static HttpRequestTestCase From(string shapeId, JsonObject c) =>
+    public static HttpRequestTestCase From(
+        string shapeId,
+        JsonObject c,
+        JsonObject? operationTraits
+    ) =>
         new(
             shapeId,
             (string)c["id"]!,
@@ -146,8 +150,30 @@ internal sealed record HttpRequestTestCase(
             (string?)c["host"],
             (string?)c["resolvedHost"],
             c["params"],
-            (string?)c["appliesTo"] ?? "both"
+            ResolveAppliesTo(c, operationTraits)
         );
+
+    private static string ResolveAppliesTo(JsonObject testCase, JsonObject? operationTraits)
+    {
+        if ((string?)testCase["appliesTo"] is { } appliesTo)
+            return appliesTo;
+
+        // Some upstream fixtures predate appliesTo but describe behavior that only an outgoing
+        // client request can observe. An omitted empty query list is indistinguishable from null
+        // to a server, and request-compression fixtures intentionally omit the wire body because
+        // they assert SDK-side compression behavior.
+        if (
+            operationTraits?["smithy.api#tags"] is JsonArray tags
+            && tags.Any(tag => (string?)tag == "client-only")
+        )
+        {
+            return "client";
+        }
+        if (operationTraits?.ContainsKey("smithy.api#requestCompression") == true)
+            return "client";
+
+        return "both";
+    }
 
     private static IReadOnlyList<string> ReadStringList(JsonObject c, string key) =>
         c[key] is JsonArray a ? [.. a.Select(n => (string)n!)] : [];
