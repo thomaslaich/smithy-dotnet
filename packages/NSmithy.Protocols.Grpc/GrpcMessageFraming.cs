@@ -7,7 +7,8 @@ namespace NSmithy.Protocols.Grpc;
 /// The gRPC length-prefixed message framing. Every gRPC message on the wire is a 5-byte header — a
 /// 1-byte compression flag followed by a 4-byte big-endian message length — and then that many
 /// payload bytes. NSmithy emits and consumes this framing directly rather than relying on
-/// Grpc.Core / Grpc.Net, so the proto payload produced by <c>ProtoCodec</c> goes straight onto the
+/// Grpc.Core / Grpc.Net, so the proto payload produced by <c>ProtoCodecFactory</c> goes straight
+/// onto the
 /// HTTP/2 body.
 /// </summary>
 public static class GrpcMessageFraming

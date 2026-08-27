@@ -142,7 +142,7 @@ REST-specific Smithy bindings live in `NSmithy.Protocols.Rest`. That package
 projects operation input and output schemas into HTTP method, URI labels, query
 parameters, headers, payload members, response status, and body members.
 Protocols such as REST JSON and REST XML reuse that projection and provide only
-their body codec factory, for example `JsonCodec` or `XmlCodec`.
+their body codec factory, backed by `JsonCodecFactory` or `XmlCodecFactory`.
 
 This split lets other protocols share the HTTP transport when appropriate
 without inheriting REST binding semantics. A protocol that serializes the whole

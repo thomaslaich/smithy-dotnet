@@ -20,6 +20,8 @@ public sealed class AwsJson11Protocol : AwsJsonProtocol
 
 public abstract class AwsJsonProtocol(string contentType) : IProtocol
 {
+    private static readonly JsonCodecFactory CodecFactory = JsonCodecFactory.Default;
+
     public IServiceProtocol ForService(ServiceSchema service)
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -52,8 +54,8 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         private readonly bool outputIsSmithyUnit;
         private readonly bool outputIsUnit;
         private readonly Schema<TOutput> outputSchema;
-        private readonly IJsonCodec<TInput> requestCodec;
-        private readonly IJsonCodec<TOutput> responseCodec;
+        private readonly ICodec<TInput> requestCodec;
+        private readonly ICodec<TOutput> responseCodec;
         private readonly Action<SmithyHttpRequest>? requestTransform;
 
         public OperationProtocol(
@@ -67,8 +69,8 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             outputIsSmithyUnit = typeof(TOutput) == typeof(SmithyUnit);
             outputIsUnit = outputIsSmithyUnit || Schemas.IsSyntheticUnit(operation.Output);
             outputSchema = operation.Output;
-            requestCodec = JsonCodec.FromSchema(operation.Input);
-            responseCodec = JsonCodec.FromSchema(operation.Output);
+            requestCodec = CodecFactory.FromSchema(operation.Input);
+            responseCodec = CodecFactory.FromSchema(operation.Output);
             requestTransform = SmithyRequestModifiers.Compile(operation);
             HttpErrors = CompileErrors(operation.Errors);
         }
@@ -151,7 +153,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
             where TError : Exception
         {
-            var codec = JsonCodec.FromSchema(error.Schema);
+            var codec = CodecFactory.FromSchema(error.Schema);
             return new HttpOperationError(
                 error.Id,
                 error.HttpStatusCode,

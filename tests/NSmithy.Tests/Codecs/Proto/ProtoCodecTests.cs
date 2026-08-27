@@ -58,7 +58,7 @@ public sealed class ProtoCodecTests
     [Fact]
     public void EncodesScalarsToCanonicalProtoBytes()
     {
-        var codec = ProtoCodec.FromSchema(SimpleSchema);
+        var codec = ProtoCodecFactory.Default.FromSchema(SimpleSchema);
 
         var bytes = codec.Serialize(new Simple("hi", 300));
 
@@ -85,7 +85,7 @@ public sealed class ProtoCodecTests
             .Structure<IntHolder, IntHolderBuilder>(ShapeId.Parse("test#Signed"))
             .Required("a", x => x.A, (b, v) => b.A = v, Schemas.Integer, Field(1, "SIGNED"))
             .Build(() => new IntHolderBuilder(), b => new IntHolder(b.A));
-        var codec = ProtoCodec.FromSchema(schema);
+        var codec = ProtoCodecFactory.Default.FromSchema(schema);
 
         // zigzag(-1) == 1 → 08 01
         byte[] expected = [0x08, 0x01];
@@ -101,7 +101,7 @@ public sealed class ProtoCodecTests
             .Structure<IntHolder, IntHolderBuilder>(ShapeId.Parse("test#Fixed"))
             .Required("a", x => x.A, (b, v) => b.A = v, Schemas.Integer, Field(1, "FIXED"))
             .Build(() => new IntHolderBuilder(), b => new IntHolder(b.A));
-        var codec = ProtoCodec.FromSchema(schema);
+        var codec = ProtoCodecFactory.Default.FromSchema(schema);
 
         // field 1, I32 wire (0x0D), 1 little-endian
         byte[] expected = [0x0D, 0x01, 0x00, 0x00, 0x00];
@@ -141,7 +141,7 @@ public sealed class ProtoCodecTests
                 Field(1)
             )
             .Build(() => new RepeatedBuilder(), b => new Repeated(b.Nums!));
-        var codec = ProtoCodec.FromSchema(schema);
+        var codec = ProtoCodecFactory.Default.FromSchema(schema);
 
         // field 1, LEN (0x0A), len 3, packed varints 1 2 3
         var bytes = codec.Serialize(new Repeated([1, 2, 3]));
@@ -168,7 +168,7 @@ public sealed class ProtoCodecTests
                 Field(1)
             )
             .Build(() => new RepeatedBuilder(), b => new Repeated(b.Nums!));
-        var codec = ProtoCodec.FromSchema(schema);
+        var codec = ProtoCodecFactory.Default.FromSchema(schema);
 
         // field 1, LEN, packed sint32 values: zigzag(-1)=1, zigzag(75)=150.
         byte[] bytes = [0x0A, 0x03, 0x01, 0x96, 0x01];
@@ -195,7 +195,7 @@ public sealed class ProtoCodecTests
                 Field(1)
             )
             .Build(() => new IntMapHolderBuilder(), b => new IntMapHolder(b.Values!));
-        var codec = ProtoCodec.FromSchema(schema);
+        var codec = ProtoCodecFactory.Default.FromSchema(schema);
 
         // field 1, LEN, entry { key: "a", value: sint32(-1) }
         byte[] bytes = [0x0A, 0x05, 0x0A, 0x01, 0x61, 0x10, 0x01];
@@ -241,7 +241,7 @@ public sealed class ProtoCodecTests
                 () => new EmptyCollectionsBuilder(),
                 b => new EmptyCollections(b.Nums!, b.Metadata!)
             );
-        var codec = ProtoCodec.FromSchema(schema);
+        var codec = ProtoCodecFactory.Default.FromSchema(schema);
 
         var result = codec.Deserialize([]);
 
@@ -365,7 +365,7 @@ public sealed class ProtoCodecTests
     [Fact]
     public void RoundTripsRichMessage()
     {
-        var codec = ProtoCodec.FromSchema(BookSchema);
+        var codec = ProtoCodecFactory.Default.FromSchema(BookSchema);
         var book = new Book(
             Id: "abc",
             PageCount: 534,
@@ -392,7 +392,7 @@ public sealed class ProtoCodecTests
     [Fact]
     public void EncodesPreUnixFractionalTimestampCanonically()
     {
-        var codec = ProtoCodec.FromSchema(BookSchema);
+        var codec = ProtoCodecFactory.Default.FromSchema(BookSchema);
         var book = new Book(
             Id: "pre",
             PageCount: null,
@@ -438,7 +438,7 @@ public sealed class ProtoCodecTests
     [Fact]
     public void OmitsAbsentOptionalFields()
     {
-        var codec = ProtoCodec.FromSchema(BookSchema);
+        var codec = ProtoCodecFactory.Default.FromSchema(BookSchema);
         var book = new Book(
             Id: "x",
             PageCount: null,
@@ -512,7 +512,7 @@ public sealed class ProtoCodecTests
                 Field(1)
             )
             .Build(() => new PaintingBuilder(), b => new Painting(b.Shade));
-        var codec = ProtoCodec.FromSchema(schema);
+        var codec = ProtoCodecFactory.Default.FromSchema(schema);
 
         // UNSPECIFIED=0, RED=1, GREEN=2, BLUE=3 → field 1 varint 2 for GREEN.
         byte[] expected = [0x08, 0x02];
@@ -549,7 +549,7 @@ public sealed class ProtoCodecTests
                 Field(1)
             )
             .Build(() => new AttributedBuilder(), b => new Attributed(b.Attrs!));
-        var codec = ProtoCodec.FromSchema(schema);
+        var codec = ProtoCodecFactory.Default.FromSchema(schema);
 
         var input = new Attributed(
             new Dictionary<string, string?> { ["subtitle"] = "An Intro", ["series"] = null }
@@ -616,7 +616,7 @@ public sealed class ProtoCodecTests
             )
             .Optional("filter", x => x.Filter!, (b, v) => b.Filter = v, FilterSchema, Field(2))
             .Build(() => new QueryBuilder(), b => new Query(b.Page, b.Filter));
-        var codec = ProtoCodec.FromSchema(schema);
+        var codec = ProtoCodecFactory.Default.FromSchema(schema);
 
         // filter=byId("z") is written at the case's own field 3 (LEN), not the member's field 2,
         // and not wrapped in a sub-message: 1A 01 7A
@@ -650,7 +650,7 @@ public sealed class ProtoCodecTests
                 Field(1)
             )
             .Build(() => new EnvelopeBuilder(), b => new Envelope(b.Payload));
-        var codec = ProtoCodec.FromSchema(schema);
+        var codec = ProtoCodecFactory.Default.FromSchema(schema);
 
         var payload = Document.From(
             new Dictionary<string, Document>
@@ -673,7 +673,7 @@ public sealed class ProtoCodecTests
     [Fact]
     public void BackpatchesMultiByteNestedMessageLengths()
     {
-        var codec = ProtoCodec.FromSchema(
+        var codec = ProtoCodecFactory.Default.FromSchema(
             Schemas
                 .Structure<Envelope, EnvelopeBuilder>(ShapeId.Parse("test#LargeEnvelope"))
                 .Required(
@@ -701,7 +701,7 @@ public sealed class ProtoCodecTests
     [Fact]
     public void NumbersFrameworkShapeMembersByDeclarationOrder()
     {
-        var codec = ProtoCodec.FromSchema(ValidationExceptionSchema.Schema);
+        var codec = ProtoCodecFactory.Default.FromSchema(ValidationExceptionSchema.Schema);
 
         var bytes = codec.Serialize(
             new ValidationException("nope", [new ValidationExceptionField("/a", "bad")])
@@ -730,7 +730,9 @@ public sealed class ProtoCodecTests
             .Required("value", x => x.Value, (b, v) => b.Value = v, Schemas.Integer, Field(2))
             .Build(() => new SimpleBuilder(), b => new Simple(b.Name!, b.Value));
 
-        var ex = Assert.Throws<InvalidOperationException>(() => ProtoCodec.FromSchema(schema));
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            ProtoCodecFactory.Default.FromSchema(schema)
+        );
 
         Assert.Contains("test#Unnumbered$name", ex.Message, StringComparison.Ordinal);
     }

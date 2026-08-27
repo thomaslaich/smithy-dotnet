@@ -191,10 +191,13 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
         // Request bodies don't materialize top-level defaults (the client sends only what was set).
         IProjectionCodec<TInput, TInputBuilder>? inputBodyCodec =
             inputPayloadMember is null && inputBodyMembers.Count > 0
-                ? codecFactory.CodecFor(
+                ? codecFactory.FromProjection(
                     Schemas.Project(inputSchema, inputBodyMembers),
-                    materializeTopLevelDefaults: false,
-                    defaultRootName: operation.Id.Name + "Request"
+                    new CodecFactoryOptions
+                    {
+                        MaterializeTopLevelDefaults = false,
+                        DefaultRootName = operation.Id.Name + "Request",
+                    }
                 )
                 : null;
 
@@ -242,10 +245,13 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
         // materialize top-level defaults.
         IProjectionCodec<TOutput, TOutputBuilder>? outputBodyCodec =
             outputPayloadMember is null && !outputIsUnit
-                ? codecFactory.CodecFor(
+                ? codecFactory.FromProjection(
                     Schemas.Project(outputSchema, outputBodyMembers),
-                    materializeTopLevelDefaults: true,
-                    defaultRootName: operation.Id.Name + "Response"
+                    new CodecFactoryOptions
+                    {
+                        MaterializeTopLevelDefaults = true,
+                        DefaultRootName = operation.Id.Name + "Response",
+                    }
                 )
                 : null;
 

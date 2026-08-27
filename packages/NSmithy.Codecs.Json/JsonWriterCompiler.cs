@@ -28,16 +28,22 @@ internal sealed class JsonWriterCompiler : ISchemaVisitor<object>
 
     public static IJsonValueWriter<T> Compile<T>(
         Schema<T> schema,
-        bool materializeTopLevelDefaults = true
+        bool materializeTopLevelDefaults = true,
+        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
     )
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new JsonWriterCompiler().CompileTopLevelValue(schema, materializeTopLevelDefaults);
+        return new JsonWriterCompiler().CompileTopLevelValue(
+            schema,
+            materializeTopLevelDefaults,
+            memberTraits
+        );
     }
 
     private IJsonValueWriter<T> CompileTopLevelValue<T>(
         Schema<T> schema,
-        bool materializeTopLevelDefaults
+        bool materializeTopLevelDefaults,
+        IReadOnlyDictionary<ShapeId, Trait>? memberTraits
     )
     {
         if (schema.Resolved is IStructSchema<T> structure)
@@ -45,7 +51,7 @@ internal sealed class JsonWriterCompiler : ISchemaVisitor<object>
             return CompileStructure(structure, materializeTopLevelDefaults);
         }
 
-        return CompileValue(schema);
+        return memberTraits is null ? CompileValue(schema) : CompileValue(schema, memberTraits);
     }
 
     public static IJsonValueWriter<T> Compile<T, TBuilder>(

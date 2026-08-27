@@ -8,7 +8,7 @@ using static NSmithy.Codecs.Cbor.CborWire;
 namespace NSmithy.Codecs.Cbor;
 
 internal sealed class CompiledCborCodec<T>(Schema<T> schema, bool materializeTopLevelDefaults)
-    : ICborCodec<T>
+    : ICodec<T>
 {
     private readonly ICborValueWriter<T> valueWriter = CborWriterCompiler.Compile(
         schema,

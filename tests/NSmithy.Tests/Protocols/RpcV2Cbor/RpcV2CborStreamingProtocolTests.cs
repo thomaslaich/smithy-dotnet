@@ -237,8 +237,8 @@ public sealed class RpcV2CborStreamingProtocolTests
         Assert.Equal("message", message.StringHeader(":event-type"));
         Assert.Equal("application/cbor", message.StringHeader(":content-type"));
 
-        var value = CborCodec
-            .FromSchema(ChatEventSchema("UploadEvent"))
+        var value = CborCodecFactory
+            .Default.FromSchema(ChatEventSchema("UploadEvent"))
             .Deserialize(message.Payload.ToArray());
         var chat = Assert.IsType<ChatEvent.Message>(value);
         Assert.Equal(new Echo("one"), chat.Value);

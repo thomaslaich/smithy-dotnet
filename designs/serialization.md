@@ -382,7 +382,7 @@ shape references another's schema by naming the sibling class
 (`Schemas.Lazy(() => FoodSchema.Schema)`).
 
 A consumer is therefore handed the schema rather than deriving it from the
-value: `JsonCodec.FromSchema(MenuItemSchema.Schema)`, and a generated client
+value: `JsonCodecFactory.Default.FromSchema(MenuItemSchema.Schema)`, and a generated client
 passes `MenuItemSchema.Schema` to the protocol when it binds an operation. The
 reference is an ordinary static property resolved at compile time, so there is
 still no registry, no reflection, and no startup scan. The schema class is
@@ -431,6 +431,23 @@ public interface IProjectionCodec<TValue, in TBuilder>
     byte[] Serialize(TValue value);
     void ReadInto(byte[] payload, TBuilder builder);
 }
+
+public interface ICodecFactory
+{
+    ICodec<T> FromSchema<T>(Schema<T> schema, CodecFactoryOptions? options = null);
+    ICodec<T> FromMember<T>(
+        ITargetedMemberSchema<T> member,
+        CodecFactoryOptions? options = null
+    );
+}
+
+public interface IProjectionCodecFactory : ICodecFactory
+{
+    IProjectionCodec<T, TBuilder> FromProjection<T, TBuilder>(
+        StructProjection<T, TBuilder> projection,
+        CodecFactoryOptions? options = null
+    );
+}
 ```
 
 A protocol creates one typed builder per request, lets each projection codec and
@@ -440,7 +457,7 @@ once.
 Codec usage:
 
 ```csharp
-var personCodec = JsonCodec.FromSchema(PersonSchema.Schema);
+var personCodec = JsonCodecFactory.Default.FromSchema(PersonSchema.Schema);
 var json = personCodec.Serialize(person);
 var roundTrip = personCodec.Deserialize(json);
 ```
@@ -450,9 +467,18 @@ the members of a structure while keeping the same container type:
 
 ```csharp
 var bodyProjection = Schemas.Project(inputSchema, bodyMembers);
-var bodyCodec = JsonCodec.FromProjection(bodyProjection);
+var bodyCodec = JsonCodecFactory.Default.FromProjection(bodyProjection);
 var body = bodyCodec.Serialize(input);
 ```
+
+Factory capabilities match the wire formats rather than forcing every codec
+into the same shape. JSON, XML, and CBOR implement
+`IProjectionCodecFactory`; Protobuf implements `ICodecFactory` because gRPC
+always encodes complete protobuf messages. `FromMember` retains traits declared
+on a targeted member, which matters when a payload member controls its target's
+wire representation (for example `@xmlName` or `@timestampFormat`). Each format exposes one
+factory type: `JsonCodecFactory`, `XmlCodecFactory`, `CborCodecFactory`, or
+`ProtoCodecFactory`.
 
 Codecs serialize Smithy data shapes into a wire payload for a particular body
 format:
@@ -469,7 +495,7 @@ map status codes; those are protocol responsibilities.
 
 ### Codec Compilation
 
-`JsonCodec.FromSchema<T>` folds the schema graph once and produces an
+`JsonCodecFactory.Default.FromSchema<T>` folds the schema graph once and produces an
 `IJsonValueReader<T>` / `IJsonValueWriter<T>` tree. Each node in the tree is a
 small sealed class with the exact concrete types it needs captured in its
 generic parameters, including the builder type, which the fold obtains

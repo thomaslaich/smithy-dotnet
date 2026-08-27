@@ -12,6 +12,8 @@ namespace NSmithy.Protocols.RpcV2Cbor;
 
 public sealed class RpcV2CborProtocol : IProtocol
 {
+    private static readonly CborCodecFactory CodecFactory = CborCodecFactory.Default;
+
     private const string ContentType = "application/cbor";
     private const string EventStreamContentType = "application/vnd.amazon.eventstream";
     private const string InitialRequestEventType = "initial-request";
@@ -113,7 +115,10 @@ public sealed class RpcV2CborProtocol : IProtocol
             );
         }
 
-        var codec = CborCodec.FromSchema(inputSchema, materializeTopLevelDefaults: false);
+        var codec = CodecFactory.FromSchema(
+            inputSchema,
+            new CodecFactoryOptions { MaterializeTopLevelDefaults = false }
+        );
         return new RequestStrategy<TInput>(
             (request, input, _) =>
             {
@@ -138,7 +143,7 @@ public sealed class RpcV2CborProtocol : IProtocol
     >(IStructSchema<TInput, TInputBuilder> inputSchema, Schema<TInputEvent> eventSchema)
         where TInputBuilder : notnull
     {
-        var codec = CborCodec.FromSchema(eventSchema);
+        var codec = CodecFactory.FromSchema(eventSchema);
         var union = RequireUnion(eventSchema);
         var binding = EventStreamShapeBinding<TInput, TInputEvent, TInputBuilder>.Create(
             inputSchema,
@@ -182,7 +187,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         // unit structure is its own CLR type and casting SmithyUnit to it would throw.
         var writesNoBody = IsUnit<TOutput>(outputSchema);
         var readsNoValue = typeof(TOutput) == typeof(SmithyUnit);
-        var codec = CborCodec.FromSchema(outputSchema);
+        var codec = CodecFactory.FromSchema(outputSchema);
 
         return new ResponseStrategy<TOutput>(
             (output, _) =>
@@ -223,7 +228,7 @@ public sealed class RpcV2CborProtocol : IProtocol
     >(IStructSchema<TOutput, TOutputBuilder> outputSchema, Schema<TOutputEvent> eventSchema)
         where TOutputBuilder : notnull
     {
-        var codec = CborCodec.FromSchema(eventSchema);
+        var codec = CodecFactory.FromSchema(eventSchema);
         var union = RequireUnion(eventSchema);
         var binding = EventStreamShapeBinding<TOutput, TOutputEvent, TOutputBuilder>.Create(
             outputSchema,
@@ -474,7 +479,7 @@ public sealed class RpcV2CborProtocol : IProtocol
     private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
         where TError : Exception
     {
-        var codec = CborCodec.FromSchema(error.Schema);
+        var codec = CodecFactory.FromSchema(error.Schema);
         return new HttpOperationError(
             error.Id,
             error.HttpStatusCode,
@@ -531,7 +536,7 @@ public sealed class RpcV2CborProtocol : IProtocol
 
     private static async IAsyncEnumerable<ReadOnlyMemory<byte>> FrameEventsAsync<T>(
         IAsyncEnumerable<T> events,
-        ICborCodec<T> codec,
+        ICodec<T> codec,
         IUnionSchema eventSchema,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
@@ -579,9 +584,12 @@ public sealed class RpcV2CborProtocol : IProtocol
             return new EventStreamShapeBinding<TShape, TEvent, TBuilder>(
                 structure,
                 streamMember,
-                CborCodec.FromProjection(
+                CodecFactory.FromProjection(
                     Schemas.Project(structure, initialMembers),
-                    materializeTopLevelDefaults
+                    new CodecFactoryOptions
+                    {
+                        MaterializeTopLevelDefaults = materializeTopLevelDefaults,
+                    }
                 ),
                 initialMembers.Length > 0
             );
@@ -661,7 +669,7 @@ public sealed class RpcV2CborProtocol : IProtocol
     >(
         TShape shape,
         EventStreamShapeBinding<TShape, TEvent, TBuilder> binding,
-        ICborCodec<TEvent> eventCodec,
+        ICodec<TEvent> eventCodec,
         IUnionSchema eventSchema,
         string initialEventType,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
@@ -711,7 +719,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         Stream body,
         bool disposeBody,
         EventStreamShapeBinding<TShape, TEvent, TBuilder> binding,
-        ICborCodec<TEvent> eventCodec,
+        ICodec<TEvent> eventCodec,
         string initialEventType,
         CancellationToken cancellationToken
     )
@@ -773,7 +781,7 @@ public sealed class RpcV2CborProtocol : IProtocol
             IAsyncEnumerator<EventStreamMessage> enumerator,
             Stream body,
             bool disposeBody,
-            ICborCodec<TEvent> eventCodec,
+            ICodec<TEvent> eventCodec,
             [EnumeratorCancellation] CancellationToken cancellationToken = default
         )
         {
@@ -812,7 +820,7 @@ public sealed class RpcV2CborProtocol : IProtocol
 
     private static async ValueTask<T> DeserializeSingleResponseAsync<T>(
         SmithyHttpClientResponse response,
-        ICborCodec<T> codec,
+        ICodec<T> codec,
         CancellationToken cancellationToken
     )
     {
@@ -826,7 +834,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         }
     }
 
-    private static T? DeserializeEventMessage<T>(ICborCodec<T> codec, EventStreamMessage message)
+    private static T? DeserializeEventMessage<T>(ICodec<T> codec, EventStreamMessage message)
     {
         EnsureEventMessage(message);
         EnsureCborPayload(message);

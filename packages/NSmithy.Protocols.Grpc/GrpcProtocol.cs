@@ -11,7 +11,7 @@ namespace NSmithy.Protocols.Grpc;
 
 /// <summary>
 /// A native gRPC protocol for NSmithy: it speaks the gRPC HTTP/2 wire contract directly, using
-/// <see cref="ProtoCodec"/> for message bodies and <see cref="GrpcMessageFraming"/> for the
+/// <see cref="ProtoCodecFactory"/> for message bodies and <see cref="GrpcMessageFraming"/> for the
 /// length-prefixed frames — no protoc, Grpc.Tools, or Grpc.Net required. It plugs into the same
 /// <see cref="IServiceProtocol"/>/<see cref="IOperationProtocol{TInput, TOutput}"/> abstraction the
 /// REST and rpcv2Cbor protocols use, so the generated client/server glue is protocol-agnostic.
@@ -23,6 +23,8 @@ namespace NSmithy.Protocols.Grpc;
 /// </remarks>
 public sealed class GrpcProtocol : IProtocol
 {
+    private static readonly ProtoCodecFactory CodecFactory = ProtoCodecFactory.Default;
+
     internal const string ContentType = "application/grpc+proto";
 
     /// <summary>Native gRPC requires HTTP/2 without downgrade.</summary>
@@ -117,7 +119,7 @@ public sealed class GrpcProtocol : IProtocol
             );
         }
 
-        var codec = ProtoCodec.FromSchema(inputSchema);
+        var codec = CodecFactory.FromSchema(inputSchema);
         return new RequestStrategy<TInput>(
             (input, _) =>
                 new SmithyHttpBody.Bytes(GrpcMessageFraming.Frame(codec.Serialize(input))),
@@ -133,7 +135,7 @@ public sealed class GrpcProtocol : IProtocol
         Schema<TInputEvent> eventSchema
     )
     {
-        var codec = ProtoCodec.FromSchema(eventSchema);
+        var codec = CodecFactory.FromSchema(eventSchema);
         var binding = EventStreamShapeBinding<TInput, TInputEvent>.Create(inputSchema);
         return new RequestStrategy<TInput>(
             (input, cancellationToken) =>
@@ -167,7 +169,7 @@ public sealed class GrpcProtocol : IProtocol
             );
         }
 
-        var codec = ProtoCodec.FromSchema(outputSchema);
+        var codec = CodecFactory.FromSchema(outputSchema);
         return new ResponseStrategy<TOutput>(
             (output, _) =>
                 UnaryGrpcResponse(GrpcMessageFraming.Frame(codec.Serialize(output)), OkTrailers),
@@ -184,7 +186,7 @@ public sealed class GrpcProtocol : IProtocol
         Schema<TOutputEvent> eventSchema
     )
     {
-        var codec = ProtoCodec.FromSchema(eventSchema);
+        var codec = CodecFactory.FromSchema(eventSchema);
         var binding = EventStreamShapeBinding<TOutput, TOutputEvent>.Create(outputSchema);
         return new ResponseStrategy<TOutput>(
             (output, cancellationToken) =>
@@ -319,7 +321,7 @@ public sealed class GrpcProtocol : IProtocol
     )
     {
         var status = GrpcStatusMapping.FromHttpStatus(statusCode);
-        var body = GrpcMessageFraming.Frame(ProtoCodec.FromSchema(errorSchema).Serialize(value));
+        var body = GrpcMessageFraming.Frame(CodecFactory.FromSchema(errorSchema).Serialize(value));
         return UnaryGrpcResponse(
             body,
             _ =>
@@ -338,7 +340,7 @@ public sealed class GrpcProtocol : IProtocol
     private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
         where TError : Exception
     {
-        var codec = ProtoCodec.FromSchema(error.Schema);
+        var codec = CodecFactory.FromSchema(error.Schema);
         return new HttpOperationError(
             error.Id,
             error.HttpStatusCode,
@@ -637,7 +639,7 @@ public sealed class GrpcProtocol : IProtocol
 
     private static async IAsyncEnumerable<ReadOnlyMemory<byte>> FrameEventsAsync<T>(
         IAsyncEnumerable<T> events,
-        IProtoCodec<T> codec,
+        ICodec<T> codec,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
@@ -651,7 +653,7 @@ public sealed class GrpcProtocol : IProtocol
 
     private static async IAsyncEnumerable<T> ReadRequestEventsAsync<T>(
         Stream body,
-        IProtoCodec<T> codec,
+        ICodec<T> codec,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
@@ -675,7 +677,7 @@ public sealed class GrpcProtocol : IProtocol
 
     private static async IAsyncEnumerable<T> ReadResponseEventsAsync<T>(
         SmithyHttpClientResponse response,
-        IProtoCodec<T> codec,
+        ICodec<T> codec,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
@@ -701,7 +703,7 @@ public sealed class GrpcProtocol : IProtocol
 
     private static async ValueTask<T> DeserializeSingleResponseAsync<T>(
         SmithyHttpClientResponse response,
-        IProtoCodec<T> codec,
+        ICodec<T> codec,
         CancellationToken cancellationToken
     )
     {

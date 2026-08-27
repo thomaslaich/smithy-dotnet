@@ -67,7 +67,7 @@ public sealed class XmlCodecTests
                 static () => new CatalogBuilder(),
                 static builder => new Catalog(builder.Items ?? [])
             );
-        var codec = XmlCodec.FromSchema(catalogSchema);
+        var codec = XmlCodecFactory.Default.FromSchema(catalogSchema);
 
         var xml =
             "<Catalog xmlns=\"urn:example\"><items><member>a</member><member>b</member></items></Catalog>";
@@ -118,7 +118,9 @@ public sealed class XmlCodecTests
                 static builder => new Catalog(builder.Items ?? [])
             );
 
-        var xml = XmlCodec.FromSchema(catalogSchema).SerializeText(new Catalog(["a", "b"]));
+        var xml = XmlCodecFactory
+            .Default.FromSchema(catalogSchema)
+            .SerializeText(new Catalog(["a", "b"]));
 
         Assert.Equal(
             "<Catalog xmlns=\"urn:example\"><items><member>a</member><member>b</member></items></Catalog>",
@@ -129,7 +131,9 @@ public sealed class XmlCodecTests
     [Fact]
     public void DeserializesWhitespaceOnlyScalar()
     {
-        var decoded = XmlCodec.FromSchema(Schemas.String).DeserializeText("<String>  </String>");
+        var decoded = XmlCodecFactory
+            .Default.FromSchema(Schemas.String)
+            .DeserializeText("<String>  </String>");
 
         Assert.Equal("  ", decoded);
     }
@@ -174,7 +178,7 @@ public sealed class XmlCodecTests
                 static () => new BucketListBuilder(),
                 static builder => new BucketList(builder.Buckets ?? [])
             );
-        var codec = XmlCodec.FromSchema(outputSchema);
+        var codec = XmlCodecFactory.Default.FromSchema(outputSchema);
 
         var xml =
             "<ListAllMyBucketsResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">"
@@ -230,7 +234,7 @@ public sealed class XmlCodecTests
                 static builder => new Person(builder.Name!, builder.Age, builder.Address!),
                 new PersonSerializer()
             );
-        var codec = XmlCodec.FromSchema(personSchema);
+        var codec = XmlCodecFactory.Default.FromSchema(personSchema);
 
         var xml = codec.SerializeText(input);
         var decoded = codec.DeserializeText(xml);
