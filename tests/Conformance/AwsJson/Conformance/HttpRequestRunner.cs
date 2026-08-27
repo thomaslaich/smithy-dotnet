@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using NSmithy.Client;
+using NSmithy.Http;
 
 namespace AwsJson.Conformance;
 
@@ -45,7 +46,7 @@ internal static class HttpRequestRunner
         foreach (var t in ClientTypes)
         {
             method = t.GetMethod(operationName, BindingFlags.Public | BindingFlags.Instance);
-            if (method is not null)
+            if (method is not null && OperationMatchesNamespace(method, testCase.ShapeId))
             {
                 clientType = t;
                 break;
@@ -69,7 +70,8 @@ internal static class HttpRequestRunner
             clientType,
             httpClient,
             endpoint,
-            static () => DefaultIdempotencyToken
+            static () => DefaultIdempotencyToken,
+            BuildVendorInterceptor(testCase)
         );
 
         try
@@ -97,6 +99,18 @@ internal static class HttpRequestRunner
         RequestAssertions.Assert(testCase, captured);
     }
 
+    private static bool OperationMatchesNamespace(MethodInfo method, string operationShapeId)
+    {
+        var inputType = method.GetParameters()[0].ParameterType;
+        var schemaType = inputType.Assembly.GetType(inputType.FullName + "Schema");
+        var schema =
+            schemaType
+                ?.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static)
+                ?.GetValue(null) as NSmithy.Core.Serde.Schema;
+        var expectedNamespace = operationShapeId.Split('#')[0];
+        return string.Equals(schema?.Id.Namespace, expectedNamespace, StringComparison.Ordinal);
+    }
+
     private static Uri ResolveEndpoint(HttpRequestTestCase testCase)
     {
         if (!string.IsNullOrWhiteSpace(testCase.Host))
@@ -110,6 +124,40 @@ internal static class HttpRequestRunner
 
         return new Uri("http://localhost");
     }
+
+    private static MachineLearningEndpointInterceptor? BuildVendorInterceptor(
+        HttpRequestTestCase testCase
+    ) =>
+        testCase.ShapeId == "com.amazonaws.machinelearning#Predict"
+            ? new MachineLearningEndpointInterceptor()
+            : null;
+}
+
+internal sealed class MachineLearningEndpointInterceptor : IClientInterceptor
+{
+    private Uri? endpoint;
+
+    public void OnBeforeSerialization(SmithyContext context, object? input)
+    {
+        var endpointText =
+            input?.GetType().GetProperty("PredictEndpoint")?.GetValue(input) as string;
+        endpoint = string.IsNullOrWhiteSpace(endpointText) ? null : new Uri(endpointText);
+    }
+
+    public ValueTask<SmithyHttpRequest> OnBeforeSigningAsync(
+        SmithyContext context,
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (endpoint is not null)
+        {
+            var current = new Uri(request.RequestUri, UriKind.Absolute);
+            request.RequestUri = new Uri(endpoint, current.PathAndQuery).AbsoluteUri;
+        }
+
+        return ValueTask.FromResult(request);
+    }
 }
 
 internal static class RequestAssertions
@@ -121,6 +169,9 @@ internal static class RequestAssertions
         var expectedPath = NormalizePath(PathOf(expected.Uri));
         var actualPath = NormalizePath(actual.RequestUri.AbsolutePath);
         Xunit.Assert.Equal(expectedPath, actualPath);
+
+        if (expected.ResolvedHost is not null)
+            Xunit.Assert.Equal(expected.ResolvedHost, actual.RequestUri.Host);
 
         // Query parameters: expected.QueryParams is a list of "k=v" strings (URL-encoded).
         // Compare as multisets (order doesn't matter per the smithy.test spec).

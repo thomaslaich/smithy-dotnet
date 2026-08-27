@@ -9,8 +9,8 @@ public sealed class HttpResponseConformanceTests
     public static IEnumerable<object[]> ExecutableCases() =>
         Model
             .EnumerateHttpResponseTests(AwsJsonAllowlist.Protocol)
+            .Where(tc => tc.AppliesToClient)
             .Where(tc => AwsJsonAllowlist.ExecutableResponseCases.Contains(tc.Id))
-            .Where(tc => !KnownParamGaps.Response.Contains(tc.Id))
             .Select(tc => new object[] { tc.Id });
 
     [Theory]

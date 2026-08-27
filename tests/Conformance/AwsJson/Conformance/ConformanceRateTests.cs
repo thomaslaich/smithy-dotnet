@@ -22,13 +22,8 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
         var execClientReq = requests.Count(c =>
             c.AppliesToClient && AwsJsonAllowlist.ExecutableRequestCases.Contains(c.Id)
         );
-        // Cases quarantined in KnownParamGaps are subtracted here. They are listed as
-        // executable but no longer run, and counting them would overstate the rate on the
-        // docs Protocol Status page — which is the number this test exists to produce.
         var execClientResp = responses.Count(c =>
-            c.AppliesToClient
-            && AwsJsonAllowlist.ExecutableResponseCases.Contains(c.Id)
-            && !KnownParamGaps.Response.Contains(c.Id)
+            c.AppliesToClient && AwsJsonAllowlist.ExecutableResponseCases.Contains(c.Id)
         );
 
         output.WriteLine(

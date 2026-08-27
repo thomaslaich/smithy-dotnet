@@ -16,8 +16,14 @@ internal static class JsonWire
     private static readonly ShapeId AlloyJsonUnknownTrait = new("alloy", "jsonUnknown");
 
     // The JSON property name for a member or union case: @jsonName if present, else the name.
-    internal static string WireName(IReadOnlyDictionary<ShapeId, Trait> traits, string fallback) =>
-        traits.TryGetValue(JsonNameTrait, out var trait) ? trait.Value.AsString() : fallback;
+    internal static string WireName(
+        IReadOnlyDictionary<ShapeId, Trait> traits,
+        string fallback,
+        bool honorJsonNameTrait
+    ) =>
+        honorJsonNameTrait && traits.TryGetValue(JsonNameTrait, out var trait)
+            ? trait.Value.AsString()
+            : fallback;
 
     internal static bool IsOpenUnion(IUnionSchema schema) =>
         ((Schema)schema).Traits.ContainsKey(AlloyDiscriminatedTrait)

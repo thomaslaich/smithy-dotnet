@@ -8,18 +8,21 @@ internal sealed class CompiledJsonCodec<T>(
     Schema<T> schema,
     bool materializeTopLevelDefaults,
     WireReadMode readMode,
+    bool honorJsonNameTrait,
     IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
 ) : ICodec<T>
 {
     private readonly IJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(
         schema,
         materializeTopLevelDefaults,
-        memberTraits
+        memberTraits,
+        honorJsonNameTrait
     );
     private readonly IJsonValueReader<T> valueReader = JsonReaderCompiler.Compile(
         schema,
         readMode,
-        memberTraits
+        memberTraits,
+        honorJsonNameTrait
     );
 
     // Size hint carried between calls: a codec instance serializes the same shape
@@ -78,15 +81,17 @@ internal static class JsonBody
 internal sealed class CompiledJsonProjectionCodec<T, TBuilder>(
     StructProjection<T, TBuilder> projection,
     bool materializeTopLevelDefaults,
-    WireReadMode readMode
+    WireReadMode readMode,
+    bool honorJsonNameTrait
 ) : IProjectionCodec<T, TBuilder>
 {
     private readonly IJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(
         projection,
-        materializeTopLevelDefaults
+        materializeTopLevelDefaults,
+        honorJsonNameTrait
     );
     private readonly StructureJsonProjectionReader<TBuilder> valueReader =
-        JsonReaderCompiler.Compile(projection, readMode);
+        JsonReaderCompiler.Compile(projection, readMode, honorJsonNameTrait);
 
     private int sizeHint = 256;
 

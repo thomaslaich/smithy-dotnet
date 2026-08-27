@@ -7,6 +7,7 @@ public sealed class HttpRequestConformanceTests
     public static IEnumerable<object[]> ExecutableCases() =>
         Model
             .EnumerateHttpRequestTests(AwsJsonAllowlist.Protocol)
+            .Where(tc => tc.AppliesToClient)
             .Where(tc => AwsJsonAllowlist.ExecutableRequestCases.Contains(tc.Id))
             .Select(tc => new object[] { tc.Id });
 
