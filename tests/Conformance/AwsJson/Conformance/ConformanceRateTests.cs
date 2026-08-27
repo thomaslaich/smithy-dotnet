@@ -13,16 +13,23 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
     [Fact]
     public void ReportConformanceRate()
     {
-        var requests = Model.EnumerateHttpRequestTests(AwsJsonConformance.Protocol).ToList();
-        var responses = Model.EnumerateHttpResponseTests(AwsJsonConformance.Protocol).ToList();
+        var requests = Model.EnumerateHttpRequestTests(AwsJsonAllowlist.Protocol).ToList();
+        var responses = Model.EnumerateHttpResponseTests(AwsJsonAllowlist.Protocol).ToList();
 
         var clientReqTotal = requests.Count(c => c.AppliesToClient);
         var clientRespTotal = responses.Count(c => c.AppliesToClient);
 
+        var execClientReq = requests.Count(c =>
+            c.AppliesToClient && AwsJsonAllowlist.ExecutableRequestCases.Contains(c.Id)
+        );
+        var execClientResp = responses.Count(c =>
+            c.AppliesToClient && AwsJsonAllowlist.ExecutableResponseCases.Contains(c.Id)
+        );
+
         output.WriteLine(
-            $"[{AwsJsonConformance.Protocol}] "
-                + $"client-requests: {clientReqTotal}/{clientReqTotal} ({Pct(clientReqTotal, clientReqTotal)}), "
-                + $"client-responses: {clientRespTotal}/{clientRespTotal} ({Pct(clientRespTotal, clientRespTotal)})"
+            $"[{AwsJsonAllowlist.Protocol}] "
+                + $"client-requests: {execClientReq}/{clientReqTotal} ({Pct(execClientReq, clientReqTotal)}), "
+                + $"client-responses: {execClientResp}/{clientRespTotal} ({Pct(execClientResp, clientRespTotal)})"
         );
     }
 
