@@ -655,11 +655,39 @@ internal static class ResponseAssertions
             || actual is decimal
         )
         {
-            var expectedNum = (double)expected!;
             var actualNum = Convert.ToDouble(
                 actual,
                 System.Globalization.CultureInfo.InvariantCulture
             );
+            // Smithy protocol-test params represent IEEE 754 special values as strings even
+            // though rpcv2Cbor carries them as native CBOR floats.
+            if (expected.TryGetValue<string>(out var specialString))
+            {
+                var expectedSpecial = specialString switch
+                {
+                    "NaN" => double.NaN,
+                    "Infinity" => double.PositiveInfinity,
+                    "-Infinity" => double.NegativeInfinity,
+                    _ => double.Parse(
+                        specialString,
+                        System.Globalization.CultureInfo.InvariantCulture
+                    ),
+                };
+                if (double.IsNaN(expectedSpecial))
+                {
+                    Assert.True(
+                        double.IsNaN(actualNum),
+                        $"[{path}] expected NaN, got {actualNum}."
+                    );
+                }
+                else
+                {
+                    Assert.Equal(expectedSpecial, actualNum);
+                }
+                return;
+            }
+
+            var expectedNum = (double)expected!;
             Assert.True(
                 Math.Abs(actualNum - expectedNum) < 1e-9 || actualNum == expectedNum,
                 $"[{path}] expected {expectedNum}, got {actualNum}."

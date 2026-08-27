@@ -8,7 +8,6 @@ public sealed class ServerHttpRequestConformanceTests
         Model
             .EnumerateHttpRequestTests(RpcV2CborAllowlist.Protocol)
             .Where(tc => RpcV2CborAllowlist.ExecutableServerRequestCases.Contains(tc.Id))
-            .Where(tc => !KnownParamGaps.ServerRequest.Contains(tc.Id))
             .Select(tc => new object[] { tc.Id });
 
     [Theory]
