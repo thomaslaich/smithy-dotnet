@@ -12,7 +12,7 @@ test totals.
 | Protocol | Surfaces | Stage | Client conformance | Server conformance |
 | --- | --- | --- | --- | --- |
 | [`aws.protocols#restJson1`](../rest-json/) | Client and server | Preview | Requests 142/142 (100%), responses 108/108 (100%) | Requests 132/132 (100%), responses 92/92 (100%), malformed 655/655 (100%) |
-| [`aws.protocols#awsJson1_1`](../aws-json/) | Client | Early preview | Requests 6/57 (10.5%), responses 18/62 (29.0%) | N/A |
+| [`aws.protocols#awsJson1_1`](../aws-json/) | Client | Early preview | Requests 57/57 (100%), responses 62/62 (100%) | N/A |
 | [`aws.protocols#awsJson1_0`](../aws-json/) | Client | Early preview | Runtime support, no conformance project | N/A |
 | [`aws.protocols#awsQuery`](../aws-query/) | Client | Preview | Requests 38/38 (100%), responses 39/39 (100%) | N/A |
 | [`aws.protocols#ec2Query`](../aws-ec2-query/) | Client | Preview | Requests 30/30 (100%), responses 29/29 (100%) | N/A |
@@ -53,8 +53,8 @@ count as official conformance.
   generated surfaces.
 - AWS Query, EC2 Query, and restXml pass every applicable official client
   request and response case.
-- The AWS JSON conformance project currently targets `awsJson1_1`.
-  `AwsJson10Protocol` has runtime support but no separate project.
+- AWS JSON 1.1 passes every applicable official client request and response case.
+  `AwsJson10Protocol` has runtime support but no separate conformance project.
 - gRPC is not part of Smithy's HTTP protocol test suite. Its codec and transport
   tests cover complex messages, numeric encodings, collections, oneofs,
   documents, errors, trailers, and all three streaming modes. Grpc.Net

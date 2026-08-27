@@ -30,7 +30,8 @@ internal interface IJsonUnionCaseReader<out TUnion>
     TUnion Read(JsonElement value);
 }
 
-internal sealed class JsonReaderCompiler(WireReadMode readMode) : ISchemaVisitor<object>
+internal sealed class JsonReaderCompiler(WireReadMode readMode, bool honorJsonNameTrait)
+    : ISchemaVisitor<object>
 {
     private readonly SchemaCompilationCache cache = new();
 
@@ -39,11 +40,12 @@ internal sealed class JsonReaderCompiler(WireReadMode readMode) : ISchemaVisitor
     public static IJsonValueReader<T> Compile<T>(
         Schema<T> schema,
         WireReadMode readMode,
-        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
+        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null,
+        bool honorJsonNameTrait = true
     )
     {
         ArgumentNullException.ThrowIfNull(schema);
-        var compiler = new JsonReaderCompiler(readMode);
+        var compiler = new JsonReaderCompiler(readMode, honorJsonNameTrait);
         return memberTraits is null
             ? compiler.CompileValue(schema)
             : compiler.CompileValue(schema, memberTraits);
@@ -51,11 +53,12 @@ internal sealed class JsonReaderCompiler(WireReadMode readMode) : ISchemaVisitor
 
     public static StructureJsonProjectionReader<TBuilder> Compile<T, TBuilder>(
         StructProjection<T, TBuilder> projection,
-        WireReadMode readMode
+        WireReadMode readMode,
+        bool honorJsonNameTrait = true
     )
     {
         ArgumentNullException.ThrowIfNull(projection);
-        var compiler = new JsonReaderCompiler(readMode);
+        var compiler = new JsonReaderCompiler(readMode, honorJsonNameTrait);
         var visitor = new JsonMemberReaderCompiler<T, TBuilder>(compiler);
         projection.VisitMembers(visitor);
         return new StructureJsonProjectionReader<TBuilder>(visitor.Readers);
@@ -209,6 +212,9 @@ internal sealed class JsonReaderCompiler(WireReadMode readMode) : ISchemaVisitor
     }
 
     internal static IJsonValueReader<T> Cast<T>(object reader) => (IJsonValueReader<T>)reader;
+
+    internal string ResolveWireName(IReadOnlyDictionary<ShapeId, Trait> traits, string fallback) =>
+        WireName(traits, fallback, honorJsonNameTrait);
 }
 
 internal sealed class DeferredJsonValueReader<T>
@@ -314,7 +320,8 @@ internal sealed class JsonMemberReaderCompiler<TContainer, TBuilder>(JsonReaderC
         readers.Add(
             new JsonMemberReader<TContainer, TBuilder, TValue>(
                 member,
-                compiler.CompileValue(member.TargetSchema, member.MemberTraits)
+                compiler.CompileValue(member.TargetSchema, member.MemberTraits),
+                compiler.ResolveWireName(member.MemberTraits, member.Name)
             )
         );
     }
@@ -322,10 +329,11 @@ internal sealed class JsonMemberReaderCompiler<TContainer, TBuilder>(JsonReaderC
 
 internal sealed class JsonMemberReader<TContainer, TBuilder, TValue>(
     IMemberSchema<TContainer, TBuilder, TValue> member,
-    IJsonValueReader<TValue> valueReader
+    IJsonValueReader<TValue> valueReader,
+    string wireName
 ) : IJsonMemberReader<TBuilder>
 {
-    public string Name => WireName(member.MemberTraits, member.Name);
+    public string Name => wireName;
 
     public bool IsRequired => member.IsRequired;
 
@@ -523,7 +531,8 @@ internal sealed class JsonUnionCaseReaderCompiler<TUnion>(JsonReaderCompiler com
         readers.Add(
             new JsonUnionCaseReader<TUnion, TValue>(
                 unionCase,
-                compiler.CompileValue(unionCase.TargetSchema)
+                compiler.CompileValue(unionCase.TargetSchema),
+                compiler.ResolveWireName(unionCase.Traits, unionCase.Name)
             )
         );
     }
@@ -531,10 +540,11 @@ internal sealed class JsonUnionCaseReaderCompiler<TUnion>(JsonReaderCompiler com
 
 internal sealed class JsonUnionCaseReader<TUnion, TValue>(
     IUnionCaseSchema<TUnion, TValue> unionCase,
-    IJsonValueReader<TValue> valueReader
+    IJsonValueReader<TValue> valueReader,
+    string wireName
 ) : IJsonUnionCaseReader<TUnion>
 {
-    public string Name => WireName(unionCase.Traits, unionCase.Name);
+    public string Name => wireName;
 
     public TUnion Read(JsonElement value) => unionCase.Create(valueReader.Read(value));
 }
@@ -559,7 +569,8 @@ internal sealed class JsonOpenUnionCaseReaderCompiler<TUnion>(JsonReaderCompiler
         readers.Add(
             new JsonOpenUnionCaseReader<TUnion, TValue>(
                 unionCase,
-                compiler.CompileValue(unionCase.TargetSchema)
+                compiler.CompileValue(unionCase.TargetSchema),
+                compiler.ResolveWireName(unionCase.Traits, unionCase.Name)
             )
         );
     }
@@ -579,10 +590,11 @@ internal interface IJsonUnknownUnionCaseReader<out TUnion>
 
 internal sealed class JsonOpenUnionCaseReader<TUnion, TValue>(
     IUnionCaseSchema<TUnion, TValue> unionCase,
-    IJsonValueReader<TValue> valueReader
+    IJsonValueReader<TValue> valueReader,
+    string wireName
 ) : IJsonOpenUnionCaseReader<TUnion>
 {
-    public string Name => WireName(unionCase.Traits, unionCase.Name);
+    public string Name => wireName;
 
     public TUnion Read(JsonElement value) => unionCase.Create(valueReader.Read(value));
 }

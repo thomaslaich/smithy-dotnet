@@ -22,18 +22,19 @@ internal interface IJsonUnionCaseWriter<in TUnion>
     bool TryWrite(Utf8JsonWriter writer, TUnion value);
 }
 
-internal sealed class JsonWriterCompiler : ISchemaVisitor<object>
+internal sealed class JsonWriterCompiler(bool honorJsonNameTrait) : ISchemaVisitor<object>
 {
     private readonly SchemaCompilationCache cache = new();
 
     public static IJsonValueWriter<T> Compile<T>(
         Schema<T> schema,
         bool materializeTopLevelDefaults = true,
-        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
+        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null,
+        bool honorJsonNameTrait = true
     )
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new JsonWriterCompiler().CompileTopLevelValue(
+        return new JsonWriterCompiler(honorJsonNameTrait).CompileTopLevelValue(
             schema,
             materializeTopLevelDefaults,
             memberTraits
@@ -56,11 +57,12 @@ internal sealed class JsonWriterCompiler : ISchemaVisitor<object>
 
     public static IJsonValueWriter<T> Compile<T, TBuilder>(
         StructProjection<T, TBuilder> projection,
-        bool materializeTopLevelDefaults = true
+        bool materializeTopLevelDefaults = true,
+        bool honorJsonNameTrait = true
     )
     {
         ArgumentNullException.ThrowIfNull(projection);
-        var compiler = new JsonWriterCompiler();
+        var compiler = new JsonWriterCompiler(honorJsonNameTrait);
         return compiler.CompileProjection(projection, materializeTopLevelDefaults);
     }
 
@@ -229,6 +231,9 @@ internal sealed class JsonWriterCompiler : ISchemaVisitor<object>
     }
 
     internal static IJsonValueWriter<T> Cast<T>(object writer) => (IJsonValueWriter<T>)writer;
+
+    internal string ResolveWireName(IReadOnlyDictionary<ShapeId, Trait> traits, string fallback) =>
+        WireName(traits, fallback, honorJsonNameTrait);
 }
 
 internal sealed class DeferredJsonValueWriter<T>
@@ -350,7 +355,8 @@ internal sealed class JsonMemberWriterCompiler<TContainer>(
         var plan = new JsonMemberPlan<TValue>(
             member,
             compiler.CompileValue(member.TargetSchema, member.MemberTraits),
-            materializeDefaults
+            materializeDefaults,
+            compiler.ResolveWireName(member.MemberTraits, member.Name)
         );
         plans.Add(plan);
         writers.Add(new JsonMemberWriter<TContainer, TValue>(member, plan));
@@ -377,7 +383,8 @@ internal sealed class JsonMemberWriter<TContainer, TValue>(
 internal sealed class JsonMemberPlan<TValue>(
     ITargetedMemberSchema<TValue> member,
     IJsonValueWriter<TValue> valueWriter,
-    bool materializeDefault
+    bool materializeDefault,
+    string wireName
 )
 {
     // Resolved once at compile time rather than per write. Previously each member
@@ -385,9 +392,7 @@ internal sealed class JsonMemberPlan<TValue>(
     // handed a string to WritePropertyName, which re-transcoded and re-escaped it
     // every time. The wire name is constant per member, so all of that is
     // hoistable — which is what System.Text.Json's source generator does.
-    private readonly JsonEncodedText propertyName = JsonEncodedText.Encode(
-        WireName(member.MemberTraits, member.Name)
-    );
+    private readonly JsonEncodedText propertyName = JsonEncodedText.Encode(wireName);
 
     private readonly bool isRequired = member.IsRequired;
 
@@ -429,7 +434,8 @@ internal sealed class JsonUnionCaseWriterCompiler<TUnion>(JsonWriterCompiler com
         writers.Add(
             new JsonUnionCaseWriter<TUnion, TValue>(
                 @case,
-                compiler.CompileValue(@case.TargetSchema)
+                compiler.CompileValue(@case.TargetSchema),
+                compiler.ResolveWireName(@case.Traits, @case.Name)
             )
         );
     }
@@ -437,7 +443,8 @@ internal sealed class JsonUnionCaseWriterCompiler<TUnion>(JsonWriterCompiler com
 
 internal sealed class JsonUnionCaseWriter<TUnion, TValue>(
     IUnionCaseSchema<TUnion, TValue> @case,
-    IJsonValueWriter<TValue> valueWriter
+    IJsonValueWriter<TValue> valueWriter,
+    string wireName
 ) : IJsonUnionCaseWriter<TUnion>
 {
     public bool TryWrite(Utf8JsonWriter writer, TUnion value)
@@ -447,7 +454,7 @@ internal sealed class JsonUnionCaseWriter<TUnion, TValue>(
             return false;
         }
 
-        writer.WritePropertyName(WireName(@case.Traits, @case.Name));
+        writer.WritePropertyName(wireName);
         valueWriter.Write(writer, @case.GetValue(value));
         return true;
     }
@@ -466,7 +473,8 @@ internal sealed class JsonOpenUnionCaseWriterCompiler<TUnion>(JsonWriterCompiler
             new JsonOpenUnionCaseWriter<TUnion, TValue>(
                 @case,
                 compiler.CompileValue(@case.TargetSchema),
-                IsJsonUnknownCase(@case)
+                IsJsonUnknownCase(@case),
+                compiler.ResolveWireName(@case.Traits, @case.Name)
             )
         );
     }
@@ -480,7 +488,8 @@ internal interface IJsonOpenUnionCaseWriter<in TUnion>
 internal sealed class JsonOpenUnionCaseWriter<TUnion, TValue>(
     IUnionCaseSchema<TUnion, TValue> @case,
     IJsonValueWriter<TValue> valueWriter,
-    bool isUnknown
+    bool isUnknown,
+    string wireName
 ) : IJsonOpenUnionCaseWriter<TUnion>
 {
     public bool TryWrite(Utf8JsonWriter writer, TUnion value, string discriminatorName)
@@ -500,14 +509,14 @@ internal sealed class JsonOpenUnionCaseWriter<TUnion, TValue>(
         if (discriminatorName.Length == 0)
         {
             writer.WriteStartObject();
-            writer.WritePropertyName(WireName(@case.Traits, @case.Name));
+            writer.WritePropertyName(wireName);
             valueWriter.Write(writer, caseValue);
             writer.WriteEndObject();
             return true;
         }
 
         writer.WriteStartObject();
-        writer.WriteString(discriminatorName, WireName(@case.Traits, @case.Name));
+        writer.WriteString(discriminatorName, wireName);
         using var buffer = new MemoryStream();
         using (var bufferedWriter = new Utf8JsonWriter(buffer))
         {

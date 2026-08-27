@@ -30,6 +30,24 @@
           "baseNamespace": ""
         }
       }
+    },
+    "awsjson-machinelearning": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "com.amazonaws.machinelearning#AmazonML_20141212"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "com.amazonaws.machinelearning#AmazonML_20141212",
+          "baseNamespace": "Auxiliary"
+        }
+      }
     }
   }
 }

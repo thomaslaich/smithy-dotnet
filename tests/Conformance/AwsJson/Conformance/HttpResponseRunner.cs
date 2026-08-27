@@ -274,7 +274,8 @@ internal static class ConformanceClients
         Type clientType,
         HttpClient httpClient,
         Uri endpoint,
-        Func<string>? idempotencyTokenProvider = null
+        Func<string>? idempotencyTokenProvider = null,
+        IClientInterceptor? interceptor = null
     )
     {
         // Use the HttpClient constructor (endpoint comes from BaseAddress) so the recording handler
@@ -282,7 +283,7 @@ internal static class ConformanceClients
         // live on the per-client {Service}ClientConfig; build one reflectively only when needed.
         httpClient.BaseAddress = endpoint;
         object? config = null;
-        if (idempotencyTokenProvider is not null)
+        if (idempotencyTokenProvider is not null || interceptor is not null)
         {
             var configType =
                 clientType.Assembly.GetType(clientType.FullName + "Config")
@@ -290,9 +291,17 @@ internal static class ConformanceClients
                     $"Config type {clientType.FullName}Config not found."
                 );
             config = Activator.CreateInstance(configType)!;
-            configType
-                .GetProperty("IdempotencyTokenProvider")!
-                .SetValue(config, idempotencyTokenProvider);
+            if (idempotencyTokenProvider is not null)
+            {
+                configType
+                    .GetProperty("IdempotencyTokenProvider")!
+                    .SetValue(config, idempotencyTokenProvider);
+            }
+
+            if (interceptor is not null)
+            {
+                ((SmithyClientConfig)config).Interceptors.Add(interceptor);
+            }
         }
         return Activator.CreateInstance(clientType, [httpClient, config])!;
     }

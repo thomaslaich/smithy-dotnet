@@ -20,7 +20,9 @@ public sealed class AwsJson11Protocol : AwsJsonProtocol
 
 public abstract class AwsJsonProtocol(string contentType) : IProtocol
 {
-    private static readonly JsonCodecFactory CodecFactory = JsonCodecFactory.Default;
+    // AWS JSON 1.0/1.1 use modeled member names and explicitly ignore @jsonName. REST JSON and
+    // generic JSON documents continue to honor the trait through JsonCodecFactory.Default.
+    private static readonly JsonCodecFactory CodecFactory = new(honorJsonNameTrait: false);
 
     public IServiceProtocol ForService(ServiceSchema service)
     {

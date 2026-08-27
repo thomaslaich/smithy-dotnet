@@ -82,6 +82,50 @@ public sealed class JsonCodecTests
             )
             .Build(static () => new ProfileBuilder(), static b => new Profile(b.Name!, b.Nickname));
 
+    private static Schema<Profile> JsonNamedProfileSchema() =>
+        Schemas
+            .Structure<Profile, ProfileBuilder>(new ShapeId("example", "JsonNamedProfile"))
+            .Required(
+                "name",
+                static p => p.Name,
+                static (b, v) => b.Name = v,
+                Schemas.String,
+                [new Trait(ShapeId.Parse("smithy.api#jsonName"), Document.From("displayName"))]
+            )
+            .Optional(
+                "nickname",
+                static p => p.Nickname!,
+                static (b, v) => b.Nickname = v,
+                Schemas.String
+            )
+            .Build(static () => new ProfileBuilder(), static b => new Profile(b.Name!, b.Nickname));
+
+    [Fact]
+    public void JsonCodecHonorsJsonNameTraitByDefault()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(JsonNamedProfileSchema());
+
+        var json = codec.SerializeText(new Profile("Ada", null));
+        var decoded = codec.DeserializeText("{\"displayName\":\"Grace\"}");
+
+        Assert.Equal("{\"displayName\":\"Ada\"}", json);
+        Assert.Equal(new Profile("Grace", null), decoded);
+    }
+
+    [Fact]
+    public void JsonCodecCanUseModeledMemberNamesInsteadOfJsonNameTrait()
+    {
+        var codec = new JsonCodecFactory(honorJsonNameTrait: false).FromSchema(
+            JsonNamedProfileSchema()
+        );
+
+        var json = codec.SerializeText(new Profile("Ada", null));
+        var decoded = codec.DeserializeText("{\"name\":\"Grace\"}");
+
+        Assert.Equal("{\"name\":\"Ada\"}", json);
+        Assert.Equal(new Profile("Grace", null), decoded);
+    }
+
     [Fact]
     public void JsonCodecOmitsNullOptionalMember()
     {
