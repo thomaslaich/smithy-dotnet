@@ -1,4 +1,5 @@
 using NSmithy.Codecs.Json;
+using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Protocols.Rest;
 
@@ -23,11 +24,14 @@ internal sealed class JsonRestBodyCodecFactory(WireReadMode readMode) : IRestBod
 
     public string BlobContentType => "application/octet-stream";
 
-    public ICodec<T> CodecFor<T>(Schema<T> schema) =>
-        JsonCodec.FromSchema(schema, readMode: readMode);
+    public ICodec<T> CodecFor<T>(
+        Schema<T> schema,
+        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
+    ) => JsonCodec.FromSchema(schema, readMode: readMode);
 
     public IProjectionCodec<T, TBuilder> CodecFor<T, TBuilder>(
         StructProjection<T, TBuilder> projection,
-        bool materializeTopLevelDefaults
+        bool materializeTopLevelDefaults,
+        string? defaultRootName
     ) => JsonCodec.FromProjection(projection, materializeTopLevelDefaults, readMode);
 }

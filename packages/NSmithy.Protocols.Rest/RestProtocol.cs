@@ -22,12 +22,18 @@ public interface IRestBodyCodecFactory
 
     string BlobContentType { get; }
 
-    ICodec<T> CodecFor<T>(Schema<T> schema);
+    ICodec<T> CodecFor<T>(
+        Schema<T> schema,
+        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
+    );
 
     IProjectionCodec<T, TBuilder> CodecFor<T, TBuilder>(
         StructProjection<T, TBuilder> projection,
-        bool materializeTopLevelDefaults
+        bool materializeTopLevelDefaults,
+        string? defaultRootName = null
     );
+
+    byte[] PrepareErrorBody(byte[] content) => content;
 }
 
 public delegate void RestPayloadReader(byte[]? content, Stream? streamingContent, object builder);
@@ -412,7 +418,7 @@ public static class RestProtocol
                 );
                 if (bodyCodec is not null && response.Content.Length > 0)
                 {
-                    bodyCodec.ReadInto(response.Content, builder);
+                    bodyCodec.ReadInto(codecFactory.PrepareErrorBody(response.Content), builder);
                 }
 
                 return schema.Build(builder);
@@ -981,7 +987,7 @@ public static class RestProtocol
             // compiled once here; the empty-struct value for a null request payload is built lazily
             // (only if a null actually arrives) so binding construction never materializes a struct
             // with required members.
-            var codec = codecFactory.CodecFor(target);
+            var codec = codecFactory.CodecFor(target, traits);
             var jsonContentType = codecFactory.ContentType;
             var writeEmptyStructOnNull = emptyStructOnNull;
 
@@ -1081,7 +1087,7 @@ public static class RestProtocol
                 return;
             }
 
-            var codec = codecFactory.CodecFor(target);
+            var codec = codecFactory.CodecFor(target, traits);
             Result = (content, streamingContent, builder) =>
             {
                 if (content is null or { Length: 0 })

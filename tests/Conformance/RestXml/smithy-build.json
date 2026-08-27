@@ -30,6 +30,42 @@
           "baseNamespace": ""
         }
       }
+    },
+    "restxml-s3": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "com.amazonaws.s3#AmazonS3"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "com.amazonaws.s3#AmazonS3",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "restxml-namespace": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
+          "baseNamespace": ""
+        }
+      }
     }
   }
 }

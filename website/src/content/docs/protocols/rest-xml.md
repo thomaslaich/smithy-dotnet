@@ -81,7 +81,7 @@ Accept: application/xml
 HTTP/1.1 200 OK
 Content-Type: application/xml
 
-<GetCityOutput><Name>Seattle</Name></GetCityOutput>
+<GetCityResponse><Name>Seattle</Name></GetCityResponse>
 ```
 
 A modeled error is selected from the `Code` element. NSmithy accepts both a

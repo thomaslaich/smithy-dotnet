@@ -10,6 +10,7 @@ public sealed class HttpRequestConformanceTests
     {
         var ids = Model
             .EnumerateHttpRequestTests(RestXmlAllowlist.Protocol)
+            .Where(tc => tc.AppliesToClient)
             .Where(tc => RestXmlAllowlist.ExecutableRequestCases.Contains(tc.Id))
             .Select(tc => new object[] { tc.Id })
             .ToList();
@@ -35,6 +36,7 @@ public sealed class HttpRequestConformanceTests
     {
         var available = Model
             .EnumerateHttpRequestTests(RestXmlAllowlist.Protocol)
+            .Where(tc => tc.AppliesToClient)
             .Select(tc => tc.Id)
             .ToHashSet(StringComparer.Ordinal);
         var missing = RestXmlAllowlist

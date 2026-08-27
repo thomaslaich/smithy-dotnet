@@ -25,7 +25,10 @@ internal static class HttpResponseRunner
         var owningOp = ResolveOwningOperation(testCase.ShapeId, modelShapes, out var isError);
         var localOpName = owningOp.Split('#')[^1];
 
-        var (clientType, method) = ConformanceClients.ResolveOperation(localOpName + "Async");
+        var (clientType, method) = ConformanceClients.ResolveOperation(
+            localOpName + "Async",
+            owningOp
+        );
         var inputType = method.GetParameters()[0].ParameterType;
         var input = BuildEmptyInput(inputType);
 
@@ -39,8 +42,12 @@ internal static class HttpResponseRunner
         {
             var task = (Task)method.Invoke(client, [input, CancellationToken.None])!;
             await task.ConfigureAwait(false);
-            var resultProp = task.GetType().GetProperty("Result")!;
-            output = resultProp.GetValue(task);
+            var resultProperty =
+                method.ReturnType.IsGenericType
+                && method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>)
+                    ? task.GetType().GetProperty("Result")
+                    : null;
+            output = resultProperty is null ? SmithyUnit.Value : resultProperty.GetValue(task);
         }
         catch (TargetInvocationException tie) when (tie.InnerException is not null)
         {
@@ -248,12 +255,15 @@ internal static class ConformanceClients
         ]
     );
 
-    public static (Type ClientType, MethodInfo Method) ResolveOperation(string methodName)
+    public static (Type ClientType, MethodInfo Method) ResolveOperation(
+        string methodName,
+        string operationShapeId
+    )
     {
         foreach (var t in Types.Value)
         {
             var m = t.GetMethod(methodName, BindingFlags.Public | BindingFlags.Instance);
-            if (m is not null)
+            if (m is not null && OperationMatchesNamespace(m, operationShapeId))
                 return (t, m);
         }
         throw new InvalidOperationException(
@@ -263,6 +273,18 @@ internal static class ConformanceClients
         );
     }
 
+    private static bool OperationMatchesNamespace(MethodInfo method, string operationShapeId)
+    {
+        var inputType = method.GetParameters()[0].ParameterType;
+        var schemaType = inputType.Assembly.GetType(inputType.FullName + "Schema");
+        var schema =
+            schemaType
+                ?.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static)
+                ?.GetValue(null) as Schema;
+        var expectedNamespace = operationShapeId.Split('#')[0];
+        return string.Equals(schema?.Id.Namespace, expectedNamespace, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// Constructs a generated client through its HttpClient constructor, using the default protocol.
     /// </summary>
@@ -270,7 +292,8 @@ internal static class ConformanceClients
         Type clientType,
         HttpClient httpClient,
         Uri endpoint,
-        Func<string>? idempotencyTokenProvider = null
+        Func<string>? idempotencyTokenProvider = null,
+        IClientInterceptor? interceptor = null
     )
     {
         // Use the HttpClient constructor (endpoint comes from BaseAddress) so the recording handler
@@ -278,7 +301,7 @@ internal static class ConformanceClients
         // live on the per-client {Service}ClientConfig; build one reflectively only when needed.
         httpClient.BaseAddress = endpoint;
         object? config = null;
-        if (idempotencyTokenProvider is not null)
+        if (idempotencyTokenProvider is not null || interceptor is not null)
         {
             var configType =
                 clientType.Assembly.GetType(clientType.FullName + "Config")
@@ -286,9 +309,19 @@ internal static class ConformanceClients
                     $"Config type {clientType.FullName}Config not found."
                 );
             config = Activator.CreateInstance(configType)!;
-            configType
-                .GetProperty("IdempotencyTokenProvider")!
-                .SetValue(config, idempotencyTokenProvider);
+            if (idempotencyTokenProvider is not null)
+            {
+                configType
+                    .GetProperty("IdempotencyTokenProvider")!
+                    .SetValue(config, idempotencyTokenProvider);
+            }
+            if (interceptor is not null)
+            {
+                var interceptors =
+                    (IList<IClientInterceptor>)
+                        configType.GetProperty("Interceptors")!.GetValue(config)!;
+                interceptors.Add(interceptor);
+            }
         }
         return Activator.CreateInstance(clientType, [httpClient, config])!;
     }
@@ -640,11 +673,53 @@ internal static class ResponseAssertions
             || actual is decimal
         )
         {
-            var expectedNum = (double)expected!;
             var actualNum = Convert.ToDouble(
                 actual,
                 System.Globalization.CultureInfo.InvariantCulture
             );
+            if (expected.TryGetValue<string>(out var specialString))
+            {
+                var expectedSpecial = specialString switch
+                {
+                    "NaN" => double.NaN,
+                    "Infinity" => double.PositiveInfinity,
+                    "-Infinity" => double.NegativeInfinity,
+                    _ => double.Parse(
+                        specialString,
+                        System.Globalization.CultureInfo.InvariantCulture
+                    ),
+                };
+                if (double.IsNaN(expectedSpecial))
+                    Assert.True(
+                        double.IsNaN(actualNum),
+                        $"[{path}] expected NaN, got {actualNum}."
+                    );
+                else if (double.IsPositiveInfinity(expectedSpecial))
+                    Assert.True(
+                        double.IsPositiveInfinity(actualNum),
+                        $"[{path}] expected Infinity, got {actualNum}."
+                    );
+                else if (double.IsNegativeInfinity(expectedSpecial))
+                    Assert.True(
+                        double.IsNegativeInfinity(actualNum),
+                        $"[{path}] expected -Infinity, got {actualNum}."
+                    );
+                else
+                    Assert.Equal(expectedSpecial, actualNum);
+                return;
+            }
+
+            var expectedNum = (double)expected!;
+            if (actual is float actualFloat)
+            {
+                var expectedFloat = (float)expectedNum;
+                var tolerance = Math.Abs(expectedFloat) * 1e-6f + 1e-6f;
+                Assert.True(
+                    Math.Abs(actualFloat - expectedFloat) <= tolerance,
+                    $"[{path}] expected {expectedNum}, got {actualNum}."
+                );
+                return;
+            }
             Assert.True(
                 Math.Abs(actualNum - expectedNum) < 1e-9 || actualNum == expectedNum,
                 $"[{path}] expected {expectedNum}, got {actualNum}."

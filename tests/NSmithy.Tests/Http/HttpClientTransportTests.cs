@@ -21,6 +21,18 @@ public sealed class HttpClientTransportTests
     }
 
     [Fact]
+    public async Task SendAsyncPreservesDotSegmentsInRequestPath()
+    {
+        using var httpClient = new HttpClient(new DotSegmentHandler());
+        var transport = new HttpClientTransport(httpClient);
+
+        await transport.SendAsync(
+            new SmithyHttpRequest(HttpMethod.Get, "https://example.test/objects/foo/../key.txt"),
+            SmithyHttpClientResponseMode.Buffer
+        );
+    }
+
+    [Fact]
     public async Task SendAsyncExposesTrailingHeadersThroughTrailerAccessor()
     {
         using var httpClient = new HttpClient(new TrailerHandler());
@@ -50,6 +62,18 @@ public sealed class HttpClientTransportTests
                 "https://example.test/base/forecast?units=metric",
                 request.RequestUri?.ToString()
             );
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        }
+    }
+
+    private sealed class DotSegmentHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        )
+        {
+            Assert.Equal("/objects/foo/../key.txt", request.RequestUri?.AbsolutePath);
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
         }
     }

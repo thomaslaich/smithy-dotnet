@@ -217,7 +217,10 @@ internal static class XmlWire
                 CultureInfo.InvariantCulture
             ),
             "http-date" => value.ToString("r", CultureInfo.InvariantCulture),
-            _ => value.UtcDateTime.ToString("O", CultureInfo.InvariantCulture),
+            _ => value.UtcDateTime.ToString(
+                "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'",
+                CultureInfo.InvariantCulture
+            ),
         };
     }
 
@@ -257,6 +260,62 @@ internal static class XmlWire
 
     internal static string ElementName(IMemberSchema member) =>
         XmlTraits.GetXmlName(member) ?? member.Name;
+
+    internal static XName ChildElementName(XElement parent, string localName)
+    {
+        var defaultNamespace = parent.GetDefaultNamespace();
+        if (
+            string.IsNullOrEmpty(defaultNamespace.NamespaceName)
+            && !string.IsNullOrEmpty(parent.Name.NamespaceName)
+        )
+        {
+            defaultNamespace = parent.Name.Namespace;
+        }
+        return string.IsNullOrEmpty(defaultNamespace.NamespaceName)
+            ? localName
+            : defaultNamespace + localName;
+    }
+
+    internal static XName AttributeName(XElement element, string name)
+    {
+        var separator = name.IndexOf(':', StringComparison.Ordinal);
+        if (separator < 0)
+            return name;
+
+        var prefix = name[..separator];
+        var localName = name[(separator + 1)..];
+        var xmlNamespace =
+            element.GetNamespaceOfPrefix(prefix)
+            ?? throw new InvalidOperationException(
+                $"XML attribute prefix '{prefix}' has no namespace declaration."
+            );
+        return xmlNamespace + localName;
+    }
+
+    internal static void ApplyNamespace(XElement element, XmlNamespace? xmlNamespace)
+    {
+        if (xmlNamespace is not { } value)
+            return;
+
+        var ns = XNamespace.Get(value.Uri);
+        if (string.IsNullOrEmpty(value.Prefix))
+        {
+            var alreadyInNamespace = element.Name.Namespace == ns;
+            element.Name = ns + element.Name.LocalName;
+            if (!alreadyInNamespace)
+            {
+                element.SetAttributeValue("xmlns", value.Uri);
+            }
+        }
+        else
+        {
+            element.SetAttributeValue(XNamespace.Xmlns + value.Prefix, value.Uri);
+            if (element.Name.Namespace == ns)
+            {
+                element.SetAttributeValue("xmlns", value.Uri);
+            }
+        }
+    }
 
     internal static string RootElementName(Schema schema) =>
         XmlTraits.GetXmlName(schema) ?? schema.Id.Name;

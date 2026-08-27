@@ -93,6 +93,47 @@ public sealed class XmlCodecTests
     private static Trait XmlName(string name) =>
         new(ShapeId.Parse("smithy.api#xmlName"), Document.From(name));
 
+    private static Trait XmlNamespace(string uri) =>
+        new(
+            ShapeId.Parse("smithy.api#xmlNamespace"),
+            Document.From(new Dictionary<string, Document> { ["uri"] = Document.From(uri) })
+        );
+
+    [Fact]
+    public void SerializesDefaultNamespaceAcrossDescendants()
+    {
+        var catalogSchema = Schemas
+            .Structure<Catalog, CatalogBuilder>(
+                new ShapeId("example", "Catalog"),
+                [XmlNamespace("urn:example")]
+            )
+            .Optional(
+                "items",
+                static catalog => catalog.Items,
+                static (builder, value) => builder.Items = value,
+                Schemas.List<string>(new ShapeId("example", "ItemList"), Schemas.String)
+            )
+            .Build(
+                static () => new CatalogBuilder(),
+                static builder => new Catalog(builder.Items ?? [])
+            );
+
+        var xml = XmlCodec.FromSchema(catalogSchema).SerializeText(new Catalog(["a", "b"]));
+
+        Assert.Equal(
+            "<Catalog xmlns=\"urn:example\"><items><member>a</member><member>b</member></items></Catalog>",
+            xml
+        );
+    }
+
+    [Fact]
+    public void DeserializesWhitespaceOnlyScalar()
+    {
+        var decoded = XmlCodec.FromSchema(Schemas.String).DeserializeText("<String>  </String>");
+
+        Assert.Equal("  ", decoded);
+    }
+
     [Fact]
     public void DeserializesRealS3ListBucketsResponse()
     {

@@ -1,6 +1,7 @@
 using System.Text;
 using System.Xml.Linq;
 using NSmithy.Codecs.Xml;
+using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Http;
 using NSmithy.Protocols.Rest;
@@ -9,8 +10,6 @@ namespace NSmithy.Protocols.RestXml;
 
 public sealed class RestXmlProtocol : IProtocol
 {
-    private static readonly IRestBodyCodecFactory BodyCodecFactory = new XmlRestBodyCodecFactory();
-
     /// <summary>
     /// Binds the protocol to a service, yielding per-operation protocols. REST derives each
     /// operation's binding from its <c>@http</c> trait, so the service schema is accepted for a
@@ -20,7 +19,7 @@ public sealed class RestXmlProtocol : IProtocol
     /// </summary>
     public IServiceProtocol ForService(ServiceSchema service) =>
         new RestServiceProtocol(
-            _ => BodyCodecFactory,
+            _ => new XmlRestBodyCodecFactory(service),
             DeserializeErrorType,
             rawStringPayloads: true,
             errorTypeHeader: null
@@ -55,15 +54,58 @@ public sealed class RestXmlProtocol : IProtocol
 
     private sealed class XmlRestBodyCodecFactory : IRestBodyCodecFactory
     {
+        private static readonly ShapeId XmlNamespaceId = ShapeId.Parse("smithy.api#xmlNamespace");
+
+        private readonly string? defaultNamespaceUri;
+        private readonly string? defaultNamespacePrefix;
+
+        public XmlRestBodyCodecFactory(ServiceSchema service)
+        {
+            if (service.GetTrait(XmlNamespaceId) is not { HasValue: true } trait)
+                return;
+
+            var value = trait.Value.AsObject();
+            defaultNamespaceUri = value["uri"].AsString();
+            defaultNamespacePrefix = value.TryGetValue("prefix", out var prefix)
+                ? prefix.AsString()
+                : null;
+        }
+
         public string ContentType => "application/xml";
 
         public string BlobContentType => "application/octet-stream";
 
-        public ICodec<T> CodecFor<T>(Schema<T> schema) => XmlCodec.FromSchema(schema);
+        public ICodec<T> CodecFor<T>(
+            Schema<T> schema,
+            IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
+        ) => XmlCodec.FromSchema(schema, memberTraits, defaultNamespaceUri, defaultNamespacePrefix);
 
         public IProjectionCodec<T, TBuilder> CodecFor<T, TBuilder>(
             StructProjection<T, TBuilder> projection,
-            bool materializeTopLevelDefaults
-        ) => XmlCodec.FromProjection(projection, materializeTopLevelDefaults);
+            bool materializeTopLevelDefaults,
+            string? defaultRootName
+        ) =>
+            XmlCodec.FromProjection(
+                projection,
+                materializeTopLevelDefaults,
+                defaultRootName,
+                defaultNamespaceUri,
+                defaultNamespacePrefix
+            );
+
+        public byte[] PrepareErrorBody(byte[] content)
+        {
+            var root = XElement.Parse(Encoding.UTF8.GetString(content));
+            if (!string.Equals(root.Name.LocalName, "ErrorResponse", StringComparison.Ordinal))
+                return content;
+
+            var error = root.Elements()
+                .FirstOrDefault(element =>
+                    string.Equals(element.Name.LocalName, "Error", StringComparison.Ordinal)
+                );
+            return error is null
+                ? content
+                : Encoding.UTF8.GetBytes(error.ToString(SaveOptions.DisableFormatting));
+        }
     }
 }

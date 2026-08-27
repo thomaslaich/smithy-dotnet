@@ -12,8 +12,8 @@ public sealed class HttpResponseConformanceTests
     {
         var ids = Model
             .EnumerateHttpResponseTests(RestXmlAllowlist.Protocol)
+            .Where(tc => tc.AppliesToClient)
             .Where(tc => RestXmlAllowlist.ExecutableResponseCases.Contains(tc.Id))
-            .Where(tc => !KnownParamGaps.Response.Contains(tc.Id))
             .Select(tc => new object[] { tc.Id })
             .ToList();
         if (ids.Count == 0)
@@ -38,6 +38,7 @@ public sealed class HttpResponseConformanceTests
     {
         var available = Model
             .EnumerateHttpResponseTests(RestXmlAllowlist.Protocol)
+            .Where(tc => tc.AppliesToClient)
             .Select(tc => tc.Id)
             .ToHashSet(StringComparer.Ordinal);
         var missing = RestXmlAllowlist

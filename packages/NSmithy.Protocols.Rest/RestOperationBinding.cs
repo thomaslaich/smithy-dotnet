@@ -193,7 +193,8 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
             inputPayloadMember is null && inputBodyMembers.Count > 0
                 ? codecFactory.CodecFor(
                     Schemas.Project(inputSchema, inputBodyMembers),
-                    materializeTopLevelDefaults: false
+                    materializeTopLevelDefaults: false,
+                    defaultRootName: operation.Id.Name + "Request"
                 )
                 : null;
 
@@ -243,7 +244,8 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
             outputPayloadMember is null && !outputIsUnit
                 ? codecFactory.CodecFor(
                     Schemas.Project(outputSchema, outputBodyMembers),
-                    materializeTopLevelDefaults: true
+                    materializeTopLevelDefaults: true,
+                    defaultRootName: operation.Id.Name + "Response"
                 )
                 : null;
 

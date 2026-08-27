@@ -19,6 +19,8 @@ namespace RestXml.Conformance;
 /// </summary>
 internal static class ParamBinder
 {
+    private static readonly ShapeId HttpPayloadTraitId = ShapeId.Parse("smithy.api#httpPayload");
+
     public static object? Bind(Type targetType, JsonNode? value)
     {
         if (value is null)
@@ -41,10 +43,56 @@ internal static class ParamBinder
             return (short)value!;
         if (targetType == typeof(byte))
             return (byte)value!;
+        if (targetType == typeof(sbyte))
+            return (sbyte)value!;
+        if (targetType == typeof(byte[]))
+        {
+            var text = (string)value!;
+            try
+            {
+                return Convert.FromBase64String(text);
+            }
+            catch (FormatException)
+            {
+                return System.Text.Encoding.UTF8.GetBytes(text);
+            }
+        }
         if (targetType == typeof(float))
+        {
+            var raw = value!.AsValue();
+            if (raw.TryGetValue<string>(out var floatString))
+            {
+                return floatString switch
+                {
+                    "NaN" => float.NaN,
+                    "Infinity" => float.PositiveInfinity,
+                    "-Infinity" => float.NegativeInfinity,
+                    _ => float.Parse(
+                        floatString,
+                        System.Globalization.CultureInfo.InvariantCulture
+                    ),
+                };
+            }
             return (float)value!;
+        }
         if (targetType == typeof(double))
+        {
+            var raw = value!.AsValue();
+            if (raw.TryGetValue<string>(out var doubleString))
+            {
+                return doubleString switch
+                {
+                    "NaN" => double.NaN,
+                    "Infinity" => double.PositiveInfinity,
+                    "-Infinity" => double.NegativeInfinity,
+                    _ => double.Parse(
+                        doubleString,
+                        System.Globalization.CultureInfo.InvariantCulture
+                    ),
+                };
+            }
             return (double)value!;
+        }
         if (targetType == typeof(decimal))
             return (decimal)value!;
 
@@ -204,12 +252,29 @@ internal static class ParamBinder
         var ctor = SelectConstructor(type);
         var parameters = ctor.GetParameters();
         var args = new object?[parameters.Length];
+        var schema = GetSchema(type);
         for (var i = 0; i < parameters.Length; i++)
         {
             var p = parameters[i];
-            if (obj.TryGetPropertyValue(p.Name!, out var node) && node is not null)
+            var camelName = char.ToLowerInvariant(p.Name![0]) + p.Name![1..];
+            var pascalName = char.ToUpperInvariant(p.Name![0]) + p.Name![1..];
+            var memberName = obj.ContainsKey(camelName) ? camelName : pascalName;
+            if (obj.TryGetPropertyValue(memberName, out var node) && node is not null)
             {
-                args[i] = Bind(p.ParameterType, node);
+                var memberSchema = (schema as IStructSchema)?.GetMember(memberName);
+                if (
+                    p.ParameterType == typeof(byte[])
+                    && node is JsonValue scalar
+                    && scalar.TryGetValue<string>(out var text)
+                    && memberSchema?.MemberTraits.ContainsKey(HttpPayloadTraitId) == true
+                )
+                {
+                    args[i] = System.Text.Encoding.UTF8.GetBytes(text);
+                }
+                else
+                {
+                    args[i] = Bind(p.ParameterType, node);
+                }
             }
             else if (p.HasDefaultValue)
             {
@@ -243,12 +308,16 @@ internal static class ParamBinder
 
     private static ShapeKind? GetSchemaKind(Type targetType)
     {
-        // The functional schema lives on the generated companion `{Type}Schema` class.
-        var schemaType = targetType.Assembly.GetType(targetType.FullName + "Schema");
-        var schemaProp = schemaType?.GetProperty(
-            "Schema",
-            BindingFlags.Public | BindingFlags.Static
-        );
-        return (schemaProp?.GetValue(null) as Schema)?.Kind;
+        return GetSchema(targetType)?.Kind;
+    }
+
+    private static Schema? GetSchema(Type targetType)
+    {
+        var schemaProperty =
+            targetType.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static)
+            ?? targetType
+                .Assembly.GetType($"{targetType.Namespace}.{targetType.Name}Schema")
+                ?.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static);
+        return schemaProperty?.GetValue(null) as Schema;
     }
 }

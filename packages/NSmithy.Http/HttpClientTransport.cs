@@ -103,7 +103,13 @@ public sealed class HttpClientTransport : IHttpTransport
 
     private HttpRequestMessage CreateMessage(SmithyHttpRequest request)
     {
-        var message = new HttpRequestMessage(request.Method, request.RequestUri)
+        var requestUri = HasDotPathSegment(request.RequestUri)
+            ? new Uri(
+                request.RequestUri,
+                new UriCreationOptions { DangerousDisablePathAndQueryCanonicalization = true }
+            )
+            : new Uri(request.RequestUri, UriKind.RelativeOrAbsolute);
+        var message = new HttpRequestMessage(request.Method, requestUri)
         {
             // Honor the HttpClient's configured HTTP version/policy. A new HttpRequestMessage
             // defaults to HTTP/1.1, which would silently downgrade gRPC (HTTP/2) requests even when
@@ -126,6 +132,13 @@ public sealed class HttpClientTransport : IHttpTransport
         }
 
         return message;
+    }
+
+    private static bool HasDotPathSegment(string uri)
+    {
+        var pathEnd = uri.IndexOfAny(['?', '#']);
+        var path = pathEnd < 0 ? uri : uri[..pathEnd];
+        return path.Split('/').Any(segment => segment is "." or "..");
     }
 
     private static HttpContent? CreateContent(SmithyHttpBody body, string? contentType) =>
