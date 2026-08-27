@@ -17,16 +17,7 @@ import LandingShader from './LandingShader.astro';
 const intro = '/smithy-dotnet/getting-started/introduction/';
 const repo = 'https://github.com/thomaslaich/smithy-dotnet';
 
-const features = [
-  { t: 'Protocol agnostic', d: 'REST, JSON-RPC, CBOR and gRPC from one model — switch or serve several at once.' },
-  { t: 'MSBuild-native', d: 'No separate codegen step. MSBuild runs <code>smithy build</code>, adds <code>.g.cs</code> files, and tracks model changes for incremental builds.' },
-  { t: 'Type-safe contracts', d: 'Generated handlers and clients are strongly typed C# records, so the contract is checked at compile time.' },
-  { t: 'Cross-ecosystem', d: 'The same contract powers clients in Java, Python, TypeScript, Rust, Swift and more — your .NET service stays interoperable.' },
-  { t: 'Docs included', d: 'A Scalar OpenAPI explorer and Sphinx reference are generated at compile time and served as static files.' },
-  { t: 'Extensible', d: 'Add protocols and generators through a plugin surface — the model stays the single source of truth.' },
-];
-
-// Each pill links to that language's Smithy code generator.
+// Each language links to its Smithy code generator.
 const langs = [
   { name: 'C#', url: repo },
   { name: 'Java', url: 'https://github.com/smithy-lang/smithy-java' },
@@ -97,24 +88,14 @@ const langs = [
   <section class="nsl-hero">
     <div class="nsl-hero-inner">
       <div class="nsl-hero-copy">
-        <a class="nsl-badge reveal" href="https://smithy.io">
-          Built on the Smithy IDL&nbsp;·&nbsp;smithy.io <span aria-hidden="true">↗</span>
-        </a>
-        <h1 class="nsl-h1 reveal" style="--reveal-delay: 60ms">Smithy code generation for&nbsp;.NET</h1>
-        <p class="nsl-lead reveal" style="--reveal-delay: 120ms">
+        <h1 class="nsl-h1 reveal">Smithy code generation for&nbsp;.NET</h1>
+        <p class="nsl-lead reveal" style="--reveal-delay: 60ms">
           Typed servers, clients, and API documentation, generated from Smithy models
           inside your MSBuild workflow.
         </p>
-        <div class="nsl-hero-actions reveal" style="--reveal-delay: 180ms">
+        <div class="nsl-hero-actions reveal" style="--reveal-delay: 120ms">
           <a class="nsl-btn nsl-btn-primary" href={intro}>Get Started</a>
           <a class="nsl-btn nsl-btn-ghost" href={repo}>View on GitHub</a>
-        </div>
-        <div class="nsl-chips reveal" style="--reveal-delay: 240ms">
-          <span class="nsl-chip">REST</span>
-          <span class="nsl-chip">JSON-RPC</span>
-          <span class="nsl-chip">CBOR-RPC</span>
-          <span class="nsl-chip">gRPC</span>
-          <span class="nsl-chip">+extensible</span>
         </div>
       </div>
     </div>
@@ -159,21 +140,6 @@ const langs = [
     </div>
   </section>
 
-  <!-- Features -->
-  <section class="nsl-section">
-    <div class="nsl-cards">
-      {
-        features.map((f, i) => (
-          <div class="nsl-card reveal" style={`--reveal-delay: ${(i % 3) * 60}ms`}>
-            <span class="nsl-card-mark" />
-            <h3 class="nsl-card-t">{f.t}</h3>
-            <p class="nsl-card-d" set:html={f.d} />
-          </div>
-        ))
-      }
-    </div>
-  </section>
-
   <!-- Docs -->
   <section class="nsl-section">
     <div class="nsl-docs reveal">
@@ -201,20 +167,6 @@ const langs = [
           />
           <figcaption>Sphinx reference&nbsp;·&nbsp;<code>/docs</code></figcaption>
         </figure>
-      </div>
-    </div>
-  </section>
-
-  <!-- CTA -->
-  <section class="nsl-section">
-    <div class="nsl-cta reveal">
-      <div class="nsl-cta-inner">
-        <h2 class="nsl-cta-h">Get started</h2>
-        <p class="nsl-cta-p">The quick start walks through modeling, building, and calling a small service.</p>
-        <div class="nsl-hero-actions nsl-cta-actions">
-          <a class="nsl-btn nsl-btn-primary" href={intro}>Get Started</a>
-          <a class="nsl-btn nsl-btn-ghost" href={repo}>GitHub</a>
-        </div>
       </div>
     </div>
   </section>
@@ -248,7 +200,6 @@ const langs = [
     --borderSoft: #171720;
     --accent: #6d4aff;
     --accentText: #b8a5ff;
-    --accentSoft: rgba(109, 74, 255, 0.14);
     --pill: #13131c;
   }
   html.nsmithy-landing[data-theme='light'] {
@@ -261,7 +212,6 @@ const langs = [
     --border: #e6e6ec;
     --borderSoft: #eeeef2;
     --accentText: #5b35e0;
-    --accentSoft: rgba(109, 74, 255, 0.09);
     --pill: #f1f1f5;
   }
 
@@ -450,21 +400,6 @@ const langs = [
   .nsl-hero-copy {
     min-width: 0;
   }
-  .nsl-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 9px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--accentText);
-    border: 1px solid var(--border);
-    background: var(--pill);
-    padding: 7px 14px;
-    border-radius: 100px;
-    margin-bottom: 28px;
-  }
   .nsl-h1 {
     font-family: 'Space Grotesk', sans-serif;
     font-weight: 600;
@@ -486,13 +421,7 @@ const langs = [
     display: flex;
     gap: 14px;
     justify-content: center;
-    margin-bottom: 34px;
-    flex-wrap: wrap;
-  }
-  .nsl-chips {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
+    margin-bottom: 0;
     flex-wrap: wrap;
   }
 
@@ -509,18 +438,6 @@ const langs = [
     pointer-events: none;
     z-index: 0;
   }
-  /* Plain text labels, not pills — anything boxed next to the buttons reads as
-     clickable. */
-  .nsl-chip {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
-    color: var(--faint);
-  }
-  .nsl-chip + .nsl-chip::before {
-    content: '·';
-    margin-right: 10px;
-  }
-
   /* ── Sections ────────────────────────────────────────────────────────────── */
   /* Positioned so they paint above the fixed shader canvas (z-index 0). */
   .nsl-section {
@@ -575,7 +492,7 @@ const langs = [
   .nsl-langs {
     display: flex;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 8px 18px;
     justify-content: center;
     max-width: 840px;
     margin: 0 auto;
@@ -584,62 +501,15 @@ const langs = [
     font-family: 'JetBrains Mono', monospace;
     font-size: 14.5px;
     color: var(--dim);
-    padding: 11px 20px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--panel);
-    transition:
-      color 0.15s ease,
-      border-color 0.15s ease;
+    padding: 4px 0;
+    transition: color 0.15s ease;
   }
   .nsl-lang:hover {
     color: var(--text);
-    border-color: var(--accent);
   }
   .nsl-lang-on {
     color: var(--accentText);
-    border-color: var(--accent);
-    background: var(--accentSoft);
-    font-weight: 500;
-  }
-
-  /* Feature cards */
-  .nsl-cards {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 18px;
-  }
-  .nsl-card {
-    padding: 28px;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    background: var(--panel);
-    transition: border-color 0.16s ease;
-  }
-  .nsl-card:hover {
-    border-color: color-mix(in oklab, var(--accent) 35%, var(--border));
-  }
-  .nsl-card-mark {
-    display: inline-block;
-    width: 11px;
-    height: 11px;
-    background: var(--accent);
-    transform: rotate(45deg);
-    border-radius: 2px;
-    margin-bottom: 18px;
-  }
-  .nsl-card-t {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 19px;
     font-weight: 600;
-    color: var(--text);
-    margin: 0 0 9px;
-  }
-  .nsl-card-d {
-    font-size: 14.5px;
-    line-height: 1.62;
-    color: var(--dim);
-    margin: 0;
   }
 
   /* Docs */
@@ -700,32 +570,6 @@ const langs = [
     color: var(--accentText);
   }
 
-  /* CTA */
-  .nsl-cta {
-    border-radius: 22px;
-    border: 1px solid var(--border);
-    background: var(--panel);
-    padding: 64px 44px;
-    text-align: center;
-  }
-  .nsl-cta-h {
-    font-family: 'Space Grotesk', sans-serif;
-    font-weight: 600;
-    font-size: clamp(30px, 4vw, 40px);
-    letter-spacing: -0.03em;
-    color: var(--text);
-    margin: 0 0 16px;
-  }
-  .nsl-cta-p {
-    font-size: 18px;
-    color: var(--dim);
-    margin: 0 0 32px;
-  }
-  .nsl-cta-actions {
-    margin-bottom: 0;
-    justify-content: center;
-  }
-
   /* Footer */
   .nsl-footer {
     position: relative;
@@ -761,9 +605,6 @@ const langs = [
 
   /* ── Responsive ──────────────────────────────────────────────────────────── */
   @media (max-width: 60rem) {
-    .nsl-cards {
-      grid-template-columns: repeat(2, 1fr);
-    }
     .nsl-docs {
       grid-template-columns: 1fr;
       gap: 28px;
@@ -784,12 +625,6 @@ const langs = [
     }
     .nsl-hero {
       padding: 64px 22px 60px;
-    }
-    .nsl-cards {
-      grid-template-columns: 1fr;
-    }
-    .nsl-cta {
-      padding: 52px 24px;
     }
     .nsl-footer-inner {
       justify-content: center;
