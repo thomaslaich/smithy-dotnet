@@ -24,14 +24,18 @@ internal sealed class JsonRestBodyCodecFactory(WireReadMode readMode) : IRestBod
 
     public string BlobContentType => "application/octet-stream";
 
-    public ICodec<T> CodecFor<T>(
-        Schema<T> schema,
-        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
-    ) => JsonCodec.FromSchema(schema, readMode: readMode);
+    private readonly JsonCodecFactory codecFactory = new(readMode);
 
-    public IProjectionCodec<T, TBuilder> CodecFor<T, TBuilder>(
+    public ICodec<T> FromSchema<T>(Schema<T> schema, CodecFactoryOptions? options = null) =>
+        codecFactory.FromSchema(schema, options);
+
+    public ICodec<T> FromMember<T>(
+        ITargetedMemberSchema<T> member,
+        CodecFactoryOptions? options = null
+    ) => codecFactory.FromMember(member, options);
+
+    public IProjectionCodec<T, TBuilder> FromProjection<T, TBuilder>(
         StructProjection<T, TBuilder> projection,
-        bool materializeTopLevelDefaults,
-        string? defaultRootName
-    ) => JsonCodec.FromProjection(projection, materializeTopLevelDefaults, readMode);
+        CodecFactoryOptions? options = null
+    ) => codecFactory.FromProjection(projection, options);
 }

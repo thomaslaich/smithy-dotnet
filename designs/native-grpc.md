@@ -28,7 +28,7 @@ speak the same gRPC wire contract, so they interoperate freely.
 ┌───────────────────────┐                          ┌───────────────────────┐
 │  3. NSmithy native    │ ◄──────────────────────► │  4. Grpc.Net          │
 │     client / server   │         gRPC wire        │     client / server   │
-│  (ProtoCodec +        │    HTTP/2 + protobuf     │                       │
+│  (ProtoCodecFactory + │    HTTP/2 + protobuf     │                       │
 │   GrpcProtocol)       │      (interoperable)     │                       │
 └───────────────────────┘                          └───────────────────────┘
 ```
@@ -44,7 +44,7 @@ speak the same gRPC wire contract, so they interoperate freely.
 
 The runtime is already factored exactly the way this needs:
 
-- **Codecs are schema-driven.** `CborCodec.FromSchema(schema)` walks a
+- **Codecs are schema-driven.** `CborCodecFactory.Default.FromSchema(schema)` walks a
   `Schema<T>` and emits/reads bytes. A protobuf codec is the same walk over the
   same schemas, reading the `alloy.proto#protoIndex` / `alloy.proto#protoNumType`
   traits that the model already carries (see `examples/grpc/.../library.smithy`).
@@ -74,8 +74,8 @@ the Smithy records directly.
 
 - `ProtoWire.cs` — low-level `ProtoWriter`/`ProtoReader` (varint, zigzag,
   fixed32/64, length-delimited, tags, field-skip).
-- `ProtoCodec.cs` — `ProtoCodec.FromSchema<T>(schema)` → `IProtoCodec<T>`, mirroring
-  `CborCodec`. Field numbers come from `@protoIndex`; integer wire types from
+- `ProtoCodecFactory.cs` — `ProtoCodecFactory.Default.FromSchema<T>(schema)` → `ICodec<T>`,
+  mirroring `CborCodecFactory`. Field numbers come from `@protoIndex`; integer wire types from
   `@protoNumType` (`SIGNED`→sint, `UNSIGNED`→uint, `FIXED`→fixed, `FIXED_SIGNED`
   →sfixed). proto3 presence rules: absent (null) members are omitted; nullable
   members with a set value are emitted even when zero (explicit presence).
@@ -157,7 +157,7 @@ The full unary `alloy.proto#grpc` surface now works, verified end-to-end by the
   event-stream surface without `Grpc.Tools` or `Grpc.Net`.
 - **Runtime member traits already flow.** `SchemaGenerator.memberTraitsExpr`
   emits *all* member traits (including `@protoIndex` / `@protoNumType`) into the
-  generated `Schema<T>`, so `ProtoCodec` reads them at runtime with no further
+  generated `Schema<T>`, so `ProtoCodecFactory` reads them at runtime with no further
   codegen change.
 
 ## Status

@@ -36,10 +36,17 @@ internal sealed class JsonReaderCompiler(WireReadMode readMode) : ISchemaVisitor
 
     public WireReadMode ReadMode => readMode;
 
-    public static IJsonValueReader<T> Compile<T>(Schema<T> schema, WireReadMode readMode)
+    public static IJsonValueReader<T> Compile<T>(
+        Schema<T> schema,
+        WireReadMode readMode,
+        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
+    )
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new JsonReaderCompiler(readMode).CompileValue(schema);
+        var compiler = new JsonReaderCompiler(readMode);
+        return memberTraits is null
+            ? compiler.CompileValue(schema)
+            : compiler.CompileValue(schema, memberTraits);
     }
 
     public static StructureJsonProjectionReader<TBuilder> Compile<T, TBuilder>(

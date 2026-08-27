@@ -23,6 +23,7 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
 {
     private const string FormContentType = "application/x-www-form-urlencoded";
     private static readonly ShapeId AwsQueryError = ShapeId.Parse("aws.protocols#awsQueryError");
+    private static readonly XmlCodecFactory CodecFactory = XmlCodecFactory.Default;
 
     public IServiceProtocol ForService(ServiceSchema service)
     {
@@ -66,7 +67,7 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
         private readonly string version;
         private readonly Schema<TInput> inputSchema;
         private readonly Schema<TOutput> outputSchema;
-        private readonly IXmlCodec<TOutput> responseCodec;
+        private readonly ICodec<TOutput> responseCodec;
         private readonly bool outputIsSmithyUnit;
         private readonly bool outputIsUnit;
         private readonly QueryProtocolKind kind;
@@ -83,7 +84,7 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
             version = service.Version;
             inputSchema = operation.Input;
             outputSchema = operation.Output;
-            responseCodec = XmlCodec.FromSchema(operation.Output);
+            responseCodec = CodecFactory.FromSchema(operation.Output);
             outputIsSmithyUnit = typeof(TOutput) == typeof(SmithyUnit);
             outputIsUnit = outputIsSmithyUnit || Schemas.IsSyntheticUnit(operation.Output);
             this.kind = kind;
@@ -167,7 +168,7 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
         private static QueryError CompileError<TError>(OperationErrorSchema<TError> error)
             where TError : Exception
         {
-            var codec = XmlCodec.FromSchema(error.Schema);
+            var codec = CodecFactory.FromSchema(error.Schema);
             var code = QueryErrorCode(error.Schema) ?? error.Id.Name;
             return new QueryError(
                 error.Id,

@@ -12,13 +12,17 @@ internal sealed class CompiledXmlCodec<T>(
     IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null,
     string? defaultNamespaceUri = null,
     string? defaultNamespacePrefix = null
-) : IXmlCodec<T>
+) : ICodec<T>
 {
     private readonly IXmlValueWriter<T> valueWriter = XmlWriterCompiler.Compile(
         schema,
-        materializeTopLevelDefaults
+        materializeTopLevelDefaults,
+        memberTraits
     );
-    private readonly IXmlValueReader<T> valueReader = XmlReaderCompiler.Compile(schema);
+    private readonly IXmlValueReader<T> valueReader = XmlReaderCompiler.Compile(
+        schema,
+        memberTraits
+    );
 
     public byte[] Serialize(T value)
     {

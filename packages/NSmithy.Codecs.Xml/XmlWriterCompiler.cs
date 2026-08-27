@@ -35,11 +35,16 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
 
     public static IXmlValueWriter<T> Compile<T>(
         Schema<T> schema,
-        bool materializeTopLevelDefaults = true
+        bool materializeTopLevelDefaults = true,
+        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
     )
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new XmlWriterCompiler().CompileTopLevelValue(schema, materializeTopLevelDefaults);
+        return new XmlWriterCompiler().CompileTopLevelValue(
+            schema,
+            materializeTopLevelDefaults,
+            memberTraits
+        );
     }
 
     public static IXmlValueWriter<T> Compile<T, TBuilder>(
@@ -69,7 +74,8 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
 
     private IXmlValueWriter<T> CompileTopLevelValue<T>(
         Schema<T> schema,
-        bool materializeTopLevelDefaults
+        bool materializeTopLevelDefaults,
+        IReadOnlyDictionary<ShapeId, Trait>? memberTraits
     )
     {
         if (schema.Resolved is IStructSchema<T> structure)
@@ -77,7 +83,7 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
             return CompileStructure(structure, materializeTopLevelDefaults);
         }
 
-        return CompileValue(schema);
+        return memberTraits is null ? CompileValue(schema) : CompileValue(schema, memberTraits);
     }
 
     public IXmlValueWriter<T> CompileValue<T>(Schema<T> schema) =>

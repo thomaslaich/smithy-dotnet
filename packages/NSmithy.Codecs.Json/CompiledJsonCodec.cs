@@ -1,4 +1,5 @@
 using System.Text.Json;
+using NSmithy.Core;
 using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Json;
@@ -6,14 +7,20 @@ namespace NSmithy.Codecs.Json;
 internal sealed class CompiledJsonCodec<T>(
     Schema<T> schema,
     bool materializeTopLevelDefaults,
-    WireReadMode readMode
-) : IJsonCodec<T>
+    WireReadMode readMode,
+    IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
+) : ICodec<T>
 {
     private readonly IJsonValueWriter<T> valueWriter = JsonWriterCompiler.Compile(
         schema,
-        materializeTopLevelDefaults
+        materializeTopLevelDefaults,
+        memberTraits
     );
-    private readonly IJsonValueReader<T> valueReader = JsonReaderCompiler.Compile(schema, readMode);
+    private readonly IJsonValueReader<T> valueReader = JsonReaderCompiler.Compile(
+        schema,
+        readMode,
+        memberTraits
+    );
 
     // Size hint carried between calls: a codec instance serializes the same shape
     // repeatedly, so the previous payload size is a good guess at the next one and

@@ -34,10 +34,16 @@ internal sealed class XmlReaderCompiler : ISchemaVisitor<object>
 
     private readonly SchemaCompilationCache cache = new();
 
-    public static IXmlValueReader<T> Compile<T>(Schema<T> schema)
+    public static IXmlValueReader<T> Compile<T>(
+        Schema<T> schema,
+        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
+    )
     {
         ArgumentNullException.ThrowIfNull(schema);
-        return new XmlReaderCompiler().CompileValue(schema);
+        var compiler = new XmlReaderCompiler();
+        return memberTraits is null
+            ? compiler.CompileValue(schema)
+            : compiler.CompileValue(schema, memberTraits);
     }
 
     public static StructureXmlProjectionReader<TBuilder> Compile<T, TBuilder>(

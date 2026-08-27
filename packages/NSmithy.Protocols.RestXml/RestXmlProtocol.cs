@@ -56,42 +56,40 @@ public sealed class RestXmlProtocol : IProtocol
     {
         private static readonly ShapeId XmlNamespaceId = ShapeId.Parse("smithy.api#xmlNamespace");
 
-        private readonly string? defaultNamespaceUri;
-        private readonly string? defaultNamespacePrefix;
+        private readonly XmlCodecFactory codecFactory;
 
         public XmlRestBodyCodecFactory(ServiceSchema service)
         {
             if (service.GetTrait(XmlNamespaceId) is not { HasValue: true } trait)
+            {
+                codecFactory = XmlCodecFactory.Default;
                 return;
+            }
 
             var value = trait.Value.AsObject();
-            defaultNamespaceUri = value["uri"].AsString();
-            defaultNamespacePrefix = value.TryGetValue("prefix", out var prefix)
+            var defaultNamespaceUri = value["uri"].AsString();
+            var defaultNamespacePrefix = value.TryGetValue("prefix", out var prefix)
                 ? prefix.AsString()
                 : null;
+            codecFactory = new XmlCodecFactory(defaultNamespaceUri, defaultNamespacePrefix);
         }
 
         public string ContentType => "application/xml";
 
         public string BlobContentType => "application/octet-stream";
 
-        public ICodec<T> CodecFor<T>(
-            Schema<T> schema,
-            IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
-        ) => XmlCodec.FromSchema(schema, memberTraits, defaultNamespaceUri, defaultNamespacePrefix);
+        public ICodec<T> FromSchema<T>(Schema<T> schema, CodecFactoryOptions? options = null) =>
+            codecFactory.FromSchema(schema, options);
 
-        public IProjectionCodec<T, TBuilder> CodecFor<T, TBuilder>(
+        public ICodec<T> FromMember<T>(
+            ITargetedMemberSchema<T> member,
+            CodecFactoryOptions? options = null
+        ) => codecFactory.FromMember(member, options);
+
+        public IProjectionCodec<T, TBuilder> FromProjection<T, TBuilder>(
             StructProjection<T, TBuilder> projection,
-            bool materializeTopLevelDefaults,
-            string? defaultRootName
-        ) =>
-            XmlCodec.FromProjection(
-                projection,
-                materializeTopLevelDefaults,
-                defaultRootName,
-                defaultNamespaceUri,
-                defaultNamespacePrefix
-            );
+            CodecFactoryOptions? options = null
+        ) => codecFactory.FromProjection(projection, options);
 
         public byte[] PrepareErrorBody(byte[] content)
         {

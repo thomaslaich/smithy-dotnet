@@ -46,7 +46,7 @@ public sealed class JsonCodecTests
                 static () => new ScalarsBuilder(),
                 static b => new Scalars(b.Text!, b.Count, b.Big, b.Ratio, b.Flag, b.Data!)
             );
-        var codec = JsonCodec.FromSchema(schema);
+        var codec = JsonCodecFactory.Default.FromSchema(schema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -85,7 +85,7 @@ public sealed class JsonCodecTests
     [Fact]
     public void JsonCodecOmitsNullOptionalMember()
     {
-        var codec = JsonCodec.FromSchema(ProfileSchema());
+        var codec = JsonCodecFactory.Default.FromSchema(ProfileSchema());
 
         var json = codec.SerializeText(new Profile("Ada", null));
 
@@ -95,7 +95,7 @@ public sealed class JsonCodecTests
     [Fact]
     public void JsonCodecDeserializesAbsentOptionalMemberAsNull()
     {
-        var codec = JsonCodec.FromSchema(ProfileSchema());
+        var codec = JsonCodecFactory.Default.FromSchema(ProfileSchema());
 
         var decoded = codec.DeserializeText("{\"name\":\"Ada\"}");
 
@@ -131,7 +131,7 @@ public sealed class JsonCodecTests
                 Schemas.Map(new ShapeId("example", "Counts"), Schemas.Integer)
             )
             .Build(static () => new BagBuilder(), static b => new Bag(b.Tags!, b.Counts!));
-        var codec = JsonCodec.FromSchema(schema);
+        var codec = JsonCodecFactory.Default.FromSchema(schema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -168,7 +168,7 @@ public sealed class JsonCodecTests
                 static () => new TimelineBuilder(),
                 static builder => new Timeline(builder.Events!)
             );
-        var codec = JsonCodec.FromSchema(schema);
+        var codec = JsonCodecFactory.Default.FromSchema(schema);
         var input = new Timeline([new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero)]);
 
         var json = codec.SerializeText(input);
@@ -204,7 +204,7 @@ public sealed class JsonCodecTests
                 static () => new TimestampRecordBuilder(),
                 static builder => new TimestampRecord(builder.Created)
             );
-        var codec = JsonCodec.FromSchema(schema);
+        var codec = JsonCodecFactory.Default.FromSchema(schema);
         var input = new TimestampRecord(new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero));
 
         var json = codec.SerializeText(input);
@@ -248,7 +248,7 @@ public sealed class JsonCodecTests
                 addressSchema
             )
             .Build(static () => new PersonBuilder(), static b => new Person(b.Name!, b.Address!));
-        var codec = JsonCodec.FromSchema(schema);
+        var codec = JsonCodecFactory.Default.FromSchema(schema);
 
         var input = new Person("Ada", new Address("London"));
         var json = codec.SerializeText(input);
@@ -301,7 +301,7 @@ public sealed class JsonCodecTests
                 static () => new DeploymentBuilder(),
                 static builder => new Deployment(builder.Name!, builder.Status)
             );
-        var codec = JsonCodec.FromSchema(deploymentSchema);
+        var codec = JsonCodecFactory.Default.FromSchema(deploymentSchema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -350,7 +350,7 @@ public sealed class JsonCodecTests
                 static () => new WorkItemBuilder(),
                 static builder => new WorkItem(builder.Title!, builder.Priority)
             );
-        var codec = JsonCodec.FromSchema(workItemSchema);
+        var codec = JsonCodecFactory.Default.FromSchema(workItemSchema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -390,7 +390,7 @@ public sealed class JsonCodecTests
     [InlineData("{\"count\":null}")]
     public void DefaultedMemberIsMaterializedWhetherAbsentOrExplicitlyNull(string json)
     {
-        var codec = JsonCodec.FromSchema(DefaultedSchema());
+        var codec = JsonCodecFactory.Default.FromSchema(DefaultedSchema());
 
         Assert.Equal(7, codec.DeserializeText(json).Count);
     }
@@ -403,7 +403,7 @@ public sealed class JsonCodecTests
     public void ProjectionReaderAgreesOnDefaultedMembers(string json)
     {
         var schema = DefaultedSchema();
-        var codec = JsonCodec.FromProjection(
+        var codec = JsonCodecFactory.Default.FromProjection(
             Schemas.Project<Defaulted, DefaultedBuilder>(schema, Schemas.GetMembers(schema))
         );
 

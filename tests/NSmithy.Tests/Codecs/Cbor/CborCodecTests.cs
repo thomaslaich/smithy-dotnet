@@ -85,7 +85,7 @@ public sealed class CborCodecTests
                 static builder => new Person(builder.Name!, builder.Age, builder.Address!),
                 new PersonSerializer()
             );
-        var codec = CborCodec.FromSchema(personSchema);
+        var codec = CborCodecFactory.Default.FromSchema(personSchema);
 
         var bytes = codec.Serialize(input);
         var decoded = codec.Deserialize(bytes);
@@ -98,7 +98,7 @@ public sealed class CborCodecTests
     {
         var writer = new CborWriter();
         writer.WriteHalf((Half)1.5);
-        var codec = CborCodec.FromSchema(Schemas.Float);
+        var codec = CborCodecFactory.Default.FromSchema(Schemas.Float);
 
         var decoded = codec.Deserialize(writer.Encode());
 
@@ -108,7 +108,7 @@ public sealed class CborCodecTests
     [Fact]
     public void CborCodecResetsReusedWriterBetweenSerializations()
     {
-        var codec = CborCodec.FromSchema(Schemas.String);
+        var codec = CborCodecFactory.Default.FromSchema(Schemas.String);
 
         _ = codec.Serialize("a longer first value");
         var bytes = codec.Serialize("x");

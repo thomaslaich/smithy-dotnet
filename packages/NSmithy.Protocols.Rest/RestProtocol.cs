@@ -16,22 +16,11 @@ namespace NSmithy.Protocols.Rest;
 /// once per operation when the <see cref="RestOperationBinding{TInput, TOutput}"/> is built, never
 /// per call.
 /// </summary>
-public interface IRestBodyCodecFactory
+public interface IRestBodyCodecFactory : IProjectionCodecFactory
 {
     string ContentType { get; }
 
     string BlobContentType { get; }
-
-    ICodec<T> CodecFor<T>(
-        Schema<T> schema,
-        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
-    );
-
-    IProjectionCodec<T, TBuilder> CodecFor<T, TBuilder>(
-        StructProjection<T, TBuilder> projection,
-        bool materializeTopLevelDefaults,
-        string? defaultRootName = null
-    );
 
     byte[] PrepareErrorBody(byte[] content) => content;
 }
@@ -366,9 +355,9 @@ public static class RestProtocol
 
         var bodyCodec =
             bodyMembers.Count > 0
-                ? codecFactory.CodecFor(
+                ? codecFactory.FromProjection(
                     Schemas.Project(schema, bodyMembers),
-                    materializeTopLevelDefaults: true
+                    new CodecFactoryOptions { MaterializeTopLevelDefaults = true }
                 )
                 : null;
 
@@ -553,9 +542,9 @@ public static class RestProtocol
         }
         else
         {
-            var codec = codecFactory.CodecFor(
+            var codec = codecFactory.FromProjection(
                 Schemas.Project(schema, bodyMembers),
-                materializeTopLevelDefaults: true
+                new CodecFactoryOptions { MaterializeTopLevelDefaults = true }
             );
             var contentType = codecFactory.ContentType;
             writeBody = value => new RestBody(codec.Serialize(value), contentType);
@@ -987,7 +976,7 @@ public static class RestProtocol
             // compiled once here; the empty-struct value for a null request payload is built lazily
             // (only if a null actually arrives) so binding construction never materializes a struct
             // with required members.
-            var codec = codecFactory.CodecFor(target, traits);
+            var codec = codecFactory.FromMember(member);
             var jsonContentType = codecFactory.ContentType;
             var writeEmptyStructOnNull = emptyStructOnNull;
 
@@ -1087,7 +1076,7 @@ public static class RestProtocol
                 return;
             }
 
-            var codec = codecFactory.CodecFor(target, traits);
+            var codec = codecFactory.FromMember(member);
             Result = (content, streamingContent, builder) =>
             {
                 if (content is null or { Length: 0 })
@@ -1119,7 +1108,7 @@ public static class RestProtocol
         IRestBodyCodecFactory codecFactory
     )
     {
-        var codec = codecFactory.CodecFor(eventSchema);
+        var codec = codecFactory.FromSchema(eventSchema);
         var union =
             eventSchema.Resolved as IUnionSchema
             ?? throw new InvalidOperationException(
@@ -1153,7 +1142,7 @@ public static class RestProtocol
         IRestBodyCodecFactory codecFactory
     )
     {
-        var codec = codecFactory.CodecFor(eventSchema);
+        var codec = codecFactory.FromSchema(eventSchema);
         var payloadContentType = codecFactory.ContentType;
         return (content, streamingContent, builder) =>
         {

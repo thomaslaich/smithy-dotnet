@@ -365,7 +365,9 @@ public sealed class GrpcProtocolTests
     [Fact]
     public void ProtoCodecSupportsEventUnionAsTopLevelMessage()
     {
-        var codec = NSmithy.Codecs.Proto.ProtoCodec.FromSchema(ChatEventSchema("ChatEvent"));
+        var codec = NSmithy.Codecs.Proto.ProtoCodecFactory.Default.FromSchema(
+            ChatEventSchema("ChatEvent")
+        );
         var value = new ChatEvent.Message(new Echo("hello"));
 
         var payload = codec.Serialize(value);
@@ -520,7 +522,9 @@ public sealed class GrpcProtocolTests
         var futureBytes = FutureChatEventSchema()
             .SerializeForTest(new ChatEvent.Message(new Echo("from the future")));
 
-        var decoded = ProtoCodec.FromSchema(ChatEventSchema("ChatEvent")).Deserialize(futureBytes);
+        var decoded = ProtoCodecFactory
+            .Default.FromSchema(ChatEventSchema("ChatEvent"))
+            .Deserialize(futureBytes);
 
         Assert.Null(decoded);
     }
@@ -630,7 +634,9 @@ public sealed class GrpcProtocolTests
 
     private static async Task<List<Echo>> DecodeBody(Stream framedBody)
     {
-        var codec = NSmithy.Codecs.Proto.ProtoCodec.FromSchema(EchoSchema("Decoded"));
+        var codec = NSmithy.Codecs.Proto.ProtoCodecFactory.Default.FromSchema(
+            EchoSchema("Decoded")
+        );
         var values = new List<Echo>();
         await foreach (var payload in GrpcMessageFraming.ReadAllAsync(framedBody))
         {
@@ -792,5 +798,5 @@ public sealed class GrpcProtocolTests
 file static class GrpcProtocolTestExtensions
 {
     public static byte[] SerializeForTest<T>(this Schema<T> schema, T value) =>
-        NSmithy.Codecs.Proto.ProtoCodec.FromSchema(schema).Serialize(value);
+        NSmithy.Codecs.Proto.ProtoCodecFactory.Default.FromSchema(schema).Serialize(value);
 }

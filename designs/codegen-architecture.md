@@ -199,7 +199,7 @@ Generated client and server methods bind the service schema, operation schemas,
 typed input/output values, selected protocol adapter, and transport options into
 the runtime protocol pipeline. The protocol adapter projects each operation into
 transport fields and delegates body payloads to a schema-bound codec such as
-`JsonCodec`.
+`JsonCodecFactory`.
 
 ## Tradeoffs
 

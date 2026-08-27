@@ -73,7 +73,7 @@ public sealed class SchemaTests
                 static builder => new Person(builder.Name!, builder.Age, builder.Address!)
             );
 
-        var personCodec = JsonCodec.FromSchema(personSchema);
+        var personCodec = JsonCodecFactory.Default.FromSchema(personSchema);
 
         var json = personCodec.SerializeText(input);
         var decoded = personCodec.DeserializeText(json);
@@ -171,7 +171,7 @@ public sealed class SchemaTests
                 static () => new TreeNodeBuilder(),
                 static builder => new TreeNode(builder.Value!, builder.Children)
             );
-        var codec = JsonCodec.FromSchema(treeSchema);
+        var codec = JsonCodecFactory.Default.FromSchema(treeSchema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -268,7 +268,7 @@ public sealed class SchemaTests
                     builder.Nickname
                 )
             );
-        var codec = JsonCodec.FromSchema(inputSchema);
+        var codec = JsonCodecFactory.Default.FromSchema(inputSchema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -284,7 +284,7 @@ public sealed class SchemaTests
     [Fact]
     public void JsonCodecRoundTripsPrimitiveRootValue()
     {
-        var codec = JsonCodec.FromSchema(Schemas.Integer);
+        var codec = JsonCodecFactory.Default.FromSchema(Schemas.Integer);
 
         var json = codec.SerializeText(36);
         var decoded = codec.DeserializeText(json);
@@ -326,7 +326,7 @@ public sealed class SchemaTests
     public void JsonCodecRoundTripsStringEnumSchema()
     {
         var statusSchema = Schemas.StringEnum<Status>(new ShapeId("example", "Status"));
-        var codec = JsonCodec.FromSchema(statusSchema);
+        var codec = JsonCodecFactory.Default.FromSchema(statusSchema);
 
         var json = codec.SerializeText(Status.Active);
         var decoded = codec.DeserializeText(json);
@@ -360,7 +360,7 @@ public sealed class SchemaTests
                 static () => new JobBuilder(),
                 static builder => new Job(builder.Name!, builder.Status)
             );
-        var codec = JsonCodec.FromSchema(jobSchema);
+        var codec = JsonCodecFactory.Default.FromSchema(jobSchema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -398,7 +398,7 @@ public sealed class SchemaTests
                 Schemas.Integer
             )
             .Build();
-        var codec = JsonCodec.FromSchema(choiceSchema);
+        var codec = JsonCodecFactory.Default.FromSchema(choiceSchema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -422,7 +422,7 @@ public sealed class SchemaTests
                 Schemas.String
             )
             .Build();
-        var codec = JsonCodec.FromSchema(choiceSchema);
+        var codec = JsonCodecFactory.Default.FromSchema(choiceSchema);
 
         // A payload that does not match the schema is the caller's mistake, not a fault: on a server
         // the runtime turns this into a structured 400.
@@ -479,7 +479,7 @@ public sealed class SchemaTests
                 customerSchema
             )
             .Build(static () => new OrderBuilder(), static builder => new Order(builder.Buyer!));
-        var codec = JsonCodec.FromSchema(orderSchema);
+        var codec = JsonCodecFactory.Default.FromSchema(orderSchema);
 
         var ex = Assert.Throws<MissingRequiredMemberException>(() =>
             codec.DeserializeText("""{"buyer":{}}""")
@@ -507,7 +507,7 @@ public sealed class SchemaTests
                 static () => new RequiredPersonBuilder(),
                 static builder => new RequiredPerson(builder.Name!)
             );
-        var codec = JsonCodec.FromSchema(schema);
+        var codec = JsonCodecFactory.Default.FromSchema(schema);
 
         var ex = Assert.Throws<MissingRequiredMemberException>(() => codec.DeserializeText("{}"));
 
@@ -531,7 +531,7 @@ public sealed class SchemaTests
                 static () => new RequiredPersonBuilder(),
                 static builder => new RequiredPerson(builder.Name!)
             );
-        var codec = JsonCodec.FromSchema(schema);
+        var codec = JsonCodecFactory.Default.FromSchema(schema);
 
         var ex = Assert.Throws<MissingRequiredMemberException>(() =>
             codec.DeserializeText("{\"name\":null}")

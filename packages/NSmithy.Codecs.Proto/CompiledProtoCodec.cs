@@ -2,7 +2,7 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Proto;
 
-internal sealed class CompiledProtoCodec<T> : IProtoCodec<T>
+internal sealed class CompiledProtoCodec<T> : ICodec<T>
 {
     private readonly IProtoMessageWriter<T> writer;
     private readonly IProtoMessageReader<T> reader;
