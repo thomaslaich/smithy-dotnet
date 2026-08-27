@@ -13,7 +13,6 @@ public sealed class HttpResponseConformanceTests
         var ids = Model
             .EnumerateHttpResponseTests(RpcV2CborAllowlist.Protocol)
             .Where(tc => RpcV2CborAllowlist.ExecutableResponseCases.Contains(tc.Id))
-            .Where(tc => !KnownParamGaps.Response.Contains(tc.Id))
             .Select(tc => new object[] { tc.Id })
             .ToList();
         if (ids.Count == 0)

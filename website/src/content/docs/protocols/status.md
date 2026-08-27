@@ -17,7 +17,7 @@ test totals.
 | [`aws.protocols#awsQuery`](../aws-query/) | Client | Preview | Requests 38/38 (100%), responses 39/39 (100%) | N/A |
 | [`aws.protocols#ec2Query`](../aws-ec2-query/) | Client | Preview | Requests 30/30 (100%), responses 29/29 (100%) | N/A |
 | [`aws.protocols#restXml`](../rest-xml/) | Client | Preview | Requests 109/109 (100%), responses 84/84 (100%) | N/A |
-| [`smithy.protocols#rpcv2Cbor`](../rpc-v2-cbor/) | Client and server | Preview | Requests 27/29 (93.1%), responses 34/43 (79.1%) | Requests 32/37 (86.5%), responses 25/27 (92.6%) |
+| [`smithy.protocols#rpcv2Cbor`](../rpc-v2-cbor/) | Client and server | Preview | Requests 29/29 (100%), responses 43/43 (100%) | Requests 37/37 (100%), responses 27/27 (100%) |
 | [`alloy#simpleRestJson`](../rest-json/) | Client and server | Preview | Requests 23/23 (100%), responses 20/20 (100%) | Requests 23/23 (100%), responses 20/20 (100%) |
 | [`alloy.proto#grpc`](../grpc/) | Client and server | Experimental | End-to-end examples | End-to-end examples |
 
@@ -49,6 +49,8 @@ count as official conformance.
   excluded from the official totals.
 - simpleRestJson passes every case in Alloy's protocol suite on both generated
   surfaces.
+- rpcv2Cbor passes every applicable official request and response case on both
+  generated surfaces.
 - AWS Query, EC2 Query, and restXml pass every applicable official client
   request and response case.
 - The AWS JSON conformance project currently targets `awsJson1_1`.
