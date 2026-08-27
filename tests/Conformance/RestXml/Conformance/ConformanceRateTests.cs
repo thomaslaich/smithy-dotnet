@@ -13,18 +13,22 @@ public sealed class ConformanceRateTests(ITestOutputHelper output)
     [Fact]
     public void ReportConformanceRate()
     {
-        var totalRequests = Model.EnumerateHttpRequestTests(RestXmlAllowlist.Protocol).Count();
-        var totalResponses = Model.EnumerateHttpResponseTests(RestXmlAllowlist.Protocol).Count();
-        var execRequests = RestXmlAllowlist.ExecutableRequestCases.Count;
-        // Cases quarantined in KnownParamGaps are subtracted here. They are listed as
-        // executable but no longer run, and counting them would overstate the rate on the
-        // docs Protocol Status page — which is the number this test exists to produce.
-        var execResponses = RestXmlAllowlist.ExecutableResponseCases.Count(id =>
-            !KnownParamGaps.Response.Contains(id)
+        var requests = Model.EnumerateHttpRequestTests(RestXmlAllowlist.Protocol).ToList();
+        var responses = Model.EnumerateHttpResponseTests(RestXmlAllowlist.Protocol).ToList();
+
+        var clientRequestTotal = requests.Count(test => test.AppliesToClient);
+        var clientResponseTotal = responses.Count(test => test.AppliesToClient);
+        var executableClientRequests = requests.Count(test =>
+            test.AppliesToClient && RestXmlAllowlist.ExecutableRequestCases.Contains(test.Id)
+        );
+        var executableClientResponses = responses.Count(test =>
+            test.AppliesToClient && RestXmlAllowlist.ExecutableResponseCases.Contains(test.Id)
         );
 
         output.WriteLine(
-            $"[{RestXmlAllowlist.Protocol}] requests: {execRequests}/{totalRequests} ({Pct(execRequests, totalRequests)}), responses: {execResponses}/{totalResponses} ({Pct(execResponses, totalResponses)})"
+            $"[{RestXmlAllowlist.Protocol}] "
+                + $"client-requests: {executableClientRequests}/{clientRequestTotal} ({Pct(executableClientRequests, clientRequestTotal)}), "
+                + $"client-responses: {executableClientResponses}/{clientResponseTotal} ({Pct(executableClientResponses, clientResponseTotal)})"
         );
     }
 

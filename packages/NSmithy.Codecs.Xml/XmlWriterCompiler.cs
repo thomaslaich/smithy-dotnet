@@ -92,17 +92,19 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
         ArgumentNullException.ThrowIfNull(memberTraits);
 
         var resolved = schema.Resolved;
-        if (memberTraits.Count != 0)
-        {
-            return (IXmlValueWriter<T>)
-                resolved.Accept(new MemberTraitXmlWriterCompiler(this, memberTraits));
-        }
-
-        return cache.GetOrCompile<IXmlValueWriter<T>, DeferredXmlValueWriter<T>>(
-            resolved,
-            static () => new DeferredXmlValueWriter<T>(),
-            target => (IXmlValueWriter<T>)target.Accept(this)
-        );
+        var writer =
+            memberTraits.Count != 0
+                ? (IXmlValueWriter<T>)
+                    resolved.Accept(new MemberTraitXmlWriterCompiler(this, memberTraits))
+                : cache.GetOrCompile<IXmlValueWriter<T>, DeferredXmlValueWriter<T>>(
+                    resolved,
+                    static () => new DeferredXmlValueWriter<T>(),
+                    target => (IXmlValueWriter<T>)target.Accept(this)
+                );
+        var xmlNamespace = XmlTraits.GetXmlNamespace(resolved, memberTraits);
+        return xmlNamespace is null
+            ? writer
+            : new NamespacedXmlValueWriter<T>(writer, xmlNamespace.Value);
     }
 
     public object VisitBoolean(Schema<bool> schema) => Scalar(schema, EmptyTraits);
@@ -193,6 +195,18 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
         return schema.ValueSerializer is { } valueSerializer
             ? new DirectStructureXmlValueWriter<T>(valueSerializer, visitor.Plans)
             : new FallbackStructureXmlValueWriter<T>(visitor.Writers);
+    }
+}
+
+internal sealed class NamespacedXmlValueWriter<T>(
+    IXmlValueWriter<T> inner,
+    XmlNamespace xmlNamespace
+) : IXmlValueWriter<T>
+{
+    public void Write(XElement element, T value)
+    {
+        ApplyNamespace(element, xmlNamespace);
+        inner.Write(element, value);
     }
 }
 
@@ -447,7 +461,7 @@ internal sealed class XmlMemberPlan<TValue>(
         if (XmlTraits.IsXmlAttribute(member))
         {
             element.SetAttributeValue(
-                ElementName(member),
+                AttributeName(element, ElementName(member)),
                 FormatScalar(member.TargetSchema, member.MemberTraits, value)
             );
             return;
@@ -460,7 +474,7 @@ internal sealed class XmlMemberPlan<TValue>(
             );
         }
 
-        var child = new XElement(ElementName(member));
+        var child = new XElement(ChildElementName(element, ElementName(member)));
         valueWriter.Write(child, value);
         element.Add(child);
     }
@@ -493,7 +507,7 @@ internal sealed class FlattenedXmlMemberPlan<TValue>(
             value = memberDefault.Value!;
         }
 
-        var child = new XElement(ElementName(member));
+        var child = new XElement(ChildElementName(element, ElementName(member)));
         valueWriter.Write(child, value);
         element.Add(child);
     }
@@ -534,7 +548,7 @@ internal sealed class FlattenedListXmlMemberPlan<TCollection, TElement>(
 
         foreach (var item in list.GetElements(value))
         {
-            var child = new XElement(ElementName(member));
+            var child = new XElement(ChildElementName(element, ElementName(member)));
             elementWriter.Write(child, item);
             element.Add(child);
         }
@@ -578,9 +592,14 @@ internal sealed class FlattenedMapXmlMemberPlan<TDictionary, TValue>(
 
         foreach (var entry in map.GetEntries(value))
         {
-            var child = new XElement(ElementName(member));
-            child.Add(new XElement(keyName, entry.Key));
-            var valueElement = new XElement(valueName);
+            var child = new XElement(ChildElementName(element, ElementName(member)));
+            var keyElement = new XElement(ChildElementName(child, keyName), entry.Key);
+            ApplyNamespace(
+                keyElement,
+                XmlTraits.GetXmlNamespace(map.KeyMember.Target, map.KeyMember.MemberTraits)
+            );
+            child.Add(keyElement);
+            var valueElement = new XElement(ChildElementName(child, valueName));
             valueWriter.Write(valueElement, entry.Value);
             child.Add(valueElement);
             element.Add(child);
@@ -649,7 +668,7 @@ internal sealed class ListXmlValueWriter<TCollection, TElement>(
         var itemName = ListItemName(schema);
         foreach (var item in schema.GetElements(value))
         {
-            var child = new XElement(itemName);
+            var child = new XElement(ChildElementName(element, itemName));
             elementWriter.Write(child, item);
             element.Add(child);
         }
@@ -673,9 +692,14 @@ internal sealed class MapXmlValueWriter<TDictionary, TValue>(
 
         foreach (var entry in schema.GetEntries(value))
         {
-            var entryElement = new XElement("entry");
-            entryElement.Add(new XElement(keyName, entry.Key));
-            var valueElement = new XElement(valueName);
+            var entryElement = new XElement(ChildElementName(element, "entry"));
+            var keyElement = new XElement(ChildElementName(entryElement, keyName), entry.Key);
+            ApplyNamespace(
+                keyElement,
+                XmlTraits.GetXmlNamespace(schema.KeyMember.Target, schema.KeyMember.MemberTraits)
+            );
+            entryElement.Add(keyElement);
+            var valueElement = new XElement(ChildElementName(entryElement, valueName));
             valueWriter.Write(valueElement, entry.Value);
             entryElement.Add(valueElement);
             element.Add(entryElement);
@@ -713,7 +737,7 @@ internal sealed class XmlUnionCaseWriter<TUnion, TValue>(
             return false;
         }
 
-        var child = new XElement(unionCase.Name);
+        var child = new XElement(ChildElementName(element, unionCase.Name));
         valueWriter.Write(child, unionCase.GetValue(value));
         element.Add(child);
         return true;

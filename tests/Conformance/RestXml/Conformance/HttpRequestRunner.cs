@@ -3,7 +3,9 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Xml.Linq;
 using NSmithy.Client;
+using NSmithy.Http;
 
 namespace RestXml.Conformance;
 
@@ -16,7 +18,7 @@ namespace RestXml.Conformance;
 /// </summary>
 internal static class HttpRequestRunner
 {
-    private static readonly Uri Endpoint = new("http://localhost");
+    private const string DefaultIdempotencyToken = "00000000-0000-4000-8000-000000000000";
 
     /// <summary>
     /// Generated client types in the test assembly. We discover these once via reflection so the
@@ -45,7 +47,7 @@ internal static class HttpRequestRunner
         foreach (var t in ClientTypes)
         {
             method = t.GetMethod(operationName, BindingFlags.Public | BindingFlags.Instance);
-            if (method is not null)
+            if (method is not null && OperationMatchesNamespace(method, testCase.ShapeId))
             {
                 clientType = t;
                 break;
@@ -64,7 +66,13 @@ internal static class HttpRequestRunner
 
         var handler = new RecordingHttpMessageHandler(_ => RecordingHttpMessageHandler.EmptyOk());
         using var httpClient = new HttpClient(handler);
-        var client = ConformanceClients.Build(clientType, httpClient, Endpoint);
+        var client = ConformanceClients.Build(
+            clientType,
+            httpClient,
+            ResolveEndpoint(testCase),
+            static () => DefaultIdempotencyToken,
+            BuildVendorInterceptor(testCase)
+        );
 
         try
         {
@@ -90,6 +98,54 @@ internal static class HttpRequestRunner
             ?? throw new InvalidOperationException("Client did not send any HTTP request.");
         RequestAssertions.Assert(testCase, captured);
     }
+
+    private static bool OperationMatchesNamespace(MethodInfo method, string operationShapeId)
+    {
+        var inputType = method.GetParameters()[0].ParameterType;
+        var schemaType = inputType.Assembly.GetType(inputType.FullName + "Schema");
+        var schema =
+            schemaType
+                ?.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static)
+                ?.GetValue(null) as NSmithy.Core.Serde.Schema;
+        var expectedNamespace = operationShapeId.Split('#')[0];
+        return string.Equals(schema?.Id.Namespace, expectedNamespace, StringComparison.Ordinal);
+    }
+
+    private static Uri ResolveEndpoint(HttpRequestTestCase testCase)
+    {
+        if (!string.IsNullOrWhiteSpace(testCase.Host))
+        {
+            return
+                testCase.Host.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                || testCase.Host.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+                ? new Uri(testCase.Host)
+                : new Uri("http://" + testCase.Host);
+        }
+
+        return new Uri("http://localhost");
+    }
+
+    private static S3AddressingInterceptor? BuildVendorInterceptor(HttpRequestTestCase testCase) =>
+        testCase.ShapeId.StartsWith("com.amazonaws.s3#", StringComparison.Ordinal)
+        && testCase.ResolvedHost is not null
+            ? new S3AddressingInterceptor(testCase.Uri, testCase.ResolvedHost)
+            : null;
+}
+
+internal sealed class S3AddressingInterceptor(string expectedUri, string resolvedHost)
+    : IClientInterceptor
+{
+    public ValueTask<SmithyHttpRequest> OnBeforeSigningAsync(
+        SmithyContext context,
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var current = new Uri(request.RequestUri, UriKind.Absolute);
+        var expectedPath = expectedUri.Split('?', 2)[0];
+        request.RequestUri = $"{current.Scheme}://{resolvedHost}{expectedPath}{current.Query}";
+        return ValueTask.FromResult(request);
+    }
 }
 
 internal static class RequestAssertions
@@ -101,6 +157,9 @@ internal static class RequestAssertions
         var expectedPath = NormalizePath(PathOf(expected.Uri));
         var actualPath = NormalizePath(actual.RequestUri.AbsolutePath);
         Xunit.Assert.Equal(expectedPath, actualPath);
+
+        if (expected.ResolvedHost is not null)
+            Xunit.Assert.Equal(expected.ResolvedHost, actual.RequestUri.Host);
 
         // Query parameters: expected.QueryParams is a list of "k=v" strings (URL-encoded).
         // Compare as multisets (order doesn't matter per the smithy.test spec).
@@ -137,7 +196,15 @@ internal static class RequestAssertions
                         + $"Sent headers: {string.Join(", ", actual.Headers.Keys)}"
                 );
             }
-            Xunit.Assert.Equal(value, string.Join(",", values));
+            var actualValue = string.Join(",", values);
+            if (
+                string.Equals(name, "Content-Encoding", StringComparison.OrdinalIgnoreCase)
+                && EqualHeaderTokenList(value, actualValue)
+            )
+            {
+                continue;
+            }
+            Xunit.Assert.Equal(value, actualValue);
         }
         foreach (var name in expected.RequireHeaders)
             Xunit.Assert.True(
@@ -155,8 +222,22 @@ internal static class RequestAssertions
 
     private static void AssertBody(HttpRequestTestCase expected, RecordedRequest actual)
     {
-        var expectedBody = expected.Body ?? "";
+        if (expected.Body is null)
+            return;
+
+        var expectedBody = expected.Body;
         var actualBody = Encoding.UTF8.GetString(actual.Body);
+        if (
+            TryParseXml(expectedBody, out var expectedXml)
+            && TryParseXml(actualBody, out var actualXml)
+        )
+        {
+            Xunit.Assert.True(
+                XNode.DeepEquals(NormalizeXml(expectedXml), NormalizeXml(actualXml)),
+                $"XML body mismatch.\nExpected: {expectedBody}\nActual:   {actualBody}"
+            );
+            return;
+        }
         // Always prefer structural JSON comparison when both sides parse as JSON; fall back to
         // exact string equality (covers raw text payloads).
         if (TryParseJson(expectedBody, out var ej) && TryParseJson(actualBody, out var aj))
@@ -168,6 +249,38 @@ internal static class RequestAssertions
             return;
         }
         Xunit.Assert.Equal(expectedBody, actualBody);
+    }
+
+    private static bool TryParseXml(string value, out XElement element)
+    {
+        try
+        {
+            element = XElement.Parse(value);
+            return true;
+        }
+        catch (System.Xml.XmlException)
+        {
+            element = null!;
+            return false;
+        }
+    }
+
+    private static XElement NormalizeXml(XElement element)
+    {
+        var hasElementChildren = element.Elements().Any();
+        return new XElement(
+            element.Name,
+            element.Attributes().OrderBy(attribute => attribute.Name.ToString()),
+            element
+                .Nodes()
+                .Where(node =>
+                    !hasElementChildren
+                    || node is not XText text
+                    || !string.IsNullOrWhiteSpace(text.Value)
+                )
+                .Select(node => node is XElement child ? NormalizeXml(child) : node)
+                .OrderBy(node => node is XElement child ? child.Name.ToString() : string.Empty)
+        );
     }
 
     private static bool TryParseJson(string s, out JsonNode? node)
@@ -232,6 +345,17 @@ internal static class RequestAssertions
     private static IEnumerable<string> NormalizeQueryParams(IEnumerable<string> entries) =>
         entries.Select(NormalizeQueryParam);
 
+    private static bool EqualHeaderTokenList(string expected, string actual)
+    {
+        static string[] Split(string value) =>
+            value.Split(
+                ',',
+                StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+            );
+
+        return Split(expected).SequenceEqual(Split(actual), StringComparer.Ordinal);
+    }
+
     private static string NormalizeQueryParam(string entry)
     {
         // Smithy expected entries may use unencoded characters; URL decode both sides for
@@ -244,5 +368,9 @@ internal static class RequestAssertions
             + Uri.UnescapeDataString(entry[(eq + 1)..]);
     }
 
-    private static string NormalizePath(string path) => path.Length > 1 ? path.TrimEnd('/') : path;
+    private static string NormalizePath(string path)
+    {
+        var decoded = Uri.UnescapeDataString(path);
+        return decoded.Length > 1 ? decoded.TrimEnd('/') : decoded;
+    }
 }

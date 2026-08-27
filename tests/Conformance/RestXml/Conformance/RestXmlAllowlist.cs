@@ -1,68 +1,30 @@
 namespace RestXml.Conformance;
 
 /// <summary>
-/// Allowlist of <c>httpRequestTests</c> / <c>httpResponseTests</c> case ids that the generated
-/// restXml client is currently expected to satisfy. Empty until cases are individually verified.
+/// Client-applicable <c>httpRequestTests</c> / <c>httpResponseTests</c> case ids for restXml.
+/// Every applicable case is executed so additions to the upstream fixtures are covered by default.
 /// </summary>
 internal static class RestXmlAllowlist
 {
     public const string Protocol = "aws.protocols#restXml";
 
-    public static readonly IReadOnlySet<string> ExecutableRequestCases = new HashSet<string>(
-        StringComparer.Ordinal
-    )
-    {
-        "EmptyInputAndEmptyOutput",
-        "NoInputAndNoOutput",
-        "NoInputAndOutput",
-        "RestXmlOmitsNullQuery",
-    };
+    public static readonly IReadOnlySet<string> ExecutableRequestCases = LoadRequestCases();
 
-    public static readonly IReadOnlySet<string> ExecutableResponseCases = new HashSet<string>(
-        StringComparer.Ordinal
-    )
-    {
-        "EmptyInputAndEmptyOutput",
-        "HttpPayloadTraitsWithBlob",
-        "HttpPayloadTraitsWithNoBlobBody",
-        "HttpPayloadWithStructure",
-        "HttpPrefixHeadersArePresent",
-        "HttpPrefixHeadersAreNotPresent",
-        "RestXmlHttpResponseCode",
-        "IgnoreQueryParamsInResponse",
-        "InputAndOutputWithStringHeaders",
-        "InputAndOutputWithNumericHeaders",
-        "InputAndOutputWithBooleanHeaders",
-        "InputAndOutputWithTimestampHeaders",
-        "InputAndOutputWithEnumHeaders",
-        "NoInputAndNoOutput",
-        "NoInputAndOutput",
-        "SimpleScalarProperties",
-        "SimpleScalarPropertiesComplexEscapes",
-        "SimpleScalarPropertiesWithEscapedCharacter",
-        "SimpleScalarPropertiesWithXMLPreamble",
-        "SimpleScalarPropertiesWithWhiteSpace",
-        "SimpleScalarPropertiesPureWhiteSpace",
-        "TimestampFormatHeaders",
-        "XmlBlobs",
-        "XmlEmptyBlobs",
-        "XmlEmptySelfClosedBlobs",
-        "XmlEmptyLists",
-        "XmlEmptyMaps",
-        "XmlEmptySelfClosedMaps",
-        "XmlEmptyStrings",
-        "XmlEmptySelfClosedStrings",
-        "XmlEnums",
-        "XmlIntEnums",
-        "XmlLists",
-        "XmlMaps",
-        "XmlMapsXmlName",
-        "XmlTimestamps",
-        "XmlTimestampsWithDateTimeFormat",
-        "XmlTimestampsWithDateTimeOnTargetFormat",
-        "XmlTimestampsWithEpochSecondsFormat",
-        "XmlTimestampsWithEpochSecondsOnTargetFormat",
-        "XmlTimestampsWithHttpDateFormat",
-        "XmlTimestampsWithHttpDateOnTargetFormat",
-    };
+    public static readonly IReadOnlySet<string> ExecutableResponseCases = LoadResponseCases();
+
+    private static HashSet<string> LoadRequestCases() =>
+        SmithyTestModel
+            .Load()
+            .EnumerateHttpRequestTests(Protocol)
+            .Where(test => test.AppliesToClient)
+            .Select(test => test.Id)
+            .ToHashSet(StringComparer.Ordinal);
+
+    private static HashSet<string> LoadResponseCases() =>
+        SmithyTestModel
+            .Load()
+            .EnumerateHttpResponseTests(Protocol)
+            .Where(test => test.AppliesToClient)
+            .Select(test => test.Id)
+            .ToHashSet(StringComparer.Ordinal);
 }

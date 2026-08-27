@@ -363,7 +363,7 @@ internal sealed class XmlMemberReader<TContainer, TBuilder, TValue>(
     {
         if (XmlTraits.IsXmlAttribute(member))
         {
-            var attr = element.Attribute(Name);
+            var attr = element.Attribute(AttributeName(element, Name));
             if (attr is not null)
             {
                 member.SetValue(
@@ -387,6 +387,10 @@ internal sealed class XmlMemberReader<TContainer, TBuilder, TValue>(
         }
 
         var child = ChildElement(element, Name);
+        if (child is null && string.Equals(element.Name.LocalName, Name, StringComparison.Ordinal))
+        {
+            child = element;
+        }
         if (child is not null)
         {
             member.SetValue(builder, valueReader.Read(child));

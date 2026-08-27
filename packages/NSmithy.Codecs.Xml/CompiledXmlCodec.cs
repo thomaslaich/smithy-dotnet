@@ -6,8 +6,13 @@ using static NSmithy.Codecs.Xml.XmlWire;
 
 namespace NSmithy.Codecs.Xml;
 
-internal sealed class CompiledXmlCodec<T>(Schema<T> schema, bool materializeTopLevelDefaults)
-    : IXmlCodec<T>
+internal sealed class CompiledXmlCodec<T>(
+    Schema<T> schema,
+    bool materializeTopLevelDefaults,
+    IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null,
+    string? defaultNamespaceUri = null,
+    string? defaultNamespacePrefix = null
+) : IXmlCodec<T>
 {
     private readonly IXmlValueWriter<T> valueWriter = XmlWriterCompiler.Compile(
         schema,
@@ -17,9 +22,20 @@ internal sealed class CompiledXmlCodec<T>(Schema<T> schema, bool materializeTopL
 
     public byte[] Serialize(T value)
     {
-        var root = new XElement(RootElementName(schema));
+        var root = new XElement(XmlTraits.GetXmlName(memberTraits) ?? RootElementName(schema));
+        ApplyNamespace(
+            root,
+            XmlTraits.GetXmlNamespace(schema)
+                ?? (
+                    defaultNamespaceUri is null
+                        ? null
+                        : new XmlNamespace(defaultNamespaceUri, defaultNamespacePrefix)
+                )
+        );
         valueWriter.Write(root, value);
-        return System.Text.Encoding.UTF8.GetBytes(root.ToString(SaveOptions.DisableFormatting));
+        return System.Text.Encoding.UTF8.GetBytes(
+            root.ToString(SaveOptions.DisableFormatting | SaveOptions.OmitDuplicateNamespaces)
+        );
     }
 
     public T Deserialize(byte[] payload)
@@ -30,14 +46,20 @@ internal sealed class CompiledXmlCodec<T>(Schema<T> schema, bool materializeTopL
             return default!;
         }
 
-        var root = XElement.Parse(System.Text.Encoding.UTF8.GetString(payload));
+        var root = XElement.Parse(
+            System.Text.Encoding.UTF8.GetString(payload),
+            LoadOptions.PreserveWhitespace
+        );
         return valueReader.Read(root);
     }
 }
 
 internal sealed class CompiledXmlProjectionCodec<T, TBuilder>(
     StructProjection<T, TBuilder> projection,
-    bool materializeTopLevelDefaults
+    bool materializeTopLevelDefaults,
+    string? defaultRootName,
+    string? defaultNamespaceUri,
+    string? defaultNamespacePrefix
 ) : IProjectionCodec<T, TBuilder>
 {
     private readonly IXmlValueWriter<T> valueWriter = XmlWriterCompiler.Compile(
@@ -50,9 +72,21 @@ internal sealed class CompiledXmlProjectionCodec<T, TBuilder>(
 
     public byte[] Serialize(T value)
     {
-        var root = new XElement(RootElementName((Schema)projection.Source));
+        var source = (Schema)projection.Source;
+        var root = new XElement(XmlTraits.GetXmlName(source) ?? defaultRootName ?? source.Id.Name);
+        ApplyNamespace(
+            root,
+            XmlTraits.GetXmlNamespace(source)
+                ?? (
+                    defaultNamespaceUri is null
+                        ? null
+                        : new XmlNamespace(defaultNamespaceUri, defaultNamespacePrefix)
+                )
+        );
         valueWriter.Write(root, value);
-        return System.Text.Encoding.UTF8.GetBytes(root.ToString(SaveOptions.DisableFormatting));
+        return System.Text.Encoding.UTF8.GetBytes(
+            root.ToString(SaveOptions.DisableFormatting | SaveOptions.OmitDuplicateNamespaces)
+        );
     }
 
     public void ReadInto(byte[] payload, TBuilder builder)
@@ -64,7 +98,10 @@ internal sealed class CompiledXmlProjectionCodec<T, TBuilder>(
             return;
         }
 
-        var root = XElement.Parse(System.Text.Encoding.UTF8.GetString(payload));
+        var root = XElement.Parse(
+            System.Text.Encoding.UTF8.GetString(payload),
+            LoadOptions.PreserveWhitespace
+        );
         valueReader.ReadInto(builder, root);
     }
 }
