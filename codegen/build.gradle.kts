@@ -104,8 +104,10 @@ val codegenBundle: Configuration by configurations.creating
 
 dependencies {
     val smithyVer = property("smithyVersion") as String
+    val smithyAiTraitsVer = property("smithyAiTraitsVersion") as String
     codegenBundle("io.github.thomaslaich.nsmithy:smithy-csharp-codegen:${project.version}")
     codegenBundle("io.github.thomaslaich.nsmithy:smithy-proto-codegen:${project.version}")
+    codegenBundle("software.amazon.smithy.java:smithy-ai-traits:$smithyAiTraitsVer")
     codegenBundle("software.amazon.smithy:smithy-aws-traits:$smithyVer")
     codegenBundle("software.amazon.smithy:smithy-protocol-traits:$smithyVer")
     codegenBundle("software.amazon.smithy:smithy-docgen:$smithyVer")

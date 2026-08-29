@@ -11,6 +11,7 @@ import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.SonatypeHost
 
 val smithyVersion: String by project
+val smithyAiTraitsVersion: String by project
 
 plugins {
     id("com.vanniktech.maven.publish")
@@ -21,6 +22,11 @@ dependencies {
     api("software.amazon.smithy:smithy-model:$smithyVersion")
     api("software.amazon.smithy:smithy-build:$smithyVersion")
     api("software.amazon.smithy:smithy-utils:$smithyVersion")
+
+    // Makes the official smithy.ai trait definitions and validators available whenever the
+    // C# build plugin is loaded. In particular, models can use smithy.ai#prompts without copying
+    // the unstable trait definition into each contracts project.
+    runtimeOnly("software.amazon.smithy.java:smithy-ai-traits:$smithyAiTraitsVersion")
 
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.11.4")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.11.4")
