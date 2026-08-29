@@ -39,14 +39,11 @@ final class AiTraitsGeneratorTest {
     String operationSchema = renderOperationSchema(model, operation);
 
     assertTrue(
-        serviceSchema.contains("new Trait(ShapeId.Parse(\"smithy.ai#prompts\")"),
-        serviceSchema);
+        serviceSchema.contains("new Trait(ShapeId.Parse(\"smithy.ai#prompts\")"), serviceSchema);
     assertTrue(serviceSchema.contains("\"weather_brief\""), serviceSchema);
     assertTrue(serviceSchema.contains("\"Create a concise weather brief\""), serviceSchema);
-    assertTrue(
-        serviceSchema.contains("\"example.weather#WeatherBriefArguments\""), serviceSchema);
-    assertTrue(
-        serviceSchema.contains("\"The user wants a short weather summary\""), serviceSchema);
+    assertTrue(serviceSchema.contains("\"example.weather#WeatherBriefArguments\""), serviceSchema);
+    assertTrue(serviceSchema.contains("\"The user wants a short weather summary\""), serviceSchema);
 
     assertTrue(
         operationSchema.contains("new Trait(ShapeId.Parse(\"smithy.ai#prompts\")"),
@@ -82,7 +79,8 @@ final class AiTraitsGeneratorTest {
 
   private URL resource(String resourceName) {
     return Objects.requireNonNull(
-        getClass().getClassLoader().getResource(resourceName), "Missing test resource " + resourceName);
+        getClass().getClassLoader().getResource(resourceName),
+        "Missing test resource " + resourceName);
   }
 
   private static String renderServiceSchema(ServiceShape service) {
