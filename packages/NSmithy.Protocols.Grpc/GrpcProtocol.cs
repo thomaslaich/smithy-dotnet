@@ -78,14 +78,9 @@ public sealed class GrpcProtocol : IProtocol
             var inputValidator = validateInput ? SmithyValidator.FromSchema(operation.Input) : null;
 
             // Each direction is chosen independently; the four call shapes are their cross product.
-            var inputEvent = FindEventStreamEventSchema(operation.Input);
-            var outputEvent = FindEventStreamEventSchema(operation.Output);
-            RequestStrategy<TInput> request = inputEvent is null
-                ? UnaryRequest(operation.Input)
-                : StreamingRequest(operation.Input, (dynamic)inputEvent);
-            ResponseStrategy<TOutput> response = outputEvent is null
-                ? UnaryResponse(operation.Output)
-                : StreamingResponse(operation.Output, (dynamic)outputEvent);
+            var request = CompileStreamingRequest(operation.Input) ?? UnaryRequest(operation.Input);
+            var response =
+                CompileStreamingResponse(operation.Output) ?? UnaryResponse(operation.Output);
 
             return new OperationProtocol<TInput, TOutput>(
                 service,
@@ -154,6 +149,49 @@ public sealed class GrpcProtocol : IProtocol
         );
     }
 
+    private static RequestStrategy<TInput>? CompileStreamingRequest<TInput>(
+        Schema<TInput> inputSchema
+    )
+    {
+        if (inputSchema.Resolved is not IStructSchema<TInput> structure)
+        {
+            return null;
+        }
+
+        var visitor = new StreamingRequestMemberVisitor<TInput>(inputSchema);
+        structure.VisitMembers(visitor);
+        return visitor.Strategy;
+    }
+
+    private sealed class StreamingRequestMemberVisitor<TInput>(Schema<TInput> inputSchema)
+        : IMemberVisitor<TInput>
+    {
+        public RequestStrategy<TInput>? Strategy { get; private set; }
+
+        public void Visit<TValue>(IMemberSchema<TInput, TValue> member)
+        {
+            if (member.Target is not IEventStreamSchema)
+            {
+                return;
+            }
+
+            if (Strategy is not null)
+            {
+                throw new InvalidOperationException("Operation shape has multiple event streams.");
+            }
+
+            Strategy = member.Target.Accept(new StreamingRequestCompiler<TInput>(inputSchema));
+        }
+    }
+
+    private sealed class StreamingRequestCompiler<TInput>(Schema<TInput> inputSchema)
+        : PartialSchemaVisitor<RequestStrategy<TInput>>
+    {
+        public override RequestStrategy<TInput> VisitEventStream<TEvent>(
+            EventStreamSchema<TEvent> schema
+        ) => StreamingRequest(inputSchema, schema.TypedEventSchema);
+    }
+
     private static ResponseStrategy<TOutput> UnaryResponse<TOutput>(Schema<TOutput> outputSchema)
     {
         if (IsUnit<TOutput>(outputSchema))
@@ -205,6 +243,49 @@ public sealed class GrpcProtocol : IProtocol
         );
     }
 
+    private static ResponseStrategy<TOutput>? CompileStreamingResponse<TOutput>(
+        Schema<TOutput> outputSchema
+    )
+    {
+        if (outputSchema.Resolved is not IStructSchema<TOutput> structure)
+        {
+            return null;
+        }
+
+        var visitor = new StreamingResponseMemberVisitor<TOutput>(outputSchema);
+        structure.VisitMembers(visitor);
+        return visitor.Strategy;
+    }
+
+    private sealed class StreamingResponseMemberVisitor<TOutput>(Schema<TOutput> outputSchema)
+        : IMemberVisitor<TOutput>
+    {
+        public ResponseStrategy<TOutput>? Strategy { get; private set; }
+
+        public void Visit<TValue>(IMemberSchema<TOutput, TValue> member)
+        {
+            if (member.Target is not IEventStreamSchema)
+            {
+                return;
+            }
+
+            if (Strategy is not null)
+            {
+                throw new InvalidOperationException("Operation shape has multiple event streams.");
+            }
+
+            Strategy = member.Target.Accept(new StreamingResponseCompiler<TOutput>(outputSchema));
+        }
+    }
+
+    private sealed class StreamingResponseCompiler<TOutput>(Schema<TOutput> outputSchema)
+        : PartialSchemaVisitor<ResponseStrategy<TOutput>>
+    {
+        public override ResponseStrategy<TOutput> VisitEventStream<TEvent>(
+            EventStreamSchema<TEvent> schema
+        ) => StreamingResponse(outputSchema, schema.TypedEventSchema);
+    }
+
     private sealed class OperationProtocol<TInput, TOutput>(
         ServiceSchema service,
         OperationSchema<TInput, TOutput> operation,
@@ -219,7 +300,7 @@ public sealed class GrpcProtocol : IProtocol
 
         private readonly ModeledErrorSerializer serverErrors = ModeledErrorSerializer.Compile(
             operation.Errors,
-            error => CompileServerError((dynamic)error)
+            error => error.Accept(ServerErrorCompiler.Instance)
         );
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
@@ -313,6 +394,17 @@ public sealed class GrpcProtocol : IProtocol
                 )
         );
 
+    private sealed class ServerErrorCompiler
+        : IOperationErrorSchemaVisitor<(Type, Func<Exception, SmithyHttpServerResponse>)>
+    {
+        public static ServerErrorCompiler Instance { get; } = new();
+
+        public (Type, Func<Exception, SmithyHttpServerResponse>) Visit<TError>(
+            OperationErrorSchema<TError> schema
+        )
+            where TError : Exception => CompileServerError(schema);
+    }
+
     private static SmithyHttpServerResponse SerializeGrpcError<TError>(
         Schema<TError> errorSchema,
         TError value,
@@ -335,7 +427,15 @@ public sealed class GrpcProtocol : IProtocol
 
     private static HttpOperationError[] CompileErrors(
         IReadOnlyList<IOperationErrorSchema> errors
-    ) => errors.Select(error => (HttpOperationError)CompileError((dynamic)error)).ToArray();
+    ) => errors.Select(error => error.Accept(ErrorCompiler.Instance)).ToArray();
+
+    private sealed class ErrorCompiler : IOperationErrorSchemaVisitor<HttpOperationError>
+    {
+        public static ErrorCompiler Instance { get; } = new();
+
+        public HttpOperationError Visit<TError>(OperationErrorSchema<TError> schema)
+            where TError : Exception => CompileError(schema);
+    }
 
     private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
         where TError : Exception
@@ -755,36 +855,4 @@ public sealed class GrpcProtocol : IProtocol
 
     private static bool IsUnit<T>(Schema schema) =>
         typeof(T) == typeof(SmithyUnit) || Schemas.IsSyntheticUnit(schema);
-
-    private static Schema? FindEventStreamEventSchema(Schema schema) =>
-        schema.Resolved is IStructSchema structure
-            ? FindEventStreamEventSchemaCore((dynamic)structure)
-            : null;
-
-    private static Schema? FindEventStreamEventSchemaCore<T>(IStructSchema<T> structure)
-    {
-        var visitor = new EventStreamSchemaVisitor<T>();
-        structure.VisitMembers(visitor);
-        return visitor.EventSchema;
-    }
-
-    private sealed class EventStreamSchemaVisitor<T> : IMemberVisitor<T>
-    {
-        public Schema? EventSchema { get; private set; }
-
-        public void Visit<TValue>(IMemberSchema<T, TValue> member)
-        {
-            if (member.Target is not IEventStreamSchema eventStream)
-            {
-                return;
-            }
-
-            if (EventSchema is not null)
-            {
-                throw new InvalidOperationException("Operation shape has multiple event streams.");
-            }
-
-            EventSchema = eventStream.EventSchema;
-        }
-    }
 }

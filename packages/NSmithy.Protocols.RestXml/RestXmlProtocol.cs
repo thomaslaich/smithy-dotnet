@@ -82,7 +82,7 @@ public sealed class RestXmlProtocol : IProtocol
             codecFactory.FromSchema(schema, options);
 
         public ICodec<T> FromMember<T>(
-            ITargetedMemberSchema<T> member,
+            ITypedTargetMemberSchema<T> member,
             CodecFactoryOptions? options = null
         ) => codecFactory.FromMember(member, options);
 

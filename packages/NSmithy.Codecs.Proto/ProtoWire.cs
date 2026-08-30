@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Collections.Frozen;
 using System.Globalization;
 using System.Numerics;
 using System.Text;
@@ -551,25 +552,21 @@ internal static class ProtoWire
 
     // ---- string enum ordinals ----------------------------------------------
 
-    internal static int EnumOrdinal(Schema enumSchema, string value)
+    /// <summary>Each declared value's proto ordinal: declaration order, 1-based, 0 being UNSPECIFIED.</summary>
+    internal static FrozenDictionary<string, int> EnumOrdinals(Schema enumSchema)
     {
         var members = EnumMembers(enumSchema);
-        var index = members.IndexOf(value);
-        // Unknown / unmatched maps to the proto UNSPECIFIED = 0 default.
-        return index < 0 ? 0 : index + 1;
-    }
-
-    internal static string? EnumValueForOrdinal(Schema enumSchema, int ordinal)
-    {
-        if (ordinal <= 0)
+        var ordinals = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < members.Count; i++)
         {
-            // 0 is the synthetic proto UNSPECIFIED, which has no Smithy enum member.
-            return null;
+            ordinals.TryAdd(members[i], i + 1);
         }
 
-        var members = EnumMembers(enumSchema);
-        return ordinal - 1 < members.Count ? members[ordinal - 1] : null;
+        return ordinals.ToFrozenDictionary(StringComparer.Ordinal);
     }
+
+    /// <summary>The declared values by ordinal minus one.</summary>
+    internal static string[] EnumValues(Schema enumSchema) => [.. EnumMembers(enumSchema)];
 
     private static List<string> EnumMembers(Schema enumSchema)
     {

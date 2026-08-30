@@ -4,20 +4,12 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Protocols.Rest;
 
-public readonly record struct QueryMemberBinding(IStructMemberSchema Member, string QueryName);
-
-public readonly record struct HeaderMemberBinding(IStructMemberSchema Member, string HeaderName);
-
-public readonly record struct PrefixHeaderMemberBinding(IStructMemberSchema Member, string Prefix);
-
 /// <summary>
 /// Everything <see cref="RestProtocol"/> needs to (de)serialize one operation, derived once from
-/// the operation's <c>@http</c> trait. The body/payload codecs and payload (de)serialize delegates
-/// are <em>compiled here</em> and reused for every call — nothing is recompiled per request.
+/// the operation's <c>@http</c> trait. Every binding plan and body codec is <em>compiled here</em>
+/// and reused for every call — nothing is recompiled per request.
 /// </summary>
 public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder>
-    where TInputBuilder : notnull
-    where TOutputBuilder : notnull
 {
     public required HttpMethod HttpMethod { get; init; }
     public required string UriTemplate { get; init; }
@@ -59,38 +51,9 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
     /// <summary>True when the response payload is a streaming blob and must not be buffered.</summary>
     public required bool OutputHasStreamingPayload { get; init; }
 
-    // Input
-    public required IStructSchema<TInput, TInputBuilder> InputSchema { get; init; }
-    public required IReadOnlyList<IStructMemberSchema> LabelMembers { get; init; }
-    public required IReadOnlyList<QueryMemberBinding> QueryMembers { get; init; }
-    public IStructMemberSchema? QueryParamsMember { get; init; }
-    public required IReadOnlyList<HeaderMemberBinding> RequestHeaderMembers { get; init; }
-    public PrefixHeaderMemberBinding? RequestPrefixHeadersMember { get; init; }
-    public required HashSet<string> BoundQueryNames { get; init; }
+    internal RestStructBinding<TInput, TInputBuilder> Input { get; init; } = null!;
 
-    /// <summary>Compiled codec for the request body projection (null when there is no body / a payload).</summary>
-    public IProjectionCodec<TInput, TInputBuilder>? InputBodyCodec { get; init; }
-
-    /// <summary>Writes the <c>@httpPayload</c> input to a body (null when there is no payload member).</summary>
-    public Func<TInput, RestBody>? InputPayloadWriter { get; init; }
-
-    /// <summary>Reads the <c>@httpPayload</c> input from a body into the builder.</summary>
-    public RestPayloadReader? InputPayloadReader { get; init; }
-
-    // Output
-    public required IStructSchema<TOutput, TOutputBuilder> OutputSchema { get; init; }
-    public IStructMemberSchema? ResponseCodeMember { get; init; }
-    public required IReadOnlyList<HeaderMemberBinding> ResponseHeaderMembers { get; init; }
-    public PrefixHeaderMemberBinding? ResponsePrefixHeadersMember { get; init; }
-
-    /// <summary>Compiled codec for the response body projection (null for unit / payload outputs).</summary>
-    public IProjectionCodec<TOutput, TOutputBuilder>? OutputBodyCodec { get; init; }
-
-    /// <summary>Writes the <c>@httpPayload</c> output to a body (null when there is no payload member).</summary>
-    public Func<TOutput, RestBody>? OutputPayloadWriter { get; init; }
-
-    /// <summary>Reads the <c>@httpPayload</c> output from a body into the builder.</summary>
-    public RestPayloadReader? OutputPayloadReader { get; init; }
+    internal RestStructBinding<TOutput, TOutputBuilder> Output { get; init; } = null!;
 
     internal static RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> CreateFrom(
         OperationSchema<TInput, TOutput> operation,
@@ -127,133 +90,61 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
             || operation.Input.Resolved is UnitSchema
             || Schemas.IsSyntheticUnit(operation.Input);
 
-        // Partition input members in a single pass
-        var labelMembers = new List<IStructMemberSchema>();
-        var queryMembers = new List<QueryMemberBinding>();
-        IStructMemberSchema? queryParamsMember = null;
-        var requestHeaderMembers = new List<HeaderMemberBinding>();
-        PrefixHeaderMemberBinding? requestPrefixHeadersMember = null;
-        IMemberSchema<TInput>? inputPayloadMember = null;
-        var inputBodyMembers = new List<IMemberSchema<TInput>>();
-        var boundQueryNames = new HashSet<string>(StringComparer.Ordinal);
-        var inputMemberCount = 0;
-
-        foreach (var member in Schemas.GetMembers(inputSchema))
-        {
-            inputMemberCount++;
-            if (member.MemberTraits.ContainsKey(RestTraits.HttpLabel))
-            {
-                labelMembers.Add(member);
-            }
-            else if (member.MemberTraits.TryGetValue(RestTraits.HttpQuery, out var queryTrait))
-            {
-                var name = queryTrait.Value.AsString();
-                queryMembers.Add(new QueryMemberBinding(member, name));
-                boundQueryNames.Add(name);
-            }
-            else if (member.MemberTraits.ContainsKey(RestTraits.HttpQueryParams))
-            {
-                queryParamsMember = member;
-            }
-            else if (member.MemberTraits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
-            {
-                requestHeaderMembers.Add(
-                    new HeaderMemberBinding(member, headerTrait.Value.AsString())
-                );
-            }
-            else if (
-                member.MemberTraits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait)
-            )
-            {
-                requestPrefixHeadersMember = new PrefixHeaderMemberBinding(
-                    member,
-                    prefixTrait.Value.AsString()
-                );
-            }
-            else if (member.MemberTraits.ContainsKey(RestTraits.HttpPayload))
-            {
-                inputPayloadMember = member;
-            }
-            else
-            {
-                inputBodyMembers.Add(member);
-            }
-        }
+        var input = RestStructBinding<TInput, TInputBuilder>.Compile(
+            inputSchema,
+            HttpBindingSide.Request,
+            codecFactory,
+            rawStringPayloads,
+            emptyStructOnNullPayload: true,
+            uriTemplate
+        );
+        var output = RestStructBinding<TOutput, TOutputBuilder>.Compile(
+            outputSchema,
+            HttpBindingSide.Response,
+            codecFactory,
+            rawStringPayloads,
+            emptyStructOnNullPayload: false
+        );
 
         // A structure the model declares still has a body when every member is bound elsewhere —
         // an empty object — but a synthetic unit has none, and an input whose members are all bound
         // to the URI or headers leaves nothing for the body to carry.
         var inputHasBody =
-            inputPayloadMember is null
+            input.PayloadMember is null
             && !inputIsUnit
-            && (inputBodyMembers.Count > 0 || inputMemberCount == 0);
+            && (input.BodyMemberNames.Count > 0 || input.MemberCount == 0);
 
         // Request bodies don't materialize top-level defaults (the client sends only what was set).
-        IProjectionCodec<TInput, TInputBuilder>? inputBodyCodec =
-            inputPayloadMember is null && inputBodyMembers.Count > 0
-                ? codecFactory.FromProjection(
-                    Schemas.Project(inputSchema, inputBodyMembers),
-                    new CodecFactoryOptions
-                    {
-                        MaterializeTopLevelDefaults = false,
-                        DefaultRootName = operation.Id.Name + "Request",
-                    }
-                )
-                : null;
-
-        // Partition output members in a single pass
-        IStructMemberSchema? responseCodeMember = null;
-        var responseHeaderMembers = new List<HeaderMemberBinding>();
-        PrefixHeaderMemberBinding? responsePrefixHeadersMember = null;
-        IMemberSchema<TOutput>? outputPayloadMember = null;
-        var outputBodyMembers = new List<IMemberSchema<TOutput>>();
-
-        foreach (var member in Schemas.GetMembers(outputSchema))
+        if (input.PayloadMember is null && input.BodyMemberNames.Count > 0)
         {
-            if (member.MemberTraits.ContainsKey(RestTraits.HttpResponseCode))
-            {
-                responseCodeMember = member;
-            }
-            else if (member.MemberTraits.TryGetValue(RestTraits.HttpHeader, out var headerTrait))
-            {
-                responseHeaderMembers.Add(
-                    new HeaderMemberBinding(member, headerTrait.Value.AsString())
-                );
-            }
-            else if (
-                member.MemberTraits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait)
-            )
-            {
-                responsePrefixHeadersMember = new PrefixHeaderMemberBinding(
-                    member,
-                    prefixTrait.Value.AsString()
-                );
-            }
-            else if (member.MemberTraits.ContainsKey(RestTraits.HttpPayload))
-            {
-                outputPayloadMember = member;
-            }
-            else
-            {
-                outputBodyMembers.Add(member);
-            }
+            input.BodyCodec = input.CompileBodyCodec(
+                codecFactory,
+                new CodecFactoryOptions
+                {
+                    MaterializeTopLevelDefaults = false,
+                    DefaultRootName = operation.Id.Name + "Request",
+                }
+            );
         }
 
-        // A modeled (non-Unit) structure output always serializes a JSON body — at minimum `{}` —
-        // even when every member is bound to a header/status, so build the codec regardless of
-        // member count. Unit outputs and payload-bound outputs are handled separately. Responses
+        // A modeled (non-Unit) structure output always serializes a body — at minimum `{}` — even
+        // when every member is bound to a header/status, so build the codec regardless of member
+        // count. Unit outputs and payload-bound outputs are handled separately. Responses
         // materialize top-level defaults.
-        IProjectionCodec<TOutput, TOutputBuilder>? outputBodyCodec =
-            outputPayloadMember is null && !outputIsUnit
-                ? codecFactory.FromProjection(
-                    Schemas.Project(outputSchema, outputBodyMembers),
-                    new CodecFactoryOptions
-                    {
-                        MaterializeTopLevelDefaults = true,
-                        DefaultRootName = operation.Id.Name + "Response",
-                    }
-                )
-                : null;
+        if (output.PayloadMember is null && !outputIsUnit)
+        {
+            output.BodyCodec = output.CompileBodyCodec(
+                codecFactory,
+                new CodecFactoryOptions
+                {
+                    MaterializeTopLevelDefaults = true,
+                    DefaultRootName = operation.Id.Name + "Response",
+                }
+            );
+        }
+
+        var inputPayload = input.PayloadMember;
+        var outputPayload = output.PayloadMember;
 
         return new RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder>
         {
@@ -262,86 +153,39 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
             SuccessStatusCode = successStatusCode,
             OutputIsUnit = outputIsUnit,
             BodyContentType = codecFactory.ContentType,
-            AcceptType = outputPayloadMember is null
+            AcceptType = outputPayload is null
                 ? codecFactory.ContentType
                 : RestProtocol.PayloadContentType(
-                    outputPayloadMember.Target,
-                    outputPayloadMember.MemberTraits,
+                    outputPayload.Target,
+                    outputPayload.MemberTraits,
                     codecFactory,
                     rawStringPayloads
                 ),
             RequestContentType =
-                inputPayloadMember is not null
+                inputPayload is not null
                     ? RestProtocol.PayloadContentType(
-                        inputPayloadMember.Target,
-                        inputPayloadMember.MemberTraits,
+                        inputPayload.Target,
+                        inputPayload.MemberTraits,
                         codecFactory,
                         rawStringPayloads
                     )
                 : inputHasBody ? codecFactory.ContentType
                 : null,
             RequestMediaTypeIsOpaque =
-                inputPayloadMember is not null
-                && RestProtocol.IsOpaquePayload(
-                    inputPayloadMember.Target,
-                    inputPayloadMember.MemberTraits
-                ),
+                inputPayload is not null
+                && RestProtocol.IsOpaquePayload(inputPayload.Target, inputPayload.MemberTraits),
             ResponseMediaTypeIsOpaque =
-                outputPayloadMember is not null
-                && RestProtocol.IsOpaquePayload(
-                    outputPayloadMember.Target,
-                    outputPayloadMember.MemberTraits
-                ),
+                outputPayload is not null
+                && RestProtocol.IsOpaquePayload(outputPayload.Target, outputPayload.MemberTraits),
             RequiresDeclaredContentType = requiresDeclaredContentType,
             OutputHasStreamingPayload =
-                outputPayloadMember is not null
+                outputPayload is not null
                 && (
-                    outputPayloadMember.Target.Resolved is IEventStreamSchema
-                    || outputPayloadMember.MemberTraits.ContainsKey(RestTraits.Streaming)
+                    outputPayload.Target.Resolved is IEventStreamSchema
+                    || outputPayload.MemberTraits.ContainsKey(RestTraits.Streaming)
                 ),
-            InputSchema = inputSchema,
-            LabelMembers = labelMembers,
-            QueryMembers = queryMembers,
-            QueryParamsMember = queryParamsMember,
-            RequestHeaderMembers = requestHeaderMembers,
-            RequestPrefixHeadersMember = requestPrefixHeadersMember,
-            BoundQueryNames = boundQueryNames,
-            InputBodyCodec = inputBodyCodec,
-            InputPayloadWriter = inputPayloadMember is null
-                ? null
-                : RestProtocol.BuildPayloadWriter(
-                    inputPayloadMember,
-                    codecFactory,
-                    rawStringPayloads,
-                    emptyStructOnNull: true
-                ),
-            InputPayloadReader = inputPayloadMember is null
-                ? null
-                : RestProtocol.BuildPayloadReader(
-                    inputPayloadMember,
-                    codecFactory,
-                    rawStringPayloads
-                ),
-            OutputSchema = outputSchema,
-            ResponseCodeMember = responseCodeMember,
-            ResponseHeaderMembers = responseHeaderMembers,
-            ResponsePrefixHeadersMember = responsePrefixHeadersMember,
-            OutputBodyCodec = outputBodyCodec,
-            OutputPayloadWriter = outputPayloadMember is null
-                ? null
-                : RestProtocol.BuildPayloadWriter(
-                    outputPayloadMember,
-                    codecFactory,
-                    rawStringPayloads,
-                    emptyStructOnNull: false
-                ),
-            OutputPayloadReader = outputPayloadMember is null
-                ? null
-                : RestProtocol.BuildPayloadReader(
-                    outputPayloadMember,
-                    codecFactory,
-                    rawStringPayloads
-                ),
+            Input = input,
+            Output = output,
         };
     }
 
@@ -378,9 +222,7 @@ public static class RestOperationBinding
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads,
         bool requiresDeclaredContentType = true
-    )
-        where TInputBuilder : notnull
-        where TOutputBuilder : notnull =>
+    ) =>
         RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder>.CreateFrom(
             operation,
             inputSchema,
@@ -389,33 +231,4 @@ public static class RestOperationBinding
             rawStringPayloads,
             requiresDeclaredContentType
         );
-
-    public static dynamic From<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads,
-        bool requiresDeclaredContentType = true
-    )
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        var inputSchema =
-            operation.Input.Resolved as IStructSchema<TInput>
-            ?? throw new InvalidOperationException(
-                $"Operation '{operation.Id}' input must be a structure schema."
-            );
-        var outputSchema =
-            operation.Output.Resolved as IStructSchema<TOutput>
-            ?? throw new InvalidOperationException(
-                $"Operation '{operation.Id}' output must be a structure schema."
-            );
-
-        return From(
-            (dynamic)operation,
-            (dynamic)inputSchema,
-            (dynamic)outputSchema,
-            codecFactory,
-            rawStringPayloads,
-            requiresDeclaredContentType
-        );
-    }
 }

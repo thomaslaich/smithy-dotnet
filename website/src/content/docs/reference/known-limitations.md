@@ -98,9 +98,10 @@ they use the codegen-emitted typed accessors on the schema, with **no runtime
 reflection** — and each compiles a per-shape reader and writer once from the
 schema, caching structural decisions such as dispatch and boxing.
 
-The codecs are not yet validated or optimized for:
+CI publishes and runs a NativeAOT smoke covering a REST/JSON operation with label, header, query,
+and document-body bindings. The codecs are not yet comprehensively validated or optimized for:
 
-- NativeAOT
+- NativeAOT across every codec and protocol combination
 - source-generated serializer metadata
 - every Smithy edge case across future protocol families
 

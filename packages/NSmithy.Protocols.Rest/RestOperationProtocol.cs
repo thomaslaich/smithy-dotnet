@@ -76,19 +76,83 @@ public sealed class RestServiceProtocol(
                 $"Operation '{operation.Id}' output must be a structure schema."
             );
 
-        return CreateOperation(
-            operation,
-            (dynamic)inputSchema,
-            (dynamic)outputSchema,
-            modeledErrors,
-            codecFactory,
-            errorDiscriminator,
-            rawStringPayloads,
-            errorTypeHeader,
-            requestTransform,
-            inputValidator,
-            requiresDeclaredContentType
+        return inputSchema.Accept(
+            new InputSchemaCompiler<TInput, TOutput>(
+                operation,
+                outputSchema,
+                modeledErrors,
+                codecFactory,
+                errorDiscriminator,
+                rawStringPayloads,
+                errorTypeHeader,
+                requestTransform,
+                inputValidator,
+                requiresDeclaredContentType
+            )
         );
+    }
+
+    private sealed class InputSchemaCompiler<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation,
+        IStructSchema<TOutput> outputSchema,
+        IReadOnlyList<IOperationErrorSchema> modeledErrors,
+        IRestBodyCodecFactory codecFactory,
+        Func<SmithyHttpClientResponse, string?> errorDiscriminator,
+        bool rawStringPayloads,
+        string? errorTypeHeader,
+        Action<SmithyHttpRequest>? requestTransform,
+        ISmithyValidator<TInput>? inputValidator,
+        bool requiresDeclaredContentType
+    ) : IStructSchemaVisitor<TInput, IOperationProtocol<TInput, TOutput>>
+    {
+        public IOperationProtocol<TInput, TOutput> Visit<TInputBuilder>(
+            IStructSchema<TInput, TInputBuilder> inputSchema
+        ) =>
+            outputSchema.Accept(
+                new OutputSchemaCompiler<TInput, TOutput, TInputBuilder>(
+                    operation,
+                    inputSchema,
+                    modeledErrors,
+                    codecFactory,
+                    errorDiscriminator,
+                    rawStringPayloads,
+                    errorTypeHeader,
+                    requestTransform,
+                    inputValidator,
+                    requiresDeclaredContentType
+                )
+            );
+    }
+
+    private sealed class OutputSchemaCompiler<TInput, TOutput, TInputBuilder>(
+        OperationSchema<TInput, TOutput> operation,
+        IStructSchema<TInput, TInputBuilder> inputSchema,
+        IReadOnlyList<IOperationErrorSchema> modeledErrors,
+        IRestBodyCodecFactory codecFactory,
+        Func<SmithyHttpClientResponse, string?> errorDiscriminator,
+        bool rawStringPayloads,
+        string? errorTypeHeader,
+        Action<SmithyHttpRequest>? requestTransform,
+        ISmithyValidator<TInput>? inputValidator,
+        bool requiresDeclaredContentType
+    ) : IStructSchemaVisitor<TOutput, IOperationProtocol<TInput, TOutput>>
+    {
+        public IOperationProtocol<TInput, TOutput> Visit<TOutputBuilder>(
+            IStructSchema<TOutput, TOutputBuilder> outputSchema
+        ) =>
+            CreateOperation(
+                operation,
+                inputSchema,
+                outputSchema,
+                modeledErrors,
+                codecFactory,
+                errorDiscriminator,
+                rawStringPayloads,
+                errorTypeHeader,
+                requestTransform,
+                inputValidator,
+                requiresDeclaredContentType
+            );
     }
 
     private static RestOperationProtocol<
@@ -108,9 +172,7 @@ public sealed class RestServiceProtocol(
         Action<SmithyHttpRequest>? requestTransform,
         ISmithyValidator<TInput>? inputValidator,
         bool requiresDeclaredContentType
-    )
-        where TInputBuilder : notnull
-        where TOutputBuilder : notnull =>
+    ) =>
         new RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutputBuilder>(
             RestOperationBinding.From(
                 operation,
@@ -145,8 +207,6 @@ public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutpu
     Action<SmithyHttpRequest>? requestTransform = null,
     ISmithyValidator<TInput>? inputValidator = null
 ) : IOperationProtocol<TInput, TOutput>
-    where TInputBuilder : notnull
-    where TOutputBuilder : notnull
 {
     public ISmithyValidator<TInput>? InputValidator { get; } = inputValidator;
 
@@ -160,8 +220,23 @@ public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutpu
         : ModeledErrorSerializer.Compile(
             modeledErrors,
             error =>
-                CompileServerError((dynamic)error, codecFactory, rawStringPayloads, errorTypeHeader)
+                error.Accept(
+                    new ServerErrorCompiler(codecFactory, rawStringPayloads, errorTypeHeader)
+                )
         );
+
+    private sealed class ServerErrorCompiler(
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads,
+        string errorTypeHeader
+    ) : IOperationErrorSchemaVisitor<(Type, Func<Exception, SmithyHttpServerResponse>)>
+    {
+        public (Type, Func<Exception, SmithyHttpServerResponse>) Visit<TError>(
+            OperationErrorSchema<TError> error
+        )
+            where TError : Exception =>
+            CompileServerError(error, codecFactory, rawStringPayloads, errorTypeHeader);
+    }
 
     public SmithyHttpRequest SerializeRequest(
         TInput input,

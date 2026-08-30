@@ -44,7 +44,7 @@ internal sealed class CborReaderCompiler : ISchemaVisitor<object>
     {
         ArgumentNullException.ThrowIfNull(schema);
 
-        return cache.GetOrCompile<ICborValueReader<T>, DeferredCborValueReader<T>>(
+        return cache.GetOrCompile(
             schema,
             static () => new DeferredCborValueReader<T>(),
             target => (ICborValueReader<T>)target.Accept(this)
@@ -79,7 +79,7 @@ internal sealed class CborReaderCompiler : ISchemaVisitor<object>
         throw new NotSupportedException("Smithy Document values are not supported by rpcv2Cbor.");
 
     public object VisitNullable<T>(NullableSchema<T> schema)
-        where T : struct => new NullableCborValueReader<T>(CompileValue(schema.TargetSchema));
+        where T : struct => new NullableCborValueReader<T>(CompileValue(schema.TypedTarget));
 
     public object VisitStreamingBlob(Schema<Stream> schema) =>
         throw new NotSupportedException("CBOR codec does not support streaming blob schemas.");
@@ -269,7 +269,7 @@ internal sealed class CborMemberReaderCompiler<TContainer, TBuilder>(CborReaderC
         readers.Add(
             new CborMemberReader<TContainer, TBuilder, TValue>(
                 member,
-                compiler.CompileValue(member.TargetSchema)
+                compiler.CompileValue(member.TypedTarget)
             )
         );
     }
@@ -284,17 +284,17 @@ internal sealed class CborMemberReader<TContainer, TBuilder, TValue>(
 
     public bool IsRequired => member.IsRequired;
 
+    // Constant per member, so resolved at compile time rather than per missing member.
+    private readonly Func<TValue>? defaultValue = CompileDefault(
+        member.TypedTarget,
+        member.MemberTraits
+    );
+
     public void ReadMissing(TBuilder builder)
     {
-        if (
-            TryCreateDefaultValue(
-                member.TargetSchema,
-                member.MemberTraits,
-                out TValue? defaultValue
-            )
-        )
+        if (defaultValue is { } create)
         {
-            member.SetValue(builder, defaultValue!);
+            member.SetValue(builder, create());
         }
     }
 

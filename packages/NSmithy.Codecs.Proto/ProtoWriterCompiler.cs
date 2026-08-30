@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Globalization;
 using System.Numerics;
 using System.Text;
@@ -73,7 +74,7 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
                 resolved.Accept(new MemberTraitProtoWriterCompiler(this, traits));
         }
 
-        return cache.GetOrCompile<IProtoValueWriter<T>, DeferredProtoValueWriter<T>>(
+        return cache.GetOrCompile(
             resolved,
             static () => new DeferredProtoValueWriter<T>(),
             target => (IProtoValueWriter<T>)target.Accept(this)
@@ -98,20 +99,20 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
 
     public object VisitDouble(Schema<double> schema) => new DoubleProtoValueWriter();
 
-    public object VisitBigInteger(Schema<BigInteger> schema) => Scalar(schema, EmptyTraits);
+    public object VisitBigInteger(Schema<BigInteger> schema) => new BigIntegerProtoValueWriter();
 
-    public object VisitBigDecimal(Schema<decimal> schema) => Scalar(schema, EmptyTraits);
+    public object VisitBigDecimal(Schema<decimal> schema) => new BigDecimalProtoValueWriter();
 
     public object VisitString(Schema<string> schema) => new StringProtoValueWriter();
 
     public object VisitBlob(Schema<byte[]> schema) => new BlobProtoValueWriter();
 
-    public object VisitTimestamp(Schema<DateTimeOffset> schema) => Scalar(schema, EmptyTraits);
+    public object VisitTimestamp(Schema<DateTimeOffset> schema) => new TimestampProtoValueWriter();
 
     public object VisitDocument(Schema<Document> schema) => new DocumentProtoValueWriter();
 
     public object VisitNullable<T>(NullableSchema<T> schema)
-        where T : struct => new NullableProtoValueWriter<T>(CompileValue(schema.TargetSchema));
+        where T : struct => new NullableProtoValueWriter<T>(CompileValue(schema.TypedTarget));
 
     public object VisitStreamingBlob(Schema<Stream> schema) =>
         throw new NotSupportedException("Proto codec does not support streaming blob schemas.");
@@ -142,15 +143,10 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
     }
 
     public object VisitStringEnum<T>(StringEnumSchema<T> schema)
-        where T : IStringEnumValue<T> => Scalar(schema, EmptyTraits);
+        where T : IStringEnumValue<T> => new StringEnumProtoValueWriter<T>(schema);
 
     public object VisitIntEnum<T>(IntEnumSchema<T> schema)
-        where T : struct, Enum => Scalar(schema, EmptyTraits);
-
-    private static ScalarProtoValueWriter<T> Scalar<T>(
-        Schema<T> schema,
-        IReadOnlyDictionary<ShapeId, Trait> traits
-    ) => new(schema, traits);
+        where T : struct, Enum => new IntEnumProtoValueWriter<T>(schema);
 
     private static object UnsupportedAggregateValue() =>
         throw new NotSupportedException(
@@ -167,70 +163,23 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
 }
 
 internal sealed class MessageWriterVisitor(ProtoValueWriterCompiler compiler)
-    : ISchemaVisitor<object>
+    : PartialSchemaVisitor<object>
 {
-    public object VisitBoolean(Schema<bool> schema) => Unsupported();
-
-    public object VisitByte(Schema<sbyte> schema) => Unsupported();
-
-    public object VisitShort(Schema<short> schema) => Unsupported();
-
-    public object VisitInteger(Schema<int> schema) => Unsupported();
-
-    public object VisitLong(Schema<long> schema) => Unsupported();
-
-    public object VisitFloat(Schema<float> schema) => Unsupported();
-
-    public object VisitDouble(Schema<double> schema) => Unsupported();
-
-    public object VisitBigInteger(Schema<BigInteger> schema) => Unsupported();
-
-    public object VisitBigDecimal(Schema<decimal> schema) => Unsupported();
-
-    public object VisitString(Schema<string> schema) => Unsupported();
-
-    public object VisitBlob(Schema<byte[]> schema) => Unsupported();
-
-    public object VisitTimestamp(Schema<DateTimeOffset> schema) => Unsupported();
-
-    public object VisitDocument(Schema<Document> schema) => Unsupported();
-
-    public object VisitNullable<T>(NullableSchema<T> schema)
-        where T : struct => Unsupported();
-
-    public object VisitStreamingBlob(Schema<Stream> schema) => Unsupported();
-
-    public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) => Unsupported();
-
-    public object VisitList<TCollection, TElement, TBuilder>(
-        IListSchema<TCollection, TElement, TBuilder> schema
-    ) => Unsupported();
-
-    public object VisitMap<TDictionary, TValue, TBuilder>(
-        IMapSchema<TDictionary, TValue, TBuilder> schema
-    ) => Unsupported();
-
-    public object VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
+    public override object VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
     {
         var visitor = new ProtoMemberWriterCompiler<T>(compiler);
         schema.VisitMembers(visitor);
         return ProtoValueWriterCompiler.CreateStructureWriter(schema, visitor);
     }
 
-    public object VisitUnion<T>(IUnionSchema<T> schema)
+    public override object VisitUnion<T>(IUnionSchema<T> schema)
     {
         var visitor = new ProtoUnionCaseWriterCompiler<T>(compiler);
         schema.VisitCases(visitor);
         return new UnionProtoMessageWriter<T>(visitor.Writers);
     }
 
-    public object VisitStringEnum<T>(StringEnumSchema<T> schema)
-        where T : IStringEnumValue<T> => Unsupported();
-
-    public object VisitIntEnum<T>(IntEnumSchema<T> schema)
-        where T : struct, Enum => Unsupported();
-
-    private static object Unsupported() =>
+    protected override object VisitDefault(Schema schema) =>
         throw new InvalidOperationException(
             "Protobuf messages must be backed by a structure or union schema."
         );
@@ -259,24 +208,21 @@ internal sealed class MemberTraitProtoWriterCompiler(
 
     public object VisitDouble(Schema<double> schema) => new DoubleProtoValueWriter();
 
-    public object VisitBigInteger(Schema<BigInteger> schema) =>
-        new ScalarProtoValueWriter<BigInteger>(schema, traits);
+    public object VisitBigInteger(Schema<BigInteger> schema) => new BigIntegerProtoValueWriter();
 
-    public object VisitBigDecimal(Schema<decimal> schema) =>
-        new ScalarProtoValueWriter<decimal>(schema, traits);
+    public object VisitBigDecimal(Schema<decimal> schema) => new BigDecimalProtoValueWriter();
 
     public object VisitString(Schema<string> schema) => new StringProtoValueWriter();
 
     public object VisitBlob(Schema<byte[]> schema) => new BlobProtoValueWriter();
 
-    public object VisitTimestamp(Schema<DateTimeOffset> schema) =>
-        new ScalarProtoValueWriter<DateTimeOffset>(schema, traits);
+    public object VisitTimestamp(Schema<DateTimeOffset> schema) => new TimestampProtoValueWriter();
 
     public object VisitDocument(Schema<Document> schema) => inner.CompileValue(schema);
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct =>
-        new NullableProtoValueWriter<T>(inner.CompileValue(schema.TargetSchema, traits));
+        new NullableProtoValueWriter<T>(inner.CompileValue(schema.TypedTarget, traits));
 
     public object VisitStreamingBlob(Schema<Stream> schema) => inner.CompileValue(schema);
 
@@ -297,10 +243,10 @@ internal sealed class MemberTraitProtoWriterCompiler(
     public object VisitUnion<T>(IUnionSchema<T> schema) => inner.CompileValue((Schema<T>)schema);
 
     public object VisitStringEnum<T>(StringEnumSchema<T> schema)
-        where T : IStringEnumValue<T> => new ScalarProtoValueWriter<T>(schema, traits);
+        where T : IStringEnumValue<T> => new StringEnumProtoValueWriter<T>(schema);
 
     public object VisitIntEnum<T>(IntEnumSchema<T> schema)
-        where T : struct, Enum => new ScalarProtoValueWriter<T>(schema, traits);
+        where T : struct, Enum => new IntEnumProtoValueWriter<T>(schema);
 }
 
 internal sealed class DeferredProtoValueWriter<T>
@@ -422,81 +368,57 @@ internal sealed class BlobProtoValueWriter : IProtoValueWriter<byte[]>
     public void WriteBody(ProtoWriter writer, byte[] value) => writer.WriteLengthDelimited(value);
 }
 
-internal sealed class ScalarProtoValueWriter<T>(
-    Schema<T> schema,
-    IReadOnlyDictionary<ShapeId, Trait> traits
-) : IProtoValueWriter<T>
+internal sealed class BigIntegerProtoValueWriter : IProtoValueWriter<BigInteger>
 {
-    public WireType WireType { get; } = ProtoWire.WireTypeOf(ProtoWire.Unwrap(schema).Kind, traits);
+    public WireType WireType => WireType.Len;
 
-    public void WriteBody(ProtoWriter writer, T value)
+    public void WriteBody(ProtoWriter writer, BigInteger value) =>
+        writer.WriteLengthDelimitedUtf8(value.ToString(CultureInfo.InvariantCulture));
+}
+
+internal sealed class BigDecimalProtoValueWriter : IProtoValueWriter<decimal>
+{
+    public WireType WireType => WireType.Len;
+
+    public void WriteBody(ProtoWriter writer, decimal value) =>
+        writer.WriteLengthDelimitedUtf8(value.ToString(CultureInfo.InvariantCulture));
+}
+
+internal sealed class TimestampProtoValueWriter : IProtoValueWriter<DateTimeOffset>
+{
+    public WireType WireType => WireType.Len;
+
+    public void WriteBody(ProtoWriter writer, DateTimeOffset value)
     {
-        var resolved = ProtoWire.Unwrap(schema);
-        switch (resolved.Kind)
-        {
-            case ShapeKind.Boolean:
-                writer.WriteVarint((bool)(object)value! ? 1UL : 0UL);
-                break;
-            case ShapeKind.Byte:
-                ProtoWire.WriteInteger(writer, resolved.Kind, traits, (sbyte)(object)value!);
-                break;
-            case ShapeKind.Short:
-                ProtoWire.WriteInteger(writer, resolved.Kind, traits, (short)(object)value!);
-                break;
-            case ShapeKind.Integer:
-                ProtoWire.WriteInteger(writer, resolved.Kind, traits, (int)(object)value!);
-                break;
-            case ShapeKind.Long:
-                ProtoWire.WriteInteger(writer, resolved.Kind, traits, (long)(object)value!);
-                break;
-            case ShapeKind.Float:
-                writer.WriteFixed32(BitConverter.SingleToUInt32Bits((float)(object)value!));
-                break;
-            case ShapeKind.Double:
-                writer.WriteFixed64(BitConverter.DoubleToUInt64Bits((double)(object)value!));
-                break;
-            case ShapeKind.String:
-                writer.WriteLengthDelimitedUtf8((string)(object)value!);
-                break;
-            case ShapeKind.Blob:
-                writer.WriteLengthDelimited((byte[])(object)value!);
-                break;
-            case ShapeKind.BigInteger:
-                writer.WriteLengthDelimitedUtf8(
-                    ((BigInteger)(object)value!).ToString(CultureInfo.InvariantCulture)
-                );
-                break;
-            case ShapeKind.BigDecimal:
-                writer.WriteLengthDelimitedUtf8(
-                    ((decimal)(object)value!).ToString(CultureInfo.InvariantCulture)
-                );
-                break;
-            case ShapeKind.IntEnum:
-                writer.WriteVarint(
-                    (ulong)(long)((IIntEnumSchema)resolved).GetIntegerValueObject(value!)
-                );
-                break;
-            case ShapeKind.Timestamp:
-                var timestamp = writer.BeginLengthDelimited();
-                ProtoWire.EncodeTimestamp(writer, (DateTimeOffset)(object)value!);
-                writer.EndLengthDelimited(timestamp);
-                break;
-            case ShapeKind.Enum:
-                writer.WriteVarint(
-                    (ulong)
-                        (long)
-                            ProtoWire.EnumOrdinal(
-                                resolved,
-                                ((IStringEnumValue)(object)value!).Value
-                            )
-                );
-                break;
-            default:
-                throw new NotSupportedException(
-                    $"Proto codec cannot encode schema kind '{resolved.Kind}'."
-                );
-        }
+        var prefix = writer.BeginLengthDelimited();
+        ProtoWire.EncodeTimestamp(writer, value);
+        writer.EndLengthDelimited(prefix);
     }
+}
+
+/// <summary>A string enum is a proto enum whose ordinals follow the model's declaration order.</summary>
+internal sealed class StringEnumProtoValueWriter<T>(StringEnumSchema<T> schema)
+    : IProtoValueWriter<T>
+    where T : IStringEnumValue<T>
+{
+    private readonly FrozenDictionary<string, int> ordinals = ProtoWire.EnumOrdinals(schema);
+
+    public WireType WireType => WireType.Varint;
+
+    // Unknown / unmatched maps to the proto UNSPECIFIED = 0 default.
+    public void WriteBody(ProtoWriter writer, T value) =>
+        writer.WriteVarint(
+            (ulong)(long)(ordinals.TryGetValue(value.Value, out var ordinal) ? ordinal : 0)
+        );
+}
+
+internal sealed class IntEnumProtoValueWriter<T>(IntEnumSchema<T> schema) : IProtoValueWriter<T>
+    where T : struct, Enum
+{
+    public WireType WireType => WireType.Varint;
+
+    public void WriteBody(ProtoWriter writer, T value) =>
+        writer.WriteVarint((ulong)(long)schema.GetIntegerValue(value));
 }
 
 internal sealed class NullableProtoValueWriter<T>(IProtoValueWriter<T> inner)
@@ -551,26 +473,54 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
 
     public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
     {
-        var target = ProtoWire.Unwrap(member.TargetSchema);
-        if (target is IUnionSchema union && ProtoWire.IsInlinedUnion(target))
+        var target = ProtoWire.Unwrap(member.TypedTarget);
+        if (ProtoWire.IsInlinedUnion(target))
         {
-            AddInlinedOneOfPlan(member, (dynamic)union);
+            target.Accept(new InlinedOneOfCompiler<TValue>(this, member));
             return;
         }
 
         var fieldNumber = ProtoWire.FieldNumber(member.Id, member.MemberTraits, writers.Count);
-        IProtoMemberPlan<TValue> plan = target switch
-        {
-            IListSchema list => CreateListPlan((dynamic)list, fieldNumber),
-            IMapSchema map => CreateMapPlan((dynamic)map, fieldNumber),
-            _ => new ValueProtoMemberPlan<TValue>(
-                fieldNumber,
-                compiler.CompileValue(member.TargetSchema, member.MemberTraits)
-            ),
-        };
+        var plan = target.Accept(new PlanCompiler<TValue>(this, member, fieldNumber));
         plans.Add(plan);
         writers.Add(new ProtoMemberWriter<TContainer, TValue>(member, plan));
     }
+
+    // A repeated or map field's element type only comes into scope by visiting the target.
+    private sealed class PlanCompiler<TValue>(
+        ProtoMemberWriterCompiler<TContainer> owner,
+        IMemberSchema<TContainer, TValue> member,
+        int fieldNumber
+    ) : PartialSchemaVisitor<IProtoMemberPlan<TValue>>
+    {
+        public override IProtoMemberPlan<TValue> VisitList<TCollection, TElement, TBuilder>(
+            IListSchema<TCollection, TElement, TBuilder> schema
+        ) => owner.CreateListPlan((IListSchema<TValue, TElement>)(object)schema, fieldNumber);
+
+        public override IProtoMemberPlan<TValue> VisitMap<TDictionary, TMapValue, TBuilder>(
+            IMapSchema<TDictionary, TMapValue, TBuilder> schema
+        ) => owner.CreateMapPlan((IMapSchema<TValue, TMapValue>)(object)schema, fieldNumber);
+
+        protected override IProtoMemberPlan<TValue> VisitDefault(Schema schema) =>
+            owner.CreateValuePlan(member, fieldNumber);
+    }
+
+    private sealed class InlinedOneOfCompiler<TValue>(
+        ProtoMemberWriterCompiler<TContainer> owner,
+        IMemberSchema<TContainer, TValue> member
+    ) : PartialSchemaVisitor<object?>
+    {
+        public override object? VisitUnion<TUnion>(IUnionSchema<TUnion> schema)
+        {
+            owner.AddInlinedOneOfPlan((IMemberSchema<TContainer, TUnion>)(object)member, schema);
+            return null;
+        }
+    }
+
+    private ValueProtoMemberPlan<TValue> CreateValuePlan<TValue>(
+        IMemberSchema<TContainer, TValue> member,
+        int fieldNumber
+    ) => new(fieldNumber, compiler.CompileValue(member.TypedTarget, member.MemberTraits));
 
     private void AddInlinedOneOfPlan<TUnion>(
         IMemberSchema<TContainer, TUnion> member,
@@ -592,7 +542,7 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
             list,
             fieldNumber,
             compiler.CompileValue(
-                list.TypedElementMember.TargetSchema,
+                list.TypedElementMember.TypedTarget,
                 list.TypedElementMember.MemberTraits
             )
         );
@@ -606,7 +556,7 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
             fieldNumber,
             ProtoWire.IsSparse((Schema)map),
             compiler.CompileValue(
-                map.TypedValueMember.TargetSchema,
+                map.TypedValueMember.TypedTarget,
                 map.TypedValueMember.MemberTraits
             )
         );
@@ -696,7 +646,7 @@ internal sealed class MapProtoMemberPlan<TDictionary, TValue>(
 ) : IProtoMemberPlan<TDictionary>
 {
     private readonly SparseScalarValueWriter<TValue> sparseWriter = new(
-        map.TypedValueMember.TargetSchema
+        map.TypedValueMember.TypedTarget
     );
     private readonly WireType valueWireType = valueWriter.WireType;
 

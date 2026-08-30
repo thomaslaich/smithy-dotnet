@@ -102,7 +102,7 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
             memberTraits.Count != 0
                 ? (IXmlValueWriter<T>)
                     resolved.Accept(new MemberTraitXmlWriterCompiler(this, memberTraits))
-                : cache.GetOrCompile<IXmlValueWriter<T>, DeferredXmlValueWriter<T>>(
+                : cache.GetOrCompile(
                     resolved,
                     static () => new DeferredXmlValueWriter<T>(),
                     target => (IXmlValueWriter<T>)target.Accept(this)
@@ -141,7 +141,7 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
         throw new NotSupportedException("Smithy Document values are not supported in XML.");
 
     public object VisitNullable<T>(NullableSchema<T> schema)
-        where T : struct => new NullableXmlValueWriter<T>(CompileValue(schema.TargetSchema));
+        where T : struct => new NullableXmlValueWriter<T>(CompileValue(schema.TypedTarget));
 
     public object VisitStreamingBlob(Schema<Stream> schema) =>
         throw new NotSupportedException("XML codec does not support streaming blob schemas.");
@@ -155,7 +155,7 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
         new ListXmlValueWriter<TCollection, TElement>(
             schema,
             CompileValue(
-                schema.TypedElementMember.TargetSchema,
+                schema.TypedElementMember.TypedTarget,
                 schema.TypedElementMember.MemberTraits
             )
         );
@@ -165,7 +165,7 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
     ) =>
         new MapXmlValueWriter<TDictionary, TValue>(
             schema,
-            CompileValue(schema.TypedValueMember.TargetSchema, schema.TypedValueMember.MemberTraits)
+            CompileValue(schema.TypedValueMember.TypedTarget, schema.TypedValueMember.MemberTraits)
         );
 
     public object VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
@@ -286,7 +286,7 @@ internal sealed class MemberTraitXmlWriterCompiler(
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct =>
-        new NullableXmlValueWriter<T>(inner.CompileValue(schema.TargetSchema, memberTraits));
+        new NullableXmlValueWriter<T>(inner.CompileValue(schema.TypedTarget, memberTraits));
 
     public object VisitStreamingBlob(Schema<Stream> schema) => inner.CompileValue(schema);
 
@@ -318,11 +318,13 @@ internal sealed class ScalarXmlValueWriter<T>(
     IReadOnlyDictionary<ShapeId, Trait> traits
 ) : IXmlValueWriter<T>
 {
+    private readonly IXmlScalar<T> scalar = XmlScalars.Compile(schema, traits);
+
     public void Write(XElement element, T value)
     {
         if (value is not null)
         {
-            element.Value = FormatScalar(schema, traits, value);
+            element.Value = scalar.Format(value);
         }
     }
 }
@@ -367,7 +369,7 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(
             ? CreateFlattenedPlan(member)
             : new XmlMemberPlan<TValue>(
                 member,
-                compiler.CompileValue(member.TargetSchema, member.MemberTraits),
+                compiler.CompileValue(member.TypedTarget, member.MemberTraits),
                 materializeDefaults
             );
         plans.Add(plan);
@@ -376,20 +378,35 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(
 
     private IXmlMemberPlan<TValue> CreateFlattenedPlan<TValue>(
         IMemberSchema<TContainer, TValue> member
-    )
+    ) => member.TypedTarget.Resolved.Accept(new FlattenedPlanCompiler<TValue>(this, member));
+
+    // A flattened member targets a list or map whose element type only comes into scope by
+    // visiting it; anything else flattens to a plain member.
+    private sealed class FlattenedPlanCompiler<TValue>(
+        XmlMemberWriterCompiler<TContainer> owner,
+        IMemberSchema<TContainer, TValue> member
+    ) : PartialSchemaVisitor<IXmlMemberPlan<TValue>>
     {
-        var target = member.TargetSchema.Resolved;
-        return target switch
-        {
-            IListSchema list => CreateFlattenedListPlan(member, (dynamic)list),
-            IMapSchema map => CreateFlattenedMapPlan(member, (dynamic)map),
-            _ => new FlattenedXmlMemberPlan<TValue>(
-                member,
-                compiler.CompileValue(member.TargetSchema, member.MemberTraits),
-                materializeDefaults
-            ),
-        };
+        public override IXmlMemberPlan<TValue> VisitList<TCollection, TElement, TBuilder>(
+            IListSchema<TCollection, TElement, TBuilder> schema
+        ) => owner.CreateFlattenedListPlan(member, (IListSchema<TValue, TElement>)(object)schema);
+
+        public override IXmlMemberPlan<TValue> VisitMap<TDictionary, TMapValue, TBuilder>(
+            IMapSchema<TDictionary, TMapValue, TBuilder> schema
+        ) => owner.CreateFlattenedMapPlan(member, (IMapSchema<TValue, TMapValue>)(object)schema);
+
+        protected override IXmlMemberPlan<TValue> VisitDefault(Schema schema) =>
+            owner.CreateFlattenedValuePlan(member);
     }
+
+    private FlattenedXmlMemberPlan<TValue> CreateFlattenedValuePlan<TValue>(
+        IMemberSchema<TContainer, TValue> member
+    ) =>
+        new(
+            member,
+            compiler.CompileValue(member.TypedTarget, member.MemberTraits),
+            materializeDefaults
+        );
 
     private FlattenedListXmlMemberPlan<TValue, TElement> CreateFlattenedListPlan<TValue, TElement>(
         IMemberSchema<TContainer, TValue> member,
@@ -399,7 +416,7 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(
             member,
             list,
             compiler.CompileValue(
-                list.TypedElementMember.TargetSchema,
+                list.TypedElementMember.TypedTarget,
                 list.TypedElementMember.MemberTraits
             ),
             materializeDefaults
@@ -413,7 +430,7 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(
             member,
             map,
             compiler.CompileValue(
-                map.TypedValueMember.TargetSchema,
+                map.TypedValueMember.TypedTarget,
                 map.TypedValueMember.MemberTraits
             ),
             materializeDefaults
@@ -438,16 +455,19 @@ internal sealed class FallbackXmlMemberWriter<TContainer, TValue>(
 }
 
 internal sealed class XmlMemberPlan<TValue>(
-    ITargetedMemberSchema<TValue> member,
+    ITypedTargetMemberSchema<TValue> member,
     IXmlValueWriter<TValue> valueWriter,
     bool materializeDefault
 ) : IXmlMemberPlan<TValue>
 {
     private readonly bool isRequired = member.IsRequired;
+    private readonly IXmlScalar<TValue>? attribute = XmlTraits.IsXmlAttribute(member)
+        ? XmlScalars.Compile(member.TypedTarget, member.MemberTraits)
+        : null;
 
     // Constant per member, so resolved at compile time rather than per write.
     private readonly (bool Present, TValue? Value) memberDefault = ResolveDefault(
-        member.TargetSchema,
+        member.TypedTarget,
         member.MemberTraits,
         materializeDefault
     );
@@ -468,7 +488,7 @@ internal sealed class XmlMemberPlan<TValue>(
         {
             element.SetAttributeValue(
                 AttributeName(element, ElementName(member)),
-                FormatScalar(member.TargetSchema, member.MemberTraits, value)
+                attribute!.Format(value)
             );
             return;
         }
@@ -487,7 +507,7 @@ internal sealed class XmlMemberPlan<TValue>(
 }
 
 internal sealed class FlattenedXmlMemberPlan<TValue>(
-    ITargetedMemberSchema<TValue> member,
+    ITypedTargetMemberSchema<TValue> member,
     IXmlValueWriter<TValue> valueWriter,
     bool materializeDefault
 ) : IXmlMemberPlan<TValue>
@@ -496,7 +516,7 @@ internal sealed class FlattenedXmlMemberPlan<TValue>(
 
     // Constant per member, so resolved at compile time rather than per write.
     private readonly (bool Present, TValue? Value) memberDefault = ResolveDefault(
-        member.TargetSchema,
+        member.TypedTarget,
         member.MemberTraits,
         materializeDefault
     );
@@ -520,7 +540,7 @@ internal sealed class FlattenedXmlMemberPlan<TValue>(
 }
 
 internal sealed class FlattenedListXmlMemberPlan<TCollection, TElement>(
-    ITargetedMemberSchema<TCollection> member,
+    ITypedTargetMemberSchema<TCollection> member,
     IListSchema<TCollection, TElement> list,
     IXmlValueWriter<TElement> elementWriter,
     bool materializeDefault
@@ -530,7 +550,7 @@ internal sealed class FlattenedListXmlMemberPlan<TCollection, TElement>(
 
     // Constant per member, so resolved at compile time rather than per write.
     private readonly (bool Present, TCollection? Value) memberDefault = ResolveDefault(
-        member.TargetSchema,
+        member.TypedTarget,
         member.MemberTraits,
         materializeDefault
     );
@@ -562,7 +582,7 @@ internal sealed class FlattenedListXmlMemberPlan<TCollection, TElement>(
 }
 
 internal sealed class FlattenedMapXmlMemberPlan<TDictionary, TValue>(
-    ITargetedMemberSchema<TDictionary> member,
+    ITypedTargetMemberSchema<TDictionary> member,
     IMapSchema<TDictionary, TValue> map,
     IXmlValueWriter<TValue> valueWriter,
     bool materializeDefault
@@ -574,7 +594,7 @@ internal sealed class FlattenedMapXmlMemberPlan<TDictionary, TValue>(
 
     // Constant per member, so resolved at compile time rather than per write.
     private readonly (bool Present, TDictionary? Value) memberDefault = ResolveDefault(
-        member.TargetSchema,
+        member.TypedTarget,
         member.MemberTraits,
         materializeDefault
     );

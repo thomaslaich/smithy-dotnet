@@ -30,7 +30,7 @@ internal sealed class JsonRestBodyCodecFactory(WireReadMode readMode) : IRestBod
         codecFactory.FromSchema(schema, options);
 
     public ICodec<T> FromMember<T>(
-        ITargetedMemberSchema<T> member,
+        ITypedTargetMemberSchema<T> member,
         CodecFactoryOptions? options = null
     ) => codecFactory.FromMember(member, options);
 

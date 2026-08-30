@@ -186,7 +186,7 @@ internal static class GrpcCodecCases
     {
         var googleValue = Bench.GrpcNet.GetItemOutput.Parser.ParseFrom(payload);
         var nsmithyValue = new Native.GetItemOutput(Item("item-0", 0));
-        var nsmithyCodec = ProtoCodec.FromSchema(Native.GetItemOutputSchema.Schema);
+        var nsmithyCodec = ProtoCodecFactory.Default.FromSchema(Native.GetItemOutputSchema.Schema);
         return new GrpcCodecCase(
             googleValue.ToByteArray,
             () => nsmithyCodec.Serialize(nsmithyValue),
@@ -203,7 +203,9 @@ internal static class GrpcCodecCases
                 Enumerable.Range(0, 100).Select(index => Item($"item-{index}", index))
             )
         );
-        var nsmithyCodec = ProtoCodec.FromSchema(Native.ListItemsOutputSchema.Schema);
+        var nsmithyCodec = ProtoCodecFactory.Default.FromSchema(
+            Native.ListItemsOutputSchema.Schema
+        );
         return new GrpcCodecCase(
             googleValue.ToByteArray,
             () => nsmithyCodec.Serialize(nsmithyValue),

@@ -333,6 +333,38 @@ was neutral at 1.90 µs for one item and about 105 µs for 100 items.
 
 ## Fixed
 
+### The untyped schema surface is gone, and it was not where the time went
+
+`MEASURED`, codec suite: neutral. The schema model no longer exposes an `object`
+tier (`GetObject`/`SetObject`, `*Object` collection accessors, `CreateObject` on
+enums, `GetCaseObject` on unions), and no codec or protocol reaches a typed
+overload through `(dynamic)` at request time. REST labels, headers, query
+parameters, prefix headers and status codes are compiled once per operation into
+typed per-member plans; the awsQuery form writer is compiled once per operation;
+XML scalars and proto scalars, timestamps and enums are compiled per kind, with
+proto enum ordinals in a frozen table rather than re-parsed from the synthetic
+trait per value; `@default` resolves once into a typed factory shared by JSON,
+CBOR, XML and the REST payload path.
+
+Measured before and after on the same machine, in process:
+
+| Benchmark | Before | After |
+| --- | --- | --- |
+| XML serialize, 1 item | 1.677 μs, 15.78 KB | 1.680 μs, 15.78 KB |
+| XML serialize, 100 items | 92.6 μs, 189.15 KB | 91.8 μs, 189.15 KB |
+| REST modeled error response | 276.9 ns, 1224 B | 274.7 ns, 1224 B |
+| Proto serialize | 39.31 ns, 48 B | 39.25 ns, 48 B |
+
+Every difference is inside the error bars. The per-value `ShapeKind` switch and
+the boxing it implied were real but invisible next to `XElement` construction
+(15 KB per single-item document) and the fixed cost of a response. What the
+change buys is the API and the AOT story, not time: `Schema.cs` lost the
+duplicate tier and two of its three collection-class families, and the runtime
+binder is no longer on any per-request path. `HYPOTHESIS`: header- and
+query-heavy REST operations, which no benchmark in this suite exercises, are
+where the removed boxing would show, and they should get a micro benchmark
+before any claim is made.
+
 ### Generated structures write typed values directly across codecs
 
 `MEASURED` for JSON, CBOR, XML and proto. Codegen now attaches an
@@ -485,7 +517,7 @@ member list, it was likely worse than 4×.
 `OBSERVED`, and **the suite cannot see it**. Recorded as a negative result.
 
 Every write-path member writer called
-`TryCreateDefaultValue(member.TargetSchema, member.MemberTraits, out _)` for each
+`TryCreateDefaultValue(member.TypedTarget, member.MemberTraits, out _)` for each
 optional member that was null, re-entering trait resolution — two dictionary
 lookups — per member per object. Whether a member has a default, and what it is,
 are constant per member, exactly like the wire name was, so both are now resolved

@@ -49,7 +49,7 @@ internal sealed class CborWriterCompiler : ISchemaVisitor<object>
     {
         ArgumentNullException.ThrowIfNull(schema);
 
-        return cache.GetOrCompile<ICborValueWriter<T>, DeferredCborValueWriter<T>>(
+        return cache.GetOrCompile(
             schema,
             static () => new DeferredCborValueWriter<T>(),
             target => (ICborValueWriter<T>)target.Accept(this)
@@ -112,7 +112,7 @@ internal sealed class CborWriterCompiler : ISchemaVisitor<object>
         throw new NotSupportedException("Smithy Document values are not supported by rpcv2Cbor.");
 
     public object VisitNullable<T>(NullableSchema<T> schema)
-        where T : struct => new NullableCborValueWriter<T>(CompileValue(schema.TargetSchema));
+        where T : struct => new NullableCborValueWriter<T>(CompileValue(schema.TypedTarget));
 
     public object VisitStreamingBlob(Schema<Stream> schema) =>
         throw new NotSupportedException("CBOR codec does not support streaming blob schemas.");
@@ -238,7 +238,7 @@ internal sealed class CborMemberWriterCompiler<TContainer>(
 
         var plan = new CborMemberPlan<TValue>(
             member,
-            compiler.CompileValue(member.TargetSchema),
+            compiler.CompileValue(member.TypedTarget),
             materializeDefaults
         );
         plans.Add(plan);
@@ -264,7 +264,7 @@ internal sealed class CborMemberWriter<TContainer, TValue>(
 }
 
 internal sealed class CborMemberPlan<TValue>(
-    ITargetedMemberSchema<TValue> member,
+    ITypedTargetMemberSchema<TValue> member,
     ICborValueWriter<TValue> valueWriter,
     bool materializeDefault
 )
@@ -274,7 +274,7 @@ internal sealed class CborMemberPlan<TValue>(
 
     // Constant per member, so resolved at compile time rather than per write.
     private readonly (bool Present, TValue? Value) memberDefault = ResolveDefault(
-        member.TargetSchema,
+        member.TypedTarget,
         member.MemberTraits,
         materializeDefault
     );

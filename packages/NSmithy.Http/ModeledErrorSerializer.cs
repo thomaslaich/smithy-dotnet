@@ -21,9 +21,9 @@ public sealed class ModeledErrorSerializer
 
     /// <summary>
     /// Compiles the operation's modeled errors into a matcher. <paramref name="compile"/> maps one
-    /// modeled error to its CLR exception type and a serializer; a protocol implements it by
-    /// dispatching to a generic method (typically via <c>(dynamic)error</c>) that closes over the
-    /// protocol's own error-body encoding.
+    /// modeled error to its CLR exception type and a serializer; a protocol can use
+    /// <see cref="IOperationErrorSchema.Accept{TResult}(IOperationErrorSchemaVisitor{TResult})"/> to
+    /// recover that type without reflection or the runtime binder.
     /// </summary>
     public static ModeledErrorSerializer Compile(
         IReadOnlyList<IOperationErrorSchema> errors,
