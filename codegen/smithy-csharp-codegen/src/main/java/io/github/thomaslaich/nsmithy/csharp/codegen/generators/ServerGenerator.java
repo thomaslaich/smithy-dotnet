@@ -2,6 +2,7 @@
  * Server-side code generator. Emits:
  *   - one `I{Operation}Handler` per operation (streaming surface derived from the model)
  *   - aggregate `I{Service}ServiceHandler`
+ *   - a protocol-neutral executable operation catalog for the aggregate handler
  *   - `{Service}ServiceServerExtensions` with AddXxxHandler<THandler>(IServiceCollection)
  *   - `{Service}ServiceProtocols` flags and `Map{Service}Service(..., protocols)` that bind
  *     selected protocol routes to the shared handler
@@ -76,6 +77,7 @@ public final class ServerGenerator implements Runnable {
     boolean emitsAspNetCore = !serverKinds.isEmpty();
 
     writer.addImport(RuntimeTypes.NSMITHY_CORE);
+    writer.addImport(RuntimeTypes.NSMITHY_SERVER);
     writer.addImport(RuntimeTypes.MS_EXT_DI);
     if (emitsAspNetCore) {
       writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
@@ -158,6 +160,9 @@ public final class ServerGenerator implements Runnable {
                 writer.write("return services;");
               });
 
+          writer.write("");
+          writeOperationCatalog(ops, contract, aggInterface);
+
           if (serverKinds.isEmpty()) {
             return;
           }
@@ -173,6 +178,36 @@ public final class ServerGenerator implements Runnable {
             writer.write("");
             writeProtocolMapHelper(kind, ops, contract, protocolEnum);
           }
+        });
+  }
+
+  private void writeOperationCatalog(
+      List<OperationShape> ops, String contract, String aggregateInterface) {
+    writer.write(
+        "public static ServiceOperationCatalog Create$LOperationCatalog(this $L handler)",
+        contract,
+        aggregateInterface);
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write("System.ArgumentNullException.ThrowIfNull(handler);");
+          writer.write("");
+          writer.write("return new ServiceOperationCatalog(");
+          writer.indent();
+          writer.write("$L,", SchemaGenerator.serviceSchemaAccessor(context, service));
+          writer.write("[");
+          writer.indent();
+          for (OperationShape op : ops) {
+            writer.write(
+                "ServiceOperation.Create($L, $L),",
+                SchemaGenerator.operationSchemaAccessor(context, op),
+                unaryAdapter(op));
+          }
+          writer.dedent();
+          writer.write("]");
+          writer.dedent();
+          writer.write(");");
         });
   }
 

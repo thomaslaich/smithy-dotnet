@@ -1580,7 +1580,26 @@ public sealed class UnionSchemaBuilder<T>
     }
 }
 
-public sealed class OperationSchema<TInput, TOutput>
+public interface IOperationSchema
+{
+    ShapeId Id { get; }
+
+    ShapeKind Kind { get; }
+
+    Schema Input { get; }
+
+    Schema Output { get; }
+
+    IReadOnlyList<IOperationErrorSchema> Errors { get; }
+
+    IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
+
+    Trait? GetTrait(ShapeId id);
+
+    bool HasTrait(ShapeId id);
+}
+
+public sealed class OperationSchema<TInput, TOutput> : IOperationSchema
 {
     internal OperationSchema(
         ShapeId id,
@@ -1606,6 +1625,10 @@ public sealed class OperationSchema<TInput, TOutput>
     public Schema<TInput> Input { get; }
 
     public Schema<TOutput> Output { get; }
+
+    Schema IOperationSchema.Input => Input;
+
+    Schema IOperationSchema.Output => Output;
 
     public IReadOnlyList<IOperationErrorSchema> Errors { get; }
 

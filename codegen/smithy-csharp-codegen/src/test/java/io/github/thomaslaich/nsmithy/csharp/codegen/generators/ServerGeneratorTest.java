@@ -249,6 +249,30 @@ final class ServerGeneratorTest {
       }
       """;
 
+  private static final String CATALOG_MODEL =
+      """
+      $version: "2"
+
+      namespace example.catalog
+
+      service CatalogService {
+          version: "1"
+          operations: [Ping, Notify]
+      }
+
+      operation Ping {
+          output := {
+              message: String
+          }
+      }
+
+      operation Notify {
+          input := {
+              message: String
+          }
+      }
+      """;
+
   @Test
   void streamingGrpcServerUsesAsyncEnumerableHandlersAndStreamingWriter() throws Exception {
     String generated = renderServer();
@@ -374,6 +398,31 @@ final class ServerGeneratorTest {
         generated);
   }
 
+  @Test
+  void serverGeneratesProtocolNeutralOperationCatalog() throws Exception {
+    String generated =
+        renderServer("", CATALOG_MODEL, "example.catalog#CatalogService", "Example.Catalog");
+
+    assertTrue(generated.contains("using NSmithy.Server;"), generated);
+    assertTrue(
+        generated.contains(
+            "public static ServiceOperationCatalog CreateCatalogServiceOperationCatalog("
+                + "this ICatalogServiceHandler handler)"),
+        generated);
+    assertTrue(generated.contains("CatalogServiceSchema.Schema,"), generated);
+    assertTrue(
+        generated.contains(
+            "ServiceOperation.Create(Example.Example.Catalog.NotifySchema.Schema, "
+                + "async (input, ct) => { await handler.NotifyAsync(input, ct).ConfigureAwait(false);"
+                + " return SmithyUnit.Value; }),"),
+        generated);
+    assertTrue(
+        generated.contains(
+            "ServiceOperation.Create(Example.Example.Catalog.PingSchema.Schema, "
+                + "(_, ct) => handler.PingAsync(ct)),"),
+        generated);
+  }
+
   private String renderServer() throws Exception {
     return renderServer(MODEL);
   }
@@ -387,9 +436,11 @@ final class ServerGeneratorTest {
       String protocolTraits, String modelText, String serviceId, String writerNamespace)
       throws Exception {
     var assembler = Model.assembler();
-    String[] protocolTraitModels = protocolTraits.split("(?m)^---$");
-    for (int i = 0; i < protocolTraitModels.length; i++) {
-      assembler.addUnparsedModel("protocol-traits-" + i + ".smithy", protocolTraitModels[i]);
+    if (!protocolTraits.isBlank()) {
+      String[] protocolTraitModels = protocolTraits.split("(?m)^---$");
+      for (int i = 0; i < protocolTraitModels.length; i++) {
+        assembler.addUnparsedModel("protocol-traits-" + i + ".smithy", protocolTraitModels[i]);
+      }
     }
     Model model = assembler.addUnparsedModel("model.smithy", modelText).assemble().unwrap();
     CSharpSettings settings =
