@@ -448,7 +448,7 @@ public sealed class JsonCodecTests
     {
         var schema = DefaultedSchema();
         var codec = JsonCodecFactory.Default.FromProjection(
-            Schemas.Project<Defaulted, DefaultedBuilder>(schema, Schemas.GetMembers(schema))
+            Schemas.Project<Defaulted, DefaultedBuilder>(schema, _ => true)
         );
 
         var builder = new DefaultedBuilder();

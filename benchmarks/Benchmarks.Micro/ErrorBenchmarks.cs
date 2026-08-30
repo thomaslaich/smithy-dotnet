@@ -24,10 +24,9 @@ namespace Bench.Micro;
 /// <em>smaller</em> payload. Any excess is overhead, not bytes.
 /// </para>
 /// <para>
-/// This exists because <c>RestProtocol.SerializeStructuredError</c> re-derives
+/// This exists because <c>RestProtocol.SerializeStructuredError</c> re-derived
 /// per response what the success path resolves once: a <c>(dynamic)</c> dispatch,
-/// <c>Schemas.GetMembers</c> (which walks the schema's members and allocates a
-/// list), and two dictionaries. The rpcv2Cbor equivalent is worse still — it
+/// a walk over the schema's members, and two dictionaries. The rpcv2Cbor equivalent is worse still — it
 /// constructs a fresh <c>CborWriterCompiler</c> and recompiles the error shape's
 /// whole writer tree per response — but rpcv2Cbor has no coverage in this suite,
 /// so it stays unmeasured.
