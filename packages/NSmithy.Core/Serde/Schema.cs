@@ -38,6 +38,8 @@ public abstract class Schema
 
     public string? MemberName => Id.MemberName;
 
+    // Virtual for one subclass: a member schema answers with its effective trait, which may sit on
+    // the shape it targets rather than in its own Traits.
     public virtual Trait? GetTrait(ShapeId id) =>
         Traits.TryGetValue(id, out var trait) ? trait : null;
 
@@ -45,16 +47,6 @@ public abstract class Schema
 
     internal static IReadOnlyDictionary<ShapeId, Trait> BuildTraits(IEnumerable<Trait>? traits) =>
         traits is null ? [] : traits.ToDictionary(t => t.Id);
-
-    /// <summary>
-    /// Effective trait lookup for a member: a trait on the member wins over the same trait on the
-    /// shape it targets.
-    /// </summary>
-    internal static Trait? FindTrait(
-        IReadOnlyDictionary<ShapeId, Trait> memberTraits,
-        Schema target,
-        ShapeId id
-    ) => memberTraits.TryGetValue(id, out var trait) ? trait : target.GetTrait(id);
 }
 
 public abstract class Schema<T> : Schema
@@ -627,9 +619,11 @@ public interface IMemberSchema
 
     bool IsRequired { get; }
 
-    Trait? GetTrait(ShapeId id);
+    /// <summary>The effective trait: one on the member wins over the same trait on its target.</summary>
+    Trait? GetTrait(ShapeId id) =>
+        MemberTraits.TryGetValue(id, out var trait) ? trait : Target.GetTrait(id);
 
-    bool HasTrait(ShapeId id);
+    bool HasTrait(ShapeId id) => GetTrait(id) is not null;
 }
 
 public interface ITargetedMemberSchema<TValue> : IMemberSchema
@@ -702,10 +696,6 @@ public sealed class CollectionMemberSchema<TValue> : ITargetedMemberSchema<TValu
     // A collection element or map entry is always present when the collection holds it; there is
     // no absent case for a consumer to check.
     public bool IsRequired => true;
-
-    public Trait? GetTrait(ShapeId id) => Schema.FindTrait(MemberTraits, TargetSchema, id);
-
-    public bool HasTrait(ShapeId id) => GetTrait(id) is not null;
 }
 
 /// <summary>
@@ -744,10 +734,6 @@ public sealed class MapKeyMemberSchema : IMemberSchema
 
     // An entry's key is always present when the map holds the entry.
     public bool IsRequired => true;
-
-    public Trait? GetTrait(ShapeId id) => Schema.FindTrait(MemberTraits, Target, id);
-
-    public bool HasTrait(ShapeId id) => GetTrait(id) is not null;
 }
 
 /// <summary>
@@ -1050,7 +1036,8 @@ public sealed class MemberSchema<TContainer, TBuilder, TValue>
 
     public void Accept(IMemberVisitor<TContainer, TBuilder> visitor) => visitor.Visit(this);
 
-    public override Trait? GetTrait(ShapeId id) => FindTrait(MemberTraits, TargetSchema, id);
+    public override Trait? GetTrait(ShapeId id) =>
+        MemberTraits.TryGetValue(id, out var trait) ? trait : TargetSchema.GetTrait(id);
 
     public override bool HasTrait(ShapeId id) => GetTrait(id) is not null;
 
