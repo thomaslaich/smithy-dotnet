@@ -50,51 +50,53 @@ public static class DefaultValues
     }
 
     // Returns a Func<T> for the visited Schema<T>, or null when the shape kind has no default form.
-    private sealed class Compiler(Document value) : ISchemaVisitor<object?>
+    private sealed class Compiler(Document value) : SchemaVisitor<object?>
     {
-        public object? VisitBoolean(Schema<bool> schema) => Constant(value.AsBoolean());
+        protected override object? VisitDefault(Schema schema) => null;
 
-        public object? VisitByte(Schema<sbyte> schema) => Constant((sbyte)value.AsNumber());
+        public override object? VisitBoolean(Schema<bool> schema) => Constant(value.AsBoolean());
 
-        public object? VisitShort(Schema<short> schema) => Constant((short)value.AsNumber());
+        public override object? VisitByte(Schema<sbyte> schema) =>
+            Constant((sbyte)value.AsNumber());
 
-        public object? VisitInteger(Schema<int> schema) => Constant((int)value.AsNumber());
+        public override object? VisitShort(Schema<short> schema) =>
+            Constant((short)value.AsNumber());
 
-        public object? VisitLong(Schema<long> schema) => Constant((long)value.AsNumber());
+        public override object? VisitInteger(Schema<int> schema) => Constant((int)value.AsNumber());
 
-        public object? VisitFloat(Schema<float> schema) => Constant((float)value.AsNumber());
+        public override object? VisitLong(Schema<long> schema) => Constant((long)value.AsNumber());
 
-        public object? VisitDouble(Schema<double> schema) => Constant((double)value.AsNumber());
+        public override object? VisitFloat(Schema<float> schema) =>
+            Constant((float)value.AsNumber());
 
-        public object? VisitBigInteger(Schema<BigInteger> schema) =>
+        public override object? VisitDouble(Schema<double> schema) =>
+            Constant((double)value.AsNumber());
+
+        public override object? VisitBigInteger(Schema<BigInteger> schema) =>
             Constant(new BigInteger(value.AsNumber()));
 
-        public object? VisitBigDecimal(Schema<decimal> schema) => Constant(value.AsNumber());
+        public override object? VisitBigDecimal(Schema<decimal> schema) =>
+            Constant(value.AsNumber());
 
-        public object? VisitString(Schema<string> schema) => Constant(value.AsString());
+        public override object? VisitString(Schema<string> schema) => Constant(value.AsString());
 
-        public object? VisitBlob(Schema<byte[]> schema)
+        public override object? VisitBlob(Schema<byte[]> schema)
         {
             var text = value.AsString();
             return new Func<byte[]>(() => Convert.FromBase64String(text));
         }
 
-        public object? VisitStreamingBlob(Schema<Stream> schema) => null;
-
-        public object? VisitTimestamp(Schema<DateTimeOffset> schema) =>
+        public override object? VisitTimestamp(Schema<DateTimeOffset> schema) =>
             Constant(DateTimeOffset.FromUnixTimeSeconds((long)value.AsNumber()));
 
-        public object? VisitDocument(Schema<Document> schema) => Constant(value);
+        public override object? VisitDocument(Schema<Document> schema) => Constant(value);
 
-        public object? VisitNullable<T>(NullableSchema<T> schema)
-            where T : struct =>
+        public override object? VisitNullable<T>(NullableSchema<T> schema) =>
             schema.TargetSchema.Resolved.Accept(this) is Func<T> inner
                 ? new Func<T?>(() => inner())
                 : null;
 
-        public object? VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) => null;
-
-        public object? VisitList<TCollection, TElement, TBuilder>(
+        public override object? VisitList<TCollection, TElement, TBuilder>(
             IListSchema<TCollection, TElement, TBuilder> schema
         )
         {
@@ -125,7 +127,7 @@ public static class DefaultValues
             });
         }
 
-        public object? VisitMap<TDictionary, TValue, TBuilder>(
+        public override object? VisitMap<TDictionary, TValue, TBuilder>(
             IMapSchema<TDictionary, TValue, TBuilder> schema
         )
         {
@@ -156,15 +158,11 @@ public static class DefaultValues
             });
         }
 
-        public object? VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema) => null;
+        public override object? VisitStringEnum<T>(StringEnumSchema<T> schema) =>
+            Constant(schema.Create(value.AsString()));
 
-        public object? VisitUnion<T>(IUnionSchema<T> schema) => null;
-
-        public object? VisitStringEnum<T>(StringEnumSchema<T> schema)
-            where T : IStringEnumValue<T> => Constant(schema.Create(value.AsString()));
-
-        public object? VisitIntEnum<T>(IntEnumSchema<T> schema)
-            where T : struct, Enum => Constant(schema.Create((int)value.AsNumber()));
+        public override object? VisitIntEnum<T>(IntEnumSchema<T> schema) =>
+            Constant(schema.Create((int)value.AsNumber()));
 
         private static Func<T> Constant<T>(T constant) => () => constant;
     }
