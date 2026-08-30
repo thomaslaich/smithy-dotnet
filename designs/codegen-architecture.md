@@ -162,7 +162,8 @@ Generated code depends on .NET packages published to NuGet:
 - `NSmithy.Core` — `Schema`, `ShapeId`, `Trait`, codec interfaces
 - `NSmithy.Http` — `IHttpTransport`, `SmithyHttpRequest`, `SmithyHttpClientResponse`
 - `NSmithy.Client` — `SmithyClientRuntime`, `IClientInterceptor`
-- `NSmithy.Server` / `NSmithy.Server.AspNetCore` — server framework
+- `NSmithy.Server` / `NSmithy.Server.AspNetCore` — host-neutral operation
+  catalogs and server framework
 - `NSmithy.Codecs.Json/Xml/Cbor` — schema-bound body codec implementations
 - `NSmithy.Protocols.Rest` — shared REST HTTP binding projection
 - `NSmithy.Protocols.*` — protocol adapters such as restJson1, restXml,
@@ -184,7 +185,8 @@ Each generated shape file contains:
 Operation files contain:
 
 - `<Operation>Schema` — an `OperationSchema<TInput, TOutput>` that references
-  the input and output schemas plus operation traits.
+  the input and output schemas plus operation traits; it also implements the
+  non-generic `IOperationSchema` view used by protocol-neutral adapters.
 
 Service files contain:
 
@@ -192,14 +194,19 @@ Service files contain:
   service-level traits.
 - `<Service>.Client.g.cs` — typed async methods for each operation; binds
   protocol and transport at construction time.
-- `<Service>.Server.g.cs` — server-side handler interface and
-  ASP.NET Core adapter.
+- `<Service>.Server.g.cs` — server-side handler interface, a
+  `ServiceOperationCatalog` factory that binds operation schemas to the typed
+  handler, and the ASP.NET Core adapter.
 
 Generated client and server methods bind the service schema, operation schemas,
 typed input/output values, selected protocol adapter, and transport options into
 the runtime protocol pipeline. The protocol adapter projects each operation into
 transport fields and delegates body payloads to a schema-bound codec such as
 `JsonCodecFactory`.
+
+The generated operation catalog stops at typed handler invocation. It has no
+HTTP, ASP.NET Core, MCP, or stdio behavior; those hosts enumerate the catalog,
+construct input using its runtime schemas, and choose their own wire mapping.
 
 ## Tradeoffs
 

@@ -165,8 +165,10 @@ disagrees with the shape it belongs to.
 
 For each operation, the generator emits an `OperationSchema<TInput, TOutput>`
 that references the input and output schemas plus operation traits and modeled
-error descriptors. For each service, it emits a `ServiceSchema` with the service
-shape id and service-level traits.
+error descriptors. The generic schema implements `IOperationSchema`, retaining
+the same metadata through a non-generic input/output schema view for dynamic
+consumers. For each service, it emits a `ServiceSchema` with the service shape id
+and service-level traits.
 
 Traits stay on schemas and members. Core schemas carry any Smithy trait, but
 consumers decide which traits they interpret. REST protocols interpret
