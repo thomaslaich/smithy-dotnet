@@ -50,7 +50,7 @@ public static class DefaultValues
     }
 
     // Returns a Func<T> for the visited Schema<T>, or null when the shape kind has no default form.
-    private sealed class Compiler(Document value) : SchemaVisitor<object?>
+    private sealed class Compiler(Document value) : PartialSchemaVisitor<object?>
     {
         protected override object? VisitDefault(Schema schema) => null;
 
@@ -92,7 +92,7 @@ public static class DefaultValues
         public override object? VisitDocument(Schema<Document> schema) => Constant(value);
 
         public override object? VisitNullable<T>(NullableSchema<T> schema) =>
-            schema.TargetSchema.Resolved.Accept(this) is Func<T> inner
+            schema.TypedTarget.Resolved.Accept(this) is Func<T> inner
                 ? new Func<T?>(() => inner())
                 : null;
 

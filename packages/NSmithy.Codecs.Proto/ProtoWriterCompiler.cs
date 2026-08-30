@@ -74,7 +74,7 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
                 resolved.Accept(new MemberTraitProtoWriterCompiler(this, traits));
         }
 
-        return cache.GetOrCompile<IProtoValueWriter<T>, DeferredProtoValueWriter<T>>(
+        return cache.GetOrCompile(
             resolved,
             static () => new DeferredProtoValueWriter<T>(),
             target => (IProtoValueWriter<T>)target.Accept(this)
@@ -112,7 +112,7 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
     public object VisitDocument(Schema<Document> schema) => new DocumentProtoValueWriter();
 
     public object VisitNullable<T>(NullableSchema<T> schema)
-        where T : struct => new NullableProtoValueWriter<T>(CompileValue(schema.TargetSchema));
+        where T : struct => new NullableProtoValueWriter<T>(CompileValue(schema.TypedTarget));
 
     public object VisitStreamingBlob(Schema<Stream> schema) =>
         throw new NotSupportedException("Proto codec does not support streaming blob schemas.");
@@ -163,70 +163,23 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
 }
 
 internal sealed class MessageWriterVisitor(ProtoValueWriterCompiler compiler)
-    : ISchemaVisitor<object>
+    : PartialSchemaVisitor<object>
 {
-    public object VisitBoolean(Schema<bool> schema) => Unsupported();
-
-    public object VisitByte(Schema<sbyte> schema) => Unsupported();
-
-    public object VisitShort(Schema<short> schema) => Unsupported();
-
-    public object VisitInteger(Schema<int> schema) => Unsupported();
-
-    public object VisitLong(Schema<long> schema) => Unsupported();
-
-    public object VisitFloat(Schema<float> schema) => Unsupported();
-
-    public object VisitDouble(Schema<double> schema) => Unsupported();
-
-    public object VisitBigInteger(Schema<BigInteger> schema) => Unsupported();
-
-    public object VisitBigDecimal(Schema<decimal> schema) => Unsupported();
-
-    public object VisitString(Schema<string> schema) => Unsupported();
-
-    public object VisitBlob(Schema<byte[]> schema) => Unsupported();
-
-    public object VisitTimestamp(Schema<DateTimeOffset> schema) => Unsupported();
-
-    public object VisitDocument(Schema<Document> schema) => Unsupported();
-
-    public object VisitNullable<T>(NullableSchema<T> schema)
-        where T : struct => Unsupported();
-
-    public object VisitStreamingBlob(Schema<Stream> schema) => Unsupported();
-
-    public object VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) => Unsupported();
-
-    public object VisitList<TCollection, TElement, TBuilder>(
-        IListSchema<TCollection, TElement, TBuilder> schema
-    ) => Unsupported();
-
-    public object VisitMap<TDictionary, TValue, TBuilder>(
-        IMapSchema<TDictionary, TValue, TBuilder> schema
-    ) => Unsupported();
-
-    public object VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
+    public override object VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
     {
         var visitor = new ProtoMemberWriterCompiler<T>(compiler);
         schema.VisitMembers(visitor);
         return ProtoValueWriterCompiler.CreateStructureWriter(schema, visitor);
     }
 
-    public object VisitUnion<T>(IUnionSchema<T> schema)
+    public override object VisitUnion<T>(IUnionSchema<T> schema)
     {
         var visitor = new ProtoUnionCaseWriterCompiler<T>(compiler);
         schema.VisitCases(visitor);
         return new UnionProtoMessageWriter<T>(visitor.Writers);
     }
 
-    public object VisitStringEnum<T>(StringEnumSchema<T> schema)
-        where T : IStringEnumValue<T> => Unsupported();
-
-    public object VisitIntEnum<T>(IntEnumSchema<T> schema)
-        where T : struct, Enum => Unsupported();
-
-    private static object Unsupported() =>
+    protected override object VisitDefault(Schema schema) =>
         throw new InvalidOperationException(
             "Protobuf messages must be backed by a structure or union schema."
         );
@@ -269,7 +222,7 @@ internal sealed class MemberTraitProtoWriterCompiler(
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct =>
-        new NullableProtoValueWriter<T>(inner.CompileValue(schema.TargetSchema, traits));
+        new NullableProtoValueWriter<T>(inner.CompileValue(schema.TypedTarget, traits));
 
     public object VisitStreamingBlob(Schema<Stream> schema) => inner.CompileValue(schema);
 
@@ -520,7 +473,7 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
 
     public void Visit<TValue>(IMemberSchema<TContainer, TValue> member)
     {
-        var target = ProtoWire.Unwrap(member.TargetSchema);
+        var target = ProtoWire.Unwrap(member.TypedTarget);
         if (ProtoWire.IsInlinedUnion(target))
         {
             target.Accept(new InlinedOneOfCompiler<TValue>(this, member));
@@ -538,7 +491,7 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
         ProtoMemberWriterCompiler<TContainer> owner,
         IMemberSchema<TContainer, TValue> member,
         int fieldNumber
-    ) : SchemaVisitor<IProtoMemberPlan<TValue>>
+    ) : PartialSchemaVisitor<IProtoMemberPlan<TValue>>
     {
         public override IProtoMemberPlan<TValue> VisitList<TCollection, TElement, TBuilder>(
             IListSchema<TCollection, TElement, TBuilder> schema
@@ -555,7 +508,7 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
     private sealed class InlinedOneOfCompiler<TValue>(
         ProtoMemberWriterCompiler<TContainer> owner,
         IMemberSchema<TContainer, TValue> member
-    ) : SchemaVisitor<object?>
+    ) : PartialSchemaVisitor<object?>
     {
         public override object? VisitUnion<TUnion>(IUnionSchema<TUnion> schema)
         {
@@ -567,7 +520,7 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
     private ValueProtoMemberPlan<TValue> CreateValuePlan<TValue>(
         IMemberSchema<TContainer, TValue> member,
         int fieldNumber
-    ) => new(fieldNumber, compiler.CompileValue(member.TargetSchema, member.MemberTraits));
+    ) => new(fieldNumber, compiler.CompileValue(member.TypedTarget, member.MemberTraits));
 
     private void AddInlinedOneOfPlan<TUnion>(
         IMemberSchema<TContainer, TUnion> member,
@@ -589,7 +542,7 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
             list,
             fieldNumber,
             compiler.CompileValue(
-                list.TypedElementMember.TargetSchema,
+                list.TypedElementMember.TypedTarget,
                 list.TypedElementMember.MemberTraits
             )
         );
@@ -603,7 +556,7 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
             fieldNumber,
             ProtoWire.IsSparse((Schema)map),
             compiler.CompileValue(
-                map.TypedValueMember.TargetSchema,
+                map.TypedValueMember.TypedTarget,
                 map.TypedValueMember.MemberTraits
             )
         );
@@ -693,7 +646,7 @@ internal sealed class MapProtoMemberPlan<TDictionary, TValue>(
 ) : IProtoMemberPlan<TDictionary>
 {
     private readonly SparseScalarValueWriter<TValue> sparseWriter = new(
-        map.TypedValueMember.TargetSchema
+        map.TypedValueMember.TypedTarget
     );
     private readonly WireType valueWireType = valueWriter.WireType;
 

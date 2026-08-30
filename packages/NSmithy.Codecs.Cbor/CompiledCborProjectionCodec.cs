@@ -105,7 +105,7 @@ internal sealed class CborProjectionMemberReaderCompiler<TContainer, TBuilder>(
         readers.Add(
             new CborProjectionMemberReader<TContainer, TBuilder, TValue>(
                 member,
-                compiler.CompileValue(member.TargetSchema)
+                compiler.CompileValue(member.TypedTarget)
             )
         );
     }
@@ -122,7 +122,7 @@ internal sealed class CborProjectionMemberReader<TContainer, TBuilder, TValue>(
 
     // Constant per member, so resolved at compile time rather than per missing member.
     private readonly Func<TValue>? defaultValue = CompileDefault(
-        member.TargetSchema,
+        member.TypedTarget,
         member.MemberTraits
     );
 

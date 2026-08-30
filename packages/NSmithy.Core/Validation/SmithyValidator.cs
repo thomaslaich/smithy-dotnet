@@ -223,7 +223,7 @@ internal static class ValidatorCompiler
         public object VisitDocument(Schema<Document> schema) => NoOpValidator<Document>.Instance;
 
         public object VisitNullable<T>(NullableSchema<T> schema)
-            where T : struct => new NullableValidator<T>(Compile(schema.TargetSchema));
+            where T : struct => new NullableValidator<T>(Compile(schema.TypedTarget));
 
         public object VisitStreamingBlob(Schema<Stream> schema) => NoOpValidator<Stream>.Instance;
 
@@ -284,7 +284,7 @@ internal static class ValidatorCompiler
         public bool VisitDocument(Schema<Document> schema) => false;
 
         public bool VisitNullable<T>(NullableSchema<T> schema)
-            where T : struct => RequiresValidation(schema.TargetSchema, visited);
+            where T : struct => RequiresValidation(schema.TypedTarget, visited);
 
         public bool VisitStreamingBlob(Schema<Stream> schema) => false;
 
@@ -353,7 +353,7 @@ internal static class ValidatorCompiler
         );
 
     internal static MemberValueValidator<TValue> CompileMember<TValue>(
-        ITargetedMemberSchema<TValue> member
+        ITypedTargetMemberSchema<TValue> member
     ) =>
         new(
             // The member's own traits are compiled against the target's kind: a member schema is
@@ -362,9 +362,9 @@ internal static class ValidatorCompiler
             ConstraintValidator<TValue>.FromTraits(
                 member.MemberTraits,
                 member.Id,
-                member.TargetSchema
+                member.TypedTarget
             ),
-            Compile(member.TargetSchema)
+            Compile(member.TypedTarget)
         );
 }
 

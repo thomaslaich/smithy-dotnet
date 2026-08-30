@@ -1,3 +1,4 @@
+using System.Text;
 using NSmithy.Codecs.Json;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
@@ -686,5 +687,130 @@ public sealed class SchemaTests
         Assert.Same(error, operation.Errors[0]);
         Assert.Same(errorSchema, ((OperationErrorSchema<TestException>)operation.Errors[0]).Schema);
         Assert.Equal(400, operation.Errors[0].HttpStatusCode);
+    }
+
+    [Fact]
+    public void StructProjectionSnapshotsSelectedMembers()
+    {
+        var schema = Schemas
+            .Structure<VisitorInput, VisitorInputBuilder>(new ShapeId("example", "VisitorInput"))
+            .Required(
+                "name",
+                static value => value.Name,
+                static (builder, value) => builder.Name = value,
+                Schemas.String
+            )
+            .Required(
+                "age",
+                static value => value.Age,
+                static (builder, value) => builder.Age = value,
+                Schemas.Integer
+            )
+            .Build(
+                static () => new VisitorInputBuilder(),
+                static builder => new VisitorInput(builder.Name!, builder.Age)
+            );
+        var selected = new HashSet<string>(StringComparer.Ordinal) { "name" };
+        var projection = Schemas.Project(schema, selected);
+
+        selected.Clear();
+        selected.Add("age");
+
+        Assert.NotNull(projection.GetMember("name"));
+        Assert.Null(projection.GetMember("age"));
+        Assert.Equal(
+            "{\"name\":\"Ada\"}",
+            Encoding.UTF8.GetString(
+                JsonCodecFactory
+                    .Default.FromProjection(projection)
+                    .Serialize(new VisitorInput("Ada", 36))
+            )
+        );
+    }
+
+    [Fact]
+    public void SchemaVisitorsRecoverHiddenBuilderAndErrorTypes()
+    {
+        var structure = Schemas
+            .Structure<VisitorInput, VisitorInputBuilder>(new ShapeId("example", "VisitorInput"))
+            .Build(
+                static () => new VisitorInputBuilder(),
+                static builder => new VisitorInput(builder.Name!, builder.Age)
+            );
+        var error = Schemas.OperationError(
+            new ShapeId("example", "BadRequest"),
+            Schemas
+                .Structure<TestException, TestExceptionBuilder>(
+                    new ShapeId("example", "BadRequest")
+                )
+                .Build(
+                    static () => new TestExceptionBuilder(),
+                    static builder => new TestException(builder.Message)
+                ),
+            400
+        );
+
+        Assert.Equal(typeof(VisitorInputBuilder), GetBuilderType(structure));
+        Assert.Equal(typeof(TestException), GetErrorType(error));
+    }
+
+    [Fact]
+    public void CompiledCollectionDefaultsDoNotAlias()
+    {
+        var defaultId = ShapeId.Parse("smithy.api#default");
+        var schema = Schemas.List(new ShapeId("example", "Names"), Schemas.String);
+        IReadOnlyDictionary<ShapeId, Trait> traits = new Dictionary<ShapeId, Trait>
+        {
+            [defaultId] = new(defaultId, Document.From([Document.From("Ada")])),
+        };
+
+        Assert.True(
+            DefaultValues.TryCompile(schema, traits, honorClientOptional: false, out var create)
+        );
+
+        var first = create();
+        var second = create();
+        Assert.NotSame(first, second);
+        Assert.Equal(["Ada"], first);
+        Assert.Equal(["Ada"], second);
+    }
+
+    [Fact]
+    public void NullableSchemaDistinguishesTypedAndUntypedTargets()
+    {
+        var nullable = Assert.IsType<NullableSchema<int>>(Schemas.Nullable(Schemas.Integer));
+
+        Assert.Same(Schemas.Integer, nullable.TypedTarget);
+        Assert.Same(Schemas.Integer, nullable.Target);
+    }
+
+    private sealed class BuilderTypeVisitor : IStructSchemaVisitor<VisitorInput, Type>
+    {
+        public Type Visit<TBuilder>(IStructSchema<VisitorInput, TBuilder> schema) =>
+            typeof(TBuilder);
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Performance",
+        "CA1859:Use concrete types when possible for improved performance",
+        Justification = "The erased interface is the behavior under test."
+    )]
+    private static Type GetBuilderType(IStructSchema<VisitorInput> schema) =>
+        schema.Accept(new BuilderTypeVisitor());
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Performance",
+        "CA1859:Use concrete types when possible for improved performance",
+        Justification = "The erased interface is the behavior under test."
+    )]
+    private static Type GetErrorType(IOperationErrorSchema schema) =>
+        schema.Accept(ErrorTypeVisitor.Instance);
+
+    private sealed class ErrorTypeVisitor : IOperationErrorSchemaVisitor<Type>
+    {
+        public static ErrorTypeVisitor Instance { get; } = new();
+
+        public Type Visit<TError>(OperationErrorSchema<TError> schema)
+            where TError : Exception => typeof(TError);
     }
 }

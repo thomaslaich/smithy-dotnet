@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
+  </ItemGroup>
+</Project>

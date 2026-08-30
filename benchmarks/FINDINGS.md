@@ -517,7 +517,7 @@ member list, it was likely worse than 4×.
 `OBSERVED`, and **the suite cannot see it**. Recorded as a negative result.
 
 Every write-path member writer called
-`TryCreateDefaultValue(member.TargetSchema, member.MemberTraits, out _)` for each
+`TryCreateDefaultValue(member.TypedTarget, member.MemberTraits, out _)` for each
 optional member that was null, re-entering trait resolution — two dictionary
 lookups — per member per object. Whether a member has a default, and what it is,
 are constant per member, exactly like the wire name was, so both are now resolved

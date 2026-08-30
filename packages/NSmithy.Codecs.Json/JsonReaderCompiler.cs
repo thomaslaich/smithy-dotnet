@@ -66,7 +66,7 @@ internal sealed class JsonReaderCompiler(WireReadMode readMode, bool honorJsonNa
 
     public IJsonValueReader<T> CompileValue<T>(Schema<T> schema)
     {
-        return cache.GetOrCompile<IJsonValueReader<T>, DeferredJsonValueReader<T>>(
+        return cache.GetOrCompile(
             schema,
             static () => new DeferredJsonValueReader<T>(),
             target => CompileValueCore<T>(target)
@@ -148,7 +148,7 @@ internal sealed class JsonReaderCompiler(WireReadMode readMode, bool honorJsonNa
         where T : struct, Enum => CompileIntEnum(schema);
 
     private NullableJsonValueReader<T> CompileNullable<T>(NullableSchema<T> schema)
-        where T : struct => new(CompileValue(schema.TargetSchema));
+        where T : struct => new(CompileValue(schema.TypedTarget));
 
     private static StringEnumJsonValueReader<T> CompileStringEnum<T>(StringEnumSchema<T> schema)
         where T : IStringEnumValue<T> => new(schema);
@@ -177,7 +177,7 @@ internal sealed class JsonReaderCompiler(WireReadMode readMode, bool honorJsonNa
         new(
             schema,
             CompileValue(
-                schema.TypedElementMember.TargetSchema,
+                schema.TypedElementMember.TypedTarget,
                 schema.TypedElementMember.MemberTraits
             )
         );
@@ -189,7 +189,7 @@ internal sealed class JsonReaderCompiler(WireReadMode readMode, bool honorJsonNa
     >(IMapSchema<TDictionary, TValue, TBuilder> schema) =>
         new(
             schema,
-            CompileValue(schema.TypedValueMember.TargetSchema, schema.TypedValueMember.MemberTraits)
+            CompileValue(schema.TypedValueMember.TypedTarget, schema.TypedValueMember.MemberTraits)
         );
 
     private IJsonValueReader<T> CompileUnion<T>(IUnionSchema<T> schema)
@@ -257,7 +257,7 @@ internal sealed class MemberTraitJsonReaderCompiler(
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct =>
-        new NullableJsonValueReader<T>(inner.CompileValue(schema.TargetSchema, memberTraits));
+        new NullableJsonValueReader<T>(inner.CompileValue(schema.TypedTarget, memberTraits));
 
     public object VisitBoolean(Schema<bool> schema) => inner.CompileValue(schema);
 
@@ -320,7 +320,7 @@ internal sealed class JsonMemberReaderCompiler<TContainer, TBuilder>(JsonReaderC
         readers.Add(
             new JsonMemberReader<TContainer, TBuilder, TValue>(
                 member,
-                compiler.CompileValue(member.TargetSchema, member.MemberTraits),
+                compiler.CompileValue(member.TypedTarget, member.MemberTraits),
                 compiler.ResolveWireName(member.MemberTraits, member.Name)
             )
         );
@@ -339,7 +339,7 @@ internal sealed class JsonMemberReader<TContainer, TBuilder, TValue>(
 
     // Constant per member, so resolved at compile time rather than per missing member.
     private readonly Func<TValue>? defaultValue = CompileDefault(
-        member.TargetSchema,
+        member.TypedTarget,
         member.MemberTraits
     );
 

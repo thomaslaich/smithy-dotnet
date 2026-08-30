@@ -164,7 +164,15 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
         }
 
         private static QueryError[] CompileErrors(IReadOnlyList<IOperationErrorSchema> schemas) =>
-            schemas.Select(error => (QueryError)CompileError((dynamic)error)).ToArray();
+            schemas.Select(error => error.Accept(QueryErrorCompiler.Instance)).ToArray();
+
+        private sealed class QueryErrorCompiler : IOperationErrorSchemaVisitor<QueryError>
+        {
+            public static QueryErrorCompiler Instance { get; } = new();
+
+            public QueryError Visit<TError>(OperationErrorSchema<TError> error)
+                where TError : Exception => CompileError(error);
+        }
 
         private static QueryError CompileError<TError>(OperationErrorSchema<TError> error)
             where TError : Exception

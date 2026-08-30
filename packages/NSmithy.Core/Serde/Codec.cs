@@ -40,10 +40,10 @@ public interface ICodecFactory
     /// default is correct for formats whose representation is controlled entirely by the target
     /// schema; trait-sensitive factories can override it.
     /// </summary>
-    ICodec<T> FromMember<T>(ITargetedMemberSchema<T> member, CodecFactoryOptions? options = null)
+    ICodec<T> FromMember<T>(ITypedTargetMemberSchema<T> member, CodecFactoryOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(member);
-        return FromSchema(member.TargetSchema, options);
+        return FromSchema(member.TypedTarget, options);
     }
 }
 

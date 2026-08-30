@@ -68,7 +68,7 @@ internal sealed class JsonWriterCompiler(bool honorJsonNameTrait) : ISchemaVisit
 
     public IJsonValueWriter<T> CompileValue<T>(Schema<T> schema)
     {
-        return cache.GetOrCompile<IJsonValueWriter<T>, DeferredJsonValueWriter<T>>(
+        return cache.GetOrCompile(
             schema,
             static () => new DeferredJsonValueWriter<T>(),
             target => CompileValueCore<T>(target)
@@ -150,7 +150,7 @@ internal sealed class JsonWriterCompiler(bool honorJsonNameTrait) : ISchemaVisit
         where T : struct, Enum => CompileIntEnum(schema);
 
     internal NullableJsonValueWriter<T> CompileNullable<T>(NullableSchema<T> schema)
-        where T : struct => new NullableJsonValueWriter<T>(CompileValue(schema.TargetSchema));
+        where T : struct => new NullableJsonValueWriter<T>(CompileValue(schema.TypedTarget));
 
     internal static StringEnumJsonValueWriter<T> CompileStringEnum<T>(StringEnumSchema<T> schema)
         where T : IStringEnumValue<T> => new StringEnumJsonValueWriter<T>();
@@ -202,7 +202,7 @@ internal sealed class JsonWriterCompiler(bool honorJsonNameTrait) : ISchemaVisit
         new ListJsonValueWriter<TCollection, TElement>(
             schema,
             CompileValue(
-                schema.TypedElementMember.TargetSchema,
+                schema.TypedElementMember.TypedTarget,
                 schema.TypedElementMember.MemberTraits
             )
         );
@@ -212,7 +212,7 @@ internal sealed class JsonWriterCompiler(bool honorJsonNameTrait) : ISchemaVisit
     ) =>
         new MapJsonValueWriter<TDictionary, TValue>(
             schema,
-            CompileValue(schema.TypedValueMember.TargetSchema, schema.TypedValueMember.MemberTraits)
+            CompileValue(schema.TypedValueMember.TypedTarget, schema.TypedValueMember.MemberTraits)
         );
 
     internal IJsonValueWriter<T> CompileUnion<T>(IUnionSchema<T> schema)
@@ -277,7 +277,7 @@ internal sealed class MemberTraitJsonWriterCompiler(
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct =>
-        new NullableJsonValueWriter<T>(inner.CompileValue(schema.TargetSchema, memberTraits));
+        new NullableJsonValueWriter<T>(inner.CompileValue(schema.TypedTarget, memberTraits));
 
     public object VisitBoolean(Schema<bool> schema) => inner.CompileValue(schema);
 
@@ -354,7 +354,7 @@ internal sealed class JsonMemberWriterCompiler<TContainer>(
 
         var plan = new JsonMemberPlan<TValue>(
             member,
-            compiler.CompileValue(member.TargetSchema, member.MemberTraits),
+            compiler.CompileValue(member.TypedTarget, member.MemberTraits),
             materializeDefaults,
             compiler.ResolveWireName(member.MemberTraits, member.Name)
         );
@@ -381,7 +381,7 @@ internal sealed class JsonMemberWriter<TContainer, TValue>(
 }
 
 internal sealed class JsonMemberPlan<TValue>(
-    ITargetedMemberSchema<TValue> member,
+    ITypedTargetMemberSchema<TValue> member,
     IJsonValueWriter<TValue> valueWriter,
     bool materializeDefault,
     string wireName
@@ -400,7 +400,7 @@ internal sealed class JsonMemberPlan<TValue>(
     // and what that default is, are constant per member. Previously every optional
     // member that happened to be null cost two more trait lookups per object.
     private readonly (bool Present, TValue? Value) memberDefault = ResolveDefault(
-        member.TargetSchema,
+        member.TypedTarget,
         member.MemberTraits,
         materializeDefault
     );

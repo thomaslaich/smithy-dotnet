@@ -48,7 +48,7 @@ public sealed class CodecFactoryTests
         Assert.Equal(value, codec.DeserializeText(xml));
     }
 
-    private static ITargetedMemberSchema<DateTimeOffset> TimestampMember()
+    private static ITypedTargetMemberSchema<DateTimeOffset> TimestampMember()
     {
         var schema = Schemas
             .Structure<TimestampPayload, TimestampPayloadBuilder>(
@@ -68,7 +68,7 @@ public sealed class CodecFactoryTests
                 static () => new TimestampPayloadBuilder(),
                 static builder => new TimestampPayload(builder.Value)
             );
-        return Assert.IsAssignableFrom<ITargetedMemberSchema<DateTimeOffset>>(
+        return Assert.IsAssignableFrom<ITypedTargetMemberSchema<DateTimeOffset>>(
             schema.GetMember("value")
         );
     }

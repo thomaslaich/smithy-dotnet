@@ -10,8 +10,6 @@ namespace NSmithy.Protocols.Rest;
 /// and reused for every call — nothing is recompiled per request.
 /// </summary>
 public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder>
-    where TInputBuilder : notnull
-    where TOutputBuilder : notnull
 {
     public required HttpMethod HttpMethod { get; init; }
     public required string UriTemplate { get; init; }
@@ -224,9 +222,7 @@ public static class RestOperationBinding
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads,
         bool requiresDeclaredContentType = true
-    )
-        where TInputBuilder : notnull
-        where TOutputBuilder : notnull =>
+    ) =>
         RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder>.CreateFrom(
             operation,
             inputSchema,
@@ -235,33 +231,4 @@ public static class RestOperationBinding
             rawStringPayloads,
             requiresDeclaredContentType
         );
-
-    public static dynamic From<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation,
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads,
-        bool requiresDeclaredContentType = true
-    )
-    {
-        ArgumentNullException.ThrowIfNull(operation);
-        var inputSchema =
-            operation.Input.Resolved as IStructSchema<TInput>
-            ?? throw new InvalidOperationException(
-                $"Operation '{operation.Id}' input must be a structure schema."
-            );
-        var outputSchema =
-            operation.Output.Resolved as IStructSchema<TOutput>
-            ?? throw new InvalidOperationException(
-                $"Operation '{operation.Id}' output must be a structure schema."
-            );
-
-        return From(
-            (dynamic)operation,
-            (dynamic)inputSchema,
-            (dynamic)outputSchema,
-            codecFactory,
-            rawStringPayloads,
-            requiresDeclaredContentType
-        );
-    }
 }

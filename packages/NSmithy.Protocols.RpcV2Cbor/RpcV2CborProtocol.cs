@@ -57,10 +57,10 @@ public sealed class RpcV2CborProtocol : IProtocol
             var outputEvent = FindEventStreamEventSchema(operation.Output);
             RequestStrategy<TInput> request = inputEvent is null
                 ? UnaryRequestStrategy(operation.Input)
-                : StreamingRequestStrategy(RequireStruct(operation.Input), (dynamic)inputEvent);
+                : CompileStreamingRequestStrategy(operation.Input, inputEvent);
             ResponseStrategy<TOutput> response = outputEvent is null
                 ? UnaryResponseStrategy(operation.Output)
-                : StreamingResponseStrategy(RequireStruct(operation.Output), (dynamic)outputEvent);
+                : CompileStreamingResponseStrategy(operation.Output, outputEvent);
 
             return new OperationProtocol<TInput, TOutput>(
                 service,
@@ -71,16 +71,70 @@ public sealed class RpcV2CborProtocol : IProtocol
                 inputValidator
             );
         }
+    }
 
-        /// <summary>
-        /// An event-stream shape is always a structure: the stream is one member of it, alongside
-        /// whatever the initial message carries. The builder type comes back erased, so the
-        /// strategy that captures it is reached through dynamic dispatch.
-        /// </summary>
-        private static dynamic RequireStruct<T>(Schema<T> schema) =>
-            schema.Resolved as IStructSchema<T>
+    private static RequestStrategy<TInput> CompileStreamingRequestStrategy<TInput>(
+        Schema<TInput> inputSchema,
+        Schema eventSchema
+    ) =>
+        (
+            inputSchema.Resolved as IStructSchema<TInput>
             ?? throw new InvalidOperationException(
-                $"rpcv2Cbor event stream shape '{schema.Id}' must use a structure shape."
+                $"rpcv2Cbor event stream shape '{inputSchema.Id}' must use a structure shape."
+            )
+        ).Accept(new StreamingRequestStructCompiler<TInput>(eventSchema));
+
+    private sealed class StreamingRequestStructCompiler<TInput>(Schema eventSchema)
+        : IStructSchemaVisitor<TInput, RequestStrategy<TInput>>
+    {
+        public RequestStrategy<TInput> Visit<TBuilder>(
+            IStructSchema<TInput, TBuilder> inputSchema
+        ) => eventSchema.Accept(new StreamingRequestEventCompiler<TInput, TBuilder>(inputSchema));
+    }
+
+    private sealed class StreamingRequestEventCompiler<TInput, TBuilder>(
+        IStructSchema<TInput, TBuilder> inputSchema
+    ) : PartialSchemaVisitor<RequestStrategy<TInput>>
+    {
+        public override RequestStrategy<TInput> VisitUnion<TEvent>(IUnionSchema<TEvent> schema) =>
+            StreamingRequestStrategy(inputSchema, (Schema<TEvent>)schema);
+
+        protected override RequestStrategy<TInput> VisitDefault(Schema schema) =>
+            throw new InvalidOperationException(
+                $"rpcv2Cbor event streams must target a union schema; found '{schema.Id}'."
+            );
+    }
+
+    private static ResponseStrategy<TOutput> CompileStreamingResponseStrategy<TOutput>(
+        Schema<TOutput> outputSchema,
+        Schema eventSchema
+    ) =>
+        (
+            outputSchema.Resolved as IStructSchema<TOutput>
+            ?? throw new InvalidOperationException(
+                $"rpcv2Cbor event stream shape '{outputSchema.Id}' must use a structure shape."
+            )
+        ).Accept(new StreamingResponseStructCompiler<TOutput>(eventSchema));
+
+    private sealed class StreamingResponseStructCompiler<TOutput>(Schema eventSchema)
+        : IStructSchemaVisitor<TOutput, ResponseStrategy<TOutput>>
+    {
+        public ResponseStrategy<TOutput> Visit<TBuilder>(
+            IStructSchema<TOutput, TBuilder> outputSchema
+        ) =>
+            eventSchema.Accept(new StreamingResponseEventCompiler<TOutput, TBuilder>(outputSchema));
+    }
+
+    private sealed class StreamingResponseEventCompiler<TOutput, TBuilder>(
+        IStructSchema<TOutput, TBuilder> outputSchema
+    ) : PartialSchemaVisitor<ResponseStrategy<TOutput>>
+    {
+        public override ResponseStrategy<TOutput> VisitUnion<TEvent>(IUnionSchema<TEvent> schema) =>
+            StreamingResponseStrategy(outputSchema, (Schema<TEvent>)schema);
+
+        protected override ResponseStrategy<TOutput> VisitDefault(Schema schema) =>
+            throw new InvalidOperationException(
+                $"rpcv2Cbor event streams must target a union schema; found '{schema.Id}'."
             );
     }
 
@@ -141,7 +195,6 @@ public sealed class RpcV2CborProtocol : IProtocol
         TInputEvent,
         TInputBuilder
     >(IStructSchema<TInput, TInputBuilder> inputSchema, Schema<TInputEvent> eventSchema)
-        where TInputBuilder : notnull
     {
         var codec = CodecFactory.FromSchema(eventSchema);
         var eventTypeOf = CompileEventType(eventSchema);
@@ -226,7 +279,6 @@ public sealed class RpcV2CborProtocol : IProtocol
         TOutputEvent,
         TOutputBuilder
     >(IStructSchema<TOutput, TOutputBuilder> outputSchema, Schema<TOutputEvent> eventSchema)
-        where TOutputBuilder : notnull
     {
         var codec = CodecFactory.FromSchema(eventSchema);
         var eventTypeOf = CompileEventType(eventSchema);
@@ -287,7 +339,7 @@ public sealed class RpcV2CborProtocol : IProtocol
 
         private readonly ModeledErrorSerializer serverErrors = ModeledErrorSerializer.Compile(
             operation.Errors,
-            error => CompileServerError((dynamic)error)
+            error => error.Accept(ServerErrorCompiler.Instance)
         );
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
@@ -474,9 +526,28 @@ public sealed class RpcV2CborProtocol : IProtocol
         );
     }
 
+    private sealed class ServerErrorCompiler
+        : IOperationErrorSchemaVisitor<(Type, Func<Exception, SmithyHttpServerResponse>)>
+    {
+        public static ServerErrorCompiler Instance { get; } = new();
+
+        public (Type, Func<Exception, SmithyHttpServerResponse>) Visit<TError>(
+            OperationErrorSchema<TError> schema
+        )
+            where TError : Exception => CompileServerError(schema);
+    }
+
     private static HttpOperationError[] CompileErrors(
         IReadOnlyList<IOperationErrorSchema> errors
-    ) => errors.Select(error => (HttpOperationError)CompileError((dynamic)error)).ToArray();
+    ) => errors.Select(error => error.Accept(ErrorCompiler.Instance)).ToArray();
+
+    private sealed class ErrorCompiler : IOperationErrorSchemaVisitor<HttpOperationError>
+    {
+        public static ErrorCompiler Instance { get; } = new();
+
+        public HttpOperationError Visit<TError>(OperationErrorSchema<TError> schema)
+            where TError : Exception => CompileError(schema);
+    }
 
     private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
         where TError : Exception
@@ -553,7 +624,6 @@ public sealed class RpcV2CborProtocol : IProtocol
     }
 
     private sealed class EventStreamShapeBinding<TShape, TEvent, TBuilder>
-        where TBuilder : notnull
     {
         private EventStreamShapeBinding(
             IStructSchema<TShape, TBuilder> structure,
@@ -663,7 +733,6 @@ public sealed class RpcV2CborProtocol : IProtocol
         string initialEventType,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
-        where TBuilder : notnull
     {
         if (binding.HasInitialMembers)
         {
@@ -712,7 +781,6 @@ public sealed class RpcV2CborProtocol : IProtocol
         string initialEventType,
         CancellationToken cancellationToken
     )
-        where TBuilder : notnull
     {
         var enumerator = EventStreamMessageReader
             .ReadAllAsync(body, cancellationToken)

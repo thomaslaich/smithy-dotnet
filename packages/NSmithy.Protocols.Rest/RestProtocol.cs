@@ -65,8 +65,6 @@ public static class RestProtocol
         TInputBuilder,
         TOutputBuilder
     >(RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> binding, TInput input)
-        where TInputBuilder : notnull
-        where TOutputBuilder : notnull
     {
         ArgumentNullException.ThrowIfNull(binding);
         var bound = binding.Input;
@@ -139,8 +137,6 @@ public static class RestProtocol
         RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> binding,
         SmithyHttpRequest request
     )
-        where TInputBuilder : notnull
-        where TOutputBuilder : notnull
     {
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(request);
@@ -221,8 +217,6 @@ public static class RestProtocol
         TInputBuilder,
         TOutputBuilder
     >(RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> binding, TOutput output)
-        where TInputBuilder : notnull
-        where TOutputBuilder : notnull
     {
         ArgumentNullException.ThrowIfNull(binding);
         var bound = binding.Output;
@@ -259,8 +253,6 @@ public static class RestProtocol
         RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> binding,
         SmithyHttpClientResponse response
     )
-        where TInputBuilder : notnull
-        where TOutputBuilder : notnull
     {
         ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(response);
@@ -272,7 +264,6 @@ public static class RestProtocol
         T value,
         Dictionary<string, IReadOnlyList<string>> headers
     )
-        where TBuilder : notnull
     {
         foreach (var header in bound.HeaderWriters)
         {
@@ -290,7 +281,6 @@ public static class RestProtocol
         SmithyHttpClientResponse response,
         Func<byte[], byte[]>? prepareBody
     )
-        where TBuilder : notnull
     {
         var builder = bound.Schema.CreateTypedBuilder();
         bound.StatusCodeReader?.Read(builder, (int)response.StatusCode);
@@ -330,15 +320,18 @@ public static class RestProtocol
     {
         ArgumentNullException.ThrowIfNull(errors);
         ArgumentNullException.ThrowIfNull(codecFactory);
-        return errors
-            .Select(error =>
-                (HttpOperationError)CompileErrorDeserializer(
-                    (dynamic)error,
-                    codecFactory,
-                    rawStringPayloads
-                )
-            )
-            .ToArray();
+        var compiler = new ErrorDeserializerCompiler(codecFactory, rawStringPayloads);
+        return errors.Select(error => error.Accept(compiler)).ToArray();
+    }
+
+    private sealed class ErrorDeserializerCompiler(
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads
+    ) : IOperationErrorSchemaVisitor<HttpOperationError>
+    {
+        public HttpOperationError Visit<TError>(OperationErrorSchema<TError> error)
+            where TError : Exception =>
+            CompileErrorDeserializer(error, codecFactory, rawStringPayloads);
     }
 
     private static HttpOperationError CompileErrorDeserializer<TError>(
@@ -355,7 +348,20 @@ public static class RestProtocol
             );
         }
 
-        return CompileErrorDeserializer(error, (dynamic)schema, codecFactory, rawStringPayloads);
+        return schema.Accept(
+            new ErrorStructDeserializerCompiler<TError>(error, codecFactory, rawStringPayloads)
+        );
+    }
+
+    private sealed class ErrorStructDeserializerCompiler<TError>(
+        OperationErrorSchema<TError> error,
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads
+    ) : IStructSchemaVisitor<TError, HttpOperationError>
+        where TError : Exception
+    {
+        public HttpOperationError Visit<TBuilder>(IStructSchema<TError, TBuilder> schema) =>
+            CompileErrorDeserializer(error, schema, codecFactory, rawStringPayloads);
     }
 
     private static HttpOperationError CompileErrorDeserializer<TError, TBuilder>(
@@ -365,7 +371,6 @@ public static class RestProtocol
         bool rawStringPayloads
     )
         where TError : Exception
-        where TBuilder : notnull
     {
         var bound = RestStructBinding<TError, TBuilder>.Compile(
             schema,
@@ -451,12 +456,20 @@ public static class RestProtocol
             );
         }
 
-        return CompileStructuredError(
-            (dynamic)schema,
-            codecFactory,
-            rawStringPayloads,
-            errorTypeHeader
+        return schema.Accept(
+            new StructuredErrorCompiler<TError>(codecFactory, rawStringPayloads, errorTypeHeader)
         );
+    }
+
+    private sealed class StructuredErrorCompiler<TError>(
+        IRestBodyCodecFactory codecFactory,
+        bool rawStringPayloads,
+        string errorTypeHeader
+    ) : IStructSchemaVisitor<TError, RestErrorSerializer<TError>>
+    {
+        public RestErrorSerializer<TError> Visit<TBuilder>(
+            IStructSchema<TError, TBuilder> schema
+        ) => CompileStructuredError(schema, codecFactory, rawStringPayloads, errorTypeHeader);
     }
 
     private static RestErrorSerializer<TError> CompileStructuredError<TError, TBuilder>(
@@ -465,7 +478,6 @@ public static class RestProtocol
         bool rawStringPayloads,
         string errorTypeHeader
     )
-        where TBuilder : notnull
     {
         var bound = RestStructBinding<TError, TBuilder>.Compile(
             schema,
@@ -910,8 +922,6 @@ public static class RestProtocol
         RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> binding,
         SmithyHttpRequest request
     )
-        where TInputBuilder : notnull
-        where TOutputBuilder : notnull
     {
         var declared = TryGetFirstHeader(request.Headers, "Content-Type", out var header)
             ? header
@@ -968,8 +978,6 @@ public static class RestProtocol
         RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> binding,
         SmithyHttpRequest request
     )
-        where TInputBuilder : notnull
-        where TOutputBuilder : notnull
     {
         if (
             binding.OutputIsUnit

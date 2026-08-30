@@ -26,14 +26,14 @@ public sealed class XmlCodecFactory(
     }
 
     public ICodec<T> FromMember<T>(
-        ITargetedMemberSchema<T> member,
+        ITypedTargetMemberSchema<T> member,
         CodecFactoryOptions? options = null
     )
     {
         ArgumentNullException.ThrowIfNull(member);
         var resolved = options ?? CodecFactoryOptions.Default;
         return new CompiledXmlCodec<T>(
-            member.TargetSchema,
+            member.TypedTarget,
             resolved.MaterializeTopLevelDefaults,
             member.MemberTraits,
             defaultNamespaceUri,

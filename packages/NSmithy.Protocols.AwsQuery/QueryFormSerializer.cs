@@ -108,7 +108,7 @@ internal sealed class QueryFormWriterCompiler(QueryProtocolKind kind)
     private sealed class Visitor(
         QueryFormWriterCompiler owner,
         IReadOnlyDictionary<ShapeId, Trait>? traits
-    ) : SchemaVisitor<object>
+    ) : PartialSchemaVisitor<object>
     {
         public override object VisitBoolean(Schema<bool> schema) =>
             new ScalarWriter<bool>(static value => value ? "true" : "false");
@@ -173,7 +173,7 @@ internal sealed class QueryFormWriterCompiler(QueryProtocolKind kind)
             );
 
         public override object VisitNullable<T>(NullableSchema<T> schema) =>
-            new NullableWriter<T>((IQueryFormWriter<T>)schema.TargetSchema.Resolved.Accept(this));
+            new NullableWriter<T>((IQueryFormWriter<T>)schema.TypedTarget.Resolved.Accept(this));
 
         public override object VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema) =>
             owner.cache.GetOrCompile<IQueryFormWriter<T>, DeferredWriter<T>>(
@@ -275,7 +275,7 @@ internal sealed class QueryFormWriterCompiler(QueryProtocolKind kind)
                 new MemberWriter<T, TValue>(
                     member,
                     owner.MemberName(member),
-                    owner.Compile(member.TargetSchema, member.MemberTraits)
+                    owner.Compile(member.TypedTarget, member.MemberTraits)
                 )
             );
     }

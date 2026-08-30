@@ -25,14 +25,14 @@ public sealed class JsonCodecFactory(
     }
 
     public ICodec<T> FromMember<T>(
-        ITargetedMemberSchema<T> member,
+        ITypedTargetMemberSchema<T> member,
         CodecFactoryOptions? options = null
     )
     {
         ArgumentNullException.ThrowIfNull(member);
         var resolved = options ?? CodecFactoryOptions.Default;
         return new CompiledJsonCodec<T>(
-            member.TargetSchema,
+            member.TypedTarget,
             resolved.MaterializeTopLevelDefaults,
             readMode,
             honorJsonNameTrait,

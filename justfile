@@ -45,6 +45,13 @@ test:
     cd codegen && gradle test
     dotnet test NSmithy.slnx --configuration Release --no-build --disable-build-servers
 
+# Publish and execute a representative typed REST operation as a native binary. This guards the
+
+# reflection-free/runtime-binder-free path separately from ordinary JIT tests.
+aot-smoke:
+    dotnet publish tests/AotSmoke/NSmithy.AotSmoke.csproj --configuration Release -p:PublishAot=true --output artifacts/aot-smoke --disable-build-servers
+    artifacts/aot-smoke/NSmithy.AotSmoke
+
 pack:
     cd codegen && gradle bundleMavenRepo ${VERSION:+-Pversion=$VERSION}
     find packages/NSmithy.MSBuild/tools/maven-repo -mindepth 1 -not -name .gitignore -delete
@@ -72,7 +79,7 @@ smoke-templates:
     # codegen rename breaks `dotnet new` while everything else stays green.
     bash templates/smoke-test.sh
 
-ci: check-format build test pack refresh-examples smoke-templates
+ci: check-format build test aot-smoke pack refresh-examples smoke-templates
 
 # The examples pin the fixed `0.0.0-SNAPSHOT` dev version permanently, while a release build packs
 # release-versioned packages, so NuGet resolves a version other than the pinned one and NU1603
@@ -81,7 +88,7 @@ ci: check-format build test pack refresh-examples smoke-templates
 # match what `just pack` produced.
 
 # What a release build runs: everything in `ci` except the examples refresh.
-release-ci: check-format build test pack
+release-ci: check-format build test aot-smoke pack
 
 bench-build:
     dotnet build benchmarks/Benchmarks.slnx --configuration Release

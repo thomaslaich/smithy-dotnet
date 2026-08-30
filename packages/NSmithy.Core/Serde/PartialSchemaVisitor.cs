@@ -7,7 +7,7 @@ namespace NSmithy.Core.Serde;
 /// one through <see cref="VisitDefault"/>, which by default refuses it. For a consumer that only
 /// admits, say, a map: override <see cref="VisitMap"/> and nothing else.
 /// </summary>
-public abstract class SchemaVisitor<TResult> : ISchemaVisitor<TResult>
+public abstract class PartialSchemaVisitor<TResult> : ISchemaVisitor<TResult>
 {
     protected virtual TResult VisitDefault(Schema schema) =>
         throw new NotSupportedException(

@@ -212,9 +212,9 @@ consumer needs to compile anything per member. That is one interface, shared by
 structure members and by list elements and map keys and values alike:
 
 ```csharp
-public interface ITargetedMemberSchema<TValue> : IMemberSchema
+public interface ITypedTargetMemberSchema<TValue> : IMemberSchema
 {
-    Schema<TValue> TargetSchema { get; }
+    Schema<TValue> TypedTarget { get; }
 }
 ```
 
@@ -227,13 +227,13 @@ container reaches the value type through the member's visitor, never through
 
 ```csharp
 public interface IMemberSchema<TContainer, TValue>
-    : IMemberSchema<TContainer>, ITargetedMemberSchema<TValue>
+    : IMemberSchema<TContainer>, ITypedTargetMemberSchema<TValue>
 {
     TValue GetValue(TContainer container);
 }
 
 public interface IMemberSchema<TContainer, TBuilder, TValue>
-    : IMemberSchema<TContainer, TValue>, IStructMemberSchema<TContainer, TBuilder>
+    : IMemberSchema<TContainer, TValue>, IBuilderMemberSchema<TContainer, TBuilder>
 {
     void SetValue(TBuilder builder, TValue value);
 }
@@ -301,9 +301,10 @@ stand-in.
 ### Projections
 
 REST protocols use projections to keep the same container type while narrowing
-the visible member set. A projection is a predicate over the source's members;
-it holds no member list of its own, and a codec compiled for it visits the
-source and skips what the predicate excludes:
+the visible member set. A projection evaluates its selection once at
+construction and snapshots the matching member schemas. A codec compiled for
+it therefore sees a stable view even when the caller constructed the selection
+from a mutable set:
 
 ```csharp
 var bodyProjection = Schemas.Project(inputSchema, bodyMemberNames);
@@ -375,7 +376,7 @@ Generic dispatch through the visitor is the *only* dispatch. Adding a consumer
 means writing one fold. A fold that must handle every kind implements
 `ISchemaVisitor<TResult>` directly, so a new shape kind fails to compile until
 the fold handles it; a fold that admits only a few kinds derives from
-`SchemaVisitor<TResult>`, overrides those, and answers the rest through
+`PartialSchemaVisitor<TResult>`, overrides those, and answers the rest through
 `VisitDefault`. Exhaustiveness is enforced by the type system rather than by
 runtime `default:` branches.
 
@@ -460,7 +461,7 @@ public interface ICodecFactory
 {
     ICodec<T> FromSchema<T>(Schema<T> schema, CodecFactoryOptions? options = null);
     ICodec<T> FromMember<T>(
-        ITargetedMemberSchema<T> member,
+        ITypedTargetMemberSchema<T> member,
         CodecFactoryOptions? options = null
     );
 }

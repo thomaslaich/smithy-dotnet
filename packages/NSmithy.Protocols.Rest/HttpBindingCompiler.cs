@@ -33,7 +33,7 @@ internal interface IHttpValueCodec<T>
 
 /// <summary>Compiles the <see cref="IHttpValueCodec{T}"/> for a bound member's target.</summary>
 internal sealed class HttpBindingCompiler(IReadOnlyDictionary<ShapeId, Trait>? memberTraits)
-    : SchemaVisitor<object>
+    : PartialSchemaVisitor<object>
 {
     internal static IHttpValueCodec<T> Compile<T>(
         Schema<T> target,
@@ -75,7 +75,7 @@ internal sealed class HttpBindingCompiler(IReadOnlyDictionary<ShapeId, Trait>? m
         new TimestampHttpCodec(TimestampFormat(schema));
 
     public override object VisitNullable<T>(NullableSchema<T> schema) =>
-        new NullableHttpCodec<T>((IHttpValueCodec<T>)schema.TargetSchema.Resolved.Accept(this));
+        new NullableHttpCodec<T>((IHttpValueCodec<T>)schema.TypedTarget.Resolved.Accept(this));
 
     public override object VisitList<TCollection, TElement, TBuilder>(
         IListSchema<TCollection, TElement, TBuilder> schema

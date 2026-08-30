@@ -23,7 +23,6 @@ internal delegate void RestPayloadReader<in TBuilder>(
 /// and outputs and error shapes alike.
 /// </summary>
 internal sealed class RestStructBinding<T, TBuilder>
-    where TBuilder : notnull
 {
     private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
 
@@ -226,13 +225,13 @@ internal sealed class RestStructBinding<T, TBuilder>
 
         private static IHttpValueCodec<TValue> Codec<TValue>(
             IMemberSchema<T, TBuilder, TValue> member
-        ) => HttpBindingCompiler.Compile(member.TargetSchema, member.MemberTraits);
+        ) => HttpBindingCompiler.Compile(member.TypedTarget, member.MemberTraits);
 
         private static IMapBindingPlan<T, TBuilder> MapPlan<TValue>(
             IMemberSchema<T, TBuilder, TValue> member,
             string prefix
         ) =>
-            member.TargetSchema.Resolved.Accept(
+            member.TypedTarget.Resolved.Accept(
                 new MapBindingPlanCompiler<T, TBuilder, TValue>(member, prefix)
             );
     }
@@ -251,7 +250,7 @@ internal sealed class RestStructBinding<T, TBuilder>
         bool emptyStructOnNull
     )
     {
-        var target = member.TargetSchema;
+        var target = member.TypedTarget;
         var traits = member.MemberTraits;
         var mediaType = RestProtocol.GetMediaType(target, traits);
         var kind = HttpBindingPlans.UnwrapNullable(target).Kind;
@@ -381,7 +380,7 @@ internal sealed class RestStructBinding<T, TBuilder>
         bool rawStringPayloads
     )
     {
-        var target = member.TargetSchema;
+        var target = member.TypedTarget;
         var traits = member.MemberTraits;
         var unwrapped = HttpBindingPlans.UnwrapNullable(target);
 
@@ -468,7 +467,7 @@ internal sealed class RestStructBinding<T, TBuilder>
         IMemberSchema<T, TBuilder, TValue> member
     ) =>
         DefaultValues.TryCompile(
-            member.TargetSchema,
+            member.TypedTarget,
             member.MemberTraits,
             honorClientOptional: false,
             out var create
@@ -480,7 +479,7 @@ internal sealed class RestStructBinding<T, TBuilder>
     private sealed class EventStreamPayloadCompiler<TValue>(
         IMemberSchema<T, TBuilder, TValue> member,
         IRestBodyCodecFactory codecFactory
-    ) : SchemaVisitor<(Func<T, RestBody> Writer, RestPayloadReader<TBuilder> Reader)>
+    ) : PartialSchemaVisitor<(Func<T, RestBody> Writer, RestPayloadReader<TBuilder> Reader)>
     {
         public override (
             Func<T, RestBody> Writer,

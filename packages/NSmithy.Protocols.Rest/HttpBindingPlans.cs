@@ -196,7 +196,7 @@ internal sealed class QueryPlan<T, TBuilder, TValue>(
 internal sealed class MapBindingPlanCompiler<T, TBuilder, TValue>(
     IMemberSchema<T, TBuilder, TValue> member,
     string prefix
-) : SchemaVisitor<IMapBindingPlan<T, TBuilder>>
+) : PartialSchemaVisitor<IMapBindingPlan<T, TBuilder>>
 {
     public override IMapBindingPlan<T, TBuilder> VisitMap<TDictionary, TMapValue, TMapBuilder>(
         IMapSchema<TDictionary, TMapValue, TMapBuilder> schema

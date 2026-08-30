@@ -22,7 +22,7 @@ internal static class XmlScalars
     ) => (IXmlScalar<T>)schema.Resolved.Accept(new Compiler(traits));
 
     private sealed class Compiler(IReadOnlyDictionary<ShapeId, Trait>? traits)
-        : SchemaVisitor<object>
+        : PartialSchemaVisitor<object>
     {
         public override object VisitBoolean(Schema<bool> schema) =>
             new Scalar<bool>(
@@ -93,7 +93,7 @@ internal static class XmlScalars
             };
 
         public override object VisitNullable<T>(NullableSchema<T> schema) =>
-            new NullableScalar<T>((IXmlScalar<T>)schema.TargetSchema.Resolved.Accept(this));
+            new NullableScalar<T>((IXmlScalar<T>)schema.TypedTarget.Resolved.Accept(this));
 
         public override object VisitStringEnum<T>(StringEnumSchema<T> schema) =>
             new Scalar<T>(static value => value.Value, schema.Create);

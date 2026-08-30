@@ -150,7 +150,15 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
 
         private static HttpOperationError[] CompileErrors(
             IReadOnlyList<IOperationErrorSchema> errors
-        ) => errors.Select(error => (HttpOperationError)CompileError((dynamic)error)).ToArray();
+        ) => errors.Select(error => error.Accept(ErrorCompiler.Instance)).ToArray();
+
+        private sealed class ErrorCompiler : IOperationErrorSchemaVisitor<HttpOperationError>
+        {
+            public static ErrorCompiler Instance { get; } = new();
+
+            public HttpOperationError Visit<TError>(OperationErrorSchema<TError> error)
+                where TError : Exception => CompileError(error);
+        }
 
         private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
             where TError : Exception

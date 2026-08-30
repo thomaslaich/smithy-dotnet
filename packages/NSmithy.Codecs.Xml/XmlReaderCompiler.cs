@@ -75,7 +75,7 @@ internal sealed class XmlReaderCompiler : ISchemaVisitor<object>
                 resolved.Accept(new MemberTraitXmlReaderCompiler(this, memberTraits));
         }
 
-        return cache.GetOrCompile<IXmlValueReader<T>, DeferredXmlValueReader<T>>(
+        return cache.GetOrCompile(
             resolved,
             static () => new DeferredXmlValueReader<T>(),
             target => (IXmlValueReader<T>)target.Accept(this)
@@ -110,7 +110,7 @@ internal sealed class XmlReaderCompiler : ISchemaVisitor<object>
         throw new NotSupportedException("Smithy Document values are not supported in XML.");
 
     public object VisitNullable<T>(NullableSchema<T> schema)
-        where T : struct => new NullableXmlValueReader<T>(CompileValue(schema.TargetSchema));
+        where T : struct => new NullableXmlValueReader<T>(CompileValue(schema.TypedTarget));
 
     public object VisitStreamingBlob(Schema<Stream> schema) =>
         throw new NotSupportedException("XML codec does not support streaming blob schemas.");
@@ -124,7 +124,7 @@ internal sealed class XmlReaderCompiler : ISchemaVisitor<object>
         new ListXmlValueReader<TCollection, TElement, TBuilder>(
             schema,
             CompileValue(
-                schema.TypedElementMember.TargetSchema,
+                schema.TypedElementMember.TypedTarget,
                 schema.TypedElementMember.MemberTraits
             )
         );
@@ -134,7 +134,7 @@ internal sealed class XmlReaderCompiler : ISchemaVisitor<object>
     ) =>
         new MapXmlValueReader<TDictionary, TValue, TBuilder>(
             schema,
-            CompileValue(schema.TypedValueMember.TargetSchema, schema.TypedValueMember.MemberTraits)
+            CompileValue(schema.TypedValueMember.TypedTarget, schema.TypedValueMember.MemberTraits)
         );
 
     public object VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
@@ -237,7 +237,7 @@ internal sealed class MemberTraitXmlReaderCompiler(
 
     public object VisitNullable<T>(NullableSchema<T> schema)
         where T : struct =>
-        new NullableXmlValueReader<T>(inner.CompileValue(schema.TargetSchema, memberTraits));
+        new NullableXmlValueReader<T>(inner.CompileValue(schema.TypedTarget, memberTraits));
 
     public object VisitStreamingBlob(Schema<Stream> schema) => inner.CompileValue(schema);
 
@@ -298,21 +298,21 @@ internal sealed class XmlMemberReaderCompiler<TContainer, TBuilder>(XmlReaderCom
         readers.Add(
             new XmlMemberReader<TContainer, TBuilder, TValue>(
                 member,
-                compiler.CompileValue(member.TargetSchema, member.MemberTraits)
+                compiler.CompileValue(member.TypedTarget, member.MemberTraits)
             )
         );
     }
 
     private IXmlMemberReader<TBuilder> CreateFlattenedReader<TValue>(
         IMemberSchema<TContainer, TBuilder, TValue> member
-    ) => member.TargetSchema.Resolved.Accept(new FlattenedReaderCompiler<TValue>(this, member));
+    ) => member.TypedTarget.Resolved.Accept(new FlattenedReaderCompiler<TValue>(this, member));
 
     // A flattened member targets a list or map whose element type only comes into scope by
     // visiting it; anything else flattens to a plain member.
     private sealed class FlattenedReaderCompiler<TValue>(
         XmlMemberReaderCompiler<TContainer, TBuilder> owner,
         IMemberSchema<TContainer, TBuilder, TValue> member
-    ) : SchemaVisitor<IXmlMemberReader<TBuilder>>
+    ) : PartialSchemaVisitor<IXmlMemberReader<TBuilder>>
     {
         public override IXmlMemberReader<TBuilder> VisitList<
             TCollection,
@@ -341,7 +341,7 @@ internal sealed class XmlMemberReaderCompiler<TContainer, TBuilder>(XmlReaderCom
         TBuilder,
         TValue
     > CreateFlattenedValueReader<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member) =>
-        new(member, compiler.CompileValue(member.TargetSchema, member.MemberTraits));
+        new(member, compiler.CompileValue(member.TypedTarget, member.MemberTraits));
 
     private FlattenedListXmlMemberReader<
         TContainer,
@@ -357,7 +357,7 @@ internal sealed class XmlMemberReaderCompiler<TContainer, TBuilder>(XmlReaderCom
             member,
             list,
             compiler.CompileValue(
-                list.TypedElementMember.TargetSchema,
+                list.TypedElementMember.TypedTarget,
                 list.TypedElementMember.MemberTraits
             )
         );
@@ -376,7 +376,7 @@ internal sealed class XmlMemberReaderCompiler<TContainer, TBuilder>(XmlReaderCom
             member,
             map,
             compiler.CompileValue(
-                map.TypedValueMember.TargetSchema,
+                map.TypedValueMember.TypedTarget,
                 map.TypedValueMember.MemberTraits
             )
         );
@@ -388,7 +388,7 @@ internal sealed class XmlMemberReader<TContainer, TBuilder, TValue>(
 ) : IXmlMemberReader<TBuilder>
 {
     private readonly IXmlScalar<TValue>? attribute = XmlTraits.IsXmlAttribute(member)
-        ? XmlScalars.Compile(member.TargetSchema, member.MemberTraits)
+        ? XmlScalars.Compile(member.TypedTarget, member.MemberTraits)
         : null;
 
     public string Name => ElementName(member);

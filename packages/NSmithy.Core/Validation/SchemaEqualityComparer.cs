@@ -61,7 +61,7 @@ internal static class SchemaEqualityComparer
         public object VisitDocument(Schema<Document> schema) => EqualityComparer<Document>.Default;
 
         public object VisitNullable<T>(NullableSchema<T> schema)
-            where T : struct => new NullableComparer<T>(For(schema.TargetSchema));
+            where T : struct => new NullableComparer<T>(For(schema.TypedTarget));
 
         public object VisitList<TCollection, TElement, TBuilder>(
             IListSchema<TCollection, TElement, TBuilder> schema
@@ -229,7 +229,7 @@ internal sealed class StructComparer<T> : IEqualityComparer<T>, IMemberVisitor<T
     public void Visit<TValue>(IMemberSchema<T, TValue> member)
     {
         members.Add(
-            new MemberComparer<T, TValue>(member, SchemaEqualityComparer.For(member.TargetSchema))
+            new MemberComparer<T, TValue>(member, SchemaEqualityComparer.For(member.TypedTarget))
         );
     }
 
