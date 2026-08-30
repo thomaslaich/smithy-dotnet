@@ -16,12 +16,12 @@ public abstract class Schema
     {
         this.id = id;
         this.kind = kind;
-        this.traits = BuildTraits(traits);
+        this.traits = Trait.Index(traits);
     }
 
     protected Schema()
     {
-        traits = new Dictionary<ShapeId, Trait>();
+        traits = Trait.None;
     }
 
     public virtual ShapeId Id => id;
@@ -38,15 +38,10 @@ public abstract class Schema
 
     public string? MemberName => Id.MemberName;
 
-    // Virtual for one subclass: a member schema answers with its effective trait, which may sit on
-    // the shape it targets rather than in its own Traits.
     public virtual Trait? GetTrait(ShapeId id) =>
         Traits.TryGetValue(id, out var trait) ? trait : null;
 
     public virtual bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
-
-    internal static IReadOnlyDictionary<ShapeId, Trait> BuildTraits(IEnumerable<Trait>? traits) =>
-        traits is null ? [] : traits.ToDictionary(t => t.Id);
 }
 
 public abstract class Schema<T> : Schema
@@ -680,7 +675,7 @@ public sealed class CollectionMemberSchema<TValue> : ITargetedMemberSchema<TValu
 
         Id = id;
         TargetSchema = target;
-        memberTraits = Schema.BuildTraits(traits);
+        memberTraits = Trait.Index(traits);
     }
 
     public ShapeId Id { get; }
@@ -721,7 +716,7 @@ public sealed class MapKeyMemberSchema : IMemberSchema
 
         Id = id;
         Target = target;
-        memberTraits = Schema.BuildTraits(traits);
+        memberTraits = Trait.Index(traits);
     }
 
     public ShapeId Id { get; }
@@ -900,7 +895,7 @@ public sealed class UnionCaseSchema<TUnion, TValue>
         ArgumentNullException.ThrowIfNull(create);
 
         Id = id;
-        Traits = Schema.BuildTraits(traits);
+        Traits = Trait.Index(traits);
         TargetSchema = target;
         this.matches = matches;
         this.get = get;
@@ -1343,7 +1338,7 @@ public sealed class OperationSchema<TInput, TOutput> : IOperationSchema
         Input = input;
         Output = output;
         Errors = WithImplicitValidationError(errors);
-        Traits = Schema.BuildTraits(traits);
+        Traits = Trait.Index(traits);
     }
 
     public ShapeId Id { get; }
@@ -1421,7 +1416,7 @@ public sealed class ServiceSchema
     {
         Id = id;
         Version = version ?? throw new ArgumentNullException(nameof(version));
-        Traits = Schema.BuildTraits(traits);
+        Traits = Trait.Index(traits);
     }
 
     public ShapeId Id { get; }
