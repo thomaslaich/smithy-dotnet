@@ -14,10 +14,7 @@ public interface IServiceOperation
 {
     IOperationSchema Schema { get; }
 
-    Task<object?> InvokeAsync(
-        object input,
-        CancellationToken cancellationToken = default
-    );
+    Task<object?> InvokeAsync(object input, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Creates typed service-operation bindings with inferred input and output types.</summary>
@@ -107,8 +104,6 @@ public sealed class ServiceOperationCatalog
                 $"Service '{Schema.Id}' does not contain operation '{id}'."
             );
 
-    public bool TryGetOperation(
-        ShapeId id,
-        [NotNullWhen(true)] out IServiceOperation? operation
-    ) => operationsById.TryGetValue(id, out operation);
+    public bool TryGetOperation(ShapeId id, [NotNullWhen(true)] out IServiceOperation? operation) =>
+        operationsById.TryGetValue(id, out operation);
 }

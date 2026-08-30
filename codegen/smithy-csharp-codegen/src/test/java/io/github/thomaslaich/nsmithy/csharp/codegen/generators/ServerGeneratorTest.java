@@ -412,9 +412,9 @@ final class ServerGeneratorTest {
     assertTrue(generated.contains("CatalogServiceSchema.Schema,"), generated);
     assertTrue(
         generated.contains(
-            "ServiceOperation.Create(Example.Example.Catalog.NotifySchema.Schema, "
-                + "async (input, ct) => { await handler.NotifyAsync(input, ct).ConfigureAwait(false);"
-                + " return SmithyUnit.Value; }),"),
+            "ServiceOperation.Create(Example.Example.Catalog.NotifySchema.Schema, async (input, ct)"
+                + " => { await handler.NotifyAsync(input, ct).ConfigureAwait(false); return"
+                + " SmithyUnit.Value; }),"),
         generated);
     assertTrue(
         generated.contains(
