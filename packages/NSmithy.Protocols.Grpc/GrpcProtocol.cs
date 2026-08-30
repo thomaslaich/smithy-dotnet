@@ -756,13 +756,13 @@ public sealed class GrpcProtocol : IProtocol
     private static bool IsUnit<T>(Schema schema) =>
         typeof(T) == typeof(SmithyUnit) || Schemas.IsSyntheticUnit(schema);
 
-    private static Schema? FindEventStreamEventSchema(Schema schema) =>
-        schema.Resolved is IStructSchema structure
-            ? FindEventStreamEventSchemaCore((dynamic)structure)
-            : null;
-
-    private static Schema? FindEventStreamEventSchemaCore<T>(IStructSchema<T> structure)
+    private static Schema? FindEventStreamEventSchema<T>(Schema<T> schema)
     {
+        if (schema.Resolved is not IStructSchema<T> structure)
+        {
+            return null;
+        }
+
         var visitor = new EventStreamSchemaVisitor<T>();
         structure.VisitMembers(visitor);
         return visitor.EventSchema;

@@ -144,7 +144,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         where TInputBuilder : notnull
     {
         var codec = CodecFactory.FromSchema(eventSchema);
-        var union = RequireUnion(eventSchema);
+        var eventTypeOf = CompileEventType(eventSchema);
         var binding = EventStreamShapeBinding<TInput, TInputEvent, TInputBuilder>.Create(
             inputSchema,
             materializeTopLevelDefaults: false
@@ -158,7 +158,7 @@ public sealed class RpcV2CborProtocol : IProtocol
                         input,
                         binding,
                         codec,
-                        union,
+                        eventTypeOf,
                         InitialRequestEventType,
                         cancellationToken
                     )
@@ -229,7 +229,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         where TOutputBuilder : notnull
     {
         var codec = CodecFactory.FromSchema(eventSchema);
-        var union = RequireUnion(eventSchema);
+        var eventTypeOf = CompileEventType(eventSchema);
         var binding = EventStreamShapeBinding<TOutput, TOutputEvent, TOutputBuilder>.Create(
             outputSchema,
             materializeTopLevelDefaults: true
@@ -243,7 +243,7 @@ public sealed class RpcV2CborProtocol : IProtocol
                         output,
                         binding,
                         codec,
-                        union,
+                        eventTypeOf,
                         InitialResponseEventType,
                         cancellationToken
                     )
@@ -265,10 +265,12 @@ public sealed class RpcV2CborProtocol : IProtocol
         );
     }
 
-    private static IUnionSchema RequireUnion<TEvent>(Schema<TEvent> eventSchema) =>
-        eventSchema.Resolved as IUnionSchema
-        ?? throw new InvalidOperationException(
-            "rpcv2Cbor event streams must target a union schema."
+    private static Func<TEvent, string> CompileEventType<TEvent>(Schema<TEvent> eventSchema) =>
+        Schemas.CompileCaseName(
+            eventSchema.Resolved as IUnionSchema<TEvent>
+                ?? throw new InvalidOperationException(
+                    "rpcv2Cbor event streams must target a union schema."
+                )
         );
 
     private sealed class OperationProtocol<TInput, TOutput>(
@@ -537,7 +539,7 @@ public sealed class RpcV2CborProtocol : IProtocol
     private static async IAsyncEnumerable<ReadOnlyMemory<byte>> FrameEventsAsync<T>(
         IAsyncEnumerable<T> events,
         ICodec<T> codec,
-        IUnionSchema eventSchema,
+        Func<T, string> eventTypeOf,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
@@ -545,8 +547,8 @@ public sealed class RpcV2CborProtocol : IProtocol
             var value in events.WithCancellation(cancellationToken).ConfigureAwait(false)
         )
         {
-            var eventType = eventSchema.GetCaseObject(value!).Name;
-            yield return CreateEventStreamMessage(eventType, codec.Serialize(value)).Encode();
+            yield return CreateEventStreamMessage(eventTypeOf(value), codec.Serialize(value))
+                .Encode();
         }
     }
 
@@ -579,19 +581,24 @@ public sealed class RpcV2CborProtocol : IProtocol
             bool materializeTopLevelDefaults
         )
         {
-            var streamMember = FindStreamMember(structure);
-            var initialMembers = CollectInitialMembers(structure, streamMember);
+            var visitor = new EventStreamMemberVisitor<TShape, TBuilder, TEvent>();
+            structure.VisitMembers(visitor);
+            var streamMember =
+                visitor.Member
+                ?? throw new InvalidOperationException(
+                    "rpcv2Cbor initial event streams require one event stream member."
+                );
             return new EventStreamShapeBinding<TShape, TEvent, TBuilder>(
                 structure,
                 streamMember,
                 CodecFactory.FromProjection(
-                    Schemas.Project(structure, initialMembers),
+                    Schemas.Project(structure, member => !ReferenceEquals(member, streamMember)),
                     new CodecFactoryOptions
                     {
                         MaterializeTopLevelDefaults = materializeTopLevelDefaults,
                     }
                 ),
-                initialMembers.Length > 0
+                visitor.MemberCount > 1
             );
         }
 
@@ -612,27 +619,6 @@ public sealed class RpcV2CborProtocol : IProtocol
             StreamMember.SetValue(builder, events);
             return Structure.Build(builder);
         }
-
-        private static IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>> FindStreamMember(
-            IStructSchema<TShape, TBuilder> structure
-        )
-        {
-            var visitor = new EventStreamMemberVisitor<TShape, TBuilder, TEvent>();
-            structure.VisitMembers(visitor);
-            return visitor.Member
-                ?? throw new InvalidOperationException(
-                    "rpcv2Cbor initial event streams require one event stream member."
-                );
-        }
-
-        private static IMemberSchema<TShape>[] CollectInitialMembers(
-            IStructSchema<TShape, TBuilder> structure,
-            IMemberSchema<TShape> streamMember
-        ) =>
-            Schemas
-                .GetMembers(structure)
-                .Where(member => !ReferenceEquals(member, streamMember))
-                .ToArray();
     }
 
     private sealed class EventStreamMemberVisitor<TShape, TBuilder, TEvent>
@@ -644,8 +630,11 @@ public sealed class RpcV2CborProtocol : IProtocol
             private set;
         }
 
+        public int MemberCount { get; private set; }
+
         public void Visit<TValue>(IMemberSchema<TShape, TBuilder, TValue> member)
         {
+            MemberCount++;
             if (member.Target is not EventStreamSchema<TEvent>)
             {
                 return;
@@ -670,7 +659,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         TShape shape,
         EventStreamShapeBinding<TShape, TEvent, TBuilder> binding,
         ICodec<TEvent> eventCodec,
-        IUnionSchema eventSchema,
+        Func<TEvent, string> eventTypeOf,
         string initialEventType,
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
@@ -689,7 +678,7 @@ public sealed class RpcV2CborProtocol : IProtocol
             var chunk in FrameEventsAsync(
                     binding.GetEvents(shape),
                     eventCodec,
-                    eventSchema,
+                    eventTypeOf,
                     cancellationToken
                 )
                 .ConfigureAwait(false)
@@ -955,13 +944,13 @@ public sealed class RpcV2CborProtocol : IProtocol
     private static bool IsUnit<T>(Schema schema) =>
         typeof(T) == typeof(SmithyUnit) || Schemas.IsSyntheticUnit(schema);
 
-    private static Schema? FindEventStreamEventSchema(Schema schema) =>
-        schema.Resolved is IStructSchema structure
-            ? FindEventStreamEventSchemaCore((dynamic)structure)
-            : null;
-
-    private static Schema? FindEventStreamEventSchemaCore<T>(IStructSchema<T> structure)
+    private static Schema? FindEventStreamEventSchema<T>(Schema<T> schema)
     {
+        if (schema.Resolved is not IStructSchema<T> structure)
+        {
+            return null;
+        }
+
         var visitor = new EventStreamSchemaVisitor<T>();
         structure.VisitMembers(visitor);
         return visitor.EventSchema;

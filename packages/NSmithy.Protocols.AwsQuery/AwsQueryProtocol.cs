@@ -64,8 +64,7 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
         : IClientOperationProtocol<TInput, TOutput>
     {
         private readonly string action;
-        private readonly string version;
-        private readonly Schema<TInput> inputSchema;
+        private readonly QueryFormSerializer<TInput> requestSerializer;
         private readonly Schema<TOutput> outputSchema;
         private readonly ICodec<TOutput> responseCodec;
         private readonly bool outputIsSmithyUnit;
@@ -81,8 +80,12 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
         )
         {
             action = operation.Id.Name;
-            version = service.Version;
-            inputSchema = operation.Input;
+            requestSerializer = new QueryFormSerializer<TInput>(
+                kind,
+                action,
+                service.Version,
+                operation.Input
+            );
             outputSchema = operation.Output;
             responseCodec = CodecFactory.FromSchema(operation.Output);
             outputIsSmithyUnit = typeof(TOutput) == typeof(SmithyUnit);
@@ -99,9 +102,7 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
         {
             var request = new SmithyHttpRequest(HttpMethod.Post, "/")
             {
-                Body = new SmithyHttpBody.Bytes(
-                    new QueryFormSerializer(kind).Serialize(action, version, inputSchema, input)
-                ),
+                Body = new SmithyHttpBody.Bytes(requestSerializer.Serialize(input)),
                 ContentType = FormContentType,
             };
             request.Headers["Accept"] = ["text/xml"];
