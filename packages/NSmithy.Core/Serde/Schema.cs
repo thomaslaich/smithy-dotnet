@@ -38,12 +38,23 @@ public abstract class Schema
 
     public string? MemberName => Id.MemberName;
 
-    public Trait? GetTrait(ShapeId id) => Traits.TryGetValue(id, out var trait) ? trait : null;
+    public virtual Trait? GetTrait(ShapeId id) =>
+        Traits.TryGetValue(id, out var trait) ? trait : null;
 
-    public bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
+    public virtual bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
 
     internal static IReadOnlyDictionary<ShapeId, Trait> BuildTraits(IEnumerable<Trait>? traits) =>
         traits is null ? [] : traits.ToDictionary(t => t.Id);
+
+    /// <summary>
+    /// Effective trait lookup for a member: a trait on the member wins over the same trait on the
+    /// shape it targets.
+    /// </summary>
+    internal static Trait? FindTrait(
+        IReadOnlyDictionary<ShapeId, Trait> memberTraits,
+        Schema target,
+        ShapeId id
+    ) => memberTraits.TryGetValue(id, out var trait) ? trait : target.GetTrait(id);
 }
 
 public abstract class Schema<T> : Schema
@@ -680,16 +691,20 @@ public interface IMemberSchema<TContainer, TValue>
     TValue GetValue(TContainer container);
 }
 
-public interface IMemberSchema<TContainer, TBuilder, TValue> : IMemberSchema<TContainer, TValue>
+/// <summary>
+/// A structure member whose builder type is known, which is what a reader needs to dispatch on the
+/// member without knowing its value type yet.
+/// </summary>
+public interface IStructMemberSchema<TContainer, TBuilder> : IMemberSchema<TContainer>
 {
-    void SetValue(TBuilder builder, TValue value);
-
     void Accept(IMemberVisitor<TContainer, TBuilder> visitor);
 }
 
-internal interface IBuilderMemberSchema<TContainer, TBuilder>
+public interface IMemberSchema<TContainer, TBuilder, TValue>
+    : IMemberSchema<TContainer, TValue>,
+        IStructMemberSchema<TContainer, TBuilder>
 {
-    void Accept(IMemberVisitor<TContainer, TBuilder> visitor);
+    void SetValue(TBuilder builder, TValue value);
 }
 
 public sealed class CollectionMemberSchema<TValue> : ITargetedMemberSchema<TValue>
@@ -730,8 +745,7 @@ public sealed class CollectionMemberSchema<TValue> : ITargetedMemberSchema<TValu
     // no absent case for a consumer to check.
     public bool IsRequired => true;
 
-    public Trait? GetTrait(ShapeId id) =>
-        MemberTraits.TryGetValue(id, out var trait) ? trait : TargetSchema.GetTrait(id);
+    public Trait? GetTrait(ShapeId id) => Schema.FindTrait(MemberTraits, TargetSchema, id);
 
     public bool HasTrait(ShapeId id) => GetTrait(id) is not null;
 }
@@ -773,8 +787,7 @@ public sealed class MapKeyMemberSchema : IMemberSchema
     // An entry's key is always present when the map holds the entry.
     public bool IsRequired => true;
 
-    public Trait? GetTrait(ShapeId id) =>
-        MemberTraits.TryGetValue(id, out var trait) ? trait : Target.GetTrait(id);
+    public Trait? GetTrait(ShapeId id) => Schema.FindTrait(MemberTraits, Target, id);
 
     public bool HasTrait(ShapeId id) => GetTrait(id) is not null;
 }
@@ -1256,8 +1269,7 @@ internal interface IUnionCaseSchema<TUnion>
 
 public sealed class MemberSchema<TContainer, TBuilder, TValue>
     : Schema<TValue>,
-        IMemberSchema<TContainer, TBuilder, TValue>,
-        IBuilderMemberSchema<TContainer, TBuilder>
+        IMemberSchema<TContainer, TBuilder, TValue>
 {
     private readonly Func<TContainer, TValue> get;
     private readonly Action<TBuilder, TValue> set;
@@ -1311,10 +1323,9 @@ public sealed class MemberSchema<TContainer, TBuilder, TValue>
 
     public void SetObject(object builder, object? value) => set((TBuilder)builder, (TValue)value!);
 
-    public new Trait? GetTrait(ShapeId id) =>
-        MemberTraits.TryGetValue(id, out var trait) ? trait : TargetSchema.GetTrait(id);
+    public override Trait? GetTrait(ShapeId id) => FindTrait(MemberTraits, TargetSchema, id);
 
-    public new bool HasTrait(ShapeId id) => GetTrait(id) is not null;
+    public override bool HasTrait(ShapeId id) => GetTrait(id) is not null;
 
     public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
     {
@@ -1327,14 +1338,14 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
 {
     private readonly Func<TBuilder> createBuilder;
     private readonly Func<TBuilder, T> build;
-    private readonly ReadOnlyCollection<IMemberSchema<T>> members;
+    private readonly IStructMemberSchema<T, TBuilder>[] members;
     private readonly Dictionary<string, IMemberSchema> membersByName;
 
     internal StructSchema(
         ShapeId id,
         Func<TBuilder> createBuilder,
         Func<TBuilder, T> build,
-        IReadOnlyList<IMemberSchema> members,
+        IReadOnlyList<IStructMemberSchema<T, TBuilder>> members,
         IEnumerable<Trait>? traits = null,
         IStructValueSerializer<T>? valueSerializer = null
     )
@@ -1342,9 +1353,7 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
     {
         this.createBuilder = createBuilder;
         this.build = build;
-        this.members = new ReadOnlyCollection<IMemberSchema<T>>(
-            members.Cast<IMemberSchema<T>>().ToArray()
-        );
+        this.members = [.. members];
         membersByName = BuildMembersByName(this.members);
         ValueSerializer = valueSerializer;
     }
@@ -1377,7 +1386,7 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
         ArgumentNullException.ThrowIfNull(visitor);
         foreach (var member in members)
         {
-            ((IBuilderMemberSchema<T, TBuilder>)member).Accept(visitor);
+            member.Accept(visitor);
         }
     }
 
@@ -1388,7 +1397,7 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
     }
 
     private static Dictionary<string, IMemberSchema> BuildMembersByName(
-        ReadOnlyCollection<IMemberSchema<T>> members
+        IStructMemberSchema<T, TBuilder>[] members
     )
     {
         var byName = new Dictionary<string, IMemberSchema>(StringComparer.Ordinal);
@@ -1401,61 +1410,66 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
     }
 }
 
+/// <summary>
+/// A subset of a structure's members, as a protocol sees a structure once it has bound some members
+/// elsewhere: the members it keeps are the ones the body codec reads and writes.
+/// </summary>
 public sealed class StructProjection<T, TBuilder>
 {
-    private readonly IStructSchema<T, TBuilder> source;
-    private readonly ReadOnlyCollection<IMemberSchema<T>> members;
-    private readonly Dictionary<string, IMemberSchema<T>> membersByName;
+    private readonly Func<IMemberSchema, bool> include;
 
-    internal StructProjection(
-        IStructSchema<T, TBuilder> source,
-        IReadOnlyList<IMemberSchema<T>> members
-    )
+    internal StructProjection(IStructSchema<T, TBuilder> source, Func<IMemberSchema, bool> include)
     {
         ArgumentNullException.ThrowIfNull(source);
-        ArgumentNullException.ThrowIfNull(members);
-        this.source = source;
-        this.members = new ReadOnlyCollection<IMemberSchema<T>>(members.ToArray());
-        membersByName = BuildMembersByName(this.members);
+        ArgumentNullException.ThrowIfNull(include);
+        Source = source;
+        this.include = include;
     }
 
-    public IStructSchema<T, TBuilder> Source => source;
+    public IStructSchema<T, TBuilder> Source { get; }
 
-    public IMemberSchema<T>? GetMember(string name)
+    public IMemberSchema? GetMember(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        return membersByName.TryGetValue(name, out var member) ? member : null;
+        return Source.GetMember(name) is { } member && include(member) ? member : null;
     }
 
     public void VisitMembers(IMemberVisitor<T> visitor)
     {
         ArgumentNullException.ThrowIfNull(visitor);
-        foreach (var member in members)
-        {
-            member.Accept(visitor);
-        }
+        Source.VisitMembers(new Filter(visitor, include));
     }
 
     public void VisitMembers(IMemberVisitor<T, TBuilder> visitor)
     {
         ArgumentNullException.ThrowIfNull(visitor);
-        foreach (var member in members)
+        Source.VisitMembers(new BuilderFilter(visitor, include));
+    }
+
+    private sealed class Filter(IMemberVisitor<T> inner, Func<IMemberSchema, bool> include)
+        : IMemberVisitor<T>
+    {
+        public void Visit<TValue>(IMemberSchema<T, TValue> member)
         {
-            ((IBuilderMemberSchema<T, TBuilder>)member).Accept(visitor);
+            if (include(member))
+            {
+                inner.Visit(member);
+            }
         }
     }
 
-    private static Dictionary<string, IMemberSchema<T>> BuildMembersByName(
-        ReadOnlyCollection<IMemberSchema<T>> members
-    )
+    private sealed class BuilderFilter(
+        IMemberVisitor<T, TBuilder> inner,
+        Func<IMemberSchema, bool> include
+    ) : IMemberVisitor<T, TBuilder>
     {
-        var byName = new Dictionary<string, IMemberSchema<T>>(StringComparer.Ordinal);
-        foreach (var member in members)
+        public void Visit<TValue>(IMemberSchema<T, TBuilder, TValue> member)
         {
-            byName.Add(member.Name, member);
+            if (include(member))
+            {
+                inner.Visit(member);
+            }
         }
-
-        return byName;
     }
 }
 
@@ -1463,7 +1477,7 @@ public sealed class StructSchemaBuilder<T, TBuilder>
 {
     private readonly ShapeId id;
     private readonly IReadOnlyList<Trait>? traits;
-    private readonly List<IMemberSchema> members = [];
+    private readonly List<IStructMemberSchema<T, TBuilder>> members = [];
 
     internal StructSchemaBuilder(ShapeId id, IEnumerable<Trait>? traits = null)
     {
@@ -1953,10 +1967,31 @@ public static class Schemas
         IEnumerable<Trait>? traits = null
     ) => new(id, version, traits);
 
+    /// <summary>The members of <paramref name="source"/> for which <paramref name="include"/> holds.</summary>
+    public static StructProjection<T, TBuilder> Project<T, TBuilder>(
+        IStructSchema<T, TBuilder> source,
+        Func<IMemberSchema, bool> include
+    ) => new(source, include);
+
+    /// <summary>The members of <paramref name="source"/> named in <paramref name="memberNames"/>.</summary>
+    public static StructProjection<T, TBuilder> Project<T, TBuilder>(
+        IStructSchema<T, TBuilder> source,
+        IReadOnlySet<string> memberNames
+    )
+    {
+        ArgumentNullException.ThrowIfNull(memberNames);
+        return new(source, member => memberNames.Contains(member.Name));
+    }
+
     public static StructProjection<T, TBuilder> Project<T, TBuilder>(
         IStructSchema<T, TBuilder> source,
         IReadOnlyList<IMemberSchema<T>> members
-    ) => new(source, members);
+    )
+    {
+        ArgumentNullException.ThrowIfNull(members);
+        var included = new HashSet<IMemberSchema>(members, ReferenceEqualityComparer.Instance);
+        return new(source, included.Contains);
+    }
 
     public static IReadOnlyList<IMemberSchema<T>> GetMembers<T>(IStructSchema<T> schema)
     {
@@ -1971,5 +2006,52 @@ public static class Schemas
         public List<IMemberSchema<T>> Members { get; } = [];
 
         public void Visit<TValue>(IMemberSchema<T, TValue> member) => Members.Add(member);
+    }
+
+    /// <summary>
+    /// Compiles the function that names the case a union value holds, e.g. for an event stream's
+    /// <c>:event-type</c>.
+    /// </summary>
+    public static Func<TUnion, string> CompileCaseName<TUnion>(IUnionSchema<TUnion> schema)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        var collector = new CaseNameCollector<TUnion>();
+        schema.VisitCases(collector);
+        var cases = collector.Cases.ToArray();
+        return value =>
+        {
+            foreach (var @case in cases)
+            {
+                if (@case.Matches(value))
+                {
+                    return @case.Name;
+                }
+            }
+
+            throw new InvalidOperationException($"No union case matched '{typeof(TUnion).Name}'.");
+        };
+    }
+
+    private interface ICaseMatch<in TUnion>
+    {
+        string Name { get; }
+
+        bool Matches(TUnion value);
+    }
+
+    private sealed class CaseMatch<TUnion, TValue>(IUnionCaseSchema<TUnion, TValue> @case)
+        : ICaseMatch<TUnion>
+    {
+        public string Name => @case.Name;
+
+        public bool Matches(TUnion value) => @case.Matches(value);
+    }
+
+    private sealed class CaseNameCollector<TUnion> : IUnionCaseVisitor<TUnion>
+    {
+        public List<ICaseMatch<TUnion>> Cases { get; } = [];
+
+        public void Visit<TValue>(IUnionCaseSchema<TUnion, TValue> unionCase) =>
+            Cases.Add(new CaseMatch<TUnion, TValue>(unionCase));
     }
 }
