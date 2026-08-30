@@ -296,80 +296,24 @@ internal static class CborWire
         out T? value
     )
     {
-        if (
-            traits.ContainsKey(ClientOptionalTrait)
-            || !traits.TryGetValue(DefaultTrait, out var trait)
-            || trait.Value.Kind == DocumentKind.Null
-        )
+        if (CompileDefault(schema, traits) is { } create)
         {
-            value = default;
-            return false;
+            value = create();
+            return true;
         }
 
-        value = CreateDefaultValue(schema, trait.Value);
-        return value is not null;
+        value = default;
+        return false;
     }
 
-    internal static T? CreateDefaultValue<T>(Schema<T> schema, Document value)
-    {
-        var resolved = schema.Resolved;
-        if (resolved is INullableSchema nullable)
-        {
-            return (T?)CreateDefaultValue((dynamic)nullable.Target, value);
-        }
-
-        return resolved.Kind switch
-        {
-            ShapeKind.Boolean => (T)(object)value.AsBoolean(),
-            ShapeKind.Byte => (T)(object)(sbyte)value.AsNumber(),
-            ShapeKind.Short => (T)(object)(short)value.AsNumber(),
-            ShapeKind.Integer => (T)(object)(int)value.AsNumber(),
-            ShapeKind.Long => (T)(object)(long)value.AsNumber(),
-            ShapeKind.Float => (T)(object)(float)value.AsNumber(),
-            ShapeKind.Double => (T)(object)(double)value.AsNumber(),
-            ShapeKind.BigInteger => (T)(object)new BigInteger(value.AsNumber()),
-            ShapeKind.BigDecimal => (T)(object)value.AsNumber(),
-            ShapeKind.String => (T)(object)value.AsString(),
-            ShapeKind.Enum => (T)((IStringEnumSchema)resolved).CreateObject(value.AsString()),
-            ShapeKind.IntEnum => (T)((IIntEnumSchema)resolved).CreateObject((int)value.AsNumber()),
-            ShapeKind.Blob => (T)(object)Convert.FromBase64String(value.AsString()),
-            ShapeKind.Timestamp => (T)
-                (object)DateTimeOffset.FromUnixTimeSeconds((long)value.AsNumber()),
-            ShapeKind.Document => (T)(object)value,
-            ShapeKind.List or ShapeKind.Set when resolved is IListSchema list => CreateDefaultList(
-                (dynamic)list,
-                value
-            ),
-            ShapeKind.Map when resolved is IMapSchema map => CreateDefaultMap((dynamic)map, value),
-            _ => null,
-        };
-    }
-
-    internal static TCollection CreateDefaultList<TCollection, TElement, TBuilder>(
-        IListSchema<TCollection, TElement, TBuilder> schema,
-        Document value
-    )
-    {
-        var builder = schema.CreateTypedBuilder();
-        foreach (var item in value.AsArray())
-            schema.Add(builder, CreateDefaultValue(schema.TypedElementMember.TargetSchema, item)!);
-        return schema.Build(builder);
-    }
-
-    internal static TDictionary CreateDefaultMap<TDictionary, TValue, TBuilder>(
-        IMapSchema<TDictionary, TValue, TBuilder> schema,
-        Document value
-    )
-    {
-        var builder = schema.CreateTypedBuilder();
-        foreach (var entry in value.AsObject())
-            schema.Add(
-                builder,
-                entry.Key,
-                CreateDefaultValue(schema.TypedValueMember.TargetSchema, entry.Value)!
-            );
-        return schema.Build(builder);
-    }
+    /// <summary>The member's <c>@default</c> as a factory, or null when it has none.</summary>
+    internal static Func<T>? CompileDefault<T>(
+        Schema<T> schema,
+        IReadOnlyDictionary<ShapeId, Trait> traits
+    ) =>
+        DefaultValues.TryCompile(schema, traits, honorClientOptional: true, out var create)
+            ? create
+            : null;
 
     internal static Schema UnwrapNullable(Schema schema)
     {

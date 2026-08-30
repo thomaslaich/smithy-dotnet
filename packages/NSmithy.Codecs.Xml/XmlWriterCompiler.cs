@@ -318,11 +318,13 @@ internal sealed class ScalarXmlValueWriter<T>(
     IReadOnlyDictionary<ShapeId, Trait> traits
 ) : IXmlValueWriter<T>
 {
+    private readonly IXmlScalar<T> scalar = XmlScalars.Compile(schema, traits);
+
     public void Write(XElement element, T value)
     {
         if (value is not null)
         {
-            element.Value = FormatScalar(schema, traits, value);
+            element.Value = scalar.Format(value);
         }
     }
 }
@@ -376,20 +378,35 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(
 
     private IXmlMemberPlan<TValue> CreateFlattenedPlan<TValue>(
         IMemberSchema<TContainer, TValue> member
-    )
+    ) => member.TargetSchema.Resolved.Accept(new FlattenedPlanCompiler<TValue>(this, member));
+
+    // A flattened member targets a list or map whose element type only comes into scope by
+    // visiting it; anything else flattens to a plain member.
+    private sealed class FlattenedPlanCompiler<TValue>(
+        XmlMemberWriterCompiler<TContainer> owner,
+        IMemberSchema<TContainer, TValue> member
+    ) : SchemaVisitor<IXmlMemberPlan<TValue>>
     {
-        var target = member.TargetSchema.Resolved;
-        return target switch
-        {
-            IListSchema list => CreateFlattenedListPlan(member, (dynamic)list),
-            IMapSchema map => CreateFlattenedMapPlan(member, (dynamic)map),
-            _ => new FlattenedXmlMemberPlan<TValue>(
-                member,
-                compiler.CompileValue(member.TargetSchema, member.MemberTraits),
-                materializeDefaults
-            ),
-        };
+        public override IXmlMemberPlan<TValue> VisitList<TCollection, TElement, TBuilder>(
+            IListSchema<TCollection, TElement, TBuilder> schema
+        ) => owner.CreateFlattenedListPlan(member, (IListSchema<TValue, TElement>)(object)schema);
+
+        public override IXmlMemberPlan<TValue> VisitMap<TDictionary, TMapValue, TBuilder>(
+            IMapSchema<TDictionary, TMapValue, TBuilder> schema
+        ) => owner.CreateFlattenedMapPlan(member, (IMapSchema<TValue, TMapValue>)(object)schema);
+
+        protected override IXmlMemberPlan<TValue> VisitDefault(Schema schema) =>
+            owner.CreateFlattenedValuePlan(member);
     }
+
+    private FlattenedXmlMemberPlan<TValue> CreateFlattenedValuePlan<TValue>(
+        IMemberSchema<TContainer, TValue> member
+    ) =>
+        new(
+            member,
+            compiler.CompileValue(member.TargetSchema, member.MemberTraits),
+            materializeDefaults
+        );
 
     private FlattenedListXmlMemberPlan<TValue, TElement> CreateFlattenedListPlan<TValue, TElement>(
         IMemberSchema<TContainer, TValue> member,
@@ -444,6 +461,9 @@ internal sealed class XmlMemberPlan<TValue>(
 ) : IXmlMemberPlan<TValue>
 {
     private readonly bool isRequired = member.IsRequired;
+    private readonly IXmlScalar<TValue>? attribute = XmlTraits.IsXmlAttribute(member)
+        ? XmlScalars.Compile(member.TargetSchema, member.MemberTraits)
+        : null;
 
     // Constant per member, so resolved at compile time rather than per write.
     private readonly (bool Present, TValue? Value) memberDefault = ResolveDefault(
@@ -468,7 +488,7 @@ internal sealed class XmlMemberPlan<TValue>(
         {
             element.SetAttributeValue(
                 AttributeName(element, ElementName(member)),
-                FormatScalar(member.TargetSchema, member.MemberTraits, value)
+                attribute!.Format(value)
             );
             return;
         }

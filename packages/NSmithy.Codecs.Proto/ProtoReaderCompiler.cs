@@ -149,15 +149,15 @@ internal sealed class ProtoValueReaderCompiler : ISchemaVisitor<object>
 
     public object VisitDouble(Schema<double> schema) => new DoubleProtoValueReader();
 
-    public object VisitBigInteger(Schema<BigInteger> schema) => Scalar(schema, EmptyTraits);
+    public object VisitBigInteger(Schema<BigInteger> schema) => new BigIntegerProtoValueReader();
 
-    public object VisitBigDecimal(Schema<decimal> schema) => Scalar(schema, EmptyTraits);
+    public object VisitBigDecimal(Schema<decimal> schema) => new BigDecimalProtoValueReader();
 
     public object VisitString(Schema<string> schema) => new StringProtoValueReader();
 
     public object VisitBlob(Schema<byte[]> schema) => new BlobProtoValueReader();
 
-    public object VisitTimestamp(Schema<DateTimeOffset> schema) => Scalar(schema, EmptyTraits);
+    public object VisitTimestamp(Schema<DateTimeOffset> schema) => new TimestampProtoValueReader();
 
     public object VisitDocument(Schema<Document> schema) => new DocumentProtoValueReader();
 
@@ -200,15 +200,10 @@ internal sealed class ProtoValueReaderCompiler : ISchemaVisitor<object>
     }
 
     public object VisitStringEnum<T>(StringEnumSchema<T> schema)
-        where T : IStringEnumValue<T> => Scalar(schema, EmptyTraits);
+        where T : IStringEnumValue<T> => new StringEnumProtoValueReader<T>(schema);
 
     public object VisitIntEnum<T>(IntEnumSchema<T> schema)
-        where T : struct, Enum => Scalar(schema, EmptyTraits);
-
-    private static ScalarProtoValueReader<T> Scalar<T>(
-        Schema<T> schema,
-        IReadOnlyDictionary<ShapeId, Trait> traits
-    ) => new(schema, traits);
+        where T : struct, Enum => new IntEnumProtoValueReader<T>(schema);
 
     private static object UnsupportedAggregateValue() =>
         throw new NotSupportedException(
@@ -314,18 +309,15 @@ internal sealed class MemberTraitProtoReaderCompiler(
 
     public object VisitDouble(Schema<double> schema) => new DoubleProtoValueReader();
 
-    public object VisitBigInteger(Schema<BigInteger> schema) =>
-        new ScalarProtoValueReader<BigInteger>(schema, traits);
+    public object VisitBigInteger(Schema<BigInteger> schema) => new BigIntegerProtoValueReader();
 
-    public object VisitBigDecimal(Schema<decimal> schema) =>
-        new ScalarProtoValueReader<decimal>(schema, traits);
+    public object VisitBigDecimal(Schema<decimal> schema) => new BigDecimalProtoValueReader();
 
     public object VisitString(Schema<string> schema) => new StringProtoValueReader();
 
     public object VisitBlob(Schema<byte[]> schema) => new BlobProtoValueReader();
 
-    public object VisitTimestamp(Schema<DateTimeOffset> schema) =>
-        new ScalarProtoValueReader<DateTimeOffset>(schema, traits);
+    public object VisitTimestamp(Schema<DateTimeOffset> schema) => new TimestampProtoValueReader();
 
     public object VisitDocument(Schema<Document> schema) => inner.CompileValue(schema);
 
@@ -352,10 +344,10 @@ internal sealed class MemberTraitProtoReaderCompiler(
     public object VisitUnion<T>(IUnionSchema<T> schema) => inner.CompileValue((Schema<T>)schema);
 
     public object VisitStringEnum<T>(StringEnumSchema<T> schema)
-        where T : IStringEnumValue<T> => new ScalarProtoValueReader<T>(schema, traits);
+        where T : IStringEnumValue<T> => new StringEnumProtoValueReader<T>(schema);
 
     public object VisitIntEnum<T>(IntEnumSchema<T> schema)
-        where T : struct, Enum => new ScalarProtoValueReader<T>(schema, traits);
+        where T : struct, Enum => new IntEnumProtoValueReader<T>(schema);
 }
 
 internal sealed class DeferredProtoValueReader<T>
@@ -456,56 +448,51 @@ internal sealed class BlobProtoValueReader : IProtoValueReader<byte[]>
         reader.ReadLengthDelimited().ToArray();
 }
 
-internal sealed class ScalarProtoValueReader<T>(
-    Schema<T> schema,
-    IReadOnlyDictionary<ShapeId, Trait> traits
-) : IProtoValueReader<T>
+internal sealed class BigIntegerProtoValueReader : IProtoValueReader<BigInteger>
 {
+    public BigInteger ReadBody(ref ProtoReader reader, WireType wireType) =>
+        BigInteger.Parse(
+            Encoding.UTF8.GetString(reader.ReadLengthDelimited()),
+            CultureInfo.InvariantCulture
+        );
+}
+
+internal sealed class BigDecimalProtoValueReader : IProtoValueReader<decimal>
+{
+    public decimal ReadBody(ref ProtoReader reader, WireType wireType) =>
+        decimal.Parse(
+            Encoding.UTF8.GetString(reader.ReadLengthDelimited()),
+            CultureInfo.InvariantCulture
+        );
+}
+
+internal sealed class TimestampProtoValueReader : IProtoValueReader<DateTimeOffset>
+{
+    public DateTimeOffset ReadBody(ref ProtoReader reader, WireType wireType) =>
+        ProtoWire.DecodeTimestamp(reader.ReadLengthDelimited());
+}
+
+internal sealed class StringEnumProtoValueReader<T>(StringEnumSchema<T> schema)
+    : IProtoValueReader<T>
+    where T : IStringEnumValue<T>
+{
+    private readonly string[] values = ProtoWire.EnumValues(schema);
+
+    // 0 is the synthetic proto UNSPECIFIED, which has no Smithy enum member.
     public T ReadBody(ref ProtoReader reader, WireType wireType)
     {
-        var resolved = ProtoWire.Unwrap(schema);
-        return resolved.Kind switch
-        {
-            ShapeKind.Boolean => (T)(object)(reader.ReadVarint() != 0),
-            ShapeKind.Byte => (T)
-                (object)(sbyte)ProtoWire.ReadInteger(ref reader, resolved.Kind, traits),
-            ShapeKind.Short => (T)
-                (object)(short)ProtoWire.ReadInteger(ref reader, resolved.Kind, traits),
-            ShapeKind.Integer => (T)
-                (object)(int)ProtoWire.ReadInteger(ref reader, resolved.Kind, traits),
-            ShapeKind.Long => (T)(object)ProtoWire.ReadInteger(ref reader, resolved.Kind, traits),
-            ShapeKind.Float => (T)(object)BitConverter.UInt32BitsToSingle(reader.ReadFixed32()),
-            ShapeKind.Double => (T)(object)BitConverter.UInt64BitsToDouble(reader.ReadFixed64()),
-            ShapeKind.String => (T)(object)Encoding.UTF8.GetString(reader.ReadLengthDelimited()),
-            ShapeKind.Blob => (T)(object)reader.ReadLengthDelimited().ToArray(),
-            ShapeKind.BigInteger => (T)
-                (object)
-                    BigInteger.Parse(
-                        Encoding.UTF8.GetString(reader.ReadLengthDelimited()),
-                        CultureInfo.InvariantCulture
-                    ),
-            ShapeKind.BigDecimal => (T)
-                (object)
-                    decimal.Parse(
-                        Encoding.UTF8.GetString(reader.ReadLengthDelimited()),
-                        CultureInfo.InvariantCulture
-                    ),
-            ShapeKind.IntEnum => (T)
-                ((IIntEnumSchema)resolved).CreateObject((int)reader.ReadVarint()),
-            ShapeKind.Timestamp => (T)
-                (object)ProtoWire.DecodeTimestamp(reader.ReadLengthDelimited()),
-            ShapeKind.Enum => ReadStringEnum(resolved, ref reader),
-            _ => throw new NotSupportedException(
-                $"Proto codec cannot decode schema kind '{resolved.Kind}' (wire type {wireType})."
-            ),
-        };
+        var ordinal = (int)reader.ReadVarint();
+        return ordinal > 0 && ordinal <= values.Length
+            ? schema.Create(values[ordinal - 1])
+            : default!;
     }
+}
 
-    private static T ReadStringEnum(Schema schema, ref ProtoReader reader)
-    {
-        var name = ProtoWire.EnumValueForOrdinal(schema, (int)reader.ReadVarint());
-        return name is null ? default! : (T)((IStringEnumSchema)schema).CreateObject(name);
-    }
+internal sealed class IntEnumProtoValueReader<T>(IntEnumSchema<T> schema) : IProtoValueReader<T>
+    where T : struct, Enum
+{
+    public T ReadBody(ref ProtoReader reader, WireType wireType) =>
+        schema.Create((int)reader.ReadVarint());
 }
 
 internal sealed class NullableProtoValueReader<T>(IProtoValueReader<T> inner)
@@ -543,36 +530,68 @@ internal sealed class ProtoFieldReaderCompiler<TContainer, TBuilder>(
     public void Visit<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member)
     {
         var target = ProtoWire.Unwrap(member.TargetSchema);
-        if (target is IUnionSchema union && ProtoWire.IsInlinedUnion(target))
+        if (ProtoWire.IsInlinedUnion(target))
         {
-            AddInlinedOneOfReaders(member, (dynamic)union);
+            target.Accept(new InlinedOneOfCompiler<TValue>(this, member));
             return;
         }
 
         var fieldNumber = ProtoWire.FieldNumber(member.Id, member.MemberTraits, readers.Count);
-        readers.Add(
-            target switch
-            {
-                IListSchema list => CreateListReader(
-                    member,
-                    (dynamic)list,
-                    fieldNumber,
-                    stateSlotCount++
-                ),
-                IMapSchema map => CreateMapReader(
-                    member,
-                    (dynamic)map,
-                    fieldNumber,
-                    stateSlotCount++
-                ),
-                _ => new ValueProtoFieldReader<TContainer, TBuilder, TValue>(
-                    member,
-                    fieldNumber,
-                    compiler.CompileValue(member.TargetSchema, member.MemberTraits)
-                ),
-            }
-        );
+        readers.Add(target.Accept(new ReaderCompiler<TValue>(this, member, fieldNumber)));
     }
+
+    // A repeated or map field's element type only comes into scope by visiting the target.
+    private sealed class ReaderCompiler<TValue>(
+        ProtoFieldReaderCompiler<TContainer, TBuilder> owner,
+        IMemberSchema<TContainer, TBuilder, TValue> member,
+        int fieldNumber
+    ) : SchemaVisitor<IProtoFieldReader<TBuilder>>
+    {
+        public override IProtoFieldReader<TBuilder> VisitList<
+            TCollection,
+            TElement,
+            TCollectionBuilder
+        >(IListSchema<TCollection, TElement, TCollectionBuilder> schema) =>
+            owner.CreateListReader(
+                member,
+                (IListSchema<TValue, TElement, TCollectionBuilder>)(object)schema,
+                fieldNumber,
+                owner.stateSlotCount++
+            );
+
+        public override IProtoFieldReader<TBuilder> VisitMap<TDictionary, TMapValue, TMapBuilder>(
+            IMapSchema<TDictionary, TMapValue, TMapBuilder> schema
+        ) =>
+            owner.CreateMapReader(
+                member,
+                (IMapSchema<TValue, TMapValue, TMapBuilder>)(object)schema,
+                fieldNumber,
+                owner.stateSlotCount++
+            );
+
+        protected override IProtoFieldReader<TBuilder> VisitDefault(Schema schema) =>
+            owner.CreateValueReader(member, fieldNumber);
+    }
+
+    private sealed class InlinedOneOfCompiler<TValue>(
+        ProtoFieldReaderCompiler<TContainer, TBuilder> owner,
+        IMemberSchema<TContainer, TBuilder, TValue> member
+    ) : SchemaVisitor<object?>
+    {
+        public override object? VisitUnion<TUnion>(IUnionSchema<TUnion> schema)
+        {
+            owner.AddInlinedOneOfReaders(
+                (IMemberSchema<TContainer, TBuilder, TUnion>)(object)member,
+                schema
+            );
+            return null;
+        }
+    }
+
+    private ValueProtoFieldReader<TContainer, TBuilder, TValue> CreateValueReader<TValue>(
+        IMemberSchema<TContainer, TBuilder, TValue> member,
+        int fieldNumber
+    ) => new(member, fieldNumber, compiler.CompileValue(member.TargetSchema, member.MemberTraits));
 
     private void AddInlinedOneOfReaders<TUnion>(
         IMemberSchema<TContainer, TBuilder, TUnion> member,

@@ -269,7 +269,9 @@ internal sealed class ScalarXmlValueReader<T>(
     IReadOnlyDictionary<ShapeId, Trait> traits
 ) : IXmlValueReader<T>
 {
-    public T Read(XElement? element) => ReadScalar(schema, traits, element?.Value ?? string.Empty);
+    private readonly IXmlScalar<T> scalar = XmlScalars.Compile(schema, traits);
+
+    public T Read(XElement? element) => scalar.Parse(element?.Value ?? string.Empty);
 }
 
 internal sealed class NullableXmlValueReader<T>(IXmlValueReader<T> inner) : IXmlValueReader<T?>
@@ -303,19 +305,43 @@ internal sealed class XmlMemberReaderCompiler<TContainer, TBuilder>(XmlReaderCom
 
     private IXmlMemberReader<TBuilder> CreateFlattenedReader<TValue>(
         IMemberSchema<TContainer, TBuilder, TValue> member
-    )
+    ) => member.TargetSchema.Resolved.Accept(new FlattenedReaderCompiler<TValue>(this, member));
+
+    // A flattened member targets a list or map whose element type only comes into scope by
+    // visiting it; anything else flattens to a plain member.
+    private sealed class FlattenedReaderCompiler<TValue>(
+        XmlMemberReaderCompiler<TContainer, TBuilder> owner,
+        IMemberSchema<TContainer, TBuilder, TValue> member
+    ) : SchemaVisitor<IXmlMemberReader<TBuilder>>
     {
-        var target = member.TargetSchema.Resolved;
-        return target switch
-        {
-            IListSchema list => CreateFlattenedListReader(member, (dynamic)list),
-            IMapSchema map => CreateFlattenedMapReader(member, (dynamic)map),
-            _ => new FlattenedXmlMemberReader<TContainer, TBuilder, TValue>(
+        public override IXmlMemberReader<TBuilder> VisitList<
+            TCollection,
+            TElement,
+            TCollectionBuilder
+        >(IListSchema<TCollection, TElement, TCollectionBuilder> schema) =>
+            owner.CreateFlattenedListReader(
                 member,
-                compiler.CompileValue(member.TargetSchema, member.MemberTraits)
-            ),
-        };
+                (IListSchema<TValue, TElement, TCollectionBuilder>)(object)schema
+            );
+
+        public override IXmlMemberReader<TBuilder> VisitMap<TDictionary, TMapValue, TMapBuilder>(
+            IMapSchema<TDictionary, TMapValue, TMapBuilder> schema
+        ) =>
+            owner.CreateFlattenedMapReader(
+                member,
+                (IMapSchema<TValue, TMapValue, TMapBuilder>)(object)schema
+            );
+
+        protected override IXmlMemberReader<TBuilder> VisitDefault(Schema schema) =>
+            owner.CreateFlattenedValueReader(member);
     }
+
+    private FlattenedXmlMemberReader<
+        TContainer,
+        TBuilder,
+        TValue
+    > CreateFlattenedValueReader<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member) =>
+        new(member, compiler.CompileValue(member.TargetSchema, member.MemberTraits));
 
     private FlattenedListXmlMemberReader<
         TContainer,
@@ -361,6 +387,10 @@ internal sealed class XmlMemberReader<TContainer, TBuilder, TValue>(
     IXmlValueReader<TValue> valueReader
 ) : IXmlMemberReader<TBuilder>
 {
+    private readonly IXmlScalar<TValue>? attribute = XmlTraits.IsXmlAttribute(member)
+        ? XmlScalars.Compile(member.TargetSchema, member.MemberTraits)
+        : null;
+
     public string Name => ElementName(member);
 
     public bool IsRequired => member.IsRequired;
@@ -372,10 +402,7 @@ internal sealed class XmlMemberReader<TContainer, TBuilder, TValue>(
             var attr = element.Attribute(AttributeName(element, Name));
             if (attr is not null)
             {
-                member.SetValue(
-                    builder,
-                    ReadScalar(member.TargetSchema, member.MemberTraits, attr.Value)
-                );
+                member.SetValue(builder, attribute!.Parse(attr.Value));
             }
             else if (member.IsRequired)
             {

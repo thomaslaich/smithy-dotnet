@@ -337,17 +337,17 @@ internal sealed class JsonMemberReader<TContainer, TBuilder, TValue>(
 
     public bool IsRequired => member.IsRequired;
 
+    // Constant per member, so resolved at compile time rather than per missing member.
+    private readonly Func<TValue>? defaultValue = CompileDefault(
+        member.TargetSchema,
+        member.MemberTraits
+    );
+
     public void ReadMissing(TBuilder builder)
     {
-        if (
-            TryCreateDefaultValue(
-                member.TargetSchema,
-                member.MemberTraits,
-                out TValue? defaultValue
-            )
-        )
+        if (defaultValue is { } create)
         {
-            member.SetValue(builder, defaultValue!);
+            member.SetValue(builder, create());
         }
     }
 

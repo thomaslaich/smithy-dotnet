@@ -85,6 +85,16 @@ internal interface IHttpQueryParamsReader<in TBuilder>
     void Read(TBuilder builder, Dictionary<string, IReadOnlyList<string>> query);
 }
 
+/// <summary>
+/// The plan for a map-valued binding, which serves as either side of <c>@httpPrefixHeaders</c> or
+/// <c>@httpQueryParams</c>.
+/// </summary>
+internal interface IMapBindingPlan<in T, in TBuilder>
+    : IHttpPrefixHeaderWriter<T>,
+        IHttpPrefixHeaderReader<TBuilder>,
+        IHttpQueryParamsWriter<T>,
+        IHttpQueryParamsReader<TBuilder>;
+
 internal interface IHttpStatusCodeWriter<in T>
 {
     int? Get(T container);
@@ -186,9 +196,9 @@ internal sealed class QueryPlan<T, TBuilder, TValue>(
 internal sealed class MapBindingPlanCompiler<T, TBuilder, TValue>(
     IMemberSchema<T, TBuilder, TValue> member,
     string prefix
-) : SchemaVisitor<object>
+) : SchemaVisitor<IMapBindingPlan<T, TBuilder>>
 {
-    public override object VisitMap<TDictionary, TMapValue, TMapBuilder>(
+    public override IMapBindingPlan<T, TBuilder> VisitMap<TDictionary, TMapValue, TMapBuilder>(
         IMapSchema<TDictionary, TMapValue, TMapBuilder> schema
     ) =>
         new MapBindingPlan<T, TBuilder, TDictionary, TMapValue, TMapBuilder>(
@@ -198,7 +208,7 @@ internal sealed class MapBindingPlanCompiler<T, TBuilder, TValue>(
             prefix
         );
 
-    protected override object VisitDefault(Schema schema) =>
+    protected override IMapBindingPlan<T, TBuilder> VisitDefault(Schema schema) =>
         throw new InvalidOperationException(
             $"HTTP binding member '{member.Name}' must target a map schema."
         );
@@ -209,11 +219,7 @@ internal sealed class MapBindingPlan<T, TBuilder, TDictionary, TValue, TMapBuild
     IMapSchema<TDictionary, TValue, TMapBuilder> map,
     IHttpValueCodec<TValue> value,
     string prefix
-)
-    : IHttpPrefixHeaderWriter<T>,
-        IHttpPrefixHeaderReader<TBuilder>,
-        IHttpQueryParamsWriter<T>,
-        IHttpQueryParamsReader<TBuilder>
+) : IMapBindingPlan<T, TBuilder>
 {
     public void Write(IDictionary<string, IReadOnlyList<string>> headers, T container)
     {

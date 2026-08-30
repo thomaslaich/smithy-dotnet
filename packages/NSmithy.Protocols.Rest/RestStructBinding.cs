@@ -177,8 +177,8 @@ internal sealed class RestStructBinding<T, TBuilder>
             if (side == HttpBindingSide.Request && traits.ContainsKey(RestTraits.HttpQueryParams))
             {
                 var plan = MapPlan(member, prefix: string.Empty);
-                QueryParamsWriter = (IHttpQueryParamsWriter<T>)plan;
-                QueryParamsReader = (IHttpQueryParamsReader<TBuilder>)plan;
+                QueryParamsWriter = plan;
+                QueryParamsReader = plan;
                 return;
             }
 
@@ -203,8 +203,8 @@ internal sealed class RestStructBinding<T, TBuilder>
             if (traits.TryGetValue(RestTraits.HttpPrefixHeaders, out var prefixTrait))
             {
                 var plan = MapPlan(member, prefixTrait.Value.AsString());
-                PrefixHeaderWriter = (IHttpPrefixHeaderWriter<T>)plan;
-                PrefixHeaderReader = (IHttpPrefixHeaderReader<TBuilder>)plan;
+                PrefixHeaderWriter = plan;
+                PrefixHeaderReader = plan;
                 return;
             }
 
@@ -228,7 +228,7 @@ internal sealed class RestStructBinding<T, TBuilder>
             IMemberSchema<T, TBuilder, TValue> member
         ) => HttpBindingCompiler.Compile(member.TargetSchema, member.MemberTraits);
 
-        private static object MapPlan<TValue>(
+        private static IMapBindingPlan<T, TBuilder> MapPlan<TValue>(
             IMemberSchema<T, TBuilder, TValue> member,
             string prefix
         ) =>
