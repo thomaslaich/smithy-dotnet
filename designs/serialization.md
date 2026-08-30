@@ -219,21 +219,28 @@ public interface ITargetedMemberSchema<TValue> : IMemberSchema
 ```
 
 A structure member additionally reads and writes its value on a container,
-which a collection member cannot do. Those accessors therefore live on the
-structure member, not on every member:
+which a collection member cannot do. Those accessors live on the structure
+member, typed over the container and its builder, so a plan compiled for a
+member moves the value without boxing it. A consumer that only knows the
+container reaches the value type through the member's visitor, never through
+`object`:
 
 ```csharp
-public interface IStructMemberSchema : IMemberSchema
+public interface IMemberSchema<TContainer, TValue>
+    : IMemberSchema<TContainer>, ITargetedMemberSchema<TValue>
 {
-    object? GetObject(object container);
-    void SetObject(object builder, object? value);
+    TValue GetValue(TContainer container);
 }
 
 public interface IMemberSchema<TContainer, TBuilder, TValue>
-    : IMemberSchema<TContainer, TValue>
+    : IMemberSchema<TContainer, TValue>, IStructMemberSchema<TContainer, TBuilder>
 {
-    TValue GetValue(TContainer container);
     void SetValue(TBuilder builder, TValue value);
+}
+
+public interface IMemberVisitor<TContainer, TBuilder>
+{
+    void Visit<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member);
 }
 ```
 
@@ -294,10 +301,12 @@ stand-in.
 ### Projections
 
 REST protocols use projections to keep the same container type while narrowing
-the visible member set:
+the visible member set. A projection is a predicate over the source's members;
+it holds no member list of its own, and a codec compiled for it visits the
+source and skips what the predicate excludes:
 
 ```csharp
-var bodyProjection = Schemas.Project(inputSchema, bodyMembers);
+var bodyProjection = Schemas.Project(inputSchema, bodyMemberNames);
 ```
 
 The projection itself is just schema metadata: it says which members of the
@@ -357,11 +366,24 @@ plan, cached per (consumer, schema).
 The hot path executes only precompiled, monomorphized delegates: no boxing, no
 per-value trait lookup, no runtime type tests. Because plans are delegate
 composition rather than emitted IL, the same machinery runs under Native AOT.
+This holds for protocols as much as for codecs: a REST operation's labels,
+headers, query parameters and status code are each a plan compiled from the
+member and its value codec, and a member's `@default` is resolved once into a
+typed factory (`DefaultValues.TryCompile`) rather than re-read per object.
 
 Generic dispatch through the visitor is the *only* dispatch. Adding a consumer
-means writing one fold; adding a shape kind means every fold fails to compile
-until it handles the new case. Exhaustiveness is enforced by the type system
-rather than by runtime `default:` branches.
+means writing one fold. A fold that must handle every kind implements
+`ISchemaVisitor<TResult>` directly, so a new shape kind fails to compile until
+the fold handles it; a fold that admits only a few kinds derives from
+`SchemaVisitor<TResult>`, overrides those, and answers the rest through
+`VisitDefault`. Exhaustiveness is enforced by the type system rather than by
+runtime `default:` branches.
+
+A generated structure also carries an `IStructValueSerializer<T>`, which hands
+a writer its members' values straight from the generated properties, in
+declaration order, through a `struct` member writer. A writer that finds one
+skips the member getter delegates; one that does not, or that writes a
+projection, uses them. Both paths produce the same bytes.
 
 ## Shape–Schema Binding
 
@@ -468,7 +490,7 @@ Projection codecs are used when a protocol wants to serialize only a subset of
 the members of a structure while keeping the same container type:
 
 ```csharp
-var bodyProjection = Schemas.Project(inputSchema, bodyMembers);
+var bodyProjection = Schemas.Project(inputSchema, bodyMemberNames);
 var bodyCodec = JsonCodecFactory.Default.FromProjection(bodyProjection);
 var body = bodyCodec.Serialize(input);
 ```

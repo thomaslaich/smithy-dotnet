@@ -32,7 +32,7 @@ namespace Bench.Micro;
 [MemoryDiagnoser]
 public class SerializationBenchmarks
 {
-    private static readonly IJsonCodec<ListItemsOutput> ListCodec = JsonCodec.FromSchema(
+    private static readonly ICodec<ListItemsOutput> ListCodec = JsonCodecFactory.Default.FromSchema(
         ListItemsOutputSchema.Schema
     );
 
@@ -93,7 +93,7 @@ public class SerializationBenchmarks
 [MemoryDiagnoser]
 public class CborSerializationBenchmarks
 {
-    private static readonly ICborCodec<ListItemsOutput> Codec = CborCodec.FromSchema(
+    private static readonly ICodec<ListItemsOutput> Codec = CborCodecFactory.Default.FromSchema(
         ListItemsOutputSchema.Schema
     );
 
@@ -113,7 +113,7 @@ public class CborSerializationBenchmarks
 [MemoryDiagnoser]
 public class XmlSerializationBenchmarks
 {
-    private static readonly IXmlCodec<ListItemsOutput> Codec = XmlCodec.FromSchema(
+    private static readonly ICodec<ListItemsOutput> Codec = XmlCodecFactory.Default.FromSchema(
         ListItemsOutputSchema.Schema
     );
 
@@ -157,7 +157,9 @@ public class ProtoSerializationBenchmarks
             new ProtoValueSerializer()
         );
 
-    private static readonly IProtoCodec<ProtoValue> Codec = ProtoCodec.FromSchema(ValueSchema);
+    private static readonly ICodec<ProtoValue> Codec = ProtoCodecFactory.Default.FromSchema(
+        ValueSchema
+    );
     private readonly ProtoValue value = new("benchmark-value", 42);
 
     [Benchmark]
@@ -343,9 +345,8 @@ public class SerializationExecutionBenchmarks : IDisposable
 [MemoryDiagnoser]
 public class DeserializationBenchmarks
 {
-    private static readonly IJsonCodec<CreateOrderInput> OrderCodec = JsonCodec.FromSchema(
-        CreateOrderInputSchema.Schema
-    );
+    private static readonly ICodec<CreateOrderInput> OrderCodec =
+        JsonCodecFactory.Default.FromSchema(CreateOrderInputSchema.Schema);
 
     private byte[] payload = null!;
 

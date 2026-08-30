@@ -4,6 +4,13 @@ using System.Text.Json;
 
 namespace NSmithy.Core;
 
+/// <summary>
+/// A Smithy document value: a JSON-shaped tree of null, boolean, string, number, array and object
+/// nodes with no schema of its own. Trait values are documents, as is any member targeting
+/// <c>smithy.api#Document</c>. <see cref="Kind"/> says which node this is; the <c>As*</c> accessors
+/// read it and throw when asked for a different kind. Numbers are held as <see cref="decimal"/>,
+/// which covers every Smithy numeric shape a trait can carry.
+/// </summary>
 public readonly record struct Document
 {
     private readonly object? value;
