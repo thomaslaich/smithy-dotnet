@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.Core.Validation;
 
 namespace NSmithy.Server;
 
@@ -14,6 +15,9 @@ public interface IServiceOperation
 {
     IOperationSchema Schema { get; }
 
+    /// <summary>Canonical JSON Schema documents for this operation's MCP tool projection.</summary>
+    OperationJsonSchemas? JsonSchemas { get; }
+
     Task<object?> InvokeAsync(object input, CancellationToken cancellationToken = default);
 }
 
@@ -22,27 +26,30 @@ public static class ServiceOperation
 {
     public static ServiceOperation<TInput, TOutput> Create<TInput, TOutput>(
         OperationSchema<TInput, TOutput> schema,
-        Func<TInput, CancellationToken, Task<TOutput>> handler
-    ) => new(schema, handler);
+        Func<TInput, CancellationToken, Task<TOutput>> handler,
+        OperationJsonSchemas? jsonSchemas = null
+    ) => new(schema, handler, jsonSchemas);
 }
 
 /// <summary>A type-safe operation binding exposed through <see cref="IServiceOperation"/>.</summary>
-public sealed class ServiceOperation<TInput, TOutput> : IServiceOperation
+public sealed class ServiceOperation<TInput, TOutput>(
+    OperationSchema<TInput, TOutput> schema,
+    Func<TInput, CancellationToken, Task<TOutput>> handler,
+    OperationJsonSchemas? jsonSchemas = null
+) : IServiceOperation
 {
-    private readonly Func<TInput, CancellationToken, Task<TOutput>> handler;
+    private readonly Func<TInput, CancellationToken, Task<TOutput>> handler =
+        handler ?? throw new ArgumentNullException(nameof(handler));
+    private readonly ISmithyValidator<TInput>? inputValidator = SmithyValidator.FromSchema(
+        schema.Input
+    );
 
-    public ServiceOperation(
-        OperationSchema<TInput, TOutput> schema,
-        Func<TInput, CancellationToken, Task<TOutput>> handler
-    )
-    {
-        Schema = schema ?? throw new ArgumentNullException(nameof(schema));
-        this.handler = handler ?? throw new ArgumentNullException(nameof(handler));
-    }
-
-    public OperationSchema<TInput, TOutput> Schema { get; }
+    public OperationSchema<TInput, TOutput> Schema { get; } =
+        schema ?? throw new ArgumentNullException(nameof(schema));
 
     IOperationSchema IServiceOperation.Schema => Schema;
+
+    public OperationJsonSchemas? JsonSchemas { get; } = jsonSchemas;
 
     public async Task<object?> InvokeAsync(
         object input,
@@ -59,6 +66,7 @@ public sealed class ServiceOperation<TInput, TOutput> : IServiceOperation
             );
         }
 
+        inputValidator?.Validate(typedInput);
         return await handler(typedInput, cancellationToken).ConfigureAwait(false);
     }
 }

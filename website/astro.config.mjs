@@ -95,6 +95,7 @@ export default defineConfig({
 						{ label: 'Validation', slug: 'servers/validation' },
 						{ label: 'Hosting & Multiple Protocols', slug: 'servers/hosting' },
 						{ label: 'Fake Handlers', slug: 'servers/fake-handlers' },
+						{ label: 'MCP', slug: 'servers/mcp' },
 						{ label: 'Endpoint Documentation', slug: 'guides/endpoint-documentation' },
 					],
 				},

@@ -22,6 +22,7 @@ dependencies {
     api("software.amazon.smithy:smithy-model:$smithyVersion")
     api("software.amazon.smithy:smithy-build:$smithyVersion")
     api("software.amazon.smithy:smithy-utils:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-jsonschema:$smithyVersion")
 
     // Makes the official smithy.ai trait definitions and validators available whenever the
     // C# build plugin is loaded. In particular, models can use smithy.ai#prompts without copying

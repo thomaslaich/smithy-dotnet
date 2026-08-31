@@ -1,5 +1,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
@@ -51,6 +52,7 @@ final class AiTraitsGeneratorTest {
     assertTrue(operationSchema.contains("\"forecast_for_location\""), operationSchema);
     assertTrue(operationSchema.contains("\"Get the forecast for one location\""), operationSchema);
     assertTrue(operationSchema.contains("\"example.weather#GetForecastInput\""), operationSchema);
+    assertFalse(operationSchema.contains("OperationJsonSchemas"), operationSchema);
   }
 
   @Test

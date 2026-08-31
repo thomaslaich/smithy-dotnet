@@ -1341,6 +1341,9 @@ public interface IOperationSchema
 
     Schema Output { get; }
 
+    /// <summary>Whether the operation has a streaming input or output.</summary>
+    bool IsStreaming { get; }
+
     IReadOnlyList<IOperationErrorSchema> Errors { get; }
 
     IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
@@ -1375,7 +1378,8 @@ public sealed class OperationSchema<TInput, TOutput> : IOperationSchema
         Schema<TInput> input,
         Schema<TOutput> output,
         IEnumerable<IOperationErrorSchema>? errors = null,
-        IEnumerable<Trait>? traits = null
+        IEnumerable<Trait>? traits = null,
+        bool isStreaming = false
     )
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -1385,6 +1389,7 @@ public sealed class OperationSchema<TInput, TOutput> : IOperationSchema
         Output = output;
         Errors = WithImplicitValidationError(errors);
         Traits = Trait.Index(traits);
+        IsStreaming = isStreaming;
     }
 
     public ShapeId Id { get; }
@@ -1398,6 +1403,8 @@ public sealed class OperationSchema<TInput, TOutput> : IOperationSchema
     Schema IOperationSchema.Input => Input;
 
     Schema IOperationSchema.Output => Output;
+
+    public bool IsStreaming { get; }
 
     public IReadOnlyList<IOperationErrorSchema> Errors { get; }
 
@@ -1735,16 +1742,18 @@ public static class Schemas
         ShapeId id,
         Schema<TInput> input,
         Schema<TOutput> output,
-        IEnumerable<Trait>? traits = null
-    ) => new(id, input, output, null, traits);
+        IEnumerable<Trait>? traits = null,
+        bool isStreaming = false
+    ) => new(id, input, output, null, traits, isStreaming);
 
     public static OperationSchema<TInput, TOutput> Operation<TInput, TOutput>(
         ShapeId id,
         Schema<TInput> input,
         Schema<TOutput> output,
         IEnumerable<IOperationErrorSchema>? errors,
-        IEnumerable<Trait>? traits = null
-    ) => new(id, input, output, errors, traits);
+        IEnumerable<Trait>? traits = null,
+        bool isStreaming = false
+    ) => new(id, input, output, errors, traits, isStreaming);
 
     public static OperationErrorSchema<TError> OperationError<TError>(
         ShapeId id,

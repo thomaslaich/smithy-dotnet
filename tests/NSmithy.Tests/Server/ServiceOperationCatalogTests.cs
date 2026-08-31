@@ -59,6 +59,35 @@ public sealed class ServiceOperationCatalogTests
     }
 
     [Fact]
+    public async Task OperationValidatesInputBeforeInvokingHandler()
+    {
+        var constrainedString = new StringSchema(
+            new ShapeId("example", "ConstrainedString"),
+            [
+                new Trait(
+                    ShapeId.Parse("smithy.api#length"),
+                    Document.From(new Dictionary<string, Document> { ["min"] = Document.From(3m) })
+                ),
+            ]
+        );
+        var invoked = false;
+        var operation = ServiceOperation.Create(
+            Schemas.Operation(OperationId, constrainedString, Schemas.Integer),
+            (string input, CancellationToken _) =>
+            {
+                invoked = true;
+                return Task.FromResult(input.Length);
+            }
+        );
+
+        await Assert.ThrowsAsync<NSmithy.Core.Validation.ValidationException>(() =>
+            operation.InvokeAsync("no")
+        );
+
+        Assert.False(invoked);
+    }
+
+    [Fact]
     public void CatalogRejectsDuplicateOperationIds()
     {
         var schema = Schemas.Operation(OperationId, Schemas.String, Schemas.Integer);

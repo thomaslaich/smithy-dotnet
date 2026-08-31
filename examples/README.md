@@ -8,7 +8,7 @@ All .NET projects are collected in a single solution, [`examples.slnx`](examples
 
 | Example | Protocol | Shows |
 | --- | --- | --- |
-| [restjson1](restjson1/) | `aws.protocols#restJson1` | Weather service: resources, pagination, errors, retries, OpenTelemetry |
+| [restjson1](restjson1/) | `aws.protocols#restJson1` | Weather service: REST endpoints, MCP tools, pagination, retries, OpenTelemetry |
 | [restjson1-streaming](restjson1-streaming/) | `aws.protocols#restJson1` | Bidirectional restJson1 event streaming (chat service) |
 | [simplerestjson](simplerestjson/) | `alloy#simpleRestJson` | Pizza Admin service: unions, enums, maps, errors, API-key auth |
 | [rpcv2cbor](rpcv2cbor/) | `smithy.protocols#rpcv2Cbor` | The restjson1 Weather service over CBOR: resources, pagination, errors, retries |

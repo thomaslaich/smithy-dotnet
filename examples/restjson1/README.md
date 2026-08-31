@@ -3,10 +3,11 @@
 A Weather service built with `aws.protocols#restJson1`. The model is adapted from
 the [Smithy quickstart](https://smithy.io/2.0/quickstart.html) and demonstrates
 resources, pagination, errors, retries (`@retryable`), HTTP binding traits, and
-end-to-end OpenTelemetry observability using the AWS REST JSON protocol.
+end-to-end OpenTelemetry observability using the AWS REST JSON protocol. The
+same generated operations and handwritten handler are also exposed as MCP tools.
 
 - `contracts`: the Smithy model, packaged as a contracts project.
-- `server`: generated ASP.NET Core endpoints with a handwritten `IWeatherServiceHandler` implementation that supports real server-side pagination.
+- `server`: generated ASP.NET Core endpoints and an MCP stdio server backed by a handwritten `IWeatherServiceHandler` implementation that supports real server-side pagination.
 - `client`: generated typed client that pages through all cities using the `nextToken` continuation token.
 
 The server and client reference the contracts project directly. No
@@ -27,7 +28,6 @@ Start the server:
 
 ```bash
 cd examples/restjson1
-pixi shell  # not needed when using direnv
 dotnet run --project server --urls http://localhost:5000
 ```
 
@@ -55,6 +55,41 @@ curl -i http://localhost:5000/cities/SEA
 curl -i http://localhost:5000/cities/SEA/forecast
 curl -i http://localhost:5000/cities/SEA/flaky-forecast   # 503s two of every three calls
 ```
+
+## MCP tools
+
+Run the same Weather service as an MCP stdio server by passing `--mcp`:
+
+```bash
+dotnet run --no-build --project examples/restjson1/server -- --mcp
+```
+
+This is a separate runtime mode: the process hosts MCP over stdio and does not
+start the ASP.NET Core endpoints. Build it first because build output on stdout
+would interfere with the MCP message stream.
+
+Configure an MCP client to launch that built assembly (replace the repository
+path with an absolute path):
+
+```json
+{
+  "mcpServers": {
+    "weather": {
+      "command": "dotnet",
+      "args": [
+        "/path/to/smithy-dotnet/examples/restjson1/server/bin/Debug/net10.0/NSmithy.Examples.RestJson1.Server.dll",
+        "--mcp"
+      ]
+    }
+  }
+}
+```
+
+The generated `GetCurrentTime`, `GetCity`, `ListCities`, `GetForecast`, and
+`GetFlakyForecast` operations appear as tools. Their descriptions, input and
+output schemas, validation, and read-only hints all come from the Smithy model.
+The ASP.NET Core and MCP hosts share the same `WeatherHandler`; only the
+transport adapter changes.
 
 ## Rejecting a bad request
 
