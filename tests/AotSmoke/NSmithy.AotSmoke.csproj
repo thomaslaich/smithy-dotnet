@@ -6,5 +6,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../../packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Server.Mcp/NSmithy.Server.Mcp.csproj" />
   </ItemGroup>
 </Project>

@@ -161,6 +161,10 @@ public final class ServerGenerator implements Runnable {
               });
 
           writer.write("");
+          writeOperationJsonSchemas(ops);
+          if (ops.stream().anyMatch(op -> !isStreaming(op))) {
+            writer.write("");
+          }
           writeOperationCatalog(ops, contract, aggInterface);
 
           if (serverKinds.isEmpty()) {
@@ -199,16 +203,61 @@ public final class ServerGenerator implements Runnable {
           writer.write("[");
           writer.indent();
           for (OperationShape op : ops) {
-            writer.write(
-                "ServiceOperation.Create($L, $L),",
-                SchemaGenerator.operationSchemaAccessor(context, op),
-                unaryAdapter(op));
+            if (isStreaming(op)) {
+              writer.write(
+                  "ServiceOperation.Create($L, $L),",
+                  SchemaGenerator.operationSchemaAccessor(context, op),
+                  unaryAdapter(op));
+            } else {
+              writer.write(
+                  "ServiceOperation.Create($L, $L, $L.Value),",
+                  SchemaGenerator.operationSchemaAccessor(context, op),
+                  unaryAdapter(op),
+                  operationJsonSchemasClass(op));
+            }
           }
           writer.dedent();
           writer.write("]");
           writer.dedent();
           writer.write(");");
         });
+  }
+
+  private void writeOperationJsonSchemas(List<OperationShape> ops) {
+    for (OperationShape op : ops) {
+      if (isStreaming(op)) {
+        continue;
+      }
+
+      writer.write("private static class $L", operationJsonSchemasClass(op));
+      writer.openBlock(
+          "{",
+          "}",
+          () -> {
+            writer.write("public static OperationJsonSchemas Value { get; } = new(");
+            writer.indent();
+            writer.write(
+                "$L,",
+                CSharpNaming.formatString(
+                    JsonSchemaGenerator.generate(context.model(), op.getInputShape())));
+            writer.write(
+                "$L",
+                CSharpNaming.formatString(
+                    JsonSchemaGenerator.generate(context.model(), op.getOutputShape())));
+            writer.dedent();
+            writer.write(");");
+          });
+      writer.write("");
+    }
+  }
+
+  private boolean isStreaming(OperationShape op) {
+    return ShapeSupport.isStreamingShape(context.model(), op.getInputShape())
+        || ShapeSupport.isStreamingShape(context.model(), op.getOutputShape());
+  }
+
+  private static String operationJsonSchemasClass(OperationShape op) {
+    return CSharpNaming.typeName(op.getId().getName()) + "JsonSchemas";
   }
 
   // ---------------- endpoint mapping ----------------

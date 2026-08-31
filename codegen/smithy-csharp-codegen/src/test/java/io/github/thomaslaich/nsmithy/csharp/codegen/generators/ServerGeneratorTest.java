@@ -410,16 +410,21 @@ final class ServerGeneratorTest {
                 + "this ICatalogServiceHandler handler)"),
         generated);
     assertTrue(generated.contains("CatalogServiceSchema.Schema,"), generated);
+    assertTrue(generated.contains("private static class NotifyJsonSchemas"), generated);
+    assertTrue(generated.contains("private static class PingJsonSchemas"), generated);
+    assertTrue(
+        generated.contains("public static OperationJsonSchemas Value { get; } = new("), generated);
+    assertTrue(generated.contains("draft/2020-12/schema"), generated);
     assertTrue(
         generated.contains(
             "ServiceOperation.Create(Example.Example.Catalog.NotifySchema.Schema, async (input, ct)"
                 + " => { await handler.NotifyAsync(input, ct).ConfigureAwait(false); return"
-                + " SmithyUnit.Value; }),"),
+                + " SmithyUnit.Value; }, NotifyJsonSchemas.Value),"),
         generated);
     assertTrue(
         generated.contains(
             "ServiceOperation.Create(Example.Example.Catalog.PingSchema.Schema, "
-                + "(_, ct) => handler.PingAsync(ct)),"),
+                + "(_, ct) => handler.PingAsync(ct), PingJsonSchemas.Value),"),
         generated);
   }
 

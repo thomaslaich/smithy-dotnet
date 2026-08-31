@@ -164,6 +164,8 @@ Generated code depends on .NET packages published to NuGet:
 - `NSmithy.Client` — `SmithyClientRuntime`, `IClientInterceptor`
 - `NSmithy.Server` / `NSmithy.Server.AspNetCore` — host-neutral operation
   catalogs and server framework
+- `NSmithy.Server.Mcp` — transport-neutral MCP tools backed by generated
+  operation catalogs
 - `NSmithy.Codecs.Json/Xml/Cbor` — schema-bound body codec implementations
 - `NSmithy.Protocols.Rest` — shared REST HTTP binding projection
 - `NSmithy.Protocols.*` — protocol adapters such as restJson1, restXml,
@@ -196,7 +198,8 @@ Service files contain:
   protocol and transport at construction time.
 - `<Service>.Server.g.cs` — server-side handler interface, a
   `ServiceOperationCatalog` factory that binds operation schemas to the typed
-  handler, and the ASP.NET Core adapter.
+  handler, generated JSON Schema 2020-12 companions for unary operation tool
+  projections, and the ASP.NET Core adapter.
 
 Generated client and server methods bind the service schema, operation schemas,
 typed input/output values, selected protocol adapter, and transport options into
@@ -204,9 +207,12 @@ the runtime protocol pipeline. The protocol adapter projects each operation into
 transport fields and delegates body payloads to a schema-bound codec such as
 `JsonCodecFactory`.
 
-The generated operation catalog stops at typed handler invocation. It has no
-HTTP, ASP.NET Core, MCP, or stdio behavior; those hosts enumerate the catalog,
-construct input using its runtime schemas, and choose their own wire mapping.
+The generated operation catalog stops at typed handler invocation and
+transport-neutral metadata. It has no HTTP, ASP.NET Core, MCP, or stdio
+behavior; those hosts enumerate the catalog, construct input using its runtime
+schemas, and choose their own wire mapping. JSON Schema metadata lives on the
+server operation binding rather than the shared operation schema, so client-only
+generation does not carry tool metadata.
 
 ## Tradeoffs
 
