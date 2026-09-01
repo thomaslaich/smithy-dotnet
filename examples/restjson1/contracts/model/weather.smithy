@@ -3,11 +3,20 @@ $version: "2"
 namespace example.weather
 
 use aws.protocols#restJson1
+use smithy.ai#prompts
 
 /// Provides weather forecasts.
 ///
 /// The service exposes city resources, each with a forecast sub-resource that
 /// gives the current chance of rain. Cities are listed with pagination support.
+@prompts({
+    city_weather_brief: {
+        description: "Create a weather brief for a city"
+        template: "Use GetCity and GetForecast for city ID {{cityId}}, then summarize the city's location and chance of rain."
+        arguments: CityWeatherBriefArguments
+        preferWhen: "The user asks for a combined city and weather overview"
+    }
+})
 @restJson1
 @paginated(inputToken: "nextToken", outputToken: "nextToken", pageSize: "pageSize")
 service Weather {
@@ -91,6 +100,14 @@ operation ListCities {
 
 /// Returns the weather forecast for a city.
 @readonly
+@prompts({
+    forecast_answer: {
+        description: "Answer a forecast question for one city"
+        template: "Use GetForecast with city ID {{cityId}} and explain the chance of rain in plain language."
+        arguments: ForecastPromptArguments
+        preferWhen: "The user asks specifically about rain or the forecast for a known city ID"
+    }
+})
 @http(method: "GET", uri: "/cities/{cityId}/forecast")
 operation GetForecast {
     input := for Forecast {
@@ -111,6 +128,18 @@ structure CityCoordinates {
 
     @required
     longitude: Float
+}
+
+structure CityWeatherBriefArguments for City {
+    /// City ID accepted by the Weather service, such as `SEA` or `ZRH`.
+    @required
+    $cityId
+}
+
+structure ForecastPromptArguments for Forecast {
+    /// City ID whose rain forecast should be explained.
+    @required
+    $cityId
 }
 
 list CitySummaries {

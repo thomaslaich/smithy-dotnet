@@ -87,6 +87,22 @@ if (mcpTool.Name != "UpdateUser" || mcpTool.InputSchema.GetProperty("type").GetS
     throw new InvalidOperationException("MCP NativeAOT tool projection failed.");
 }
 
+var mcpPrompt = SmithyMcpPrompts
+    .Create([
+        new ServicePromptDefinition(
+            "update_user",
+            "Update one user",
+            "Use UpdateUser for {{userId}}.",
+            arguments: [new ServicePromptArgumentDefinition("userId", null, true)]
+        ),
+    ])
+    .Single()
+    .ProtocolPrompt;
+if (mcpPrompt.Name != "update_user" || mcpPrompt.Arguments?.Single().Name != "userId")
+{
+    throw new InvalidOperationException("MCP NativeAOT prompt projection failed.");
+}
+
 internal sealed record AotInput(
     string UserId,
     string? RequestToken,

@@ -2,7 +2,8 @@
  * Server-side code generator. Emits:
  *   - one `I{Operation}Handler` per operation (streaming surface derived from the model)
  *   - aggregate `I{Service}ServiceHandler`
- *   - a protocol-neutral executable operation catalog for the aggregate handler
+ *   - a DI-registered service definition that binds each independently registered operation
+ *     handler into a protocol-neutral executable catalog
  *   - `{Service}ServiceServerExtensions` with AddXxxHandler<THandler>(IServiceCollection)
  *   - `{Service}ServiceProtocols` flags and `Map{Service}Service(..., protocols)` that bind
  *     selected protocol routes to the shared handler
@@ -17,6 +18,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
+import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport.Kind;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
@@ -29,10 +31,15 @@ import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
+import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
+import software.amazon.smithy.model.shapes.Shape;
+import software.amazon.smithy.model.shapes.ShapeId;
+import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.model.traits.DocumentationTrait;
 import software.amazon.smithy.model.traits.HttpTrait;
+import software.amazon.smithy.model.traits.RequiredTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -71,6 +78,7 @@ public final class ServerGenerator implements Runnable {
             .collect(Collectors.toList());
 
     List<Kind> serverKinds = serverKinds();
+    List<PromptDefinition> prompts = promptDefinitions(ops);
     if (serverKinds.contains(Kind.GRPC)) {
       ops.forEach(op -> ShapeSupport.requireGrpcEventStreamWrapperIsFlattenable(model, op));
     }
@@ -79,6 +87,7 @@ public final class ServerGenerator implements Runnable {
     writer.addImport(RuntimeTypes.NSMITHY_CORE);
     writer.addImport(RuntimeTypes.NSMITHY_SERVER);
     writer.addImport(RuntimeTypes.MS_EXT_DI);
+    writer.addImport(RuntimeTypes.MS_EXT_DI_EXTENSIONS);
     if (emitsAspNetCore) {
       writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
       writer.addImport(RuntimeTypes.NSMITHY_HTTP);
@@ -122,10 +131,123 @@ public final class ServerGenerator implements Runnable {
       writer.write("");
     }
 
+    writeServiceDefinition(ops, prompts, contract);
+    writer.write("");
     writeServerExtensions(ops, contract, aggInterface, serverKinds);
   }
 
   // ---------------- DI registration ----------------
+
+  private void writeServiceDefinition(
+      List<OperationShape> ops, List<PromptDefinition> prompts, String contract) {
+    writer.write("public sealed class $LDefinition : IServiceDefinition", contract);
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write(
+              "public ServiceSchema Schema => $L;",
+              SchemaGenerator.serviceSchemaAccessor(context, service));
+          writer.write("");
+          writePromptDefinitions(prompts);
+          writer.write("");
+          writer.write(
+              "public ServiceOperationCatalog CreateOperationCatalog(IServiceProvider services)");
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                writer.write("System.ArgumentNullException.ThrowIfNull(services);");
+                writer.write("return CreateOperationCatalog(");
+                writer.indent();
+                for (int i = 0; i < ops.size(); i++) {
+                  OperationShape op = ops.get(i);
+                  writer.write(
+                      "services.GetRequiredService<$L>()$L",
+                      opHandlerName(op),
+                      i + 1 == ops.size() ? "" : ",");
+                }
+                writer.dedent();
+                writer.write(");");
+              });
+          writer.write("");
+          writeOperationCatalogFactory(ops);
+
+          if (ops.stream().anyMatch(op -> !isStreaming(op))) {
+            writer.write("");
+            writeOperationJsonSchemas(ops);
+          }
+        });
+  }
+
+  private void writePromptDefinitions(List<PromptDefinition> prompts) {
+    writer.write("public IReadOnlyList<ServicePromptDefinition> Prompts { get; } =");
+    writer.write("[");
+    writer.indent();
+    for (PromptDefinition prompt : prompts) {
+      writer.write("new ServicePromptDefinition(");
+      writer.indent();
+      writer.write("$L,", CSharpNaming.formatString(prompt.name()));
+      writer.write("$L,", CSharpNaming.formatString(prompt.description()));
+      writer.write("$L,", CSharpNaming.formatString(prompt.template()));
+      writer.write(
+          "$L,",
+          prompt.preferWhen() == null ? "null" : CSharpNaming.formatString(prompt.preferWhen()));
+      writer.write("[");
+      writer.indent();
+      for (PromptArgumentDefinition argument : prompt.arguments()) {
+        writer.write(
+            "new ServicePromptArgumentDefinition($L, $L, $L),",
+            CSharpNaming.formatString(argument.name()),
+            argument.description() == null
+                ? "null"
+                : CSharpNaming.formatString(argument.description()),
+            argument.required() ? "true" : "false");
+      }
+      writer.dedent();
+      writer.write("]");
+      writer.dedent();
+      writer.write("),");
+    }
+    writer.dedent();
+    writer.write("];");
+  }
+
+  private void writeOperationCatalogFactory(List<OperationShape> ops) {
+    String parameters =
+        ops.stream()
+            .map(op -> opHandlerName(op) + " " + operationHandlerVariable(op))
+            .collect(Collectors.joining(", "));
+    writer.write("private static ServiceOperationCatalog CreateOperationCatalog($L)", parameters);
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write("return new ServiceOperationCatalog(");
+          writer.indent();
+          writer.write("$L,", SchemaGenerator.serviceSchemaAccessor(context, service));
+          writer.write("[");
+          writer.indent();
+          for (OperationShape op : ops) {
+            if (isStreaming(op)) {
+              writer.write(
+                  "ServiceOperation.Create($L, $L),",
+                  SchemaGenerator.operationSchemaAccessor(context, op),
+                  unaryAdapter(op, operationHandlerVariable(op)));
+            } else {
+              writer.write(
+                  "ServiceOperation.Create($L, $L, $L.Value),",
+                  SchemaGenerator.operationSchemaAccessor(context, op),
+                  unaryAdapter(op, operationHandlerVariable(op)),
+                  operationJsonSchemasClass(op));
+            }
+          }
+          writer.dedent();
+          writer.write("]");
+          writer.dedent();
+          writer.write(");");
+        });
+  }
 
   private void writeServerExtensions(
       List<OperationShape> ops, String contract, String aggInterface, List<Kind> serverKinds) {
@@ -135,6 +257,21 @@ public final class ServerGenerator implements Runnable {
         "{",
         "}",
         () -> {
+          writer.write(
+              "public static IServiceCollection Add$L(this IServiceCollection services)", contract);
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                writer.write("System.ArgumentNullException.ThrowIfNull(services);");
+                writer.write(
+                    "services.TryAddEnumerable(ServiceDescriptor.Singleton<IServiceDefinition,"
+                        + " $LDefinition>());",
+                    contract);
+                writer.write("return services;");
+              });
+
+          writer.write("");
           writer.write(
               "public static IServiceCollection Add$LHandler<THandler>(this IServiceCollection"
                   + " services)",
@@ -146,6 +283,7 @@ public final class ServerGenerator implements Runnable {
               () -> {
                 writer.write("System.ArgumentNullException.ThrowIfNull(services);");
                 writer.write("");
+                writer.write("services.Add$L();", contract);
                 writer.write("services.AddSingleton<THandler>();");
                 writer.write(
                     "services.AddSingleton<$L>(serviceProvider =>"
@@ -159,13 +297,6 @@ public final class ServerGenerator implements Runnable {
                 }
                 writer.write("return services;");
               });
-
-          writer.write("");
-          writeOperationJsonSchemas(ops);
-          if (ops.stream().anyMatch(op -> !isStreaming(op))) {
-            writer.write("");
-          }
-          writeOperationCatalog(ops, contract, aggInterface);
 
           if (serverKinds.isEmpty()) {
             return;
@@ -182,44 +313,6 @@ public final class ServerGenerator implements Runnable {
             writer.write("");
             writeProtocolMapHelper(kind, ops, contract, protocolEnum);
           }
-        });
-  }
-
-  private void writeOperationCatalog(
-      List<OperationShape> ops, String contract, String aggregateInterface) {
-    writer.write(
-        "public static ServiceOperationCatalog Create$LOperationCatalog(this $L handler)",
-        contract,
-        aggregateInterface);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(handler);");
-          writer.write("");
-          writer.write("return new ServiceOperationCatalog(");
-          writer.indent();
-          writer.write("$L,", SchemaGenerator.serviceSchemaAccessor(context, service));
-          writer.write("[");
-          writer.indent();
-          for (OperationShape op : ops) {
-            if (isStreaming(op)) {
-              writer.write(
-                  "ServiceOperation.Create($L, $L),",
-                  SchemaGenerator.operationSchemaAccessor(context, op),
-                  unaryAdapter(op));
-            } else {
-              writer.write(
-                  "ServiceOperation.Create($L, $L, $L.Value),",
-                  SchemaGenerator.operationSchemaAccessor(context, op),
-                  unaryAdapter(op),
-                  operationJsonSchemasClass(op));
-            }
-          }
-          writer.dedent();
-          writer.write("]");
-          writer.dedent();
-          writer.write(");");
         });
   }
 
@@ -472,9 +565,13 @@ public final class ServerGenerator implements Runnable {
   // output (the handler returns Task, but the runtime expects Task<SmithyUnit>).
 
   private String unaryAdapter(OperationShape op) {
+    return unaryAdapter(op, "handler");
+  }
+
+  private String unaryAdapter(OperationShape op, String handlerVariable) {
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
-    String method = handlerMethod(op);
+    String method = handlerMethod(op, handlerVariable);
     if (hasInput && hasOutput) {
       return method;
     }
@@ -490,8 +587,63 @@ public final class ServerGenerator implements Runnable {
             + ".ConfigureAwait(false); return SmithyUnit.Value; }";
   }
 
-  private String handlerMethod(OperationShape op) {
-    return "handler." + CSharpNaming.typeName(op.getId().getName()) + "Async";
+  private String handlerMethod(OperationShape op, String handlerVariable) {
+    return handlerVariable + "." + CSharpNaming.typeName(op.getId().getName()) + "Async";
+  }
+
+  // ---------------- prompts ----------------
+
+  private List<PromptDefinition> promptDefinitions(List<OperationShape> ops) {
+    var prompts = new java.util.ArrayList<PromptDefinition>();
+    addPromptDefinitions(service, prompts);
+    for (OperationShape op : ops) {
+      addPromptDefinitions(op, prompts);
+    }
+    return List.copyOf(prompts);
+  }
+
+  private void addPromptDefinitions(Shape owner, List<PromptDefinition> prompts) {
+    owner
+        .findTrait(TraitIds.PROMPTS)
+        .ifPresent(
+            trait -> {
+              var entries =
+                  trait.toNode().expectObjectNode().getStringMap().entrySet().stream()
+                      .sorted(Map.Entry.comparingByKey())
+                      .toList();
+              for (var entry : entries) {
+                ObjectNode definition = entry.getValue().expectObjectNode();
+                String description = definition.expectStringMember("description").getValue();
+                String template = definition.expectStringMember("template").getValue();
+                String preferWhen =
+                    definition.getStringMember("preferWhen").map(n -> n.getValue()).orElse(null);
+                List<PromptArgumentDefinition> arguments =
+                    definition
+                        .getStringMember("arguments")
+                        .map(node -> promptArguments(node.getValue()))
+                        .orElse(List.of());
+                prompts.add(
+                    new PromptDefinition(
+                        entry.getKey(), description, template, preferWhen, arguments));
+              }
+            });
+  }
+
+  private List<PromptArgumentDefinition> promptArguments(String shapeId) {
+    StructureShape structure =
+        context.model().expectShape(ShapeId.from(shapeId), StructureShape.class);
+    return structure.getAllMembers().values().stream()
+        .sorted(Comparator.comparing(member -> member.getMemberName()))
+        .map(
+            member ->
+                new PromptArgumentDefinition(
+                    member.getMemberName(),
+                    member
+                        .getTrait(DocumentationTrait.class)
+                        .map(trait -> trait.getValue())
+                        .orElse(null),
+                    member.hasTrait(RequiredTrait.class)))
+        .toList();
   }
 
   // ---------------- routing helpers ----------------
@@ -569,6 +721,10 @@ public final class ServerGenerator implements Runnable {
     return "I" + CSharpNaming.typeName(op.getId().getName()) + "Handler";
   }
 
+  private String operationHandlerVariable(OperationShape op) {
+    return CSharpNaming.parameterName(op.getId().getName() + "Handler");
+  }
+
   private String serverOperationSignature(SymbolProvider sp, OperationShape op) {
     Model model = context.model();
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
@@ -619,4 +775,13 @@ public final class ServerGenerator implements Runnable {
   private boolean isOutputStreaming(Model model, OperationShape op) {
     return ShapeSupport.isEventStreamShape(model, op.getOutputShape());
   }
+
+  private record PromptDefinition(
+      String name,
+      String description,
+      String template,
+      String preferWhen,
+      List<PromptArgumentDefinition> arguments) {}
+
+  private record PromptArgumentDefinition(String name, String description, boolean required) {}
 }

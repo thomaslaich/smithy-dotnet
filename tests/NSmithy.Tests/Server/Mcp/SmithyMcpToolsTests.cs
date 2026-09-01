@@ -223,19 +223,18 @@ public sealed class SmithyMcpToolsTests
     }
 
     [Fact]
-    public void ResolvesCatalogFromDependencyInjection()
+    public void ResolvesGeneratedServiceDefinitionWithoutAnAggregateHandler()
     {
         var services = new ServiceCollection();
-        services.AddSingleton(Catalog(static (_, _) => Task.FromResult(new LookupOutput("sunny"))));
-        services
-            .AddMcpServer()
-            .WithSmithyTools(serviceProvider =>
-                serviceProvider.GetRequiredService<ServiceOperationCatalog>()
-            );
+        services.AddSingleton<LookupHandler>();
+        services.AddSingleton<IServiceDefinition, LookupServiceDefinition>();
+        services.AddMcpServer().WithSmithyService(ServiceSchema);
 
         using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<McpServerOptions>>().Value;
+
         Assert.Single(options.ToolCollection!);
+        Assert.Single(options.PromptCollection!);
     }
 
     private static ServiceOperationCatalog Catalog(
@@ -374,5 +373,26 @@ public sealed class SmithyMcpToolsTests
     private sealed class LookupFailureBuilder
     {
         public string? Message { get; set; }
+    }
+
+    private sealed class LookupHandler
+    {
+        private readonly string suffix = string.Empty;
+
+        public Task<LookupOutput> InvokeAsync(
+            LookupInput input,
+            CancellationToken cancellationToken
+        ) => Task.FromResult(new LookupOutput(input.Place + suffix));
+    }
+
+    private sealed class LookupServiceDefinition : IServiceDefinition
+    {
+        public ServiceSchema Schema => ServiceSchema;
+
+        public IReadOnlyList<ServicePromptDefinition> Prompts { get; } =
+        [new("weather_brief", "Create a weather brief", "Call LookupWeather.")];
+
+        public ServiceOperationCatalog CreateOperationCatalog(IServiceProvider services) =>
+            Catalog(services.GetRequiredService<LookupHandler>().InvokeAsync);
     }
 }

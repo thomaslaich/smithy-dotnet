@@ -24,6 +24,7 @@ public final class TraitIds {
   public static final ShapeId GRPC = ShapeId.from("alloy.proto#grpc");
   public static final ShapeId PROTO_INDEX = ShapeId.from("alloy.proto#protoIndex");
   public static final ShapeId XML_NAME = ShapeId.from("smithy.api#xmlName");
+  public static final ShapeId PROMPTS = ShapeId.from("smithy.ai#prompts");
 
   private TraitIds() {}
 }

@@ -4,14 +4,13 @@ description: Expose generated Smithy services through Model Context Protocol wit
 ---
 
 `NSmithy.Server.Mcp` exposes generated services through the
-[Model Context Protocol](https://modelcontextprotocol.io/). It currently maps
-unary operations to MCP tools. Support for prompts modeled with
-`smithy.ai#prompts` is planned next.
+[Model Context Protocol](https://modelcontextprotocol.io/). It maps unary
+operations to MCP tools and `smithy.ai#prompts` traits to MCP prompts.
 
 | MCP capability | NSmithy support |
 | --- | --- |
 | Tools | Generated from unary operations |
-| Prompts | Planned from `smithy.ai#prompts` |
+| Prompts | Generated from `smithy.ai#prompts` on services and operations |
 | Resources | Not currently generated |
 
 The package integrates with the official
@@ -28,16 +27,10 @@ provided by that SDK.
 The package brings in the MCP server hosting APIs and the NSmithy JSON and
 server runtimes.
 
-## Tools
+## Register a Generated Service
 
-The tools adapter uses generated JSON Schema 2020-12 documents, JSON codecs,
-constraint validation, and typed handlers shared with the other NSmithy server
-surfaces.
-
-### Register Generated Operations
-
-Register the generated handler as usual, then give its generated operation
-catalog to `WithSmithyTools`:
+Register the generated handler as usual, then select the service by its generated
+schema. This exposes its tools and prompts together:
 
 ```csharp
 using Microsoft.Extensions.DependencyInjection;
@@ -50,23 +43,31 @@ builder.Services.AddWeatherServiceHandler<WeatherHandler>();
 builder.Services
     .AddMcpServer()
     .WithStdioServerTransport()
-    .WithSmithyTools<IWeatherServiceHandler>(handler =>
-        handler.CreateWeatherServiceOperationCatalog()
-    );
+    .WithSmithyService(WeatherSchema.Schema);
 
 await builder.Build().RunAsync();
 ```
 
-The dependency-injection overload resolves the generated aggregate handler when
-the MCP server is configured. An existing catalog can also be registered
-directly:
+`AddWeatherServiceHandler` also registers the generated service definition.
+That definition resolves each operation through its per-operation handler
+interface, so MCP does not require an aggregate handler. For separately
+implemented operation handlers, register the service definition explicitly:
 
 ```csharp
-builder.Services
-    .AddMcpServer()
-    .WithStdioServerTransport()
-    .WithSmithyTools(handler.CreateWeatherServiceOperationCatalog());
+builder.Services.AddWeatherService();
+builder.Services.AddSingleton<IGetCityHandler, GetCityHandler>();
+builder.Services.AddSingleton<IGetForecastHandler, GetForecastHandler>();
+// Register the remaining operation handlers exposed by the service.
 ```
+
+`WithSmithyService` is explicit: registering a service or its handlers in DI
+does not expose it to MCP until its schema is selected.
+
+## Tools
+
+The tools adapter uses generated JSON Schema 2020-12 documents, JSON codecs,
+constraint validation, and typed handlers shared with the other NSmithy server
+surfaces.
 
 ### Operation Mapping
 
@@ -97,9 +98,65 @@ such as OpenAPI.
 Streaming operations are omitted because an MCP tool call has one JSON argument
 object and one result.
 
+An application that builds its own `ServiceOperationCatalog` can expose only
+that catalog with `WithSmithyTools(catalog)`. This is the low-level escape hatch;
+generated services normally use `WithSmithyService`.
+
+## Prompts
+
+Add `smithy.ai#prompts` to a service or operation:
+
+```smithy
+use smithy.ai#prompts
+
+@prompts({
+    city_weather_brief: {
+        description: "Create a weather brief for a city"
+        template: "Use GetCity and GetForecast for city ID {{cityId}}, then summarize the result."
+        arguments: CityWeatherBriefArguments
+        preferWhen: "The user asks for a combined city and weather overview"
+    }
+})
+service Weather {
+    version: "2006-03-01"
+    operations: [GetCity, GetForecast]
+}
+
+structure CityWeatherBriefArguments {
+    /// City ID accepted by the Weather service.
+    @required
+    cityId: String
+}
+```
+
+The generated MCP prompt has the name `city_weather_brief`, its modeled
+description, and a required string argument named `cityId`. Resolving it with
+`cityId = "SEA"` returns this user message:
+
+```text
+Use GetCity and GetForecast for city ID SEA, then summarize the result.
+
+Tool preference: The user asks for a combined city and weather overview
+```
+
+A template is text with `{{argumentName}}` placeholders. NSmithy substitutes
+the MCP prompt arguments and returns the rendered text to the client. It does
+not call either operation itself. The instructions establish the relationship:
+the model sees the rendered prompt and the available MCP tools, then decides
+whether and how to invoke `GetCity` and `GetForecast`. One prompt can therefore
+guide zero, one, or several tool calls.
+
+Prompt names must be unique within the generated service when compared without
+regard to case. Required and optional status plus argument documentation come
+from the referenced Smithy structure. Unknown arguments, non-string values, and
+missing required arguments produce MCP `InvalidParams` errors.
+
+Handwritten prompt definitions can be registered directly with
+`WithSmithyPrompts(definitions)`, independently of generated service tools.
+
 The [restJson1 Weather example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/restjson1)
 runs the same generated service and handler as either an ASP.NET Core server or
-an MCP stdio server.
+an MCP stdio server, and includes both single-tool and multi-tool prompts.
 
 ## Resources
 
