@@ -273,6 +273,48 @@ final class ServerGeneratorTest {
       }
       """;
 
+  private static final String PROMPTS_MODEL =
+      """
+      $version: "2"
+
+      namespace example.prompts
+
+      use smithy.ai#prompts
+
+      @prompts({
+          service_brief: {
+              description: "Summarize two locations"
+              template: "Compare {{first}} with {{second}}."
+              arguments: ComparisonArguments
+              preferWhen: "Use this for comparisons"
+          }
+      })
+      service PromptService {
+          version: "1"
+          operations: [Compare]
+      }
+
+      @prompts({
+          operation_brief: {
+              description: "Use the comparison operation"
+              template: "Call Compare for {{first}} and {{second}}."
+              arguments: ComparisonArguments
+          }
+      })
+      operation Compare {
+          input: ComparisonArguments
+          output := {}
+      }
+
+      structure ComparisonArguments {
+          /// First location.
+          @required
+          first: String
+
+          second: String
+      }
+      """;
+
   @Test
   void streamingGrpcServerUsesAsyncEnumerableHandlersAndStreamingWriter() throws Exception {
     String generated = renderServer();
@@ -405,10 +447,17 @@ final class ServerGeneratorTest {
 
     assertTrue(generated.contains("using NSmithy.Server;"), generated);
     assertTrue(
-        generated.contains(
-            "public static ServiceOperationCatalog CreateCatalogServiceOperationCatalog("
-                + "this ICatalogServiceHandler handler)"),
+        generated.contains("public sealed class CatalogServiceDefinition : IServiceDefinition"),
         generated);
+    assertTrue(
+        generated.contains(
+            "public static IServiceCollection AddCatalogService(this IServiceCollection"
+                + " services)"),
+        generated);
+    assertTrue(generated.contains("services.AddCatalogService();"), generated);
+    assertTrue(generated.contains("services.GetRequiredService<INotifyHandler>()"), generated);
+    assertTrue(generated.contains("services.GetRequiredService<IPingHandler>()"), generated);
+    assertFalse(generated.contains("CreateCatalogServiceOperationCatalog"), generated);
     assertTrue(generated.contains("CatalogServiceSchema.Schema,"), generated);
     assertTrue(generated.contains("private static class NotifyJsonSchemas"), generated);
     assertTrue(generated.contains("private static class PingJsonSchemas"), generated);
@@ -418,14 +467,35 @@ final class ServerGeneratorTest {
     assertTrue(
         generated.contains(
             "ServiceOperation.Create(Example.Example.Catalog.NotifySchema.Schema, async (input, ct)"
-                + " => { await handler.NotifyAsync(input, ct).ConfigureAwait(false); return"
+                + " => { await notifyHandler.NotifyAsync(input, ct).ConfigureAwait(false); return"
                 + " SmithyUnit.Value; }, NotifyJsonSchemas.Value),"),
         generated);
     assertTrue(
         generated.contains(
             "ServiceOperation.Create(Example.Example.Catalog.PingSchema.Schema, "
-                + "(_, ct) => handler.PingAsync(ct), PingJsonSchemas.Value),"),
+                + "(_, ct) => pingHandler.PingAsync(ct), PingJsonSchemas.Value),"),
         generated);
+  }
+
+  @Test
+  void serverGeneratesServiceAndOperationPromptDefinitions() throws Exception {
+    String generated =
+        renderServer("", PROMPTS_MODEL, "example.prompts#PromptService", "Example.Prompts");
+
+    assertTrue(
+        generated.contains("public IReadOnlyList<ServicePromptDefinition> Prompts"), generated);
+    assertTrue(generated.contains("\"service_brief\""), generated);
+    assertTrue(generated.contains("\"Summarize two locations\""), generated);
+    assertTrue(generated.contains("\"Compare {{first}} with {{second}}.\""), generated);
+    assertTrue(generated.contains("\"Use this for comparisons\""), generated);
+    assertTrue(
+        generated.contains(
+            "new ServicePromptArgumentDefinition(\"first\", \"First location.\", true)"),
+        generated);
+    assertTrue(
+        generated.contains("new ServicePromptArgumentDefinition(\"second\", null, false)"),
+        generated);
+    assertTrue(generated.contains("\"operation_brief\""), generated);
   }
 
   private String renderServer() throws Exception {
@@ -447,7 +517,8 @@ final class ServerGeneratorTest {
         assembler.addUnparsedModel("protocol-traits-" + i + ".smithy", protocolTraitModels[i]);
       }
     }
-    Model model = assembler.addUnparsedModel("model.smithy", modelText).assemble().unwrap();
+    Model model =
+        assembler.addUnparsedModel("model.smithy", modelText).discoverModels().assemble().unwrap();
     CSharpSettings settings =
         CSharpSettings.fromNode(
             ObjectNode.builder()

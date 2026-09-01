@@ -164,8 +164,8 @@ Generated code depends on .NET packages published to NuGet:
 - `NSmithy.Client` — `SmithyClientRuntime`, `IClientInterceptor`
 - `NSmithy.Server` / `NSmithy.Server.AspNetCore` — host-neutral operation
   catalogs and server framework
-- `NSmithy.Server.Mcp` — transport-neutral MCP tools backed by generated
-  operation catalogs
+- `NSmithy.Server.Mcp` — MCP tools and prompts projected from generated service
+  definitions
 - `NSmithy.Codecs.Json/Xml/Cbor` — schema-bound body codec implementations
 - `NSmithy.Protocols.Rest` — shared REST HTTP binding projection
 - `NSmithy.Protocols.*` — protocol adapters such as restJson1, restXml,
@@ -197,8 +197,9 @@ Service files contain:
 - `<Service>.Client.g.cs` — typed async methods for each operation; binds
   protocol and transport at construction time.
 - `<Service>.Server.g.cs` — server-side handler interface, a
-  `ServiceOperationCatalog` factory that binds operation schemas to the typed
-  handler, generated JSON Schema 2020-12 companions for unary operation tool
+  DI-registered `IServiceDefinition` that binds operation schemas to their
+  per-operation handlers, prompt definitions generated from
+  `smithy.ai#prompts`, JSON Schema 2020-12 companions for unary operation tool
   projections, and the ASP.NET Core adapter.
 
 Generated client and server methods bind the service schema, operation schemas,
@@ -207,12 +208,15 @@ the runtime protocol pipeline. The protocol adapter projects each operation into
 transport fields and delegates body payloads to a schema-bound codec such as
 `JsonCodecFactory`.
 
-The generated operation catalog stops at typed handler invocation and
-transport-neutral metadata. It has no HTTP, ASP.NET Core, MCP, or stdio
-behavior; those hosts enumerate the catalog, construct input using its runtime
-schemas, and choose their own wire mapping. JSON Schema metadata lives on the
-server operation binding rather than the shared operation schema, so client-only
-generation does not carry tool metadata.
+The generated service definition is transport-neutral. It resolves each
+operation handler independently and builds an operation catalog that stops at
+typed invocation and runtime metadata. It also exposes prompt definitions, but
+does not interpret or execute their templates. Transport adapters project these
+parts into their own capability model: the MCP adapter creates tools from the
+catalog and renders prompts, while ASP.NET Core continues to bind routes
+directly. JSON Schema metadata lives on the server operation binding rather than
+the shared operation schema, so client-only generation does not carry tool
+metadata.
 
 ## Tradeoffs
 

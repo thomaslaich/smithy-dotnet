@@ -177,6 +177,12 @@ timestamps, base64 blobs, unions, and constraints), not any particular HTTP or
 binary wire protocol. MCP tools consume this metadata without coupling the
 shared operation schema or client-only output to MCP concerns.
 
+Prompt metadata follows a separate path. Server generation converts
+`smithy.ai#prompts` traits into transport-neutral `ServicePromptDefinition`
+values on the generated `IServiceDefinition`; it does not add prompt semantics
+to `ServiceSchema` or `OperationSchema`. An MCP adapter renders those definitions
+into MCP prompts, while other hosts can ignore them.
+
 Traits stay on schemas and members. Core schemas carry any Smithy trait, but
 consumers decide which traits they interpret. REST protocols interpret
 `@httpLabel`, `@httpHeader`, `@httpPayload`, and `@timestampFormat`; a gRPC

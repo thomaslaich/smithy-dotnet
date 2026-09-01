@@ -42,9 +42,7 @@ static async Task RunMcpServerAsync(string[] args)
     builder
         .Services.AddMcpServer()
         .WithStdioServerTransport()
-        .WithSmithyTools<IWeatherServiceHandler>(handler =>
-            handler.CreateWeatherServiceOperationCatalog()
-        );
+        .WithSmithyService(WeatherSchema.Schema);
 
     await builder.Build().RunAsync();
 }

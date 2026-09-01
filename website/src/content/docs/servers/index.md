@@ -51,6 +51,7 @@ convenience, not a requirement. If you'd rather split operations across classes
 `AddWeatherServiceHandler`:
 
 ```csharp
+builder.Services.AddWeatherService();
 builder.Services.AddSingleton<IGetCityHandler, GetCityHandler>();
 builder.Services.AddSingleton<IListCitiesHandler, ListCitiesHandler>();
 // …one registration per operation the mapped protocol serves
@@ -58,7 +59,8 @@ builder.Services.AddSingleton<IListCitiesHandler, ListCitiesHandler>();
 
 Each mapped route picks up its operation's handler independently. As long as
 every operation the protocol maps has a registration, the service is fully
-served.
+served. `AddWeatherService` registers generated service-level metadata used by
+adapters such as MCP; `AddWeatherServiceHandler` calls it automatically.
 
 ## Map the endpoints
 
