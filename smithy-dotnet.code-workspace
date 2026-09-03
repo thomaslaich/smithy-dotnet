@@ -15,10 +15,6 @@
     {
       "name": "Benchmarks",
       "path": "benchmarks"
-    },
-    {
-      "name": "Example: Kafka",
-      "path": "examples/kafka"
     }
   ],
   "settings": {

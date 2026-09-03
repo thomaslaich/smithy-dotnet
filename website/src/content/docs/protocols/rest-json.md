@@ -179,8 +179,8 @@ and the [AWS Protocols Overview](/smithy-dotnet/protocols/aws-overview/).
 
 ## Examples
 
-- [Unary restJson1 weather service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/restjson1)
-- [Streaming restJson1 chat service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/restjson1-streaming)
+- [Unary restJson1 weather service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/restjson1/unary)
+- [Streaming restJson1 chat service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/restjson1/streaming)
 - [simpleRestJson pizza service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/simplerestjson)
 
 ## Specifications and tests

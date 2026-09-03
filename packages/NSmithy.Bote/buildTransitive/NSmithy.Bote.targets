@@ -1,0 +1,71 @@
+<Project>
+  <PropertyGroup>
+    <_NSmithyBoteMavenRepo>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/maven-repo'))</_NSmithyBoteMavenRepo>
+  </PropertyGroup>
+
+  <!--
+    A contracts project runs its own smithy-build.json directly, so there is no
+    synthesized Maven block to augment. Pass Bote and its Alloy model dependency
+    as positional Smithy CLI models in that case. Consumer/codegen projects get
+    them transitively through the Bote codegen extension instead.
+  -->
+  <ItemGroup Condition="'$(SmithyPublish)' == 'true'">
+    <_NSmithyBoteContractModel
+      Include="$(_NSmithyBoteMavenRepo)/io/github/thomaslaich/bote/bote/$(BoteVersion)/bote-$(BoteVersion).jar"
+    />
+    <_NSmithyBoteContractModel
+      Include="$(_NSmithyBoteMavenRepo)/com/disneystreaming/alloy/alloy-core/*/alloy-core-*.jar"
+    />
+  </ItemGroup>
+  <Target
+    Name="_NSmithyBotePrepareContractModelInputs"
+    BeforeTargets="GenerateSmithyCode"
+    Condition="'$(SmithyPublish)' == 'true' and '@(_NSmithyBoteContractModel)' != ''"
+  >
+    <PropertyGroup>
+      <SmithyExtraArgs>$(SmithyExtraArgs) @(_NSmithyBoteContractModel->'&quot;%(FullPath)&quot;', ' ')</SmithyExtraArgs>
+    </PropertyGroup>
+  </Target>
+
+  <ItemGroup Condition="Exists('$(_NSmithyBoteMavenRepo)')">
+    <_NSmithyBoteJar Include="$(_NSmithyBoteMavenRepo)/**/*.jar" />
+    <SmithyCodegenInput Include="@(_NSmithyBoteJar)" />
+  </ItemGroup>
+  <ItemGroup Condition="'@(_NSmithyBoteJar)' != ''">
+    <SmithyMavenRepository Include="$([System.Uri]::new('$(_NSmithyBoteMavenRepo)').AbsoluteUri)" />
+  </ItemGroup>
+  <ItemGroup>
+    <SmithyMavenDependency Include="io.github.thomaslaich.nsmithy:smithy-csharp-bote-codegen:$(NSmithyBoteVersion)" />
+    <SmithyMavenDependency
+      Include="io.github.thomaslaich.bote:smithy-asyncapi:$(BoteVersion)"
+      Condition="'$(SmithyGenerateAsyncApi)' == 'true'"
+    />
+    <SmithyBuildPlugin Include="asyncapi" Condition="'$(SmithyGenerateAsyncApi)' == 'true'">
+      <Service>$(SmithyService)</Service>
+    </SmithyBuildPlugin>
+  </ItemGroup>
+
+  <Target
+    Name="_NSmithyBoteCopyAsyncApiToWwwroot"
+    AfterTargets="GenerateSmithyCode"
+    Condition="'$(SmithyGenerateAsyncApi)' == 'true'"
+  >
+    <PropertyGroup>
+      <_NSmithyBoteOutputDir>$([MSBuild]::EnsureTrailingSlash('$(MSBuildProjectDirectory)'))$(SmithyBuildOutputPath)</_NSmithyBoteOutputDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <_NSmithyBoteAsyncApiJson Include="$(_NSmithyBoteOutputDir)**/asyncapi/*.json" />
+    </ItemGroup>
+    <MakeDir
+      Directories="$(MSBuildProjectDirectory)/wwwroot"
+      Condition="'@(_NSmithyBoteAsyncApiJson)' != ''"
+    />
+    <Copy
+      SourceFiles="@(_NSmithyBoteAsyncApiJson)"
+      DestinationFiles="$(MSBuildProjectDirectory)/wwwroot/asyncapi.json"
+      Condition="'@(_NSmithyBoteAsyncApiJson)' != ''"
+      OverwriteReadOnlyFiles="true"
+      SkipUnchangedFiles="true"
+    />
+  </Target>
+</Project>

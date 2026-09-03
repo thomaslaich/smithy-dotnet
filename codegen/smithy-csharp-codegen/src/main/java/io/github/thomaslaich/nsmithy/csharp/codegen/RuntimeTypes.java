@@ -34,9 +34,6 @@ public final class RuntimeTypes {
   public static final String MS_ASPNETCORE_HTTP = "Microsoft.AspNetCore.Http";
   public static final String MS_ASPNETCORE_ROUTING = "Microsoft.AspNetCore.Routing";
 
-  public static final String NSMITHY_PROTOCOLS_KAFKA = "NSmithy.Protocols.Kafka";
-  public static final String CONFLUENT_KAFKA = "Confluent.Kafka";
-
   public static final String GRPC_CORE = "Grpc.Core";
   public static final String GOOGLE_PROTOBUF_WELLKNOWN = "Google.Protobuf.WellKnownTypes";
 

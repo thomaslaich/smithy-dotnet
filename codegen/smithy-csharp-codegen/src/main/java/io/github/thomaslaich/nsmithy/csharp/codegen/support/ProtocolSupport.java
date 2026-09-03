@@ -78,19 +78,6 @@ public final class ProtocolSupport {
     return s.findTrait(TraitIds.GRPC).isPresent();
   }
 
-  /**
-   * Any bote messaging protocol (Kafka, Redis). A bote service gets a messaging SDK instead of the
-   * HTTP client/server/schema surfaces; which SDK is decided per protocol trait at the generator
-   * call sites.
-   */
-  public static boolean isBoteService(ServiceShape s) {
-    return s.findTrait(TraitIds.KAFKA_JSON).isPresent()
-        || s.findTrait(TraitIds.KAFKA_AVRO).isPresent()
-        || s.findTrait(TraitIds.KAFKA_PROTOBUF).isPresent()
-        || s.findTrait(TraitIds.REDIS_STREAMS_JSON).isPresent()
-        || s.findTrait(TraitIds.REDIS_PUB_SUB_JSON).isPresent();
-  }
-
   public static boolean emitsAspNetCoreServer(ServiceShape s) {
     return emitsHttpAspNetCoreServer(s) || isGrpcService(s);
   }

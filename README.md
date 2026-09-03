@@ -18,7 +18,7 @@ NSmithy is a .NET toolkit that turns a [Smithy](https://smithy.io) model into id
 - **Contract-first**: The Smithy model is the source of truth. NSmithy generates C# model types, clients, and ASP.NET Core server stubs from it.
 - **Protocol-agnostic**: The same model can target multiple protocols; switching protocols requires no changes to client or server code.
 - **Part of the Smithy ecosystem**: A .NET service built with NSmithy can be called from clients generated for Java, TypeScript, Python, Go, Rust, Swift, and more, and vice versa.
-- **Protocol support**: REST JSON, REST XML, AWS JSON, AWS Query / EC2 Query, RPC v2 CBOR, and gRPC.
+- **Protocol support**: REST JSON, REST XML, AWS JSON, AWS Query / EC2 Query, RPC v2 CBOR, gRPC, and optional Bote Kafka/Redis messaging.
 - **Streaming support**: Event streaming, bidirectional streaming, and streaming blob payloads.
 - **Smithy-native architecture**: Follows Smithy's official [code generator guidance](https://smithy.io/2.0/guides/building-codegen/index.html).
 - **Conformance-tested**: Tested against official Smithy, AWS, and alloy conformance suites.

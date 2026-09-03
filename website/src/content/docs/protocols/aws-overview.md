@@ -91,4 +91,4 @@ uses generated clients for all five supported AWS HTTP protocols:
 - EC2 over EC2 Query
 
 For restJson1 event streams, see the [streaming
-example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/restjson1-streaming).
+example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/restjson1/streaming).

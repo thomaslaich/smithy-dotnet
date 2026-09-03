@@ -1,14 +1,14 @@
 ---
 title: bote Protocols Overview
-description: Messaging protocols from the bote trait library for modeling Kafka contracts in Smithy.
+description: Kafka and Redis messaging protocols from the bote trait library.
 ---
 
 [bote](https://github.com/thomaslaich/bote) is a Smithy trait library for
 messaging contracts. It defines protocol traits for Kafka (`@kafkaJson`,
 `@kafkaAvro`, `@kafkaProtobuf`) and Redis, plus the broker-agnostic vocabulary
-they share. NSmithy implements code generation for
-[`bote#kafkaJson`](/smithy-dotnet/protocols/bote-kafka-json/) only. Status:
-**Experimental**.
+they share. The optional `NSmithy.Bote` package implements C#
+generation for [`bote#kafkaJson`](/smithy-dotnet/protocols/bote-kafka-json/),
+`bote#redisStreamsJson`, and `bote#redisPubSubJson`. Status: **Experimental**.
 
 ## The Contract Model
 
@@ -35,19 +35,19 @@ team can own infrastructure settings independently of the contract owner.
 
 ## Generated Surface
 
-A `@kafkaJson` service does not generate the HTTP client/server pair described
-in [Client & Server Usage](/smithy-dotnet/protocols/usage/). It generates a
-typed Kafka SDK over
-[Confluent.Kafka](https://github.com/confluentinc/confluent-kafka-dotnet): a
-producer plus command and event consumers, shared by both contract roles. See
-[kafkaJson](/smithy-dotnet/protocols/bote-kafka-json/) for the generated
-surfaces.
+A supported Bote service does not generate the HTTP client/server pair described
+in [Client & Server Usage](/smithy-dotnet/protocols/usage/). Kafka services
+generate a typed SDK over
+[Confluent.Kafka](https://github.com/confluentinc/confluent-kafka-dotnet), while
+Redis services generate Streams or Pub/Sub surfaces over StackExchange.Redis.
+See [Kafka JSON](/smithy-dotnet/protocols/bote-kafka-json/) and
+[Redis JSON](/smithy-dotnet/protocols/bote-redis-json/) for the generated APIs.
 
 ## AsyncAPI Documentation
 
 bote includes a smithy-build plugin that renders
 [AsyncAPI 3.1](https://www.asyncapi.com/) documents from bote services.
-NSmithy runs it when the `SmithyGenerateAsyncApi` MSBuild property is set and
+NSmithy.Bote runs it when the `SmithyGenerateAsyncApi` MSBuild property is set and
 serves the result with `MapSmithyAsyncApi()`. The document is rendered from
 the owner's perspective by default (commands are `receive`, events are
 `send`); setting `"perspective": "client"` in the plugin configuration flips
@@ -55,8 +55,9 @@ the actions.
 
 ## Maturity
 
-bote and NSmithy's Kafka support are experimental. Only `kafkaJson` has a
-generator, and there is no conformance suite; behavior is validated through
-the
-[`examples/kafka`](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/kafka)
-project. See [Protocol Status](/smithy-dotnet/protocols/status/).
+bote and its NSmithy extension are experimental. Kafka Avro and Protobuf do not
+yet have C# generators, and there is no conformance suite; the generated
+[Kafka JSON](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/kafkajson)
+and [Redis JSON](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/redisjson)
+examples live in this repository.
+See [Protocol Status](/smithy-dotnet/protocols/status/).

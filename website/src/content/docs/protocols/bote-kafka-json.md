@@ -1,11 +1,11 @@
 ---
-title: kafkaJson
+title: Kafka JSON
 description: JSON messages over Kafka via bote#kafkaJson, generated as a typed producer and consumers.
 ---
 
 `bote#kafkaJson` is a JSON-over-Kafka protocol from the
-[bote trait library](/smithy-dotnet/protocols/bote-overview/). NSmithy
-generates a typed Kafka SDK from the service: a producer plus command and
+[bote trait library](/smithy-dotnet/protocols/bote-overview/). The
+`NSmithy.Bote` generates a typed Kafka SDK from the service: a producer plus command and
 event consumers over
 [Confluent.Kafka](https://github.com/confluentinc/confluent-kafka-dotnet).
 Status: **Experimental**.
@@ -15,19 +15,17 @@ See [Protocol Status](/smithy-dotnet/protocols/status/) for maturity details.
 ## Maven Dependency
 
 ```json
-"io.github.thomaslaich.bote:bote:0.1.0-SNAPSHOT"
+"io.github.thomaslaich.bote:bote:0.1.0"
 ```
 
-bote is not on Maven Central yet. Publish it to your local Maven repository
-with `just publish-local` from the
-[bote repo](https://github.com/thomaslaich/bote); the synthesized
-`smithy-build.json` resolves `file://~/.m2/repository` when the contracts
-declare it as a repository.
+The trait library is published on Maven Central. `NSmithy.Bote` also bundles
+it hermetically for generated .NET builds.
 
 ## NuGet Packages
 
 | Purpose | Packages |
 | --- | --- |
+| Build integration | `NSmithy.Bote` |
 | Generated Kafka SDK | `NSmithy.Core`, `NSmithy.Codecs.Json`, `Confluent.Kafka` |
 | AsyncAPI docs host | `NSmithy.Server.AspNetCore.Docs` |
 
@@ -107,7 +105,11 @@ union LightMeasuredStream {
 - `@kafkaHeader(name: "...")` binds a member to a Kafka message header.
 - Topic provisioning is not part of the contract. Attach
   `bote.infra#kafkaTopicConfig` (partitions, replication, retention) with
-  `apply` from a separate model file.
+  `apply` from a separately deployable infrastructure model owned by the
+  service team. NSmithy generates a typed `{Service}KafkaInfrastructure.Topics`
+  deployment plan from the composed models. A console deployer, an Aspire
+  AppHost integration, or organization-specific infrastructure tooling can
+  consume the same plan; AsyncAPI remains the platform-neutral export.
 
 ## On the Wire
 
@@ -146,7 +148,7 @@ behavior).
 
 ## Generated Surfaces
 
-From the `StreetlightDevice` service NSmithy generates one
+From the `StreetlightDevice` service NSmithy.Bote generates one
 `StreetlightDeviceKafka.g.cs`. The contract owner and its clients use
 different halves of the same types:
 
@@ -207,6 +209,80 @@ Consumer group membership, offsets, and delivery semantics are runtime
 concerns configured through Confluent's `ConsumerConfig` (`GroupId`,
 `AutoOffsetReset`, and so on); they are not part of the model.
 
+## Kafka Infrastructure Generation
+
+Keep deployable topic settings in an infrastructure overlay rather than in the
+portable application contract. The overlay applies Bote's
+`bote.infra#kafkaTopicConfig` trait to the operations that own the topics:
+
+```smithy
+$version: "2"
+
+namespace examples.kafka.infra
+
+use bote.infra#kafkaTopicConfig
+
+apply examples.kafka.streetlights#ConsumeLightingEvents @kafkaTopicConfig(
+    partitions: 3
+    replicationFactor: 1
+    retentionMs: 604800000 // 7 days
+)
+
+apply examples.kafka.streetlights#DimLight @kafkaTopicConfig(
+    partitions: 3
+    replicationFactor: 1
+    retentionMs: 86400000 // 1 day
+)
+```
+
+An infrastructure project composes that local overlay with the contract model.
+It can disable the client and server surfaces because it needs only the generated
+deployment plan:
+
+```xml
+<PropertyGroup>
+  <SmithyService>examples.kafka.streetlights#StreetlightDevice</SmithyService>
+  <SmithyGenerateClient>false</SmithyGenerateClient>
+  <SmithyGenerateServer>false</SmithyGenerateServer>
+</PropertyGroup>
+
+<ItemGroup>
+  <PackageReference Include="NSmithy.Bote" Version="..." PrivateAssets="all" />
+  <ProjectReference
+    Include="../device.contracts/Device.Contracts.csproj"
+    ReferenceOutputAssembly="false"
+  />
+</ItemGroup>
+```
+
+NSmithy.Bote generates a provider-neutral C# description of the desired topics:
+
+```csharp
+public static class StreetlightDeviceKafkaInfrastructure
+{
+    public sealed record Topic(
+        string Name,
+        int? Partitions,
+        short? ReplicationFactor,
+        IReadOnlyDictionary<string, string> Configuration);
+
+    public static IReadOnlyList<Topic> Topics { get; } = [/* modeled topics */];
+}
+```
+
+The generated surface deliberately describes desired state; it does not perform
+deployment. A small adapter can reconcile it through Confluent's Admin API,
+translate it into an organization's infrastructure system, or expose it to an
+Aspire AppHost. This keeps the Smithy codegen independent of both Confluent's
+deployment policy and Aspire. NSmithy.Bote does not currently ship an Aspire
+adapter.
+
+The runnable example's `device.infra` console is an idempotent Confluent adapter:
+it creates missing topics, increases partition counts, and applies topic
+configuration. Kafka cannot reduce partition counts, and replication-factor
+changes require reassignment, so those cases are reported rather than silently
+ignored.
+
 ## Dependency Injection
 
 Setting `SmithyGenerateDependencyInjection` to `true` additionally generates
@@ -261,9 +337,11 @@ app.MapSmithyAsyncApi(); // /asyncapi.json + Scalar at /asyncapi
 app.Run();
 ```
 
-See the runnable
-[`examples/kafka`](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/kafka)
-project for the full setup, including a Docker Compose Kafka broker.
+See the runnable [Kafka JSON example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/kafkajson)
+for separate `device.contracts` and `device.infra` projects, model-driven topic
+deployment through Confluent's Admin API, generated clients, and AsyncAPI
+documentation. Aspire can host the broker and invoke the same infrastructure
+project without becoming a dependency of the generated model.
 
 ## Current Limitations
 

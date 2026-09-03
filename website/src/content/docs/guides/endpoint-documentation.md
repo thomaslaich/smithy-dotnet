@@ -43,6 +43,9 @@ Add `NSmithy.Server.AspNetCore.Docs` to your server project:
 This package provides the `MapSmithyOpenApi()`, `MapSmithyDocs()`, and
 `MapSmithyAsyncApi()` extension methods.
 
+For Bote AsyncAPI generation, also reference `NSmithy.Bote`; that extension
+owns the `SmithyGenerateAsyncApi` property and the AsyncAPI build plugin.
+
 ## Enable the Generators
 
 Set the MSBuild properties you need in your server `.csproj`:
@@ -55,7 +58,7 @@ Set the MSBuild properties you need in your server `.csproj`:
   <!-- Generate openapi.json for AWS restJson1 services -->
   <SmithyOpenApiProtocol>aws.protocols#restJson1</SmithyOpenApiProtocol>
 
-  <!-- Generate asyncapi.json for bote messaging services -->
+  <!-- Requires NSmithy.Bote; generate asyncapi.json for Bote messaging services -->
   <SmithyGenerateAsyncApi>true</SmithyGenerateAsyncApi>
 </PropertyGroup>
 ```
@@ -96,7 +99,7 @@ MSBuild then copies it to `wwwroot/docs/`.
 `/asyncapi`. The UI reads `/asyncapi.json`, the AsyncAPI 3.1 document
 generated from the model and copied to `wwwroot/asyncapi.json` at build time.
 See
-[kafkaJson](/smithy-dotnet/protocols/bote-kafka-json/#asyncapi-documentation)
+[Kafka JSON](/smithy-dotnet/protocols/bote-kafka-json/#asyncapi-documentation)
 for a messaging example.
 
 ## What Gets Generated
