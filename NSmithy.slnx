@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/packages/">
     <Project Path="packages/NSmithy.Aws/NSmithy.Aws.csproj" />
+    <Project Path="packages/NSmithy.Bote/NSmithy.Bote.csproj" />
     <Project Path="packages/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
     <Project Path="packages/NSmithy.Codecs.Proto/NSmithy.Codecs.Proto.csproj" />
     <Project Path="packages/NSmithy.Client/NSmithy.Client.csproj" />

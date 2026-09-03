@@ -15,8 +15,9 @@
                            <ProjectReference> to this project.
 
       (code generation)    Runs automatically when a smithy-build.json exists at the
-                           project root, or when SmithySource items are present
-                           (collected from a contracts ProjectReference).
+                           project root, when the project has a local model/ folder,
+                           or when SmithySource items are collected from a contracts
+                           ProjectReference.
                            For server/client projects without a local smithy-build.json,
                            one is synthesized in obj/ from the contracts smithy-build.json
                            with sources patched to absolute paths and the csharp-codegen
@@ -35,6 +36,9 @@
        always wins.
        ================================================================ -->
   <PropertyGroup>
+    <SmithySources Condition="'$(SmithySources)' == ''"
+      >$(MSBuildProjectDirectory)/model</SmithySources
+    >
     <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.73.0</SmithyVersion>
     <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''"
       >0.0.0-SNAPSHOT</SmithyCSharpCodegenVersion
@@ -293,6 +297,14 @@
     <_SmithyBundledMavenRepo>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/maven-repo'))</_SmithyBundledMavenRepo>
   </PropertyGroup>
 
+  <ItemGroup Condition="Exists('$(_SmithyBundledMavenRepo)')">
+    <_NSmithyBundledJar Include="$(_SmithyBundledMavenRepo)/**/*.jar" />
+    <SmithyCodegenInput Include="@(_NSmithyBundledJar)" />
+  </ItemGroup>
+  <ItemGroup Condition="'@(_NSmithyBundledJar)' != ''">
+    <SmithyMavenRepository Include="$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri)" />
+  </ItemGroup>
+
   <PropertyGroup>
     <SmithyGenerateServer Condition="'$(SmithyGenerateServer)' == ''">true</SmithyGenerateServer>
     <SmithyEmitGeneratedFiles Condition="'$(SmithyEmitGeneratedFiles)' == ''"
@@ -310,14 +322,22 @@
       Exclude="$(MSBuildProjectDirectory)/obj/**;$(MSBuildProjectDirectory)/bin/**;$(SmithyBuildOutputPath)**"
     />
     <_SmithyGeneratorInput Include="$(SmithyBuildFile)" Condition="Exists('$(SmithyBuildFile)')" />
-    <!-- Rebuild when the bundled codegen plugin/traits change (e.g. package upgrade). -->
-    <_SmithyGeneratorInput
-      Include="$(_SmithyBundledMavenRepo)/**/*.jar"
-      Condition="Exists('$(_SmithyBundledMavenRepo)')"
-    />
+    <!-- Extension packages contribute their bundled JARs through SmithyCodegenInput. -->
+    <_SmithyGeneratorInput Include="@(SmithyCodegenInput)" />
     <Watch Include="$(SmithyBuildFile)" Condition="Exists('$(SmithyBuildFile)')" />
     <Watch Include="@(_SmithyGeneratorInput)" />
   </ItemGroup>
+
+  <!-- Resolve extension inputs after every package's .targets file has been evaluated. -->
+  <Target
+    Name="_CollectSmithyCodegenExtensionInputs"
+    BeforeTargets="_SmithyRefreshMavenCache;GenerateSmithyCode"
+  >
+    <ItemGroup>
+      <_SmithyGeneratorInput Include="@(SmithyCodegenInput)" />
+      <Watch Include="@(SmithyCodegenInput)" />
+    </ItemGroup>
+  </Target>
 
   <!--
     Collect SmithySource items and the contracts smithy-build.json path from
@@ -352,10 +372,9 @@
   </Target>
 
   <!--
-    Synthesize a smithy-build.json when none exists on disk but SmithySource items
-    are present (collected from a contracts ProjectReference).
-    Reads the contracts smithy-build.json, patches sources to absolute paths, and
-    injects the csharp-codegen Maven dependency and plugin entry.
+    Synthesize a smithy-build.json when none exists on disk but local or referenced
+    Smithy sources are present. When a contracts smithy-build.json is available,
+    inherit its configuration before injecting the codegen dependency and plugins.
     The condition check for SmithySource must be inside the target body — MSBuild
     evaluates target Condition attributes before DependsOnTargets run, so
     SmithySource would always appear empty at the Condition evaluation point.
@@ -366,13 +385,18 @@
     DependsOnTargets="_CollectSmithyItemsFromProjectReferences"
     Condition="!Exists('$(SmithyBuildFile)')"
   >
+    <ItemGroup>
+      <_SmithyLocalSource Include="$(SmithySources)/**/*.smithy" />
+      <SmithySource Include="@(_SmithyLocalSource)" />
+    </ItemGroup>
+
     <Error
-      Text="NSmithy: SmithyService must be set when generating from a contracts reference. Add &lt;SmithyService&gt;my.namespace#MyService&lt;/SmithyService&gt; to your project."
+      Text="NSmithy: SmithyService must be set when generating from Smithy model sources. Add &lt;SmithyService&gt;my.namespace#MyService&lt;/SmithyService&gt; to your project."
       Condition="'@(SmithySource)' != '' and '$(SmithyService)' == ''"
     />
     <Error
       Text="NSmithy: could not find smithy-build.json in the contracts project. Ensure the contracts project has SmithyPublish=true and a smithy-build.json at its root."
-      Condition="'@(SmithySource)' != '' and '@(SmithyContractsBuildFile)' == ''"
+      Condition="'@(SmithySource)' != '' and '@(SmithyContractsBuildFile)' == '' and '@(_SmithyLocalSource)' == ''"
     />
 
     <PropertyGroup Condition="'@(SmithySource)' != ''">
@@ -382,11 +406,13 @@
     <MakeDir Directories="$(IntermediateOutputPath)" Condition="'@(SmithySource)' != ''" />
 
     <SynthesizeSmithyBuildFile
-      ContractsBuildFile="@(SmithyContractsBuildFile)"
+      ContractsBuildFiles="@(SmithyContractsBuildFile)"
       Sources="@(SmithySource)"
       Service="$(SmithyService)"
       BaseNamespace="$(SmithyBaseNamespace)"
       CSharpCodegenVersion="$(SmithyCSharpCodegenVersion)"
+      AdditionalMavenDependencies="@(SmithyMavenDependency)"
+      AdditionalPlugins="@(SmithyBuildPlugin)"
       SmithyVersion="$(SmithyVersion)"
       GenerateDocs="$(SmithyGenerateDocs)"
       GenerateClient="$(SmithyGenerateClient)"
@@ -394,8 +420,6 @@
       GenerateDependencyInjection="$(SmithyGenerateDependencyInjection)"
       GenerateFakes="$(SmithyGenerateFakes)"
       OpenApiProtocol="$(SmithyOpenApiProtocol)"
-      GenerateAsyncApi="$(SmithyGenerateAsyncApi)"
-      AsyncApiPluginVersion="$(SmithyAsyncApiPluginVersion)"
       Grpc="$(SmithyGrpc)"
       ProtoPlugin="$(SmithyProtoPlugin)"
       OutputFile="$(_SmithySynthesizedBuildFile)"
@@ -439,7 +463,7 @@
   <Target
     Name="_SmithyRefreshMavenCache"
     BeforeTargets="GenerateSmithyCode"
-    Condition="Exists('$(_SmithyBundledMavenRepo)')"
+    Condition="'@(SmithyMavenRepository)' != ''"
     Inputs="@(_SmithyGeneratorInput)"
     Outputs="$(_SmithyMavenCacheStamp)"
   >
@@ -459,15 +483,9 @@
     Outputs="$(SmithyStampFile)"
   >
     <MakeDir Directories="$(SmithyBuildOutputPath)" />
-    <!-- Point the CLI at the bundled Maven repo with an isolated cache so codegen
-         resolves the plugin + traits from local files. Only when the repo actually
-         holds jars (the dir itself is committed just to carry a .gitignore); otherwise
-         leave the CLI's default (network) resolution in place. -->
-    <ItemGroup>
-      <_SmithyBundleJar Include="$(_SmithyBundledMavenRepo)/**/*.jar" />
-    </ItemGroup>
-    <PropertyGroup Condition="'@(_SmithyBundleJar)' != ''">
-      <_SmithyMavenEnv>SMITHY_MAVEN_REPOS=$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri);SMITHY_MAVEN_CACHE=$([System.IO.Path]::GetFullPath('$(_SmithyMavenCachePath)'))</_SmithyMavenEnv>
+    <!-- Point the CLI at all Maven repositories contributed by NSmithy extensions. -->
+    <PropertyGroup Condition="'@(SmithyMavenRepository)' != ''">
+      <_SmithyMavenEnv>SMITHY_MAVEN_REPOS=@(SmithyMavenRepository, '|');SMITHY_MAVEN_CACHE=$([System.IO.Path]::GetFullPath('$(_SmithyMavenCachePath)'))</_SmithyMavenEnv>
     </PropertyGroup>
     <PropertyGroup>
       <_SmithyCliBuildOutput>$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\'))</_SmithyCliBuildOutput>
@@ -570,36 +588,6 @@
       SourceFiles="@(_OpenApiJson)"
       DestinationFiles="$(MSBuildProjectDirectory)/wwwroot/openapi.json"
       Condition="'@(_OpenApiJson)' != ''"
-      OverwriteReadOnlyFiles="true"
-      SkipUnchangedFiles="true"
-    />
-  </Target>
-
-  <!--
-    Copy the bote AsyncAPI output to wwwroot/asyncapi.json so that ASP.NET Core's
-    static file middleware can serve it at /asyncapi.json.
-    Only runs when SmithyGenerateAsyncApi is true. Assumes a single service document
-    (the common case); for multiple services, host the files under their own names.
-  -->
-  <Target
-    Name="_CopyAsyncApiToWwwroot"
-    AfterTargets="GenerateSmithyCode"
-    Condition="'$(SmithyGenerateAsyncApi)' == 'true'"
-  >
-    <PropertyGroup>
-      <_SmithyOutputDir>$([MSBuild]::EnsureTrailingSlash('$(MSBuildProjectDirectory)'))$(SmithyBuildOutputPath)</_SmithyOutputDir>
-    </PropertyGroup>
-    <ItemGroup>
-      <_AsyncApiJson Include="$(_SmithyOutputDir)**/asyncapi/*.json" />
-    </ItemGroup>
-    <MakeDir
-      Directories="$(MSBuildProjectDirectory)/wwwroot"
-      Condition="'@(_AsyncApiJson)' != ''"
-    />
-    <Copy
-      SourceFiles="@(_AsyncApiJson)"
-      DestinationFiles="$(MSBuildProjectDirectory)/wwwroot/asyncapi.json"
-      Condition="'@(_AsyncApiJson)' != ''"
       OverwriteReadOnlyFiles="true"
       SkipUnchangedFiles="true"
     />

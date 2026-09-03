@@ -5,6 +5,7 @@ obj/
 .idea/
 .direnv/
 .devenv/
+.pixi/
 TestResults/
 *.user
 *.suo
@@ -36,3 +37,8 @@ build/
 # --artifacts. The `just bench-*` recipes direct output to benchmarks/results
 # instead; this catches ad-hoc runs.
 BenchmarkDotNet.Artifacts/
+
+# Documentation and API descriptions copied into example web roots by codegen.
+**/wwwroot/docs/
+**/wwwroot/openapi.json
+**/wwwroot/asyncapi.json

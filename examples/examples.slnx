@@ -42,4 +42,17 @@
   <Folder Name="/polyglot/">
     <Project Path="polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj" />
   </Folder>
+  <Folder Name="/kafkajson/">
+    <Project Path="kafkajson/device.contracts/NSmithy.Examples.Kafka.Device.Contracts.csproj" />
+    <Project Path="kafkajson/device.infra/NSmithy.Examples.Kafka.Device.Infra.csproj" />
+    <Project Path="kafkajson/device/NSmithy.Examples.Kafka.Device.csproj" />
+    <Project Path="kafkajson/controller/NSmithy.Examples.Kafka.Controller.csproj" />
+    <Project Path="kafkajson/device.docs/NSmithy.Examples.Kafka.Device.Docs.csproj" />
+  </Folder>
+  <Folder Name="/redisjson/">
+    <Project Path="redisjson/chat/NSmithy.Examples.Redis.Chat.csproj" />
+    <Project Path="redisjson/inventory/contracts/NSmithy.Examples.Redis.Inventory.Contracts.csproj" />
+    <Project Path="redisjson/inventory/server/NSmithy.Examples.Redis.Inventory.Server.csproj" />
+    <Project Path="redisjson/inventory/client/NSmithy.Examples.Redis.Inventory.Client.csproj" />
+  </Folder>
 </Solution>

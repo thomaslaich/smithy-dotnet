@@ -6,16 +6,20 @@ using MsBuildTask = Microsoft.Build.Utilities.Task;
 namespace NSmithy.Contracts;
 
 /// <summary>
-/// Synthesizes a smithy-build.json for a server/client project by reading the
-/// contracts project's smithy-build.json, replacing the sources with the supplied
-/// absolute paths, and injecting the smithy-csharp-codegen Maven dependency and
-/// csharp-codegen plugin entry.
+/// Synthesizes a smithy-build.json for an application from local or referenced
+/// Smithy sources. When a contracts build file is supplied, its Maven settings
+/// and suppressions are inherited.
 /// </summary>
 public sealed class SynthesizeSmithyBuildFile : MsBuildTask
 {
-    /// <summary>Path to the contracts project's smithy-build.json.</summary>
-    [Required]
+    /// <summary>
+    /// Optional legacy path to one contracts project's smithy-build.json.
+    /// Prefer <see cref="ContractsBuildFiles" /> for new callers.
+    /// </summary>
     public string ContractsBuildFile { get; set; } = "";
+
+    /// <summary>Optional paths to contracts projects' smithy-build.json files.</summary>
+    public ITaskItem[] ContractsBuildFiles { get; set; } = [];
 
     /// <summary>Absolute paths to the .smithy source files.</summary>
     [Required]
@@ -31,6 +35,15 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
     /// <summary>Version of smithy-csharp-codegen Maven artifact to inject.</summary>
     [Required]
     public string CSharpCodegenVersion { get; set; } = "";
+
+    /// <summary>Additional Maven artifacts contributed by codegen extension packages.</summary>
+    public ITaskItem[] AdditionalMavenDependencies { get; set; } = [];
+
+    /// <summary>
+    /// Additional Smithy build plugins contributed by extension packages. The item identity is the
+    /// plugin name; optional Service and SettingsJson metadata populate its configuration.
+    /// </summary>
+    public ITaskItem[] AdditionalPlugins { get; set; } = [];
 
     /// <summary>
     /// Smithy SDK version used when injecting optional plugin dependencies.
@@ -75,15 +88,6 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
     public string OpenApiProtocol { get; set; } = "";
 
     /// <summary>
-    /// When true, injects bote's smithy-asyncapi Maven dep and asyncapi plugin entry
-    /// so an AsyncAPI 3.1 document is generated for bote messaging services.
-    /// </summary>
-    public bool GenerateAsyncApi { get; set; }
-
-    /// <summary>Version of the io.github.thomaslaich.bote:smithy-asyncapi plugin.</summary>
-    public string AsyncApiPluginVersion { get; set; } = "";
-
-    /// <summary>
     /// When true, injects the smithy-proto-codegen Maven dep and the proto-codegen
     /// plugin entry so a .proto file is generated for gRPC services.
     /// </summary>
@@ -98,48 +102,66 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
 
     public override bool Execute()
     {
-        string contractsJson;
-        try
+        var contractsBuildFiles = ContractsBuildFiles
+            .Select(item => item.GetMetadata("FullPath"))
+            .Append(ContractsBuildFile)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var contractRoots = new List<JsonElement>();
+        foreach (var contractsBuildFile in contractsBuildFiles)
         {
-            contractsJson = File.ReadAllText(ContractsBuildFile);
+            try
+            {
+                using var document = JsonDocument.Parse(
+                    File.ReadAllText(contractsBuildFile),
+                    new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip }
+                );
+                contractRoots.Add(document.RootElement.Clone());
+            }
+            catch (Exception ex)
+            {
+                Log.LogError(
+                    $"NSmithy: failed to read contracts smithy-build.json at '{contractsBuildFile}': {ex.Message}"
+                );
+                return false;
+            }
         }
-        catch (Exception ex)
-        {
-            Log.LogError(
-                $"NSmithy: failed to read contracts smithy-build.json at '{ContractsBuildFile}': {ex.Message}"
-            );
-            return false;
-        }
-
-        using var doc = JsonDocument.Parse(
-            contractsJson,
-            new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip }
-        );
-        var root = doc.RootElement;
 
         // Collect Maven repositories from contracts (fall back to defaults).
         var repos = new List<string>();
-        if (
-            root.TryGetProperty("maven", out var maven)
-            && maven.TryGetProperty("repositories", out var reposEl)
-        )
+        foreach (var root in contractRoots)
         {
-            foreach (var repo in reposEl.EnumerateArray())
-                if (repo.TryGetProperty("url", out var url))
-                    repos.Add(url.GetString()!);
+            if (
+                root.TryGetProperty("maven", out var maven)
+                && maven.TryGetProperty("repositories", out var reposElement)
+            )
+            {
+                foreach (var repo in reposElement.EnumerateArray())
+                    if (
+                        repo.TryGetProperty("url", out var url)
+                        && url.GetString() is { } value
+                        && !repos.Contains(value)
+                    )
+                        repos.Add(value);
+            }
         }
         if (repos.Count == 0)
             repos.Add("https://repo.maven.apache.org/maven2/");
 
         // Collect Maven dependencies from contracts, then append smithy-csharp-codegen.
         var deps = new List<string>();
-        if (
-            root.TryGetProperty("maven", out var maven2)
-            && maven2.TryGetProperty("dependencies", out var depsEl)
-        )
+        foreach (var root in contractRoots)
         {
-            foreach (var dep in depsEl.EnumerateArray())
-                deps.Add(dep.GetString()!);
+            if (
+                root.TryGetProperty("maven", out var maven)
+                && maven.TryGetProperty("dependencies", out var dependenciesElement)
+            )
+            {
+                foreach (var dependency in dependenciesElement.EnumerateArray())
+                    if (dependency.GetString() is { } value && !deps.Contains(value))
+                        deps.Add(value);
+            }
         }
         var codegenDep =
             $"io.github.thomaslaich.nsmithy:smithy-csharp-codegen:{CSharpCodegenVersion}";
@@ -153,14 +175,18 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
         )
             deps.Add(codegenDep);
 
+        foreach (var dependency in AdditionalMavenDependencies)
+        {
+            var coordinate = dependency.ItemSpec;
+            if (!string.IsNullOrWhiteSpace(coordinate) && !deps.Contains(coordinate))
+                deps.Add(coordinate);
+        }
+
         if (GenerateDocs)
             deps.Add($"software.amazon.smithy:smithy-docgen:{SmithyVersion}");
 
         if (!string.IsNullOrEmpty(OpenApiProtocol))
             deps.Add($"software.amazon.smithy:smithy-openapi:{SmithyVersion}");
-
-        if (GenerateAsyncApi)
-            deps.Add($"io.github.thomaslaich.bote:smithy-asyncapi:{AsyncApiPluginVersion}");
 
         // smithy-proto-codegen is released in lockstep with smithy-csharp-codegen,
         // so it shares the same version. Skip if the contracts already declare it.
@@ -177,13 +203,21 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
 
         // Collect suppressions from contracts.
         var suppressions = new List<(string Id, string Namespace)>();
-        if (root.TryGetProperty("suppressions", out var suppressionsEl))
+        foreach (var root in contractRoots)
         {
-            foreach (var s in suppressionsEl.EnumerateArray())
+            if (!root.TryGetProperty("suppressions", out var suppressionsElement))
+                continue;
+
+            foreach (var suppression in suppressionsElement.EnumerateArray())
             {
-                var id = s.TryGetProperty("id", out var idEl) ? idEl.GetString()! : "";
-                var ns = s.TryGetProperty("namespace", out var nsEl) ? nsEl.GetString()! : "";
-                suppressions.Add((id, ns));
+                var id = suppression.TryGetProperty("id", out var idElement)
+                    ? idElement.GetString()!
+                    : "";
+                var ns = suppression.TryGetProperty("namespace", out var namespaceElement)
+                    ? namespaceElement.GetString()!
+                    : "";
+                if (!suppressions.Contains((id, ns)))
+                    suppressions.Add((id, ns));
             }
         }
 
@@ -271,11 +305,34 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
             writer.WriteEndObject();
         }
 
-        if (GenerateAsyncApi)
+        foreach (var plugin in AdditionalPlugins)
         {
-            writer.WritePropertyName("asyncapi");
+            if (string.IsNullOrWhiteSpace(plugin.ItemSpec))
+                continue;
+
+            writer.WritePropertyName(plugin.ItemSpec);
             writer.WriteStartObject();
-            writer.WriteString("service", Service);
+
+            var pluginService = plugin.GetMetadata("Service");
+            if (!string.IsNullOrWhiteSpace(pluginService))
+                writer.WriteString("service", pluginService);
+
+            var settingsJson = plugin.GetMetadata("SettingsJson");
+            if (!string.IsNullOrWhiteSpace(settingsJson))
+            {
+                using var settings = JsonDocument.Parse(settingsJson);
+                if (settings.RootElement.ValueKind != JsonValueKind.Object)
+                    throw new InvalidOperationException(
+                        $"Smithy plugin '{plugin.ItemSpec}' SettingsJson must be a JSON object."
+                    );
+                foreach (var property in settings.RootElement.EnumerateObject())
+                {
+                    if (property.NameEquals("service") && !string.IsNullOrWhiteSpace(pluginService))
+                        continue;
+                    property.WriteTo(writer);
+                }
+            }
+
             writer.WriteEndObject();
         }
 
