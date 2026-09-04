@@ -63,6 +63,7 @@ import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.shapes.StructureShape;
+import software.amazon.smithy.model.traits.JsonNameTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -146,8 +147,8 @@ public final class KafkaGenerator implements Runnable {
           for (KafkaBindings.Produce produce : produces) {
             codecShapes.add(produce.command());
           }
-          codecShapes.addAll(eventCodecShapes(consumes, model, discrimination));
-          codecShapes.forEach(this::writeCodecField);
+          codecShapes.addAll(eventCodecShapes(consumes, model));
+          codecShapes.forEach(this::writePayloadCodecField);
           writer.write("private readonly IProducer<string?, byte[]> _producer;");
           writer.write("");
           writer.write("public $L(ProducerConfig config)", typeName);
@@ -169,6 +170,11 @@ public final class KafkaGenerator implements Runnable {
               writer.write("");
               writePublishMethod(consume, member, model, discrimination);
             }
+          }
+
+          if (!consumes.isEmpty() && discrimination == EventDiscrimination.ENVELOPE) {
+            writer.write("");
+            writeEnvelopeWrapper();
           }
 
           writer.write("");
@@ -223,9 +229,10 @@ public final class KafkaGenerator implements Runnable {
           writer.write("");
           switch (discrimination) {
             case ENVELOPE -> {
-              writer.write("var wrapped = $L.From$L(message);", consume.unionType(), variant);
               writer.write(
-                  "var value = $L.Serialize(wrapped);", codecFieldName(consume.unionType()));
+                  "var value = WrapEvent($L, $L.Serialize(message));",
+                  CSharpNaming.formatString(eventWireName(member)),
+                  codecFieldName(eventType));
               writeKeyHeadersAndProduce(model, event, "message", consume.topic(), null);
             }
             case HEADER -> {
@@ -238,6 +245,23 @@ public final class KafkaGenerator implements Runnable {
               writeKeyHeadersAndProduce(model, event, "message", consume.topic(), null);
             }
           }
+        });
+  }
+
+  private void writeEnvelopeWrapper() {
+    writer.write("private static byte[] WrapEvent(string eventType, byte[] payload)");
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write("using var stream = new System.IO.MemoryStream();");
+          writer.write("using var json = new System.Text.Json.Utf8JsonWriter(stream);");
+          writer.write("json.WriteStartObject();");
+          writer.write("json.WritePropertyName(eventType);");
+          writer.write("json.WriteRawValue(payload);");
+          writer.write("json.WriteEndObject();");
+          writer.write("json.Flush();");
+          writer.write("return stream.ToArray();");
         });
   }
 
@@ -256,11 +280,7 @@ public final class KafkaGenerator implements Runnable {
       writer.write("string? key = null;");
     }
 
-    List<MemberShape> headerMembers =
-        payload.members().stream()
-            .filter(m -> m.hasTrait(TraitIds.KAFKA_HEADER))
-            .sorted(Comparator.comparing(MemberShape::getMemberName))
-            .collect(Collectors.toList());
+    List<MemberShape> headerMembers = headerMembers(payload);
 
     if (!headerMembers.isEmpty() || typeHeaderValue != null) {
       writer.write("var headers = new Headers();");
@@ -281,14 +301,14 @@ public final class KafkaGenerator implements Runnable {
               "}",
               () ->
                   writer.write(
-                      "headers.Add($L, Encoding.UTF8.GetBytes($L));",
+                      "headers.Add($L, $L);",
                       CSharpNaming.formatString(headerName),
-                      headerValueExpression(model, hm, local)));
+                      headerBytesExpression(model, hm, local)));
         } else {
           writer.write(
-              "headers.Add($L, Encoding.UTF8.GetBytes($L));",
+              "headers.Add($L, $L);",
               CSharpNaming.formatString(headerName),
-              headerValueExpression(model, hm, objExpr + "." + prop));
+              headerBytesExpression(model, hm, objExpr + "." + prop));
         }
       }
       writer.write(
@@ -344,7 +364,14 @@ public final class KafkaGenerator implements Runnable {
         typeName,
         ifaceName,
         topics,
-        () -> codecShapes.forEach(this::writeCodecField),
+        () -> {
+          codecShapes.forEach(this::writePayloadCodecField);
+          codecShapes.stream()
+              .map(Shape::asStructureShape)
+              .flatMap(Optional::stream)
+              .filter(this::hasHeaderMembers)
+              .forEach(this::writeHeaderDeserializer);
+        },
         () -> {
           for (int i = 0; i < produces.size(); i++) {
             KafkaBindings.Produce produce = produces.get(i);
@@ -356,9 +383,11 @@ public final class KafkaGenerator implements Runnable {
                 "{",
                 "}",
                 () -> {
-                  writer.write(
-                      "var command = $L.Deserialize(result.Message.Value);",
-                      codecFieldName(produce.commandType()));
+                  writePayloadDeserialization(
+                      produce.command(),
+                      "command",
+                      "result.Message.Value",
+                      "result.Message.Headers");
                   writer.write("await _handler.Handle$LAsync(command, ct);", produce.opName());
                 });
           }
@@ -404,12 +433,19 @@ public final class KafkaGenerator implements Runnable {
             .distinct()
             .sorted()
             .collect(Collectors.toList());
-    Set<Shape> codecShapes = eventCodecShapes(consumes, model, discrimination);
+    Set<Shape> codecShapes = eventCodecShapes(consumes, model);
     writeConsumerScaffold(
         typeName,
         ifaceName,
         topics,
-        () -> codecShapes.forEach(this::writeCodecField),
+        () -> {
+          codecShapes.forEach(this::writePayloadCodecField);
+          codecShapes.stream()
+              .map(Shape::asStructureShape)
+              .flatMap(Optional::stream)
+              .filter(this::hasHeaderMembers)
+              .forEach(this::writeHeaderDeserializer);
+        },
         () -> {
           for (int i = 0; i < consumes.size(); i++) {
             KafkaBindings.Consume consume = consumes.get(i);
@@ -428,13 +464,39 @@ public final class KafkaGenerator implements Runnable {
     switch (discrimination) {
       case ENVELOPE -> {
         writer.write(
-            "var union = $L.Deserialize(result.Message.Value);",
-            codecFieldName(consume.unionType()));
-        for (MemberShape member : consume.members()) {
+            "using var envelope = System.Text.Json.JsonDocument.Parse(result.Message.Value);");
+        writer.write(
+            "if (envelope.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)");
+        writer.write(
+            "    throw new System.Text.Json.JsonException(\"Expected an event envelope"
+                + " object.\");");
+        writer.write("var properties = envelope.RootElement.EnumerateObject();");
+        writer.write("if (!properties.MoveNext())");
+        writer.write(
+            "    throw new System.Text.Json.JsonException(\"Expected one event envelope"
+                + " member.\");");
+        writer.write("var property = properties.Current;");
+        writer.write("if (properties.MoveNext())");
+        writer.write(
+            "    throw new System.Text.Json.JsonException(\"Expected one event envelope"
+                + " member.\");");
+        writer.write("var eventValue = Encoding.UTF8.GetBytes(property.Value.GetRawText());");
+        for (int i = 0; i < consume.members().size(); i++) {
+          MemberShape member = consume.members().get(i);
           String variant = CSharpNaming.typeName(member.getMemberName());
-          String local = CSharpNaming.parameterName(member.getMemberName());
-          writer.write("if (union is $L.$L $L)", consume.unionType(), variant, local);
-          writer.write("    await _handler.Handle$LAsync($L.Value, ct);", variant, local);
+          StructureShape event = model.expectShape(member.getTarget(), StructureShape.class);
+          writer.write(
+              "$L (property.Name == $L)",
+              i == 0 ? "if" : "else if",
+              CSharpNaming.formatString(eventWireName(member)));
+          writer.openBlock(
+              "{",
+              "}",
+              () -> {
+                writePayloadDeserialization(
+                    event, "message", "eventValue", "result.Message.Headers");
+                writer.write("await _handler.Handle$LAsync(message, ct);", variant);
+              });
         }
       }
       case HEADER -> {
@@ -458,9 +520,11 @@ public final class KafkaGenerator implements Runnable {
                     "{",
                     "}",
                     () -> {
-                      writer.write(
-                          "var message = $L.Deserialize(result.Message.Value);",
-                          codecFieldName(qualified(model, member)));
+                      writePayloadDeserialization(
+                          model.expectShape(member.getTarget(), StructureShape.class),
+                          "message",
+                          "result.Message.Value",
+                          "result.Message.Headers");
                       writer.write("await _handler.Handle$LAsync(message, ct);", variant);
                     });
               }
@@ -471,9 +535,11 @@ public final class KafkaGenerator implements Runnable {
         // unambiguous by construction.
         MemberShape member = consume.members().get(0);
         String variant = CSharpNaming.typeName(member.getMemberName());
-        writer.write(
-            "var message = $L.Deserialize(result.Message.Value);",
-            codecFieldName(qualified(model, member)));
+        writePayloadDeserialization(
+            model.expectShape(member.getTarget(), StructureShape.class),
+            "message",
+            "result.Message.Value",
+            "result.Message.Headers");
         writer.write("await _handler.Handle$LAsync(message, ct);", variant);
       }
     }
@@ -587,9 +653,37 @@ public final class KafkaGenerator implements Runnable {
     return (i < 0 ? qualifiedType : qualifiedType.substring(i + 1)) + "Codec";
   }
 
-  /** Emits one JSON codec field for a generated shape. */
-  private void writeCodecField(Shape shape) {
+  /** Emits a whole-shape codec, or a structure projection that excludes @kafkaHeader members. */
+  private void writePayloadCodecField(Shape shape) {
     String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(shape));
+    Optional<StructureShape> structure = shape.asStructureShape();
+    if (structure.isPresent() && hasHeaderMembers(structure.get())) {
+      String schema = SchemaGenerator.schemaClassName(context, shape);
+      String builder = schema + ".Builder";
+      String structSchemaField = structSchemaFieldName(type);
+      String excluded =
+          headerMembers(structure.get()).stream()
+              .map(member -> "member.Name != " + CSharpNaming.formatString(member.getMemberName()))
+              .collect(Collectors.joining(" && "));
+      writer.write(
+          "private static readonly IStructSchema<$L, $L> $L ="
+              + " (IStructSchema<$L, $L>)$L.Schema;",
+          type,
+          builder,
+          structSchemaField,
+          type,
+          builder,
+          schema);
+      writer.write(
+          "private static readonly IProjectionCodec<$L, $L> $L ="
+              + " JsonCodecFactory.Default.FromProjection(Schemas.Project($L, member => $L));",
+          type,
+          builder,
+          codecFieldName(type),
+          structSchemaField,
+          excluded);
+      return;
+    }
     writer.write(
         "private static readonly ICodec<$L> $L = JsonCodecFactory.Default.FromSchema($L.Schema);",
         type,
@@ -597,20 +691,102 @@ public final class KafkaGenerator implements Runnable {
         SchemaGenerator.schemaClassName(context, shape));
   }
 
-  /** The payload shapes an event-side participant needs codecs for, per discrimination. */
-  private Set<Shape> eventCodecShapes(
-      List<KafkaBindings.Consume> consumes, Model model, EventDiscrimination discrimination) {
+  /** The event payload shapes needed for serialization and header hydration. */
+  private Set<Shape> eventCodecShapes(List<KafkaBindings.Consume> consumes, Model model) {
     Set<Shape> shapes = new LinkedHashSet<>();
     for (KafkaBindings.Consume consume : consumes) {
-      if (discrimination == EventDiscrimination.ENVELOPE) {
-        shapes.add(consume.union());
-      } else {
-        for (MemberShape member : consume.members()) {
-          shapes.add(model.expectShape(member.getTarget()));
-        }
+      for (MemberShape member : consume.members()) {
+        shapes.add(model.expectShape(member.getTarget()));
       }
     }
     return shapes;
+  }
+
+  private void writePayloadDeserialization(
+      StructureShape payload, String local, String valueExpr, String headersExpr) {
+    String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(payload));
+    if (hasHeaderMembers(payload)) {
+      writer.write(
+          "var $L = $L($L, $L);", local, deserializeMethodName(type), valueExpr, headersExpr);
+    } else {
+      writer.write("var $L = $L.Deserialize($L);", local, codecFieldName(type), valueExpr);
+    }
+  }
+
+  private void writeHeaderDeserializer(StructureShape payload) {
+    String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(payload));
+    String structSchemaField = structSchemaFieldName(type);
+    writer.write("");
+    writer.write(
+        "private static $L $L(byte[] value, Headers? headers)", type, deserializeMethodName(type));
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write("var builder = $L.CreateTypedBuilder();", structSchemaField);
+          writer.write("$L.ReadInto(value, builder);", codecFieldName(type));
+          for (MemberShape member : headerMembers(payload)) {
+            String bytes = CSharpNaming.parameterName(member.getMemberName()) + "Bytes";
+            String headerName = kafkaHeaderName(member);
+            if (ShapeSupport.isRequired(member)) {
+              writer.write(
+                  "if (headers is null || !headers.TryGetLastBytes($L, out var $L))",
+                  CSharpNaming.formatString(headerName),
+                  bytes);
+              writer.write(
+                  "    throw new MissingRequiredMemberException($L);",
+                  CSharpNaming.formatString(member.getMemberName()));
+              writeHeaderAssignment(member, bytes);
+            } else {
+              writer.write(
+                  "if (headers is { } && headers.TryGetLastBytes($L, out var $L))",
+                  CSharpNaming.formatString(headerName),
+                  bytes);
+              writer.openBlock("{", "}", () -> writeHeaderAssignment(member, bytes));
+            }
+          }
+          writer.write("return $L.Build(builder);", structSchemaField);
+        });
+  }
+
+  private void writeHeaderAssignment(MemberShape member, String bytesExpression) {
+    Shape target = context.model().expectShape(member.getTarget());
+    String prop = CSharpNaming.propertyName(member.getMemberName());
+    if (target.getType() == ShapeType.BLOB) {
+      writer.write("builder.$L = $L;", prop, bytesExpression);
+      return;
+    }
+    String text = CSharpNaming.parameterName(member.getMemberName()) + "Text";
+    writer.write("var $L = Encoding.UTF8.GetString($L);", text, bytesExpression);
+    writer.write("builder.$L = $L;", prop, headerParseExpression(target, text));
+  }
+
+  private List<MemberShape> headerMembers(StructureShape payload) {
+    return payload.members().stream()
+        .filter(member -> member.hasTrait(TraitIds.KAFKA_HEADER))
+        .sorted(Comparator.comparing(MemberShape::getMemberName))
+        .collect(Collectors.toList());
+  }
+
+  private boolean hasHeaderMembers(StructureShape payload) {
+    return payload.members().stream().anyMatch(member -> member.hasTrait(TraitIds.KAFKA_HEADER));
+  }
+
+  private String structSchemaFieldName(String qualifiedType) {
+    int i = qualifiedType.lastIndexOf('.');
+    return (i < 0 ? qualifiedType : qualifiedType.substring(i + 1)) + "StructSchema";
+  }
+
+  private String deserializeMethodName(String qualifiedType) {
+    int i = qualifiedType.lastIndexOf('.');
+    return "Deserialize" + (i < 0 ? qualifiedType : qualifiedType.substring(i + 1));
+  }
+
+  private String eventWireName(MemberShape member) {
+    return member
+        .getTrait(JsonNameTrait.class)
+        .map(JsonNameTrait::getValue)
+        .orElse(member.getMemberName());
   }
 
   /** Reads the eventDiscrimination setting from the service's @kafkaJson trait. */
@@ -645,12 +821,64 @@ public final class KafkaGenerator implements Runnable {
     };
   }
 
-  private String headerValueExpression(Model model, MemberShape member, String valueExpr) {
-    ShapeType type = model.expectShape(member.getTarget()).getType();
-    return switch (type) {
+  private String headerBytesExpression(Model model, MemberShape member, String valueExpr) {
+    Shape target = model.expectShape(member.getTarget());
+    if (target.getType() == ShapeType.BLOB) return valueExpr;
+    return "Encoding.UTF8.GetBytes(" + headerTextExpression(target, valueExpr) + ")";
+  }
+
+  private String headerTextExpression(Shape target, String valueExpr) {
+    return switch (target.getType()) {
       case STRING -> valueExpr;
       case ENUM -> valueExpr + ".Value";
-      default -> valueExpr + ".ToString()";
+      case INT_ENUM ->
+          "((int)" + valueExpr + ").ToString(System.Globalization.CultureInfo.InvariantCulture)";
+      case BOOLEAN -> valueExpr + " ? \"true\" : \"false\"";
+      case FLOAT, DOUBLE ->
+          valueExpr + ".ToString(\"R\", System.Globalization.CultureInfo.InvariantCulture)";
+      case TIMESTAMP ->
+          valueExpr
+              + ".ToUniversalTime().ToString(\"O\","
+              + " System.Globalization.CultureInfo.InvariantCulture)";
+      case BYTE, SHORT, INTEGER, LONG, BIG_INTEGER, BIG_DECIMAL ->
+          valueExpr + ".ToString(null, System.Globalization.CultureInfo.InvariantCulture)";
+      default ->
+          throw new IllegalArgumentException(
+              "@kafkaHeader only supports simple types and blobs; "
+                  + target.getId()
+                  + " is "
+                  + target.getType());
+    };
+  }
+
+  private String headerParseExpression(Shape target, String textExpr) {
+    String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target));
+    String invariant = "System.Globalization.CultureInfo.InvariantCulture";
+    return switch (target.getType()) {
+      case STRING -> textExpr;
+      case ENUM -> "new " + type + "(" + textExpr + ")";
+      case INT_ENUM -> "(" + type + ")int.Parse(" + textExpr + ", " + invariant + ")";
+      case BOOLEAN -> "bool.Parse(" + textExpr + ")";
+      case BYTE -> "sbyte.Parse(" + textExpr + ", " + invariant + ")";
+      case SHORT -> "short.Parse(" + textExpr + ", " + invariant + ")";
+      case INTEGER -> "int.Parse(" + textExpr + ", " + invariant + ")";
+      case LONG -> "long.Parse(" + textExpr + ", " + invariant + ")";
+      case FLOAT -> "float.Parse(" + textExpr + ", " + invariant + ")";
+      case DOUBLE -> "double.Parse(" + textExpr + ", " + invariant + ")";
+      case BIG_INTEGER -> "System.Numerics.BigInteger.Parse(" + textExpr + ", " + invariant + ")";
+      case BIG_DECIMAL -> "decimal.Parse(" + textExpr + ", " + invariant + ")";
+      case TIMESTAMP ->
+          "System.DateTimeOffset.Parse("
+              + textExpr
+              + ", "
+              + invariant
+              + ", System.Globalization.DateTimeStyles.RoundtripKind)";
+      default ->
+          throw new IllegalArgumentException(
+              "@kafkaHeader only supports simple types and blobs; "
+                  + target.getId()
+                  + " is "
+                  + target.getType());
     };
   }
 }

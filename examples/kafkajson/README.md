@@ -64,8 +64,9 @@ the protocol's `eventDiscrimination` setting:
   `bote-type` Kafka header.
 - `NONE` writes a bare payload on a single-event channel.
 
-Members with `@kafkaKey` become the Kafka message key, while members with
-`@kafkaHeader` become Kafka headers.
+Members with `@kafkaKey` become the Kafka message key. Members with
+`@kafkaHeader` travel only in Kafka headers: generated producers omit them from
+the JSON value, and generated consumers restore them before calling the handler.
 
 With `SmithyGenerateDependencyInjection=true` in the device project,
 NSmithy.Bote also generates Microsoft.Extensions hosting registrations.

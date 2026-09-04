@@ -102,7 +102,9 @@ union LightMeasuredStream {
 ```
 
 - `@kafkaKey` marks the member used as the Kafka message key.
-- `@kafkaHeader(name: "...")` binds a member to a Kafka message header.
+- `@kafkaHeader(name: "...")` binds a simple or blob member to a Kafka message
+  header. Producers omit it from JSON, and consumers hydrate it from the last
+  header with that name before constructing the message.
 - Topic provisioning is not part of the contract. Attach
   `bote.infra#kafkaTopicConfig` (partitions, replication, retention) with
   `apply` from a separately deployable infrastructure model owned by the
@@ -142,9 +144,10 @@ consumer must agree.
 service StreetlightDevice { ... }
 ```
 
-The protocol defines `@kafkaHeader` members to travel only as Kafka headers,
-never inside the JSON value (see the limitation below for NSmithy's current
-behavior).
+`@kafkaHeader` members travel only as Kafka headers, never inside the JSON
+value. Strings and other simple values use UTF-8 text with invariant formatting;
+blobs use their bytes directly. A missing required header fails deserialization
+like any other missing required member.
 
 ## Generated Surfaces
 
@@ -349,10 +352,8 @@ project without becoming a dependency of the generated model.
 
 ## Current Limitations
 
-- `@kafkaHeader` members are serialized into the JSON value in addition to the
-  Kafka header; the protocol specifies headers only.
-- `eventDiscrimination` `HEADER` and `NONE` are implemented in the generator
-  but only `ENVELOPE` is exercised by the example.
+- The runnable example exercises `ENVELOPE`; `HEADER` and `NONE` are covered by
+  generator tests.
 - The consume loop swallows non-fatal `ConsumeException`s; there is no retry,
   dead-letter, or error callback mechanism.
 - `bote#kafkaAvro` and `bote#kafkaProtobuf` are defined by bote but have no

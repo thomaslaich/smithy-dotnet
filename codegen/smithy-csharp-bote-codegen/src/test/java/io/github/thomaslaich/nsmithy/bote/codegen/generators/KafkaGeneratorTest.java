@@ -66,11 +66,16 @@ final class KafkaGeneratorTest {
 
       @streaming
       union DeviceEvents {
+          @jsonName("measured-event")
           measured: Measured
       }
 
       @event
       structure Measured {
+          @required
+          @kafkaHeader(name: "source")
+          source: String
+
           lumens: Integer
       }
 
@@ -96,6 +101,47 @@ final class KafkaGeneratorTest {
     assertTrue(generated.contains("var key = command.DeviceId;"), generated);
     assertTrue(
         generated.contains("headers.Add(\"trace-id\", Encoding.UTF8.GetBytes(traceId));"),
+        generated);
+    assertTrue(generated.contains("member => member.Name != \"traceId\""), generated);
+    assertTrue(generated.contains("member => member.Name != \"source\""), generated);
+    assertTrue(
+        generated.contains(
+            "var value = WrapEvent(\"measured-event\", MeasuredCodec.Serialize(message));"),
+        generated);
+    assertTrue(generated.contains("builder.TraceId = traceIdText;"), generated);
+    assertTrue(generated.contains("builder.Source = sourceText;"), generated);
+    assertTrue(
+        generated.contains("throw new MissingRequiredMemberException(\"source\");"), generated);
+    assertTrue(
+        generated.contains("DeserializeMeasured(eventValue, result.Message.Headers)"), generated);
+  }
+
+  @Test
+  void hydratesHeadersWithHeaderEventDiscrimination() throws Exception {
+    String generated =
+        renderKafka(
+            MODEL.replace(
+                "@kafkaJson\nservice", "@kafkaJson(eventDiscrimination: \"HEADER\")\nservice"));
+
+    assertTrue(generated.contains("var value = MeasuredCodec.Serialize(message);"), generated);
+    assertTrue(
+        generated.contains("headers.Add(\"bote-type\", Encoding.UTF8.GetBytes(\"measured\"));"),
+        generated);
+    assertTrue(
+        generated.contains("DeserializeMeasured(result.Message.Value, result.Message.Headers)"),
+        generated);
+  }
+
+  @Test
+  void hydratesHeadersWithNoEventDiscrimination() throws Exception {
+    String generated =
+        renderKafka(
+            MODEL.replace(
+                "@kafkaJson\nservice", "@kafkaJson(eventDiscrimination: \"NONE\")\nservice"));
+
+    assertTrue(generated.contains("var value = MeasuredCodec.Serialize(message);"), generated);
+    assertTrue(
+        generated.contains("DeserializeMeasured(result.Message.Value, result.Message.Headers)"),
         generated);
   }
 
@@ -137,7 +183,11 @@ final class KafkaGeneratorTest {
   }
 
   private String renderKafka() throws Exception {
-    RenderContext rendered = context();
+    return renderKafka(MODEL);
+  }
+
+  private String renderKafka(String modelText) throws Exception {
+    RenderContext rendered = context(modelText);
     var writer = new CSharpWriter("Example.Example.Messaging");
 
     new KafkaGenerator(rendered.context(), writer, rendered.service()).run();
@@ -146,10 +196,14 @@ final class KafkaGeneratorTest {
   }
 
   private RenderContext context() throws Exception {
+    return context(MODEL);
+  }
+
+  private RenderContext context(String modelText) throws Exception {
     Model model =
         Model.assembler()
             .discoverModels(getClass().getClassLoader())
-            .addUnparsedModel("model.smithy", MODEL)
+            .addUnparsedModel("model.smithy", modelText)
             .assemble()
             .unwrap();
     CSharpSettings settings =
