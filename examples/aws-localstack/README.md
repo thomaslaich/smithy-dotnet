@@ -8,10 +8,48 @@ This example exercises one generated AWS client for each AWS HTTP protocol suppo
 - AWS Query: SQS `ListQueues`
 - EC2 Query: EC2 `DescribeRegions`
 
-On startup, an init hook (`init/ready.d/seed.sh`) seeds a little data into each
-service so the `List*` calls return populated responses, so you should see:
+The `client` project contains the generated clients. On startup, the LocalStack
+init hook at `init/ready.d/seed.sh` adds sample resources so the `List*` calls
+return populated responses.
 
+## Prerequisites
+
+- .NET 10 SDK
+- `just`, or the repository toolchain through `devenv shell`
+- Docker
+
+The container image is pinned to `localstack/localstack:3.8`, the last community
+release that runs DynamoDB, S3, and Lambda without a `LOCALSTACK_AUTH_TOKEN`.
+
+## Build
+
+From the repository root:
+
+```bash
+just build
+just pack
+just refresh-examples
 ```
+
+## Run
+
+Start LocalStack:
+
+```bash
+docker compose -f examples/aws-localstack/compose.yaml up
+```
+
+Alternatively, run `devenv up` from `examples/aws-localstack`.
+
+In another shell, run the client from the repository root:
+
+```bash
+dotnet run --project examples/aws-localstack/client
+```
+
+Expected output:
+
+```text
 AWS JSON / DynamoDB ListTables: 2 table(s) [Authors, Books]
 restXml / S3 ListBuckets: 2 bucket(s) [nsmithy-demo-assets, nsmithy-demo-logs]
 restJson1 / Lambda ListFunctions: 1 function(s) [nsmithy-greeter]
@@ -19,26 +57,18 @@ AWS Query / SQS ListQueues: 2 queue(s) [...nsmithy-demo-events, ...nsmithy-demo-
 EC2 Query / EC2 DescribeRegions: one or more LocalStack regions
 ```
 
-Run it against LocalStack (runs in Docker, so a running Docker daemon is
-required — `devenv up` brings the container up via `compose.yaml`). The
-container image is pinned to `localstack/localstack:3.8`, the last community
-release that runs DynamoDB/S3/Lambda without a `LOCALSTACK_AUTH_TOKEN` license:
+## Stop
+
+Stop LocalStack with Ctrl+C, then remove the Compose resources:
 
 ```bash
-just pack
-cd examples/aws-localstack
-devenv up   # or: docker compose up
+docker compose -f examples/aws-localstack/compose.yaml down
 ```
 
-In another shell:
+## Generated client configuration
 
-```bash
-cd examples/aws-localstack
-devenv shell
-dotnet run --project client
-```
-
-The generated clients take the endpoint directly and a config object for auth schemes:
+The generated clients take the endpoint directly and a configuration object for
+authentication schemes:
 
 ```csharp
 using var client = new DynamoDB20120810Client(

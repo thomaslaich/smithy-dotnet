@@ -1,4 +1,4 @@
-# NSmithy Native gRPC Example
+# gRPC unary example
 
 A library management service built with `alloy.proto#grpc` and served over
 NSmithy's native gRPC stack. There is no protoc, `Grpc.Tools`, `Grpc.Net`, or
@@ -11,13 +11,20 @@ The model exercises the proto codec's feature surface: `@protoIndex` field
 numbers, `@protoNumType` (`uint32`, `fixed64`), `@sparse` maps,
 `@protoInlinedOneOf` unions, `intEnum`, and string enums.
 
+## Projects
+
 - `contracts`: the Smithy model, packaged as a contracts project.
 - `server`: ASP.NET Core server on Kestrel HTTP/2 that maps the generated gRPC
   endpoints via `MapLibraryService()`.
 - `client`: generated typed client that selects gRPC with
   `Protocol = new GrpcProtocol()`.
 
-## Run
+## Prerequisites
+
+- .NET 10 SDK
+- `just`, or the repository toolchain through `devenv shell`
+
+## Build
 
 From the repository root, build and pack local packages:
 
@@ -27,24 +34,24 @@ just pack
 just refresh-examples
 ```
 
+## Run
+
 Start the server (listens on `http://localhost:5001`, HTTP/2 cleartext):
 
 ```bash
-cd examples/grpc/unary
-dotnet run --project server
+dotnet run --project examples/grpc/unary/server
 ```
 
 In another shell, run the client:
 
 ```bash
-cd examples/grpc/unary
-dotnet run --project client -- http://localhost:5001
+dotnet run --project examples/grpc/unary/client -- http://localhost:5001
 ```
 
 The client exercises every operation: get, create, list with a
 `@protoInlinedOneOf` filter, search, batch upload, and delete.
 
-## Interop
+## Interoperability
 
 NSmithy peers speak standard gRPC, so either side can be swapped for a
 conventional `Grpc.Net` implementation generated from the emitted `.proto`

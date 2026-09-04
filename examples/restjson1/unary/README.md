@@ -1,4 +1,4 @@
-# NSmithy restJson1 Example
+# restJson1 unary example
 
 A Weather service built with `aws.protocols#restJson1`. The model is adapted from
 the [Smithy quickstart](https://smithy.io/2.0/quickstart.html) and demonstrates
@@ -6,15 +6,24 @@ resources, pagination, errors, retries (`@retryable`), HTTP binding traits, and
 end-to-end OpenTelemetry observability using the AWS REST JSON protocol. The
 same generated operations and Smithy prompt templates are also exposed over MCP.
 
+## Projects
+
 - `contracts`: the Smithy model, packaged as a contracts project.
-- `server`: generated ASP.NET Core endpoints and an MCP stdio server backed by a handwritten `IWeatherServiceHandler` implementation that supports real server-side pagination.
-- `client`: generated typed client that pages through all cities using the `nextToken` continuation token.
+- `server`: generated ASP.NET Core endpoints and an MCP stdio server backed by a
+  handwritten `IWeatherServiceHandler` with real server-side pagination.
+- `client`: generated typed client that pages through all cities using the
+  `nextToken` continuation token.
 
 The server and client reference the contracts project directly. No
 `smithy-build.json` is needed — NSmithy synthesizes one from the model sources
 and Maven dependencies declared in the contracts project.
 
-## Run
+## Prerequisites
+
+- .NET 10 SDK
+- `just`, or the repository toolchain through `devenv shell`
+
+## Build
 
 From the repository root, build and pack local packages:
 
@@ -24,18 +33,18 @@ just pack
 just refresh-examples
 ```
 
+## Run
+
 Start the server:
 
 ```bash
-cd examples/restjson1/unary
-dotnet run --project server --urls http://localhost:5000
+dotnet run --project examples/restjson1/unary/server --urls http://localhost:5000
 ```
 
 In another shell, run the client:
 
 ```bash
-cd examples/restjson1/unary
-dotnet run --project client -- http://localhost:5000
+dotnet run --project examples/restjson1/unary/client -- http://localhost:5000
 ```
 
 With the server running, open in your browser:
@@ -136,7 +145,7 @@ names the member and the constraint it failed:
 curl -i 'http://localhost:5000/cities/SEA%21'   # "SEA!"
 ```
 
-```
+```http
 HTTP/1.1 400 Bad Request
 X-Amzn-Errortype: ValidationException
 
@@ -153,7 +162,7 @@ modeled as `Integer`:
 curl -i 'http://localhost:5000/cities?pageSize=abc'
 ```
 
-```
+```http
 HTTP/1.1 400 Bad Request
 X-Amzn-Errortype: SerializationException
 
@@ -167,7 +176,7 @@ before the operation runs:
 curl -i -H 'Accept: application/xml' http://localhost:5000/current-time
 ```
 
-```
+```http
 HTTP/1.1 406 Not Acceptable
 X-Amzn-Errortype: NotAcceptableException
 
@@ -182,7 +191,7 @@ handler and returns the error the operation models — a space is inside
 curl -i 'http://localhost:5000/cities/%20'
 ```
 
-```
+```http
 HTTP/1.1 400 Bad Request
 X-Amzn-Errortype: NoSuchResource
 
