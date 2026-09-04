@@ -205,9 +205,13 @@ await producer.DimLightAsync(
     new DimLightInput(Percentage: 50, StreetlightId: "streetlight-001"), ct);
 ```
 
-Consumer group membership, offsets, and delivery semantics are runtime
-concerns configured through Confluent's `ConsumerConfig` (`GroupId`,
-`AutoOffsetReset`, and so on); they are not part of the model.
+Consumer group membership and the initial offset policy remain runtime concerns
+configured through Confluent's `ConsumerConfig` (`GroupId`, `AutoOffsetReset`,
+and so on). Generated consumers enforce at-least-once handling: they enable
+automatic commits but disable automatic offset storage, then store each offset
+only after its handler completes successfully. A handler failure therefore
+stops the consumer without making that message eligible for commit. Eager
+at-most-once acknowledgment is not supported.
 
 ## Kafka Infrastructure Generation
 

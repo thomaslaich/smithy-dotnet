@@ -510,9 +510,14 @@ public final class KafkaGenerator implements Runnable {
               "{",
               "}",
               () -> {
+                writer.write("System.ArgumentNullException.ThrowIfNull(config);");
+                writer.write("var consumerConfig = new Dictionary<string, string>();");
+                writer.write("foreach (var entry in config)");
+                writer.write("    consumerConfig[entry.Key] = entry.Value;");
+                writer.write("consumerConfig[\"enable.auto.commit\"] = \"true\";");
+                writer.write("consumerConfig[\"enable.auto.offset.store\"] = \"false\";");
                 writer.write(
-                    "_consumer = new ConsumerBuilder<string?, byte[]>(config ?? throw new"
-                        + " System.ArgumentNullException(nameof(config))).Build();");
+                    "_consumer = new ConsumerBuilder<string?, byte[]>(consumerConfig).Build();");
                 writer.write(
                     "_handler = handler ?? throw new"
                         + " System.ArgumentNullException(nameof(handler));");
@@ -542,6 +547,7 @@ public final class KafkaGenerator implements Runnable {
                           () -> {
                             writer.write("var result = _consumer.Consume(cancellationToken);");
                             writer.write("await DispatchAsync(result, cancellationToken);");
+                            writer.write("_consumer.StoreOffset(result);");
                           });
                       writer.write(
                           "catch (System.OperationCanceledException) when"
