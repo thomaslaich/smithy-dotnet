@@ -1,31 +1,4 @@
-/*
- * Renders opt-in Microsoft.Extensions hosting registrations for a @kafkaJson service.
- *
- * Emits a `{Service}KafkaServiceCollectionExtensions` class:
- *
- *   Add{Service}Producer(config)         registers {Service}Producer as a singleton
- *                                        (Confluent producers are thread-safe and
- *                                        meant to be shared)
- *   Add{Service}CommandConsumer(config)  registers a BackgroundService that runs
- *                                        {Service}CommandConsumer for the host
- *                                        lifetime; requires a registered
- *                                        I{Service}CommandHandler
- *   Add{Service}EventConsumer(config)    same for {Service}EventConsumer /
- *                                        I{Service}EventHandler
- *
- * Handlers are resolved from a new service scope per message (via a generated
- * scoped adapter), so implementations may be registered with any lifetime and
- * take scoped dependencies such as a DbContext. Handler exceptions propagate out
- * of the consume loop and stop the hosted service; retry and dead-lettering are
- * left to the handler.
- *
- * Because this code depends on Microsoft.Extensions.DependencyInjection /
- * Hosting — dependencies NSmithy does not force on plain console apps — it lives
- * in its own `{Service}Kafka.DependencyInjection.g.cs` file that is only
- * produced when the `generateDependencyInjection` plugin setting is enabled
- * (driven by the `SmithyGenerateDependencyInjection` MSBuild property), the same
- * gating as the HTTP client DI file.
- */
+/** Generates opt-in hosting registrations with one dependency-injection scope per message. */
 package io.github.thomaslaich.nsmithy.bote.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.bote.codegen.RuntimeTypes;
@@ -119,9 +92,7 @@ public final class KafkaDependencyInjectionGenerator implements Runnable {
     }
   }
 
-  // ===========================================================================
   // IServiceCollection extensions
-  // ===========================================================================
 
   private void writeExtensions(
       String svc, List<KafkaBindings.Produce> produces, List<KafkaBindings.Consume> consumes) {
@@ -185,14 +156,7 @@ public final class KafkaDependencyInjectionGenerator implements Runnable {
         });
   }
 
-  // ===========================================================================
   // Scoped handler adapters
-  // ===========================================================================
-
-  /**
-   * Emits an adapter implementing the handler interface that resolves the registered handler in a
-   * new service scope per call.
-   */
   private void writeScopedHandler(String adapterName, String ifaceName, Runnable methods) {
     writer.write("internal sealed class $L : $L", adapterName, ifaceName);
     writer.openBlock(
@@ -227,11 +191,7 @@ public final class KafkaDependencyInjectionGenerator implements Runnable {
         });
   }
 
-  // ===========================================================================
   // Hosted services
-  // ===========================================================================
-
-  /** Emits a BackgroundService that owns the consumer and runs it for the host lifetime. */
   private void writeConsumerService(String consumerName) {
     String serviceName = consumerName + "Service";
     writer.write("internal sealed class $L : BackgroundService", serviceName);
@@ -264,16 +224,13 @@ public final class KafkaDependencyInjectionGenerator implements Runnable {
               "{",
               "}",
               () -> {
-                // The consumer's DisposeAsync completes synchronously.
                 writer.write("_consumer.DisposeAsync().AsTask().GetAwaiter().GetResult();");
                 writer.write("base.Dispose();");
               });
         });
   }
 
-  // ===========================================================================
   // Helpers
-  // ===========================================================================
 
   private String qualified(Model model, MemberShape member) {
     return CSharpSymbolProvider.qualified(

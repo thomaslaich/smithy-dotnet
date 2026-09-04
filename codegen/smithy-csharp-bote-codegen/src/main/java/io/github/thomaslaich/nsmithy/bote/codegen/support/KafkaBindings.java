@@ -1,11 +1,4 @@
-/*
- * Reads the Kafka capability bindings of a @kafkaJson service from the model.
- *
- * Shared by KafkaGenerator (the SDK) and KafkaDependencyInjectionGenerator (the
- * hosting extensions): both need the same view of which operations are
- * @kafkaProduce / @kafkaConsume capabilities and which C# types their payloads
- * map to.
- */
+/** Reads the Kafka capability bindings shared by SDK and hosting generators. */
 package io.github.thomaslaich.nsmithy.bote.codegen.support;
 
 import io.github.thomaslaich.nsmithy.bote.codegen.TraitIds;
@@ -31,23 +24,11 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 @SmithyInternalApi
 public final class KafkaBindings {
 
-  /** A @kafkaProduce operation: a command payload written to a topic. */
-  public record Produce(
-      String opName, // C# PascalCase operation name
-      String topic,
-      StructureShape command, // the (dedicated) command input structure
-      String commandType // qualified C# type
-      ) {}
+  public record Produce(String opName, String topic, StructureShape command, String commandType) {}
 
-  /** A @kafkaConsume operation: a @streaming union of @event payloads on a topic. */
   public record Consume(
-      String topic,
-      UnionShape union,
-      String unionType, // qualified C# type
-      List<MemberShape> members // sorted union members
-      ) {}
+      String topic, UnionShape union, String unionType, List<MemberShape> members) {}
 
-  /** Deployable desired state attached to a Kafka capability operation. */
   public record TopicConfiguration(
       String topic,
       Integer partitions,
@@ -56,7 +37,6 @@ public final class KafkaBindings {
 
   private KafkaBindings() {}
 
-  /** The service's operations in stable (shape id) order. */
   public static List<OperationShape> operations(Model model, ServiceShape service) {
     return TopDownIndex.of(model).getContainedOperations(service).stream()
         .sorted(Comparator.comparing(op -> op.getId().toString()))
