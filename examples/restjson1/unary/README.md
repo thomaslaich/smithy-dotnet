@@ -25,8 +25,8 @@ and Maven dependencies declared in the contracts project.
 
 ## Build
 
-Run all commands in this README from the repository root. First build the local
-packages and examples:
+Run all commands in this README from `examples/restjson1/unary`. First build the
+local packages and examples:
 
 ```bash
 just build
@@ -39,13 +39,13 @@ just refresh-examples
 Start the server:
 
 ```bash
-dotnet run --project examples/restjson1/unary/server --urls http://localhost:5000
+dotnet run --project server --urls http://localhost:5000
 ```
 
 In another shell, run the client:
 
 ```bash
-dotnet run --project examples/restjson1/unary/client -- http://localhost:5000
+dotnet run --project client -- http://localhost:5000
 ```
 
 With the server running, open in your browser:
@@ -71,7 +71,7 @@ curl -i http://localhost:5000/cities/SEA/flaky-forecast   # 503s two of every th
 Run the same Weather service as an MCP stdio server by passing `--mcp`:
 
 ```bash
-dotnet run --no-build --project examples/restjson1/unary/server -- --mcp
+dotnet run --no-build --project server -- --mcp
 ```
 
 This is a separate runtime mode: the process hosts MCP over stdio and does not

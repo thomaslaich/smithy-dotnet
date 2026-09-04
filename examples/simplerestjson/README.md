@@ -23,8 +23,8 @@ and Maven dependencies declared in the contracts project.
 
 ## Build
 
-Run all commands in this README from the repository root. First build the local
-packages and examples:
+Run all commands in this README from `examples/simplerestjson`. First build the
+local packages and examples:
 
 ```bash
 just build
@@ -37,13 +37,13 @@ just refresh-examples
 Start the server:
 
 ```bash
-dotnet run --project examples/simplerestjson/server --urls http://localhost:5000
+dotnet run --project server --urls http://localhost:5000
 ```
 
 In another shell, run the client:
 
 ```bash
-dotnet run --project examples/simplerestjson/client -- http://localhost:5000
+dotnet run --project client -- http://localhost:5000
 ```
 
 With the server running, open in your browser:

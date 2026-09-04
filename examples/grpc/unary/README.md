@@ -26,8 +26,8 @@ numbers, `@protoNumType` (`uint32`, `fixed64`), `@sparse` maps,
 
 ## Build
 
-Run all commands in this README from the repository root. First build the local
-packages and examples:
+Run all commands in this README from `examples/grpc/unary`. First build the
+local packages and examples:
 
 ```bash
 just build
@@ -40,13 +40,13 @@ just refresh-examples
 Start the server (listens on `http://localhost:5001`, HTTP/2 cleartext):
 
 ```bash
-dotnet run --project examples/grpc/unary/server
+dotnet run --project server
 ```
 
 In another shell, run the client:
 
 ```bash
-dotnet run --project examples/grpc/unary/client -- http://localhost:5001
+dotnet run --project client -- http://localhost:5001
 ```
 
 The client exercises every operation: get, create, list with a

@@ -26,8 +26,8 @@ bodies, so the model carries no HTTP binding traits.
 
 ## Build
 
-Run all commands in this README from the repository root. First build the local
-packages and examples:
+Run all commands in this README from `examples/rpcv2cbor/unary`. First build the
+local packages and examples:
 
 ```bash
 just build
@@ -40,13 +40,13 @@ just refresh-examples
 Start the server:
 
 ```bash
-dotnet run --project examples/rpcv2cbor/unary/server
+dotnet run --project server
 ```
 
 In another shell, run the client:
 
 ```bash
-dotnet run --project examples/rpcv2cbor/unary/client -- http://localhost:5001
+dotnet run --project client -- http://localhost:5001
 ```
 
 The client walks the full surface: current time, paginated city listing (pages
@@ -60,7 +60,7 @@ POST. Pass `--debug` to the client to log every request and response with a hex
 dump of the CBOR bytes, using the client runtime's built-in `DebugInterceptor`:
 
 ```bash
-dotnet run --project examples/rpcv2cbor/unary/client -- http://localhost:5001 --debug
+dotnet run --project client -- http://localhost:5001 --debug
 ```
 
 ```text

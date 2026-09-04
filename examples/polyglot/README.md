@@ -34,7 +34,7 @@ models, and consumers generate local clients for the APIs they use.
 
 ## Build
 
-Run all commands in this README from the repository root. First build the local
+Run all commands in this README from `examples/polyglot`. First build the local
 NSmithy packages and .NET client:
 
 ```bash
@@ -49,18 +49,18 @@ Enter the repository development shell, then start the Java service:
 
 ```bash
 devenv shell
-gradle -p examples/polyglot/java :server:run
+gradle -p java :server:run
 ```
 
 The Java service generates sources from
-`examples/polyglot/java/smithy/model/java-hello.smithy` before compiling. Adding
+`java/smithy/model/java-hello.smithy` before compiling. Adding
 an operation makes the generated service builder require a registered
 implementation for it.
 
 In another shell, run the generated .NET client:
 
 ```bash
-dotnet run --project examples/polyglot/dotnet -- world http://localhost:8082
+dotnet run --project dotnet -- world http://localhost:8082
 ```
 
 The .NET project runs NSmithy code generation as part of its normal build and
@@ -69,7 +69,7 @@ consumes packages from `artifacts/packages`.
 ## Run with Docker Compose
 
 ```bash
-docker compose -f examples/polyglot/docker-compose.yml up --build
+docker compose up --build
 ```
 
 ## Try the API
@@ -86,7 +86,7 @@ curl -X POST http://localhost:8082/shout \
   -d '{"name": "world"}'
 
 # Ask the generated .NET client to call the service.
-dotnet run --project examples/polyglot/dotnet -- world http://localhost:8082
+dotnet run --project dotnet -- world http://localhost:8082
 ```
 
 The commands run on the host and therefore use the published port `8082`.
@@ -97,7 +97,7 @@ Stop locally run processes with Ctrl+C. For the Docker Compose workflow, remove
 the resources with:
 
 ```bash
-docker compose -f examples/polyglot/docker-compose.yml down
+docker compose down
 ```
 
 ## Add a .NET service

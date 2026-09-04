@@ -21,8 +21,8 @@ multi-client chat service.
 
 ## Build
 
-Run all commands in this README from the repository root. First build the local
-packages and examples:
+Run all commands in this README from `examples/rpcv2cbor/streaming`. First build
+the local packages and examples:
 
 ```bash
 just build
@@ -36,7 +36,7 @@ Start the server. It defaults to port `5004` and serves cleartext HTTP/2 so the
 duplex stream can send and receive messages at the same time.
 
 ```bash
-dotnet run --project examples/rpcv2cbor/streaming/server
+dotnet run --project server
 ```
 
 In another shell, run a client. The user name is the first argument; the endpoint
@@ -44,7 +44,7 @@ or port is optional and comes last. The client defaults to
 `http://localhost:5004`.
 
 ```bash
-dotnet run --project examples/rpcv2cbor/streaming/client -- alice
+dotnet run --project client -- alice
 ```
 
 Open another shell and run a second client with another user name. Messages typed

@@ -29,9 +29,9 @@ Broker-backed examples include Docker Compose files for local dependencies.
 
 ## Build
 
-Run all commands in the example READMEs from the repository root. First build
-and pack NSmithy, then restore and build every example against the local
-packages:
+Run the following commands from the `examples` directory. Individual example
+READMEs likewise assume their own example directory. First build and pack
+NSmithy, then restore and build every example against the local packages:
 
 ```bash
 just build
