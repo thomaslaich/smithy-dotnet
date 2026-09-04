@@ -107,7 +107,7 @@ need Maven or a separate JRE.
 
 ## Build
 
-Run all commands in this README from the repository root. First build the local
+Run all commands in this README from `examples/kafkajson`. First build the local
 packages and examples:
 
 ```bash
@@ -121,8 +121,8 @@ just refresh-examples
 ### 1. Start Kafka and initialize the topics
 
 ```bash
-docker compose -f examples/kafkajson/docker-compose.yml up -d kafka
-dotnet run --project examples/kafkajson/device.infra
+docker compose up -d kafka
+dotnet run --project device.infra
 ```
 
 The reconciler creates missing topics, increases partition counts when needed,
@@ -131,7 +131,7 @@ replication-factor changes require reassignment, so the reconciler reports
 those cases. To use another broker:
 
 ```bash
-dotnet run --project examples/kafkajson/device.infra -- broker:9092
+dotnet run --project device.infra -- broker:9092
 ```
 
 ### 2. Start the device
@@ -139,7 +139,7 @@ dotnet run --project examples/kafkajson/device.infra -- broker:9092
 In one terminal, start the owner that emits events and handles commands:
 
 ```bash
-dotnet run --project examples/kafkajson/device
+dotnet run --project device
 ```
 
 ### 3. Run the controller
@@ -147,7 +147,7 @@ dotnet run --project examples/kafkajson/device
 In another terminal, start the client that dims the light and watches events:
 
 ```bash
-dotnet run --project examples/kafkajson/controller
+dotnet run --project controller
 ```
 
 Expected output includes:
@@ -162,7 +162,7 @@ Expected output includes:
 Stop each application with Ctrl+C, then remove Kafka:
 
 ```bash
-docker compose -f examples/kafkajson/docker-compose.yml down
+docker compose down
 ```
 
 ## View the AsyncAPI document
@@ -179,7 +179,7 @@ This setting injects bote's `asyncapi` plugin and copies the document to
 `wwwroot/asyncapi.json`. Run it with:
 
 ```bash
-dotnet run --project examples/kafkajson/device.docs
+dotnet run --project device.docs
 ```
 
 The raw document is available at `/asyncapi.json`, and `/` renders it in Scalar.
