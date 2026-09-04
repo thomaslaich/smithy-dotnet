@@ -1,45 +1,4 @@
-/*
- * Renders C# Kafka producer and consumer stubs for a @kafkaJson service.
- *
- * bote models a contract from the owner's perspective. A @kafkaJson service has
- * two kinds of operations, each carrying its topic on the trait itself:
- *
- *   @kafkaProduce — clients produce the operation's input (a @command structure)
- *                   to the topic. The contract owner consumes it.
- *   @kafkaConsume — the contract owner emits @event payloads (the members of the
- *                   output's @streaming union) to the topic. Clients consume them.
- *
- * Each generated artifact therefore serves both roles symmetrically:
- *
- *   {Service}Producer
- *     - {Op}Async(command)            one per @kafkaProduce — serialize the command
- *                                     payload and write it to the command topic
- *                                     (a client invoking a capability)
- *     - Publish{Event}Async(event)    one per @kafkaConsume union member — write
- *                                     the event to the event topic (the owner
- *                                     emitting)
- *
- *   I{Service}CommandHandler / {Service}CommandConsumer
- *     - consumes the @kafkaProduce topics, deserializes the bare command payload,
- *       dispatches to Handle{Op}Async (the owner handling commands)
- *
- *   I{Service}EventHandler / {Service}EventConsumer
- *     - consumes the @kafkaConsume topics, decodes each event per the protocol's
- *       eventDiscrimination, dispatches to Handle{Event}Async (a client handling
- *       events)
- *
- * Commands are written as the bare payload (one command type per topic). Event
- * serialization follows the kafkaJson protocol's eventDiscrimination setting:
- *
- *   ENVELOPE (default) — the value is union-wrapped ({"member": {...}})
- *   HEADER             — the value is the bare payload; a "bote-type" Kafka
- *                        header carries the union member name
- *   NONE               — the value is the bare payload; the channel carries a
- *                        single event type (validator-enforced)
- *
- * The topic is read from the @kafkaProduce / @kafkaConsume trait. Key (@kafkaKey)
- * and headers (@kafkaHeader) are read from the payload structure's members.
- */
+/** Generates typed Kafka producers, consumers, and handlers for @kafkaJson services. */
 package io.github.thomaslaich.nsmithy.bote.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.bote.codegen.RuntimeTypes;
@@ -69,14 +28,12 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 @SmithyInternalApi
 public final class KafkaGenerator implements Runnable {
 
-  /** How JSON event messages carry their type on a multi-event channel. */
   private enum EventDiscrimination {
     ENVELOPE,
     HEADER,
     NONE
   }
 
-  /** The Kafka header that carries the union member name in HEADER mode. */
   private static final String TYPE_HEADER = "bote-type";
 
   private final GenerationContext context;
@@ -127,9 +84,7 @@ public final class KafkaGenerator implements Runnable {
     }
   }
 
-  // ===========================================================================
   // Producer
-  // ===========================================================================
 
   private void writeProducer(
       String svc,
@@ -189,7 +144,6 @@ public final class KafkaGenerator implements Runnable {
         });
   }
 
-  /** A client invoking a capability: serialize the bare command and write it to the topic. */
   private void writeProduceMethod(KafkaBindings.Produce produce, Model model) {
     writer.write(
         "public System.Threading.Tasks.Task $LAsync($L command,"
@@ -207,7 +161,6 @@ public final class KafkaGenerator implements Runnable {
         });
   }
 
-  /** The contract owner emitting an event: encode it per eventDiscrimination and write it. */
   private void writePublishMethod(
       KafkaBindings.Consume consume,
       MemberShape member,
@@ -265,11 +218,7 @@ public final class KafkaGenerator implements Runnable {
         });
   }
 
-  /**
-   * Emits the @kafkaKey / @kafkaHeader extraction, the Message, and the ProduceAsync call. Assumes
-   * a local `var value` (the serialized payload bytes) is already in scope. When typeHeaderValue is
-   * non-null, a "bote-type" header carrying it is always added (HEADER discrimination).
-   */
+  // Expects the serialized payload in `value`; typeHeaderValue adds event discrimination.
   private void writeKeyHeadersAndProduce(
       Model model, StructureShape payload, String objExpr, String topic, String typeHeaderValue) {
     Optional<MemberShape> keyMember =
@@ -324,9 +273,7 @@ public final class KafkaGenerator implements Runnable {
         CSharpNaming.formatString(topic));
   }
 
-  // ===========================================================================
   // Command handling (@kafkaProduce)
-  // ===========================================================================
 
   private void writeCommandHandlerInterface(String svc, List<KafkaBindings.Produce> produces) {
     writer.write("public interface I$LCommandHandler", svc);
@@ -394,9 +341,7 @@ public final class KafkaGenerator implements Runnable {
         });
   }
 
-  // ===========================================================================
   // Event handling (@kafkaConsume)
-  // ===========================================================================
 
   private void writeEventHandlerInterface(
       String svc, List<KafkaBindings.Consume> consumes, Model model) {
@@ -458,7 +403,6 @@ public final class KafkaGenerator implements Runnable {
         });
   }
 
-  /** Emits the per-topic event decode + dispatch body for the given discrimination mode. */
   private void writeEventDispatch(
       KafkaBindings.Consume consume, Model model, EventDiscrimination discrimination) {
     switch (discrimination) {
@@ -531,8 +475,7 @@ public final class KafkaGenerator implements Runnable {
             });
       }
       case NONE -> {
-        // NONE requires a single-member union (validator-enforced): the channel is
-        // unambiguous by construction.
+        // The validator limits NONE to one event type.
         MemberShape member = consume.members().get(0);
         String variant = CSharpNaming.typeName(member.getMemberName());
         writePayloadDeserialization(
@@ -545,15 +488,7 @@ public final class KafkaGenerator implements Runnable {
     }
   }
 
-  // ===========================================================================
   // Shared consumer scaffold
-  // ===========================================================================
-
-  /**
-   * Emits a consumer class with the codec fields (supplied by the caller), a constructor, a
-   * Subscribe + consume loop that tolerates non-fatal ConsumeExceptions, a DispatchAsync (body
-   * supplied by the caller), and DisposeAsync.
-   */
   private void writeConsumerScaffold(
       String typeName,
       String ifaceName,
@@ -596,9 +531,7 @@ public final class KafkaGenerator implements Runnable {
               "{",
               "}",
               () -> {
-                // Yield so the blocking Consume() loop runs on a thread-pool thread; this
-                // lets callers do `var task = RunAsync(ct);` without the synchronous first
-                // Consume() blocking them.
+                // Prevent the first blocking Consume() from blocking the caller synchronously.
                 writer.write("await System.Threading.Tasks.Task.Yield();");
                 writer.write("_consumer.Subscribe([$L]);", topicList);
                 writer.write("while (!cancellationToken.IsCancellationRequested)");
@@ -638,22 +571,19 @@ public final class KafkaGenerator implements Runnable {
         });
   }
 
-  // ===========================================================================
   // Trait / model helpers
-  // ===========================================================================
 
   private String qualified(Model model, MemberShape member) {
     return CSharpSymbolProvider.qualified(
         context.symbolProvider().toSymbol(model.expectShape(member.getTarget())));
   }
 
-  /** The name of the static per-type codec field, derived from the C# type's simple name. */
   private String codecFieldName(String qualifiedType) {
     int i = qualifiedType.lastIndexOf('.');
     return (i < 0 ? qualifiedType : qualifiedType.substring(i + 1)) + "Codec";
   }
 
-  /** Emits a whole-shape codec, or a structure projection that excludes @kafkaHeader members. */
+  // Header-bound members use a body projection because they never appear in JSON.
   private void writePayloadCodecField(Shape shape) {
     String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(shape));
     Optional<StructureShape> structure = shape.asStructureShape();
@@ -691,7 +621,6 @@ public final class KafkaGenerator implements Runnable {
         SchemaGenerator.schemaClassName(context, shape));
   }
 
-  /** The event payload shapes needed for serialization and header hydration. */
   private Set<Shape> eventCodecShapes(List<KafkaBindings.Consume> consumes, Model model) {
     Set<Shape> shapes = new LinkedHashSet<>();
     for (KafkaBindings.Consume consume : consumes) {
@@ -789,7 +718,6 @@ public final class KafkaGenerator implements Runnable {
         .orElse(member.getMemberName());
   }
 
-  /** Reads the eventDiscrimination setting from the service's @kafkaJson trait. */
   private EventDiscrimination eventDiscrimination() {
     return service
         .findTrait(TraitIds.KAFKA_JSON)
