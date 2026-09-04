@@ -107,7 +107,8 @@ need Maven or a separate JRE.
 
 ## Build
 
-From the repository root:
+Run all commands in this README from the repository root. First build the local
+packages and examples:
 
 ```bash
 just build
@@ -175,7 +176,7 @@ with the AsyncAPI analogue of `SmithyOpenApiProtocol`:
 ```
 
 This setting injects bote's `asyncapi` plugin and copies the document to
-`wwwroot/asyncapi.json`. Run it from the repository root:
+`wwwroot/asyncapi.json`. Run it with:
 
 ```bash
 dotnet run --project examples/kafkajson/device.docs

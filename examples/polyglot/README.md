@@ -34,7 +34,8 @@ models, and consumers generate local clients for the APIs they use.
 
 ## Build
 
-From the repository root, build the local NSmithy packages and .NET client:
+Run all commands in this README from the repository root. First build the local
+NSmithy packages and .NET client:
 
 ```bash
 just build
@@ -67,8 +68,6 @@ consumes packages from `artifacts/packages`.
 
 ## Run with Docker Compose
 
-From the repository root:
-
 ```bash
 docker compose -f examples/polyglot/docker-compose.yml up --build
 ```
@@ -95,7 +94,7 @@ The commands run on the host and therefore use the published port `8082`.
 ## Stop
 
 Stop locally run processes with Ctrl+C. For the Docker Compose workflow, remove
-the resources from the repository root:
+the resources with:
 
 ```bash
 docker compose -f examples/polyglot/docker-compose.yml down

@@ -25,7 +25,8 @@ and Maven dependencies declared in the contracts project.
 
 ## Build
 
-From the repository root, build and pack local packages:
+Run all commands in this README from the repository root. First build the local
+packages and examples:
 
 ```bash
 just build
@@ -95,7 +96,7 @@ path with an absolute path):
 ```
 
 For [Claude Code](https://docs.anthropic.com/en/docs/claude-code/mcp), add the
-built server from the repository root:
+built server:
 
 ```bash
 claude mcp add weather -- dotnet /absolute/path/to/smithy-dotnet/examples/restjson1/unary/server/bin/Debug/net10.0/NSmithy.Examples.RestJson1.Server.dll --mcp

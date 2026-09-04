@@ -22,7 +22,8 @@ chat service.
 
 ## Build
 
-From the repository root:
+Run all commands in this README from the repository root. First build the local
+packages and examples:
 
 ```bash
 just build
@@ -32,8 +33,8 @@ just refresh-examples
 
 ## Run
 
-Start either server from the repository root. Both default to port `5002`, so
-run only one unless you provide a different port.
+Start either server. Both default to port `5002`, so run only one unless you
+provide a different port.
 
 ```bash
 dotnet run --project examples/grpc/streaming/server

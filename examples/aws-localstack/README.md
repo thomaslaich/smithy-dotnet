@@ -23,7 +23,8 @@ release that runs DynamoDB, S3, and Lambda without a `LOCALSTACK_AUTH_TOKEN`.
 
 ## Build
 
-From the repository root:
+Run all commands in this README from the repository root. First build the local
+packages and examples:
 
 ```bash
 just build
@@ -39,9 +40,10 @@ Start LocalStack:
 docker compose -f examples/aws-localstack/compose.yaml up
 ```
 
-Alternatively, run `devenv up` from `examples/aws-localstack`.
+The example also includes `examples/aws-localstack/devenv.nix` for users working
+from that directory.
 
-In another shell, run the client from the repository root:
+In another shell, run the client:
 
 ```bash
 dotnet run --project examples/aws-localstack/client

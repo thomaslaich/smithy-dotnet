@@ -21,7 +21,8 @@ multi-client chat service.
 
 ## Build
 
-From the repository root, build and pack local packages:
+Run all commands in this README from the repository root. First build the local
+packages and examples:
 
 ```bash
 just build
