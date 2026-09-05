@@ -1,4 +1,7 @@
 using Examples.Redis.Chat;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using NSmithy.Messaging.Redis;
 using StackExchange.Redis;
 
 var redis = args.Length > 0 ? args[0] : "localhost:6379";
@@ -12,94 +15,86 @@ if (string.IsNullOrWhiteSpace(userId))
 }
 
 await using var connection = await ConnectionMultiplexer.ConnectAsync(redis);
-var chat = new ChatRoomRedisStreams(connection);
-
-using var cancellation = new CancellationTokenSource();
-Console.CancelKeyPress += (_, eventArgs) =>
-{
-    eventArgs.Cancel = true;
-    cancellation.Cancel();
-};
-
-var owner = new ChatRoomRedisStreamsConsumer(
-    connection,
-    new ChatOwner(chat),
-    "redis-chat-owner",
-    $"example-{Environment.ProcessId}"
+var builder = Host.CreateApplicationBuilder(args);
+builder.Services.AddSingleton(new ChatSession(roomId, userId));
+builder.Services.AddRedisStreamsMessaging(connection);
+builder.Services.AddChatRoomClient();
+builder.Services.AddChatRoomEventPublisher();
+builder.Services.AddChatRoomCommandConsumer(
+    new RedisStreamConsumerOptions
+    {
+        ConsumerGroup = "redis-chat-owner",
+        ConsumerName = $"example-{Environment.ProcessId}",
+    }
 );
-var owning = owner.RunAsync(cancellationToken: cancellation.Token);
-var reading = ReadMessagesAsync(chat, roomId, userId, cancellation.Token);
+
+// Every terminal sees all new events. This demo keeps its XREAD cursor in memory;
+// configure CheckpointStore and a stable CheckpointName to resume across restarts.
+builder.Services.AddChatRoomEventConsumer(
+    new RedisStreamConsumerOptions
+    {
+        ReadMode = RedisStreamReadMode.Independent,
+        StartPosition = "$",
+    }
+);
+builder.Services.AddScoped<IPostMessageHandler, ChatOwner>();
+builder.Services.AddScoped<IReadMessagesHandler, ChatReader>();
+builder.Services.AddHostedService<ConsoleInput>();
 
 Console.WriteLine($"Connected to room '{roomId}' as '{userId}'. Type a message; Ctrl+C stops.");
-try
+await builder.Build().RunAsync();
+
+sealed record ChatSession(string RoomId, string UserId);
+
+sealed class ConsoleInput(
+    IChatRoomClient client,
+    ChatSession session,
+    IHostApplicationLifetime lifetime
+) : BackgroundService
 {
-    while (!cancellation.IsCancellationRequested)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        Console.Write("> ");
-        var body = await Console.In.ReadLineAsync(cancellation.Token);
-        if (body is null)
-            break;
-        if (string.IsNullOrWhiteSpace(body))
-            continue;
-
-        await chat.PostMessageAsync(
-            new PostMessageInput(Body: body, RoomId: roomId, UserId: userId),
-            cancellation.Token
-        );
-    }
-}
-catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
-finally
-{
-    cancellation.Cancel();
-    await IgnoreCancellationAsync(owning);
-    await IgnoreCancellationAsync(reading);
-}
-
-static async Task ReadMessagesAsync(
-    ChatRoomRedisStreams chat,
-    string roomId,
-    string userId,
-    CancellationToken cancellationToken
-)
-{
-    await foreach (
-        var item in chat.ReadMessagesAsync(position: "$", cancellationToken: cancellationToken)
-    )
-    {
-        item.Match(
-            message =>
-            {
-                if (message.RoomId != roomId)
-                    return 0;
-
-                var sender = message.UserId == userId ? "you" : message.UserId;
-                Console.WriteLine($"\n[{sender}] {message.Body}");
-                Console.Write("> ");
-                return 0;
-            },
-            (_, _) => 0
-        );
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            Console.Write("> ");
+            // Console input can block even through ReadLineAsync. Cancel the wait so host
+            // shutdown does not depend on another keypress; the reader thread owns no services.
+            var body = await Task.Run(static () => Console.ReadLine(), CancellationToken.None)
+                .WaitAsync(stoppingToken);
+            if (body is null)
+                break;
+            if (string.IsNullOrWhiteSpace(body))
+                continue;
+            await client.PostMessageAsync(
+                new PostMessageInput(Body: body, RoomId: session.RoomId, UserId: session.UserId),
+                stoppingToken
+            );
+        }
+        lifetime.StopApplication();
     }
 }
 
-static async Task IgnoreCancellationAsync(Task task)
+sealed class ChatReader(ChatSession session) : IReadMessagesHandler
 {
-    try
+    public Task HandleAsync(ChatEvents message, CancellationToken cancellationToken = default)
     {
-        await task;
+        if (message is ChatEvents.MessagePosted posted && posted.Value.RoomId == session.RoomId)
+        {
+            var sender = posted.Value.UserId == session.UserId ? "you" : posted.Value.UserId;
+            Console.WriteLine($"\n[{sender}] {posted.Value.Body}");
+            Console.Write("> ");
+        }
+        return Task.CompletedTask;
     }
-    catch (OperationCanceledException) { }
 }
 
-sealed class ChatOwner(ChatRoomRedisStreams chat) : IChatRoomRedisStreamsHandler
+sealed class ChatOwner(IChatRoomEventPublisher publisher) : IPostMessageHandler
 {
-    public async Task HandlePostMessageAsync(
+    public Task HandleAsync(
         PostMessageInput command,
         CancellationToken cancellationToken = default
-    )
-    {
-        await chat.PublishMessagePostedAsync(
+    ) =>
+        publisher.PublishMessagePostedAsync(
             new MessagePosted(
                 Body: command.Body,
                 RoomId: command.RoomId,
@@ -108,5 +103,4 @@ sealed class ChatOwner(ChatRoomRedisStreams chat) : IChatRoomRedisStreamsHandler
             ),
             cancellationToken
         );
-    }
 }

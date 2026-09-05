@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/packages/">
+    <Project Path="packages/NSmithy.Messaging.Redis/NSmithy.Messaging.Redis.csproj" />
     <Project Path="packages/NSmithy.Messaging/NSmithy.Messaging.csproj" />
     <Project Path="packages/NSmithy.Messaging.Kafka/NSmithy.Messaging.Kafka.csproj" />
     <Project Path="packages/NSmithy.Aws/NSmithy.Aws.csproj" />

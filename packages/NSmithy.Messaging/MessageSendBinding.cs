@@ -1,7 +1,7 @@
 namespace NSmithy.Messaging;
 
 /// <summary>Immutable operation facts and a reusable encoder; contains no transport state.</summary>
-public sealed class MessageSendBinding<T>(
+public class MessageSendBinding<T>(
     string serviceId,
     string operationId,
     string address,

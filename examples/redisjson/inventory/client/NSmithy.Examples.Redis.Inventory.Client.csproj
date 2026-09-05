@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace></RootNamespace>
+    <SmithyGenerateDependencyInjection>true</SmithyGenerateDependencyInjection>
     <SmithyService>examples.redis.inventory#Inventory</SmithyService>
     <SmithyGeneratedNamespaces>examples.redis.inventory</SmithyGeneratedNamespaces>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
@@ -15,7 +16,7 @@
     <PackageReference Include="NSmithy.Bote" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
     <PackageReference Include="NSmithy.Codecs.Json" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Core" Version="0.0.0-SNAPSHOT" />
-    <PackageReference Include="StackExchange.Redis" Version="2.8.31" />
+    <PackageReference Include="NSmithy.Messaging.Redis" Version="0.0.0-SNAPSHOT" />
     <ProjectReference Include="../contracts/NSmithy.Examples.Redis.Inventory.Contracts.csproj" />
   </ItemGroup>
 </Project>

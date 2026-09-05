@@ -5,7 +5,7 @@ namespace NSmithy.Messaging;
 /// <summary>Owns a DI scope for the complete delivery, including asynchronous scope disposal.</summary>
 public sealed class MessageProcessor(IServiceScopeFactory scopes)
 {
-    public async Task ProcessAsync(
+    public async Task<MessagePayload?> ProcessAsync(
         MessageReceiveBinding binding,
         MessagePayload payload,
         CancellationToken cancellationToken = default
@@ -14,7 +14,7 @@ public sealed class MessageProcessor(IServiceScopeFactory scopes)
         ArgumentNullException.ThrowIfNull(binding);
         cancellationToken.ThrowIfCancellationRequested();
         await using var scope = scopes.CreateAsyncScope();
-        await binding
+        return await binding
             .DispatchAsync(payload, scope.ServiceProvider, cancellationToken)
             .ConfigureAwait(false);
     }

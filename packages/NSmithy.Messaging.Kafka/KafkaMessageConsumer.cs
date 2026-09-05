@@ -40,6 +40,11 @@ public sealed partial class KafkaMessageConsumer : BackgroundService
                 "A consumer requires at least one operation binding.",
                 nameof(bindings)
             );
+        if (this.bindings.Values.Any(binding => binding.HasReply))
+            throw new ArgumentException(
+                "Kafka consumers do not support request/reply bindings.",
+                nameof(bindings)
+            );
         this.processor = processor;
         this.services = services;
         this.createConsumer = createConsumer;

@@ -20,6 +20,7 @@ import software.amazon.smithy.model.shapes.UnionShape;
 
 public final class RedisBindings {
   public record StreamAdd(
+      String operationId,
       String opName,
       String stream,
       Optional<Long> maxLen,
@@ -29,6 +30,7 @@ public final class RedisBindings {
       Optional<String> replyType) {}
 
   public record Subscription(
+      String operationId,
       String opName,
       String address,
       Optional<Long> maxLen,
@@ -37,7 +39,11 @@ public final class RedisBindings {
       List<MemberShape> members) {}
 
   public record Publish(
-      String opName, String channel, StructureShape command, String commandType) {}
+      String operationId,
+      String opName,
+      String channel,
+      StructureShape command,
+      String commandType) {}
 
   private RedisBindings() {}
 
@@ -59,6 +65,7 @@ public final class RedisBindings {
       ObjectNode trait = trait(operation, TraitIds.REDIS_STREAM_ADD);
       result.add(
           new StreamAdd(
+              operation.getId().toString(),
               CSharpNaming.typeName(operation.getId().getName()),
               stringMember(trait, "stream", operation),
               trait.getNumberMember("maxLen").map(number -> number.getValue().longValue()),
@@ -83,6 +90,7 @@ public final class RedisBindings {
       ObjectNode trait = trait(operation, TraitIds.REDIS_PUBLISH);
       result.add(
           new Publish(
+              operation.getId().toString(),
               CSharpNaming.typeName(operation.getId().getName()),
               stringMember(trait, "channel", operation),
               command,
@@ -121,6 +129,7 @@ public final class RedisBindings {
       ObjectNode trait = trait(operation, traitId);
       result.add(
           new Subscription(
+              operation.getId().toString(),
               CSharpNaming.typeName(operation.getId().getName()),
               stringMember(trait, addressMember, operation),
               trait.getNumberMember("maxLen").map(number -> number.getValue().longValue()),

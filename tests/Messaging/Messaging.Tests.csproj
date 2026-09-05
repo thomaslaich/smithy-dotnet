@@ -9,6 +9,7 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <Using Include="Xunit" />
+    <ProjectReference Include="../../packages/NSmithy.Messaging.Redis/NSmithy.Messaging.Redis.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Messaging.Kafka/NSmithy.Messaging.Kafka.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <ProjectReference Include="../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />

@@ -5,20 +5,28 @@ and broker runtimes.
 
 ## Status
 
-Kafka now generates immutable send/receive bindings, service-role clients and
+Kafka and Redis now generate immutable send/receive bindings, service-role clients and
 publishers, and per-operation handlers. `NSmithy.Messaging` owns scoped dispatch;
 `NSmithy.Messaging.Kafka` owns producer lifetime, polling, offset storage, and
-hosted consumption. Generated Kafka code has no broker loops or SDK dependency
+hosted consumption. `NSmithy.Messaging.Redis` owns stream recovery, checkpoints,
+request/reply, acknowledgment, and Pub/Sub subscription lifetime. Generated code
+has no broker loops or SDK dependency
 outside composition-root registration and optional infrastructure tooling.
 
-The first runtime processes one message at a time. Decode and handler failures
-stop consumption without storing the failed offset. Missing handlers fail
-startup. Unknown event variants are decode failures. Retries, dead-letter
+The runtimes process one message at a time. Decode and handler failures
+stop consumption without settling the failed delivery. Missing handlers fail
+startup. Unknown Kafka event discriminators are decode failures. Retries, dead-letter
 policies, concurrency, batch APIs, and common telemetry remain future work.
 
-Redis still emits transport loops and exposes subscriptions as
-`IAsyncEnumerable<T>`. Those surfaces are transitional and should converge on
-this design before the messaging API is considered stable.
+Redis Streams uses consumer groups by default and recovers idle pending entries
+with `XAUTOCLAIM` (Redis 6.2+). Independent `XREAD` processing uses the same event
+handlers and can persist progress through `IRedisStreamCheckpointStore`.
+`RedisStreamCheckpointStore` supplies Redis-backed persistence. Request/reply
+handlers return typed replies; scoped dispatch encodes them, and the transport
+publishes each reply before acknowledgment. Pub/Sub uses a bounded dispatch
+queue and stops on handler failure or overflow; it cannot redeliver messages.
+Broker subscription methods no longer expose `IAsyncEnumerable<T>`.
+
 
 ## Goal
 
@@ -391,22 +399,17 @@ networks, and managed broker instances remains deployment-platform work.
 
 ## Migration
 
-The initial generated implementation should move toward this design in this
-order:
+The foundational migration is implemented for Kafka and Redis: generated
+operation bindings, service-role interfaces, per-operation handlers, shared
+scoped processing, and transport-owned hosting and delivery state.
 
-1. introduce immutable messaging operation bindings and transport runtime
-   packages;
-2. move Kafka polling, offset handling, and producer lifecycle out of generated
-   code;
-3. move Redis group management, pending recovery, acknowledgment, and Pub/Sub
-   subscription lifetime out of generated code;
-4. replace transport-named public surfaces with service-role interfaces and
-   registrations;
-5. replace broker `IAsyncEnumerable<T>` subscriptions with event handlers,
-   including checkpointed `XREAD` handling where configured;
-6. add single/batch handler selection and batch publication to the shared
+Remaining work:
+
+1. add single/batch handler selection and batch publication to the shared
    processing runtime;
-7. keep generated infrastructure metadata as an independent opt-in surface.
+2. define explicit retry, dead-letter, concurrency, and telemetry policies;
+3. extend the architecture to additional transports and codecs;
+4. keep generated infrastructure metadata as an independent opt-in surface.
 
 ## Non-goals
 
