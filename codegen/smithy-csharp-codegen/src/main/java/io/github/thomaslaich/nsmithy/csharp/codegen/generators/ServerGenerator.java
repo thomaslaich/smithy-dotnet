@@ -15,7 +15,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
@@ -76,6 +75,7 @@ public final class ServerGenerator implements Runnable {
         idx.getContainedOperations(service).stream()
             .sorted(Comparator.comparing(o -> o.getId().toString()))
             .collect(Collectors.toList());
+    ops.forEach(op -> writer.reserveName(operationJsonSchemasClass(op)));
 
     List<Kind> serverKinds = serverKinds();
     List<PromptDefinition> prompts = promptDefinitions(ops);
@@ -147,7 +147,7 @@ public final class ServerGenerator implements Runnable {
         () -> {
           writer.write(
               "public ServiceSchema Schema => $L;",
-              SchemaGenerator.serviceSchemaAccessor(context, service));
+              SchemaGenerator.serviceSchemaAccessor(writer, context, service));
           writer.write("");
           writePromptDefinitions(prompts);
           writer.write("");
@@ -225,19 +225,19 @@ public final class ServerGenerator implements Runnable {
         () -> {
           writer.write("return new ServiceOperationCatalog(");
           writer.indent();
-          writer.write("$L,", SchemaGenerator.serviceSchemaAccessor(context, service));
+          writer.write("$L,", SchemaGenerator.serviceSchemaAccessor(writer, context, service));
           writer.write("[");
           writer.indent();
           for (OperationShape op : ops) {
             if (isStreaming(op)) {
               writer.write(
                   "ServiceOperation.Create($L, $L),",
-                  SchemaGenerator.operationSchemaAccessor(context, op),
+                  SchemaGenerator.operationSchemaAccessor(writer, context, op),
                   unaryAdapter(op, operationHandlerVariable(op)));
             } else {
               writer.write(
                   "ServiceOperation.Create($L, $L, $L.Value),",
-                  SchemaGenerator.operationSchemaAccessor(context, op),
+                  SchemaGenerator.operationSchemaAccessor(writer, context, op),
                   unaryAdapter(op, operationHandlerVariable(op)),
                   operationJsonSchemasClass(op));
             }
@@ -385,7 +385,7 @@ public final class ServerGenerator implements Runnable {
           "private static readonly IServiceProtocol $LServiceProtocol = new $L().ForService($L);",
           mapSuffix(kind),
           ProtocolSupport.protocolType(kind),
-          SchemaGenerator.serviceSchemaAccessor(context, service));
+          SchemaGenerator.serviceSchemaAccessor(writer, context, service));
       for (OperationShape op : ops) {
         if (!canBindOperation(kind, op)) {
           continue;
@@ -393,11 +393,11 @@ public final class ServerGenerator implements Runnable {
         writer.write(
             "private static readonly IServerOperationProtocol<$L, $L> $L ="
                 + " $LServiceProtocol.ForServerOperation($L);",
-            SchemaGenerator.operationShapeType(context, op.getInputShape()),
-            SchemaGenerator.operationShapeType(context, op.getOutputShape()),
+            SchemaGenerator.operationShapeType(writer, context, op.getInputShape()),
+            SchemaGenerator.operationShapeType(writer, context, op.getOutputShape()),
             operationProtocolField(kind, op),
             mapSuffix(kind),
-            SchemaGenerator.operationSchemaAccessor(context, op));
+            SchemaGenerator.operationSchemaAccessor(writer, context, op));
       }
     }
   }
@@ -735,13 +735,9 @@ public final class ServerGenerator implements Runnable {
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
     String inputType =
-        hasInput
-            ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())))
-            : null;
+        hasInput ? writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape()))) : null;
     String outputType =
-        hasOutput
-            ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getOutputShape())))
-            : null;
+        hasOutput ? writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape()))) : null;
     String returnType =
         hasOutput
             ? "System.Threading.Tasks.Task<" + outputType + ">"

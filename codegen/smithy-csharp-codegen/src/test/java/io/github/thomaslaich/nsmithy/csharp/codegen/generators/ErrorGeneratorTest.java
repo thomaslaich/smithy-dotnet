@@ -93,7 +93,7 @@ final class ErrorGeneratorTest {
     assertTrue(
         generated.contains(
             "private sealed class ValueSerializer :"
-                + " IStructValueSerializer<Example.Example.Weather.ValidationError>"),
+                + " IStructValueSerializer<global::Example.Example.Weather.ValidationError>"),
         generated);
     assertTrue(generated.contains("writer.WriteMember<string?>(0, value.Message);"), generated);
     assertTrue(generated.contains("new ValueSerializer())"), generated);

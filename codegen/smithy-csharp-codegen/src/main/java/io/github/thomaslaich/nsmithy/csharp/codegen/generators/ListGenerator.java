@@ -4,7 +4,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
@@ -31,8 +30,7 @@ public final class ListGenerator implements Runnable {
     SymbolProvider sp = context.symbolProvider();
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     Symbol member = sp.toSymbol(context.model().expectShape(shape.getMember().getTarget()));
-    String memberType =
-        CSharpSymbolProvider.qualified(member) + (ShapeSupport.isSparse(shape) ? "?" : "");
+    String memberType = writer.typeName(member) + (ShapeSupport.isSparse(shape) ? "?" : "");
 
     writer.writeXmlDocs(shape);
     writer.write("public sealed partial record class $L", typeName);

@@ -49,23 +49,23 @@ public final class OperationSchemaGenerator implements Runnable {
         () -> {
           writer.write(
               "public static OperationSchema<$L, $L> Schema { get; } =",
-              SchemaGenerator.operationShapeType(context, shape.getInputShape()),
-              SchemaGenerator.operationShapeType(context, shape.getOutputShape()));
+              SchemaGenerator.operationShapeType(writer, context, shape.getInputShape()),
+              SchemaGenerator.operationShapeType(writer, context, shape.getOutputShape()));
           writer.indent();
           if (isStreaming) {
             writer.write(
                 "Schemas.Operation($L, $L, $L, $L, $L, isStreaming: true);",
                 SchemaGenerator.shapeIdExpr(shape.getId()),
-                SchemaGenerator.operationShapeSchema(context, shape.getInputShape()),
-                SchemaGenerator.operationShapeSchema(context, shape.getOutputShape()),
+                SchemaGenerator.operationShapeSchema(writer, context, shape.getInputShape()),
+                SchemaGenerator.operationShapeSchema(writer, context, shape.getOutputShape()),
                 errorsLiteral(errors),
                 SchemaGenerator.traitsExpr(shape.getAllTraits().values()));
           } else {
             writer.write(
                 "Schemas.Operation($L, $L, $L, $L, $L);",
                 SchemaGenerator.shapeIdExpr(shape.getId()),
-                SchemaGenerator.operationShapeSchema(context, shape.getInputShape()),
-                SchemaGenerator.operationShapeSchema(context, shape.getOutputShape()),
+                SchemaGenerator.operationShapeSchema(writer, context, shape.getInputShape()),
+                SchemaGenerator.operationShapeSchema(writer, context, shape.getOutputShape()),
                 errorsLiteral(errors),
                 SchemaGenerator.traitsExpr(shape.getAllTraits().values()));
           }
@@ -86,7 +86,7 @@ public final class OperationSchemaGenerator implements Runnable {
                   return "Schemas.OperationError("
                       + SchemaGenerator.shapeIdExpr(errorId)
                       + ", "
-                      + SchemaGenerator.shapeSchemaAccessor(context, error)
+                      + SchemaGenerator.shapeSchemaAccessor(writer, context, error)
                       + ", "
                       + httpErrorCode(error)
                       + ")";

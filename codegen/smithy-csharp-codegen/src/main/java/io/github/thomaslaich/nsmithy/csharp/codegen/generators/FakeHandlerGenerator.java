@@ -13,7 +13,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
@@ -42,7 +41,7 @@ public final class FakeHandlerGenerator implements Runnable {
     this.context = c;
     this.writer = w;
     this.service = s;
-    this.values = new FakeValueSynthesizer(c, "fake handler");
+    this.values = new FakeValueSynthesizer(c, w, "fake handler");
     this.matcher = new FakeExampleMatcher(c, values);
   }
 
@@ -110,14 +109,12 @@ public final class FakeHandlerGenerator implements Runnable {
     String returnType =
         hasOutput
             ? "System.Threading.Tasks.Task<"
-                + CSharpSymbolProvider.qualified(
-                    sp.toSymbol(model.expectShape(op.getOutputShape())))
+                + writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape())))
                 + ">"
             : "System.Threading.Tasks.Task";
     String params =
         hasInput
-            ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())))
-                + " input, "
+            ? writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape()))) + " input, "
             : "";
     return returnType
         + " "

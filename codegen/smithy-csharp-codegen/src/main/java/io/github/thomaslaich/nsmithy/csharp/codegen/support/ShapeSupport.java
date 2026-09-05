@@ -1,7 +1,7 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.support;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
+import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -75,17 +75,19 @@ public final class ShapeSupport {
    * integer to the generated enum type. Anything else falls through to a plain literal
    * (string/bool/numeric).
    */
-  public static String defaultValueExpression(Model model, SymbolProvider sp, MemberShape member) {
+  public static String defaultValueExpression(
+      CSharpWriter writer, Model model, SymbolProvider sp, MemberShape member) {
     var trait = member.getTrait(DefaultTrait.class).orElse(null);
     if (trait == null) return null;
     if (hasClientOptional(member)) return null;
     var node = trait.toNode();
     Shape target = model.expectShape(member.getTarget());
-    String typeName = CSharpSymbolProvider.qualified(sp.toSymbol(member));
-    return literalForShape(model, sp, target, node, typeName);
+    String typeName = writer.typeName(sp.toSymbol(member));
+    return literalForShape(writer, model, sp, target, node, typeName);
   }
 
   private static String literalForShape(
+      CSharpWriter writer,
       Model model,
       SymbolProvider sp,
       Shape target,
@@ -118,13 +120,14 @@ public final class ShapeSupport {
           node.isNumberNode()
               ? "(" + typeName + ")" + node.expectNumberNode().getValue().longValue()
               : null;
-      case LIST, SET -> listLiteral(model, sp, target, node, typeName);
-      case MAP -> mapLiteral(model, sp, target, node, typeName);
+      case LIST, SET -> listLiteral(writer, model, sp, target, node, typeName);
+      case MAP -> mapLiteral(writer, model, sp, target, node, typeName);
       default -> defaultLiteral(node);
     };
   }
 
   private static String listLiteral(
+      CSharpWriter writer,
       Model model,
       SymbolProvider sp,
       Shape target,
@@ -144,10 +147,10 @@ public final class ShapeSupport {
                           + target.getType()
                           + ".");
             });
-    String elementType = CSharpSymbolProvider.qualified(sp.toSymbol(memberTarget));
+    String elementType = writer.typeName(sp.toSymbol(memberTarget));
     List<String> elements = new ArrayList<>();
     for (var element : node.expectArrayNode().getElements()) {
-      String literal = literalForShape(model, sp, memberTarget, element, elementType);
+      String literal = literalForShape(writer, model, sp, memberTarget, element, elementType);
       if (literal == null) return null;
       elements.add(literal);
     }
@@ -155,6 +158,7 @@ public final class ShapeSupport {
   }
 
   private static String mapLiteral(
+      CSharpWriter writer,
       Model model,
       SymbolProvider sp,
       Shape target,
@@ -174,8 +178,8 @@ public final class ShapeSupport {
                             + "."));
     Shape keyTarget = model.expectShape(mapShape.getKey().getTarget());
     Shape valueTarget = model.expectShape(mapShape.getValue().getTarget());
-    String keyType = CSharpSymbolProvider.qualified(sp.toSymbol(keyTarget));
-    String valueType = CSharpSymbolProvider.qualified(sp.toSymbol(valueTarget));
+    String keyType = writer.typeName(sp.toSymbol(keyTarget));
+    String valueType = writer.typeName(sp.toSymbol(valueTarget));
     StringBuilder sb =
         new StringBuilder("new ")
             .append(typeName)
@@ -188,7 +192,8 @@ public final class ShapeSupport {
     for (var entry : node.expectObjectNode().getStringMap().entrySet()) {
       String keyLiteral =
           defaultLiteral(software.amazon.smithy.model.node.Node.from(entry.getKey()));
-      String valueLiteral = literalForShape(model, sp, valueTarget, entry.getValue(), valueType);
+      String valueLiteral =
+          literalForShape(writer, model, sp, valueTarget, entry.getValue(), valueType);
       if (keyLiteral == null || valueLiteral == null) return null;
       if (!first) sb.append(", ");
       first = false;
@@ -331,35 +336,38 @@ public final class ShapeSupport {
   }
 
   /** Member type for property emission: type symbol + optional `?` suffix. */
-  public static String memberTypeExpr(SymbolProvider sp, MemberShape member, boolean nullable) {
+  public static String memberTypeExpr(
+      CSharpWriter writer, SymbolProvider sp, MemberShape member, boolean nullable) {
     Symbol s = sp.toSymbol(member);
-    String base = CSharpSymbolProvider.qualified(s);
+    String base = writer.typeName(s);
     return nullable ? base + "?" : base;
   }
 
   public static String memberTypeExpr(
-      Model model, SymbolProvider sp, MemberShape member, boolean nullable) {
+      CSharpWriter writer, Model model, SymbolProvider sp, MemberShape member, boolean nullable) {
     String base;
     if (isStreamingBlobMember(model, member)) {
       base = "System.IO.Stream";
     } else if (isEventStreamMember(model, member)) {
       base =
           "System.Collections.Generic.IAsyncEnumerable<"
-              + CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(member.getTarget())))
+              + writer.typeName(sp.toSymbol(model.expectShape(member.getTarget())))
               + ">";
     } else {
-      base = CSharpSymbolProvider.qualified(sp.toSymbol(member));
+      base = writer.typeName(sp.toSymbol(member));
     }
     return nullable ? base + "?" : base;
   }
 
   /** Parameter type: nullable if member is nullable OR has a default. */
-  public static String parameterTypeExpr(SymbolProvider sp, MemberShape member) {
-    return memberTypeExpr(sp, member, isNullable(member) || hasDefault(member));
+  public static String parameterTypeExpr(
+      CSharpWriter writer, SymbolProvider sp, MemberShape member) {
+    return memberTypeExpr(writer, sp, member, isNullable(member) || hasDefault(member));
   }
 
-  public static String parameterTypeExpr(Model model, SymbolProvider sp, MemberShape member) {
-    return memberTypeExpr(model, sp, member, isNullable(member) || hasDefault(member));
+  public static String parameterTypeExpr(
+      CSharpWriter writer, Model model, SymbolProvider sp, MemberShape member) {
+    return memberTypeExpr(writer, model, sp, member, isNullable(member) || hasDefault(member));
   }
 
   public static boolean isHttpLabel(MemberShape m) {

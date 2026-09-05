@@ -7,13 +7,15 @@
  * $T behaviour:
  *  - Symbol with empty namespace: bare name (used for C# keyword primitives
  *    like `string`, `int`, etc.).
- *  - Symbol with non-empty namespace: name only; the namespace is added to the
- *    file imports. (System.* is also imported as a `using` to keep generated
- *    code uncluttered.)
+ *  - Local, unshadowed types use their short name. Other types use global:: qualification.
+ *  - Explicit SymbolReference aliases are preserved.
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.writer;
 
+import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiFunction;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -27,6 +29,11 @@ import software.amazon.smithy.utils.SmithyUnstableApi;
 public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclarations> {
 
   private final String namespace;
+  // These generated nested types, members, and type parameters can hide model types.
+  private final Set<String> reservedNames =
+      new HashSet<>(
+          Set.of(
+              "Builder", "ValueSerializer", "Schema", "Unknown", "Value", "Tag", "T", "TWriter"));
 
   public CSharpWriter(String namespace) {
     super(new ImportDeclarations(namespace));
@@ -40,6 +47,36 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
   public CSharpWriter addImport(String csharpNamespace) {
     getImportContainer().importNamespace(csharpNamespace);
     return this;
+  }
+
+  /** Reserve a generated identifier that can hide a type reference in this file. */
+  public void reserveName(String name) {
+    reservedNames.add(name);
+  }
+
+  /** Reserve model member names before rendering references in the containing file. */
+  public void reserveMemberNames(Shape shape) {
+    shape
+        .members()
+        .forEach(
+            member -> {
+              reservedNames.add(CSharpNaming.propertyName(member.getMemberName()));
+              reservedNames.add(CSharpNaming.typeName(member.getMemberName()));
+            });
+  }
+
+  /** Render a type reference without importing potentially ambiguous model namespaces. */
+  public String typeName(Symbol symbol) {
+    return typeName(symbol, "");
+  }
+
+  /** The suffix refers to a generated companion type, such as a shape's schema class. */
+  public String typeName(Symbol symbol, String suffix) {
+    String name = symbol.getName() + suffix;
+    String ns = symbol.getNamespace();
+    if (ns.isEmpty()) return name;
+    if (ns.equals(namespace) && !reservedNames.contains(name)) return name;
+    return "global::" + ns + "." + name;
   }
 
   /** Emits a C# XML documentation summary from a Smithy shape's documentation trait. */
@@ -128,8 +165,7 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
     @Override
     public String apply(Object type, String indent) {
       if (type instanceof Symbol s) {
-        addImport(s, null);
-        return s.getName();
+        return typeName(s);
       }
       if (type instanceof SymbolReference ref) {
         addImport(ref.getSymbol(), ref.getAlias(), SymbolReference.ContextOption.USE);

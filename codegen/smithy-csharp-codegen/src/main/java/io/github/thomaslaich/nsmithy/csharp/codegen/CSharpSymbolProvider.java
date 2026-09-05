@@ -78,12 +78,6 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
         .build();
   }
 
-  /** A *qualified* type expression for use in inline generic args: "ns.Name" or "Name". */
-  public static String qualified(Symbol s) {
-    String ns = s.getNamespace();
-    return (ns == null || ns.isEmpty()) ? s.getName() : ns + "." + s.getName();
-  }
-
   @Override
   public Symbol blobShape(BlobShape s) {
     return primitive("", "byte[]", false);

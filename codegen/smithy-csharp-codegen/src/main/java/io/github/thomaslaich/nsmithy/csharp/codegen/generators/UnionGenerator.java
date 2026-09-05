@@ -31,6 +31,7 @@ public final class UnionGenerator implements Runnable {
 
   @Override
   public void run() {
+    writer.reserveMemberNames(shape);
     SymbolProvider sp = context.symbolProvider();
     Model model = context.model();
     String typeName = CSharpNaming.typeName(shape.getId().getName());
@@ -45,7 +46,7 @@ public final class UnionGenerator implements Runnable {
           writer.write("");
           for (MemberShape m : members) {
             String variantName = CSharpNaming.typeName(m.getMemberName());
-            String valueType = ShapeSupport.memberTypeExpr(model, sp, m, false);
+            String valueType = ShapeSupport.memberTypeExpr(writer, model, sp, m, false);
             writer.write("public sealed partial record class $L : $L", variantName, typeName);
             writer.openBlock(
                 "{",
@@ -101,7 +102,7 @@ public final class UnionGenerator implements Runnable {
           StringBuilder header = new StringBuilder("public T Match<T>(");
           for (MemberShape m : members) {
             String pn = CSharpNaming.parameterName(m.getMemberName());
-            String vt = ShapeSupport.memberTypeExpr(model, sp, m, false);
+            String vt = ShapeSupport.memberTypeExpr(writer, model, sp, m, false);
             header.append("System.Func<").append(vt).append(", T> ").append(pn).append(", ");
           }
           header.append("System.Func<string, Document, T> unknown)");

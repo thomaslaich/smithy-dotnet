@@ -6,7 +6,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
@@ -78,13 +77,13 @@ public final class ClientGenerator implements Runnable {
           writer.write("");
           for (OperationShape op : operations) {
             writer.writeXmlDocs(op, operationParameterDocs(model, op));
-            writer.write("$L;", operationSignature(context, op));
+            writer.write("$L;", operationSignature(writer, context, op));
             paginationInfo(context, service, op)
                 .ifPresent(
                     info -> {
                       writer.writeXmlDocs(op, operationParameterDocs(model, op));
-                      writer.write("$L;", paginatorPagesSignature(context, op));
-                      paginatorItemsSignature(context, info)
+                      writer.write("$L;", paginatorPagesSignature(writer, context, op));
+                      paginatorItemsSignature(writer, context, info)
                           .ifPresent(
                               signature -> {
                                 writer.writeXmlDocs(op, operationParameterDocs(model, op));
@@ -125,7 +124,7 @@ public final class ClientGenerator implements Runnable {
         httpVersionPreferenceLiteral(
             ProtocolSupport.httpVersionPreference(
                 service, kinds.get(0), ProtocolSupport.hasEventStreamOperations(model, service)));
-    String serviceSchema = SchemaGenerator.serviceSchemaAccessor(context, service);
+    String serviceSchema = SchemaGenerator.serviceSchemaAccessor(writer, context, service);
     // The idempotency-token provider is only stored/used when an operation has a nullable
     // @idempotencyToken member; emitting the field unconditionally would be an unused private
     // field.
@@ -153,8 +152,8 @@ public final class ClientGenerator implements Runnable {
             }
             writer.write(
                 "private readonly SmithyOperationBinding<$L, $L> $LBinding;",
-                SchemaGenerator.operationShapeType(context, op.getInputShape()),
-                SchemaGenerator.operationShapeType(context, op.getOutputShape()),
+                SchemaGenerator.operationShapeType(writer, context, op.getInputShape()),
+                SchemaGenerator.operationShapeType(writer, context, op.getOutputShape()),
                 CSharpNaming.typeName(op.getId().getName()));
           }
           writer.write("");
@@ -413,14 +412,14 @@ public final class ClientGenerator implements Runnable {
       if (!canBindOperation(op)) {
         continue;
       }
-      String operationSchema = SchemaGenerator.operationSchemaAccessor(context, op);
+      String operationSchema = SchemaGenerator.operationSchemaAccessor(writer, context, op);
       writer.write(
           "this.$LBinding = new SmithyOperationBinding<$L, $L>($L.Id, $L.Id,"
               + " serviceProtocol.ForClientOperation($L), $L, $L);",
           CSharpNaming.typeName(op.getId().getName()),
-          SchemaGenerator.operationShapeType(context, op.getInputShape()),
-          SchemaGenerator.operationShapeType(context, op.getOutputShape()),
-          SchemaGenerator.serviceSchemaAccessor(context, service),
+          SchemaGenerator.operationShapeType(writer, context, op.getInputShape()),
+          SchemaGenerator.operationShapeType(writer, context, op.getOutputShape()),
+          SchemaGenerator.serviceSchemaAccessor(writer, context, service),
           operationSchema,
           operationSchema,
           operationAuthSchemesLiteral(op),
@@ -499,7 +498,7 @@ public final class ClientGenerator implements Runnable {
   private void writeOperationMethod(Model model, OperationShape op) {
     writer.writeXmlDocs(op, operationParameterDocs(model, op));
     if (!canBindOperation(op)) {
-      writer.write("public $L", operationSignature(context, op));
+      writer.write("public $L", operationSignature(writer, context, op));
       writer.openBlock(
           "{",
           "}",
@@ -516,7 +515,8 @@ public final class ClientGenerator implements Runnable {
     String opName = CSharpNaming.typeName(op.getId().getName());
     String inputArg = hasInput ? "input" : "SmithyUnit.Value";
 
-    writer.write(hasOutput ? "public $L" : "public async $L", operationSignature(context, op));
+    writer.write(
+        hasOutput ? "public $L" : "public async $L", operationSignature(writer, context, op));
     writer.openBlock(
         "{",
         "}",
@@ -579,13 +579,12 @@ public final class ClientGenerator implements Runnable {
     return PaginatedIndex.of(context.model()).getPaginationInfo(service, op);
   }
 
-  static String paginatorPagesSignature(GenerationContext context, OperationShape op) {
+  static String paginatorPagesSignature(
+      CSharpWriter writer, GenerationContext context, OperationShape op) {
     SymbolProvider sp = context.symbolProvider();
     Model model = context.model();
-    String inputType =
-        CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())));
-    String outputType =
-        CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getOutputShape())));
+    String inputType = writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape())));
+    String outputType = writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape())));
     return "System.Collections.Generic.IAsyncEnumerable<"
         + outputType
         + "> "
@@ -600,8 +599,9 @@ public final class ClientGenerator implements Runnable {
    * member that resolves to a list. Map-valued items are rare and not generated yet — the pages
    * paginator still covers them.
    */
-  static Optional<String> paginatorItemsSignature(GenerationContext context, PaginationInfo info) {
-    return paginatorItemElementType(context, info)
+  static Optional<String> paginatorItemsSignature(
+      CSharpWriter writer, GenerationContext context, PaginationInfo info) {
+    return paginatorItemElementType(writer, context, info)
         .map(
             elementType ->
                 "System.Collections.Generic.IAsyncEnumerable<"
@@ -609,7 +609,7 @@ public final class ClientGenerator implements Runnable {
                     + "> "
                     + CSharpNaming.typeName(info.getOperation().getId().getName())
                     + "ItemsAsync("
-                    + CSharpSymbolProvider.qualified(
+                    + writer.typeName(
                         context
                             .symbolProvider()
                             .toSymbol(
@@ -618,7 +618,7 @@ public final class ClientGenerator implements Runnable {
   }
 
   private static Optional<String> paginatorItemElementType(
-      GenerationContext context, PaginationInfo info) {
+      CSharpWriter writer, GenerationContext context, PaginationInfo info) {
     List<MemberShape> path = info.getItemsMemberPath();
     if (path.isEmpty()) {
       return Optional.empty();
@@ -628,7 +628,7 @@ public final class ClientGenerator implements Runnable {
       return Optional.empty();
     }
     var element = context.model().expectShape(target.asListShape().get().getMember().getTarget());
-    return Optional.of(CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(element)));
+    return Optional.of(writer.typeName(context.symbolProvider().toSymbol(element)));
   }
 
   /** Renders a null-safe property access chain for a member path, e.g. {@code output.A?.B}. */
@@ -653,7 +653,8 @@ public final class ClientGenerator implements Runnable {
 
     writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
     writer.write(
-        "public async $L", withEnumeratorCancellation(paginatorPagesSignature(context, op)));
+        "public async $L",
+        withEnumeratorCancellation(paginatorPagesSignature(writer, context, op)));
     writer.openBlock(
         "{",
         "}",
@@ -679,7 +680,7 @@ public final class ClientGenerator implements Runnable {
         });
     writer.write("");
 
-    paginatorItemsSignature(context, info)
+    paginatorItemsSignature(writer, context, info)
         .ifPresent(
             signature -> {
               String itemsExpr = memberPathExpr("page", info.getItemsMemberPath());
@@ -731,20 +732,17 @@ public final class ClientGenerator implements Runnable {
             + " System.Threading.CancellationToken cancellationToken");
   }
 
-  static String operationSignature(GenerationContext context, OperationShape op) {
+  static String operationSignature(
+      CSharpWriter writer, GenerationContext context, OperationShape op) {
     SymbolProvider sp = context.symbolProvider();
     Model model = context.model();
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
     boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
     String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
     String inputType =
-        hasInput
-            ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())))
-            : null;
+        hasInput ? writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape()))) : null;
     String outputType =
-        hasOutput
-            ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getOutputShape())))
-            : null;
+        hasOutput ? writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape()))) : null;
     String returnType =
         hasOutput
             ? "System.Threading.Tasks.Task<" + outputType + ">"

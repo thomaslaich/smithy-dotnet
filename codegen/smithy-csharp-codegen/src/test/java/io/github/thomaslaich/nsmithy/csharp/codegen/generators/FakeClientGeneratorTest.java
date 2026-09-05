@@ -114,8 +114,8 @@ final class FakeClientGeneratorTest {
     assertTrue(
         generated.contains(
             "public virtual"
-                + " System.Threading.Tasks.Task<Example.Example.Fake.GetCityOutput>"
-                + " GetCityAsync(Example.Example.Fake.GetCityInput input,"
+                + " System.Threading.Tasks.Task<GetCityOutput>"
+                + " GetCityAsync(GetCityInput input,"
                 + " System.Threading.CancellationToken cancellationToken = default)"),
         generated);
     assertTrue(generated.contains("public virtual void Dispose() { }"), generated);
@@ -127,8 +127,9 @@ final class FakeClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "return System.Threading.Tasks.Task.FromResult(new Example.Example.Fake.GetCityOutput("
-                + "Name: \"Zurich\", Population: 400000));"),
+            "return System.Threading.Tasks.Task.FromResult(new"
+                + " GetCityOutput(Name: \"Zurich\", Population:"
+                + " 400000));"),
         generated);
   }
 
@@ -138,14 +139,14 @@ final class FakeClientGeneratorTest {
 
     assertTrue(generated.contains("if (MatchesGetCityExample0(input))"), generated);
     assertTrue(
-        generated.contains(
-            "private static bool MatchesGetCityExample1(Example.Example.Fake.GetCityInput input)"),
+        generated.contains("private static bool MatchesGetCityExample1(GetCityInput" + " input)"),
         generated);
     assertTrue(generated.contains("if (!(input.Id == \"nope\"))"), generated);
     assertTrue(
         generated.contains(
-            "return System.Threading.Tasks.Task.FromException<Example.Example.Fake.GetCityOutput>("
-                + "new Example.Example.Fake.NoSuchCity(message: \"unknown city\"));"),
+            "return"
+                + " System.Threading.Tasks.Task.FromException<GetCityOutput>(new"
+                + " NoSuchCity(message: \"unknown city\"));"),
         generated);
   }
 
@@ -156,8 +157,8 @@ final class FakeClientGeneratorTest {
     assertTrue(
         generated.contains(
             "public virtual async"
-                + " System.Collections.Generic.IAsyncEnumerable<Example.Example.Fake.ListCitiesOutput>"
-                + " ListCitiesPagesAsync(Example.Example.Fake.ListCitiesInput input,"
+                + " System.Collections.Generic.IAsyncEnumerable<ListCitiesOutput>"
+                + " ListCitiesPagesAsync(ListCitiesInput input,"
                 + " [System.Runtime.CompilerServices.EnumeratorCancellation]"
                 + " System.Threading.CancellationToken cancellationToken = default)"),
         generated);
@@ -176,8 +177,8 @@ final class FakeClientGeneratorTest {
     assertTrue(
         generated.contains(
             "public virtual async"
-                + " System.Collections.Generic.IAsyncEnumerable<Example.Example.Fake.CitySummary>"
-                + " ListCitiesItemsAsync(Example.Example.Fake.ListCitiesInput input,"
+                + " System.Collections.Generic.IAsyncEnumerable<CitySummary>"
+                + " ListCitiesItemsAsync(ListCitiesInput input,"
                 + " [System.Runtime.CompilerServices.EnumeratorCancellation]"
                 + " System.Threading.CancellationToken cancellationToken = default)"),
         generated);
@@ -206,13 +207,11 @@ final class FakeClientGeneratorTest {
   void eventStreamOutputsYieldFromGeneratedAsyncIterator() throws Exception {
     String generated = renderFake();
 
-    assertTrue(
-        generated.contains("new Example.Example.Fake.WatchOutput(Events: FakeWatchEventsEvents())"),
-        generated);
+    assertTrue(generated.contains("new WatchOutput(Events: FakeWatchEventsEvents())"), generated);
     assertTrue(
         generated.contains(
             "private static async"
-                + " System.Collections.Generic.IAsyncEnumerable<Example.Example.Fake.ChatEvent>"
+                + " System.Collections.Generic.IAsyncEnumerable<ChatEvent>"
                 + " FakeWatchEventsEvents()"),
         generated);
   }

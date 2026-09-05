@@ -1,7 +1,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.SymbolProperties;
@@ -44,7 +43,8 @@ public final class SchemaGenerator {
     writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
   }
 
-  public static String shapeSchemaAccessor(GenerationContext context, Shape shape) {
+  public static String shapeSchemaAccessor(
+      CSharpWriter writer, GenerationContext context, Shape shape) {
     if ("smithy.api".equals(shape.getId().getNamespace())) {
       return switch (shape.getId().getName()) {
         case "Boolean" -> "Schemas.Boolean";
@@ -91,7 +91,7 @@ public final class SchemaGenerator {
       return preludeSchema;
     }
 
-    String accessor = schemaClassName(context, shape) + ".Schema";
+    String accessor = schemaClassName(writer, context, shape) + ".Schema";
 
     // Aggregate shapes can participate in recursive graphs (a shape referencing itself
     // directly or through a cycle). A direct static reference would observe null while the
@@ -127,31 +127,33 @@ public final class SchemaGenerator {
         "Unit");
   }
 
-  public static String schemaClassName(GenerationContext context, Shape shape) {
-    return CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(shape)) + "Schema";
+  public static String schemaClassName(
+      CSharpWriter writer, GenerationContext context, Shape shape) {
+    return writer.typeName(context.symbolProvider().toSymbol(shape), "Schema");
   }
 
-  public static String operationSchemaAccessor(GenerationContext context, OperationShape shape) {
-    return CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(shape))
-        + "Schema.Schema";
+  public static String operationSchemaAccessor(
+      CSharpWriter writer, GenerationContext context, OperationShape shape) {
+    return writer.typeName(context.symbolProvider().toSymbol(shape), "Schema") + ".Schema";
   }
 
   public static String serviceSchemaAccessor(
-      GenerationContext context, software.amazon.smithy.model.shapes.ServiceShape service) {
-    String ns = context.settings().csharpNamespace(service.getId().getNamespace());
-    String typeName = CSharpNaming.typeName(service.getId().getName());
-    return (ns.isEmpty() ? "" : ns + ".") + typeName + "Schema.Schema";
+      CSharpWriter writer,
+      GenerationContext context,
+      software.amazon.smithy.model.shapes.ServiceShape service) {
+    return writer.typeName(context.symbolProvider().toSymbol(service), "Schema") + ".Schema";
   }
 
-  public static String operationShapeType(GenerationContext context, ShapeId id) {
+  public static String operationShapeType(
+      CSharpWriter writer, GenerationContext context, ShapeId id) {
     if (ShapeSupport.isUnit(id)) return "SmithyUnit";
-    return CSharpSymbolProvider.qualified(
-        context.symbolProvider().toSymbol(context.model().expectShape(id)));
+    return writer.typeName(context.symbolProvider().toSymbol(context.model().expectShape(id)));
   }
 
-  public static String operationShapeSchema(GenerationContext context, ShapeId id) {
+  public static String operationShapeSchema(
+      CSharpWriter writer, GenerationContext context, ShapeId id) {
     if (ShapeSupport.isUnit(id)) return "Schemas.Unit";
-    return shapeSchemaAccessor(context, context.model().expectShape(id));
+    return shapeSchemaAccessor(writer, context, context.model().expectShape(id));
   }
 
   private static String localSchemaClassName(Shape shape) {
@@ -188,7 +190,7 @@ public final class SchemaGenerator {
       CSharpWriter writer, GenerationContext context, Shape shape, List<MemberShape> members) {
     addImports(writer);
     SymbolProvider sp = context.symbolProvider();
-    String typeName = CSharpSymbolProvider.qualified(sp.toSymbol(shape));
+    String typeName = writer.typeName(sp.toSymbol(shape));
 
     writer.write("public static partial class $L", localSchemaClassName(shape));
     writer.openBlock(
@@ -203,7 +205,7 @@ public final class SchemaGenerator {
                 for (MemberShape member : members) {
                   writer.write(
                       "public $L $L { get; set; }",
-                      ShapeSupport.memberTypeExpr(context.model(), sp, member, true),
+                      ShapeSupport.memberTypeExpr(writer, context.model(), sp, member, true),
                       CSharpNaming.propertyName(member.getMemberName()));
                 }
               });
@@ -225,7 +227,7 @@ public final class SchemaGenerator {
                         MemberShape member = members.get(index);
                         writer.write(
                             "writer.WriteMember<$L>($L, value.$L);",
-                            ShapeSupport.memberTypeExpr(context.model(), sp, member, true),
+                            ShapeSupport.memberTypeExpr(writer, context.model(), sp, member, true),
                             index,
                             CSharpNaming.propertyName(member.getMemberName()));
                       }
@@ -249,7 +251,7 @@ public final class SchemaGenerator {
             writer.write("$L,", CSharpNaming.formatString(name));
             writer.write("static value => value.$L,", prop);
             writer.write("static (builder, value) => builder.$L = value,", prop);
-            writer.write("$L,", memberTargetExpr(context, member));
+            writer.write("$L,", memberTargetExpr(writer, context, member));
             writer.write("$L)", memberTraitsExpr(context, member));
             writer.dedent();
           }
@@ -274,13 +276,13 @@ public final class SchemaGenerator {
     addImports(writer);
     SymbolProvider sp = context.symbolProvider();
     Shape memberTarget = context.model().expectShape(shape.getMember().getTarget());
-    String typeName = CSharpSymbolProvider.qualified(sp.toSymbol(shape));
+    String typeName = writer.typeName(sp.toSymbol(shape));
     boolean sparse = ShapeSupport.isSparse(shape);
-    String memberType =
-        CSharpSymbolProvider.qualified(sp.toSymbol(memberTarget)) + (sparse ? "?" : "");
+    String memberType = writer.typeName(sp.toSymbol(memberTarget)) + (sparse ? "?" : "");
     String builderType = "System.Collections.Generic.List<" + memberType + ">";
     String factory = shape.getType() == ShapeType.SET ? "Set" : "List";
-    String elementSchema = elementSchemaExpr(context, shape.getMember(), memberTarget, sparse);
+    String elementSchema =
+        elementSchemaExpr(writer, context, shape.getMember(), memberTarget, sparse);
 
     writer.write("public static partial class $L", localSchemaClassName(shape));
     writer.openBlock(
@@ -317,12 +319,11 @@ public final class SchemaGenerator {
     addImports(writer);
     SymbolProvider sp = context.symbolProvider();
     Shape valueTarget = context.model().expectShape(shape.getValue().getTarget());
-    String typeName = CSharpSymbolProvider.qualified(sp.toSymbol(shape));
+    String typeName = writer.typeName(sp.toSymbol(shape));
     boolean sparse = ShapeSupport.isSparse(shape);
-    String valueType =
-        CSharpSymbolProvider.qualified(sp.toSymbol(valueTarget)) + (sparse ? "?" : "");
+    String valueType = writer.typeName(sp.toSymbol(valueTarget)) + (sparse ? "?" : "");
     String builderType = "System.Collections.Generic.Dictionary<string, " + valueType + ">";
-    String valueSchema = elementSchemaExpr(context, shape.getValue(), valueTarget, sparse);
+    String valueSchema = elementSchemaExpr(writer, context, shape.getValue(), valueTarget, sparse);
 
     writer.write("public static partial class $L", localSchemaClassName(shape));
     writer.openBlock(
@@ -349,7 +350,7 @@ public final class SchemaGenerator {
               memberTraitsExpr(context, shape.getKey()),
               memberTraitsExpr(context, shape.getValue()),
               shapeSchemaAccessor(
-                  context, context.model().expectShape(shape.getKey().getTarget())));
+                  writer, context, context.model().expectShape(shape.getKey().getTarget())));
           writer.dedent();
           writer.dedent();
           writer.write("");
@@ -394,7 +395,7 @@ public final class SchemaGenerator {
   public static void writeUnionSchema(
       CSharpWriter writer, GenerationContext context, UnionShape shape, List<MemberShape> members) {
     addImports(writer);
-    String typeName = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(shape));
+    String typeName = writer.typeName(context.symbolProvider().toSymbol(shape));
 
     writer.write("public static partial class $L", localSchemaClassName(shape));
     writer.openBlock(
@@ -417,7 +418,7 @@ public final class SchemaGenerator {
             writer.write("static value => value is $L.$L,", typeName, variantName);
             writer.write("static value => (($L.$L)value).Value,", typeName, variantName);
             writer.write("static value => new $L.$L(value!),", typeName, variantName);
-            writer.write("$L,", rawMemberTargetExpr(context, member));
+            writer.write("$L,", rawMemberTargetExpr(writer, context, member));
             writer.write("$L)", memberTraitsExpr(context, member));
             writer.dedent();
           }
@@ -428,11 +429,13 @@ public final class SchemaGenerator {
         });
   }
 
-  private static String memberTargetExpr(GenerationContext context, MemberShape member) {
+  private static String memberTargetExpr(
+      CSharpWriter writer, GenerationContext context, MemberShape member) {
     Shape target = context.model().expectShape(member.getTarget());
-    String targetExpr = targetSchemaExpr(context, member, target);
+    String targetExpr = targetSchemaExpr(writer, context, member, target);
     String nullableMemberType =
-        ShapeSupport.memberTypeExpr(context.model(), context.symbolProvider(), member, true);
+        ShapeSupport.memberTypeExpr(
+            writer, context.model(), context.symbolProvider(), member, true);
     if (!nullableMemberType.endsWith("?")) {
       return targetExpr;
     }
@@ -443,20 +446,21 @@ public final class SchemaGenerator {
     return "Schemas.NullableReference(" + targetExpr + ")";
   }
 
-  private static String rawMemberTargetExpr(GenerationContext context, MemberShape member) {
+  private static String rawMemberTargetExpr(
+      CSharpWriter writer, GenerationContext context, MemberShape member) {
     Shape target = context.model().expectShape(member.getTarget());
-    return targetSchemaExpr(context, member, target);
+    return targetSchemaExpr(writer, context, member, target);
   }
 
   private static String targetSchemaExpr(
-      GenerationContext context, MemberShape member, Shape target) {
+      CSharpWriter writer, GenerationContext context, MemberShape member, Shape target) {
     if (ShapeSupport.isStreamingBlobMember(context.model(), member)) {
       return "Schemas.StreamingBlob";
     }
     if (ShapeSupport.isEventStreamMember(context.model(), member)) {
-      return "Schemas.EventStream(" + shapeSchemaAccessor(context, target) + ")";
+      return "Schemas.EventStream(" + shapeSchemaAccessor(writer, context, target) + ")";
     }
-    return shapeSchemaAccessor(context, target);
+    return shapeSchemaAccessor(writer, context, target);
   }
 
   /**
@@ -465,8 +469,12 @@ public final class SchemaGenerator {
    * the generated model type, so the schema's element type must match.
    */
   private static String elementSchemaExpr(
-      GenerationContext context, MemberShape member, Shape target, boolean sparse) {
-    String targetExpr = shapeSchemaAccessor(context, target);
+      CSharpWriter writer,
+      GenerationContext context,
+      MemberShape member,
+      Shape target,
+      boolean sparse) {
+    String targetExpr = shapeSchemaAccessor(writer, context, target);
     String base;
     if (!sparse) {
       base = targetExpr;

@@ -4,7 +4,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
@@ -35,8 +34,7 @@ public final class MapGenerator implements Runnable {
     // which has no other form. What the key targets is not lost — the schema carries that shape, so
     // a server holds the key to whatever it says — but it is not what the key is typed as.
     String keyType = "string";
-    String valueType =
-        CSharpSymbolProvider.qualified(value) + (ShapeSupport.isSparse(shape) ? "?" : "");
+    String valueType = writer.typeName(value) + (ShapeSupport.isSparse(shape) ? "?" : "");
 
     writer.writeXmlDocs(shape);
     writer.write("public sealed partial record class $L", typeName);

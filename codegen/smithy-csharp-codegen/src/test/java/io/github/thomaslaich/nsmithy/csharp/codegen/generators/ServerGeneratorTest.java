@@ -321,20 +321,20 @@ final class ServerGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<Example.Example.Streaming.WatchOutput>"
-                + " WatchAsync(Example.Example.Streaming.WatchInput input,"
+            "System.Threading.Tasks.Task<global::Example.Example.Streaming.WatchOutput>"
+                + " WatchAsync(global::Example.Example.Streaming.WatchInput input,"
                 + " System.Threading.CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<Example.Example.Streaming.UploadOutput>"
-                + " UploadAsync(Example.Example.Streaming.UploadInput input,"
+            "System.Threading.Tasks.Task<global::Example.Example.Streaming.UploadOutput>"
+                + " UploadAsync(global::Example.Example.Streaming.UploadInput input,"
                 + " System.Threading.CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<Example.Example.Streaming.ChatOutput>"
-                + " ChatAsync(Example.Example.Streaming.ChatInput input,"
+            "System.Threading.Tasks.Task<global::Example.Example.Streaming.ChatOutput>"
+                + " ChatAsync(global::Example.Example.Streaming.ChatInput input,"
                 + " System.Threading.CancellationToken cancellationToken = default);"),
         generated);
     assertFalse(generated.contains("IEventStreamServiceProtocol"));
@@ -466,13 +466,14 @@ final class ServerGeneratorTest {
     assertTrue(generated.contains("draft/2020-12/schema"), generated);
     assertTrue(
         generated.contains(
-            "ServiceOperation.Create(Example.Example.Catalog.NotifySchema.Schema, async (input, ct)"
-                + " => { await notifyHandler.NotifyAsync(input, ct).ConfigureAwait(false); return"
-                + " SmithyUnit.Value; }, NotifyJsonSchemas.Value),"),
+            "ServiceOperation.Create(global::Example.Example.Catalog.NotifySchema.Schema, async"
+                + " (input, ct) => { await notifyHandler.NotifyAsync(input,"
+                + " ct).ConfigureAwait(false); return SmithyUnit.Value; },"
+                + " NotifyJsonSchemas.Value),"),
         generated);
     assertTrue(
         generated.contains(
-            "ServiceOperation.Create(Example.Example.Catalog.PingSchema.Schema, "
+            "ServiceOperation.Create(global::Example.Example.Catalog.PingSchema.Schema, "
                 + "(_, ct) => pingHandler.PingAsync(ct), PingJsonSchemas.Value),"),
         generated);
   }

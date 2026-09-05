@@ -36,6 +36,7 @@ public final class ErrorGenerator implements Runnable {
 
   @Override
   public void run() {
+    writer.reserveMemberNames(shape);
     SymbolProvider sp = context.symbolProvider();
     Model model = context.model();
     String typeName = CSharpNaming.typeName(shape.getId().getName());
@@ -101,7 +102,7 @@ public final class ErrorGenerator implements Runnable {
     if (!hasRequired) sig.append(" = null");
     for (MemberShape m : ctor) {
       sig.append(", ")
-          .append(ShapeSupport.parameterTypeExpr(model, sp, m))
+          .append(ShapeSupport.parameterTypeExpr(writer, model, sp, m))
           .append(' ')
           .append(CSharpNaming.parameterName(m.getMemberName()));
       if (ShapeSupport.isOptionalParameter(m)) sig.append(" = null");
@@ -138,7 +139,7 @@ public final class ErrorGenerator implements Runnable {
     for (MemberShape m : ShapeSupport.sortedMembers(shape, excluded)) {
       String prop = CSharpNaming.propertyName(m.getMemberName());
       boolean nullable = ShapeSupport.isNullable(m);
-      String type = ShapeSupport.memberTypeExpr(model, sp, m, nullable);
+      String type = ShapeSupport.memberTypeExpr(writer, model, sp, m, nullable);
       writer.writeXmlDocs(m);
       writer.write("public $L $L { get; }", type, prop);
     }

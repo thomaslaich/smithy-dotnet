@@ -10,7 +10,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
@@ -50,14 +49,16 @@ final class FakeValueSynthesizer {
   private static final long PLACEHOLDER_EPOCH_SECONDS = 1704067200L;
 
   private final GenerationContext context;
+  private final CSharpWriter writer;
   private final String subject;
   private final List<PendingIterator> pendingIterators = new ArrayList<>();
 
   private record PendingIterator(String name, String eventType, List<String> events) {}
 
   /** `subject` names the consuming fake ("fake handler", "fake client") in codegen warnings. */
-  FakeValueSynthesizer(GenerationContext context, String subject) {
+  FakeValueSynthesizer(GenerationContext context, CSharpWriter writer, String subject) {
     this.context = context;
+    this.writer = writer;
     this.subject = subject;
   }
 
@@ -329,7 +330,7 @@ final class FakeValueSynthesizer {
             : target.asSetShape().orElseThrow().getMember();
     Shape elementTarget = model.expectShape(elementMember.getTarget());
     String elementType =
-        CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(elementTarget))
+        writer.typeName(context.symbolProvider().toSymbol(elementTarget))
             + (ShapeSupport.isSparse(target) ? "?" : "");
 
     List<String> elements = new ArrayList<>();
@@ -372,7 +373,7 @@ final class FakeValueSynthesizer {
     Shape keyTarget = model.expectShape(map.getKey().getTarget());
     Shape valueTarget = model.expectShape(map.getValue().getTarget());
     String valueType =
-        CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(valueTarget))
+        writer.typeName(context.symbolProvider().toSymbol(valueTarget))
             + (ShapeSupport.isSparse(map) ? "?" : "");
 
     List<String> entries = new ArrayList<>();
@@ -551,6 +552,6 @@ final class FakeValueSynthesizer {
   }
 
   String qualifiedType(Shape shape) {
-    return CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(shape));
+    return writer.typeName(context.symbolProvider().toSymbol(shape));
   }
 }

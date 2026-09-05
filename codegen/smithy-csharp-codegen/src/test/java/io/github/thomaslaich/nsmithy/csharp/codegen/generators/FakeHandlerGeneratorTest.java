@@ -179,8 +179,8 @@ final class FakeHandlerGeneratorTest {
     assertTrue(
         generated.contains(
             "public virtual"
-                + " System.Threading.Tasks.Task<Example.Example.Fake.GetCityOutput>"
-                + " GetCityAsync(Example.Example.Fake.GetCityInput input,"
+                + " System.Threading.Tasks.Task<GetCityOutput>"
+                + " GetCityAsync(GetCityInput input,"
                 + " System.Threading.CancellationToken cancellationToken = default)"),
         generated);
     assertFalse(generated.contains("AddFakeFakeableServiceHandler"), generated);
@@ -192,9 +192,10 @@ final class FakeHandlerGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "return System.Threading.Tasks.Task.FromResult(new Example.Example.Fake.GetCityOutput("
-                + "Name: \"Zurich\", Population: 400000, Tags: new Example.Example.Fake.TagList("
-                + "new string[] { \"alpine\" })));"),
+            "return System.Threading.Tasks.Task.FromResult(new"
+                + " GetCityOutput(Name: \"Zurich\", Population:"
+                + " 400000, Tags: new TagList(new string[] {"
+                + " \"alpine\" })));"),
         generated);
     assertFalse(generated.contains("GetCityOutput(Name: \"Zurich\", Mood:"), generated);
   }
@@ -205,11 +206,11 @@ final class FakeHandlerGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "new Example.Example.Fake.GetStatusOutput(Label: \"label\","
-                + " Attrs: new Example.Example.Fake.AttrMap(new"
+            "new GetStatusOutput(Label: \"label\","
+                + " Attrs: new AttrMap(new"
                 + " System.Collections.Generic.Dictionary<string, string> { { \"key\", \"value\" }"
-                + " }), Choice: Example.Example.Fake.Choice.FromNum(0), Code: \"codexx\","
-                + " Count: 5, Mood: Example.Example.Fake.Mood.HAPPY,"
+                + " }), Choice: Choice.FromNum(0), Code: \"codexx\","
+                + " Count: 5, Mood: Mood.HAPPY,"
                 + " When: System.DateTimeOffset.FromUnixTimeSeconds(1704067200))"),
         generated);
   }
@@ -220,11 +221,12 @@ final class FakeHandlerGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "new Example.Example.Fake.GetTreeOutput(Root: new Example.Example.Fake.TreeNode("
-                + "Id: \"id\", Children: new Example.Example.Fake.TreeList("
-                + "System.Array.Empty<Example.Example.Fake.TreeNode>())))"),
+            "new GetTreeOutput(Root: new"
+                + " TreeNode(Id: \"id\", Children: new"
+                + " TreeList("
+                + "System.Array.Empty<TreeNode>())))"),
         generated);
-    assertFalse(generated.contains("Child: new Example.Example.Fake.TreeNode"), generated);
+    assertFalse(generated.contains("Child: new TreeNode"), generated);
   }
 
   @Test
@@ -243,19 +245,16 @@ final class FakeHandlerGeneratorTest {
   void eventStreamOutputsYieldFromGeneratedAsyncIterator() throws Exception {
     String generated = renderFake();
 
-    assertTrue(
-        generated.contains("new Example.Example.Fake.WatchOutput(Events: FakeWatchEventsEvents())"),
-        generated);
+    assertTrue(generated.contains("new WatchOutput(Events: FakeWatchEventsEvents())"), generated);
     assertTrue(
         generated.contains(
             "private static async"
-                + " System.Collections.Generic.IAsyncEnumerable<Example.Example.Fake.ChatEvent>"
+                + " System.Collections.Generic.IAsyncEnumerable<ChatEvent>"
                 + " FakeWatchEventsEvents()"),
         generated);
     assertTrue(
         generated.contains(
-            "yield return Example.Example.Fake.ChatEvent.FromMessage(new"
-                + " Example.Example.Fake.MessageEvent(Text: \"text\"));"),
+            "yield return ChatEvent.FromMessage(new" + " MessageEvent(Text: \"text\"));"),
         generated);
   }
 
@@ -267,21 +266,20 @@ final class FakeHandlerGeneratorTest {
     assertTrue(generated.contains("if (MatchesLookupExample1(input))"), generated);
     assertTrue(generated.contains("if (MatchesLookupExample2(input))"), generated);
     assertTrue(
-        generated.contains(
-            "private static bool MatchesLookupExample0(Example.Example.Fake.LookupInput input)"),
+        generated.contains("private static bool MatchesLookupExample0(LookupInput" + " input)"),
         generated);
     assertTrue(generated.contains("if (!(input.Query == \"zrh\"))"), generated);
     assertTrue(generated.contains("if (!(input.Limit == 1))"), generated);
     assertTrue(
         generated.contains(
             "return System.Threading.Tasks.Task.FromResult(new"
-                + " Example.Example.Fake.LookupOutput(Label: \"Filtered\"));"),
+                + " LookupOutput(Label: \"Filtered\"));"),
         generated);
     // The fallback stays the first non-error example output.
     assertTrue(
         generated.contains(
             "return System.Threading.Tasks.Task.FromResult(new"
-                + " Example.Example.Fake.LookupOutput(Label: \"Zurich\"));"),
+                + " LookupOutput(Label: \"Zurich\"));"),
         generated);
   }
 
@@ -302,9 +300,10 @@ final class FakeHandlerGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "return System.Threading.Tasks.Task.FromException<Example.Example.Fake.LookupOutput>("
-                + "new Example.Example.Fake.LookupError(message: \"no such city\","
-                + " hint: \"try zrh\"));"),
+            "return"
+                + " System.Threading.Tasks.Task.FromException<LookupOutput>(new"
+                + " LookupError(message: \"no such city\", hint: \"try"
+                + " zrh\"));"),
         generated);
   }
 
