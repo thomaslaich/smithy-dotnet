@@ -205,23 +205,27 @@ A host adapter binds a host framework to the runtime. It owns two conversions â€
 the host request into a `SmithyHttpRequest`, and a `SmithyHttpServerResponse` onto
 the host response â€” and one dispatch entry point that generated endpoints call:
 
-The runtime is currently stateless, so the host adapter owns a shared default
-instance rather than requiring it in DI; generated endpoints never reference it.
+Generated endpoints resolve `SmithyServerRuntime` from request services and pass
+it to the host. `Add{Service}Handler<THandler>()` calls `AddSmithyServer()`, which
+uses `TryAddSingleton` to register a default without replacing application
+registrations. Applications registering operation handlers individually must call
+`services.AddSmithyServer()` before building the host. The runtime is currently
+stateless; this ownership boundary allows future lifecycle configuration without
+adding global host state.
 
 ```csharp
 public static class SmithyAspNetCoreHost
 {
-    private static readonly SmithyServerRuntime Runtime = new();
-
     public static async Task DispatchAsync<TInput, TOutput>(
+        SmithyServerRuntime runtime,
         HttpContext context,
         IServerOperationProtocol<TInput, TOutput> protocol,
         Func<TInput, CancellationToken, Task<TOutput>> handler,
         bool streamRequestBody = false,
         CancellationToken cancellationToken = default)
     {
-        var request = await ToSmithyRequestAsync(context, cancellationToken).ConfigureAwait(false);
-        var response = await Runtime.DispatchAsync(protocol, request, handler, cancellationToken).ConfigureAwait(false);
+        var request = await ToSmithyRequestAsync(context, streamRequestBody, cancellationToken).ConfigureAwait(false);
+        var response = await runtime.DispatchAsync(protocol, request, handler, cancellationToken).ConfigureAwait(false);
         await WriteAsync(context, response, cancellationToken).ConfigureAwait(false);
     }
 
@@ -280,8 +284,8 @@ A generated endpoint is a route bound to a handler method and the operation's
 protocol, delegating to the host adapter:
 
 ```csharp
-endpoints.MapMethods("/foo", ["POST"], (HttpContext context, IFooHandler handler, CancellationToken ct) =>
-    SmithyAspNetCoreHost.DispatchAsync(context, FooProtocol, handler.FooAsync, ct));
+endpoints.MapMethods("/foo", ["POST"], (HttpContext context, [FromServices] SmithyServerRuntime runtime, IFooHandler handler, CancellationToken ct) =>
+    SmithyAspNetCoreHost.DispatchAsync(runtime, context, FooProtocol, handler.FooAsync, cancellationToken: ct));
 ```
 
 The only per-operation variation in codegen is the handler-adapter lambda (by

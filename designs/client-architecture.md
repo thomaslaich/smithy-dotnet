@@ -53,6 +53,13 @@ public sealed class WeatherClientConfig : SmithyClientConfig
 }
 ```
 
+`SmithyHttpClientEnvironment` owns common construction: endpoint fallback,
+service protocol binding, auth scheme resolution, runtime creation, and owned
+transport cleanup. Generated constructors supply service defaults and bind
+operations. Failed operation binding disposes the environment before rethrowing.
+`IHttpClientFactory` registration uses the same HTTP version configuration helper,
+then applies the application's `configureClient` callback so explicit settings win.
+
 The public constructors keep transport ownership explicit:
 
 ```csharp

@@ -146,6 +146,9 @@ public final class ServerGenerator implements Runnable {
               () -> {
                 writer.write("System.ArgumentNullException.ThrowIfNull(services);");
                 writer.write("");
+                if (!serverKinds.isEmpty()) {
+                  writer.write("services.AddSmithyServer();");
+                }
                 writer.write("services.AddSingleton<THandler>();");
                 writer.write(
                     "services.AddSingleton<$L>(serviceProvider =>"
@@ -353,9 +356,9 @@ public final class ServerGenerator implements Runnable {
           protocolEnum,
           mapSuffix(kind));
       writer.openBlock(
-          "endpoints.MapMethods($L, [$L], async (HttpContext httpContext, $L handler,"
-              + " System.Threading.CancellationToken"
-              + " cancellationToken) => {",
+          "endpoints.MapMethods($L, [$L], async (HttpContext httpContext,"
+              + " [Microsoft.AspNetCore.Mvc.FromServices] SmithyServerRuntime runtime, $L handler,"
+              + " System.Threading.CancellationToken cancellationToken) => {",
           "});",
           CSharpNaming.formatString(routePattern(http)),
           CSharpNaming.formatString(http.getMethod()),
@@ -386,7 +389,8 @@ public final class ServerGenerator implements Runnable {
         protocolEnum,
         mapSuffix(kind));
     writer.openBlock(
-        "endpoints.MapPost($L, async (HttpContext httpContext, $L handler,"
+        "endpoints.MapPost($L, async (HttpContext httpContext,"
+            + " [Microsoft.AspNetCore.Mvc.FromServices] SmithyServerRuntime runtime, $L handler,"
             + " System.Threading.CancellationToken cancellationToken) => {",
         "});",
         CSharpNaming.formatString(uri),
@@ -406,7 +410,7 @@ public final class ServerGenerator implements Runnable {
             || ((kind == Kind.SIMPLE_REST_JSON || kind == Kind.REST_JSON_1)
                 && ShapeSupport.isStreamingBlobShape(model, op.getInputShape()));
     writer.write(
-        "await SmithyAspNetCoreHost.DispatchAsync(httpContext, $L, $L, $L,"
+        "await SmithyAspNetCoreHost.DispatchAsync(runtime, httpContext, $L, $L, $L,"
             + " cancellationToken).ConfigureAwait(false);",
         operationProtocolField(kind, op),
         unaryAdapter(op),

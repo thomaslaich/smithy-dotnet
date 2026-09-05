@@ -434,9 +434,9 @@ final class ClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "config.Protocol is null ? new"
+            "new"
                 + " SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
-                + " allowDowngrade: true) : null"),
+                + " allowDowngrade: true)"),
         generated);
   }
 
@@ -451,12 +451,11 @@ final class ClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "SmithyHttpVersionPreference? modeledHttpVersionPreference = config.Protocol is null ?"
-                + " new SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
-                + " allowDowngrade: true) : null;"),
+            "new SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
+                + " allowDowngrade: true));"),
         generated);
     assertTrue(
-        generated.indexOf("resolvedProtocol.HttpVersionPreference).Apply(client);")
+        generated.indexOf("SmithyHttpClientEnvironment.ConfigureHttpClient(client,")
             < generated.indexOf("configureClient?.Invoke(client);"),
         generated);
   }
@@ -472,9 +471,9 @@ final class ClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "config.Protocol is null ? new"
+            "new"
                 + " SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
-                + " allowDowngrade: false) : null"),
+                + " allowDowngrade: false)"),
         generated);
   }
 

@@ -140,8 +140,8 @@ public final class ClientGenerator implements Runnable {
         () -> {
           if (needsRuntime) {
             writer.write("private readonly SmithyClientRuntime runtime;");
-            // Only set for the endpoint ctor, so Dispose never touches caller-owned clients.
-            writer.write("private readonly System.Net.Http.HttpClient? ownedHttpClient;");
+            // The environment owns only resources created by the runtime factory.
+            writer.write("private readonly SmithyHttpClientEnvironment environment;");
           }
           if (needsIdempotency) {
             writer.write("private readonly System.Func<string> idempotencyTokenProvider;");
@@ -180,36 +180,12 @@ public final class ClientGenerator implements Runnable {
               () -> {
                 writer.write("System.ArgumentNullException.ThrowIfNull(config);");
                 if (needsRuntime) {
-                  writer.write(
-                      "var endpoint = config.Endpoint ?? throw new System.ArgumentException(");
-                  writer.write(
-                      "    \"Config.Endpoint must be set; otherwise use the constructor that takes"
-                          + " an HttpClient.\", nameof(config));");
-                  writer.write(
-                      "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
-                  writer.write(
-                      "var httpClient = CreateDefaultHttpClient(resolvedProtocol,"
-                          + " config.Protocol is null ? $L : null);",
-                      modeledHttpVersionPreference);
-                  writer.write("this.ownedHttpClient = httpClient;");
-                  writer.write(
-                      "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
-                  writer.write(
-                      "this.runtime = new SmithyClientRuntime(new"
-                          + " HttpClientTransport(httpClient),"
-                          + " config.Interceptors,"
-                          + " config.RetryStrategy,"
-                          + " endpoint,"
-                          + " config.OperationTimeout,"
-                          + " config.EndpointResolver,"
-                          + " SmithyAuthSchemeResolver.ResolveSchemes($L,"
-                          + " ModeledAuthSchemes, config.AuthSchemes),"
-                          + " config.DisableHostPrefixInjection, config.UserAgent);",
-                      serviceSchema);
+                  writeEnvironmentCreation(
+                      serviceSchema, primaryProtocol, modeledHttpVersionPreference, "null");
                 }
                 writeIdempotencyAssignment(needsIdempotency);
                 if (needsRuntime) {
-                  writeOperationBindings(operations);
+                  writeSafeOperationBindings(operations);
                 }
               });
           writer.write("");
@@ -228,32 +204,12 @@ public final class ClientGenerator implements Runnable {
                 writer.write("System.ArgumentNullException.ThrowIfNull(httpClient);");
                 if (needsRuntime) {
                   writer.write("config ??= new $LConfig();", typeName);
-                  writer.write(
-                      "var endpoint = config.Endpoint ?? httpClient.BaseAddress ?? throw new"
-                          + " System.ArgumentException(");
-                  writer.write(
-                      "    \"Set Config.Endpoint or httpClient.BaseAddress.\","
-                          + " nameof(httpClient));");
-                  writer.write(
-                      "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
-                  writer.write(
-                      "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
-                  writer.write(
-                      "this.runtime = new SmithyClientRuntime(new"
-                          + " HttpClientTransport(httpClient),"
-                          + " config.Interceptors,"
-                          + " config.RetryStrategy,"
-                          + " endpoint,"
-                          + " config.OperationTimeout,"
-                          + " config.EndpointResolver,"
-                          + " SmithyAuthSchemeResolver.ResolveSchemes($L,"
-                          + " ModeledAuthSchemes, config.AuthSchemes),"
-                          + " config.DisableHostPrefixInjection, config.UserAgent);",
-                      serviceSchema);
+                  writeEnvironmentCreation(
+                      serviceSchema, primaryProtocol, modeledHttpVersionPreference, "httpClient");
                 }
                 writeIdempotencyAssignment(needsIdempotency);
                 if (needsRuntime) {
-                  writeOperationBindings(operations);
+                  writeSafeOperationBindings(operations);
                 }
               });
           writer.write("");
@@ -271,16 +227,16 @@ public final class ClientGenerator implements Runnable {
                 "{",
                 "}",
                 () -> {
-                  writer.write(
-                      "this.runtime = runtime ?? throw new"
-                          + " System.ArgumentNullException(nameof(runtime));");
                   writer.write("config ??= new $LConfig();", typeName);
                   writer.write(
-                      "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
+                      "this.environment = SmithyHttpClientEnvironment.FromRuntime($L, runtime,"
+                          + " config, static () => new $L());",
+                      serviceSchema,
+                      primaryProtocol);
+                  writer.write("this.runtime = environment.Runtime;");
+                  writer.write("var serviceProtocol = environment.ServiceProtocol;");
                   writeIdempotencyAssignment(needsIdempotency);
-                  writer.write(
-                      "var serviceProtocol = resolvedProtocol.ForService($L);", serviceSchema);
-                  writeOperationBindings(operations);
+                  writeSafeOperationBindings(operations);
                 });
             writer.write("");
           }
@@ -314,18 +270,6 @@ public final class ClientGenerator implements Runnable {
               modeledAuthSchemesLiteral());
           writer.write("");
 
-          writer.write(
-              "private static System.Net.Http.HttpClient CreateDefaultHttpClient(IProtocol"
-                  + " protocol, SmithyHttpVersionPreference? modeledPreference)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("var client = new System.Net.Http.HttpClient();");
-                writer.write(
-                    "(modeledPreference ?? protocol.HttpVersionPreference).Apply(client);");
-                writer.write("return client;");
-              });
           if (needsIdempotency) {
             writer.write("");
             writer.write(
@@ -335,10 +279,10 @@ public final class ClientGenerator implements Runnable {
           writer.write("");
 
           // Disposes the HttpClient the client created itself; a no-op when the caller supplied the
-          // HttpClient or runtime (ownedHttpClient is null), so injected transports are never
+          // HttpClient or runtime, so injected transports are never
           // closed.
           if (needsRuntime) {
-            writer.write("public void Dispose() => ownedHttpClient?.Dispose();");
+            writer.write("public void Dispose() => environment.Dispose();");
           } else {
             writer.write("public void Dispose() { }");
           }
@@ -351,6 +295,32 @@ public final class ClientGenerator implements Runnable {
         });
     writer.write("");
     writeConfigClass(typeName);
+  }
+
+  private void writeSafeOperationBindings(List<OperationShape> operations) {
+    writer.write("try");
+    writer.openBlock("{", "}", () -> writeOperationBindings(operations));
+    writer.write("catch");
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write("environment.Dispose();");
+          writer.write("throw;");
+        });
+  }
+
+  private void writeEnvironmentCreation(
+      String serviceSchema, String primaryProtocol, String preference, String httpClient) {
+    writer.write(
+        "this.environment = SmithyHttpClientEnvironment.Create($L, config, static () => new $L(),"
+            + " ModeledAuthSchemes, $L, $L);",
+        serviceSchema,
+        primaryProtocol,
+        preference,
+        httpClient);
+    writer.write("this.runtime = environment.Runtime;");
+    writer.write("var serviceProtocol = environment.ServiceProtocol;");
   }
 
   /**

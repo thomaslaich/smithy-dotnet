@@ -4,9 +4,9 @@ How NSmithy abstracts the HTTP transport layer.
 
 ## Goals
 
-- Generated clients must not depend on `HttpClient` or any specific .NET HTTP
-  implementation. Consumers should be able to substitute a different transport
-  (e.g. a test double, a custom retry wrapper, or a non-`HttpClient` HTTP stack).
+- Operation execution depends on `IHttpTransport`. Generated clients accept
+  `HttpClient` for convenience; consumers can supply a runtime with a test double
+  or another HTTP stack.
 - The transport interface must be minimal: one method, one request type, one
   response type.
 - Request and response types must carry enough information for any Smithy HTTP
@@ -35,18 +35,20 @@ public interface IHttpTransport
 `SmithyHttpRequest` carries:
 
 - `HttpMethod Method`
-- `string RequestUri` — resolved against the client endpoint by the transport
+- `string RequestUri` — resolved against the effective endpoint by the client runtime
 - `IDictionary<string, IReadOnlyList<string>> Headers` (multi-value)
-- `byte[]? Content`, `string? ContentType`, and a separate `ContentHeaders`
+- `SmithyHttpBody Body` and `string? ContentType`
 
 `SmithyHttpClientResponse` carries:
 
 - `HttpStatusCode StatusCode` and `string? ReasonPhrase`
-- `byte[] Content` (with a `ContentText` convenience accessor)
+- `SmithyHttpBody Body`; `Content` / `ContentText` are buffered-body convenience accessors
 - `IReadOnlyDictionary<string, IReadOnlyList<string>> Headers` and `ContentHeaders`
 - `Func<string, string?>? Trailer` for trailing response headers
 
-These types are deliberately flat. HTTP/2 trailers (e.g. gRPC's `grpc-status`) are
+`SmithyHttpBody` distinguishes empty, buffered byte, live stream, and framed
+async-enumerable bodies. The client runtime selects buffered or streaming
+response mode from the operation binding. HTTP/2 trailers (e.g. gRPC's `grpc-status`) are
 kept separate from upfront response headers and exposed through `Trailer`. Bindings
 that need the status (e.g. `@httpResponseCode`) read `StatusCode` directly.
 
@@ -67,35 +69,34 @@ The generated `{Service}ClientConfig : SmithyClientConfig` is the canonical
 configuration model. It currently carries `Endpoint`, `Protocol`, `AuthSchemes`,
 `Interceptors`, `RetryStrategy`, and `IdempotencyTokenProvider`; service-specific
 and future runtime options can be added as properties without changing
-constructor signatures. The endpoint constructor writes the positional endpoint
-into config and then delegates to a private config constructor. The positional
+constructor signatures. The endpoint constructor shallow-copies config, writes
+the positional endpoint into that copy, and delegates to a private constructor. The positional
 endpoint wins over any `config.Endpoint` value.
 
 When the caller supplies no `HttpClient`, the client creates one using the
 protocol trait's modeled `http` / `eventStreamHttp` preference and downgrade
 policy. Native gRPC defaults to exact HTTP/2.
 
-The protocol implementation composes the transport with the codec and the
-protocol binding to produce a complete request pipeline. The generated client
-passes operation schemas and typed values into the protocol adapter; for the
-endpoint/HttpClient constructors it wraps the `HttpClient` in an
-`IHttpTransport` (`HttpClientTransport`) internally. The client runtime applies
-the effective endpoint to relative request URIs before handing the request to the
-transport, so `HttpClientTransport` sends the URI it receives.
+`SmithyHttpClientEnvironment` binds the service protocol, resolves configured
+auth schemes, wraps the HTTP client in `HttpClientTransport`, and constructs
+`SmithyClientRuntime`. Generated code supplies service defaults and operation
+bindings. The environment disposes only the HTTP client it created, including
+when construction fails; supplied clients and runtimes remain caller-owned.
 
-## Why Not `HttpClient` Directly
+The protocol owns serialization and wire rules. The runtime owns endpoint
+resolution, authentication, retries, interceptors, and transport invocation. It
+resolves relative request URIs before handing them to the transport.
 
-Accepting `HttpClient` in generated clients is common in .NET codegen tools but
-has several drawbacks for Smithy:
+## Why a Transport Interface
 
-- **Protocol coupling**: generated clients would be tied to HTTP/1.1 and HTTP/2
-  semantics. Smithy protocols like `rpcv2Cbor` or future transports would
-  require a different abstraction anyway.
-- **Testability**: replacing `HttpClient` with a test double requires
-  `HttpMessageHandler` subclassing, which is not composable without a mocking
-  library.
-- **Flexibility**: `IHttpTransport` lets consumers wrap the transport with retry
-  logic, logging, or a circuit breaker without patching the generated client.
+`IHttpTransport` makes an individual HTTP attempt independently replaceable and
+testable. Protocol tests can inspect neutral requests and provide neutral
+responses without hosting a server. `HttpClientTransport` can also be tested
+through a custom `HttpMessageHandler`; no mocking library is required.
+
+Retries belong to `SmithyClientRuntime`, where authentication, operation deadlines,
+and body replayability can be considered together. A transport implements one
+attempt and does not need to know about Smithy operation lifecycles.
 
 ## Relationship to `IHttpClientFactory`
 
@@ -135,8 +136,9 @@ Smithy HTTP traits.
 
 ## Protocol Layering
 
-`NSmithy.Http` only models raw HTTP transport. It does not know about Smithy
-traits or operation schemas.
+`NSmithy.Http` defines neutral HTTP messages, transport, and schema-bound
+protocol interfaces. Concrete protocol packages interpret Smithy traits; the
+transport does not.
 
 REST-specific Smithy bindings live in `NSmithy.Protocols.Rest`. That package
 projects operation input and output schemas into HTTP method, URI labels, query

@@ -5,7 +5,11 @@ runtime boundary.
 
 ## Status
 
-This is a design proposal, not a description of committed implementation work.
+The first two changes are implemented: `SmithyHttpClientEnvironment` centralizes
+client construction and ownership, and generated endpoints resolve
+`SmithyServerRuntime` through DI. The sections below retain the motivation and
+proposed alternatives; endpoint descriptors and HTTP-specific renames remain
+deferred.
 The current HTTP architecture is sound: operation methods and endpoints are
 thin, protocol bindings own wire behavior, and shared runtimes own the client
 and server execution algorithms. The improvements below preserve that design
@@ -72,9 +76,9 @@ but less completely during client construction and server endpoint mapping.
 
 ## 1. Centralize Client Construction
 
-### Current shape
+### Previous shape
 
-Each generated client constructor currently assembles much of the runtime
+Each generated client constructor previously assembled much of the runtime
 environment:
 
 - choose the configured or default protocol;
@@ -86,14 +90,13 @@ environment:
 - track whether the generated client owns the `HttpClient`;
 - bind every operation.
 
-The generated code is correct, but the construction algorithm is repeated for
-every service. Changes to ownership, default transport setup, or common config
-flow therefore require generator changes and regenerate a substantial block in
-every consumer project.
+The construction algorithm was repeated for every service. Changes to ownership,
+default transport setup, or common config flow therefore required generator
+changes and regenerated a substantial block in every consumer project.
 
-### Proposed shape
+### Implemented shape
 
-Move common construction into a hand-written factory that returns a disposable
+Common construction now lives in a hand-written factory that returns a disposable
 client environment:
 
 ```csharp
@@ -106,14 +109,14 @@ public sealed class SmithyHttpClientEnvironment : IDisposable
         ServiceSchema service,
         SmithyClientConfig config,
         Func<IProtocol> defaultProtocol,
-        SmithyHttpVersionPreference? modeledHttpVersion = null);
+        IReadOnlyList<string> modeledAuthSchemes,
+        SmithyHttpVersionPreference? modeledHttpVersion = null,
+        HttpClient? httpClient = null);
 }
 ```
 
-The exact public shape may instead be a builder or an internal factory used by
-generated clients. The important point is ownership: one runtime type should
-implement common endpoint/config/transport construction and dispose only the
-resources it created.
+One runtime type implements common endpoint/config/transport construction and
+disposes only the resources it created.
 
 Generated construction then becomes:
 
@@ -122,6 +125,7 @@ environment = SmithyHttpClientEnvironment.Create(
     WeatherSchema.Schema,
     config,
     static () => new RestJson1Protocol(),
+    ModeledAuthSchemes,
     WeatherHttpVersionPreference);
 
 getForecastBinding = new(
@@ -130,9 +134,9 @@ getForecastBinding = new(
     environment.ServiceProtocol.ForClientOperation(GetForecastSchema.Schema));
 ```
 
-Caller-supplied `HttpClient` and `SmithyClientRuntime` overloads remain possible,
-but should flow through the same environment abstraction rather than each
-constructor spelling out a parallel initialization path.
+Caller-supplied `HttpClient` and `SmithyClientRuntime` overloads flow through
+`Create` and `FromRuntime`, respectively. Generated constructors dispose the
+environment if operation binding throws.
 
 ### Benefits
 
@@ -144,18 +148,18 @@ constructor spelling out a parallel initialization path.
 
 ## 2. Resolve the Server Runtime Through Dependency Injection
 
-`SmithyAspNetCoreHost` currently owns a static default `SmithyServerRuntime`.
+`SmithyAspNetCoreHost` previously owned a static default `SmithyServerRuntime`.
 That is pleasantly small while the runtime is stateless, but it becomes the
 wrong ownership boundary when server interceptors, telemetry, exception policy,
 or other lifecycle configuration is added.
 
-The generated endpoint should receive a runtime from ASP.NET Core dependency
-injection, directly or through a host service:
+Generated endpoints now receive the runtime from ASP.NET Core dependency
+injection and pass it to the host adapter:
 
 ```csharp
 endpoints.MapPost("/weather", async (
     HttpContext context,
-    SmithyServerRuntime runtime,
+    [FromServices] SmithyServerRuntime runtime,
     IGetWeatherHandler handler,
     CancellationToken cancellationToken) =>
 {
@@ -168,9 +172,10 @@ endpoints.MapPost("/weather", async (
 });
 ```
 
-The generated `Add{Service}` registration can use `TryAddSingleton` to provide a
-default runtime. Applications that need interceptors or telemetry replace that
-registration. The host adapter stays stateless and continues to own only
+The generated `Add{Service}Handler<THandler>` registration calls
+`AddSmithyServer`, which uses `TryAddSingleton` to provide a default runtime.
+Applications may register a runtime with another lifetime before this call.
+Interceptors and telemetry remain future work. The host adapter owns only
 ASP.NET Core request/response conversion.
 
 This is preferable to placing configurable global state on
@@ -343,8 +348,8 @@ transport-neutral service definition merely to reduce generated lines.
 
 Recommended implementation order:
 
-1. inject `SmithyServerRuntime` instead of using static host state;
-2. centralize generated client construction and transport ownership;
+1. inject `SmithyServerRuntime` instead of using static host state (implemented);
+2. centralize generated client construction and transport ownership (implemented);
 3. measure whether descriptor-driven endpoint mapping reduces total complexity;
 4. consolidate new adapter metadata around the existing service definition;
 5. reserve HTTP-specific naming changes for a breaking release.
@@ -352,6 +357,32 @@ Recommended implementation order:
 The first two changes have a clear ownership benefit without changing the
 operation or handler programming model. Endpoint descriptors and renames have a
 higher migration cost and should be justified independently.
+
+## Implementation Decisions
+
+- The environment exposes `Create` for endpoint/HttpClient construction and
+  `FromRuntime` for a caller-owned runtime. Both expose the service-bound
+  protocol. Generated constructors dispose the environment if operation binding
+  fails. Caller-owned resources survive both failure and client disposal.
+- `ConfigureHttpClient` shares version selection with generated DI registration.
+  Modeled preferences apply to the default protocol; an explicit protocol uses
+  its own preference. Application factory configuration runs last.
+- `AddSmithyServer` uses `TryAddSingleton`; aggregate handler registration calls
+  it automatically. Individual handler registration requires an explicit call.
+  Generated endpoints request the runtime with `[FromServices]`, preserving
+  scoped application registrations and avoiding request-body inference.
+- Direct callers of `SmithyAspNetCoreHost.DispatchAsync` now pass the runtime as
+  the first argument. Generated client constructors and handler interfaces keep
+  their existing signatures.
+- Endpoint descriptors are deferred after examining unary, streaming,
+  multi-protocol, and static-query generation. Each endpoint already delegates
+  dispatch in one call. A descriptor would additionally need heterogeneous
+  typed handler adapters, streaming flags, query guards, and protocol route
+  collision handling. There is no demonstrated simplification to justify that
+  extra public model in this change. Existing transport-neutral service and
+  operation schemas remain the metadata root.
+- HTTP-specific renames remain reserved for a separately planned breaking
+  release. Protocol service/operation binding stages are retained.
 
 ## Success Criteria
 
