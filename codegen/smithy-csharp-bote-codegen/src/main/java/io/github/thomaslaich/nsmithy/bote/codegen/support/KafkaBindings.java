@@ -24,10 +24,20 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 @SmithyInternalApi
 public final class KafkaBindings {
 
-  public record Produce(String opName, String topic, StructureShape command, String commandType) {}
+  public record Produce(
+      String operationId,
+      String opName,
+      String topic,
+      StructureShape command,
+      String commandType) {}
 
   public record Consume(
-      String topic, UnionShape union, String unionType, List<MemberShape> members) {}
+      String operationId,
+      String opName,
+      String topic,
+      UnionShape union,
+      String unionType,
+      List<MemberShape> members) {}
 
   public record TopicConfiguration(
       String topic,
@@ -102,6 +112,7 @@ public final class KafkaBindings {
     StructureShape command = model.expectShape(op.getInputShape(), StructureShape.class);
     String commandType = CSharpSymbolProvider.qualified(sp.toSymbol(command));
     return new Produce(
+        op.getId().toString(),
         CSharpNaming.typeName(op.getId().getName()),
         topicName(op, TraitIds.KAFKA_PRODUCE),
         command,
@@ -126,7 +137,13 @@ public final class KafkaBindings {
             .sorted(Comparator.comparing(MemberShape::getMemberName))
             .collect(Collectors.toList());
     String unionType = CSharpSymbolProvider.qualified(sp.toSymbol(union));
-    return new Consume(topicName(op, TraitIds.KAFKA_CONSUME), union, unionType, members);
+    return new Consume(
+        op.getId().toString(),
+        CSharpNaming.typeName(op.getId().getName()),
+        topicName(op, TraitIds.KAFKA_CONSUME),
+        union,
+        unionType,
+        members);
   }
 
   private static String topicName(OperationShape operation) {

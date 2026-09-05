@@ -1,4 +1,4 @@
-/** Generates typed Kafka producers, consumers, and handlers for @kafkaJson services. */
+/** Generates contract bindings and thin service-role APIs for @kafkaJson services. */
 package io.github.thomaslaich.nsmithy.bote.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.bote.codegen.RuntimeTypes;
@@ -49,156 +49,257 @@ public final class KafkaGenerator implements Runnable {
   @Override
   public void run() {
     Model model = context.model();
-
-    List<KafkaBindings.Produce> produces =
-        KafkaBindings.produces(model, context.symbolProvider(), service);
-    List<KafkaBindings.Consume> consumes =
-        KafkaBindings.consumes(model, context.symbolProvider(), service);
-
+    var produces = KafkaBindings.produces(model, context.symbolProvider(), service);
+    var consumes = KafkaBindings.consumes(model, context.symbolProvider(), service);
     if (produces.isEmpty() && consumes.isEmpty()) return;
-
-    EventDiscrimination discrimination = eventDiscrimination();
-
     writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     writer.addImport(RuntimeTypes.NSMITHY_CODECS_JSON);
-    writer.addImport(RuntimeTypes.CONFLUENT_KAFKA);
+    writer.addImport("NSmithy.Messaging");
     writer.addImport(RuntimeTypes.SYSTEM_TEXT);
     writer.addImport(RuntimeTypes.SYSTEM_COLLECTIONS_GENERIC);
-
     String svc = CSharpNaming.typeName(service.getId().getName());
-
-    writeProducer(svc, produces, consumes, model, discrimination);
-
-    if (!produces.isEmpty()) {
-      writer.write("");
-      writeCommandHandlerInterface(svc, produces);
-      writer.write("");
-      writeCommandConsumer(svc, produces);
-    }
-
-    if (!consumes.isEmpty()) {
-      writer.write("");
-      writeEventHandlerInterface(svc, consumes, model);
-      writer.write("");
-      writeEventConsumer(svc, consumes, model, discrimination);
-    }
-  }
-
-  // Producer
-
-  private void writeProducer(
-      String svc,
-      List<KafkaBindings.Produce> produces,
-      List<KafkaBindings.Consume> consumes,
-      Model model,
-      EventDiscrimination discrimination) {
-    String typeName = svc + "Producer";
-    writer.write("public sealed class $L : System.IAsyncDisposable", typeName);
+    writeRole(svc, "Client", produces, List.of());
+    writeRole(svc, "EventPublisher", List.of(), consumes);
+    for (var produce : produces) writeHandler(produce.opName(), produce.commandType());
+    for (var consume : consumes) writeHandler(consume.opName(), consume.unionType());
+    writer.write("internal static class $LMessaging", svc);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          Set<Shape> codecShapes = new LinkedHashSet<>();
-          for (KafkaBindings.Produce produce : produces) {
-            codecShapes.add(produce.command());
+          Set<Shape> shapes = new LinkedHashSet<>();
+          produces.forEach(p -> shapes.add(p.command()));
+          shapes.addAll(eventCodecShapes(consumes, model));
+          shapes.forEach(this::writePayloadCodecField);
+          shapes.stream()
+              .map(Shape::asStructureShape)
+              .flatMap(Optional::stream)
+              .filter(this::hasHeaderMembers)
+              .forEach(this::writeHeaderDeserializer);
+          for (var produce : produces) {
+            writeSendBinding(
+                produce.opName(), produce.commandType(), produce.operationId(), produce.topic());
+            writer.write(
+                "private static MessagePayload Encode$L($L command)",
+                produce.opName(),
+                produce.commandType());
+            writer.openBlock(
+                "{",
+                "}",
+                () -> {
+                  writer.write(
+                      "var value = $L.Serialize(command);", codecFieldName(produce.commandType()));
+                  writeEncodedPayload(model, produce.command(), "command", null);
+                });
+            writeReceiveBinding(
+                produce.opName(), produce.commandType(), produce.operationId(), produce.topic());
+            writer.write(
+                "private static $L Decode$L(MessagePayload payload)",
+                produce.commandType(),
+                produce.opName());
+            writer.openBlock(
+                "{",
+                "}",
+                () -> {
+                  writePayloadDeserialization(
+                      produce.command(), "command", "payload.Value", "payload.Headers");
+                  writer.write("return command;");
+                });
           }
-          codecShapes.addAll(eventCodecShapes(consumes, model));
-          codecShapes.forEach(this::writePayloadCodecField);
-          writer.write("private readonly IProducer<string?, byte[]> _producer;");
-          writer.write("");
-          writer.write("public $L(ProducerConfig config)", typeName);
+          for (var consume : consumes) {
+            for (var member : consume.members()) {
+              String name = "Publish" + CSharpNaming.typeName(member.getMemberName());
+              String type = qualified(model, member);
+              writeSendBinding(name, type, consume.operationId(), consume.topic());
+              writer.write("private static MessagePayload Encode$L($L message)", name, type);
+              writer.openBlock(
+                  "{",
+                  "}",
+                  () -> {
+                    if (eventDiscrimination() == EventDiscrimination.ENVELOPE)
+                      writer.write(
+                          "var value = WrapEvent($L, $L.Serialize(message));",
+                          CSharpNaming.formatString(eventWireName(member)),
+                          codecFieldName(type));
+                    else writer.write("var value = $L.Serialize(message);", codecFieldName(type));
+                    writeEncodedPayload(
+                        model,
+                        model.expectShape(member.getTarget(), StructureShape.class),
+                        "message",
+                        eventDiscrimination() == EventDiscrimination.HEADER
+                            ? member.getMemberName()
+                            : null);
+                  });
+            }
+            writeReceiveBinding(
+                consume.opName(), consume.unionType(), consume.operationId(), consume.topic());
+            writer.write(
+                "private static $L Decode$L(MessagePayload payload)",
+                consume.unionType(),
+                consume.opName());
+            writer.openBlock("{", "}", () -> writeEventDecode(consume, model));
+          }
+          if (!consumes.isEmpty() && eventDiscrimination() == EventDiscrimination.ENVELOPE)
+            writeEnvelopeWrapper();
+        });
+  }
+
+  private void writeHandler(String operation, String type) {
+    writer.write("public interface I$LHandler", operation);
+    writer.openBlock(
+        "{",
+        "}",
+        () ->
+            writer.write(
+                "System.Threading.Tasks.Task HandleAsync($L message,"
+                    + " System.Threading.CancellationToken cancellationToken = default);",
+                type));
+  }
+
+  private void writeRole(
+      String svc,
+      String role,
+      List<KafkaBindings.Produce> produces,
+      List<KafkaBindings.Consume> consumes) {
+    if (produces.isEmpty() && consumes.isEmpty()) return;
+    writer.write("public interface I$L$L", svc, role);
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          for (var produce : produces)
+            writeMethodSignature(produce.opName(), produce.commandType(), false);
+          for (var consume : consumes)
+            for (var member : consume.members())
+              writeMethodSignature(
+                  "Publish" + CSharpNaming.typeName(member.getMemberName()),
+                  qualified(context.model(), member),
+                  false);
+        });
+    writer.write("public sealed class $L$L : I$L$L", svc, role, svc, role);
+    writer.openBlock(
+        "{",
+        "}",
+        () -> {
+          writer.write("private readonly IMessageSender _sender;");
+          writer.write("public $L$L(IMessageSender sender)", svc, role);
           writer.openBlock(
               "{",
               "}",
               () ->
                   writer.write(
-                      "_producer = new ProducerBuilder<string?, byte[]>(config ?? throw new"
-                          + " System.ArgumentNullException(nameof(config))).Build();"));
-
-          for (KafkaBindings.Produce produce : produces) {
-            writer.write("");
-            writeProduceMethod(produce, model);
-          }
-
-          for (KafkaBindings.Consume consume : consumes) {
-            for (MemberShape member : consume.members()) {
-              writer.write("");
-              writePublishMethod(consume, member, model, discrimination);
-            }
-          }
-
-          if (!consumes.isEmpty() && discrimination == EventDiscrimination.ENVELOPE) {
-            writer.write("");
-            writeEnvelopeWrapper();
-          }
-
-          writer.write("");
-          writer.write("public System.Threading.Tasks.ValueTask DisposeAsync()");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("_producer.Dispose();");
-                writer.write("return System.Threading.Tasks.ValueTask.CompletedTask;");
-              });
+                      "_sender = sender ?? throw new"
+                          + " System.ArgumentNullException(nameof(sender));"));
+          for (var produce : produces)
+            writeSendMethod(svc, produce.opName(), produce.commandType());
+          for (var consume : consumes)
+            for (var member : consume.members())
+              writeSendMethod(
+                  svc,
+                  "Publish" + CSharpNaming.typeName(member.getMemberName()),
+                  qualified(context.model(), member));
         });
   }
 
-  private void writeProduceMethod(KafkaBindings.Produce produce, Model model) {
+  private void writeMethodSignature(String name, String type, boolean implementation) {
     writer.write(
-        "public System.Threading.Tasks.Task $LAsync($L command,"
-            + " System.Threading.CancellationToken cancellationToken = default)",
-        produce.opName(),
-        produce.commandType());
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(command);");
-          writer.write("");
-          writer.write("var value = $L.Serialize(command);", codecFieldName(produce.commandType()));
-          writeKeyHeadersAndProduce(model, produce.command(), "command", produce.topic(), null);
-        });
+        "$LSystem.Threading.Tasks.Task $LAsync($L message, System.Threading.CancellationToken"
+            + " cancellationToken = default)$L",
+        implementation ? "public " : "",
+        name,
+        type,
+        implementation ? "" : ";");
   }
 
-  private void writePublishMethod(
-      KafkaBindings.Consume consume,
-      MemberShape member,
-      Model model,
-      EventDiscrimination discrimination) {
-    StructureShape event = model.expectShape(member.getTarget(), StructureShape.class);
-    String eventType = qualified(model, member);
-    String variant = CSharpNaming.typeName(member.getMemberName());
-    writer.write(
-        "public System.Threading.Tasks.Task Publish$LAsync($L message,"
-            + " System.Threading.CancellationToken cancellationToken = default)",
-        variant,
-        eventType);
+  private void writeSendMethod(String svc, String name, String type) {
+    writeMethodSignature(name, type, true);
     writer.openBlock(
         "{",
         "}",
-        () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(message);");
-          writer.write("");
-          switch (discrimination) {
-            case ENVELOPE -> {
-              writer.write(
-                  "var value = WrapEvent($L, $L.Serialize(message));",
-                  CSharpNaming.formatString(eventWireName(member)),
-                  codecFieldName(eventType));
-              writeKeyHeadersAndProduce(model, event, "message", consume.topic(), null);
-            }
-            case HEADER -> {
-              writer.write("var value = $L.Serialize(message);", codecFieldName(eventType));
-              writeKeyHeadersAndProduce(
-                  model, event, "message", consume.topic(), member.getMemberName());
-            }
-            case NONE -> {
-              writer.write("var value = $L.Serialize(message);", codecFieldName(eventType));
-              writeKeyHeadersAndProduce(model, event, "message", consume.topic(), null);
-            }
-          }
-        });
+        () ->
+            writer.write(
+                "return _sender.SendAsync($LMessaging.$LSend, message, cancellationToken);",
+                svc,
+                name));
+  }
+
+  private void writeSendBinding(String name, String type, String operation, String topic) {
+    writer.write(
+        "internal static readonly MessageSendBinding<$L> $LSend = new($L, $L, $L, Encode$L);",
+        type,
+        name,
+        CSharpNaming.formatString(service.getId().toString()),
+        CSharpNaming.formatString(operation),
+        CSharpNaming.formatString(topic),
+        name);
+  }
+
+  private void writeReceiveBinding(String name, String type, String operation, String topic) {
+    writer.write(
+        "internal static readonly MessageReceiveBinding<$L, I$LHandler> $LReceive = new($L, $L, $L,"
+            + " Decode$L, static (handler, message, ct) => handler.HandleAsync(message, ct));",
+        type,
+        name,
+        name,
+        CSharpNaming.formatString(service.getId().toString()),
+        CSharpNaming.formatString(operation),
+        CSharpNaming.formatString(topic),
+        name);
+  }
+
+  private void writeEventDecode(KafkaBindings.Consume consume, Model model) {
+    if (eventDiscrimination() == EventDiscrimination.ENVELOPE) {
+      writer.write("using var envelope = System.Text.Json.JsonDocument.Parse(payload.Value);");
+      writer.write("if (envelope.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)");
+      writer.write(
+          "    throw new System.Text.Json.JsonException(\"Expected an event envelope object.\");");
+      writer.write("var properties = envelope.RootElement.EnumerateObject();");
+      writer.write(
+          "if (!properties.MoveNext()) throw new System.Text.Json.JsonException(\"Expected one"
+              + " event envelope member.\");");
+      writer.write("var property = properties.Current;");
+      writer.write(
+          "if (properties.MoveNext()) throw new System.Text.Json.JsonException(\"Expected one event"
+              + " envelope member.\");");
+      writer.write("var eventType = property.Name;");
+      writer.write("var eventValue = Encoding.UTF8.GetBytes(property.Value.GetRawText());");
+    } else if (eventDiscrimination() == EventDiscrimination.HEADER) {
+      writer.write(
+          "if (payload.Headers is null || !payload.Headers.TryGetValue(\"bote-type\", out var"
+              + " typeBytes))");
+      writer.write(
+          "    throw new System.Text.Json.JsonException(\"Missing bote-type event header.\");");
+      writer.write("var eventType = Encoding.UTF8.GetString(typeBytes);");
+    }
+    for (var member : consume.members()) {
+      Runnable decode =
+          () -> {
+            writePayloadDeserialization(
+                model.expectShape(member.getTarget(), StructureShape.class),
+                "message",
+                eventDiscrimination() == EventDiscrimination.ENVELOPE
+                    ? "eventValue"
+                    : "payload.Value",
+                "payload.Headers");
+            writer.write(
+                "return $L.From$L(message);",
+                consume.unionType(),
+                CSharpNaming.typeName(member.getMemberName()));
+          };
+      if (eventDiscrimination() == EventDiscrimination.NONE) decode.run();
+      else {
+        writer.write(
+            "if (eventType == $L)",
+            CSharpNaming.formatString(
+                eventDiscrimination() == EventDiscrimination.ENVELOPE
+                    ? eventWireName(member)
+                    : member.getMemberName()));
+        writer.openBlock("{", "}", decode);
+      }
+    }
+    if (eventDiscrimination() != EventDiscrimination.NONE)
+      writer.write(
+          "throw new System.Text.Json.JsonException(\"Unknown event type: \" + eventType);");
   }
 
   private void writeEnvelopeWrapper() {
@@ -219,8 +320,8 @@ public final class KafkaGenerator implements Runnable {
   }
 
   // Expects the serialized payload in `value`; typeHeaderValue adds event discrimination.
-  private void writeKeyHeadersAndProduce(
-      Model model, StructureShape payload, String objExpr, String topic, String typeHeaderValue) {
+  private void writeEncodedPayload(
+      Model model, StructureShape payload, String objExpr, String typeHeaderValue) {
     Optional<MemberShape> keyMember =
         payload.members().stream().filter(m -> m.hasTrait(TraitIds.KAFKA_KEY)).findFirst();
     if (keyMember.isPresent()) {
@@ -232,7 +333,7 @@ public final class KafkaGenerator implements Runnable {
     List<MemberShape> headerMembers = headerMembers(payload);
 
     if (!headerMembers.isEmpty() || typeHeaderValue != null) {
-      writer.write("var headers = new Headers();");
+      writer.write("var headers = new Dictionary<string, byte[]>();");
       if (typeHeaderValue != null) {
         writer.write(
             "headers.Add($L, Encoding.UTF8.GetBytes($L));",
@@ -260,315 +361,10 @@ public final class KafkaGenerator implements Runnable {
               headerBytesExpression(model, hm, objExpr + "." + prop));
         }
       }
-      writer.write(
-          "var kafkaMessage = new Message<string?, byte[]> { Key = key, Value = value,"
-              + " Headers = headers };");
     } else {
-      writer.write("var kafkaMessage = new Message<string?, byte[]> { Key = key, Value = value };");
+      writer.write("Dictionary<string, byte[]>? headers = null;");
     }
-
-    writer.write("");
-    writer.write(
-        "return _producer.ProduceAsync($L, kafkaMessage, cancellationToken);",
-        CSharpNaming.formatString(topic));
-  }
-
-  // Command handling (@kafkaProduce)
-
-  private void writeCommandHandlerInterface(String svc, List<KafkaBindings.Produce> produces) {
-    writer.write("public interface I$LCommandHandler", svc);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          boolean first = true;
-          for (KafkaBindings.Produce produce : produces) {
-            if (!first) writer.write("");
-            first = false;
-            writer.write(
-                "System.Threading.Tasks.Task Handle$LAsync($L command,"
-                    + " System.Threading.CancellationToken cancellationToken = default);",
-                produce.opName(),
-                produce.commandType());
-          }
-        });
-  }
-
-  private void writeCommandConsumer(String svc, List<KafkaBindings.Produce> produces) {
-    String typeName = svc + "CommandConsumer";
-    String ifaceName = "I" + svc + "CommandHandler";
-    List<String> topics =
-        produces.stream()
-            .map(KafkaBindings.Produce::topic)
-            .distinct()
-            .sorted()
-            .collect(Collectors.toList());
-    Set<Shape> codecShapes = new LinkedHashSet<>();
-    for (KafkaBindings.Produce produce : produces) {
-      codecShapes.add(produce.command());
-    }
-    writeConsumerScaffold(
-        typeName,
-        ifaceName,
-        topics,
-        () -> {
-          codecShapes.forEach(this::writePayloadCodecField);
-          codecShapes.stream()
-              .map(Shape::asStructureShape)
-              .flatMap(Optional::stream)
-              .filter(this::hasHeaderMembers)
-              .forEach(this::writeHeaderDeserializer);
-        },
-        () -> {
-          for (int i = 0; i < produces.size(); i++) {
-            KafkaBindings.Produce produce = produces.get(i);
-            writer.write(
-                "$L (result.Topic == $L)",
-                i == 0 ? "if" : "else if",
-                CSharpNaming.formatString(produce.topic()));
-            writer.openBlock(
-                "{",
-                "}",
-                () -> {
-                  writePayloadDeserialization(
-                      produce.command(),
-                      "command",
-                      "result.Message.Value",
-                      "result.Message.Headers");
-                  writer.write("await _handler.Handle$LAsync(command, ct);", produce.opName());
-                });
-          }
-        });
-  }
-
-  // Event handling (@kafkaConsume)
-
-  private void writeEventHandlerInterface(
-      String svc, List<KafkaBindings.Consume> consumes, Model model) {
-    writer.write("public interface I$LEventHandler", svc);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          boolean first = true;
-          for (KafkaBindings.Consume consume : consumes) {
-            for (MemberShape member : consume.members()) {
-              if (!first) writer.write("");
-              first = false;
-              writer.write(
-                  "System.Threading.Tasks.Task Handle$LAsync($L message,"
-                      + " System.Threading.CancellationToken cancellationToken = default);",
-                  CSharpNaming.typeName(member.getMemberName()),
-                  qualified(model, member));
-            }
-          }
-        });
-  }
-
-  private void writeEventConsumer(
-      String svc,
-      List<KafkaBindings.Consume> consumes,
-      Model model,
-      EventDiscrimination discrimination) {
-    String typeName = svc + "EventConsumer";
-    String ifaceName = "I" + svc + "EventHandler";
-    List<String> topics =
-        consumes.stream()
-            .map(KafkaBindings.Consume::topic)
-            .distinct()
-            .sorted()
-            .collect(Collectors.toList());
-    Set<Shape> codecShapes = eventCodecShapes(consumes, model);
-    writeConsumerScaffold(
-        typeName,
-        ifaceName,
-        topics,
-        () -> {
-          codecShapes.forEach(this::writePayloadCodecField);
-          codecShapes.stream()
-              .map(Shape::asStructureShape)
-              .flatMap(Optional::stream)
-              .filter(this::hasHeaderMembers)
-              .forEach(this::writeHeaderDeserializer);
-        },
-        () -> {
-          for (int i = 0; i < consumes.size(); i++) {
-            KafkaBindings.Consume consume = consumes.get(i);
-            writer.write(
-                "$L (result.Topic == $L)",
-                i == 0 ? "if" : "else if",
-                CSharpNaming.formatString(consume.topic()));
-            writer.openBlock("{", "}", () -> writeEventDispatch(consume, model, discrimination));
-          }
-        });
-  }
-
-  private void writeEventDispatch(
-      KafkaBindings.Consume consume, Model model, EventDiscrimination discrimination) {
-    switch (discrimination) {
-      case ENVELOPE -> {
-        writer.write(
-            "using var envelope = System.Text.Json.JsonDocument.Parse(result.Message.Value);");
-        writer.write(
-            "if (envelope.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)");
-        writer.write(
-            "    throw new System.Text.Json.JsonException(\"Expected an event envelope"
-                + " object.\");");
-        writer.write("var properties = envelope.RootElement.EnumerateObject();");
-        writer.write("if (!properties.MoveNext())");
-        writer.write(
-            "    throw new System.Text.Json.JsonException(\"Expected one event envelope"
-                + " member.\");");
-        writer.write("var property = properties.Current;");
-        writer.write("if (properties.MoveNext())");
-        writer.write(
-            "    throw new System.Text.Json.JsonException(\"Expected one event envelope"
-                + " member.\");");
-        writer.write("var eventValue = Encoding.UTF8.GetBytes(property.Value.GetRawText());");
-        for (int i = 0; i < consume.members().size(); i++) {
-          MemberShape member = consume.members().get(i);
-          String variant = CSharpNaming.typeName(member.getMemberName());
-          StructureShape event = model.expectShape(member.getTarget(), StructureShape.class);
-          writer.write(
-              "$L (property.Name == $L)",
-              i == 0 ? "if" : "else if",
-              CSharpNaming.formatString(eventWireName(member)));
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writePayloadDeserialization(
-                    event, "message", "eventValue", "result.Message.Headers");
-                writer.write("await _handler.Handle$LAsync(message, ct);", variant);
-              });
-        }
-      }
-      case HEADER -> {
-        writer.write(
-            "if (result.Message.Headers is { } messageHeaders &&"
-                + " messageHeaders.TryGetLastBytes($L, out var typeBytes))",
-            CSharpNaming.formatString(TYPE_HEADER));
-        writer.openBlock(
-            "{",
-            "}",
-            () -> {
-              writer.write("var eventType = Encoding.UTF8.GetString(typeBytes);");
-              for (int i = 0; i < consume.members().size(); i++) {
-                MemberShape member = consume.members().get(i);
-                String variant = CSharpNaming.typeName(member.getMemberName());
-                writer.write(
-                    "$L (eventType == $L)",
-                    i == 0 ? "if" : "else if",
-                    CSharpNaming.formatString(member.getMemberName()));
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      writePayloadDeserialization(
-                          model.expectShape(member.getTarget(), StructureShape.class),
-                          "message",
-                          "result.Message.Value",
-                          "result.Message.Headers");
-                      writer.write("await _handler.Handle$LAsync(message, ct);", variant);
-                    });
-              }
-            });
-      }
-      case NONE -> {
-        // The validator limits NONE to one event type.
-        MemberShape member = consume.members().get(0);
-        String variant = CSharpNaming.typeName(member.getMemberName());
-        writePayloadDeserialization(
-            model.expectShape(member.getTarget(), StructureShape.class),
-            "message",
-            "result.Message.Value",
-            "result.Message.Headers");
-        writer.write("await _handler.Handle$LAsync(message, ct);", variant);
-      }
-    }
-  }
-
-  // Shared consumer scaffold
-  private void writeConsumerScaffold(
-      String typeName,
-      String ifaceName,
-      List<String> topics,
-      Runnable codecFields,
-      Runnable dispatchBody) {
-    String topicList =
-        topics.stream().map(CSharpNaming::formatString).collect(Collectors.joining(", "));
-    writer.write("public sealed class $L : System.IAsyncDisposable", typeName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          codecFields.run();
-          writer.write("private readonly IConsumer<string?, byte[]> _consumer;");
-          writer.write("private readonly $L _handler;", ifaceName);
-          writer.write("");
-          writer.write("public $L(ConsumerConfig config, $L handler)", typeName, ifaceName);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(config);");
-                writer.write("var consumerConfig = new Dictionary<string, string>();");
-                writer.write("foreach (var entry in config)");
-                writer.write("    consumerConfig[entry.Key] = entry.Value;");
-                writer.write("consumerConfig[\"enable.auto.commit\"] = \"true\";");
-                writer.write("consumerConfig[\"enable.auto.offset.store\"] = \"false\";");
-                writer.write(
-                    "_consumer = new ConsumerBuilder<string?, byte[]>(consumerConfig).Build();");
-                writer.write(
-                    "_handler = handler ?? throw new"
-                        + " System.ArgumentNullException(nameof(handler));");
-              });
-          writer.write("");
-          writer.write(
-              "public async System.Threading.Tasks.Task RunAsync("
-                  + "System.Threading.CancellationToken cancellationToken = default)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                // Prevent the first blocking Consume() from blocking the caller synchronously.
-                writer.write("await System.Threading.Tasks.Task.Yield();");
-                writer.write("_consumer.Subscribe([$L]);", topicList);
-                writer.write("while (!cancellationToken.IsCancellationRequested)");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      writer.write("try");
-                      writer.openBlock(
-                          "{",
-                          "}",
-                          () -> {
-                            writer.write("var result = _consumer.Consume(cancellationToken);");
-                            writer.write("await DispatchAsync(result, cancellationToken);");
-                            writer.write("_consumer.StoreOffset(result);");
-                          });
-                      writer.write(
-                          "catch (System.OperationCanceledException) when"
-                              + " (cancellationToken.IsCancellationRequested) { throw; }");
-                      writer.write("catch (ConsumeException e) when (!e.Error.IsFatal) { }");
-                    });
-              });
-          writer.write("");
-          writer.write(
-              "private async System.Threading.Tasks.Task DispatchAsync(ConsumeResult<string?,"
-                  + " byte[]> result, System.Threading.CancellationToken ct)");
-          writer.openBlock("{", "}", dispatchBody);
-          writer.write("");
-          writer.write("public System.Threading.Tasks.ValueTask DisposeAsync()");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("_consumer.Dispose();");
-                writer.write("return System.Threading.Tasks.ValueTask.CompletedTask;");
-              });
-        });
+    writer.write("return new MessagePayload(value, key, headers);");
   }
 
   // Trait / model helpers
@@ -647,7 +443,9 @@ public final class KafkaGenerator implements Runnable {
     String structSchemaField = structSchemaFieldName(type);
     writer.write("");
     writer.write(
-        "private static $L $L(byte[] value, Headers? headers)", type, deserializeMethodName(type));
+        "private static $L $L(byte[] value, IReadOnlyDictionary<string, byte[]>? headers)",
+        type,
+        deserializeMethodName(type));
     writer.openBlock(
         "{",
         "}",
@@ -659,7 +457,7 @@ public final class KafkaGenerator implements Runnable {
             String headerName = kafkaHeaderName(member);
             if (ShapeSupport.isRequired(member)) {
               writer.write(
-                  "if (headers is null || !headers.TryGetLastBytes($L, out var $L))",
+                  "if (headers is null || !headers.TryGetValue($L, out var $L))",
                   CSharpNaming.formatString(headerName),
                   bytes);
               writer.write(
@@ -668,7 +466,7 @@ public final class KafkaGenerator implements Runnable {
               writeHeaderAssignment(member, bytes);
             } else {
               writer.write(
-                  "if (headers is { } && headers.TryGetLastBytes($L, out var $L))",
+                  "if (headers is { } && headers.TryGetValue($L, out var $L))",
                   CSharpNaming.formatString(headerName),
                   bytes);
               writer.openBlock("{", "}", () -> writeHeaderAssignment(member, bytes));

@@ -1,81 +1,72 @@
 using Confluent.Kafka;
 using Examples.Kafka.Streetlights;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using NSmithy.Messaging.Kafka;
 
-// A controller is a CLIENT of the StreetlightDevice contract: it PRODUCES DimLight
-// commands and CONSUMES the LightMeasured events the device emits.
+// The controller sends commands to the owner and handles the owner's events.
 var bootstrap = args.Length > 0 ? args[0] : "localhost:9092";
-const string streetlightId = "streetlight-001";
-
-using var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (_, e) =>
-{
-    e.Cancel = true;
-    cts.Cancel();
-};
-
-var producerConfig = new ProducerConfig
-{
-    BootstrapServers = bootstrap,
-    BrokerAddressFamily = BrokerAddressFamily.V4,
-};
-var consumerConfig = new ConsumerConfig
-{
-    BootstrapServers = bootstrap,
-    GroupId = "streetlight-controller",
-    AutoOffsetReset = AutoOffsetReset.Earliest,
-    BrokerAddressFamily = BrokerAddressFamily.V4,
-};
-
-await using var producer = new StreetlightDeviceProducer(producerConfig);
-await using var events = new StreetlightDeviceEventConsumer(
-    consumerConfig,
-    new LightMeasuredHandler()
-);
-
-Console.WriteLine(
-    "[controller] watching LightMeasured events and dimming the light. Ctrl+C to stop."
-);
-
-// Watch the device's lighting events in the background.
-var watching = events.RunAsync(cts.Token);
-
-// Walk the light down in steps.
-int[] levels = [80, 50, 20, 0];
-try
-{
-    foreach (var pct in levels)
+var builder = Host.CreateApplicationBuilder(args);
+builder.Services.AddKafkaMessaging(
+    new KafkaMessagingOptions
     {
-        if (cts.Token.IsCancellationRequested)
-            break;
-        await producer.DimLightAsync(
-            new DimLightInput(
-                Percentage: pct,
-                SentAt: DateTimeOffset.UtcNow,
-                StreetlightId: streetlightId
-            ),
-            cts.Token
-        );
-        Console.WriteLine($"[controller] sent DimLight -> {pct}%");
-        await Task.Delay(TimeSpan.FromSeconds(2), cts.Token);
+        Producer = new ProducerConfig
+        {
+            BootstrapServers = bootstrap,
+            BrokerAddressFamily = BrokerAddressFamily.V4,
+        },
+        Consumer = new ConsumerConfig
+        {
+            BootstrapServers = bootstrap,
+            GroupId = "streetlight-controller",
+            AutoOffsetReset = AutoOffsetReset.Earliest,
+            BrokerAddressFamily = BrokerAddressFamily.V4,
+        },
     }
+);
+builder.Services.AddStreetlightDeviceClient();
+builder.Services.AddStreetlightDeviceEventConsumer();
+builder.Services.AddScoped<IConsumeLightingEventsHandler, LightMeasuredHandler>();
+builder.Services.AddHostedService<Dimmer>();
 
-    // Keep watching events until Ctrl+C.
-    await watching;
-}
-catch (OperationCanceledException) { }
+Console.WriteLine("[controller] watching events and dimming the light. Ctrl+C to stop.");
+await builder.Build().RunAsync();
 
-Console.WriteLine("[controller] stopped.");
-
-sealed class LightMeasuredHandler : IStreetlightDeviceEventHandler
+sealed class Dimmer(IStreetlightDeviceClient client) : BackgroundService
 {
-    public Task HandleLightMeasuredAsync(
-        LightMeasured message,
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        int[] levels = [80, 50, 20, 0];
+        foreach (var percentage in levels)
+        {
+            await client.DimLightAsync(
+                new DimLightInput(
+                    Percentage: percentage,
+                    SentAt: DateTimeOffset.UtcNow,
+                    StreetlightId: "streetlight-001"
+                ),
+                stoppingToken
+            );
+            Console.WriteLine($"[controller] sent DimLight -> {percentage}%");
+            await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+        }
+    }
+}
+
+sealed class LightMeasuredHandler : IConsumeLightingEventsHandler
+{
+    public Task HandleAsync(
+        LightMeasuredStream message,
         CancellationToken cancellationToken = default
     )
     {
-        Console.WriteLine(
-            $"[controller] LightMeasured  streetlight={message.StreetlightId} lumens={message.Lumens} at={message.SentAt:HH:mm:ss}"
-        );
+        if (message is LightMeasuredStream.LightMeasured measured)
+        {
+            var value = measured.Value;
+            Console.WriteLine(
+                $"[controller] LightMeasured streetlight={value.StreetlightId} lumens={value.Lumens} at={value.SentAt:HH:mm:ss}"
+            );
+        }
         return Task.CompletedTask;
     }
 }
