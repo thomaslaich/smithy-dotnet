@@ -1,33 +1,28 @@
 using Examples.Redis.Inventory;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using NSmithy.Messaging.Redis;
 using StackExchange.Redis;
 
 var redis = args.Length > 0 ? args[0] : "localhost:6379";
 await using var connection = await ConnectionMultiplexer.ConnectAsync(redis);
-
-using var cancellation = new CancellationTokenSource();
-Console.CancelKeyPress += (_, eventArgs) =>
-{
-    eventArgs.Cancel = true;
-    cancellation.Cancel();
-};
-
-var server = new InventoryRedisStreamsConsumer(
-    connection,
-    new InventoryOwner(),
-    "redis-inventory-owner",
-    $"server-{Environment.ProcessId}"
+var builder = Host.CreateApplicationBuilder(args);
+builder.Services.AddRedisStreamsMessaging(connection);
+builder.Services.AddInventoryCommandConsumer(
+    new RedisStreamConsumerOptions
+    {
+        ConsumerGroup = "redis-inventory-owner",
+        ConsumerName = $"server-{Environment.ProcessId}",
+    }
 );
+builder.Services.AddScoped<IGetStockHandler, InventoryOwner>();
 
 Console.WriteLine($"Inventory server listening on {redis}. Ctrl+C stops.");
-try
-{
-    await server.RunAsync(cancellationToken: cancellation.Token);
-}
-catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+await builder.Build().RunAsync();
 
-sealed class InventoryOwner : IInventoryRedisStreamsHandler
+sealed class InventoryOwner : IGetStockHandler
 {
-    public Task<GetStockOutput> HandleGetStockAsync(
+    public Task<GetStockOutput> HandleAsync(
         GetStockInput command,
         CancellationToken cancellationToken = default
     )

@@ -1,5 +1,6 @@
 package io.github.thomaslaich.nsmithy.bote.codegen.generators;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
@@ -71,12 +72,14 @@ final class RedisGeneratorTest {
   void generatesStreamsClientAndOwnerConsumer() throws Exception {
     String generated = renderRedis();
 
-    assertTrue(generated.contains("public sealed class ChatRedisStreams"), generated);
-    assertTrue(
-        generated.contains("public async System.Threading.Tasks.Task PostAsync("), generated);
-    assertTrue(generated.contains("public sealed class ChatRedisStreamsConsumer"), generated);
-    assertTrue(generated.contains("public interface IChatRedisStreamsHandler"), generated);
-    assertTrue(generated.contains("StreamAcknowledgeAsync"), generated);
+    assertTrue(generated.contains("public sealed class ChatClient"), generated);
+    assertTrue(generated.contains("public System.Threading.Tasks.Task PostAsync("), generated);
+    assertTrue(generated.contains("public interface IWatchHandler"), generated);
+    assertTrue(generated.contains("public interface IPostHandler"), generated);
+    assertTrue(generated.contains("RedisStreamSendBinding<"), generated);
+    assertFalse(generated.contains("StreamAcknowledgeAsync"), generated);
+    assertFalse(generated.contains("IAsyncEnumerable"), generated);
+    assertFalse(generated.contains("StackExchange.Redis"), generated);
   }
 
   private String renderRedis() throws Exception {

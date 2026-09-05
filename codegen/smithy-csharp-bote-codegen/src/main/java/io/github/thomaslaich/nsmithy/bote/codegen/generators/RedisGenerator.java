@@ -8,17 +8,16 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.SchemaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.CodegenException;
-import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.StructureShape;
 
-/**
- * Generates StackExchange.Redis clients and owner-side dispatchers for Bote Redis JSON services.
- */
+/** Generates operation facts and typed roles; Redis behavior belongs to the runtime. */
 public final class RedisGenerator implements Runnable {
   public enum Kind {
     STREAMS,
@@ -30,6 +29,16 @@ public final class RedisGenerator implements Runnable {
   private final ServiceShape service;
   private final Kind kind;
 
+  private record Command(
+      String operationId,
+      String name,
+      String address,
+      Shape shape,
+      String type,
+      Optional<StructureShape> reply,
+      Optional<String> replyType,
+      Optional<Long> maxLength) {}
+
   public RedisGenerator(
       GenerationContext context, CSharpWriter writer, ServiceShape service, Kind kind) {
     this.context = context;
@@ -40,677 +49,335 @@ public final class RedisGenerator implements Runnable {
 
   @Override
   public void run() {
+    if (!context.settings().generateClient() && !context.settings().generateServer()) return;
+    var commands =
+        kind == Kind.STREAMS
+            ? RedisBindings.streamAdds(context.model(), context.symbolProvider(), service).stream()
+                .map(
+                    c ->
+                        new Command(
+                            c.operationId(),
+                            c.opName(),
+                            c.stream(),
+                            c.command(),
+                            c.commandType(),
+                            c.reply(),
+                            c.replyType(),
+                            c.maxLen()))
+                .toList()
+            : RedisBindings.publishes(context.model(), context.symbolProvider(), service).stream()
+                .map(
+                    c ->
+                        new Command(
+                            c.operationId(),
+                            c.opName(),
+                            c.channel(),
+                            c.command(),
+                            c.commandType(),
+                            Optional.<StructureShape>empty(),
+                            Optional.<String>empty(),
+                            Optional.<Long>empty()))
+                .toList();
+    var events =
+        kind == Kind.STREAMS
+            ? RedisBindings.streamReads(context.model(), context.symbolProvider(), service)
+            : RedisBindings.subscribes(context.model(), context.symbolProvider(), service);
+    if (commands.isEmpty() && events.isEmpty()) return;
+    validateAddresses(
+        commands.stream().map(Command::address).toList(),
+        events.stream().map(RedisBindings.Subscription::address).toList(),
+        "Redis address");
     writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     writer.addImport(RuntimeTypes.NSMITHY_CODECS_JSON);
-    writer.addImport(RuntimeTypes.STACKEXCHANGE_REDIS);
-    writer.addImport("System.Runtime.CompilerServices");
-    writer.addImport("System.Threading.Channels");
-
-    String serviceName = CSharpNaming.typeName(service.getId().getName());
-    if (kind == Kind.STREAMS) {
-      writeStreams(serviceName);
-    } else {
-      writePubSub(serviceName);
-    }
-  }
-
-  private void writeStreams(String serviceName) {
-    Model model = context.model();
-    List<RedisBindings.StreamAdd> adds =
-        RedisBindings.streamAdds(model, context.symbolProvider(), service);
-    List<RedisBindings.Subscription> reads =
-        RedisBindings.streamReads(model, context.symbolProvider(), service);
-    if (adds.isEmpty() && reads.isEmpty()) return;
-    validateAddresses(
-        adds.stream().map(RedisBindings.StreamAdd::stream).toList(),
-        reads.stream().map(RedisBindings.Subscription::address).toList(),
-        "Redis stream");
-
-    writeStreamsClient(serviceName, adds, reads);
-    if (!adds.isEmpty()) {
-      writer.write("");
-      writeStreamHandler(serviceName, adds);
-      writer.write("");
-      writeStreamConsumer(serviceName, adds);
-    }
-    writer.write("");
-    writeReplyEnvelopeHelper();
-  }
-
-  private void writeStreamsClient(
-      String serviceName,
-      List<RedisBindings.StreamAdd> adds,
-      List<RedisBindings.Subscription> reads) {
-    String typeName = serviceName + "RedisStreams";
-    writer.write("public sealed class $L", typeName);
+    writer.addImport("NSmithy.Messaging");
+    writer.addImport("NSmithy.Messaging.Redis");
+    String svc = CSharpNaming.typeName(service.getId().getName());
+    if (!commands.isEmpty()) writeClient(svc, commands);
+    if (!events.isEmpty()) writePublisher(svc, events);
+    for (var c : commands) writeHandler(c.name(), c.type(), c.replyType());
+    for (var e : events) writeHandler(e.opName(), e.unionType(), Optional.empty());
+    writer.write("internal static class $LMessaging", svc);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          Set<Shape> codecs = new LinkedHashSet<>();
-          for (RedisBindings.StreamAdd add : adds) {
-            codecs.add(add.command());
-            add.reply().ifPresent(codecs::add);
+          Set<Shape> shapes = new LinkedHashSet<>();
+          for (var c : commands) {
+            shapes.add(c.shape());
+            c.reply().ifPresent(shapes::add);
           }
-          for (RedisBindings.Subscription read : reads) codecs.add(read.union());
-          codecs.forEach(this::writeCodecField);
-          writer.write("private readonly IDatabase _database;");
-          writer.write("private readonly ISubscriber _subscriber;");
-          writer.write("");
-          writer.write("public $L(IConnectionMultiplexer connection, int database = -1)", typeName);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(connection);");
-                writer.write("_database = connection.GetDatabase(database);");
-                writer.write("_subscriber = connection.GetSubscriber();");
-              });
-
-          for (RedisBindings.StreamAdd add : adds) {
-            writer.write("");
-            if (add.reply().isPresent()) writeRequestReplyMethod(add);
-            else writeStreamAddMethod(add);
-          }
-          for (RedisBindings.Subscription read : reads) {
-            for (MemberShape member : read.members()) {
-              writer.write("");
-              writeStreamEventPublishMethod(read, member);
-            }
-            writer.write("");
-            writeStreamReadMethod(read);
-          }
+          for (var e : events) shapes.add(e.union());
+          shapes.forEach(this::writeCodecField);
+          for (var c : commands) writeCommandBindings(c);
+          for (var e : events) writeEventBindings(e);
         });
+    if (context.settings().generateDependencyInjection()) writeRegistration(svc, commands, events);
   }
 
-  private void writeStreamAddMethod(RedisBindings.StreamAdd add) {
-    writer.write(
-        "public async System.Threading.Tasks.Task $LAsync($L command,"
-            + " System.Threading.CancellationToken cancellationToken = default)",
-        add.opName(),
-        add.commandType());
+  private static String task(Optional<String> reply) {
+    return "System.Threading.Tasks.Task" + reply.map(r -> "<" + r + ">").orElse("");
+  }
+
+  private void writeHandler(String name, String type, Optional<String> reply) {
+    writer.write("public interface I$LHandler", name);
+    writer.openBlock(
+        "{",
+        "}",
+        () ->
+            writer.write(
+                "$L HandleAsync($L message, System.Threading.CancellationToken cancellationToken ="
+                    + " default);",
+                task(reply),
+                type));
+  }
+
+  private void writeClient(String svc, List<Command> commands) {
+    writer.write("public interface I$LClient", svc);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(command);");
-          writer.write("var payload = $L.Serialize(command);", codecFieldName(add.commandType()));
-          writeStreamAddCall(
-              add.stream(), add.maxLen().orElse(null), "new NameValueEntry(\"data\", payload)");
+          for (var c : commands)
+            writer.write(
+                "$L $LAsync($L message, System.Threading.CancellationToken cancellationToken ="
+                    + " default);",
+                task(c.replyType()),
+                c.name(),
+                c.type());
         });
-  }
-
-  private void writeRequestReplyMethod(RedisBindings.StreamAdd add) {
-    String replyType = add.replyType().orElseThrow();
-    writer.write(
-        "public async System.Threading.Tasks.Task<$L> $LAsync($L command, System.TimeSpan? timeout"
-            + " = null, System.Threading.CancellationToken cancellationToken = default)",
-        replyType,
-        add.opName(),
-        add.commandType());
+    writer.write("public sealed class $LClient : I$LClient", svc, svc);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(command);");
-          writer.write("var correlationId = System.Guid.NewGuid().ToString(\"N\");");
-          writer.write("var replyTo = \"bote:reply:\" + correlationId;");
-          writer.write("var channel = RedisChannel.Literal(replyTo);");
-          writer.write(
-              "var completion = new"
-                  + " System.Threading.Tasks.TaskCompletionSource<byte[]>(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);");
-          writer.write("System.Action<RedisChannel, RedisValue> onReply = (_, value) =>");
-          writer.openBlock(
-              "{",
-              "};",
-              () -> {
-                writer.write("try");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      writer.write("var reply = BoteRedisReplyEnvelope.Parse(value);");
-                      writer.write("if (reply.CorrelationId == correlationId)");
-                      writer.openBlock(
-                          "{", "}", () -> writer.write("completion.TrySetResult(reply.Payload);"));
-                    });
-                writer.write("catch (System.Exception exception)");
-                writer.openBlock(
-                    "{", "}", () -> writer.write("completion.TrySetException(exception);"));
-              });
-          writer.write(
-              "await _subscriber.SubscribeAsync(channel, onReply).WaitAsync(cancellationToken);");
-          writer.write("try");
+          boolean sends = commands.stream().anyMatch(c -> c.reply().isEmpty());
+          boolean requests = commands.stream().anyMatch(c -> c.reply().isPresent());
+          if (sends) writer.write("private readonly IMessageSender _sender;");
+          if (requests) writer.write("private readonly IMessageRequestSender _requests;");
+          String parameters =
+              (sends ? "IMessageSender sender" : "")
+                  + (sends && requests ? ", " : "")
+                  + (requests ? "IMessageRequestSender requests" : "");
+          writer.write("public $LClient($L)", svc, parameters);
           writer.openBlock(
               "{",
               "}",
               () -> {
-                writer.write(
-                    "var payload = $L.Serialize(command);", codecFieldName(add.commandType()));
-                writeStreamAddCall(
-                    add.stream(),
-                    add.maxLen().orElse(null),
-                    "new NameValueEntry(\"data\", payload), new NameValueEntry(\"reply_to\","
-                        + " replyTo), new NameValueEntry(\"correlation_id\", correlationId)");
-                writer.write(
-                    "using var timeoutSource ="
-                        + " System.Threading.CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);");
-                writer.write(
-                    "timeoutSource.CancelAfter(timeout ?? System.TimeSpan.FromSeconds(30));");
-                writer.write(
-                    "var replyPayload = await completion.Task.WaitAsync(timeoutSource.Token);");
-                writer.write("return $L.Deserialize(replyPayload);", codecFieldName(replyType));
+                if (sends)
+                  writer.write(
+                      "_sender = sender ?? throw new"
+                          + " System.ArgumentNullException(nameof(sender));");
+                if (requests)
+                  writer.write(
+                      "_requests = requests ?? throw new"
+                          + " System.ArgumentNullException(nameof(requests));");
               });
-          writer.write("finally");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> writer.write("await _subscriber.UnsubscribeAsync(channel, onReply);"));
-        });
-  }
-
-  private void writeStreamEventPublishMethod(RedisBindings.Subscription read, MemberShape member) {
-    String eventType = qualified(member);
-    String variant = CSharpNaming.typeName(member.getMemberName());
-    writer.write(
-        "public async System.Threading.Tasks.Task Publish$LAsync($L message,"
-            + " System.Threading.CancellationToken cancellationToken = default)",
-        variant,
-        eventType);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(message);");
-          writer.write("var wrapped = $L.From$L(message);", read.unionType(), variant);
-          writer.write("var payload = $L.Serialize(wrapped);", codecFieldName(read.unionType()));
-          writeStreamAddCall(
-              read.address(), read.maxLen().orElse(null), "new NameValueEntry(\"data\", payload)");
-        });
-  }
-
-  private void writeStreamReadMethod(RedisBindings.Subscription read) {
-    writer.write(
-        "public async System.Collections.Generic.IAsyncEnumerable<$L> $LAsync(RedisValue position ="
-            + " default, int count = 10, [EnumeratorCancellation]"
-            + " System.Threading.CancellationToken cancellationToken = default)",
-        read.unionType(),
-        read.opName());
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("if (position.IsNull) position = \"0-0\";");
-          writer.write("else if (position == \"$$\")");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write(
-                    "var latest = await _database.StreamRangeAsync($L, \"-\", \"+\", 1,"
-                        + " Order.Descending).WaitAsync(cancellationToken);",
-                    literal(read.address()));
-                writer.write("position = latest.Length == 0 ? \"0-0\" : latest[0].Id;");
-              });
-          writer.write("while (!cancellationToken.IsCancellationRequested)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write(
-                    "var entries = await _database.StreamReadAsync($L, position,"
-                        + " count).WaitAsync(cancellationToken);",
-                    literal(read.address()));
-                writer.write("if (entries.Length == 0)");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      writer.write(
-                          "await System.Threading.Tasks.Task.Delay(100, cancellationToken);");
-                      writer.write("continue;");
-                    });
-                writer.write("foreach (var entry in entries)");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      writer.write("position = entry.Id;");
-                      writer.write(
-                          "var payload = (byte[]?)BoteRedisEntry.GetRequired(entry, \"data\") ??"
-                              + " throw new System.InvalidOperationException(\"Redis stream data is"
-                              + " null.\");");
-                      writer.write(
-                          "yield return $L.Deserialize(payload);",
-                          codecFieldName(read.unionType()));
-                    });
-              });
-        });
-  }
-
-  private void writeStreamHandler(String serviceName, List<RedisBindings.StreamAdd> adds) {
-    writer.write("public interface I$LRedisStreamsHandler", serviceName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          boolean first = true;
-          for (RedisBindings.StreamAdd add : adds) {
-            if (!first) writer.write("");
-            first = false;
-            if (add.replyType().isPresent()) {
-              writer.write(
-                  "System.Threading.Tasks.Task<$L> Handle$LAsync($L command,"
-                      + " System.Threading.CancellationToken cancellationToken = default);",
-                  add.replyType().orElseThrow(),
-                  add.opName(),
-                  add.commandType());
-            } else {
-              writer.write(
-                  "System.Threading.Tasks.Task Handle$LAsync($L command,"
-                      + " System.Threading.CancellationToken cancellationToken = default);",
-                  add.opName(),
-                  add.commandType());
-            }
-          }
-        });
-  }
-
-  private void writeStreamConsumer(String serviceName, List<RedisBindings.StreamAdd> adds) {
-    String typeName = serviceName + "RedisStreamsConsumer";
-    String handlerType = "I" + serviceName + "RedisStreamsHandler";
-    writer.write("public sealed class $L", typeName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          Set<Shape> codecs = new LinkedHashSet<>();
-          for (RedisBindings.StreamAdd add : adds) {
-            codecs.add(add.command());
-            add.reply().ifPresent(codecs::add);
-          }
-          codecs.forEach(this::writeCodecField);
-          writer.write("private readonly IDatabase _database;");
-          writer.write("private readonly ISubscriber _subscriber;");
-          writer.write("private readonly $L _handler;", handlerType);
-          writer.write("private readonly string _group;");
-          writer.write("private readonly string _consumer;");
-          writer.write("");
-          writer.write(
-              "public $L(IConnectionMultiplexer connection, $L handler, string consumerGroup,"
-                  + " string consumerName, int database = -1)",
-              typeName,
-              handlerType);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(connection);");
-                writer.write("_database = connection.GetDatabase(database);");
-                writer.write("_subscriber = connection.GetSubscriber();");
-                writer.write(
-                    "_handler = handler ?? throw new"
-                        + " System.ArgumentNullException(nameof(handler));");
-                writer.write(
-                    "_group = consumerGroup ?? throw new"
-                        + " System.ArgumentNullException(nameof(consumerGroup));");
-                writer.write(
-                    "_consumer = consumerName ?? throw new"
-                        + " System.ArgumentNullException(nameof(consumerName));");
-              });
-          writer.write("");
-          writeEnsureGroups(adds);
-          writer.write("");
-          writer.write(
-              "public async System.Threading.Tasks.Task RunAsync(int count = 10,"
-                  + " System.Threading.CancellationToken cancellationToken = default)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("await EnsureConsumerGroupsAsync(cancellationToken);");
-                writer.write("while (!cancellationToken.IsCancellationRequested)");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      writer.write("var received = false;");
-                      for (RedisBindings.StreamAdd add : adds) writeStreamConsume(add);
-                      writer.write(
-                          "if (!received) await System.Threading.Tasks.Task.Delay(100,"
-                              + " cancellationToken);");
-                    });
-              });
-        });
-    writer.write("");
-    writeEntryHelper();
-  }
-
-  private void writeEnsureGroups(List<RedisBindings.StreamAdd> adds) {
-    writer.write(
-        "private async System.Threading.Tasks.Task"
-            + " EnsureConsumerGroupsAsync(System.Threading.CancellationToken cancellationToken)");
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          for (String stream :
-              adds.stream().map(RedisBindings.StreamAdd::stream).distinct().toList()) {
-            writer.write("try");
+          for (var c : commands) {
+            writer.write(
+                "public $L $LAsync($L message, System.Threading.CancellationToken cancellationToken"
+                    + " = default)",
+                task(c.replyType()),
+                c.name(),
+                c.type());
             writer.openBlock(
                 "{",
                 "}",
                 () ->
                     writer.write(
-                        "await _database.StreamCreateConsumerGroupAsync($L, _group, \"0-0\","
-                            + " createStream: true).WaitAsync(cancellationToken);",
-                        literal(stream)));
-            writer.write(
-                "catch (RedisServerException exception) when"
-                    + " (exception.Message.StartsWith(\"BUSYGROUP\","
-                    + " System.StringComparison.Ordinal))");
-            writer.openBlock("{", "}", () -> {});
+                        "return $L($LMessaging.$LSend, message, cancellationToken);",
+                        c.reply().isPresent() ? "_requests.RequestAsync" : "_sender.SendAsync",
+                        svc,
+                        c.name()));
           }
         });
   }
 
-  private void writeStreamConsume(RedisBindings.StreamAdd add) {
-    writer.write(
-        "var $LEntries = await _database.StreamReadGroupAsync($L, _group, _consumer, \">\", count:"
-            + " count).WaitAsync(cancellationToken);",
-        CSharpNaming.parameterName(add.opName()),
-        literal(add.stream()));
-    writer.write("foreach (var entry in $LEntries)", CSharpNaming.parameterName(add.opName()));
+  private void writePublisher(String svc, List<RedisBindings.Subscription> events) {
+    writer.write("public interface I$LEventPublisher", svc);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          writer.write("received = true;");
-          writer.write(
-              "var payload = (byte[]?)BoteRedisEntry.GetRequired(entry, \"data\") ?? throw new"
-                  + " System.InvalidOperationException(\"Redis stream data is null.\");");
-          writer.write("var command = $L.Deserialize(payload);", codecFieldName(add.commandType()));
-          if (add.replyType().isPresent()) {
-            writer.write(
-                "var reply = await _handler.Handle$LAsync(command, cancellationToken);",
-                add.opName());
-            writer.write("var replyTo = (string)BoteRedisEntry.GetRequired(entry, \"reply_to\")!;");
-            writer.write(
-                "var correlationId = (string)BoteRedisEntry.GetRequired(entry,"
-                    + " \"correlation_id\")!;");
-            writer.write(
-                "var replyPayload = $L.Serialize(reply);",
-                codecFieldName(add.replyType().orElseThrow()));
-            writer.write(
-                "await _subscriber.PublishAsync(RedisChannel.Literal(replyTo),"
-                    + " BoteRedisReplyEnvelope.Create(correlationId,"
-                    + " replyPayload)).WaitAsync(cancellationToken);");
-          } else {
-            writer.write("await _handler.Handle$LAsync(command, cancellationToken);", add.opName());
-          }
-          writer.write(
-              "await _database.StreamAcknowledgeAsync($L, _group,"
-                  + " entry.Id).WaitAsync(cancellationToken);",
-              literal(add.stream()));
+          for (var e : events)
+            for (var member : e.members())
+              writer.write(
+                  "System.Threading.Tasks.Task Publish$LAsync($L message,"
+                      + " System.Threading.CancellationToken cancellationToken = default);",
+                  CSharpNaming.typeName(member.getMemberName()),
+                  qualified(member));
         });
-  }
-
-  private void writePubSub(String serviceName) {
-    Model model = context.model();
-    List<RedisBindings.Publish> publishes =
-        RedisBindings.publishes(model, context.symbolProvider(), service);
-    List<RedisBindings.Subscription> subscribes =
-        RedisBindings.subscribes(model, context.symbolProvider(), service);
-    if (publishes.isEmpty() && subscribes.isEmpty()) return;
-    validateAddresses(
-        publishes.stream().map(RedisBindings.Publish::channel).toList(),
-        subscribes.stream().map(RedisBindings.Subscription::address).toList(),
-        "Redis Pub/Sub channel");
-
-    String typeName = serviceName + "RedisPubSub";
-    writer.write("public sealed class $L", typeName);
+    writer.write("public sealed class $LEventPublisher : I$LEventPublisher", svc, svc);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          Set<Shape> codecs = new LinkedHashSet<>();
-          for (RedisBindings.Publish publish : publishes) codecs.add(publish.command());
-          for (RedisBindings.Subscription subscribe : subscribes) codecs.add(subscribe.union());
-          codecs.forEach(this::writeCodecField);
-          writer.write("private readonly ISubscriber _subscriber;");
-          writer.write("");
-          writer.write("public $L(IConnectionMultiplexer connection)", typeName);
+          writer.write("private readonly IMessageSender _sender;");
+          writer.write("public $LEventPublisher(IMessageSender sender)", svc);
           writer.openBlock(
               "{",
               "}",
-              () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(connection);");
-                writer.write("_subscriber = connection.GetSubscriber();");
-              });
-          for (RedisBindings.Publish publish : publishes) {
-            writer.write("");
-            writer.write(
-                "public async System.Threading.Tasks.Task $LAsync($L command,"
-                    + " System.Threading.CancellationToken cancellationToken = default)",
-                publish.opName(),
-                publish.commandType());
-            writer.openBlock(
-                "{",
-                "}",
-                () -> {
-                  writer.write("System.ArgumentNullException.ThrowIfNull(command);");
+              () ->
                   writer.write(
-                      "var payload = $L.Serialize(command);",
-                      codecFieldName(publish.commandType()));
-                  writer.write(
-                      "await _subscriber.PublishAsync(RedisChannel.Literal($L),"
-                          + " payload).WaitAsync(cancellationToken);",
-                      literal(publish.channel()));
-                });
-          }
-          for (RedisBindings.Subscription subscribe : subscribes) {
-            for (MemberShape member : subscribe.members()) {
-              writer.write("");
-              String variant = CSharpNaming.typeName(member.getMemberName());
+                      "_sender = sender ?? throw new"
+                          + " System.ArgumentNullException(nameof(sender));"));
+          for (var e : events)
+            for (var member : e.members()) {
+              String name = CSharpNaming.typeName(member.getMemberName());
               writer.write(
-                  "public async System.Threading.Tasks.Task Publish$LAsync($L message,"
+                  "public System.Threading.Tasks.Task Publish$LAsync($L message,"
                       + " System.Threading.CancellationToken cancellationToken = default)",
-                  variant,
+                  name,
                   qualified(member));
               writer.openBlock(
                   "{",
                   "}",
-                  () -> {
-                    writer.write("System.ArgumentNullException.ThrowIfNull(message);");
-                    writer.write(
-                        "var wrapped = $L.From$L(message);", subscribe.unionType(), variant);
-                    writer.write(
-                        "var payload = $L.Serialize(wrapped);",
-                        codecFieldName(subscribe.unionType()));
-                    writer.write(
-                        "await _subscriber.PublishAsync(RedisChannel.Literal($L),"
-                            + " payload).WaitAsync(cancellationToken);",
-                        literal(subscribe.address()));
-                  });
+                  () ->
+                      writer.write(
+                          "return _sender.SendAsync($LMessaging.Publish$LSend, message,"
+                              + " cancellationToken);",
+                          svc,
+                          name));
             }
-            writer.write("");
-            writePubSubSubscribeMethod(subscribe);
-          }
         });
-    if (!publishes.isEmpty()) {
-      writer.write("");
-      writePubSubHandler(serviceName, publishes);
-      writer.write("");
-      writePubSubConsumer(serviceName, publishes);
+  }
+
+  private void writeCommandBindings(Command c) {
+    String facts =
+        literal(service.getId().toString())
+            + ", "
+            + literal(c.operationId())
+            + ", "
+            + literal(c.address());
+    String encode =
+        "static message => new MessagePayload(" + codecFieldName(c.type()) + ".Serialize(message))";
+    String decode = "static payload => " + codecFieldName(c.type()) + ".Deserialize(payload.Value)";
+    if (c.replyType().isPresent()) {
+      String reply = c.replyType().orElseThrow();
+      writer.write(
+          "internal static readonly RedisStreamRequestBinding<$L, $L> $LSend = new($L, $L, static"
+              + " payload => $L.Deserialize(payload.Value), $L);",
+          c.type(),
+          reply,
+          c.name(),
+          facts,
+          encode,
+          codecFieldName(reply),
+          c.maxLength().map(Object::toString).orElse("null"));
+      writer.write(
+          "internal static readonly MessageReplyReceiveBinding<$L, $L, I$LHandler> $LReceive ="
+              + " new($L, $L, static reply => new MessagePayload($L.Serialize(reply)), static"
+              + " (handler, message, ct) => handler.HandleAsync(message, ct));",
+          c.type(),
+          reply,
+          c.name(),
+          c.name(),
+          facts,
+          decode,
+          codecFieldName(reply));
+    } else {
+      writer.write(
+          "internal static readonly $L<$L> $LSend = new($L, $L$L);",
+          kind == Kind.STREAMS ? "RedisStreamSendBinding" : "MessageSendBinding",
+          c.type(),
+          c.name(),
+          facts,
+          encode,
+          kind == Kind.STREAMS ? ", " + c.maxLength().map(Object::toString).orElse("null") : "");
+      writer.write(
+          "internal static readonly MessageReceiveBinding<$L, I$LHandler> $LReceive = new($L, $L,"
+              + " static (handler, message, ct) => handler.HandleAsync(message, ct));",
+          c.type(),
+          c.name(),
+          c.name(),
+          facts,
+          decode);
     }
   }
 
-  private void writePubSubHandler(String serviceName, List<RedisBindings.Publish> publishes) {
-    writer.write("public interface I$LRedisPubSubHandler", serviceName);
+  private void writeEventBindings(RedisBindings.Subscription e) {
+    String facts =
+        literal(service.getId().toString())
+            + ", "
+            + literal(e.operationId())
+            + ", "
+            + literal(e.address());
+    for (var member : e.members()) {
+      String name = CSharpNaming.typeName(member.getMemberName());
+      writer.write(
+          "internal static readonly $L<$L> Publish$LSend = new($L, static message => new"
+              + " MessagePayload($L.Serialize($L.From$L(message)))$L);",
+          kind == Kind.STREAMS ? "RedisStreamSendBinding" : "MessageSendBinding",
+          qualified(member),
+          name,
+          facts,
+          codecFieldName(e.unionType()),
+          e.unionType(),
+          name,
+          kind == Kind.STREAMS ? ", " + e.maxLen().map(Object::toString).orElse("null") : "");
+    }
+    writer.write(
+        "internal static readonly MessageReceiveBinding<$L, I$LHandler> $LReceive = new($L, static"
+            + " payload => $L.Deserialize(payload.Value), static (handler, message, ct) =>"
+            + " handler.HandleAsync(message, ct));",
+        e.unionType(),
+        e.opName(),
+        e.opName(),
+        facts,
+        codecFieldName(e.unionType()));
+  }
+
+  private void writeRegistration(
+      String svc, List<Command> commands, List<RedisBindings.Subscription> events) {
+    writer.addImport("Microsoft.Extensions.DependencyInjection");
+    writer.addImport("Microsoft.Extensions.DependencyInjection.Extensions");
+    writer.write("public static class $LMessagingExtensions", svc);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          boolean first = true;
-          for (RedisBindings.Publish publish : publishes) {
-            if (!first) writer.write("");
-            first = false;
-            writer.write(
-                "System.Threading.Tasks.Task Handle$LAsync($L command,"
-                    + " System.Threading.CancellationToken cancellationToken = default);",
-                publish.opName(),
-                publish.commandType());
+          if (!commands.isEmpty()) {
+            writeRoleRegistration(svc, "Client");
+            writeConsumerRegistration(
+                svc, "Command", commands.stream().map(Command::name).toList());
+          }
+          if (!events.isEmpty()) {
+            writeRoleRegistration(svc, "EventPublisher");
+            writeConsumerRegistration(
+                svc, "Event", events.stream().map(RedisBindings.Subscription::opName).toList());
           }
         });
   }
 
-  private void writePubSubConsumer(String serviceName, List<RedisBindings.Publish> publishes) {
-    String typeName = serviceName + "RedisPubSubConsumer";
-    String handlerType = "I" + serviceName + "RedisPubSubHandler";
-    writer.write("public sealed class $L", typeName);
+  private void writeRoleRegistration(String svc, String role) {
+    writer.write(
+        "public static IServiceCollection Add$L$L(this IServiceCollection services)", svc, role);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          for (RedisBindings.Publish publish : publishes) writeCodecField(publish.command());
-          writer.write("private readonly ISubscriber _subscriber;");
-          writer.write("private readonly $L _handler;", handlerType);
-          writer.write("");
-          writer.write(
-              "public $L(IConnectionMultiplexer connection, $L handler)", typeName, handlerType);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(connection);");
-                writer.write("_subscriber = connection.GetSubscriber();");
-                writer.write(
-                    "_handler = handler ?? throw new"
-                        + " System.ArgumentNullException(nameof(handler));");
-              });
-          writer.write("");
-          writer.write(
-              "public async System.Threading.Tasks.Task RunAsync(System.Threading.CancellationToken"
-                  + " cancellationToken = default)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write(
-                    "var messages = Channel.CreateUnbounded<(RedisChannel Address, RedisValue"
-                        + " Value)>();");
-                writer.write(
-                    "System.Action<RedisChannel, RedisValue> onMessage = (address, value) =>"
-                        + " messages.Writer.TryWrite((address, value));");
-                for (RedisBindings.Publish publish : publishes) {
-                  writer.write(
-                      "await _subscriber.SubscribeAsync(RedisChannel.Literal($L),"
-                          + " onMessage).WaitAsync(cancellationToken);",
-                      literal(publish.channel()));
-                }
-                writer.write("try");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      writer.write(
-                          "await foreach (var message in"
-                              + " messages.Reader.ReadAllAsync(cancellationToken))");
-                      writer.openBlock(
-                          "{",
-                          "}",
-                          () -> {
-                            for (int i = 0; i < publishes.size(); i++) {
-                              RedisBindings.Publish publish = publishes.get(i);
-                              writer.write(
-                                  "$L (message.Address == RedisChannel.Literal($L))",
-                                  i == 0 ? "if" : "else if",
-                                  literal(publish.channel()));
-                              writer.openBlock(
-                                  "{",
-                                  "}",
-                                  () -> {
-                                    writer.write(
-                                        "var payload = (byte[]?)message.Value ?? throw new"
-                                            + " System.InvalidOperationException(\"Redis Pub/Sub"
-                                            + " payload is null.\");");
-                                    writer.write(
-                                        "var command = $L.Deserialize(payload);",
-                                        codecFieldName(publish.commandType()));
-                                    writer.write(
-                                        "await _handler.Handle$LAsync(command, cancellationToken);",
-                                        publish.opName());
-                                  });
-                            }
-                          });
-                    });
-                writer.write("finally");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      for (RedisBindings.Publish publish : publishes) {
-                        writer.write(
-                            "await _subscriber.UnsubscribeAsync(RedisChannel.Literal($L),"
-                                + " onMessage);",
-                            literal(publish.channel()));
-                      }
-                    });
-              });
+          writer.write("services.TryAddSingleton<I$L$L, $L$L>();", svc, role, svc, role);
+          writer.write("return services;");
         });
   }
 
-  private void writePubSubSubscribeMethod(RedisBindings.Subscription subscribe) {
+  private void writeConsumerRegistration(String svc, String role, List<String> operations) {
+    String transport = kind == Kind.STREAMS ? "RedisStream" : "RedisPubSub";
     writer.write(
-        "public async System.Collections.Generic.IAsyncEnumerable<$L>"
-            + " $LAsync([EnumeratorCancellation] System.Threading.CancellationToken"
-            + " cancellationToken = default)",
-        subscribe.unionType(),
-        subscribe.opName());
+        "public static IServiceCollection Add$L$LConsumer(this IServiceCollection services,"
+            + " $LConsumerOptions? options = null)",
+        svc,
+        role,
+        transport);
     writer.openBlock(
         "{",
         "}",
-        () -> {
-          writer.write("var messages = Channel.CreateUnbounded<RedisValue>();");
-          writer.write("var channel = RedisChannel.Literal($L);", literal(subscribe.address()));
-          writer.write(
-              "System.Action<RedisChannel, RedisValue> onMessage = (_, value) =>"
-                  + " messages.Writer.TryWrite(value);");
-          writer.write(
-              "await _subscriber.SubscribeAsync(channel, onMessage).WaitAsync(cancellationToken);");
-          writer.write("try");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write(
-                    "await foreach (var value in messages.Reader.ReadAllAsync(cancellationToken))");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () ->
-                        writer.write(
-                            "yield return $L.Deserialize((byte[]?)value ??"
-                                + " System.Array.Empty<byte>());",
-                            codecFieldName(subscribe.unionType())));
-              });
-          writer.write("finally");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> writer.write("await _subscriber.UnsubscribeAsync(channel, onMessage);"));
-        });
-  }
-
-  private void writeStreamAddCall(String stream, Long maxLen, String entries) {
-    String max = maxLen == null ? "null" : Integer.toString(Math.toIntExact(maxLen));
-    writer.write(
-        "await _database.StreamAddAsync($L, new NameValueEntry[] { $L }, maxLength: $L,"
-            + " useApproximateMaxLength: $L).WaitAsync(cancellationToken);",
-        literal(stream),
-        entries,
-        max,
-        maxLen == null ? "false" : "true");
+        () ->
+            writer.write(
+                "return services.Add$LConsumer(options, $L);",
+                transport,
+                operations.stream()
+                    .map(op -> svc + "Messaging." + op + "Receive")
+                    .collect(Collectors.joining(", "))));
   }
 
   private void writeCodecField(Shape shape) {
@@ -720,75 +387,6 @@ public final class RedisGenerator implements Runnable {
         type,
         codecFieldName(type),
         SchemaGenerator.schemaClassName(context, shape));
-  }
-
-  private void writeEntryHelper() {
-    writer.write("internal static class BoteRedisEntry");
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("public static RedisValue GetRequired(StreamEntry entry, RedisValue name)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("foreach (var field in entry.Values)");
-                writer.openBlock(
-                    "{", "}", () -> writer.write("if (field.Name == name) return field.Value;"));
-                writer.write(
-                    "throw new System.InvalidOperationException(\"Redis stream entry is missing"
-                        + " field '\" + name + \"'.\");");
-              });
-        });
-  }
-
-  private void writeReplyEnvelopeHelper() {
-    writer.write("internal static class BoteRedisReplyEnvelope");
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write(
-              "internal readonly record struct Reply(string CorrelationId, byte[] Payload);");
-          writer.write("");
-          writer.write("public static byte[] Create(string correlationId, byte[] payload)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("using var stream = new System.IO.MemoryStream();");
-                writer.write("using (var json = new System.Text.Json.Utf8JsonWriter(stream))");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      writer.write("json.WriteStartObject();");
-                      writer.write("json.WriteString(\"correlation_id\", correlationId);");
-                      writer.write("json.WritePropertyName(\"data\");");
-                      writer.write("json.WriteRawValue(payload, skipInputValidation: false);");
-                      writer.write("json.WriteEndObject();");
-                    });
-                writer.write("return stream.ToArray();");
-              });
-          writer.write("");
-          writer.write("public static Reply Parse(RedisValue value)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("var bytes = (byte[]?)value ?? System.Array.Empty<byte>();");
-                writer.write("using var json = System.Text.Json.JsonDocument.Parse(bytes);");
-                writer.write("var root = json.RootElement;");
-                writer.write(
-                    "var correlationId = root.GetProperty(\"correlation_id\").GetString() ?? throw"
-                        + " new System.Text.Json.JsonException(\"Missing correlation_id.\");");
-                writer.write(
-                    "var payload ="
-                        + " System.Text.Encoding.UTF8.GetBytes(root.GetProperty(\"data\").GetRawText());");
-                writer.write("return new Reply(correlationId, payload);");
-              });
-        });
   }
 
   private String qualified(MemberShape member) {

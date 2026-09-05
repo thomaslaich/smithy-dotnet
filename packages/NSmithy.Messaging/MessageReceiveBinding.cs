@@ -8,8 +8,9 @@ public abstract class MessageReceiveBinding(string serviceId, string operationId
     public string ServiceId { get; } = serviceId;
     public string OperationId { get; } = operationId;
     public string Address { get; } = address;
+    public virtual bool HasReply => false;
     public abstract void Validate(IServiceProvider services);
-    public abstract Task DispatchAsync(
+    public abstract Task<MessagePayload?> DispatchAsync(
         MessagePayload payload,
         IServiceProvider services,
         CancellationToken cancellationToken
@@ -35,7 +36,7 @@ public sealed class MessageReceiveBinding<T, THandler>(
             );
     }
 
-    public override Task DispatchAsync(
+    public override async Task<MessagePayload?> DispatchAsync(
         MessagePayload payload,
         IServiceProvider services,
         CancellationToken cancellationToken
@@ -43,6 +44,8 @@ public sealed class MessageReceiveBinding<T, THandler>(
     {
         ArgumentNullException.ThrowIfNull(services);
         var message = decode(payload);
-        return handle(services.GetRequiredService<THandler>(), message, cancellationToken);
+        await handle(services.GetRequiredService<THandler>(), message, cancellationToken)
+            .ConfigureAwait(false);
+        return null;
     }
 }

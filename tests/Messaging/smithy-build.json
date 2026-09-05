@@ -35,6 +35,33 @@
           "generateDependencyInjection": true
         }
       }
+    },
+    "redisstreams": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "tests.redisstreams#ChatRoom",
+          "baseNamespace": "",
+          "generateDependencyInjection": true
+        }
+      }
+    },
+    "redisreply": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "tests.redisreply#Inventory",
+          "baseNamespace": "",
+          "generateDependencyInjection": true
+        }
+      }
+    },
+    "redispubsub": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "tests.redispubsub#ChatRoom",
+          "baseNamespace": "",
+          "generateDependencyInjection": true
+        }
+      }
     }
   }
 }

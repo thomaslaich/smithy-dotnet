@@ -21,8 +21,8 @@ test totals.
 | [`aws.protocols#ec2Query`](../aws-ec2-query/) | Client | Preview | Requests 30/30 (100%), responses 29/29 (100%) | N/A |
 | [`aws.protocols#restXml`](../rest-xml/) | Client | Preview | Requests 109/109 (100%), responses 84/84 (100%) | N/A |
 | [`bote#kafkaJson`](../bote-kafka-json/) | Producer and consumers | Experimental | End-to-end examples | N/A |
-| [`bote#redisStreamsJson`](../bote-redis-json/) | Stream client and owner consumer | Experimental | End-to-end examples | N/A |
-| [`bote#redisPubSubJson`](../bote-redis-json/) | Pub/Sub client and owner consumer | Experimental | Code generation | N/A |
+| [`bote#redisStreamsJson`](../bote-redis-json/) | Typed roles, group recovery, checkpoints, request/reply | Experimental | Runtime and broker tests | N/A |
+| [`bote#redisPubSubJson`](../bote-redis-json/) | Typed roles and bounded handler dispatch | Experimental | Runtime and broker tests | N/A |
 
 ## How the numbers are counted
 

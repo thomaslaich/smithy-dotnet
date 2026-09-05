@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../packages/NSmithy.Messaging.Redis/NSmithy.Messaging.Redis.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Messaging.Kafka/NSmithy.Messaging.Kafka.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Aws/NSmithy.Aws.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
