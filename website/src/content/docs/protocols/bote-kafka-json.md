@@ -26,7 +26,7 @@ it hermetically for generated .NET builds.
 | Purpose | Packages |
 | --- | --- |
 | Build integration | `NSmithy.Bote` |
-| Generated Kafka SDK | `NSmithy.Core`, `NSmithy.Codecs.Json`, `Confluent.Kafka` |
+| Generated Kafka SDK | `NSmithy.Core`, `NSmithy.Codecs.Json`, `NSmithy.Messaging.Kafka` |
 | AsyncAPI docs host | `NSmithy.Server.AspNetCore.Docs` |
 
 ## Modeling
@@ -151,70 +151,39 @@ like any other missing required member.
 
 ## Generated Surfaces
 
-From the `StreetlightDevice` service NSmithy.Bote generates one
-`StreetlightDeviceKafka.g.cs`. The contract owner and its clients use
-different halves of the same types:
+The generated API separates service roles:
 
-- **`StreetlightDeviceProducer`**: the write side. One `{Op}Async(command)`
-  method per `@kafkaProduce` (a client invoking a capability) and one
-  `Publish{Event}Async(event)` method per `@kafkaConsume` union member (the
-  owner emitting).
-- **`IStreetlightDeviceCommandHandler`** / **`StreetlightDeviceCommandConsumer`**:
-  the owner's command side. Consumes the `@kafkaProduce` topics and dispatches
-  each command to `Handle{Op}Async`.
-- **`IStreetlightDeviceEventHandler`** / **`StreetlightDeviceEventConsumer`**:
-  a client's event side. Consumes the `@kafkaConsume` topics, decodes events
-  per `eventDiscrimination`, and dispatches to `Handle{Event}Async`.
+- `IStreetlightDeviceClient` / `StreetlightDeviceClient` sends commands through
+  `DimLightAsync`.
+- `IStreetlightDeviceEventPublisher` / `StreetlightDeviceEventPublisher` publishes
+  events through `PublishLightMeasuredAsync`.
+- `IDimLightHandler.HandleAsync(DimLightInput, CancellationToken)` handles the
+  owner's command operation.
+- `IConsumeLightingEventsHandler.HandleAsync(LightMeasuredStream, CancellationToken)`
+  handles the client's event operation as a modeled union. Discrimination remains
+  inside the generated binding.
 
 A dedicated operation input structure surfaces in C# as `{Op}Input`:
 `DimLightCommand` above generates the C# type `DimLightInput`.
 
-The owner (the streetlight device) handles commands and emits events:
+Clients and publishers delegate to `IMessageSender` through immutable operation
+bindings. Bindings contain service/operation IDs, addresses, codecs, keys,
+headers, and typed dispatch. `NSmithy.Messaging` provides a fresh DI scope for each
+delivery. `NSmithy.Messaging.Kafka` owns broker connections, polling, offset
+storage, and hosting. Only composition-root configuration uses Kafka SDK types.
 
-```csharp
-using Confluent.Kafka;
-using Examples.Kafka.Streetlights;
+The first runtime processes deliveries sequentially. It enables automatic
+commits and disables automatic offset storage, storing a position only after
+successful dispatch and asynchronous scope disposal. Decode or handler failure
+stops the consumer without advancing that delivery. Unknown event discriminators
+are decode failures. Restarting can replay messages; handlers must be idempotent
+where duplicates matter. Lost partition ownership is logged and allows the new
+owner to replay. Shutdown closes the consumer after processing exits.
 
-await using var producer = new StreetlightDeviceProducer(
-    new ProducerConfig { BootstrapServers = "localhost:9092" });
-await using var commands = new StreetlightDeviceCommandConsumer(
-    new ConsumerConfig { BootstrapServers = "localhost:9092", GroupId = "device" },
-    new DimLightHandler());
-
-var handling = commands.RunAsync(ct); // blocking consume loop on a background task
-
-await producer.PublishLightMeasuredAsync(
-    new LightMeasured(Lumens: 842, StreetlightId: "streetlight-001"), ct);
-
-sealed class DimLightHandler : IStreetlightDeviceCommandHandler
-{
-    public Task HandleDimLightAsync(DimLightInput command, CancellationToken ct = default)
-    {
-        Console.WriteLine($"dim {command.StreetlightId} -> {command.Percentage}%");
-        return Task.CompletedTask;
-    }
-}
-```
-
-A client (a controller) produces commands and consumes events:
-
-```csharp
-await using var producer = new StreetlightDeviceProducer(producerConfig);
-await using var events = new StreetlightDeviceEventConsumer(
-    consumerConfig, new LightMeasuredHandler());
-
-var watching = events.RunAsync(ct);
-await producer.DimLightAsync(
-    new DimLightInput(Percentage: 50, StreetlightId: "streetlight-001"), ct);
-```
-
-Consumer group membership and the initial offset policy remain runtime concerns
-configured through Confluent's `ConsumerConfig` (`GroupId`, `AutoOffsetReset`,
-and so on). Generated consumers enforce at-least-once handling: they enable
-automatic commits but disable automatic offset storage, then store each offset
-only after its handler completes successfully. A handler failure therefore
-stops the consumer without making that message eligible for commit. Eager
-at-most-once acknowledgment is not supported.
+Configure `ConsumerConfig.GroupId` and `AutoOffsetReset` at the composition root.
+Keep processing time within Kafka's configured `MaxPollIntervalMs`; long handlers
+can lose partition ownership. Automatic retry, dead-letter handling, concurrency,
+and batch APIs are not implemented in this first runtime slice.
 
 ## Kafka Infrastructure Generation
 
@@ -292,36 +261,53 @@ ignored.
 
 ## Dependency Injection
 
-Setting `SmithyGenerateDependencyInjection` to `true` additionally generates
-`{Service}Kafka.DependencyInjection.g.cs` with Microsoft.Extensions hosting
-registrations (the file requires the `Microsoft.Extensions.Hosting` package):
-
-- `Add{Service}Producer(ProducerConfig)` registers the producer as a
-  singleton. Confluent producers are thread-safe and meant to be shared.
-- `Add{Service}CommandConsumer(ConsumerConfig)` and
-  `Add{Service}EventConsumer(ConsumerConfig)` each register a
-  `BackgroundService` that runs the consumer for the host lifetime.
-
-Register your handler implementation with any lifetime; it is resolved in a
-new service scope per message, so it can take scoped dependencies such as a
-`DbContext`:
+Setting `SmithyGenerateDependencyInjection` to `true` generates registration
+helpers. Add `NSmithy.Messaging.Kafka` to the application and configure the broker
+once before registering the generated service roles:
 
 ```csharp
 using Confluent.Kafka;
 using Examples.Kafka.Streetlights;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using NSmithy.Messaging.Kafka;
 
 var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddStreetlightDeviceProducer(producerConfig);
-builder.Services.AddStreetlightDeviceCommandConsumer(consumerConfig);
-builder.Services.AddScoped<IStreetlightDeviceCommandHandler, DimLightHandler>();
+builder.Services.AddKafkaMessaging(new KafkaMessagingOptions
+{
+    Producer = new ProducerConfig { BootstrapServers = "localhost:9092" },
+    Consumer = new ConsumerConfig
+    {
+        BootstrapServers = "localhost:9092",
+        GroupId = "device",
+        AutoOffsetReset = AutoOffsetReset.Earliest,
+    },
+});
+builder.Services.AddStreetlightDeviceEventPublisher();
+builder.Services.AddStreetlightDeviceCommandConsumer();
+builder.Services.AddScoped<IDimLightHandler, DimLightHandler>();
 await builder.Build().RunAsync();
+
+sealed class DimLightHandler : IDimLightHandler
+{
+    public Task HandleAsync(DimLightInput command, CancellationToken ct = default)
+    {
+        Console.WriteLine($"dim {command.StreetlightId} -> {command.Percentage}%");
+        return Task.CompletedTask;
+    }
+}
 ```
 
-A handler exception propagates out of the consume loop and stops the hosted
-service; by default the .NET host then shuts down. Retry and dead-lettering
-are left to the handler.
+The controller instead registers `AddStreetlightDeviceClient()`,
+`AddStreetlightDeviceEventConsumer()`, and its `IConsumeLightingEventsHandler`.
+Inject `IStreetlightDeviceClient` or `IStreetlightDeviceEventPublisher` into
+application services. The container owns the shared Kafka sender's lifetime.
+For direct sending, construct `KafkaMessageSender` and pass it to the generated
+client or publisher; the caller then owns sender disposal.
+
+Each consumed operation requires a handler registration before startup. A handler
+exception stops the worker; by default the .NET host then shuts down. The runtime
+never acknowledges a failed handler merely to continue consuming.
 
 ## AsyncAPI Documentation
 

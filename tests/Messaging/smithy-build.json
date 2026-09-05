@@ -1,0 +1,40 @@
+{
+  "version": "1.0",
+  "sources": [
+    "model"
+  ],
+  "maven": {
+    "dependencies": [
+      "io.github.thomaslaich.nsmithy:smithy-csharp-bote-codegen:0.0.0-SNAPSHOT"
+    ]
+  },
+  "projections": {
+    "envelope": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "tests.envelope#Device",
+          "baseNamespace": "",
+          "generateDependencyInjection": true
+        }
+      }
+    },
+    "header": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "tests.header#Device",
+          "baseNamespace": "",
+          "generateDependencyInjection": true
+        }
+      }
+    },
+    "none": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "tests.none#Device",
+          "baseNamespace": "",
+          "generateDependencyInjection": true
+        }
+      }
+    }
+  }
+}

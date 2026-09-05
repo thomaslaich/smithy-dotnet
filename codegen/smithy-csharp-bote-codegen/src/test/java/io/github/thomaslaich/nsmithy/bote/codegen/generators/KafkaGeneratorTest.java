@@ -1,6 +1,6 @@
 package io.github.thomaslaich.nsmithy.bote.codegen.generators;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
@@ -92,12 +92,12 @@ final class KafkaGeneratorTest {
   void generatesProducerAndOwnerAndClientConsumers() throws Exception {
     String generated = renderKafka();
 
-    assertTrue(generated.contains("public sealed class DeviceProducer"), generated);
+    assertTrue(generated.contains("public sealed class DeviceClient"), generated);
     assertTrue(generated.contains("public System.Threading.Tasks.Task DimAsync("), generated);
     assertTrue(
         generated.contains("public System.Threading.Tasks.Task PublishMeasuredAsync("), generated);
-    assertTrue(generated.contains("public sealed class DeviceCommandConsumer"), generated);
-    assertTrue(generated.contains("public sealed class DeviceEventConsumer"), generated);
+    assertTrue(generated.contains("public interface IDimHandler"), generated);
+    assertTrue(generated.contains("public interface IWatchHandler"), generated);
     assertTrue(generated.contains("var key = command.DeviceId;"), generated);
     assertTrue(
         generated.contains("headers.Add(\"trace-id\", Encoding.UTF8.GetBytes(traceId));"),
@@ -112,8 +112,7 @@ final class KafkaGeneratorTest {
     assertTrue(generated.contains("builder.Source = sourceText;"), generated);
     assertTrue(
         generated.contains("throw new MissingRequiredMemberException(\"source\");"), generated);
-    assertTrue(
-        generated.contains("DeserializeMeasured(eventValue, result.Message.Headers)"), generated);
+    assertTrue(generated.contains("DeserializeMeasured(eventValue, payload.Headers)"), generated);
   }
 
   @Test
@@ -128,8 +127,7 @@ final class KafkaGeneratorTest {
         generated.contains("headers.Add(\"bote-type\", Encoding.UTF8.GetBytes(\"measured\"));"),
         generated);
     assertTrue(
-        generated.contains("DeserializeMeasured(result.Message.Value, result.Message.Headers)"),
-        generated);
+        generated.contains("DeserializeMeasured(payload.Value, payload.Headers)"), generated);
   }
 
   @Test
@@ -141,8 +139,7 @@ final class KafkaGeneratorTest {
 
     assertTrue(generated.contains("var value = MeasuredCodec.Serialize(message);"), generated);
     assertTrue(
-        generated.contains("DeserializeMeasured(result.Message.Value, result.Message.Headers)"),
-        generated);
+        generated.contains("DeserializeMeasured(payload.Value, payload.Headers)"), generated);
   }
 
   @Test
@@ -161,25 +158,18 @@ final class KafkaGeneratorTest {
   }
 
   @Test
-  void storesOffsetsOnlyAfterSuccessfulDispatch() throws Exception {
+  void delegatesBehaviorToRuntimeAndDispatchesTheOperationUnion() throws Exception {
     String generated = renderKafka();
-
-    assertEquals(2, occurrences(generated, "consumerConfig[\"enable.auto.commit\"] = \"true\";"));
-    assertEquals(
-        2, occurrences(generated, "consumerConfig[\"enable.auto.offset.store\"] = \"false\";"));
-    assertEquals(2, occurrences(generated, "_consumer.StoreOffset(result);"));
-
-    int commandConsumer = generated.indexOf("public sealed class DeviceCommandConsumer");
-    int eventConsumer = generated.indexOf("public sealed class DeviceEventConsumer");
-    assertDispatchBeforeOffsetStore(generated.substring(commandConsumer, eventConsumer));
-    assertDispatchBeforeOffsetStore(generated.substring(eventConsumer));
-  }
-
-  private void assertDispatchBeforeOffsetStore(String consumer) {
-    int dispatch = consumer.indexOf("await DispatchAsync(result, cancellationToken);");
-    int store = consumer.indexOf("_consumer.StoreOffset(result);");
-    assertTrue(dispatch >= 0, consumer);
-    assertTrue(store > dispatch, consumer);
+    assertTrue(
+        generated.contains(
+            "MessageReceiveBinding<Example.Example.Messaging.DeviceEvents, IWatchHandler>"),
+        generated);
+    assertTrue(generated.contains("DeviceEvents.FromMeasured(message)"), generated);
+    assertTrue(generated.contains("_sender.SendAsync(DeviceMessaging.DimSend"), generated);
+    assertFalse(generated.contains("Confluent.Kafka"), generated);
+    assertFalse(generated.contains("StoreOffset"), generated);
+    assertFalse(generated.contains("BackgroundService"), generated);
+    assertFalse(generated.contains("while ("), generated);
   }
 
   private String renderKafka() throws Exception {
@@ -227,14 +217,4 @@ final class KafkaGeneratorTest {
   }
 
   private record RenderContext(GenerationContext context, ServiceShape service) {}
-
-  private static int occurrences(String value, String fragment) {
-    int count = 0;
-    int offset = 0;
-    while ((offset = value.indexOf(fragment, offset)) >= 0) {
-      count++;
-      offset += fragment.length();
-    }
-    return count;
-  }
 }

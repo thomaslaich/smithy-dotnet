@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace></RootNamespace>
     <!-- Synthesize the Kafka SDK from the referenced contract. -->
+    <SmithyGenerateDependencyInjection>true</SmithyGenerateDependencyInjection>
     <SmithyService>examples.kafka.streetlights#StreetlightDevice</SmithyService>
     <SmithyGeneratedNamespaces>examples.kafka.streetlights</SmithyGeneratedNamespaces>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
@@ -13,7 +14,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Confluent.Kafka" Version="2.6.0" />
+    <PackageReference Include="NSmithy.Messaging.Kafka" Version="0.0.0-SNAPSHOT" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
     <PackageReference Include="NSmithy.Bote" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
     <PackageReference Include="NSmithy.Core" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Codecs.Json" Version="0.0.0-SNAPSHOT" />

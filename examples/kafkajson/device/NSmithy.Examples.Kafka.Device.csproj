@@ -8,14 +8,14 @@
     <!-- Synthesize the Kafka SDK from the referenced contract. -->
     <SmithyService>examples.kafka.streetlights#StreetlightDevice</SmithyService>
     <SmithyGeneratedNamespaces>examples.kafka.streetlights</SmithyGeneratedNamespaces>
-    <!-- Also generate the Add{Service}Producer / Add{Service}*Consumer hosting extensions. -->
+    <!-- Also generate the Add{Service}Client / Add{Service}*Consumer hosting extensions. -->
     <SmithyGenerateDependencyInjection>true</SmithyGenerateDependencyInjection>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
     <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Confluent.Kafka" Version="2.6.0" />
+    <PackageReference Include="NSmithy.Messaging.Kafka" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
     <PackageReference Include="NSmithy.Bote" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
     <PackageReference Include="NSmithy.Core" Version="0.0.0-SNAPSHOT" />

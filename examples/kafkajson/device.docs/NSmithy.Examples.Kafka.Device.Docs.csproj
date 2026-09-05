@@ -13,6 +13,9 @@
     <SmithyService>examples.kafka.streetlights#StreetlightDevice</SmithyService>
     <SmithyGeneratedNamespaces>examples.kafka.streetlights</SmithyGeneratedNamespaces>
     <SmithyGenerateAsyncApi>true</SmithyGenerateAsyncApi>
+    <!-- This host serves documentation; it does not send or consume messages. -->
+    <SmithyGenerateClient>false</SmithyGenerateClient>
+    <SmithyGenerateServer>false</SmithyGenerateServer>
     <!--
       smithy-docgen (Sphinx, SmithyGenerateDocs) is disabled: its validation
       decorator hard-rejects bote's @command structures being reused as
@@ -24,7 +27,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Confluent.Kafka" Version="2.6.0" />
     <PackageReference Include="NSmithy.Bote" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
     <PackageReference Include="NSmithy.Core" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Codecs.Json" Version="0.0.0-SNAPSHOT" />

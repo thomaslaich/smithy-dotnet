@@ -5,9 +5,19 @@ and broker runtimes.
 
 ## Status
 
-This document describes the intended architecture. The initial Bote generators
-currently emit transport loops and expose Redis subscriptions as
-`IAsyncEnumerable<T>`; those surfaces are transitional and should converge on
+Kafka now generates immutable send/receive bindings, service-role clients and
+publishers, and per-operation handlers. `NSmithy.Messaging` owns scoped dispatch;
+`NSmithy.Messaging.Kafka` owns producer lifetime, polling, offset storage, and
+hosted consumption. Generated Kafka code has no broker loops or SDK dependency
+outside composition-root registration and optional infrastructure tooling.
+
+The first runtime processes one message at a time. Decode and handler failures
+stop consumption without storing the failed offset. Missing handlers fail
+startup. Unknown event variants are decode failures. Retries, dead-letter
+policies, concurrency, batch APIs, and common telemetry remain future work.
+
+Redis still emits transport loops and exposes subscriptions as
+`IAsyncEnumerable<T>`. Those surfaces are transitional and should converge on
 this design before the messaging API is considered stable.
 
 ## Goal
@@ -277,7 +287,9 @@ hiding transport invariants is not.
 ## Batch Handling
 
 Consumption batching is runtime configuration, not part of the Smithy contract.
-Typical options are `MaxBatchSize` and `MaxBatchWait`. They may differ by
+The shared layer defines size and wait policy, while each transport forms safe
+batches under its ordering and ownership constraints. Typical options are
+`MaxBatchSize` and `MaxBatchWait`. They may differ by
 deployment without changing the service model or handler types.
 
 For durable transports:
@@ -288,7 +300,10 @@ For durable transports:
 4. only successful completion allows the transport runtime to settle it;
 5. failure leaves the batch unsettled, so it can be redelivered.
 
-Kafka stores the highest successfully processed offset for each topic-partition.
+Kafka advances only through the contiguous successfully processed prefix of
+each topic-partition. A later success must never advance past an earlier failed
+or in-flight delivery. Partition ownership must still be valid when storing the
+position; ownership loss can cause replay by the new owner.
 Redis acknowledges the successful entry IDs. AMQP settles the corresponding
 delivery tags. There is no per-item acknowledgment in the handler contract and
 no partial-success result. Applications requiring partial success should make

@@ -17,43 +17,23 @@ commands and consuming events.
 
 ## Generated code
 
-The `NSmithy.Bote` extension generates
-`Examples/Kafka/Streetlights/StreetlightDeviceKafka.g.cs`, which contains a
-role-neutral SDK.
+`NSmithy.Bote` generates contract-specific bindings and service-role interfaces:
 
-### Producer
+- `IStreetlightDeviceClient` sends `DimLightAsync` commands.
+- `IStreetlightDeviceEventPublisher` publishes `PublishLightMeasuredAsync` events.
+- `IDimLightHandler.HandleAsync(DimLightInput, CancellationToken)` handles commands.
+- `IConsumeLightingEventsHandler.HandleAsync(LightMeasuredStream, CancellationToken)`
+  handles the modeled event union.
 
-`StreetlightDeviceProducer` (`IAsyncDisposable`) is the write side:
+`NSmithy.Messaging.Kafka` owns the Kafka producer, polling loop, offset storage,
+and hosted service. Generated code contains no broker loops. A new DI scope is
+created for each delivery and asynchronously disposed before offset storage.
 
-```csharp
-// @kafkaProduce: a client writes a bare @command to the command topic.
-await producer.DimLightAsync(new DimLightInput(StreetlightId: "...", Percentage: 50));
-
-// @kafkaConsume: the owner emits an @event to the event topic.
-await producer.PublishLightMeasuredAsync(new LightMeasured(StreetlightId: "...", Lumens: 800));
-```
-
-### Command consumer
-
-`IStreetlightDeviceCommandHandler` and `StreetlightDeviceCommandConsumer` form
-the owner's command side. They consume `@kafkaProduce` topics, deserialize bare
-commands, and dispatch to `Handle{Op}Async`.
-
-### Event consumer
-
-`IStreetlightDeviceEventHandler` and `StreetlightDeviceEventConsumer` form the
-client's event side. They consume `@kafkaConsume` topics, deserialize the
-`@streaming` union, and dispatch each variant to `Handle{Event}Async`.
-
-```csharp
-await using var events = new StreetlightDeviceEventConsumer(config, new MyEventHandler());
-await events.RunAsync(cancellationToken);
-```
-
-Generated consumers provide at-least-once handling. They make an offset eligible
-for automatic commit only after the handler completes successfully; a handler
-failure stops the consumer and leaves the message available for redelivery.
-Eager at-most-once acknowledgment is intentionally not supported.
+The consumer processes messages sequentially. Decode or handler failure stops it
+without advancing the failed delivery; restarting can replay messages, so handlers
+must tolerate duplicates. Unknown event discriminators fail decoding. Shutdown
+cancels processing, waits for the active handler, and closes the Kafka consumer.
+Batch processing, automatic retry, and dead-letter policies are not implemented.
 
 Commands use a bare JSON structure, with one command type per topic. Events use
 the protocol's `eventDiscrimination` setting:
@@ -68,12 +48,13 @@ Members with `@kafkaKey` become the Kafka message key. Members with
 `@kafkaHeader` travel only in Kafka headers: generated producers omit them from
 the JSON value, and generated consumers restore them before calling the handler.
 
-With `SmithyGenerateDependencyInjection=true` in the device project,
-NSmithy.Bote also generates Microsoft.Extensions hosting registrations.
-`AddStreetlightDeviceProducer(config)` registers a singleton producer, while
-`AddStreetlightDeviceCommandConsumer(config)` and
-`AddStreetlightDeviceEventConsumer(config)` run consumers as hosted services.
-Each message gets a new dependency-injection scope for its handler.
+Both applications enable `SmithyGenerateDependencyInjection`. Configure the broker
+once with `AddKafkaMessaging(new KafkaMessagingOptions { Producer = ..., Consumer = ... })`.
+The device calls `AddStreetlightDeviceEventPublisher()` and
+`AddStreetlightDeviceCommandConsumer()`, then registers `IDimLightHandler`.
+The controller calls `AddStreetlightDeviceClient()` and
+`AddStreetlightDeviceEventConsumer()`, then registers `IConsumeLightingEventsHandler`.
+Missing handlers fail startup before the consumer connects to Kafka.
 
 ## Model and infrastructure
 
