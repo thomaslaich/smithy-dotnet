@@ -33,7 +33,10 @@ import software.amazon.smithy.utils.SmithyUnstableApi;
 public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclarations> {
 
   private final String namespace;
-  private final Set<String> modelNames = new HashSet<>();
+  // Shape names and generated companions visible in the current or a parent namespace.
+  private final Set<String> modelTypeNames = new HashSet<>();
+  // Conservatively reserve segments from every model namespace, including unrelated ones.
+  private final Set<String> namespaceSegments = new HashSet<>();
   private final Map<FrameworkReference, String> frameworkReferences = new LinkedHashMap<>();
 
   private record FrameworkReference(String qualifiedName, boolean attribute) {}
@@ -72,14 +75,14 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
             shape -> {
               String ns = settings.csharpNamespace(shape.getId().getNamespace());
               // Namespace segments can also hide imported types during C# name lookup.
-              modelNames.addAll(java.util.List.of(ns.split("\\.")));
+              namespaceSegments.addAll(java.util.List.of(ns.split("\\.")));
               if (ns.equals(namespace) || namespace.startsWith(ns + ".")) {
                 String name = CSharpNaming.typeName(shape.getId().getName());
-                modelNames.add(name);
-                modelNames.add(name + "Schema");
+                modelTypeNames.add(name);
+                modelTypeNames.add(name + "Schema");
                 if (shape.isServiceShape()) {
-                  modelNames.add(name + "Client");
-                  modelNames.add(name + "ClientConfig");
+                  modelTypeNames.add(name + "Client");
+                  modelTypeNames.add(name + "ClientConfig");
                 }
               }
             });
@@ -115,16 +118,7 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
           reference.getKey().attribute() && name.endsWith("Attribute")
               ? name.substring(0, name.length() - 9)
               : name;
-      boolean collision =
-          reservedNames.contains(name)
-              || modelNames.contains(name)
-              || reservedNames.contains(shortName)
-              || modelNames.contains(shortName)
-              || frameworkReferences.keySet().stream()
-                  .anyMatch(
-                      other ->
-                          !other.qualifiedName().equals(qualified)
-                              && other.qualifiedName().endsWith("." + name));
+      boolean collision = hasFrameworkNameCollision(qualified, name, shortName);
       String rendered = "global::" + qualified;
       if (!collision) {
         imports.add(ns);
@@ -133,6 +127,22 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
       body = body.replace(reference.getValue(), rendered);
     }
     return body;
+  }
+
+  /** Check each source of shadowing for both the full name and attribute shorthand. */
+  private boolean hasFrameworkNameCollision(String qualifiedName, String name, String shortName) {
+    // Generated members, nested types, or type parameters can hide the reference.
+    if (reservedNames.contains(name) || reservedNames.contains(shortName)) return true;
+    // Model types and their generated companions can take precedence over imported types.
+    if (modelTypeNames.contains(name) || modelTypeNames.contains(shortName)) return true;
+    // Preserve the existing conservative policy for namespace segments.
+    if (namespaceSegments.contains(name) || namespaceSegments.contains(shortName)) return true;
+    // Distinct framework types sharing a simple name would make the imports ambiguous.
+    return frameworkReferences.keySet().stream()
+        .anyMatch(
+            other ->
+                !other.qualifiedName().equals(qualifiedName)
+                    && other.qualifiedName().endsWith("." + name));
   }
 
   /** Reserve model member names before rendering references in the containing file. */

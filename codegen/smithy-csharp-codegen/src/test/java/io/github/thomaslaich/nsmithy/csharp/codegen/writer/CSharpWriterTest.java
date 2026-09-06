@@ -112,4 +112,48 @@ final class CSharpWriterTest {
     assertTrue(generated.contains("global::System.Threading.CancellationToken token"), generated);
     assertTrue(generated.contains("global::System.Net.Http.HttpClient client"), generated);
   }
+
+  @Test
+  void unrelatedNamespaceSegmentsRemainReservedButUnrelatedTypeNamesDoNot() {
+    var model =
+        Model.assembler()
+            .addUnparsedModel(
+                "task.smithy",
+                """
+                $version: "2"
+                namespace unrelated.task
+                structure CancellationToken {}
+                """)
+            .addUnparsedModel(
+                "attribute.smithy",
+                """
+                $version: "2"
+                namespace unrelated.enumeratorCancellation
+                structure Placeholder {}
+                """)
+            .assemble()
+            .unwrap();
+    var settings =
+        CSharpSettings.fromNode(
+            ObjectNode.builder().withMember("service", "example.library#Library").build());
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(model, settings).apply("test.g.cs", "Example.Library");
+    writer.write(
+        "public $L Read([$L] $L token);",
+        writer.frameworkType("System.Threading.Tasks.Task"),
+        writer.frameworkAttribute(
+            "System.Runtime.CompilerServices.EnumeratorCancellationAttribute"),
+        writer.frameworkType("System.Threading.CancellationToken"));
+    String generated = writer.toString();
+    assertTrue(generated.contains("global::System.Threading.Tasks.Task Read("), generated);
+    assertTrue(
+        generated.contains(
+            "[global::System.Runtime.CompilerServices.EnumeratorCancellationAttribute]"),
+        generated);
+    assertTrue(generated.contains("CancellationToken token"), generated);
+    assertTrue(generated.contains("using System.Threading;"), generated);
+    assertFalse(generated.contains("global::System.Threading.CancellationToken"), generated);
+    assertFalse(generated.contains("using System.Threading.Tasks;"), generated);
+    assertFalse(generated.contains("using System.Runtime.CompilerServices;"), generated);
+  }
 }
