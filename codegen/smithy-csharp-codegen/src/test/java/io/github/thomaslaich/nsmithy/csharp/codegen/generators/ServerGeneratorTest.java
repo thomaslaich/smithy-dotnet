@@ -534,9 +534,11 @@ final class ServerGeneratorTest {
             .settings(settings)
             .symbolProvider(symbolProvider)
             .fileManifest(manifest)
-            .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
+            .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
             .build();
-    var writer = new CSharpWriter(writerNamespace);
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", writerNamespace);
     var service = model.expectShape(ShapeId.from(serviceId), ServiceShape.class);
 
     new ServerGenerator(context, writer, service).run();

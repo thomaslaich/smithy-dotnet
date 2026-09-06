@@ -21,7 +21,6 @@ public final class MapGenerator implements Runnable {
 
   public MapGenerator(GenerationContext c, CSharpWriter w, MapShape s) {
     this.context = c;
-    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.shape = s;
   }

@@ -35,7 +35,6 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
   private final String namespace;
   private final Set<String> modelNames = new HashSet<>();
   private final Map<FrameworkReference, String> frameworkReferences = new LinkedHashMap<>();
-  private boolean modelNamesCollected;
 
   private record FrameworkReference(String qualifiedName, boolean attribute) {}
 
@@ -65,9 +64,7 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
   }
 
   /** Include declarations that can shadow framework types even when this file never uses them. */
-  public void reserveModelNames(Model model, CSharpSettings settings) {
-    if (modelNamesCollected) return;
-    modelNamesCollected = true;
+  private void reserveModelNames(Model model, CSharpSettings settings) {
     model
         .shapes()
         .filter(shape -> !shape.isMemberShape())
@@ -230,9 +227,19 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
 
   /** Factory used by WriterDelegator. */
   public static final class CSharpWriterFactory implements SymbolWriter.Factory<CSharpWriter> {
+    private final Model model;
+    private final CSharpSettings settings;
+
+    public CSharpWriterFactory(Model model, CSharpSettings settings) {
+      this.model = model;
+      this.settings = settings;
+    }
+
     @Override
     public CSharpWriter apply(String filename, String namespace) {
-      return new CSharpWriter(namespace);
+      var writer = new CSharpWriter(namespace);
+      writer.reserveModelNames(model, settings);
+      return writer;
     }
   }
 

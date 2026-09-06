@@ -100,8 +100,8 @@ final class CSharpWriterTest {
     var settings =
         CSharpSettings.fromNode(
             ObjectNode.builder().withMember("service", "example.library#Http").build());
-    var writer = new CSharpWriter("Example.Library");
-    writer.reserveModelNames(model, settings);
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(model, settings).apply("test.g.cs", "Example.Library");
     writer.write(
         "public $L Read($L token, $L client);",
         writer.frameworkType("System.Threading.Tasks.Task"),

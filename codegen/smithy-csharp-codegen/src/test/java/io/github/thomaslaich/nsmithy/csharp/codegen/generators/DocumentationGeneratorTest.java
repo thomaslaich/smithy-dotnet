@@ -161,7 +161,9 @@ final class DocumentationGeneratorTest {
   private String renderStructure(String shapeId) throws Exception {
     var model = model();
     var context = context(model);
-    var writer = new CSharpWriter("Example.Weather");
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", "Example.Weather");
     new StructureGenerator(
             context, writer, model.expectShape(ShapeId.from(shapeId), StructureShape.class))
         .run();
@@ -170,7 +172,10 @@ final class DocumentationGeneratorTest {
 
   private String renderStringEnum(String shapeId) throws Exception {
     var model = model();
-    var writer = new CSharpWriter("Example.Weather");
+    var context = context(model);
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", "Example.Weather");
     new StringEnumGenerator(writer, model.expectShape(ShapeId.from(shapeId), EnumShape.class))
         .run();
     return writer.toString();
@@ -178,7 +183,10 @@ final class DocumentationGeneratorTest {
 
   private String renderIntEnum(String shapeId) throws Exception {
     var model = model();
-    var writer = new CSharpWriter("Example.Weather");
+    var context = context(model);
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", "Example.Weather");
     new IntEnumGenerator(writer, model.expectShape(ShapeId.from(shapeId), IntEnumShape.class))
         .run();
     return writer.toString();
@@ -187,7 +195,9 @@ final class DocumentationGeneratorTest {
   private String renderError(String shapeId) throws Exception {
     var model = model();
     var context = context(model);
-    var writer = new CSharpWriter("Example.Weather");
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", "Example.Weather");
     new ErrorGenerator(
             context, writer, model.expectShape(ShapeId.from(shapeId), StructureShape.class))
         .run();
@@ -197,7 +207,9 @@ final class DocumentationGeneratorTest {
   private String renderClient() throws Exception {
     var model = model();
     var context = context(model);
-    var writer = new CSharpWriter("Example.Weather");
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", "Example.Weather");
     new ClientGenerator(
             context,
             writer,
@@ -209,7 +221,9 @@ final class DocumentationGeneratorTest {
   private String renderServer() throws Exception {
     var model = model();
     var context = context(model);
-    var writer = new CSharpWriter("Example.Weather");
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", "Example.Weather");
     new ServerGenerator(
             context,
             writer,
@@ -240,7 +254,7 @@ final class DocumentationGeneratorTest {
         .settings(settings)
         .symbolProvider(symbolProvider)
         .fileManifest(manifest)
-        .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
+        .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
         .build();
   }
 }

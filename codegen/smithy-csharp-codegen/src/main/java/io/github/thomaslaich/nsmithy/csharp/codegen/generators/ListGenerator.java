@@ -21,7 +21,6 @@ public final class ListGenerator implements Runnable {
 
   public ListGenerator(GenerationContext c, CSharpWriter w, ListShape s) {
     this.context = c;
-    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.shape = s;
   }

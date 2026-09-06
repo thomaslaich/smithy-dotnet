@@ -46,7 +46,9 @@ final class TypeNameGeneratorTest {
   @Test
   void shortensLocalTypesAndSchemaAccessorsWithoutChangingDocumentation() {
     var context = context();
-    var writer = new CSharpWriter("Example.Library");
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", "Example.Library");
     new StructureGenerator(
             context,
             writer,
@@ -74,7 +76,9 @@ final class TypeNameGeneratorTest {
   @Test
   void qualifiesTypesHiddenByUnionVariantsAndTypeParameters() {
     var context = context();
-    var writer = new CSharpWriter("Example.Library");
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", "Example.Library");
     new UnionGenerator(
             context,
             writer,
@@ -112,7 +116,7 @@ final class TypeNameGeneratorTest {
         .settings(settings)
         .symbolProvider(symbols)
         .fileManifest(manifest)
-        .writerDelegator(new CSharpDelegator(manifest, symbols))
+        .writerDelegator(new CSharpDelegator(manifest, symbols, model, settings))
         .build();
   }
 }

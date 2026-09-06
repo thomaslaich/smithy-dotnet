@@ -14,22 +14,11 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 @SmithyInternalApi
 public final class CSharpDelegator extends WriterDelegator<CSharpWriter> {
 
-  public CSharpDelegator(FileManifest fileManifest, SymbolProvider symbolProvider) {
-    super(fileManifest, symbolProvider, new CSharpWriter.CSharpWriterFactory());
-  }
-
   public CSharpDelegator(
       FileManifest fileManifest,
       SymbolProvider symbolProvider,
       Model model,
       CSharpSettings settings) {
-    super(
-        fileManifest,
-        symbolProvider,
-        (filename, namespace) -> {
-          var writer = new CSharpWriter(namespace);
-          writer.reserveModelNames(model, settings);
-          return writer;
-        });
+    super(fileManifest, symbolProvider, new CSharpWriter.CSharpWriterFactory(model, settings));
   }
 }

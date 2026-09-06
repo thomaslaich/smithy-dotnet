@@ -323,9 +323,11 @@ final class FakeHandlerGeneratorTest {
             .settings(settings)
             .symbolProvider(symbolProvider)
             .fileManifest(manifest)
-            .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
+            .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
             .build();
-    var writer = new CSharpWriter("Example.Example.Fake");
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", "Example.Example.Fake");
     var service = model.expectShape(ShapeId.from("example.fake#Fakeable"), ServiceShape.class);
 
     new FakeHandlerGenerator(context, writer, service).run();

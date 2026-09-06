@@ -115,9 +115,11 @@ final class ErrorGeneratorTest {
             .settings(settings)
             .symbolProvider(symbolProvider)
             .fileManifest(manifest)
-            .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
+            .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
             .build();
-    var writer = new CSharpWriter("Example.Weather");
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", "Example.Weather");
     var shape = model.expectShape(ShapeId.from(shapeId), StructureShape.class);
 
     new ErrorGenerator(context, writer, shape).run();

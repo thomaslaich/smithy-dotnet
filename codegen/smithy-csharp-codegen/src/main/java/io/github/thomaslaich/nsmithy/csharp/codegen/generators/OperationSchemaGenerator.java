@@ -25,7 +25,6 @@ public final class OperationSchemaGenerator implements Runnable {
 
   public OperationSchemaGenerator(GenerationContext c, CSharpWriter w, OperationShape s) {
     this.context = c;
-    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.shape = s;
   }

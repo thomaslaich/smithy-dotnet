@@ -45,7 +45,6 @@ public final class ClientGenerator implements Runnable {
 
   public ClientGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
-    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.service = s;
   }

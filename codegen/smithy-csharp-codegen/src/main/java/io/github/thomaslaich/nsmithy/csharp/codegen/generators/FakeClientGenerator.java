@@ -37,7 +37,6 @@ public final class FakeClientGenerator implements Runnable {
 
   public FakeClientGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
-    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.service = s;
     this.values = new FakeValueSynthesizer(c, w, "fake client");

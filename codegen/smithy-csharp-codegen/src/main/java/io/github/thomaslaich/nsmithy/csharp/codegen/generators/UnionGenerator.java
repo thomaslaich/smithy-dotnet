@@ -25,7 +25,6 @@ public final class UnionGenerator implements Runnable {
 
   public UnionGenerator(GenerationContext c, CSharpWriter w, UnionShape s) {
     this.context = c;
-    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.shape = s;
   }

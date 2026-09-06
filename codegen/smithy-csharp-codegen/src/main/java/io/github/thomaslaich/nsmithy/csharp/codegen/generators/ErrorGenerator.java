@@ -30,7 +30,6 @@ public final class ErrorGenerator implements Runnable {
 
   public ErrorGenerator(GenerationContext c, CSharpWriter w, StructureShape s) {
     this.context = c;
-    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.shape = s;
   }
