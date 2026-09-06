@@ -228,35 +228,35 @@ public final class SchemaGenerator {
     String elementSchema =
         elementSchemaExpr(writer, context, shape.getMember(), memberTarget, sparse);
 
-    writer.write("public static partial class $L", localSchemaClassName(shape));
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("public static $T<$L> Schema { get; } =", RuntimeTypes.SCHEMA, typeName);
-          writer.indent();
-          writer.write(
-              "$T.$L<$L, $L, $L>($L, $L,",
-              RuntimeTypes.SCHEMAS,
-              factory,
-              typeName,
-              memberType,
-              builderType,
-              shapeIdExpr(writer, shape.getId()),
-              elementSchema);
-          writer.indent();
-          writer.write("static value => value.Values,");
-          writer.write("static () => new $L(),", builderType);
-          writer.write("static (builder, value) => builder.Add(value),");
-          writer.write("static builder => $L.FromOwnedList(builder),", typeName);
-          writer.write(
-              "$L, elementTraits: $L);",
-              traitsExpr(writer, shape.getAllTraits().values()),
-              memberTraitsExpr(writer, context, shape.getMember()));
-          writer.dedent();
-          writer.dedent();
-          writer.write("");
-        });
+    writer.pushState();
+    try {
+      writer.putContext("schemaClass", localSchemaClassName(shape));
+      writer.putContext("schema", RuntimeTypes.SCHEMA);
+      writer.putContext("schemas", RuntimeTypes.SCHEMAS);
+      writer.putContext("type", typeName);
+      writer.putContext("memberType", memberType);
+      writer.putContext("builderType", builderType);
+      writer.putContext("factory", factory);
+      writer.putContext("shapeId", shapeIdExpr(writer, shape.getId()));
+      writer.putContext("elementSchema", elementSchema);
+      writer.putContext("traits", traitsExpr(writer, shape.getAllTraits().values()));
+      writer.putContext("elementTraits", memberTraitsExpr(writer, context, shape.getMember()));
+      writer.write(
+          """
+          public static partial class ${schemaClass:L}
+          {
+              public static ${schema:T}<${type:L}> Schema { get; } =
+                  ${schemas:T}.${factory:L}<${type:L}, ${memberType:L}, ${builderType:L}>(${shapeId:L}, ${elementSchema:L},
+                      static value => value.Values,
+                      static () => new ${builderType:L}(),
+                      static (builder, value) => builder.Add(value),
+                      static builder => ${type:L}.FromOwnedList(builder),
+                      ${traits:L}, elementTraits: ${elementTraits:L});
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   public static void writeMapSchema(
@@ -269,38 +269,40 @@ public final class SchemaGenerator {
     String builderType = writer.typeName(RuntimeTypes.DICTIONARY) + "<string, " + valueType + ">";
     String valueSchema = elementSchemaExpr(writer, context, shape.getValue(), valueTarget, sparse);
 
-    writer.write("public static partial class $L", localSchemaClassName(shape));
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("public static $T<$L> Schema { get; } =", RuntimeTypes.SCHEMA, typeName);
-          writer.indent();
-          writer.write(
-              "$T.Map<$L, $L, $L>($L, $L,",
-              RuntimeTypes.SCHEMAS,
-              typeName,
-              valueType,
-              builderType,
-              shapeIdExpr(writer, shape.getId()),
-              valueSchema);
-          writer.indent();
-          writer.write("static value => value.Values,");
-          writer.write(
-              "static () => new $L($T.Ordinal),", builderType, RuntimeTypes.STRING_COMPARER);
-          writer.write("static (builder, key, value) => builder[key] = value,");
-          writer.write("static builder => $L.FromOwnedDictionary(builder),", typeName);
-          writer.write(
-              "$L, keyTraits: $L, valueTraits: $L, key: $L);",
-              traitsExpr(writer, shape.getAllTraits().values()),
-              memberTraitsExpr(writer, context, shape.getKey()),
-              memberTraitsExpr(writer, context, shape.getValue()),
-              shapeSchemaAccessor(
-                  writer, context, context.model().expectShape(shape.getKey().getTarget())));
-          writer.dedent();
-          writer.dedent();
-          writer.write("");
-        });
+    writer.pushState();
+    try {
+      writer.putContext("schemaClass", localSchemaClassName(shape));
+      writer.putContext("schema", RuntimeTypes.SCHEMA);
+      writer.putContext("schemas", RuntimeTypes.SCHEMAS);
+      writer.putContext("stringComparer", RuntimeTypes.STRING_COMPARER);
+      writer.putContext("type", typeName);
+      writer.putContext("valueType", valueType);
+      writer.putContext("builderType", builderType);
+      writer.putContext("shapeId", shapeIdExpr(writer, shape.getId()));
+      writer.putContext("valueSchema", valueSchema);
+      writer.putContext("traits", traitsExpr(writer, shape.getAllTraits().values()));
+      writer.putContext("keyTraits", memberTraitsExpr(writer, context, shape.getKey()));
+      writer.putContext("valueTraits", memberTraitsExpr(writer, context, shape.getValue()));
+      writer.putContext(
+          "keySchema",
+          shapeSchemaAccessor(
+              writer, context, context.model().expectShape(shape.getKey().getTarget())));
+      writer.write(
+          """
+          public static partial class ${schemaClass:L}
+          {
+              public static ${schema:T}<${type:L}> Schema { get; } =
+                  ${schemas:T}.Map<${type:L}, ${valueType:L}, ${builderType:L}>(${shapeId:L}, ${valueSchema:L},
+                      static value => value.Values,
+                      static () => new ${builderType:L}(${stringComparer:T}.Ordinal),
+                      static (builder, key, value) => builder[key] = value,
+                      static builder => ${type:L}.FromOwnedDictionary(builder),
+                      ${traits:L}, keyTraits: ${keyTraits:L}, valueTraits: ${valueTraits:L}, key: ${keySchema:L});
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   public static void writeSimpleSchema(CSharpWriter writer, Shape shape) {
