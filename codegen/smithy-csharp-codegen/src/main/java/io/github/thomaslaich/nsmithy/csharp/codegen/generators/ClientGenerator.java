@@ -473,24 +473,32 @@ public final class ClientGenerator implements Runnable {
    * constructor surface. The copy constructor backs the client's copy-at-construction semantics.
    */
   private void writeConfigClass(String typeName) {
-    writer.write("public sealed class $LConfig : $T", typeName, RuntimeTypes.SMITHY_CLIENT_CONFIG);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          if (service.getId().equals(GLACIER_SERVICE)) {
-            writer.write("public $LConfig()", typeName);
-            writer.openBlock(
-                "{",
-                "}",
-                () ->
-                    writer.write("Interceptors.Add(new $T());", RuntimeTypes.GLACIER_INTERCEPTOR));
-          } else {
-            writer.write("public $LConfig() { }", typeName);
+    writer.pushState();
+    try {
+      writer.putContext("config", typeName + "Config");
+      writer.putContext("baseConfig", RuntimeTypes.SMITHY_CLIENT_CONFIG);
+      writer.putContext("defaults", writer.consumer(this::writeConfigDefaults));
+      writer.write(
+          """
+          public sealed class ${config:L} : ${baseConfig:T}
+          {
+              public ${config:L}()
+              {
+                  ${defaults:C|}
+              }
+
+              public ${config:L}(${config:L} source) : base(source) { }
           }
-          writer.write("");
-          writer.write("public $LConfig($LConfig source) : base(source) { }", typeName, typeName);
-        });
+          """);
+    } finally {
+      writer.popState();
+    }
+  }
+
+  private void writeConfigDefaults(CSharpWriter writer) {
+    if (service.getId().equals(GLACIER_SERVICE)) {
+      writer.write("Interceptors.Add(new $T());", RuntimeTypes.GLACIER_INTERCEPTOR);
+    }
   }
 
   /**
