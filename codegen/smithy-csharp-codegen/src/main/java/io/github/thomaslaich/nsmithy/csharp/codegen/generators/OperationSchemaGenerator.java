@@ -31,7 +31,6 @@ public final class OperationSchemaGenerator implements Runnable {
 
   @Override
   public void run() {
-
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     List<ShapeId> errors =
         shape.getErrors().stream()
@@ -40,38 +39,38 @@ public final class OperationSchemaGenerator implements Runnable {
     boolean isStreaming =
         ShapeSupport.isStreamingShape(context.model(), shape.getInputShape())
             || ShapeSupport.isStreamingShape(context.model(), shape.getOutputShape());
-    writer.write("public static partial class $LSchema", typeName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write(
-              "public static $T<$L, $L> Schema { get; } =",
-              RuntimeTypes.OPERATION_SCHEMA,
-              SchemaGenerator.operationShapeType(writer, context, shape.getInputShape()),
-              SchemaGenerator.operationShapeType(writer, context, shape.getOutputShape()));
-          writer.indent();
-          if (isStreaming) {
-            writer.write(
-                "$T.Operation($L, $L, $L, $L, $L, isStreaming: true);",
-                RuntimeTypes.SCHEMAS,
-                SchemaGenerator.shapeIdExpr(writer, shape.getId()),
-                SchemaGenerator.operationShapeSchema(writer, context, shape.getInputShape()),
-                SchemaGenerator.operationShapeSchema(writer, context, shape.getOutputShape()),
-                errorsLiteral(errors),
-                SchemaGenerator.traitsExpr(writer, shape.getAllTraits().values()));
-          } else {
-            writer.write(
-                "$T.Operation($L, $L, $L, $L, $L);",
-                RuntimeTypes.SCHEMAS,
-                SchemaGenerator.shapeIdExpr(writer, shape.getId()),
-                SchemaGenerator.operationShapeSchema(writer, context, shape.getInputShape()),
-                SchemaGenerator.operationShapeSchema(writer, context, shape.getOutputShape()),
-                errorsLiteral(errors),
-                SchemaGenerator.traitsExpr(writer, shape.getAllTraits().values()));
+    writer.pushState();
+    try {
+      writer.putContext("typeName", typeName);
+      writer.putContext("operationSchema", RuntimeTypes.OPERATION_SCHEMA);
+      writer.putContext("schemas", RuntimeTypes.SCHEMAS);
+      writer.putContext(
+          "inputType", SchemaGenerator.operationShapeType(writer, context, shape.getInputShape()));
+      writer.putContext(
+          "outputType",
+          SchemaGenerator.operationShapeType(writer, context, shape.getOutputShape()));
+      writer.putContext("shapeId", SchemaGenerator.shapeIdExpr(writer, shape.getId()));
+      writer.putContext(
+          "inputSchema",
+          SchemaGenerator.operationShapeSchema(writer, context, shape.getInputShape()));
+      writer.putContext(
+          "outputSchema",
+          SchemaGenerator.operationShapeSchema(writer, context, shape.getOutputShape()));
+      writer.putContext("errors", errorsLiteral(errors));
+      writer.putContext(
+          "traits", SchemaGenerator.traitsExpr(writer, shape.getAllTraits().values()));
+      writer.putContext("streamingArgument", isStreaming ? ", isStreaming: true" : "");
+      writer.write(
+          """
+          public static partial class ${typeName:L}Schema
+          {
+              public static ${operationSchema:T}<${inputType:L}, ${outputType:L}> Schema { get; } =
+                  ${schemas:T}.Operation(${shapeId:L}, ${inputSchema:L}, ${outputSchema:L}, ${errors:L}, ${traits:L}${streamingArgument:L});
           }
-          writer.dedent();
-        });
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   private String errorsLiteral(List<ShapeId> errors) {
