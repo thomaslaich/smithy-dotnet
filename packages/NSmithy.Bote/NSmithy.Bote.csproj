@@ -1,0 +1,87 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>NSmithy.Bote</PackageId>
+    <Description>Hermetic Bote messaging codegen integration for NSmithy.</Description>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_NSmithyBotePackVersionedBuildFiles</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference
+      Include="../NSmithy.MSBuild/NSmithy.MSBuild.csproj"
+      PrivateAssets="compile;runtime;contentfiles;analyzers;native"
+    />
+  </ItemGroup>
+
+  <UsingTask
+    TaskName="_NSmithyBoteSubstituteInFile"
+    TaskFactory="RoslynCodeTaskFactory"
+    AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll"
+  >
+    <ParameterGroup>
+      <InputFile ParameterType="System.String" Required="true" />
+      <OutputFile ParameterType="System.String" Required="true" />
+      <Find ParameterType="System.String" Required="true" />
+      <ReplaceWith ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+        var text = File.ReadAllText(InputFile);
+        Directory.CreateDirectory(Path.GetDirectoryName(OutputFile)!);
+        File.WriteAllText(OutputFile, text.Replace(Find, ReplaceWith));
+      ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="_NSmithyBotePackVersionedBuildFiles">
+    <PropertyGroup>
+      <_NSmithyBotePackObjDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'nupkg'))</_NSmithyBotePackObjDir>
+    </PropertyGroup>
+    <_NSmithyBoteSubstituteInFile
+      InputFile="$(MSBuildProjectDirectory)/buildTransitive/NSmithy.Bote.props"
+      OutputFile="$(_NSmithyBotePackObjDir)NSmithy.Bote.props"
+      Find="0.0.0-SNAPSHOT"
+      ReplaceWith="$(Version)"
+    />
+    <_NSmithyBoteSubstituteInFile
+      InputFile="$(MSBuildProjectDirectory)/buildTransitive/NSmithy.Bote.targets"
+      OutputFile="$(_NSmithyBotePackObjDir)NSmithy.Bote.targets"
+      Find="0.0.0-SNAPSHOT"
+      ReplaceWith="$(Version)"
+    />
+    <ItemGroup>
+      <TfmSpecificPackageFile
+        Include="$(_NSmithyBotePackObjDir)NSmithy.Bote.props"
+        PackagePath="buildTransitive/NSmithy.Bote.props"
+      />
+      <TfmSpecificPackageFile
+        Include="$(_NSmithyBotePackObjDir)NSmithy.Bote.targets"
+        PackagePath="buildTransitive/NSmithy.Bote.targets"
+      />
+    </ItemGroup>
+  </Target>
+
+  <ItemGroup>
+    <None
+      Include="tools/maven-repo/**/*"
+      Exclude="tools/maven-repo/.gitignore"
+      Pack="true"
+      PackagePath="tools/maven-repo/"
+    />
+  </ItemGroup>
+
+  <Target Name="_NSmithyBoteValidateMavenBundle" BeforeTargets="Pack">
+    <ItemGroup>
+      <_NSmithyBoteBundleJar Include="tools/maven-repo/**/*.jar" />
+      <_NSmithyBoteBundlePom Include="tools/maven-repo/**/*.pom" />
+    </ItemGroup>
+    <Error
+      Text="NSmithy.Bote: Maven bundle is empty. Run `just pack` to stage it."
+      Condition="'@(_NSmithyBoteBundleJar)' == '' or '@(_NSmithyBoteBundlePom)' == ''"
+    />
+  </Target>
+</Project>

@@ -1,0 +1,220 @@
+package io.github.thomaslaich.nsmithy.bote.codegen.generators;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
+import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
+import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
+import java.nio.file.Files;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import software.amazon.smithy.build.FileManifest;
+import software.amazon.smithy.model.Model;
+import software.amazon.smithy.model.node.Node;
+import software.amazon.smithy.model.node.ObjectNode;
+import software.amazon.smithy.model.shapes.ServiceShape;
+import software.amazon.smithy.model.shapes.ShapeId;
+
+final class KafkaGeneratorTest {
+
+  private static final String MODEL =
+      """
+      $version: "2"
+
+      namespace example.messaging
+
+      use bote#command
+      use bote#event
+      use bote#kafkaConsume
+      use bote#kafkaHeader
+      use bote#kafkaJson
+      use bote#kafkaKey
+      use bote#kafkaProduce
+      use bote.infra#kafkaTopicConfig
+
+      @kafkaJson
+      service Device {
+          version: "1"
+          operations: [Dim, Watch]
+      }
+
+      @kafkaProduce(topic: "device.commands")
+      operation Dim {
+          input: DimCommand
+      }
+
+      @command
+      structure DimCommand {
+          @kafkaKey
+          deviceId: String
+
+          @kafkaHeader(name: "trace-id")
+          traceId: String
+
+          percentage: Integer
+      }
+
+      @kafkaConsume(topic: "device.events")
+      operation Watch {
+          output := {
+              events: DeviceEvents
+          }
+      }
+
+      @streaming
+      union DeviceEvents {
+          @jsonName("measured-event")
+          measured: Measured
+      }
+
+      @event
+      structure Measured {
+          @required
+          @kafkaHeader(name: "source")
+          source: String
+
+          lumens: Integer
+      }
+
+      apply example.messaging#Dim @kafkaTopicConfig(
+          partitions: 3
+          replicationFactor: 2
+          retentionMs: 86400000
+      )
+      """;
+
+  @TempDir java.nio.file.Path tempDir;
+
+  @Test
+  void generatesProducerAndOwnerAndClientConsumers() throws Exception {
+    String generated = renderKafka();
+
+    assertTrue(generated.contains("public sealed class DeviceClient"), generated);
+    assertTrue(generated.contains("public System.Threading.Tasks.Task DimAsync("), generated);
+    assertTrue(
+        generated.contains("public System.Threading.Tasks.Task PublishMeasuredAsync("), generated);
+    assertTrue(generated.contains("public interface IDimHandler"), generated);
+    assertTrue(generated.contains("public interface IWatchHandler"), generated);
+    assertTrue(generated.contains("var key = command.DeviceId;"), generated);
+    assertTrue(
+        generated.contains("headers.Add(\"trace-id\", Encoding.UTF8.GetBytes(traceId));"),
+        generated);
+    assertTrue(generated.contains("member => member.Name != \"traceId\""), generated);
+    assertTrue(generated.contains("member => member.Name != \"source\""), generated);
+    assertTrue(
+        generated.contains(
+            "var value = WrapEvent(\"measured-event\", MeasuredCodec.Serialize(message));"),
+        generated);
+    assertTrue(generated.contains("builder.TraceId = traceIdText;"), generated);
+    assertTrue(generated.contains("builder.Source = sourceText;"), generated);
+    assertTrue(
+        generated.contains("throw new MissingRequiredMemberException(\"source\");"), generated);
+    assertTrue(generated.contains("DeserializeMeasured(eventValue, payload.Headers)"), generated);
+  }
+
+  @Test
+  void hydratesHeadersWithHeaderEventDiscrimination() throws Exception {
+    String generated =
+        renderKafka(
+            MODEL.replace(
+                "@kafkaJson\nservice", "@kafkaJson(eventDiscrimination: \"HEADER\")\nservice"));
+
+    assertTrue(generated.contains("var value = MeasuredCodec.Serialize(message);"), generated);
+    assertTrue(
+        generated.contains("headers.Add(\"bote-type\", Encoding.UTF8.GetBytes(\"measured\"));"),
+        generated);
+    assertTrue(
+        generated.contains("DeserializeMeasured(payload.Value, payload.Headers)"), generated);
+  }
+
+  @Test
+  void hydratesHeadersWithNoEventDiscrimination() throws Exception {
+    String generated =
+        renderKafka(
+            MODEL.replace(
+                "@kafkaJson\nservice", "@kafkaJson(eventDiscrimination: \"NONE\")\nservice"));
+
+    assertTrue(generated.contains("var value = MeasuredCodec.Serialize(message);"), generated);
+    assertTrue(
+        generated.contains("DeserializeMeasured(payload.Value, payload.Headers)"), generated);
+  }
+
+  @Test
+  void generatesTopicInfrastructureFromTheDeploymentOverlay() throws Exception {
+    RenderContext rendered = context();
+    var writer = new CSharpWriter("Example.Example.Messaging");
+
+    new KafkaInfrastructureGenerator(rendered.context(), writer, rendered.service()).run();
+
+    String generated = writer.toString();
+    assertTrue(generated.contains("public static class DeviceKafkaInfrastructure"), generated);
+    assertTrue(generated.contains("Name: \"device.commands\""), generated);
+    assertTrue(generated.contains("Partitions: 3"), generated);
+    assertTrue(generated.contains("ReplicationFactor: 2"), generated);
+    assertTrue(generated.contains("[\"retention.ms\"] = \"86400000\""), generated);
+  }
+
+  @Test
+  void delegatesBehaviorToRuntimeAndDispatchesTheOperationUnion() throws Exception {
+    String generated = renderKafka();
+    assertTrue(
+        generated.contains(
+            "MessageReceiveBinding<Example.Example.Messaging.DeviceEvents, IWatchHandler>"),
+        generated);
+    assertTrue(generated.contains("DeviceEvents.FromMeasured(message)"), generated);
+    assertTrue(generated.contains("_sender.SendAsync(DeviceMessaging.DimSend"), generated);
+    assertFalse(generated.contains("Confluent.Kafka"), generated);
+    assertFalse(generated.contains("StoreOffset"), generated);
+    assertFalse(generated.contains("BackgroundService"), generated);
+    assertFalse(generated.contains("while ("), generated);
+  }
+
+  private String renderKafka() throws Exception {
+    return renderKafka(MODEL);
+  }
+
+  private String renderKafka(String modelText) throws Exception {
+    RenderContext rendered = context(modelText);
+    var writer = new CSharpWriter("Example.Example.Messaging");
+
+    new KafkaGenerator(rendered.context(), writer, rendered.service()).run();
+
+    return writer.toString();
+  }
+
+  private RenderContext context() throws Exception {
+    return context(MODEL);
+  }
+
+  private RenderContext context(String modelText) throws Exception {
+    Model model =
+        Model.assembler()
+            .discoverModels(getClass().getClassLoader())
+            .addUnparsedModel("model.smithy", modelText)
+            .assemble()
+            .unwrap();
+    CSharpSettings settings =
+        CSharpSettings.fromNode(
+            ObjectNode.builder()
+                .withMember("service", Node.from("example.messaging#Device"))
+                .withMember("baseNamespace", Node.from("Example"))
+                .build());
+    var symbolProvider = new CSharpSymbolProvider(model, settings);
+    var manifest = FileManifest.create(Files.createDirectory(tempDir.resolve("manifest")));
+    var context =
+        GenerationContext.builder()
+            .model(model)
+            .settings(settings)
+            .symbolProvider(symbolProvider)
+            .fileManifest(manifest)
+            .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
+            .build();
+    var service = model.expectShape(ShapeId.from("example.messaging#Device"), ServiceShape.class);
+    return new RenderContext(context, service);
+  }
+
+  private record RenderContext(GenerationContext context, ServiceShape service) {}
+}

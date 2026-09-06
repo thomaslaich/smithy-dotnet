@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace></RootNamespace>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
+    <!--
+      Generate only the modeled Kafka infrastructure surface. The local model/
+      overlay is composed with the referenced application contract by NSmithy.
+    -->
+    <SmithyService>examples.kafka.streetlights#StreetlightDevice</SmithyService>
+    <SmithyGeneratedNamespaces>examples.kafka.streetlights</SmithyGeneratedNamespaces>
+    <SmithyGenerateClient>false</SmithyGenerateClient>
+    <SmithyGenerateServer>false</SmithyGenerateServer>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Confluent.Kafka" Version="2.6.0" />
+    <PackageReference Include="NSmithy.Bote" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.Core" Version="0.0.0-SNAPSHOT" />
+    <!-- Import the contract model without coupling the deployer to its generated assembly. -->
+    <ProjectReference
+      Include="../device.contracts/NSmithy.Examples.Kafka.Device.Contracts.csproj"
+      ReferenceOutputAssembly="false"
+    />
+  </ItemGroup>
+</Project>

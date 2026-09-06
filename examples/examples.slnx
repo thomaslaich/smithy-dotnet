@@ -1,45 +1,58 @@
 <Solution>
-  <Folder Name="/restjson1/">
-    <Project Path="restjson1/contracts/NSmithy.Examples.RestJson1.Contracts.csproj" />
-    <Project Path="restjson1/server/NSmithy.Examples.RestJson1.Server.csproj" />
-    <Project Path="restjson1/client/NSmithy.Examples.RestJson1.Client.csproj" />
+  <Folder Name="/restjson1/unary/">
+    <Project Path="restjson1/unary/contracts/NSmithy.Examples.RestJson1.Contracts.csproj" />
+    <Project Path="restjson1/unary/server/NSmithy.Examples.RestJson1.Server.csproj" />
+    <Project Path="restjson1/unary/client/NSmithy.Examples.RestJson1.Client.csproj" />
   </Folder>
-  <Folder Name="/restjson1-streaming/">
-    <Project Path="restjson1-streaming/contracts/RestJson1Streaming.Contracts.csproj" />
-    <Project Path="restjson1-streaming/server/NSmithy.Examples.RestJson1Streaming.Server.csproj" />
-    <Project Path="restjson1-streaming/client/NSmithy.Examples.RestJson1Streaming.Client.csproj" />
+  <Folder Name="/restjson1/streaming/">
+    <Project Path="restjson1/streaming/contracts/RestJson1Streaming.Contracts.csproj" />
+    <Project Path="restjson1/streaming/server/NSmithy.Examples.RestJson1Streaming.Server.csproj" />
+    <Project Path="restjson1/streaming/client/NSmithy.Examples.RestJson1Streaming.Client.csproj" />
   </Folder>
   <Folder Name="/simplerestjson/">
     <Project Path="simplerestjson/contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj" />
     <Project Path="simplerestjson/server/NSmithy.Examples.SimpleRestJson.Server.csproj" />
     <Project Path="simplerestjson/client/NSmithy.Examples.SimpleRestJson.Client.csproj" />
   </Folder>
-  <Folder Name="/rpcv2cbor/">
-    <Project Path="rpcv2cbor/contracts/NSmithy.Examples.RpcV2Cbor.Contracts.csproj" />
-    <Project Path="rpcv2cbor/server/NSmithy.Examples.RpcV2Cbor.Server.csproj" />
-    <Project Path="rpcv2cbor/client/NSmithy.Examples.RpcV2Cbor.Client.csproj" />
+  <Folder Name="/rpcv2cbor/unary/">
+    <Project Path="rpcv2cbor/unary/contracts/NSmithy.Examples.RpcV2Cbor.Contracts.csproj" />
+    <Project Path="rpcv2cbor/unary/server/NSmithy.Examples.RpcV2Cbor.Server.csproj" />
+    <Project Path="rpcv2cbor/unary/client/NSmithy.Examples.RpcV2Cbor.Client.csproj" />
   </Folder>
-  <Folder Name="/rpcv2cbor-streaming/">
-    <Project Path="rpcv2cbor-streaming/contracts/RpcV2CborStreaming.Contracts.csproj" />
-    <Project Path="rpcv2cbor-streaming/server/NSmithy.Examples.RpcV2CborStreaming.Server.csproj" />
-    <Project Path="rpcv2cbor-streaming/client/NSmithy.Examples.RpcV2CborStreaming.Client.csproj" />
+  <Folder Name="/rpcv2cbor/streaming/">
+    <Project Path="rpcv2cbor/streaming/contracts/RpcV2CborStreaming.Contracts.csproj" />
+    <Project Path="rpcv2cbor/streaming/server/NSmithy.Examples.RpcV2CborStreaming.Server.csproj" />
+    <Project Path="rpcv2cbor/streaming/client/NSmithy.Examples.RpcV2CborStreaming.Client.csproj" />
   </Folder>
-  <Folder Name="/grpc/">
-    <Project Path="grpc/contracts/Library.Contracts.csproj" />
-    <Project Path="grpc/server/NSmithy.Examples.Grpc.Server.csproj" />
-    <Project Path="grpc/client/NSmithy.Examples.Grpc.Client.csproj" />
+  <Folder Name="/grpc/unary/">
+    <Project Path="grpc/unary/contracts/Library.Contracts.csproj" />
+    <Project Path="grpc/unary/server/NSmithy.Examples.Grpc.Server.csproj" />
+    <Project Path="grpc/unary/client/NSmithy.Examples.Grpc.Client.csproj" />
   </Folder>
-  <Folder Name="/grpc-streaming/">
-    <Project Path="grpc-streaming/contracts/Streaming.Contracts.csproj" />
-    <Project Path="grpc-streaming/server/NSmithy.Examples.GrpcStreaming.Server.csproj" />
-    <Project Path="grpc-streaming/client/NSmithy.Examples.GrpcStreaming.Client.csproj" />
-    <Project Path="grpc-streaming/grpcnet-server/NSmithy.Examples.GrpcStreaming.GrpcNetServer.csproj" />
-    <Project Path="grpc-streaming/grpcnet-client/NSmithy.Examples.GrpcStreaming.GrpcNetClient.csproj" />
+  <Folder Name="/grpc/streaming/">
+    <Project Path="grpc/streaming/contracts/Streaming.Contracts.csproj" />
+    <Project Path="grpc/streaming/server/NSmithy.Examples.GrpcStreaming.Server.csproj" />
+    <Project Path="grpc/streaming/client/NSmithy.Examples.GrpcStreaming.Client.csproj" />
+    <Project Path="grpc/streaming/grpcnet-server/NSmithy.Examples.GrpcStreaming.GrpcNetServer.csproj" />
+    <Project Path="grpc/streaming/grpcnet-client/NSmithy.Examples.GrpcStreaming.GrpcNetClient.csproj" />
   </Folder>
   <Folder Name="/aws-localstack/">
     <Project Path="aws-localstack/client/NSmithy.Examples.AwsLocalStack.Client.csproj" />
   </Folder>
   <Folder Name="/polyglot/">
     <Project Path="polyglot/dotnet/NSmithy.Polyglot.DotNet.Client.csproj" />
+  </Folder>
+  <Folder Name="/kafkajson/">
+    <Project Path="kafkajson/device.contracts/NSmithy.Examples.Kafka.Device.Contracts.csproj" />
+    <Project Path="kafkajson/device.infra/NSmithy.Examples.Kafka.Device.Infra.csproj" />
+    <Project Path="kafkajson/device/NSmithy.Examples.Kafka.Device.csproj" />
+    <Project Path="kafkajson/controller/NSmithy.Examples.Kafka.Controller.csproj" />
+    <Project Path="kafkajson/device.docs/NSmithy.Examples.Kafka.Device.Docs.csproj" />
+  </Folder>
+  <Folder Name="/redisjson/">
+    <Project Path="redisjson/chat/NSmithy.Examples.Redis.Chat.csproj" />
+    <Project Path="redisjson/inventory/contracts/NSmithy.Examples.Redis.Inventory.Contracts.csproj" />
+    <Project Path="redisjson/inventory/server/NSmithy.Examples.Redis.Inventory.Server.csproj" />
+    <Project Path="redisjson/inventory/client/NSmithy.Examples.Redis.Inventory.Client.csproj" />
   </Folder>
 </Solution>

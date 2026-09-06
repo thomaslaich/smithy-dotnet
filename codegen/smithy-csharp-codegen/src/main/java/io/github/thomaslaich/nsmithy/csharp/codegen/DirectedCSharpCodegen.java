@@ -15,6 +15,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StringEnumGenerat
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StructureGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.UnionGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
+import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpServiceGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;
 import software.amazon.smithy.codegen.core.CodegenException;
@@ -34,6 +35,7 @@ import software.amazon.smithy.codegen.core.directed.GenerateServiceDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateStructureDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateUnionDirective;
 import software.amazon.smithy.model.shapes.EnumShape;
+import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
 @SmithyUnstableApi
@@ -63,8 +65,24 @@ final class DirectedCSharpCodegen
   public void generateService(
       GenerateServiceDirective<GenerationContext, CSharpSettings> directive) {
     GenerationContext ctx = directive.context();
-    String csNamespace = ctx.settings().csharpNamespace(directive.shape().getId().getNamespace());
-    String typeName = CSharpNaming.typeName(directive.shape().getId().getName());
+    ServiceShape service = directive.shape();
+    var extensionGenerators =
+        ctx.integrations().stream()
+            .map(integration -> integration.serviceGenerator(ctx, service))
+            .flatMap(java.util.Optional::stream)
+            .toList();
+    if (extensionGenerators.size() > 1) {
+      throw new CodegenException(
+          "Multiple C# integrations provide a service generator for " + service.getId());
+    }
+    if (!extensionGenerators.isEmpty()) {
+      CSharpServiceGenerator generator = extensionGenerators.get(0);
+      generator.generate(ctx, service);
+      return;
+    }
+
+    String csNamespace = ctx.settings().csharpNamespace(service.getId().getNamespace());
+    String typeName = CSharpNaming.typeName(service.getId().getName());
     String dir = csNamespace.replace('.', '/');
 
     // The service schema is consumed by both client and server, so it has no ".Client"/".Server"
@@ -73,7 +91,7 @@ final class DirectedCSharpCodegen
         .useFileWriter(
             dir + "/" + typeName + ".Schema.g.cs",
             csNamespace,
-            writer -> new ServiceSchemaGenerator(writer, directive.shape()).run());
+            writer -> new ServiceSchemaGenerator(writer, service).run());
 
     // Service-level files use a dotted ".Client"/".Server" suffix so the MSBuild
     // include/exclude globs (*.Client.g.cs / *.Server.g.cs) can distinguish them from
@@ -85,7 +103,7 @@ final class DirectedCSharpCodegen
           .useFileWriter(
               dir + "/" + typeName + ".Client.g.cs",
               csNamespace,
-              writer -> new ClientGenerator(ctx, writer, directive.shape()).run());
+              writer -> new ClientGenerator(ctx, writer, service).run());
     }
 
     if (ctx.settings().generateServer()) {
@@ -93,7 +111,7 @@ final class DirectedCSharpCodegen
           .useFileWriter(
               dir + "/" + typeName + ".Server.g.cs",
               csNamespace,
-              writer -> new ServerGenerator(ctx, writer, directive.shape()).run());
+              writer -> new ServerGenerator(ctx, writer, service).run());
     }
 
     // Opt-in fakes, one per generated surface: the fake handler implements the ".Server" half's
@@ -111,14 +129,14 @@ final class DirectedCSharpCodegen
             .useFileWriter(
                 dir + "/" + typeName + ".Fakes.Server.g.cs",
                 csNamespace,
-                writer -> new FakeHandlerGenerator(ctx, writer, directive.shape()).run());
+                writer -> new FakeHandlerGenerator(ctx, writer, service).run());
       }
       if (ctx.settings().generateClient()) {
         ctx.writerDelegator()
             .useFileWriter(
                 dir + "/" + typeName + ".Fakes.Client.g.cs",
                 csNamespace,
-                writer -> new FakeClientGenerator(ctx, writer, directive.shape()).run());
+                writer -> new FakeClientGenerator(ctx, writer, service).run());
       }
     }
 
@@ -131,8 +149,7 @@ final class DirectedCSharpCodegen
           .useFileWriter(
               dir + "/" + typeName + ".DependencyInjection.g.cs",
               csNamespace,
-              writer ->
-                  new ClientDependencyInjectionGenerator(ctx, writer, directive.shape()).run());
+              writer -> new ClientDependencyInjectionGenerator(ctx, writer, service).run());
     }
   }
 

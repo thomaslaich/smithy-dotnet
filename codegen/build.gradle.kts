@@ -175,3 +175,70 @@ tasks.register("bundleMavenRepo") {
         logger.lifecycle("Bundled Maven repo -> ${repo.absolutePath}")
     }
 }
+
+// Optional Bote integration bundle, packed by NSmithy.Bote rather than the core
+// NSmithy.MSBuild package. Keeping the repositories separate means ordinary
+// NSmithy consumers do not carry messaging traits or generators.
+val boteCodegenBundle: Configuration by configurations.creating
+
+dependencies {
+    val boteVer = property("boteVersion") as String
+    boteCodegenBundle("io.github.thomaslaich.nsmithy:smithy-csharp-bote-codegen:${project.version}")
+    boteCodegenBundle("io.github.thomaslaich.bote:smithy-asyncapi:$boteVer")
+}
+
+tasks.register("bundleBoteMavenRepo") {
+    dependsOn(":smithy-csharp-bote-codegen:publishToMavenLocal")
+    val conf = boteCodegenBundle
+    val outDir = layout.buildDirectory.dir("bote-maven-bundle")
+    inputs.files(conf)
+    outputs.dir(outDir)
+    doLast {
+        val repo = outDir.get().asFile
+        repo.deleteRecursively()
+        repo.mkdirs()
+
+        fun artifactDir(group: String, name: String, ver: String) =
+            repo.resolve("${group.replace('.', '/')}/$name/$ver").apply { mkdirs() }
+
+        conf.resolvedConfiguration.resolvedArtifacts.forEach { art ->
+            val id = art.moduleVersion.id
+            val classifier = art.classifier?.let { "-$it" } ?: ""
+            art.file.copyTo(
+                artifactDir(id.group, id.name, id.version)
+                    .resolve("${id.name}-${id.version}$classifier.${art.extension ?: "jar"}"),
+                overwrite = true,
+            )
+        }
+
+        val componentIds = conf.incoming.resolutionResult.allComponents
+            .mapNotNull { it.id as? ModuleComponentIdentifier }
+        val pomResult = dependencies.createArtifactResolutionQuery()
+            .forComponents(componentIds)
+            .withArtifacts(MavenModule::class.java, MavenPomArtifact::class.java)
+            .execute()
+        pomResult.resolvedComponents.forEach { comp ->
+            val id = comp.id as? ModuleComponentIdentifier ?: return@forEach
+            comp.getArtifacts(MavenPomArtifact::class.java).forEach { result ->
+                if (result is ResolvedArtifactResult) {
+                    result.file.copyTo(
+                        artifactDir(id.group, id.module, id.version)
+                            .resolve("${id.module}-${id.version}.pom"),
+                        overwrite = true,
+                    )
+                }
+            }
+        }
+
+        repo.walkTopDown()
+            .filter { it.isFile && (it.extension == "jar" || it.extension == "pom") }
+            .forEach { file ->
+                val hash = MessageDigest.getInstance("SHA-1")
+                    .digest(file.readBytes())
+                    .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+                File(file.parentFile, "${file.name}.sha1").writeText(hash)
+            }
+
+        logger.lifecycle("Bundled Bote Maven repo -> ${repo.absolutePath}")
+    }
+}

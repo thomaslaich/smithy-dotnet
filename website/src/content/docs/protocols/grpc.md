@@ -169,8 +169,8 @@ Add the Alloy model package to `smithy-build.json`:
 
 ## Examples
 
-- [Unary gRPC library service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/grpc)
-- [Streaming and Grpc.Net interoperability](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/grpc-streaming)
+- [Unary gRPC library service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/grpc/unary)
+- [Streaming and Grpc.Net interoperability](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/grpc/streaming)
 
 ## Protocol source
 

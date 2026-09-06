@@ -3,9 +3,11 @@ title: Protocols
 description: Choose a Smithy protocol and understand what it changes in generated .NET clients and servers.
 ---
 
-A protocol defines the HTTP route, headers, body encoding, error format, and
-streaming transport for a Smithy service. NSmithy reads the protocol trait and
-generates the matching .NET runtime bindings.
+A protocol defines the transport bindings, body encoding, error format, and
+streaming behavior for a Smithy service. For HTTP protocols that includes routes,
+methods, and headers; for messaging protocols it includes topics, keys, and
+message headers. NSmithy reads the protocol trait and generates the matching .NET
+runtime bindings.
 
 The protocol does not change your application model. Generated clients expose
 typed operations, and generated servers expose typed handler interfaces,
@@ -17,18 +19,23 @@ regardless of the wire format.
 | --- | --- | --- |
 | [`aws.protocols#restJson1`](../rest-json/) | Client and server | General REST APIs, broad tooling support, streaming, and AWS-compatible behavior |
 | [`smithy.protocols#rpcv2Cbor`](../rpc-v2-cbor/) | Client and server | Compact binary RPC with CBOR and event streaming |
+| [`alloy#simpleRestJson`](../rest-json/) | Client and server | Alloy and Smithy4s interoperability |
+| [`alloy.proto#grpc`](../grpc/) | Client and server | Standard gRPC and protobuf interoperability |
 | [`aws.protocols#awsJson1_1`](../aws-json/) | Client | Existing AWS JSON RPC services |
 | [`aws.protocols#awsJson1_0`](../aws-json/) | Client | Existing AWS JSON 1.0 services |
 | [`aws.protocols#awsQuery`](../aws-query/) | Client | Existing AWS Query services |
 | [`aws.protocols#ec2Query`](../aws-ec2-query/) | Client | Existing EC2 Query services |
 | [`aws.protocols#restXml`](../rest-xml/) | Client | Existing AWS XML services such as S3 |
-| [`alloy#simpleRestJson`](../rest-json/) | Client and server | Alloy and Smithy4s interoperability |
-| [`alloy.proto#grpc`](../grpc/) | Client and server | Standard gRPC and protobuf interoperability |
+| [`bote#kafkaJson`](../bote-kafka-json/) | Kafka producer and consumers | Typed asynchronous messaging over Kafka |
+| [`bote#redisStreamsJson`](../bote-redis-json/) | Redis Streams client and owner consumer | Durable commands, event streams, and request/reply |
+| [`bote#redisPubSubJson`](../bote-redis-json/) | Redis Pub/Sub client and owner consumer | Ephemeral commands and event subscriptions |
 
 For most new HTTP APIs, start with `restJson1`. Use `rpcv2Cbor` for compact
 binary Smithy RPC between compatible peers. Use gRPC when standard protobuf and
 gRPC interoperability matter. The AWS Query, AWS JSON, and restXml protocols
-are primarily for existing AWS services and emulators.
+are primarily for existing AWS services and emulators. Bote protocols generate
+messaging-specific producers, readers, and consumers rather than the HTTP
+client/server pair.
 
 See [Protocol Status](../status/) for maturity and current conformance numbers.
 
