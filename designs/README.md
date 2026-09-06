@@ -14,7 +14,6 @@ tradeoffs.
 | [http-interfaces.md](http-interfaces.md) | HTTP transport abstractions |
 | [client-architecture.md](client-architecture.md) | Generated client lifecycle, config, interceptors, auth, retries |
 | [server-architecture.md](server-architecture.md) | Generated server dispatch, shared server runtime, host adapter |
-| [http-architecture-improvements.md](http-architecture-improvements.md) | Proposed reductions in generated HTTP construction and hosting code |
 | [native-grpc.md](native-grpc.md) | Native proto codec + gRPC protocol (no protoc/Grpc.Tools) |
 | [streaming.md](streaming.md) | Event streams and streaming blob payloads |
 

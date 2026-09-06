@@ -278,6 +278,11 @@ public static class SmithyAspNetCoreHost
 Whether a connection can carry trailers is transport-level and belongs to the
 host. The trailer values (`grpc-status: 13`, the message) belong to the protocol.
 
+Direct callers of `SmithyAspNetCoreHost.DispatchAsync` pass the runtime as the
+first argument. Generated endpoints use `[FromServices]` to resolve it, preserving
+application-selected lifetimes and avoiding request-body inference. This is an
+ownership seam; server interceptors and telemetry remain future work.
+
 ## Generated Endpoint
 
 A generated endpoint is a route bound to a handler method and the operation's
@@ -292,6 +297,26 @@ The only per-operation variation in codegen is the handler-adapter lambda (by
 input/output presence and stream direction), the route and URI derived from the
 model, and any static query validation from `@http`. The dispatch algorithm is
 not generated.
+
+### Endpoint Mapping and Shared Metadata
+
+Generated code contains contract-specific facts; runtimes own reusable behavior.
+Explicit endpoint mappings retain the route, protocol selection, static query
+guards, streaming flags, and typed handler adapters. Dispatch already delegates
+to the host in one call.
+
+Descriptor-driven endpoint mapping remains deferred. A descriptor would also
+need typed handler resolution and protocol route collision handling. Before
+introducing it, compare generated source size and total runtime complexity for
+unary, streaming, multi-protocol, and static-query services. Reducing generated
+lines alone does not justify another public abstraction or reflection-based
+dispatch.
+
+New host integrations should reuse the transport-neutral service definition,
+operation catalog, and service/operation schemas as their metadata root.
+Adapter-specific descriptors should reference those definitions. HTTP routes,
+MCP JSON Schema, and framework types belong in their respective adapters, rather
+than in a parallel service model or the shared definition.
 
 ## Multiple Protocols per Service
 

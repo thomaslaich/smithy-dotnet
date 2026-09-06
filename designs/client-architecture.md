@@ -60,6 +60,13 @@ operations. Failed operation binding disposes the environment before rethrowing.
 `IHttpClientFactory` registration uses the same HTTP version configuration helper,
 then applies the application's `configureClient` callback so explicit settings win.
 
+The environment's `Create` factory handles endpoint and supplied-`HttpClient`
+construction; `FromRuntime` binds the service to a caller-owned runtime. Both
+expose `Runtime` and `ServiceProtocol`, leaving generated constructors to bind
+operations. `ConfigureHttpClient` shares version selection with generated DI:
+modeled preferences apply to the default protocol, while an explicitly selected
+protocol supplies its own preference. Supplied HTTP clients keep their settings.
+
 The public constructors keep transport ownership explicit:
 
 ```csharp

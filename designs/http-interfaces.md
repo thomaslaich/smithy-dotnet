@@ -151,6 +151,30 @@ without inheriting REST binding semantics. A protocol that serializes the whole
 operation input into one body can ignore REST traits even if the schema graph
 carries them.
 
+## Protocol Binding Lifetimes
+
+Protocol construction has three stages:
+
+```text
+IProtocol
+    -> IServiceProtocol
+        -> IClientOperationProtocol<TInput, TOutput>
+        -> IServerOperationProtocol<TInput, TOutput>
+```
+
+The unbound protocol carries configuration. The service-bound protocol compiles
+and caches service information. Operation protocols compile bindings, codecs,
+validation, and error behavior once per operation and call side. Keep these
+stages unless measurement shows that a service-bound layer has no meaningful
+shared state. `IOperationProtocol<TInput, TOutput>` combines the two operation
+interfaces for implementation convenience; runtimes depend on their own half.
+
+Despite their broad names, these interfaces, `SmithyOperationBinding`, and
+`SmithyClientRuntime` describe HTTP exchanges. gRPC fits because it uses HTTP/2.
+Durable broker consumption needs its own execution model. HTTP-specific names
+such as `IHttpProtocol` or `SmithyHttpClientRuntime` would make that boundary more
+explicit, but a public rename is deferred to a planned breaking release.
+
 ## gRPC
 
 gRPC is just another `IProtocol` (`GrpcProtocol`) over this same transport: it uses
