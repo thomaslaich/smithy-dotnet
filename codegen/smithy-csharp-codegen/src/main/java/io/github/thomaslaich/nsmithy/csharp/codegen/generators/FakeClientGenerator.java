@@ -13,7 +13,6 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
-import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
 import java.util.List;
@@ -39,8 +38,8 @@ public final class FakeClientGenerator implements Runnable {
     this.context = c;
     this.writer = w;
     this.service = s;
-    this.values = new FakeValueSynthesizer(c, "fake client");
-    this.matcher = new FakeExampleMatcher(c, values);
+    this.values = new FakeValueSynthesizer(c, w, "fake client");
+    this.matcher = new FakeExampleMatcher(c, w, values);
   }
 
   @Override
@@ -51,8 +50,6 @@ public final class FakeClientGenerator implements Runnable {
         idx.getContainedOperations(service).stream()
             .sorted(Comparator.comparing(o -> o.getId().toString()))
             .collect(Collectors.toList());
-
-    writer.addImport(RuntimeTypes.NSMITHY_CORE);
 
     String typeName = CSharpNaming.typeName(service.getId().getName()) + "Client";
     String interfaceName = "I" + typeName;
@@ -89,7 +86,7 @@ public final class FakeClientGenerator implements Runnable {
   // ---------------- operation methods ----------------
 
   private void writeOperationMethod(OperationShape op) {
-    writer.write("public virtual $L", ClientGenerator.operationSignature(context, op));
+    writer.write("public virtual $L", ClientGenerator.operationSignature(writer, context, op));
     writer.openBlock("{", "}", () -> matcher.writeOperationBody(writer, op));
   }
 
@@ -105,7 +102,7 @@ public final class FakeClientGenerator implements Runnable {
     writer.write(
         "public virtual async $L",
         ClientGenerator.withEnumeratorCancellation(
-            ClientGenerator.paginatorPagesSignature(context, op)));
+            writer, ClientGenerator.paginatorPagesSignature(writer, context, op)));
     writer.openBlock(
         "{",
         "}",
@@ -114,13 +111,14 @@ public final class FakeClientGenerator implements Runnable {
                 "yield return await $LAsync(input, cancellationToken).ConfigureAwait(false);",
                 opName));
 
-    ClientGenerator.paginatorItemsSignature(context, info)
+    ClientGenerator.paginatorItemsSignature(writer, context, info)
         .ifPresent(
             signature -> {
               String itemsExpr = ClientGenerator.memberPathExpr("page", info.getItemsMemberPath());
               writer.write("");
               writer.write(
-                  "public virtual async $L", ClientGenerator.withEnumeratorCancellation(signature));
+                  "public virtual async $L",
+                  ClientGenerator.withEnumeratorCancellation(writer, signature));
               writer.openBlock(
                   "{",
                   "}",

@@ -13,6 +13,7 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.ArrayList;
@@ -39,16 +40,13 @@ final class FakeExampleMatcher {
   private static final Logger LOGGER = Logger.getLogger(FakeExampleMatcher.class.getName());
 
   private final GenerationContext context;
+  private final CSharpWriter writer;
   private final FakeValueSynthesizer values;
   private final List<PendingMatcher> pendingMatchers = new ArrayList<>();
 
-  private record PendingMatcher(
-      String name, String title, String inputType, List<String> conditions) {}
-
-  private record Arm(String matchMethod, String title, String statement) {}
-
-  FakeExampleMatcher(GenerationContext context, FakeValueSynthesizer values) {
+  FakeExampleMatcher(GenerationContext context, CSharpWriter writer, FakeValueSynthesizer values) {
     this.context = context;
+    this.writer = writer;
     this.values = values;
   }
 
@@ -64,9 +62,9 @@ final class FakeExampleMatcher {
       writer.openBlock("{", "}", () -> writer.write("$L", arm.statement()));
     }
     if (hasOutput) {
-      writer.write("return System.Threading.Tasks.Task.FromResult($L);", values.outputExpr(op));
+      writer.write("return $T.FromResult($L);", RuntimeTypes.TASK, values.outputExpr(op));
     } else {
-      writer.write("return System.Threading.Tasks.Task.CompletedTask;");
+      writer.write("return $T.CompletedTask;", RuntimeTypes.TASK);
     }
   }
 
@@ -89,6 +87,11 @@ final class FakeExampleMatcher {
           });
     }
   }
+
+  private record PendingMatcher(
+      String name, String title, String inputType, List<String> conditions) {}
+
+  private record Arm(String matchMethod, String title, String statement) {}
 
   private List<Arm> arms(OperationShape op) {
     List<ExamplesTrait.Example> examples =
@@ -131,20 +134,28 @@ final class FakeExampleMatcher {
         String errorExpr = values.errorExpr(error.get().getShapeId(), error.get().getContent());
         statement =
             hasOutput
-                ? "return System.Threading.Tasks.Task.FromException<"
+                ? "return "
+                    + writer.typeName(RuntimeTypes.TASK)
+                    + ".FromException<"
                     + outputType
                     + ">("
                     + errorExpr
                     + ");"
-                : "return System.Threading.Tasks.Task.FromException(" + errorExpr + ");";
+                : "return "
+                    + writer.typeName(RuntimeTypes.TASK)
+                    + ".FromException("
+                    + errorExpr
+                    + ");";
       } else if (hasOutput) {
         ObjectNode output = example.getOutput().orElse(Node.objectNode());
         statement =
-            "return System.Threading.Tasks.Task.FromResult("
+            "return "
+                + writer.typeName(RuntimeTypes.TASK)
+                + ".FromResult("
                 + values.outputExprFor(op, output)
                 + ");";
       } else {
-        statement = "return System.Threading.Tasks.Task.CompletedTask;";
+        statement = "return " + writer.typeName(RuntimeTypes.TASK) + ".CompletedTask;";
       }
       arms.add(new Arm(name, example.getTitle(), statement));
     }
@@ -212,7 +223,8 @@ final class FakeExampleMatcher {
         String v = nextVar(counter);
         out.add(expr + " is { } " + v);
         out.add(
-            "System.Linq.Enumerable.SequenceEqual("
+            writer.typeName(RuntimeTypes.ENUMERABLE)
+                + ".SequenceEqual("
                 + v
                 + ", "
                 + values.blobBytesExpr(node, "")

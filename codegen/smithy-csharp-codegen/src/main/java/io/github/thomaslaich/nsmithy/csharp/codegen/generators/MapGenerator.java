@@ -4,8 +4,8 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -35,8 +35,7 @@ public final class MapGenerator implements Runnable {
     // which has no other form. What the key targets is not lost — the schema carries that shape, so
     // a server holds the key to whatever it says — but it is not what the key is typed as.
     String keyType = "string";
-    String valueType =
-        CSharpSymbolProvider.qualified(value) + (ShapeSupport.isSparse(shape) ? "?" : "");
+    String valueType = writer.typeName(value) + (ShapeSupport.isSparse(shape) ? "?" : "");
 
     writer.writeXmlDocs(shape);
     writer.write("public sealed partial record class $L", typeName);
@@ -45,27 +44,30 @@ public final class MapGenerator implements Runnable {
         "}",
         () -> {
           writer.write(
-              "public $L(System.Collections.Generic.IReadOnlyDictionary<$L, $L> values)",
+              "public $L($T<$L, $L> values)",
               typeName,
+              RuntimeTypes.I_READ_ONLY_DICTIONARY,
               keyType,
               valueType);
           writer.openBlock(
               "{",
               "}",
               () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(values);");
+                writer.write("$T.ThrowIfNull(values);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
                 writer.write(
-                    "Values = new System.Collections.ObjectModel.ReadOnlyDictionary<$L, $L>("
-                        + "new System.Collections.Generic.Dictionary<$L, $L>(values));",
+                    "Values = new $T<$L, $L>(new $T<$L, $L>(values));",
+                    RuntimeTypes.READ_ONLY_DICTIONARY,
                     keyType,
                     valueType,
+                    RuntimeTypes.DICTIONARY,
                     keyType,
                     valueType);
               });
           writer.write("");
           writer.write(
-              "private $L(System.Collections.Generic.Dictionary<$L, $L> values)",
+              "private $L($T<$L, $L> values)",
               typeName,
+              RuntimeTypes.DICTIONARY,
               keyType,
               valueType);
           writer.openBlock(
@@ -73,21 +75,22 @@ public final class MapGenerator implements Runnable {
               "}",
               () ->
                   writer.write(
-                      "Values = new System.Collections.ObjectModel.ReadOnlyDictionary<$L,"
-                          + " $L>(values);",
+                      "Values = new $T<$L, $L>(values);",
+                      RuntimeTypes.READ_ONLY_DICTIONARY,
                       keyType,
                       valueType));
           writer.write("");
           writer.write(
-              "internal static $L FromOwnedDictionary("
-                  + "System.Collections.Generic.Dictionary<$L, $L> values) => new(values);",
+              "internal static $L FromOwnedDictionary($T<$L, $L> values) => new(values);",
               typeName,
+              RuntimeTypes.DICTIONARY,
               keyType,
               valueType);
           writer.write("");
           writer.writeXmlDocs(shape.getValue());
           writer.write(
-              "public System.Collections.Generic.IReadOnlyDictionary<$L, $L> Values { get; }",
+              "public $T<$L, $L> Values { get; }",
+              RuntimeTypes.I_READ_ONLY_DICTIONARY,
               keyType,
               valueType);
         });

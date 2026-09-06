@@ -13,7 +13,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
@@ -42,8 +41,8 @@ public final class FakeHandlerGenerator implements Runnable {
     this.context = c;
     this.writer = w;
     this.service = s;
-    this.values = new FakeValueSynthesizer(c, "fake handler");
-    this.matcher = new FakeExampleMatcher(c, values);
+    this.values = new FakeValueSynthesizer(c, w, "fake handler");
+    this.matcher = new FakeExampleMatcher(c, w, values);
   }
 
   @Override
@@ -54,8 +53,6 @@ public final class FakeHandlerGenerator implements Runnable {
         idx.getContainedOperations(service).stream()
             .sorted(Comparator.comparing(o -> o.getId().toString()))
             .collect(Collectors.toList());
-
-    writer.addImport(RuntimeTypes.NSMITHY_CORE);
 
     String serviceTypeName = CSharpNaming.typeName(service.getId().getName());
     String contract =
@@ -109,21 +106,21 @@ public final class FakeHandlerGenerator implements Runnable {
     String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
     String returnType =
         hasOutput
-            ? "System.Threading.Tasks.Task<"
-                + CSharpSymbolProvider.qualified(
-                    sp.toSymbol(model.expectShape(op.getOutputShape())))
+            ? writer.typeName(RuntimeTypes.TASK)
+                + "<"
+                + writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape())))
                 + ">"
-            : "System.Threading.Tasks.Task";
+            : writer.typeName(RuntimeTypes.TASK);
     String params =
         hasInput
-            ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())))
-                + " input, "
+            ? writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape()))) + " input, "
             : "";
     return returnType
         + " "
         + name
         + "("
         + params
-        + "System.Threading.CancellationToken cancellationToken = default)";
+        + writer.typeName(RuntimeTypes.CANCELLATION_TOKEN)
+        + " cancellationToken = default)";
   }
 }

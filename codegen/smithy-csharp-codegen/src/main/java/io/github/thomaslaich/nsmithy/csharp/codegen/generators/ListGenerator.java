@@ -4,8 +4,8 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -31,8 +31,7 @@ public final class ListGenerator implements Runnable {
     SymbolProvider sp = context.symbolProvider();
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     Symbol member = sp.toSymbol(context.model().expectShape(shape.getMember().getTarget()));
-    String memberType =
-        CSharpSymbolProvider.qualified(member) + (ShapeSupport.isSparse(shape) ? "?" : "");
+    String memberType = writer.typeName(member) + (ShapeSupport.isSparse(shape) ? "?" : "");
 
     writer.writeXmlDocs(shape);
     writer.write("public sealed partial record class $L", typeName);
@@ -40,30 +39,29 @@ public final class ListGenerator implements Runnable {
         "{",
         "}",
         () -> {
-          writer.write(
-              "public $L(System.Collections.Generic.IEnumerable<$L> values)", typeName, memberType);
+          writer.write("public $L($T<$L> values)", typeName, RuntimeTypes.I_ENUMERABLE, memberType);
           writer.openBlock(
               "{",
               "}",
               () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(values);");
+                writer.write("$T.ThrowIfNull(values);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
                 writer.write(
-                    "Values = System.Array.AsReadOnly(System.Linq.Enumerable.ToArray(values));");
+                    "Values = $T.AsReadOnly($T.ToArray(values));",
+                    RuntimeTypes.ARRAY,
+                    RuntimeTypes.ENUMERABLE);
               });
           writer.write("");
-          writer.write(
-              "private $L(System.Collections.Generic.List<$L> values)", typeName, memberType);
+          writer.write("private $L($T<$L> values)", typeName, RuntimeTypes.LIST, memberType);
           writer.openBlock("{", "}", () -> writer.write("Values = values.AsReadOnly();"));
           writer.write("");
           writer.write(
-              "internal static $L FromOwnedList(System.Collections.Generic.List<$L> values)"
-                  + " => new(values);",
+              "internal static $L FromOwnedList($T<$L> values) => new(values);",
               typeName,
+              RuntimeTypes.LIST,
               memberType);
           writer.write("");
           writer.writeXmlDocs(shape.getMember());
-          writer.write(
-              "public System.Collections.Generic.IReadOnlyList<$L> Values { get; }", memberType);
+          writer.write("public $T<$L> Values { get; }", RuntimeTypes.I_READ_ONLY_LIST, memberType);
         });
     writer.write("");
     SchemaGenerator.writeListSchema(writer, context, shape);

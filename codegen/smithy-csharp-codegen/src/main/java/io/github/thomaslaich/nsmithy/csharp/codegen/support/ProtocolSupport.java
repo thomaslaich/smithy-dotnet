@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import software.amazon.smithy.codegen.core.CodegenException;
+import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.node.ArrayNode;
@@ -39,8 +40,6 @@ public final class ProtocolSupport {
   }
 
   public record HttpVersionPreference(String alpnId, boolean allowDowngrade) {}
-
-  private ProtocolSupport() {}
 
   public static boolean isRestJson1Service(ServiceShape s) {
     return s.findTrait(TraitIds.REST_JSON_1).isPresent();
@@ -195,15 +194,6 @@ public final class ProtocolSupport {
                     || ShapeSupport.isEventStreamShape(model, operation.getOutputShape()));
   }
 
-  private static int httpVersionRank(String alpnId) {
-    return switch (alpnId) {
-      case "http/1.1" -> 1;
-      case "h2" -> 2;
-      case "h3" -> 3;
-      default -> -1;
-    };
-  }
-
   /** The default protocol for the client: the first declared kind by precedence. */
   public static Kind primaryKind(ServiceShape s) {
     List<Kind> kinds = declaredKinds(s);
@@ -229,17 +219,17 @@ public final class ProtocolSupport {
   }
 
   /** Protocol helper class for the given protocol. */
-  public static String protocolType(Kind kind) {
+  public static Symbol protocolType(Kind kind) {
     return switch (kind) {
-      case AWS_JSON_1_0 -> "AwsJson10Protocol";
-      case AWS_JSON_1_1 -> "AwsJson11Protocol";
-      case AWS_QUERY -> "AwsQueryProtocol";
-      case EC2_QUERY -> "Ec2QueryProtocol";
-      case SIMPLE_REST_JSON -> "SimpleRestJsonProtocol";
-      case REST_JSON_1 -> "RestJson1Protocol";
-      case REST_XML -> "RestXmlProtocol";
-      case RPC_V2_CBOR -> "RpcV2CborProtocol";
-      case GRPC -> "GrpcProtocol";
+      case AWS_JSON_1_0 -> RuntimeTypes.AWS_JSON10_PROTOCOL;
+      case AWS_JSON_1_1 -> RuntimeTypes.AWS_JSON11_PROTOCOL;
+      case AWS_QUERY -> RuntimeTypes.AWS_QUERY_PROTOCOL;
+      case EC2_QUERY -> RuntimeTypes.EC2_QUERY_PROTOCOL;
+      case SIMPLE_REST_JSON -> RuntimeTypes.SIMPLE_REST_JSON_PROTOCOL;
+      case REST_JSON_1 -> RuntimeTypes.REST_JSON1_PROTOCOL;
+      case REST_XML -> RuntimeTypes.REST_XML_PROTOCOL;
+      case RPC_V2_CBOR -> RuntimeTypes.RPC_V2_CBOR_PROTOCOL;
+      case GRPC -> RuntimeTypes.GRPC_PROTOCOL;
     };
   }
 
@@ -255,18 +245,6 @@ public final class ProtocolSupport {
     };
   }
 
-  /** Runtime namespace housing the protocol class. */
-  public static String runtimeProtocolNamespace(Kind kind) {
-    return switch (kind) {
-      case AWS_JSON_1_0, AWS_JSON_1_1 -> RuntimeTypes.NSMITHY_PROTOCOLS_AWSJSON;
-      case AWS_QUERY, EC2_QUERY -> RuntimeTypes.NSMITHY_PROTOCOLS_AWSQUERY;
-      case SIMPLE_REST_JSON, REST_JSON_1 -> RuntimeTypes.NSMITHY_PROTOCOLS_RESTJSON;
-      case REST_XML -> RuntimeTypes.NSMITHY_PROTOCOLS_RESTXML;
-      case RPC_V2_CBOR -> RuntimeTypes.NSMITHY_PROTOCOLS_RPCV2CBOR;
-      case GRPC -> RuntimeTypes.NSMITHY_PROTOCOLS_GRPC;
-    };
-  }
-
   /** True when the runtime protocol can bind Smithy event-stream operation inputs/outputs. */
   public static boolean supportsEventStreams(Kind kind) {
     return switch (kind) {
@@ -275,14 +253,14 @@ public final class ProtocolSupport {
     };
   }
 
-  /** Runtime namespace housing the codec singleton. */
-  public static String codecNamespace(Kind kind) {
-    return switch (kind) {
-      case AWS_JSON_1_0, AWS_JSON_1_1, SIMPLE_REST_JSON, REST_JSON_1 ->
-          RuntimeTypes.NSMITHY_CODECS_JSON;
-      case AWS_QUERY, EC2_QUERY, REST_XML -> RuntimeTypes.NSMITHY_CODECS_XML;
-      case RPC_V2_CBOR -> RuntimeTypes.NSMITHY_CODECS_CBOR;
-      case GRPC -> RuntimeTypes.NSMITHY_CODECS_PROTO;
+  private ProtocolSupport() {}
+
+  private static int httpVersionRank(String alpnId) {
+    return switch (alpnId) {
+      case "http/1.1" -> 1;
+      case "h2" -> 2;
+      case "h3" -> 3;
+      default -> -1;
     };
   }
 }

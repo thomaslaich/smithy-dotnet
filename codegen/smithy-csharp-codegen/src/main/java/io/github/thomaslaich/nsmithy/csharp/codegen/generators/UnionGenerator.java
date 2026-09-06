@@ -31,6 +31,7 @@ public final class UnionGenerator implements Runnable {
 
   @Override
   public void run() {
+    writer.reserveMemberNames(shape);
     SymbolProvider sp = context.symbolProvider();
     Model model = context.model();
     String typeName = CSharpNaming.typeName(shape.getId().getName());
@@ -45,7 +46,7 @@ public final class UnionGenerator implements Runnable {
           writer.write("");
           for (MemberShape m : members) {
             String variantName = CSharpNaming.typeName(m.getMemberName());
-            String valueType = ShapeSupport.memberTypeExpr(model, sp, m, false);
+            String valueType = ShapeSupport.memberTypeExpr(writer, model, sp, m, false);
             writer.write("public sealed partial record class $L : $L", variantName, typeName);
             writer.openBlock(
                 "{",
@@ -58,8 +59,8 @@ public final class UnionGenerator implements Runnable {
                       () -> {
                         if (ShapeSupport.isReferenceType(model, m)) {
                           writer.write(
-                              "Value = value ?? throw new"
-                                  + " System.ArgumentNullException(nameof(value));");
+                              "Value = value ?? throw new $T(nameof(value));",
+                              RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
                         } else {
                           writer.write("Value = value;");
                         }
@@ -73,27 +74,30 @@ public final class UnionGenerator implements Runnable {
             writer.write("");
           }
 
-          writer.addImport(RuntimeTypes.NSMITHY_CORE);
           writer.write("public sealed partial record class Unknown : $L", typeName);
           writer.openBlock(
               "{",
               "}",
               () -> {
-                writer.write("public Unknown(string tag, Document value)");
+                writer.write("public Unknown(string tag, $T value)", RuntimeTypes.DOCUMENT);
                 writer.openBlock(
                     "{",
                     "}",
                     () -> {
                       writer.write(
-                          "Tag = tag ?? throw new System.ArgumentNullException(nameof(tag));");
+                          "Tag = tag ?? throw new $T(nameof(tag));",
+                          RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
                       writer.write("Value = value;");
                     });
                 writer.write("");
                 writer.write("public string Tag { get; }");
-                writer.write("public Document Value { get; }");
+                writer.write("public $T Value { get; }", RuntimeTypes.DOCUMENT);
               });
           writer.write("");
-          writer.write("public static $L FromUnknown(string tag, Document value)", typeName);
+          writer.write(
+              "public static $L FromUnknown(string tag, $T value)",
+              typeName,
+              RuntimeTypes.DOCUMENT);
           writer.openBlock("{", "}", () -> writer.write("return new Unknown(tag, value);"));
           writer.write("");
 
@@ -101,10 +105,17 @@ public final class UnionGenerator implements Runnable {
           StringBuilder header = new StringBuilder("public T Match<T>(");
           for (MemberShape m : members) {
             String pn = CSharpNaming.parameterName(m.getMemberName());
-            String vt = ShapeSupport.memberTypeExpr(model, sp, m, false);
-            header.append("System.Func<").append(vt).append(", T> ").append(pn).append(", ");
+            String vt = ShapeSupport.memberTypeExpr(writer, model, sp, m, false);
+            header
+                .append(writer.typeName(RuntimeTypes.FUNC) + "<")
+                .append(vt)
+                .append(", T> ")
+                .append(pn)
+                .append(", ");
           }
-          header.append("System.Func<string, Document, T> unknown)");
+          header.append(
+              writer.typeName(RuntimeTypes.FUNC)
+                  + ("<string, " + writer.typeName(RuntimeTypes.DOCUMENT) + ", T> unknown)"));
           writer.write(header.toString());
           writer.openBlock(
               "{",
@@ -112,9 +123,9 @@ public final class UnionGenerator implements Runnable {
               () -> {
                 for (MemberShape m : members) {
                   String pn = CSharpNaming.parameterName(m.getMemberName());
-                  writer.write("System.ArgumentNullException.ThrowIfNull($L);", pn);
+                  writer.write("$T.ThrowIfNull($L);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION, pn);
                 }
-                writer.write("System.ArgumentNullException.ThrowIfNull(unknown);");
+                writer.write("$T.ThrowIfNull(unknown);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
                 writer.write("");
                 writer.write("return this switch {");
                 writer.indent();
@@ -125,7 +136,8 @@ public final class UnionGenerator implements Runnable {
                 }
                 writer.write("Unknown value => unknown(value.Tag, value.Value),");
                 writer.write(
-                    "_ => throw new System.InvalidOperationException(\"Unknown union variant.\"),");
+                    "_ => throw new $T(\"Unknown union variant.\"),",
+                    RuntimeTypes.INVALID_OPERATION_EXCEPTION);
                 writer.dedent();
                 writer.write("};");
               });

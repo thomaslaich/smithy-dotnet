@@ -16,7 +16,7 @@ final class SchemaGeneratorTest {
 
     CodegenException ex =
         assertThrows(
-            CodegenException.class, () -> SchemaGenerator.shapeSchemaAccessor(null, shape));
+            CodegenException.class, () -> SchemaGenerator.shapeSchemaAccessor(null, null, shape));
 
     assertTrue(
         ex.getMessage().contains("Unsupported Smithy prelude schema shape smithy.api#Unsupported"),

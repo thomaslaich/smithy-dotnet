@@ -33,6 +33,7 @@ public final class StructureGenerator implements Runnable {
 
   @Override
   public void run() {
+    writer.reserveMemberNames(shape);
     SymbolProvider sp = context.symbolProvider();
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     List<MemberShape> members = List.copyOf(shape.members());
@@ -71,7 +72,7 @@ public final class StructureGenerator implements Runnable {
     StringBuilder sig = new StringBuilder("(");
     for (int i = 0; i < ctorMembers.size(); i++) {
       MemberShape member = ctorMembers.get(i);
-      sig.append(ShapeSupport.parameterTypeExpr(context.model(), sp, member))
+      sig.append(ShapeSupport.parameterTypeExpr(writer, context.model(), sp, member))
           .append(' ')
           .append(CSharpNaming.propertyName(member.getMemberName()));
       if (ShapeSupport.isOptionalParameter(member)) {
