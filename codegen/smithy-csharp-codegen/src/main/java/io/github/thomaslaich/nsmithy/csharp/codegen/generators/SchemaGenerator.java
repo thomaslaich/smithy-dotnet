@@ -306,76 +306,64 @@ public final class SchemaGenerator {
   }
 
   public static void writeSimpleSchema(CSharpWriter writer, Shape shape) {
-    writer.write("public static partial class $L", localSchemaClassName(shape));
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          if (shape.getType() == ShapeType.ENUM) {
-            String typeName = CSharpNaming.typeName(shape.getId().getName());
-            writer.write(
-                "public static $T<$L> Schema { get; } = $T.StringEnum<$L>($L, values: $L, traits:"
-                    + " $L, internalValues: $L);",
-                RuntimeTypes.SCHEMA,
-                typeName,
-                RuntimeTypes.SCHEMAS,
-                typeName,
-                shapeIdExpr(writer, shape.getId()),
-                stringEnumValuesExpr(shape),
-                traitsExpr(writer, shape.getAllTraits().values()),
-                stringEnumInternalValuesExpr(shape));
-            writer.write("");
-            return;
+    writer.pushState();
+    try {
+      writer.putContext("schemaClass", localSchemaClassName(shape));
+      writer.putContext("schema", RuntimeTypes.SCHEMA);
+      writer.putContext("type", CSharpNaming.typeName(shape.getId().getName()));
+      if (shape.getType() == ShapeType.ENUM) {
+        writer.putContext("schemas", RuntimeTypes.SCHEMAS);
+        writer.putContext("shapeId", shapeIdExpr(writer, shape.getId()));
+        writer.putContext("values", stringEnumValuesExpr(shape));
+        writer.putContext("traits", traitsExpr(writer, shape.getAllTraits().values()));
+        writer.putContext("internalValues", stringEnumInternalValuesExpr(shape));
+        writer.putContext(
+            "initializer",
+            writer.format(
+                "${schemas:T}.StringEnum<${type:L}>(${shapeId:L}, values: ${values:L}, traits:"
+                    + " ${traits:L}, internalValues: ${internalValues:L})"));
+      } else {
+        String prelude = primitiveTypeToPreludeSchema(writer, shape.getType());
+        writer.putContext(
+            "initializer",
+            prelude != null ? prelude : writer.format("$T.String", RuntimeTypes.SCHEMAS));
+      }
+      writer.write(
+          """
+          public static partial class ${schemaClass:L}
+          {
+              public static ${schema:T}<${type:L}> Schema { get; } = ${initializer:L};
           }
-
-          String prelude = primitiveTypeToPreludeSchema(writer, shape.getType());
-          if (prelude == null) {
-            prelude = (writer.typeName(RuntimeTypes.SCHEMAS) + ".String");
-          }
-          writer.write(
-              "public static $T<$L> Schema { get; } = $L;",
-              RuntimeTypes.SCHEMA,
-              CSharpNaming.typeName(shape.getId().getName()),
-              prelude);
-          writer.write("");
-        });
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   public static void writeUnionSchema(
       CSharpWriter writer, GenerationContext context, UnionShape shape, List<MemberShape> members) {
-    String typeName = writer.typeName(context.symbolProvider().toSymbol(shape));
-
-    writer.write("public static partial class $L", localSchemaClassName(shape));
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("public static $T<$L> Schema { get; } =", RuntimeTypes.SCHEMA, typeName);
-          writer.indent();
-          writer.write(
-              "$T.Union<$L>($L, $L)",
-              RuntimeTypes.SCHEMAS,
-              typeName,
-              shapeIdExpr(writer, shape.getId()),
-              traitsExpr(writer, shape.getAllTraits().values()));
-          writer.indent();
-          for (MemberShape member : members) {
-            String variantName = CSharpNaming.typeName(member.getMemberName());
-            writer.write(".Case(");
-            writer.indent();
-            writer.write("$L,", CSharpNaming.formatString(member.getMemberName()));
-            writer.write("static value => value is $L.$L,", typeName, variantName);
-            writer.write("static value => (($L.$L)value).Value,", typeName, variantName);
-            writer.write("static value => new $L.$L(value!),", typeName, variantName);
-            writer.write("$L,", rawMemberTargetExpr(writer, context, member));
-            writer.write("$L)", memberTraitsExpr(writer, context, member));
-            writer.dedent();
+    writer.pushState();
+    try {
+      writer.putContext("schemaClass", localSchemaClassName(shape));
+      writer.putContext("type", context.symbolProvider().toSymbol(shape));
+      writer.putContext("schema", RuntimeTypes.SCHEMA);
+      writer.putContext("schemas", RuntimeTypes.SCHEMAS);
+      writer.putContext("shapeId", shapeIdExpr(writer, shape.getId()));
+      writer.putContext("traits", traitsExpr(writer, shape.getAllTraits().values()));
+      writer.putContext("cases", writer.consumer(w -> writeUnionCases(w, context, shape, members)));
+      writer.write(
+          """
+          public static partial class ${schemaClass:L}
+          {
+              public static ${schema:T}<${type:T}> Schema { get; } =
+                  ${schemas:T}.Union<${type:T}>(${shapeId:L}, ${traits:L})
+                      ${cases:C|}
+                      .Build();
           }
-          writer.write(".Build();");
-          writer.dedent();
-          writer.dedent();
-          writer.write("");
-        });
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   /**
@@ -422,6 +410,32 @@ public final class SchemaGenerator {
   }
 
   private SchemaGenerator() {}
+
+  private static void writeUnionCases(
+      CSharpWriter writer, GenerationContext context, UnionShape shape, List<MemberShape> members) {
+    for (MemberShape member : members) {
+      writer.pushState();
+      try {
+        writer.putContext("unionType", context.symbolProvider().toSymbol(shape));
+        writer.putContext("variant", CSharpNaming.typeName(member.getMemberName()));
+        writer.putContext("name", CSharpNaming.formatString(member.getMemberName()));
+        writer.putContext("target", rawMemberTargetExpr(writer, context, member));
+        writer.putContext("memberTraits", memberTraitsExpr(writer, context, member));
+        writer.write(
+            """
+            .Case(
+                ${name:L},
+                static value => value is ${unionType:T}.${variant:L},
+                static value => ((${unionType:T}.${variant:L})value).Value,
+                static value => new ${unionType:T}.${variant:L}(value!),
+                ${target:L},
+                ${memberTraits:L})
+            """);
+      } finally {
+        writer.popState();
+      }
+    }
+  }
 
   private static void writeStructureBuilderProperties(
       CSharpWriter writer, GenerationContext context, List<MemberShape> members) {
