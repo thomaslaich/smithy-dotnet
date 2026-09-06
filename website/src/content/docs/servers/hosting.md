@@ -22,6 +22,24 @@ app.Run();
 A client picks the protocol by which endpoint it calls; the wire serialization
 lives entirely in each protocol's binding.
 
+## Server runtime registration
+
+`Add{Service}Handler<THandler>()` also registers a default `SmithyServerRuntime`.
+Endpoints resolve it from request services and pass it to the ASP.NET Core host
+adapter. An existing application registration takes precedence.
+
+If you register operation handlers individually, register the runtime explicitly:
+
+```csharp
+using NSmithy.Server.AspNetCore;
+
+builder.Services.AddSmithyServer();
+builder.Services.AddScoped<IGetWeatherHandler, GetWeatherHandler>();
+```
+
+The runtime currently has no configurable lifecycle options. DI establishes its
+ownership and lifetime; it does not add interceptors or telemetry by itself.
+
 ## What can share a port
 
 Endpoints are port-agnostic — ports are a deployment concern, so the generated

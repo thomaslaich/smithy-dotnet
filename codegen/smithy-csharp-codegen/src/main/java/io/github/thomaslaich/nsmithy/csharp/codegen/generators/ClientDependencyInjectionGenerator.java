@@ -64,7 +64,7 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
     String clientKey = (namespace.isEmpty() ? "" : namespace + ".") + clientName;
 
     writer.addImport(MS_EXT_DI);
-    writer.addImport(RuntimeTypes.NSMITHY_HTTP);
+    writer.addImport(RuntimeTypes.NSMITHY_CLIENT);
     writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kinds.get(0)));
 
     writer.write("public static class $LServiceCollectionExtensions", clientName);
@@ -105,21 +105,16 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
                 writer.write("System.ArgumentNullException.ThrowIfNull(services);");
                 writer.write("var config = new $LConfig();", clientName);
                 writer.write("configure?.Invoke(config);");
-                writer.write(
-                    "SmithyHttpVersionPreference? modeledHttpVersionPreference ="
-                        + " config.Protocol is null ? $L : null;",
-                    modeledHttpVersionPreference);
-                writer.write(
-                    "var resolvedProtocol = config.Protocol ?? new $L();", primaryProtocol);
-                writer.write("config.Protocol = resolvedProtocol;");
                 writer.write("return services");
                 writer.write("    .AddHttpClient(");
                 writer.write("        $L,", CSharpNaming.formatString(clientKey));
                 writer.write("        client =>");
                 writer.write("        {");
                 writer.write(
-                    "            (modeledHttpVersionPreference ??"
-                        + " resolvedProtocol.HttpVersionPreference).Apply(client);");
+                    "            SmithyHttpClientEnvironment.ConfigureHttpClient(client, config,"
+                        + " static () => new $L(), $L);",
+                    primaryProtocol,
+                    modeledHttpVersionPreference);
                 writer.write("            configureClient?.Invoke(client);");
                 writer.write("        })");
                 writer.write(
