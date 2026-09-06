@@ -93,16 +93,20 @@ public final class ShapeSupport {
       Shape target,
       software.amazon.smithy.model.node.Node node,
       String typeName) {
-    if (target.getType() == ShapeType.DOCUMENT) return documentLiteral(node);
+    if (target.getType() == ShapeType.DOCUMENT) return documentLiteral(writer, node);
     if (node.isNullNode()) return null;
     return switch (target.getType()) {
       case BLOB ->
           node.isStringNode()
-              ? "System.Convert.FromBase64String(\"" + node.expectStringNode().getValue() + "\")"
+              ? writer.frameworkType("System.Convert")
+                  + ".FromBase64String(\""
+                  + node.expectStringNode().getValue()
+                  + "\")"
               : null;
       case TIMESTAMP ->
           node.isNumberNode()
-              ? "System.DateTimeOffset.FromUnixTimeSeconds("
+              ? writer.frameworkType("System.DateTimeOffset")
+                  + ".FromUnixTimeSeconds("
                   + node.expectNumberNode().getValue().longValue()
                   + ")"
               : null;
@@ -183,7 +187,7 @@ public final class ShapeSupport {
     StringBuilder sb =
         new StringBuilder("new ")
             .append(typeName)
-            .append("(new System.Collections.Generic.Dictionary<")
+            .append("(new " + writer.frameworkType("System.Collections.Generic.Dictionary") + "<")
             .append(keyType)
             .append(", ")
             .append(valueType)
@@ -202,7 +206,8 @@ public final class ShapeSupport {
     return sb.append("})").toString();
   }
 
-  public static String documentLiteral(software.amazon.smithy.model.node.Node node) {
+  public static String documentLiteral(
+      CSharpWriter writer, software.amazon.smithy.model.node.Node node) {
     if (node.isNullNode()) return "NSmithy.Core.Document.Null";
     if (node.isBooleanNode())
       return "NSmithy.Core.Document.From(" + node.expectBooleanNode().getValue() + ")";
@@ -220,14 +225,16 @@ public final class ShapeSupport {
       for (var el : node.expectArrayNode().getElements()) {
         if (!first) sb.append(", ");
         first = false;
-        sb.append(documentLiteral(el));
+        sb.append(documentLiteral(writer, el));
       }
       return sb.append("})").toString();
     }
     if (node.isObjectNode()) {
       StringBuilder sb =
           new StringBuilder(
-              "NSmithy.Core.Document.From(new System.Collections.Generic.Dictionary<string,"
+              "NSmithy.Core.Document.From(new "
+                  + writer.frameworkType("System.Collections.Generic.Dictionary")
+                  + "<string,"
                   + " NSmithy.Core.Document> {");
       boolean first = true;
       for (var entry : node.expectObjectNode().getStringMap().entrySet()) {
@@ -236,7 +243,7 @@ public final class ShapeSupport {
         sb.append("{ \"")
             .append(entry.getKey().replace("\\", "\\\\").replace("\"", "\\\""))
             .append("\", ")
-            .append(documentLiteral(entry.getValue()))
+            .append(documentLiteral(writer, entry.getValue()))
             .append(" }");
       }
       return sb.append("})").toString();
@@ -347,10 +354,11 @@ public final class ShapeSupport {
       CSharpWriter writer, Model model, SymbolProvider sp, MemberShape member, boolean nullable) {
     String base;
     if (isStreamingBlobMember(model, member)) {
-      base = "System.IO.Stream";
+      base = writer.frameworkType("System.IO.Stream");
     } else if (isEventStreamMember(model, member)) {
       base =
-          "System.Collections.Generic.IAsyncEnumerable<"
+          writer.frameworkType("System.Collections.Generic.IAsyncEnumerable")
+              + "<"
               + writer.typeName(sp.toSymbol(model.expectShape(member.getTarget())))
               + ">";
     } else {

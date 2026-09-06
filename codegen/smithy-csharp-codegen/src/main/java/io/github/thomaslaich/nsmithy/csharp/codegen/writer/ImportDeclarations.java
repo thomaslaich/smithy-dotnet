@@ -40,11 +40,19 @@ public final class ImportDeclarations implements ImportContainer {
 
   @Override
   public String toString() {
-    if (imports.isEmpty()) {
+    return render(Set.of());
+  }
+
+  /** Combine explicit imports with the framework imports needed for this rendering. */
+  public String render(Set<String> additionalImports) {
+    Set<String> allImports = new TreeSet<>(imports);
+    allImports.addAll(additionalImports);
+    allImports.remove(currentNamespace);
+    if (allImports.isEmpty()) {
       return "";
     }
     StringBuilder sb = new StringBuilder();
-    for (String ns : imports) {
+    for (String ns : allImports) {
       sb.append("using ").append(ns).append(";\n");
     }
     sb.append('\n');

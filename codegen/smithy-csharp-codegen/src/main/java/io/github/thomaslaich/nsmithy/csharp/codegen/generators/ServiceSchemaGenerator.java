@@ -46,7 +46,7 @@ public final class ServiceSchemaGenerator implements Runnable {
               "Schemas.Service($L, $S, $L);",
               SchemaGenerator.shapeIdExpr(service.getId()),
               service.getVersion(),
-              SchemaGenerator.traitsExpr(service.getAllTraits().values()));
+              SchemaGenerator.traitsExpr(writer, service.getAllTraits().values()));
           writer.dedent();
         });
   }

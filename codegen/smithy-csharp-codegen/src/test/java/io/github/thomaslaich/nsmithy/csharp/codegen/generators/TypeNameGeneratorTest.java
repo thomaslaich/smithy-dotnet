@@ -82,7 +82,7 @@ final class TypeNameGeneratorTest {
         .run();
     String generated = writer.toString();
     assertTrue(generated.contains("public Book(global::Example.Library.Book value)"), generated);
-    assertTrue(generated.contains("System.Func<global::Example.Library.T, T>"), generated);
+    assertTrue(generated.contains("Func<global::Example.Library.T, T>"), generated);
     assertTrue(generated.contains("Schema<Choice> Schema"), generated);
   }
 

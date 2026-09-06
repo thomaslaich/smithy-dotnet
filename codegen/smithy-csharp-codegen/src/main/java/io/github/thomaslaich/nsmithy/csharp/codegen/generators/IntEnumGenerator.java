@@ -59,6 +59,6 @@ public final class IntEnumGenerator implements Runnable {
                 typeName,
                 SchemaGenerator.shapeIdExpr(shape.getId()),
                 SchemaGenerator.intEnumValuesExpr(shape),
-                SchemaGenerator.traitsExpr(shape.getAllTraits().values())));
+                SchemaGenerator.traitsExpr(writer, shape.getAllTraits().values())));
   }
 }

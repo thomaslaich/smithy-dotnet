@@ -147,14 +147,19 @@ final class FakeValueSynthesizer {
     for (PendingIterator iterator : pendingIterators) {
       writer.write("");
       writer.write(
-          "private static async System.Collections.Generic.IAsyncEnumerable<$L> $L()",
+          "private static async "
+              + writer.frameworkType("System.Collections.Generic.IAsyncEnumerable")
+              + "<$L> $L()",
           iterator.eventType(),
           iterator.name());
       writer.openBlock(
           "{",
           "}",
           () -> {
-            writer.write("await System.Threading.Tasks.Task.CompletedTask.ConfigureAwait(false);");
+            writer.write(
+                "await "
+                    + writer.frameworkType("System.Threading.Tasks.Task")
+                    + ".CompletedTask.ConfigureAwait(false);");
             for (String event : iterator.events()) {
               writer.write("yield return $L;", event);
             }
@@ -200,7 +205,9 @@ final class FakeValueSynthesizer {
           expr = eventStreamExpr(op, member, valueNode, stack);
         } else if (op != null && ShapeSupport.isStreamingBlobMember(model, member)) {
           expr =
-              "new System.IO.MemoryStream("
+              "new "
+                  + writer.frameworkType("System.IO.MemoryStream")
+                  + "("
                   + blobBytesExpr(valueNode, CSharpNaming.camel(member.getMemberName()))
                   + ")";
         } else {
@@ -246,7 +253,7 @@ final class FakeValueSynthesizer {
       case TIMESTAMP -> timestampExpr(node);
       case DOCUMENT ->
           node != null
-              ? ShapeSupport.documentLiteral(node)
+              ? ShapeSupport.documentLiteral(writer, node)
               : "NSmithy.Core.Document.From(" + CSharpNaming.formatString(hint) + ")";
       case ENUM -> enumExpr(target, node);
       case INT_ENUM -> intEnumExpr(target, node);
@@ -357,7 +364,13 @@ final class FakeValueSynthesizer {
 
     String typeName = qualifiedType(target);
     if (elements.isEmpty()) {
-      return "new " + typeName + "(System.Array.Empty<" + elementType + ">())";
+      return "new "
+          + typeName
+          + "("
+          + writer.frameworkType("System.Array")
+          + ".Empty<"
+          + elementType
+          + ">())";
     }
     return "new "
         + typeName
@@ -400,7 +413,11 @@ final class FakeValueSynthesizer {
     }
 
     String typeName = qualifiedType(map);
-    String dictionary = "System.Collections.Generic.Dictionary<string, " + valueType + ">";
+    String dictionary =
+        writer.frameworkType("System.Collections.Generic.Dictionary")
+            + "<string, "
+            + valueType
+            + ">";
     if (entries.isEmpty()) {
       return "new " + typeName + "(new " + dictionary + "())";
     }
@@ -456,25 +473,36 @@ final class FakeValueSynthesizer {
 
   String blobBytesExpr(Node node, String hint) {
     if (node != null && node.isStringNode()) {
-      return "System.Convert.FromBase64String("
+      return writer.frameworkType("System.Convert")
+          + ".FromBase64String("
           + CSharpNaming.formatString(node.expectStringNode().getValue())
           + ")";
     }
-    return "System.Text.Encoding.UTF8.GetBytes(" + CSharpNaming.formatString(hint) + ")";
+    return writer.frameworkType("System.Text.Encoding")
+        + ".UTF8.GetBytes("
+        + CSharpNaming.formatString(hint)
+        + ")";
   }
 
   String timestampExpr(Node node) {
     if (node != null && node.isNumberNode()) {
-      return "System.DateTimeOffset.FromUnixTimeSeconds("
+      return writer.frameworkType("System.DateTimeOffset")
+          + ".FromUnixTimeSeconds("
           + node.expectNumberNode().getValue().longValue()
           + ")";
     }
     if (node != null && node.isStringNode()) {
-      return "System.DateTimeOffset.Parse("
+      return writer.frameworkType("System.DateTimeOffset")
+          + ".Parse("
           + CSharpNaming.formatString(node.expectStringNode().getValue())
-          + ", System.Globalization.CultureInfo.InvariantCulture)";
+          + ", "
+          + writer.frameworkType("System.Globalization.CultureInfo")
+          + ".InvariantCulture)";
     }
-    return "System.DateTimeOffset.FromUnixTimeSeconds(" + PLACEHOLDER_EPOCH_SECONDS + ")";
+    return writer.frameworkType("System.DateTimeOffset")
+        + ".FromUnixTimeSeconds("
+        + PLACEHOLDER_EPOCH_SECONDS
+        + ")";
   }
 
   String numberExpr(ShapeType type, Node node, MemberShape member, Shape target) {
@@ -501,7 +529,11 @@ final class FakeValueSynthesizer {
       case LONG -> value.longValue() + "L";
       case FLOAT -> value.floatValue() + "f";
       case DOUBLE -> value.doubleValue() + "d";
-      case BIG_INTEGER -> "System.Numerics.BigInteger.Parse(\"" + value.toBigInteger() + "\")";
+      case BIG_INTEGER ->
+          writer.frameworkType("System.Numerics.BigInteger")
+              + ".Parse(\""
+              + value.toBigInteger()
+              + "\")";
       case BIG_DECIMAL -> value.toPlainString() + "m";
       default -> throw new CodegenException("Not a numeric shape type: " + type);
     };

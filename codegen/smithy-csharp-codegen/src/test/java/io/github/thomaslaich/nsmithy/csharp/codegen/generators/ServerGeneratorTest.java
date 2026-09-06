@@ -321,21 +321,21 @@ final class ServerGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<global::Example.Example.Streaming.WatchOutput>"
+            "Task<global::Example.Example.Streaming.WatchOutput>"
                 + " WatchAsync(global::Example.Example.Streaming.WatchInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<global::Example.Example.Streaming.UploadOutput>"
+            "Task<global::Example.Example.Streaming.UploadOutput>"
                 + " UploadAsync(global::Example.Example.Streaming.UploadInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<global::Example.Example.Streaming.ChatOutput>"
+            "Task<global::Example.Example.Streaming.ChatOutput>"
                 + " ChatAsync(global::Example.Example.Streaming.ChatInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertFalse(generated.contains("IEventStreamServiceProtocol"));
     // Streaming endpoints delegate to the shared runtime path; only request-body streaming is

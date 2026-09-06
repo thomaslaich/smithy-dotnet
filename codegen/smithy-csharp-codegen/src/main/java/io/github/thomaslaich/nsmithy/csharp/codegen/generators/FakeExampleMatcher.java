@@ -39,6 +39,7 @@ final class FakeExampleMatcher {
   private static final Logger LOGGER = Logger.getLogger(FakeExampleMatcher.class.getName());
 
   private final GenerationContext context;
+  private final CSharpWriter writer;
   private final FakeValueSynthesizer values;
   private final List<PendingMatcher> pendingMatchers = new ArrayList<>();
 
@@ -47,8 +48,9 @@ final class FakeExampleMatcher {
 
   private record Arm(String matchMethod, String title, String statement) {}
 
-  FakeExampleMatcher(GenerationContext context, FakeValueSynthesizer values) {
+  FakeExampleMatcher(GenerationContext context, CSharpWriter writer, FakeValueSynthesizer values) {
     this.context = context;
+    this.writer = writer;
     this.values = values;
   }
 
@@ -64,9 +66,12 @@ final class FakeExampleMatcher {
       writer.openBlock("{", "}", () -> writer.write("$L", arm.statement()));
     }
     if (hasOutput) {
-      writer.write("return System.Threading.Tasks.Task.FromResult($L);", values.outputExpr(op));
+      writer.write(
+          "return " + writer.frameworkType("System.Threading.Tasks.Task") + ".FromResult($L);",
+          values.outputExpr(op));
     } else {
-      writer.write("return System.Threading.Tasks.Task.CompletedTask;");
+      writer.write(
+          "return " + writer.frameworkType("System.Threading.Tasks.Task") + ".CompletedTask;");
     }
   }
 
@@ -131,20 +136,29 @@ final class FakeExampleMatcher {
         String errorExpr = values.errorExpr(error.get().getShapeId(), error.get().getContent());
         statement =
             hasOutput
-                ? "return System.Threading.Tasks.Task.FromException<"
+                ? "return "
+                    + writer.frameworkType("System.Threading.Tasks.Task")
+                    + ".FromException<"
                     + outputType
                     + ">("
                     + errorExpr
                     + ");"
-                : "return System.Threading.Tasks.Task.FromException(" + errorExpr + ");";
+                : "return "
+                    + writer.frameworkType("System.Threading.Tasks.Task")
+                    + ".FromException("
+                    + errorExpr
+                    + ");";
       } else if (hasOutput) {
         ObjectNode output = example.getOutput().orElse(Node.objectNode());
         statement =
-            "return System.Threading.Tasks.Task.FromResult("
+            "return "
+                + writer.frameworkType("System.Threading.Tasks.Task")
+                + ".FromResult("
                 + values.outputExprFor(op, output)
                 + ");";
       } else {
-        statement = "return System.Threading.Tasks.Task.CompletedTask;";
+        statement =
+            "return " + writer.frameworkType("System.Threading.Tasks.Task") + ".CompletedTask;";
       }
       arms.add(new Arm(name, example.getTitle(), statement));
     }
@@ -212,7 +226,8 @@ final class FakeExampleMatcher {
         String v = nextVar(counter);
         out.add(expr + " is { } " + v);
         out.add(
-            "System.Linq.Enumerable.SequenceEqual("
+            writer.frameworkType("System.Linq.Enumerable")
+                + ".SequenceEqual("
                 + v
                 + ", "
                 + values.blobBytesExpr(node, "")

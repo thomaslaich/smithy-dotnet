@@ -25,6 +25,7 @@ public final class UnionGenerator implements Runnable {
 
   public UnionGenerator(GenerationContext c, CSharpWriter w, UnionShape s) {
     this.context = c;
+    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.shape = s;
   }
@@ -60,7 +61,9 @@ public final class UnionGenerator implements Runnable {
                         if (ShapeSupport.isReferenceType(model, m)) {
                           writer.write(
                               "Value = value ?? throw new"
-                                  + " System.ArgumentNullException(nameof(value));");
+                                  + " "
+                                  + writer.frameworkType("System.ArgumentNullException")
+                                  + "(nameof(value));");
                         } else {
                           writer.write("Value = value;");
                         }
@@ -86,7 +89,9 @@ public final class UnionGenerator implements Runnable {
                     "}",
                     () -> {
                       writer.write(
-                          "Tag = tag ?? throw new System.ArgumentNullException(nameof(tag));");
+                          "Tag = tag ?? throw new "
+                              + writer.frameworkType("System.ArgumentNullException")
+                              + "(nameof(tag));");
                       writer.write("Value = value;");
                     });
                 writer.write("");
@@ -103,9 +108,14 @@ public final class UnionGenerator implements Runnable {
           for (MemberShape m : members) {
             String pn = CSharpNaming.parameterName(m.getMemberName());
             String vt = ShapeSupport.memberTypeExpr(writer, model, sp, m, false);
-            header.append("System.Func<").append(vt).append(", T> ").append(pn).append(", ");
+            header
+                .append(writer.frameworkType("System.Func") + "<")
+                .append(vt)
+                .append(", T> ")
+                .append(pn)
+                .append(", ");
           }
-          header.append("System.Func<string, Document, T> unknown)");
+          header.append(writer.frameworkType("System.Func") + "<string, Document, T> unknown)");
           writer.write(header.toString());
           writer.openBlock(
               "{",
@@ -113,9 +123,13 @@ public final class UnionGenerator implements Runnable {
               () -> {
                 for (MemberShape m : members) {
                   String pn = CSharpNaming.parameterName(m.getMemberName());
-                  writer.write("System.ArgumentNullException.ThrowIfNull($L);", pn);
+                  writer.write(
+                      writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull($L);",
+                      pn);
                 }
-                writer.write("System.ArgumentNullException.ThrowIfNull(unknown);");
+                writer.write(
+                    writer.frameworkType("System.ArgumentNullException")
+                        + ".ThrowIfNull(unknown);");
                 writer.write("");
                 writer.write("return this switch {");
                 writer.indent();
@@ -126,7 +140,9 @@ public final class UnionGenerator implements Runnable {
                 }
                 writer.write("Unknown value => unknown(value.Tag, value.Value),");
                 writer.write(
-                    "_ => throw new System.InvalidOperationException(\"Unknown union variant.\"),");
+                    "_ => throw new "
+                        + writer.frameworkType("System.InvalidOperationException")
+                        + "(\"Unknown union variant.\"),");
                 writer.dedent();
                 writer.write("};");
               });

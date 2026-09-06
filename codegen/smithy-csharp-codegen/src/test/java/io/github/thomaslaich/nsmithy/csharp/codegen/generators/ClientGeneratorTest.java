@@ -127,21 +127,21 @@ final class ClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<global::Example.Example.Streaming.WatchOutput>"
+            "Task<global::Example.Example.Streaming.WatchOutput>"
                 + " WatchAsync(global::Example.Example.Streaming.WatchInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<global::Example.Example.Streaming.UploadOutput>"
+            "Task<global::Example.Example.Streaming.UploadOutput>"
                 + " UploadAsync(global::Example.Example.Streaming.UploadInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<global::Example.Example.Streaming.ChatOutput>"
+            "Task<global::Example.Example.Streaming.ChatOutput>"
                 + " ChatAsync(global::Example.Example.Streaming.ChatInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertFalse(generated.contains("ForOutputEventStreamOperation"), generated);
     assertFalse(generated.contains("Streaming operations are not wired"), generated);
@@ -435,7 +435,7 @@ final class ClientGeneratorTest {
     assertTrue(
         generated.contains(
             "new"
-                + " SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
+                + " SmithyHttpVersionPreference(HttpVersion.Version20,"
                 + " allowDowngrade: true)"),
         generated);
   }
@@ -451,8 +451,7 @@ final class ClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "new SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
-                + " allowDowngrade: true));"),
+            "new SmithyHttpVersionPreference(HttpVersion.Version20," + " allowDowngrade: true));"),
         generated);
     assertTrue(
         generated.indexOf("SmithyHttpClientEnvironment.ConfigureHttpClient(client,")
@@ -472,7 +471,7 @@ final class ClientGeneratorTest {
     assertTrue(
         generated.contains(
             "new"
-                + " SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
+                + " SmithyHttpVersionPreference(HttpVersion.Version20,"
                 + " allowDowngrade: false)"),
         generated);
   }
@@ -567,9 +566,9 @@ final class ClientGeneratorTest {
     // Pages paginator: repeats the call while the response carries a token.
     assertTrue(
         generated.contains(
-            "System.Collections.Generic.IAsyncEnumerable<global::Example.Example.Pages.ListThingsOutput>"
+            "IAsyncEnumerable<global::Example.Example.Pages.ListThingsOutput>"
                 + " ListThingsPagesAsync(global::Example.Example.Pages.ListThingsInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(generated.contains("input = input with { NextToken = token };"), generated);
     assertTrue(generated.contains("while (token is not null)"), generated);
@@ -577,11 +576,20 @@ final class ClientGeneratorTest {
     // Items paginator: flattens the pages' list member.
     assertTrue(
         generated.contains(
-            "System.Collections.Generic.IAsyncEnumerable<global::Example.Example.Pages.Thing>"
+            "IAsyncEnumerable<global::Example.Example.Pages.Thing>"
                 + " ListThingsItemsAsync(global::Example.Example.Pages.ListThingsInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(generated.contains("foreach (var item in items.Values)"), generated);
+    assertTrue(generated.contains("using System.Collections.Generic;"), generated);
+    assertTrue(generated.contains("using System.Threading;"), generated);
+    assertTrue(generated.contains("using System.Runtime.CompilerServices;"), generated);
+    assertTrue(
+        generated.contains("[EnumeratorCancellation] CancellationToken cancellationToken"),
+        generated);
+    assertFalse(generated.contains("System.Collections.Generic.IAsyncEnumerable<"), generated);
+    assertFalse(
+        generated.contains("System.Threading.CancellationToken cancellationToken"), generated);
 
     // Unpaginated operations get no paginators.
     assertFalse(generated.contains("GetThingPagesAsync"), generated);

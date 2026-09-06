@@ -21,6 +21,7 @@ public final class MapGenerator implements Runnable {
 
   public MapGenerator(GenerationContext c, CSharpWriter w, MapShape s) {
     this.context = c;
+    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.shape = s;
   }
@@ -43,7 +44,9 @@ public final class MapGenerator implements Runnable {
         "}",
         () -> {
           writer.write(
-              "public $L(System.Collections.Generic.IReadOnlyDictionary<$L, $L> values)",
+              "public $L("
+                  + writer.frameworkType("System.Collections.Generic.IReadOnlyDictionary")
+                  + "<$L, $L> values)",
               typeName,
               keyType,
               valueType);
@@ -51,10 +54,15 @@ public final class MapGenerator implements Runnable {
               "{",
               "}",
               () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(values);");
                 writer.write(
-                    "Values = new System.Collections.ObjectModel.ReadOnlyDictionary<$L, $L>("
-                        + "new System.Collections.Generic.Dictionary<$L, $L>(values));",
+                    writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(values);");
+                writer.write(
+                    "Values = new "
+                        + writer.frameworkType("System.Collections.ObjectModel.ReadOnlyDictionary")
+                        + "<$L, $L>("
+                        + "new "
+                        + writer.frameworkType("System.Collections.Generic.Dictionary")
+                        + "<$L, $L>(values));",
                     keyType,
                     valueType,
                     keyType,
@@ -62,7 +70,9 @@ public final class MapGenerator implements Runnable {
               });
           writer.write("");
           writer.write(
-              "private $L(System.Collections.Generic.Dictionary<$L, $L> values)",
+              "private $L("
+                  + writer.frameworkType("System.Collections.Generic.Dictionary")
+                  + "<$L, $L> values)",
               typeName,
               keyType,
               valueType);
@@ -71,21 +81,27 @@ public final class MapGenerator implements Runnable {
               "}",
               () ->
                   writer.write(
-                      "Values = new System.Collections.ObjectModel.ReadOnlyDictionary<$L,"
+                      "Values = new "
+                          + writer.frameworkType(
+                              "System.Collections.ObjectModel.ReadOnlyDictionary")
+                          + "<$L,"
                           + " $L>(values);",
                       keyType,
                       valueType));
           writer.write("");
           writer.write(
               "internal static $L FromOwnedDictionary("
-                  + "System.Collections.Generic.Dictionary<$L, $L> values) => new(values);",
+                  + writer.frameworkType("System.Collections.Generic.Dictionary")
+                  + "<$L, $L> values) => new(values);",
               typeName,
               keyType,
               valueType);
           writer.write("");
           writer.writeXmlDocs(shape.getValue());
           writer.write(
-              "public System.Collections.Generic.IReadOnlyDictionary<$L, $L> Values { get; }",
+              "public "
+                  + writer.frameworkType("System.Collections.Generic.IReadOnlyDictionary")
+                  + "<$L, $L> Values { get; }",
               keyType,
               valueType);
         });

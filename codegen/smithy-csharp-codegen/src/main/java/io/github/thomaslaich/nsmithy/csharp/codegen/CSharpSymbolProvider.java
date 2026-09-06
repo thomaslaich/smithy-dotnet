@@ -135,7 +135,7 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
 
   @Override
   public Symbol timestampShape(TimestampShape s) {
-    return primitive("", "System.DateTimeOffset", true);
+    return primitive("System", "DateTimeOffset", true);
   }
 
   @Override

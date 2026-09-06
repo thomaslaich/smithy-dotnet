@@ -25,6 +25,7 @@ public final class OperationSchemaGenerator implements Runnable {
 
   public OperationSchemaGenerator(GenerationContext c, CSharpWriter w, OperationShape s) {
     this.context = c;
+    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.shape = s;
   }
@@ -59,7 +60,7 @@ public final class OperationSchemaGenerator implements Runnable {
                 SchemaGenerator.operationShapeSchema(writer, context, shape.getInputShape()),
                 SchemaGenerator.operationShapeSchema(writer, context, shape.getOutputShape()),
                 errorsLiteral(errors),
-                SchemaGenerator.traitsExpr(shape.getAllTraits().values()));
+                SchemaGenerator.traitsExpr(writer, shape.getAllTraits().values()));
           } else {
             writer.write(
                 "Schemas.Operation($L, $L, $L, $L, $L);",
@@ -67,7 +68,7 @@ public final class OperationSchemaGenerator implements Runnable {
                 SchemaGenerator.operationShapeSchema(writer, context, shape.getInputShape()),
                 SchemaGenerator.operationShapeSchema(writer, context, shape.getOutputShape()),
                 errorsLiteral(errors),
-                SchemaGenerator.traitsExpr(shape.getAllTraits().values()));
+                SchemaGenerator.traitsExpr(writer, shape.getAllTraits().values()));
           }
           writer.dedent();
         });

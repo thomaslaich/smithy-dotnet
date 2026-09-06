@@ -50,6 +50,7 @@ public final class ServerGenerator implements Runnable {
 
   public ServerGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
+    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.service = s;
   }
@@ -157,7 +158,9 @@ public final class ServerGenerator implements Runnable {
               "{",
               "}",
               () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(services);");
+                writer.write(
+                    writer.frameworkType("System.ArgumentNullException")
+                        + ".ThrowIfNull(services);");
                 writer.write("return CreateOperationCatalog(");
                 writer.indent();
                 for (int i = 0; i < ops.size(); i++) {
@@ -263,7 +266,9 @@ public final class ServerGenerator implements Runnable {
               "{",
               "}",
               () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(services);");
+                writer.write(
+                    writer.frameworkType("System.ArgumentNullException")
+                        + ".ThrowIfNull(services);");
                 writer.write(
                     "services.TryAddEnumerable(ServiceDescriptor.Singleton<IServiceDefinition,"
                         + " $LDefinition>());",
@@ -281,7 +286,9 @@ public final class ServerGenerator implements Runnable {
               "{",
               "}",
               () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(services);");
+                writer.write(
+                    writer.frameworkType("System.ArgumentNullException")
+                        + ".ThrowIfNull(services);");
                 writer.write("");
                 if (!serverKinds.isEmpty()) {
                   writer.write("services.AddSmithyServer();");
@@ -360,7 +367,7 @@ public final class ServerGenerator implements Runnable {
 
   private void writeProtocolEnum(String contract, List<Kind> serverKinds) {
     String enumName = protocolEnumName(contract);
-    writer.write("[System.Flags]");
+    writer.write("[" + writer.frameworkAttribute("System.FlagsAttribute") + "]");
     writer.write("public enum $L", enumName);
     writer.openBlock(
         "{",
@@ -415,20 +422,26 @@ public final class ServerGenerator implements Runnable {
         "{",
         "}",
         () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(endpoints);");
+          writer.write(
+              writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(endpoints);");
           writer.write("if ((protocols & ~$L.All) != 0)", protocolEnum);
           writer.openBlock(
               "{",
               "}",
               () ->
                   writer.write(
-                      "throw new System.ArgumentOutOfRangeException(nameof(protocols), protocols,"
+                      "throw new "
+                          + writer.frameworkType("System.ArgumentOutOfRangeException")
+                          + "(nameof(protocols), protocols,"
                           + " \"Unknown $L value.\");",
                       protocolEnum));
           writer.write("");
           writer.write(
-              "var mappedRoutes = new System.Collections.Generic.HashSet<string>("
-                  + "System.StringComparer.Ordinal);");
+              "var mappedRoutes = new "
+                  + writer.frameworkType("System.Collections.Generic.HashSet")
+                  + "<string>("
+                  + writer.frameworkType("System.StringComparer")
+                  + ".Ordinal);");
           for (Kind kind : serverKinds) {
             writer.write("if ((protocols & $L.$L) != 0)", protocolEnum, mapSuffix(kind));
             writer.openBlock(
@@ -443,7 +456,9 @@ public final class ServerGenerator implements Runnable {
 
   private void writeRouteConflictHelper(String contract, String protocolEnum) {
     writer.write(
-        "private static void EnsureRouteAvailable(System.Collections.Generic.HashSet<string>"
+        "private static void EnsureRouteAvailable("
+            + writer.frameworkType("System.Collections.Generic.HashSet")
+            + "<string>"
             + " mappedRoutes, string method, string routePattern, $L protocol)",
         protocolEnum);
     writer.openBlock(
@@ -457,7 +472,9 @@ public final class ServerGenerator implements Runnable {
               "}",
               () -> {
                 writer.write(
-                    "throw new System.InvalidOperationException(\"Mapping \" + protocol + \" for"
+                    "throw new "
+                        + writer.frameworkType("System.InvalidOperationException")
+                        + "(\"Mapping \" + protocol + \" for"
                         + " $L would register duplicate route '\" + route + \"'. Map conflicting"
                         + " protocols on different endpoint route builders, hosts, or ports.\");",
                     contract);
@@ -469,7 +486,9 @@ public final class ServerGenerator implements Runnable {
       Kind kind, List<OperationShape> ops, String contract, String protocolEnum) {
     writer.write(
         "private static void Map$L$L(IEndpointRouteBuilder endpoints,"
-            + " System.Collections.Generic.HashSet<string> mappedRoutes)",
+            + " "
+            + writer.frameworkType("System.Collections.Generic.HashSet")
+            + "<string> mappedRoutes)",
         contract,
         mapSuffix(kind));
     writer.openBlock(
@@ -500,14 +519,19 @@ public final class ServerGenerator implements Runnable {
       writer.openBlock(
           "endpoints.MapMethods($L, [$L], async (HttpContext httpContext,"
               + " [Microsoft.AspNetCore.Mvc.FromServices] SmithyServerRuntime runtime, $L handler,"
-              + " System.Threading.CancellationToken cancellationToken) => {",
+              + " "
+              + writer.frameworkType("System.Threading.CancellationToken")
+              + " cancellationToken) => {",
           "});",
           CSharpNaming.formatString(routePattern(http)),
           CSharpNaming.formatString(http.getMethod()),
           opInterface,
           () -> {
-            writer.write("System.ArgumentNullException.ThrowIfNull(httpContext);");
-            writer.write("System.ArgumentNullException.ThrowIfNull(handler);");
+            writer.write(
+                writer.frameworkType("System.ArgumentNullException")
+                    + ".ThrowIfNull(httpContext);");
+            writer.write(
+                writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(handler);");
             writer.write("");
             writeStaticQueryValidation(http);
             writeDispatch(kind, op);
@@ -533,13 +557,17 @@ public final class ServerGenerator implements Runnable {
     writer.openBlock(
         "endpoints.MapPost($L, async (HttpContext httpContext,"
             + " [Microsoft.AspNetCore.Mvc.FromServices] SmithyServerRuntime runtime, $L handler,"
-            + " System.Threading.CancellationToken cancellationToken) => {",
+            + " "
+            + writer.frameworkType("System.Threading.CancellationToken")
+            + " cancellationToken) => {",
         "});",
         CSharpNaming.formatString(uri),
         opInterface,
         () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(httpContext);");
-          writer.write("System.ArgumentNullException.ThrowIfNull(handler);");
+          writer.write(
+              writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(httpContext);");
+          writer.write(
+              writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(handler);");
           writer.write("");
           writeDispatch(kind, op);
         });
@@ -740,15 +768,16 @@ public final class ServerGenerator implements Runnable {
         hasOutput ? writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape()))) : null;
     String returnType =
         hasOutput
-            ? "System.Threading.Tasks.Task<" + outputType + ">"
-            : "System.Threading.Tasks.Task";
+            ? writer.frameworkType("System.Threading.Tasks.Task") + "<" + outputType + ">"
+            : writer.frameworkType("System.Threading.Tasks.Task");
     String params = hasInput ? inputType + " input, " : "";
     return returnType
         + " "
         + name
         + "("
         + params
-        + "System.Threading.CancellationToken cancellationToken = default)";
+        + writer.frameworkType("System.Threading.CancellationToken")
+        + " cancellationToken = default)";
   }
 
   private Map<String, String> operationParameterDocs(OperationShape op) {

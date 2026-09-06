@@ -82,7 +82,7 @@ public final class SchemaGenerator {
               .collect(Collectors.toList());
       return tsTraits.isEmpty()
           ? "Schemas.Timestamp"
-          : "Schemas.TimestampWithTraits(" + traitsExpr(tsTraits) + ")";
+          : "Schemas.TimestampWithTraits(" + traitsExpr(writer, tsTraits) + ")";
     }
 
     String preludeSchema =
@@ -164,17 +164,17 @@ public final class SchemaGenerator {
     return "ShapeId.Parse(" + CSharpNaming.formatString(id.toString()) + ")";
   }
 
-  public static String traitExpr(Trait trait) {
+  public static String traitExpr(CSharpWriter writer, Trait trait) {
     String idExpr = shapeIdExpr(trait.toShapeId());
     Node node = trait.toNode();
     if (node.isNullNode()) {
       return "new Trait(" + idExpr + ")";
     }
 
-    return "new Trait(" + idExpr + ", " + documentExpr(node) + ")";
+    return "new Trait(" + idExpr + ", " + documentExpr(writer, node) + ")";
   }
 
-  public static String traitsExpr(Collection<? extends Trait> traits) {
+  public static String traitsExpr(CSharpWriter writer, Collection<? extends Trait> traits) {
     if (traits.isEmpty()) {
       return "null";
     }
@@ -182,7 +182,7 @@ public final class SchemaGenerator {
     List<Trait> sorted = new ArrayList<>(traits);
     sorted.sort(java.util.Comparator.comparing(t -> t.toShapeId().toString()));
     return "["
-        + sorted.stream().map(SchemaGenerator::traitExpr).collect(Collectors.joining(", "))
+        + sorted.stream().map(value -> traitExpr(writer, value)).collect(Collectors.joining(", "))
         + "]";
   }
 
@@ -240,7 +240,7 @@ public final class SchemaGenerator {
               "Schemas.Structure<$L, Builder>($L, $L)",
               typeName,
               shapeIdExpr(shape.getId()),
-              traitsExpr(shape.getAllTraits().values()));
+              traitsExpr(writer, shape.getAllTraits().values()));
           writer.indent();
           for (MemberShape member : members) {
             String method = ShapeSupport.isRequired(member) ? "Required" : "Optional";
@@ -252,7 +252,7 @@ public final class SchemaGenerator {
             writer.write("static value => value.$L,", prop);
             writer.write("static (builder, value) => builder.$L = value,", prop);
             writer.write("$L,", memberTargetExpr(writer, context, member));
-            writer.write("$L)", memberTraitsExpr(context, member));
+            writer.write("$L)", memberTraitsExpr(writer, context, member));
             writer.dedent();
           }
           writer.write(".Build(");
@@ -279,7 +279,8 @@ public final class SchemaGenerator {
     String typeName = writer.typeName(sp.toSymbol(shape));
     boolean sparse = ShapeSupport.isSparse(shape);
     String memberType = writer.typeName(sp.toSymbol(memberTarget)) + (sparse ? "?" : "");
-    String builderType = "System.Collections.Generic.List<" + memberType + ">";
+    String builderType =
+        writer.frameworkType("System.Collections.Generic.List") + "<" + memberType + ">";
     String factory = shape.getType() == ShapeType.SET ? "Set" : "List";
     String elementSchema =
         elementSchemaExpr(writer, context, shape.getMember(), memberTarget, sparse);
@@ -306,8 +307,8 @@ public final class SchemaGenerator {
           writer.write("static builder => $L.FromOwnedList(builder),", typeName);
           writer.write(
               "$L, elementTraits: $L);",
-              traitsExpr(shape.getAllTraits().values()),
-              memberTraitsExpr(context, shape.getMember()));
+              traitsExpr(writer, shape.getAllTraits().values()),
+              memberTraitsExpr(writer, context, shape.getMember()));
           writer.dedent();
           writer.dedent();
           writer.write("");
@@ -322,7 +323,11 @@ public final class SchemaGenerator {
     String typeName = writer.typeName(sp.toSymbol(shape));
     boolean sparse = ShapeSupport.isSparse(shape);
     String valueType = writer.typeName(sp.toSymbol(valueTarget)) + (sparse ? "?" : "");
-    String builderType = "System.Collections.Generic.Dictionary<string, " + valueType + ">";
+    String builderType =
+        writer.frameworkType("System.Collections.Generic.Dictionary")
+            + "<string, "
+            + valueType
+            + ">";
     String valueSchema = elementSchemaExpr(writer, context, shape.getValue(), valueTarget, sparse);
 
     writer.write("public static partial class $L", localSchemaClassName(shape));
@@ -341,14 +346,16 @@ public final class SchemaGenerator {
               valueSchema);
           writer.indent();
           writer.write("static value => value.Values,");
-          writer.write("static () => new $L(System.StringComparer.Ordinal),", builderType);
+          writer.write(
+              "static () => new $L(" + writer.frameworkType("System.StringComparer") + ".Ordinal),",
+              builderType);
           writer.write("static (builder, key, value) => builder[key] = value,");
           writer.write("static builder => $L.FromOwnedDictionary(builder),", typeName);
           writer.write(
               "$L, keyTraits: $L, valueTraits: $L, key: $L);",
-              traitsExpr(shape.getAllTraits().values()),
-              memberTraitsExpr(context, shape.getKey()),
-              memberTraitsExpr(context, shape.getValue()),
+              traitsExpr(writer, shape.getAllTraits().values()),
+              memberTraitsExpr(writer, context, shape.getKey()),
+              memberTraitsExpr(writer, context, shape.getValue()),
               shapeSchemaAccessor(
                   writer, context, context.model().expectShape(shape.getKey().getTarget())));
           writer.dedent();
@@ -374,7 +381,7 @@ public final class SchemaGenerator {
                 typeName,
                 shapeIdExpr(shape.getId()),
                 stringEnumValuesExpr(shape),
-                traitsExpr(shape.getAllTraits().values()),
+                traitsExpr(writer, shape.getAllTraits().values()),
                 stringEnumInternalValuesExpr(shape));
             writer.write("");
             return;
@@ -408,7 +415,7 @@ public final class SchemaGenerator {
               "Schemas.Union<$L>($L, $L)",
               typeName,
               shapeIdExpr(shape.getId()),
-              traitsExpr(shape.getAllTraits().values()));
+              traitsExpr(writer, shape.getAllTraits().values()));
           writer.indent();
           for (MemberShape member : members) {
             String variantName = CSharpNaming.typeName(member.getMemberName());
@@ -419,7 +426,7 @@ public final class SchemaGenerator {
             writer.write("static value => (($L.$L)value).Value,", typeName, variantName);
             writer.write("static value => new $L.$L(value!),", typeName, variantName);
             writer.write("$L,", rawMemberTargetExpr(writer, context, member));
-            writer.write("$L)", memberTraitsExpr(context, member));
+            writer.write("$L)", memberTraitsExpr(writer, context, member));
             writer.dedent();
           }
           writer.write(".Build();");
@@ -536,7 +543,8 @@ public final class SchemaGenerator {
     return String.join(", ", args);
   }
 
-  private static String memberTraitsExpr(GenerationContext context, MemberShape member) {
+  private static String memberTraitsExpr(
+      CSharpWriter writer, GenerationContext context, MemberShape member) {
     List<Trait> traits = new ArrayList<>(member.getAllTraits().values());
     Shape target = context.model().expectShape(member.getTarget());
     if (shouldInlineTargetTraits(target)) {
@@ -546,7 +554,7 @@ public final class SchemaGenerator {
         }
       }
     }
-    return traitsExpr(traits);
+    return traitsExpr(writer, traits);
   }
 
   private static boolean shouldInlineTargetTraits(Shape target) {
@@ -573,7 +581,7 @@ public final class SchemaGenerator {
     };
   }
 
-  private static String documentExpr(Node node) {
+  private static String documentExpr(CSharpWriter writer, Node node) {
     return switch (node.getType()) {
       case NULL -> "NSmithy.Core.Document.Null";
       case BOOLEAN -> "NSmithy.Core.Document.From(" + node.expectBooleanNode().getValue() + ")";
@@ -583,34 +591,36 @@ public final class SchemaGenerator {
               + ")";
       case NUMBER ->
           "NSmithy.Core.Document.From((decimal)" + node.expectNumberNode().getValue() + ")";
-      case ARRAY -> arrayDocumentExpr(node.expectArrayNode());
-      case OBJECT -> objectDocumentExpr(node.expectObjectNode());
+      case ARRAY -> arrayDocumentExpr(writer, node.expectArrayNode());
+      case OBJECT -> objectDocumentExpr(writer, node.expectObjectNode());
     };
   }
 
-  private static String arrayDocumentExpr(ArrayNode node) {
+  private static String arrayDocumentExpr(CSharpWriter writer, ArrayNode node) {
     return "NSmithy.Core.Document.From(new NSmithy.Core.Document[] {"
         + node.getElements().stream()
-            .map(SchemaGenerator::documentExpr)
+            .map(value -> documentExpr(writer, value))
             .collect(Collectors.joining(", "))
         + "})";
   }
 
-  private static String objectDocumentExpr(ObjectNode node) {
+  private static String objectDocumentExpr(CSharpWriter writer, ObjectNode node) {
     return "NSmithy.Core.Document.From("
-        + "new System.Collections.Generic.Dictionary<string, NSmithy.Core.Document>"
+        + "new "
+        + writer.frameworkType("System.Collections.Generic.Dictionary")
+        + "<string, NSmithy.Core.Document>"
         + " {"
         + node.getMembers().entrySet().stream()
-            .map(SchemaGenerator::objectMemberExpr)
+            .map(value -> objectMemberExpr(writer, value))
             .collect(Collectors.joining(", "))
         + "})";
   }
 
-  private static String objectMemberExpr(Map.Entry<StringNode, Node> member) {
+  private static String objectMemberExpr(CSharpWriter writer, Map.Entry<StringNode, Node> member) {
     return "{"
         + CSharpNaming.formatString(member.getKey().getValue())
         + ", "
-        + documentExpr(member.getValue())
+        + documentExpr(writer, member.getValue())
         + "}";
   }
 

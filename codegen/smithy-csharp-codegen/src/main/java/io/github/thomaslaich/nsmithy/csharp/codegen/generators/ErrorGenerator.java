@@ -30,6 +30,7 @@ public final class ErrorGenerator implements Runnable {
 
   public ErrorGenerator(GenerationContext c, CSharpWriter w, StructureShape s) {
     this.context = c;
+    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.shape = s;
   }
@@ -47,10 +48,13 @@ public final class ErrorGenerator implements Runnable {
     writer.writeXmlDocs(shape);
     if (retryable.isPresent()) {
       writer.write(
-          "public sealed partial class $L : System.Exception, NSmithy.Core.ISmithyRetryableError",
+          "public sealed partial class $L : "
+              + writer.frameworkType("System.Exception")
+              + ", NSmithy.Core.ISmithyRetryableError",
           typeName);
     } else {
-      writer.write("public sealed partial class $L : System.Exception", typeName);
+      writer.write(
+          "public sealed partial class $L : " + writer.frameworkType("System.Exception"), typeName);
     }
     writer.openBlock(
         "{",
@@ -122,7 +126,9 @@ public final class ErrorGenerator implements Runnable {
               String param = CSharpNaming.parameterName(m.getMemberName());
               if (!ShapeSupport.isNullable(m) && ShapeSupport.isReferenceType(model, m)) {
                 writer.write(
-                    "$L = $L ?? throw new System.ArgumentNullException(nameof($L));",
+                    "$L = $L ?? throw new "
+                        + writer.frameworkType("System.ArgumentNullException")
+                        + "(nameof($L));",
                     prop,
                     param,
                     param);

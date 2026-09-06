@@ -45,6 +45,7 @@ public final class ClientGenerator implements Runnable {
 
   public ClientGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
+    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.service = s;
   }
@@ -69,7 +70,8 @@ public final class ClientGenerator implements Runnable {
 
     // Interface — IDisposable so a client that owns its HttpClient is released via `using` or DI.
     writer.writeXmlDocs(service);
-    writer.write("public interface $L : System.IDisposable", interfaceName);
+    writer.write(
+        "public interface $L : " + writer.frameworkType("System.IDisposable"), interfaceName);
     writer.openBlock(
         "{",
         "}",
@@ -122,6 +124,7 @@ public final class ClientGenerator implements Runnable {
     String primaryProtocol = ProtocolSupport.protocolType(kinds.get(0));
     String modeledHttpVersionPreference =
         httpVersionPreferenceLiteral(
+            writer,
             ProtocolSupport.httpVersionPreference(
                 service, kinds.get(0), ProtocolSupport.hasEventStreamOperations(model, service)));
     String serviceSchema = SchemaGenerator.serviceSchemaAccessor(writer, context, service);
@@ -143,7 +146,10 @@ public final class ClientGenerator implements Runnable {
             writer.write("private readonly SmithyHttpClientEnvironment environment;");
           }
           if (needsIdempotency) {
-            writer.write("private readonly System.Func<string> idempotencyTokenProvider;");
+            writer.write(
+                "private readonly "
+                    + writer.frameworkType("System.Func")
+                    + "<string> idempotencyTokenProvider;");
           }
           // The protocol is bound at construction; per-operation protocols are built once from it.
           for (OperationShape op : operations) {
@@ -162,7 +168,9 @@ public final class ClientGenerator implements Runnable {
           // Endpoint already present on config; construction then flows through the config
           // constructor so there is only one implementation path.
           writer.write(
-              "public $L(System.Uri endpoint, $LConfig? config = null) :"
+              "public $L("
+                  + writer.frameworkType("System.Uri")
+                  + " endpoint, $LConfig? config = null) :"
                   + " this(WithEndpoint(endpoint, config))",
               typeName,
               typeName);
@@ -177,7 +185,8 @@ public final class ClientGenerator implements Runnable {
               "{",
               "}",
               () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(config);");
+                writer.write(
+                    writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(config);");
                 if (needsRuntime) {
                   writeEnvironmentCreation(
                       serviceSchema, primaryProtocol, modeledHttpVersionPreference, "null");
@@ -193,14 +202,18 @@ public final class ClientGenerator implements Runnable {
           // AddHttpClient<I,T>). The endpoint comes from Config.Endpoint, falling back to the
           // HttpClient's BaseAddress.
           writer.write(
-              "public $L(System.Net.Http.HttpClient httpClient, $LConfig? config = null)",
+              "public $L("
+                  + writer.frameworkType("System.Net.Http.HttpClient")
+                  + " httpClient, $LConfig? config = null)",
               typeName,
               typeName);
           writer.openBlock(
               "{",
               "}",
               () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(httpClient);");
+                writer.write(
+                    writer.frameworkType("System.ArgumentNullException")
+                        + ".ThrowIfNull(httpClient);");
                 if (needsRuntime) {
                   writer.write("config ??= new $LConfig();", typeName);
                   writeEnvironmentCreation(
@@ -243,14 +256,18 @@ public final class ClientGenerator implements Runnable {
           // Copies the caller's config before setting the endpoint, so constructing a client
           // never mutates a config instance the caller may share with other clients.
           writer.write(
-              "private static $LConfig WithEndpoint(System.Uri endpoint, $LConfig? config)",
+              "private static $LConfig WithEndpoint("
+                  + writer.frameworkType("System.Uri")
+                  + " endpoint, $LConfig? config)",
               typeName,
               typeName);
           writer.openBlock(
               "{",
               "}",
               () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(endpoint);");
+                writer.write(
+                    writer.frameworkType("System.ArgumentNullException")
+                        + ".ThrowIfNull(endpoint);");
                 writer.write(
                     "var copy = config is null ? new $LConfig() : new $LConfig(config);",
                     typeName,
@@ -264,7 +281,9 @@ public final class ClientGenerator implements Runnable {
           // introduced solely by an operation-level @auth override, so constructor validation does
           // not reject a client configured specifically for such an operation.
           writer.write(
-              "private static readonly System.Collections.Generic.IReadOnlyList<string>"
+              "private static readonly "
+                  + writer.frameworkType("System.Collections.Generic.IReadOnlyList")
+                  + "<string>"
                   + " ModeledAuthSchemes = $L;",
               modeledAuthSchemesLiteral());
           writer.write("");
@@ -273,7 +292,9 @@ public final class ClientGenerator implements Runnable {
             writer.write("");
             writer.write(
                 "private static string DefaultIdempotencyToken() =>"
-                    + " System.Guid.NewGuid().ToString();");
+                    + " "
+                    + writer.frameworkType("System.Guid")
+                    + ".NewGuid().ToString();");
           }
           writer.write("");
 
@@ -371,7 +392,7 @@ public final class ClientGenerator implements Runnable {
                     .forEach(id -> uniqueIds.put(id.toString(), Boolean.TRUE)));
     List<String> ids = uniqueIds.keySet().stream().toList();
     if (ids.isEmpty()) {
-      return "System.Array.Empty<string>()";
+      return writer.frameworkType("System.Array") + ".Empty<string>()";
     }
     return "new string[] { "
         + ids.stream().map(CSharpNaming::formatString).collect(Collectors.joining(", "))
@@ -439,7 +460,7 @@ public final class ClientGenerator implements Runnable {
             .map(ShapeId::toString)
             .collect(Collectors.toList());
     if (ids.isEmpty()) {
-      return "System.Array.Empty<string>()";
+      return writer.frameworkType("System.Array") + ".Empty<string>()";
     }
     return "new string[] { "
         + ids.stream().map(CSharpNaming::formatString).collect(Collectors.joining(", "))
@@ -475,15 +496,15 @@ public final class ClientGenerator implements Runnable {
   }
 
   static String httpVersionPreferenceLiteral(
-      Optional<ProtocolSupport.HttpVersionPreference> preference) {
+      CSharpWriter writer, Optional<ProtocolSupport.HttpVersionPreference> preference) {
     if (preference.isEmpty()) {
       return "null";
     }
     String version =
         switch (preference.get().alpnId()) {
-          case "h3" -> "System.Net.HttpVersion.Version30";
-          case "h2" -> "System.Net.HttpVersion.Version20";
-          case "http/1.1" -> "System.Net.HttpVersion.Version11";
+          case "h3" -> writer.frameworkType("System.Net.HttpVersion") + ".Version30";
+          case "h2" -> writer.frameworkType("System.Net.HttpVersion") + ".Version20";
+          case "http/1.1" -> writer.frameworkType("System.Net.HttpVersion") + ".Version11";
           default -> throw new IllegalArgumentException(preference.get().alpnId());
         };
     return "new SmithyHttpVersionPreference("
@@ -504,7 +525,9 @@ public final class ClientGenerator implements Runnable {
           "}",
           () ->
               writer.write(
-                  "throw new System.NotSupportedException(\"Event-stream operations are not"
+                  "throw new "
+                      + writer.frameworkType("System.NotSupportedException")
+                      + "(\"Event-stream operations are not"
                       + " supported by the declared service protocols.\");"));
       writer.write("");
       return;
@@ -522,7 +545,8 @@ public final class ClientGenerator implements Runnable {
         "}",
         () -> {
           if (hasInput) {
-            writer.write("System.ArgumentNullException.ThrowIfNull(input);");
+            writer.write(
+                writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(input);");
             writeIdempotencyTokenDefaults(
                 model.expectShape(op.getInputShape(), StructureShape.class));
           }
@@ -585,13 +609,16 @@ public final class ClientGenerator implements Runnable {
     Model model = context.model();
     String inputType = writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape())));
     String outputType = writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape())));
-    return "System.Collections.Generic.IAsyncEnumerable<"
+    return writer.frameworkType("System.Collections.Generic.IAsyncEnumerable")
+        + "<"
         + outputType
         + "> "
         + CSharpNaming.typeName(op.getId().getName())
         + "PagesAsync("
         + inputType
-        + " input, System.Threading.CancellationToken cancellationToken = default)";
+        + " input, "
+        + writer.frameworkType("System.Threading.CancellationToken")
+        + " cancellationToken = default)";
   }
 
   /**
@@ -604,7 +631,8 @@ public final class ClientGenerator implements Runnable {
     return paginatorItemElementType(writer, context, info)
         .map(
             elementType ->
-                "System.Collections.Generic.IAsyncEnumerable<"
+                writer.frameworkType("System.Collections.Generic.IAsyncEnumerable")
+                    + "<"
                     + elementType
                     + "> "
                     + CSharpNaming.typeName(info.getOperation().getId().getName())
@@ -614,7 +642,9 @@ public final class ClientGenerator implements Runnable {
                             .symbolProvider()
                             .toSymbol(
                                 context.model().expectShape(info.getOperation().getInputShape())))
-                    + " input, System.Threading.CancellationToken cancellationToken = default)");
+                    + " input, "
+                    + writer.frameworkType("System.Threading.CancellationToken")
+                    + " cancellationToken = default)");
   }
 
   private static Optional<String> paginatorItemElementType(
@@ -654,12 +684,13 @@ public final class ClientGenerator implements Runnable {
     writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
     writer.write(
         "public async $L",
-        withEnumeratorCancellation(paginatorPagesSignature(writer, context, op)));
+        withEnumeratorCancellation(writer, paginatorPagesSignature(writer, context, op)));
     writer.openBlock(
         "{",
         "}",
         () -> {
-          writer.write("System.ArgumentNullException.ThrowIfNull(input);");
+          writer.write(
+              writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(input);");
           writer.write(
               "var output = await $LAsync(input, cancellationToken).ConfigureAwait(false);",
               opName);
@@ -685,7 +716,7 @@ public final class ClientGenerator implements Runnable {
             signature -> {
               String itemsExpr = memberPathExpr("page", info.getItemsMemberPath());
               writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
-              writer.write("public async $L", withEnumeratorCancellation(signature));
+              writer.write("public async $L", withEnumeratorCancellation(writer, signature));
               writer.openBlock(
                   "{",
                   "}",
@@ -725,11 +756,16 @@ public final class ClientGenerator implements Runnable {
   }
 
   /** Adds [EnumeratorCancellation] to a paginator signature's cancellation-token parameter. */
-  static String withEnumeratorCancellation(String signature) {
+  static String withEnumeratorCancellation(CSharpWriter writer, String signature) {
     return signature.replace(
-        "System.Threading.CancellationToken cancellationToken",
-        "[System.Runtime.CompilerServices.EnumeratorCancellation]"
-            + " System.Threading.CancellationToken cancellationToken");
+        writer.frameworkType("System.Threading.CancellationToken") + " cancellationToken",
+        "["
+            + writer.frameworkAttribute(
+                "System.Runtime.CompilerServices.EnumeratorCancellationAttribute")
+            + "]"
+            + " "
+            + writer.frameworkType("System.Threading.CancellationToken")
+            + " cancellationToken");
   }
 
   static String operationSignature(
@@ -745,15 +781,16 @@ public final class ClientGenerator implements Runnable {
         hasOutput ? writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape()))) : null;
     String returnType =
         hasOutput
-            ? "System.Threading.Tasks.Task<" + outputType + ">"
-            : "System.Threading.Tasks.Task";
+            ? writer.frameworkType("System.Threading.Tasks.Task") + "<" + outputType + ">"
+            : writer.frameworkType("System.Threading.Tasks.Task");
     String params = hasInput ? inputType + " input, " : "";
     return returnType
         + " "
         + name
         + "("
         + params
-        + "System.Threading.CancellationToken cancellationToken = default)";
+        + writer.frameworkType("System.Threading.CancellationToken")
+        + " cancellationToken = default)";
   }
 
   private Map<String, String> operationParameterDocs(Model model, OperationShape op) {

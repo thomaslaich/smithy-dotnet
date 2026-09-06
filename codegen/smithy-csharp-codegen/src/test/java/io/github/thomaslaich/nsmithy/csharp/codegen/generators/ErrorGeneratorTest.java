@@ -64,7 +64,7 @@ final class ErrorGeneratorTest {
 
     assertTrue(
         throttling.contains(
-            "public sealed partial class ThrottlingError : System.Exception,"
+            "public sealed partial class ThrottlingError : Exception,"
                 + " NSmithy.Core.ISmithyRetryableError"),
         throttling);
     assertTrue(
@@ -81,8 +81,7 @@ final class ErrorGeneratorTest {
     String generated = renderError("example.weather#ValidationError");
 
     assertTrue(
-        generated.contains("public sealed partial class ValidationError : System.Exception"),
-        generated);
+        generated.contains("public sealed partial class ValidationError : Exception"), generated);
     assertFalse(generated.contains("ISmithyRetryableError"), generated);
   }
 

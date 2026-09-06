@@ -27,6 +27,7 @@ public final class StructureGenerator implements Runnable {
 
   public StructureGenerator(GenerationContext c, CSharpWriter w, StructureShape s) {
     this.context = c;
+    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.shape = s;
   }

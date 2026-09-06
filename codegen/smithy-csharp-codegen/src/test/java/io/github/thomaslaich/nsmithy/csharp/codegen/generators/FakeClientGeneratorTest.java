@@ -114,9 +114,9 @@ final class FakeClientGeneratorTest {
     assertTrue(
         generated.contains(
             "public virtual"
-                + " System.Threading.Tasks.Task<GetCityOutput>"
+                + " Task<GetCityOutput>"
                 + " GetCityAsync(GetCityInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default)"),
+                + " CancellationToken cancellationToken = default)"),
         generated);
     assertTrue(generated.contains("public virtual void Dispose() { }"), generated);
   }
@@ -127,7 +127,7 @@ final class FakeClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "return System.Threading.Tasks.Task.FromResult(new"
+            "return Task.FromResult(new"
                 + " GetCityOutput(Name: \"Zurich\", Population:"
                 + " 400000));"),
         generated);
@@ -145,7 +145,7 @@ final class FakeClientGeneratorTest {
     assertTrue(
         generated.contains(
             "return"
-                + " System.Threading.Tasks.Task.FromException<GetCityOutput>(new"
+                + " Task.FromException<GetCityOutput>(new"
                 + " NoSuchCity(message: \"unknown city\"));"),
         generated);
   }
@@ -157,10 +157,10 @@ final class FakeClientGeneratorTest {
     assertTrue(
         generated.contains(
             "public virtual async"
-                + " System.Collections.Generic.IAsyncEnumerable<ListCitiesOutput>"
+                + " IAsyncEnumerable<ListCitiesOutput>"
                 + " ListCitiesPagesAsync(ListCitiesInput input,"
-                + " [System.Runtime.CompilerServices.EnumeratorCancellation]"
-                + " System.Threading.CancellationToken cancellationToken = default)"),
+                + " [EnumeratorCancellation]"
+                + " CancellationToken cancellationToken = default)"),
         generated);
     assertTrue(
         generated.contains(
@@ -177,10 +177,10 @@ final class FakeClientGeneratorTest {
     assertTrue(
         generated.contains(
             "public virtual async"
-                + " System.Collections.Generic.IAsyncEnumerable<CitySummary>"
+                + " IAsyncEnumerable<CitySummary>"
                 + " ListCitiesItemsAsync(ListCitiesInput input,"
-                + " [System.Runtime.CompilerServices.EnumeratorCancellation]"
-                + " System.Threading.CancellationToken cancellationToken = default)"),
+                + " [EnumeratorCancellation]"
+                + " CancellationToken cancellationToken = default)"),
         generated);
     assertTrue(
         generated.contains(
@@ -197,10 +197,9 @@ final class FakeClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "public virtual System.Threading.Tasks.Task"
-                + " PingAsync(System.Threading.CancellationToken cancellationToken = default)"),
+            "public virtual Task" + " PingAsync(CancellationToken cancellationToken = default)"),
         generated);
-    assertTrue(generated.contains("return System.Threading.Tasks.Task.CompletedTask;"), generated);
+    assertTrue(generated.contains("return Task.CompletedTask;"), generated);
   }
 
   @Test
@@ -210,9 +209,7 @@ final class FakeClientGeneratorTest {
     assertTrue(generated.contains("new WatchOutput(Events: FakeWatchEventsEvents())"), generated);
     assertTrue(
         generated.contains(
-            "private static async"
-                + " System.Collections.Generic.IAsyncEnumerable<ChatEvent>"
-                + " FakeWatchEventsEvents()"),
+            "private static async" + " IAsyncEnumerable<ChatEvent>" + " FakeWatchEventsEvents()"),
         generated);
   }
 

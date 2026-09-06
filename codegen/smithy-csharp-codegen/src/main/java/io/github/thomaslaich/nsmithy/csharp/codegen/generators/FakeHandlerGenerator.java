@@ -39,10 +39,11 @@ public final class FakeHandlerGenerator implements Runnable {
 
   public FakeHandlerGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
+    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.service = s;
     this.values = new FakeValueSynthesizer(c, w, "fake handler");
-    this.matcher = new FakeExampleMatcher(c, values);
+    this.matcher = new FakeExampleMatcher(c, w, values);
   }
 
   @Override
@@ -108,10 +109,11 @@ public final class FakeHandlerGenerator implements Runnable {
     String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
     String returnType =
         hasOutput
-            ? "System.Threading.Tasks.Task<"
+            ? writer.frameworkType("System.Threading.Tasks.Task")
+                + "<"
                 + writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape())))
                 + ">"
-            : "System.Threading.Tasks.Task";
+            : writer.frameworkType("System.Threading.Tasks.Task");
     String params =
         hasInput
             ? writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape()))) + " input, "
@@ -121,6 +123,7 @@ public final class FakeHandlerGenerator implements Runnable {
         + name
         + "("
         + params
-        + "System.Threading.CancellationToken cancellationToken = default)";
+        + writer.frameworkType("System.Threading.CancellationToken")
+        + " cancellationToken = default)";
   }
 }

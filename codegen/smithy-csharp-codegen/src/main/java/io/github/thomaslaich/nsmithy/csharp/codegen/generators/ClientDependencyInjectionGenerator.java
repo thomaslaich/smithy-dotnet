@@ -36,6 +36,7 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
 
   public ClientDependencyInjectionGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
+    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.service = s;
   }
@@ -55,6 +56,7 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
     String primaryProtocol = ProtocolSupport.protocolType(kinds.get(0));
     String modeledHttpVersionPreference =
         ClientGenerator.httpVersionPreferenceLiteral(
+            writer,
             ProtocolSupport.httpVersionPreference(
                 service,
                 kinds.get(0),
@@ -80,8 +82,10 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
               interfaceName);
           writer.write("public static IHttpClientBuilder Add$L(", clientName);
           writer.write("    this IServiceCollection services,");
-          writer.write("    System.Uri endpoint,");
-          writer.write("    System.Action<$LConfig>? configure = null) =>", clientName);
+          writer.write("    " + writer.frameworkType("System.Uri") + " endpoint,");
+          writer.write(
+              "    " + writer.frameworkType("System.Action") + "<$LConfig>? configure = null) =>",
+              clientName);
           writer.write(
               "    services.Add$L(client => client.BaseAddress = endpoint, configure);",
               clientName);
@@ -96,13 +100,22 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
               interfaceName);
           writer.write("public static IHttpClientBuilder Add$L(", clientName);
           writer.write("    this IServiceCollection services,");
-          writer.write("    System.Action<System.Net.Http.HttpClient>? configureClient = null,");
-          writer.write("    System.Action<$LConfig>? configure = null)", clientName);
+          writer.write(
+              "    "
+                  + writer.frameworkType("System.Action")
+                  + "<"
+                  + writer.frameworkType("System.Net.Http.HttpClient")
+                  + ">? configureClient = null,");
+          writer.write(
+              "    " + writer.frameworkType("System.Action") + "<$LConfig>? configure = null)",
+              clientName);
           writer.openBlock(
               "{",
               "}",
               () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(services);");
+                writer.write(
+                    writer.frameworkType("System.ArgumentNullException")
+                        + ".ThrowIfNull(services);");
                 writer.write("var config = new $LConfig();", clientName);
                 writer.write("configure?.Invoke(config);");
                 writer.write("return services");

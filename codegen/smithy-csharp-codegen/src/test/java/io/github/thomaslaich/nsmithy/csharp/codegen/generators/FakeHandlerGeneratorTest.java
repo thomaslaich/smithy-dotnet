@@ -179,9 +179,9 @@ final class FakeHandlerGeneratorTest {
     assertTrue(
         generated.contains(
             "public virtual"
-                + " System.Threading.Tasks.Task<GetCityOutput>"
+                + " Task<GetCityOutput>"
                 + " GetCityAsync(GetCityInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default)"),
+                + " CancellationToken cancellationToken = default)"),
         generated);
     assertFalse(generated.contains("AddFakeFakeableServiceHandler"), generated);
   }
@@ -192,7 +192,7 @@ final class FakeHandlerGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "return System.Threading.Tasks.Task.FromResult(new"
+            "return Task.FromResult(new"
                 + " GetCityOutput(Name: \"Zurich\", Population:"
                 + " 400000, Tags: new TagList(new string[] {"
                 + " \"alpine\" })));"),
@@ -208,10 +208,10 @@ final class FakeHandlerGeneratorTest {
         generated.contains(
             "new GetStatusOutput(Label: \"label\","
                 + " Attrs: new AttrMap(new"
-                + " System.Collections.Generic.Dictionary<string, string> { { \"key\", \"value\" }"
+                + " Dictionary<string, string> { { \"key\", \"value\" }"
                 + " }), Choice: Choice.FromNum(0), Code: \"codexx\","
                 + " Count: 5, Mood: Mood.HAPPY,"
-                + " When: System.DateTimeOffset.FromUnixTimeSeconds(1704067200))"),
+                + " When: DateTimeOffset.FromUnixTimeSeconds(1704067200))"),
         generated);
   }
 
@@ -224,7 +224,7 @@ final class FakeHandlerGeneratorTest {
             "new GetTreeOutput(Root: new"
                 + " TreeNode(Id: \"id\", Children: new"
                 + " TreeList("
-                + "System.Array.Empty<TreeNode>())))"),
+                + "Array.Empty<TreeNode>())))"),
         generated);
     assertFalse(generated.contains("Child: new TreeNode"), generated);
   }
@@ -235,10 +235,9 @@ final class FakeHandlerGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "public virtual System.Threading.Tasks.Task"
-                + " PingAsync(System.Threading.CancellationToken cancellationToken = default)"),
+            "public virtual Task" + " PingAsync(CancellationToken cancellationToken = default)"),
         generated);
-    assertTrue(generated.contains("return System.Threading.Tasks.Task.CompletedTask;"), generated);
+    assertTrue(generated.contains("return Task.CompletedTask;"), generated);
   }
 
   @Test
@@ -248,9 +247,7 @@ final class FakeHandlerGeneratorTest {
     assertTrue(generated.contains("new WatchOutput(Events: FakeWatchEventsEvents())"), generated);
     assertTrue(
         generated.contains(
-            "private static async"
-                + " System.Collections.Generic.IAsyncEnumerable<ChatEvent>"
-                + " FakeWatchEventsEvents()"),
+            "private static async" + " IAsyncEnumerable<ChatEvent>" + " FakeWatchEventsEvents()"),
         generated);
     assertTrue(
         generated.contains(
@@ -271,15 +268,11 @@ final class FakeHandlerGeneratorTest {
     assertTrue(generated.contains("if (!(input.Query == \"zrh\"))"), generated);
     assertTrue(generated.contains("if (!(input.Limit == 1))"), generated);
     assertTrue(
-        generated.contains(
-            "return System.Threading.Tasks.Task.FromResult(new"
-                + " LookupOutput(Label: \"Filtered\"));"),
+        generated.contains("return Task.FromResult(new" + " LookupOutput(Label: \"Filtered\"));"),
         generated);
     // The fallback stays the first non-error example output.
     assertTrue(
-        generated.contains(
-            "return System.Threading.Tasks.Task.FromResult(new"
-                + " LookupOutput(Label: \"Zurich\"));"),
+        generated.contains("return Task.FromResult(new" + " LookupOutput(Label: \"Zurich\"));"),
         generated);
   }
 
@@ -301,7 +294,7 @@ final class FakeHandlerGeneratorTest {
     assertTrue(
         generated.contains(
             "return"
-                + " System.Threading.Tasks.Task.FromException<LookupOutput>(new"
+                + " Task.FromException<LookupOutput>(new"
                 + " LookupError(message: \"no such city\", hint: \"try"
                 + " zrh\"));"),
         generated);

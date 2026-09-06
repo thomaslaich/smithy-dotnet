@@ -37,10 +37,11 @@ public final class FakeClientGenerator implements Runnable {
 
   public FakeClientGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
     this.context = c;
+    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.service = s;
     this.values = new FakeValueSynthesizer(c, w, "fake client");
-    this.matcher = new FakeExampleMatcher(c, values);
+    this.matcher = new FakeExampleMatcher(c, w, values);
   }
 
   @Override
@@ -105,7 +106,7 @@ public final class FakeClientGenerator implements Runnable {
     writer.write(
         "public virtual async $L",
         ClientGenerator.withEnumeratorCancellation(
-            ClientGenerator.paginatorPagesSignature(writer, context, op)));
+            writer, ClientGenerator.paginatorPagesSignature(writer, context, op)));
     writer.openBlock(
         "{",
         "}",
@@ -120,7 +121,8 @@ public final class FakeClientGenerator implements Runnable {
               String itemsExpr = ClientGenerator.memberPathExpr("page", info.getItemsMemberPath());
               writer.write("");
               writer.write(
-                  "public virtual async $L", ClientGenerator.withEnumeratorCancellation(signature));
+                  "public virtual async $L",
+                  ClientGenerator.withEnumeratorCancellation(writer, signature));
               writer.openBlock(
                   "{",
                   "}",

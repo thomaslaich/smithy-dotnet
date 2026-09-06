@@ -21,6 +21,7 @@ public final class ListGenerator implements Runnable {
 
   public ListGenerator(GenerationContext c, CSharpWriter w, ListShape s) {
     this.context = c;
+    w.reserveModelNames(c.model(), c.settings());
     this.writer = w;
     this.shape = s;
   }
@@ -39,29 +40,47 @@ public final class ListGenerator implements Runnable {
         "}",
         () -> {
           writer.write(
-              "public $L(System.Collections.Generic.IEnumerable<$L> values)", typeName, memberType);
+              "public $L("
+                  + writer.frameworkType("System.Collections.Generic.IEnumerable")
+                  + "<$L> values)",
+              typeName,
+              memberType);
           writer.openBlock(
               "{",
               "}",
               () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(values);");
                 writer.write(
-                    "Values = System.Array.AsReadOnly(System.Linq.Enumerable.ToArray(values));");
+                    writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(values);");
+                writer.write(
+                    "Values = "
+                        + writer.frameworkType("System.Array")
+                        + ".AsReadOnly("
+                        + writer.frameworkType("System.Linq.Enumerable")
+                        + ".ToArray(values));");
               });
           writer.write("");
           writer.write(
-              "private $L(System.Collections.Generic.List<$L> values)", typeName, memberType);
+              "private $L("
+                  + writer.frameworkType("System.Collections.Generic.List")
+                  + "<$L> values)",
+              typeName,
+              memberType);
           writer.openBlock("{", "}", () -> writer.write("Values = values.AsReadOnly();"));
           writer.write("");
           writer.write(
-              "internal static $L FromOwnedList(System.Collections.Generic.List<$L> values)"
+              "internal static $L FromOwnedList("
+                  + writer.frameworkType("System.Collections.Generic.List")
+                  + "<$L> values)"
                   + " => new(values);",
               typeName,
               memberType);
           writer.write("");
           writer.writeXmlDocs(shape.getMember());
           writer.write(
-              "public System.Collections.Generic.IReadOnlyList<$L> Values { get; }", memberType);
+              "public "
+                  + writer.frameworkType("System.Collections.Generic.IReadOnlyList")
+                  + "<$L> Values { get; }",
+              memberType);
         });
     writer.write("");
     SchemaGenerator.writeListSchema(writer, context, shape);
