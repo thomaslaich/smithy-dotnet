@@ -31,22 +31,25 @@ public final class ServiceSchemaGenerator implements Runnable {
 
   @Override
   public void run() {
-
-    String typeName = CSharpNaming.typeName(service.getId().getName());
-    writer.write("public static partial class $LSchema", typeName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("public static $T Schema { get; } =", RuntimeTypes.SERVICE_SCHEMA);
-          writer.indent();
-          writer.write(
-              "$T.Service($L, $S, $L);",
-              RuntimeTypes.SCHEMAS,
-              SchemaGenerator.shapeIdExpr(writer, service.getId()),
-              service.getVersion(),
-              SchemaGenerator.traitsExpr(writer, service.getAllTraits().values()));
-          writer.dedent();
-        });
+    writer.pushState();
+    try {
+      writer.putContext("typeName", CSharpNaming.typeName(service.getId().getName()));
+      writer.putContext("serviceSchema", RuntimeTypes.SERVICE_SCHEMA);
+      writer.putContext("schemas", RuntimeTypes.SCHEMAS);
+      writer.putContext("shapeId", SchemaGenerator.shapeIdExpr(writer, service.getId()));
+      writer.putContext("version", service.getVersion());
+      writer.putContext(
+          "traits", SchemaGenerator.traitsExpr(writer, service.getAllTraits().values()));
+      writer.write(
+          """
+          public static partial class ${typeName:L}Schema
+          {
+              public static ${serviceSchema:T} Schema { get; } =
+                  ${schemas:T}.Service(${shapeId:L}, ${version:S}, ${traits:L});
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 }
