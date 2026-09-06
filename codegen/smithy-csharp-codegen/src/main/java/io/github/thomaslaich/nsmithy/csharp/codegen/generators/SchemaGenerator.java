@@ -163,89 +163,57 @@ public final class SchemaGenerator {
 
   public static void writeStructureSchema(
       CSharpWriter writer, GenerationContext context, Shape shape, List<MemberShape> members) {
-    SymbolProvider sp = context.symbolProvider();
-    String typeName = writer.typeName(sp.toSymbol(shape));
+    writer.pushState();
+    try {
+      writer.putContext("schemaClass", localSchemaClassName(shape));
+      writer.putContext("type", context.symbolProvider().toSymbol(shape));
+      writer.putContext("schema", RuntimeTypes.SCHEMA);
+      writer.putContext("schemas", RuntimeTypes.SCHEMAS);
+      writer.putContext("structValueSerializer", RuntimeTypes.I_STRUCT_VALUE_SERIALIZER);
+      writer.putContext("structMemberWriter", RuntimeTypes.I_STRUCT_MEMBER_WRITER);
+      writer.putContext("shapeId", shapeIdExpr(writer, shape.getId()));
+      writer.putContext("traits", traitsExpr(writer, shape.getAllTraits().values()));
+      writer.putContext(
+          "constructorArguments", constructorArguments(writer, context, shape, members));
+      writer.putContext(
+          "builderProperties",
+          writer.consumer(w -> writeStructureBuilderProperties(w, context, members)));
+      writer.putContext(
+          "serializationCalls",
+          writer.consumer(w -> writeStructureSerializationCalls(w, context, members)));
+      writer.putContext(
+          "memberBindings",
+          writer.consumer(w -> writeStructureMemberBindings(w, context, members)));
+      writer.write(
+          """
+          public static partial class ${schemaClass:L}
+          {
+              public sealed class Builder
+              {
+                  ${builderProperties:C|}
+              }
 
-    writer.write("public static partial class $L", localSchemaClassName(shape));
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("public sealed class Builder");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                for (MemberShape member : members) {
-                  writer.write(
-                      "public $L $L { get; set; }",
-                      ShapeSupport.memberTypeExpr(writer, context.model(), sp, member, true),
-                      CSharpNaming.propertyName(member.getMemberName()));
-                }
-              });
-          writer.write("");
-          writer.write(
-              "private sealed class ValueSerializer : $T<$L>",
-              RuntimeTypes.I_STRUCT_VALUE_SERIALIZER,
-              typeName);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write(
-                    "public void WriteMembers<TWriter>($L value, ref TWriter writer)", typeName);
-                writer.write("    where TWriter : struct, $T", RuntimeTypes.I_STRUCT_MEMBER_WRITER);
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      for (int index = 0; index < members.size(); index++) {
-                        MemberShape member = members.get(index);
-                        writer.write(
-                            "writer.WriteMember<$L>($L, value.$L);",
-                            ShapeSupport.memberTypeExpr(writer, context.model(), sp, member, true),
-                            index,
-                            CSharpNaming.propertyName(member.getMemberName()));
-                      }
-                    });
-              });
-          writer.write("");
-          writer.write("public static $T<$L> Schema { get; } =", RuntimeTypes.SCHEMA, typeName);
-          writer.indent();
-          writer.write(
-              "$T.Structure<$L, Builder>($L, $L)",
-              RuntimeTypes.SCHEMAS,
-              typeName,
-              shapeIdExpr(writer, shape.getId()),
-              traitsExpr(writer, shape.getAllTraits().values()));
-          writer.indent();
-          for (MemberShape member : members) {
-            String method = ShapeSupport.isRequired(member) ? "Required" : "Optional";
-            String name = member.getMemberName();
-            String prop = CSharpNaming.propertyName(name);
-            writer.write(".$L(", method);
-            writer.indent();
-            writer.write("$L,", CSharpNaming.formatString(name));
-            writer.write("static value => value.$L,", prop);
-            writer.write("static (builder, value) => builder.$L = value,", prop);
-            writer.write("$L,", memberTargetExpr(writer, context, member));
-            writer.write("$L)", memberTraitsExpr(writer, context, member));
-            writer.dedent();
+              private sealed class ValueSerializer : ${structValueSerializer:T}<${type:T}>
+              {
+                  public void WriteMembers<TWriter>(${type:T} value, ref TWriter writer)
+                      where TWriter : struct, ${structMemberWriter:T}
+                  {
+                      ${serializationCalls:C|}
+                  }
+              }
+
+              public static ${schema:T}<${type:T}> Schema { get; } =
+                  ${schemas:T}.Structure<${type:T}, Builder>(${shapeId:L}, ${traits:L})
+                      ${memberBindings:C|}
+                      .Build(
+                          static () => new Builder(),
+                          static builder => new ${type:T}(${constructorArguments:L}),
+                          new ValueSerializer());
           }
-          writer.write(".Build(");
-          writer.indent();
-          writer.write("static () => new Builder(),");
-          writer.write(
-              "static builder => new $L($L),",
-              typeName,
-              constructorArguments(writer, context, shape, members));
-          writer.write("new ValueSerializer())");
-          writer.dedent();
-          writer.write(";");
-          writer.dedent();
-          writer.dedent();
-          writer.write("");
-        });
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   public static void writeListSchema(
@@ -452,6 +420,55 @@ public final class SchemaGenerator {
   }
 
   private SchemaGenerator() {}
+
+  private static void writeStructureBuilderProperties(
+      CSharpWriter writer, GenerationContext context, List<MemberShape> members) {
+    for (MemberShape member : members) {
+      writer.write(
+          "public $L $L { get; set; }",
+          ShapeSupport.memberTypeExpr(
+              writer, context.model(), context.symbolProvider(), member, true),
+          CSharpNaming.propertyName(member.getMemberName()));
+    }
+  }
+
+  private static void writeStructureSerializationCalls(
+      CSharpWriter writer, GenerationContext context, List<MemberShape> members) {
+    for (int index = 0; index < members.size(); index++) {
+      MemberShape member = members.get(index);
+      writer.write(
+          "writer.WriteMember<$L>($L, value.$L);",
+          ShapeSupport.memberTypeExpr(
+              writer, context.model(), context.symbolProvider(), member, true),
+          index,
+          CSharpNaming.propertyName(member.getMemberName()));
+    }
+  }
+
+  private static void writeStructureMemberBindings(
+      CSharpWriter writer, GenerationContext context, List<MemberShape> members) {
+    for (MemberShape member : members) {
+      writer.pushState();
+      try {
+        writer.putContext("method", ShapeSupport.isRequired(member) ? "Required" : "Optional");
+        writer.putContext("name", CSharpNaming.formatString(member.getMemberName()));
+        writer.putContext("property", CSharpNaming.propertyName(member.getMemberName()));
+        writer.putContext("target", memberTargetExpr(writer, context, member));
+        writer.putContext("memberTraits", memberTraitsExpr(writer, context, member));
+        writer.write(
+            """
+            .${method:L}(
+                ${name:L},
+                static value => value.${property:L},
+                static (builder, value) => builder.${property:L} = value,
+                ${target:L},
+                ${memberTraits:L})
+            """);
+      } finally {
+        writer.popState();
+      }
+    }
+  }
 
   private static boolean isCycleCapable(ShapeType type) {
     return switch (type) {
