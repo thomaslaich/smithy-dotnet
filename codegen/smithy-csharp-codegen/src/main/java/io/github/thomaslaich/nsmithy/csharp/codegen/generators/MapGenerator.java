@@ -5,6 +5,7 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -43,36 +44,30 @@ public final class MapGenerator implements Runnable {
         "}",
         () -> {
           writer.write(
-              "public $L("
-                  + writer.frameworkType("System.Collections.Generic.IReadOnlyDictionary")
-                  + "<$L, $L> values)",
+              "public $L($T<$L, $L> values)",
               typeName,
+              RuntimeTypes.I_READ_ONLY_DICTIONARY,
               keyType,
               valueType);
           writer.openBlock(
               "{",
               "}",
               () -> {
+                writer.write("$T.ThrowIfNull(values);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
                 writer.write(
-                    writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(values);");
-                writer.write(
-                    "Values = new "
-                        + writer.frameworkType("System.Collections.ObjectModel.ReadOnlyDictionary")
-                        + "<$L, $L>("
-                        + "new "
-                        + writer.frameworkType("System.Collections.Generic.Dictionary")
-                        + "<$L, $L>(values));",
+                    "Values = new $T<$L, $L>(new $T<$L, $L>(values));",
+                    RuntimeTypes.READ_ONLY_DICTIONARY,
                     keyType,
                     valueType,
+                    RuntimeTypes.DICTIONARY,
                     keyType,
                     valueType);
               });
           writer.write("");
           writer.write(
-              "private $L("
-                  + writer.frameworkType("System.Collections.Generic.Dictionary")
-                  + "<$L, $L> values)",
+              "private $L($T<$L, $L> values)",
               typeName,
+              RuntimeTypes.DICTIONARY,
               keyType,
               valueType);
           writer.openBlock(
@@ -80,27 +75,22 @@ public final class MapGenerator implements Runnable {
               "}",
               () ->
                   writer.write(
-                      "Values = new "
-                          + writer.frameworkType(
-                              "System.Collections.ObjectModel.ReadOnlyDictionary")
-                          + "<$L,"
-                          + " $L>(values);",
+                      "Values = new $T<$L, $L>(values);",
+                      RuntimeTypes.READ_ONLY_DICTIONARY,
                       keyType,
                       valueType));
           writer.write("");
           writer.write(
-              "internal static $L FromOwnedDictionary("
-                  + writer.frameworkType("System.Collections.Generic.Dictionary")
-                  + "<$L, $L> values) => new(values);",
+              "internal static $L FromOwnedDictionary($T<$L, $L> values) => new(values);",
               typeName,
+              RuntimeTypes.DICTIONARY,
               keyType,
               valueType);
           writer.write("");
           writer.writeXmlDocs(shape.getValue());
           writer.write(
-              "public "
-                  + writer.frameworkType("System.Collections.Generic.IReadOnlyDictionary")
-                  + "<$L, $L> Values { get; }",
+              "public $T<$L, $L> Values { get; }",
+              RuntimeTypes.I_READ_ONLY_DICTIONARY,
               keyType,
               valueType);
         });

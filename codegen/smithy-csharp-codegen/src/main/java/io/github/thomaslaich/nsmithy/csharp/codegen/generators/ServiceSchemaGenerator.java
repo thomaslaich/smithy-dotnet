@@ -31,8 +31,6 @@ public final class ServiceSchemaGenerator implements Runnable {
 
   @Override
   public void run() {
-    writer.addImport(RuntimeTypes.NSMITHY_CORE);
-    writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
 
     String typeName = CSharpNaming.typeName(service.getId().getName());
     writer.write("public static partial class $LSchema", typeName);
@@ -40,11 +38,12 @@ public final class ServiceSchemaGenerator implements Runnable {
         "{",
         "}",
         () -> {
-          writer.write("public static ServiceSchema Schema { get; } =");
+          writer.write("public static $T Schema { get; } =", RuntimeTypes.SERVICE_SCHEMA);
           writer.indent();
           writer.write(
-              "Schemas.Service($L, $S, $L);",
-              SchemaGenerator.shapeIdExpr(service.getId()),
+              "$T.Service($L, $S, $L);",
+              RuntimeTypes.SCHEMAS,
+              SchemaGenerator.shapeIdExpr(writer, service.getId()),
               service.getVersion(),
               SchemaGenerator.traitsExpr(writer, service.getAllTraits().values()));
           writer.dedent();

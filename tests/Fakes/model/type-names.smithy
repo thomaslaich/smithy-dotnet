@@ -23,6 +23,7 @@ operation RoundTrip {
 structure Payload {
     nextToken: String
     frameworkNames: FrameworkNames
+    runtimeNames: RuntimeNames
     helper: Builder
     serializer: ValueSerializer
     choice: Choice
@@ -87,3 +88,20 @@ structure Dictionary {}
 structure List {}
 structure Exception {}
 structure Uri {}
+
+// Runtime symbol imports must be as collision-safe as framework symbol imports.
+structure RuntimeNames {
+    documentType: Document
+    schemaType: Schema
+    schemasType: Schemas
+    shapeIdType: ShapeId
+    traitType: Trait
+    runtimeType: SmithyServerRuntime
+}
+
+structure Document {}
+structure Schema {}
+structure Schemas {}
+structure ShapeId {}
+structure Trait {}
+structure SmithyServerRuntime {}

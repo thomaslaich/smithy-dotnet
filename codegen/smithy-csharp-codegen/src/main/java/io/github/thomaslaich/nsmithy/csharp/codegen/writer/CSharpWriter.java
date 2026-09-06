@@ -8,17 +8,15 @@
  *  - Symbol with empty namespace: bare name (used for C# keyword primitives
  *    like `string`, `int`, etc.).
  *  - Local, unshadowed model types use their short name; other model types are qualified.
- *  - Framework references collect imports and fall back to global:: qualification on collision.
+ *  - External references collect imports and fall back to global:: qualification on collision.
  *  - Explicit SymbolReference aliases are preserved.
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.writer;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
+import io.github.thomaslaich.nsmithy.csharp.codegen.SymbolProperties;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.BiFunction;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -33,19 +31,6 @@ import software.amazon.smithy.utils.SmithyUnstableApi;
 public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclarations> {
 
   private final String namespace;
-  // Shape names and generated companions visible in the current or a parent namespace.
-  private final Set<String> modelTypeNames = new HashSet<>();
-  // Conservatively reserve segments from every model namespace, including unrelated ones.
-  private final Set<String> namespaceSegments = new HashSet<>();
-  private final Map<FrameworkReference, String> frameworkReferences = new LinkedHashMap<>();
-
-  private record FrameworkReference(String qualifiedName, boolean attribute) {}
-
-  // These generated nested types, members, and type parameters can hide model types.
-  private final Set<String> reservedNames =
-      new HashSet<>(
-          Set.of(
-              "Builder", "ValueSerializer", "Schema", "Unknown", "Value", "Tag", "T", "TWriter"));
 
   public CSharpWriter(String namespace) {
     super(new ImportDeclarations(namespace));
@@ -63,86 +48,12 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
 
   /** Reserve a generated identifier that can hide a type reference in this file. */
   public void reserveName(String name) {
-    reservedNames.add(name);
+    getImportContainer().reserveName(name);
   }
 
-  /** Include declarations that can shadow framework types even when this file never uses them. */
-  private void reserveModelNames(Model model, CSharpSettings settings) {
-    model
-        .shapes()
-        .filter(shape -> !shape.isMemberShape())
-        .forEach(
-            shape -> {
-              String ns = settings.csharpNamespace(shape.getId().getNamespace());
-              // Namespace segments can also hide imported types during C# name lookup.
-              namespaceSegments.addAll(java.util.List.of(ns.split("\\.")));
-              if (ns.equals(namespace) || namespace.startsWith(ns + ".")) {
-                String name = CSharpNaming.typeName(shape.getId().getName());
-                modelTypeNames.add(name);
-                modelTypeNames.add(name + "Schema");
-                if (shape.isServiceShape()) {
-                  modelTypeNames.add(name + "Client");
-                  modelTypeNames.add(name + "ClientConfig");
-                }
-              }
-            });
-  }
-
-  /**
-   * Return a stable reference token. Resolve it after the whole file has registered its names, so
-   * import decisions do not depend on emission order. Only explicit tokens are substituted;
-   * documentation and model string literals are never simplified.
-   */
-  public String frameworkType(String qualifiedName) {
-    return frameworkReference(qualifiedName, false);
-  }
-
-  /** Render an attribute with its conventional short form when that form is unambiguous. */
-  public String frameworkAttribute(String qualifiedName) {
-    return frameworkReference(qualifiedName, true);
-  }
-
-  private String frameworkReference(String qualifiedName, boolean attribute) {
-    return frameworkReferences.computeIfAbsent(
-        new FrameworkReference(qualifiedName, attribute),
-        ignored -> "\u0001framework" + frameworkReferences.size() + "\u0002");
-  }
-
-  private String renderFrameworkReferences(String body, Set<String> imports) {
-    for (var reference : frameworkReferences.entrySet()) {
-      String qualified = reference.getKey().qualifiedName();
-      int separator = qualified.lastIndexOf('.');
-      String ns = qualified.substring(0, separator);
-      String name = qualified.substring(separator + 1);
-      String shortName =
-          reference.getKey().attribute() && name.endsWith("Attribute")
-              ? name.substring(0, name.length() - 9)
-              : name;
-      boolean collision = hasFrameworkNameCollision(qualified, name, shortName);
-      String rendered = "global::" + qualified;
-      if (!collision) {
-        imports.add(ns);
-        rendered = shortName;
-      }
-      body = body.replace(reference.getValue(), rendered);
-    }
-    return body;
-  }
-
-  /** Check each source of shadowing for both the full name and attribute shorthand. */
-  private boolean hasFrameworkNameCollision(String qualifiedName, String name, String shortName) {
-    // Generated members, nested types, or type parameters can hide the reference.
-    if (reservedNames.contains(name) || reservedNames.contains(shortName)) return true;
-    // Model types and their generated companions can take precedence over imported types.
-    if (modelTypeNames.contains(name) || modelTypeNames.contains(shortName)) return true;
-    // Preserve the existing conservative policy for namespace segments.
-    if (namespaceSegments.contains(name) || namespaceSegments.contains(shortName)) return true;
-    // Distinct framework types sharing a simple name would make the imports ambiguous.
-    return frameworkReferences.keySet().stream()
-        .anyMatch(
-            other ->
-                !other.qualifiedName().equals(qualifiedName)
-                    && other.qualifiedName().endsWith("." + name));
+  /** Render an attribute symbol using its conventional shorthand when safe. */
+  public String attributeName(Symbol symbol) {
+    return typeName(symbol.toBuilder().putProperty(SymbolProperties.IS_ATTRIBUTE, true).build());
   }
 
   /** Reserve model member names before rendering references in the containing file. */
@@ -151,8 +62,8 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
         .members()
         .forEach(
             member -> {
-              reservedNames.add(CSharpNaming.propertyName(member.getMemberName()));
-              reservedNames.add(CSharpNaming.typeName(member.getMemberName()));
+              getImportContainer().reserveName(CSharpNaming.propertyName(member.getMemberName()));
+              getImportContainer().reserveName(CSharpNaming.typeName(member.getMemberName()));
             });
   }
 
@@ -163,14 +74,10 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
 
   /** The suffix refers to a generated companion type, such as a shape's schema class. */
   public String typeName(Symbol symbol, String suffix) {
-    String name = symbol.getName() + suffix;
-    String ns = symbol.getNamespace();
-    if (symbol.getDefinitionFile().isEmpty() && (ns.equals("System") || ns.startsWith("System."))) {
-      return frameworkType(ns + "." + name);
-    }
-    if (ns.isEmpty()) return name;
-    if (ns.equals(namespace) && !reservedNames.contains(name)) return name;
-    return "global::" + ns + "." + name;
+    Symbol reference =
+        suffix.isEmpty() ? symbol : symbol.toBuilder().name(symbol.getName() + suffix).build();
+    addUseImports(reference);
+    return getImportContainer().reference(reference, reference.getName());
   }
 
   /** Emits a C# XML documentation summary from a Smithy shape's documentation trait. */
@@ -195,10 +102,6 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
     writeXmlDocs((String) null, parameterDocs);
   }
 
-  private void writeXmlDocs(String summary) {
-    writeXmlDocs(summary, Map.of());
-  }
-
   public void writeXmlDocs(String summary, Map<String, String> parameterDocs) {
     boolean hasSummary = summary != null && !summary.isBlank();
     if (hasSummary) {
@@ -215,24 +118,6 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
           writeXmlText(documentation);
           write("/// </param>");
         });
-  }
-
-  private void writeXmlText(String text) {
-    for (String line : text.strip().split("\\R", -1)) {
-      if (line.isBlank()) {
-        write("///");
-      } else {
-        write("/// $L", escapeXml(line.strip()));
-      }
-    }
-  }
-
-  private static String escapeXml(String value) {
-    return value
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace("\"", "&quot;");
   }
 
   /** Factory used by WriterDelegator. */
@@ -255,16 +140,61 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
 
   @Override
   public String toString() {
-    Set<String> frameworkImports = new HashSet<>();
-    String body = renderFrameworkReferences(super.toString(), frameworkImports);
+    String body = getImportContainer().renderReferences(super.toString());
     StringBuilder sb = new StringBuilder();
     sb.append("// <auto-generated />\n");
     sb.append("// Generated by smithy-csharp-codegen. DO NOT EDIT.\n");
     sb.append("#nullable enable\n\n");
-    sb.append(getImportContainer().render(frameworkImports));
+    sb.append(getImportContainer().toString());
     sb.append("namespace ").append(namespace).append(";\n\n");
     sb.append(body);
     return sb.toString();
+  }
+
+  /** Include declarations that can shadow framework types even when this file never uses them. */
+  private void reserveModelNames(Model model, CSharpSettings settings) {
+    model
+        .shapes()
+        .filter(shape -> !shape.isMemberShape())
+        .forEach(
+            shape -> {
+              String ns = settings.csharpNamespace(shape.getId().getNamespace());
+              // Namespace segments can also hide imported types during C# name lookup.
+              for (String segment : ns.split("\\.")) {
+                getImportContainer().reserveNamespaceSegment(segment);
+              }
+              if (ns.equals(namespace) || namespace.startsWith(ns + ".")) {
+                String name = CSharpNaming.typeName(shape.getId().getName());
+                getImportContainer().reserveModelTypeName(name);
+                getImportContainer().reserveModelTypeName(name + "Schema");
+                if (shape.isServiceShape()) {
+                  getImportContainer().reserveModelTypeName(name + "Client");
+                  getImportContainer().reserveModelTypeName(name + "ClientConfig");
+                }
+              }
+            });
+  }
+
+  private void writeXmlDocs(String summary) {
+    writeXmlDocs(summary, Map.of());
+  }
+
+  private void writeXmlText(String text) {
+    for (String line : text.strip().split("\\R", -1)) {
+      if (line.isBlank()) {
+        write("///");
+      } else {
+        write("/// $L", escapeXml(line.strip()));
+      }
+    }
+  }
+
+  private static String escapeXml(String value) {
+    return value
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace("\"", "&quot;");
   }
 
   private final class CSharpSymbolFormatter implements BiFunction<Object, String, String> {
@@ -275,7 +205,7 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
       }
       if (type instanceof SymbolReference ref) {
         addImport(ref.getSymbol(), ref.getAlias(), SymbolReference.ContextOption.USE);
-        return ref.getAlias();
+        return getImportContainer().reference(ref.getSymbol(), ref.getAlias());
       }
       throw new CodegenException("Invalid type for $T: " + type);
     }

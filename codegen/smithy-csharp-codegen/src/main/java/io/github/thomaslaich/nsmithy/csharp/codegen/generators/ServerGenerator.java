@@ -54,18 +54,6 @@ public final class ServerGenerator implements Runnable {
     this.service = s;
   }
 
-  /** Protocols that emit an ASP.NET Core server, in declared precedence order. */
-  private List<Kind> serverKinds() {
-    return ProtocolSupport.declaredKinds(service).stream()
-        .filter(
-            kind ->
-                kind == Kind.RPC_V2_CBOR
-                    || kind == Kind.SIMPLE_REST_JSON
-                    || kind == Kind.REST_JSON_1
-                    || kind == Kind.GRPC)
-        .collect(Collectors.toList());
-  }
-
   @Override
   public void run() {
     SymbolProvider sp = context.symbolProvider();
@@ -84,20 +72,12 @@ public final class ServerGenerator implements Runnable {
     }
     boolean emitsAspNetCore = !serverKinds.isEmpty();
 
-    writer.addImport(RuntimeTypes.NSMITHY_CORE);
-    writer.addImport(RuntimeTypes.NSMITHY_SERVER);
     writer.addImport(RuntimeTypes.MS_EXT_DI);
     writer.addImport(RuntimeTypes.MS_EXT_DI_EXTENSIONS);
     if (emitsAspNetCore) {
-      writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
-      writer.addImport(RuntimeTypes.NSMITHY_HTTP);
-      writer.addImport(RuntimeTypes.NSMITHY_SERVER_ASPNETCORE);
+
       writer.addImport(RuntimeTypes.MS_ASPNETCORE_BUILDER);
-      writer.addImport(RuntimeTypes.MS_ASPNETCORE_HTTP);
-      writer.addImport(RuntimeTypes.MS_ASPNETCORE_ROUTING);
-      for (Kind kind : serverKinds) {
-        writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kind));
-      }
+      writer.addImport(RuntimeTypes.NSMITHY_SERVER_ASPNETCORE);
     }
 
     String serviceTypeName = CSharpNaming.typeName(service.getId().getName());
@@ -136,30 +116,43 @@ public final class ServerGenerator implements Runnable {
     writeServerExtensions(ops, contract, aggInterface, serverKinds);
   }
 
+  /** Protocols that emit an ASP.NET Core server, in declared precedence order. */
+  private List<Kind> serverKinds() {
+    return ProtocolSupport.declaredKinds(service).stream()
+        .filter(
+            kind ->
+                kind == Kind.RPC_V2_CBOR
+                    || kind == Kind.SIMPLE_REST_JSON
+                    || kind == Kind.REST_JSON_1
+                    || kind == Kind.GRPC)
+        .collect(Collectors.toList());
+  }
+
   // ---------------- DI registration ----------------
 
   private void writeServiceDefinition(
       List<OperationShape> ops, List<PromptDefinition> prompts, String contract) {
-    writer.write("public sealed class $LDefinition : IServiceDefinition", contract);
+    writer.write(
+        "public sealed class $LDefinition : $T", contract, RuntimeTypes.I_SERVICE_DEFINITION);
     writer.openBlock(
         "{",
         "}",
         () -> {
           writer.write(
-              "public ServiceSchema Schema => $L;",
+              "public $T Schema => $L;",
+              RuntimeTypes.SERVICE_SCHEMA,
               SchemaGenerator.serviceSchemaAccessor(writer, context, service));
           writer.write("");
           writePromptDefinitions(prompts);
           writer.write("");
           writer.write(
-              "public ServiceOperationCatalog CreateOperationCatalog(IServiceProvider services)");
+              "public $T CreateOperationCatalog(IServiceProvider services)",
+              RuntimeTypes.SERVICE_OPERATION_CATALOG);
           writer.openBlock(
               "{",
               "}",
               () -> {
-                writer.write(
-                    writer.frameworkType("System.ArgumentNullException")
-                        + ".ThrowIfNull(services);");
+                writer.write("$T.ThrowIfNull(services);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
                 writer.write("return CreateOperationCatalog(");
                 writer.indent();
                 for (int i = 0; i < ops.size(); i++) {
@@ -183,11 +176,12 @@ public final class ServerGenerator implements Runnable {
   }
 
   private void writePromptDefinitions(List<PromptDefinition> prompts) {
-    writer.write("public IReadOnlyList<ServicePromptDefinition> Prompts { get; } =");
+    writer.write(
+        "public IReadOnlyList<$T> Prompts { get; } =", RuntimeTypes.SERVICE_PROMPT_DEFINITION);
     writer.write("[");
     writer.indent();
     for (PromptDefinition prompt : prompts) {
-      writer.write("new ServicePromptDefinition(");
+      writer.write("new $T(", RuntimeTypes.SERVICE_PROMPT_DEFINITION);
       writer.indent();
       writer.write("$L,", CSharpNaming.formatString(prompt.name()));
       writer.write("$L,", CSharpNaming.formatString(prompt.description()));
@@ -199,7 +193,8 @@ public final class ServerGenerator implements Runnable {
       writer.indent();
       for (PromptArgumentDefinition argument : prompt.arguments()) {
         writer.write(
-            "new ServicePromptArgumentDefinition($L, $L, $L),",
+            "new $T($L, $L, $L),",
+            RuntimeTypes.SERVICE_PROMPT_ARGUMENT_DEFINITION,
             CSharpNaming.formatString(argument.name()),
             argument.description() == null
                 ? "null"
@@ -220,12 +215,15 @@ public final class ServerGenerator implements Runnable {
         ops.stream()
             .map(op -> opHandlerName(op) + " " + operationHandlerVariable(op))
             .collect(Collectors.joining(", "));
-    writer.write("private static ServiceOperationCatalog CreateOperationCatalog($L)", parameters);
+    writer.write(
+        "private static $T CreateOperationCatalog($L)",
+        RuntimeTypes.SERVICE_OPERATION_CATALOG,
+        parameters);
     writer.openBlock(
         "{",
         "}",
         () -> {
-          writer.write("return new ServiceOperationCatalog(");
+          writer.write("return new $T(", RuntimeTypes.SERVICE_OPERATION_CATALOG);
           writer.indent();
           writer.write("$L,", SchemaGenerator.serviceSchemaAccessor(writer, context, service));
           writer.write("[");
@@ -233,12 +231,14 @@ public final class ServerGenerator implements Runnable {
           for (OperationShape op : ops) {
             if (isStreaming(op)) {
               writer.write(
-                  "ServiceOperation.Create($L, $L),",
+                  "$T.Create($L, $L),",
+                  RuntimeTypes.SERVICE_OPERATION,
                   SchemaGenerator.operationSchemaAccessor(writer, context, op),
                   unaryAdapter(op, operationHandlerVariable(op)));
             } else {
               writer.write(
-                  "ServiceOperation.Create($L, $L, $L.Value),",
+                  "$T.Create($L, $L, $L.Value),",
+                  RuntimeTypes.SERVICE_OPERATION,
                   SchemaGenerator.operationSchemaAccessor(writer, context, op),
                   unaryAdapter(op, operationHandlerVariable(op)),
                   operationJsonSchemasClass(op));
@@ -260,34 +260,35 @@ public final class ServerGenerator implements Runnable {
         "}",
         () -> {
           writer.write(
-              "public static IServiceCollection Add$L(this IServiceCollection services)", contract);
+              "public static $T Add$L(this $T services)",
+              RuntimeTypes.I_SERVICE_COLLECTION,
+              contract,
+              RuntimeTypes.I_SERVICE_COLLECTION);
           writer.openBlock(
               "{",
               "}",
               () -> {
+                writer.write("$T.ThrowIfNull(services);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
                 writer.write(
-                    writer.frameworkType("System.ArgumentNullException")
-                        + ".ThrowIfNull(services);");
-                writer.write(
-                    "services.TryAddEnumerable(ServiceDescriptor.Singleton<IServiceDefinition,"
-                        + " $LDefinition>());",
+                    "services.TryAddEnumerable($T.Singleton<$T, $LDefinition>());",
+                    RuntimeTypes.SERVICE_DESCRIPTOR,
+                    RuntimeTypes.I_SERVICE_DEFINITION,
                     contract);
                 writer.write("return services;");
               });
 
           writer.write("");
           writer.write(
-              "public static IServiceCollection Add$LHandler<THandler>(this IServiceCollection"
-                  + " services)",
-              contract);
+              "public static $T Add$LHandler<THandler>(this $T services)",
+              RuntimeTypes.I_SERVICE_COLLECTION,
+              contract,
+              RuntimeTypes.I_SERVICE_COLLECTION);
           writer.write("    where THandler : class, $L", aggInterface);
           writer.openBlock(
               "{",
               "}",
               () -> {
-                writer.write(
-                    writer.frameworkType("System.ArgumentNullException")
-                        + ".ThrowIfNull(services);");
+                writer.write("$T.ThrowIfNull(services);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
                 writer.write("");
                 if (!serverKinds.isEmpty()) {
                   writer.write("services.AddSmithyServer();");
@@ -336,7 +337,8 @@ public final class ServerGenerator implements Runnable {
           "{",
           "}",
           () -> {
-            writer.write("public static OperationJsonSchemas Value { get; } = new(");
+            writer.write(
+                "public static $T Value { get; } = new(", RuntimeTypes.OPERATION_JSON_SCHEMAS);
             writer.indent();
             writer.write(
                 "$L,",
@@ -366,7 +368,7 @@ public final class ServerGenerator implements Runnable {
 
   private void writeProtocolEnum(String contract, List<Kind> serverKinds) {
     String enumName = protocolEnumName(contract);
-    writer.write("[" + writer.frameworkAttribute("System.FlagsAttribute") + "]");
+    writer.write("[" + writer.attributeName(RuntimeTypes.FLAGS_ATTRIBUTE) + "]");
     writer.write("public enum $L", enumName);
     writer.openBlock(
         "{",
@@ -388,17 +390,18 @@ public final class ServerGenerator implements Runnable {
   private void writeProtocolFields(List<OperationShape> ops, List<Kind> serverKinds) {
     for (Kind kind : serverKinds) {
       writer.write(
-          "private static readonly IServiceProtocol $LServiceProtocol = new $L().ForService($L);",
+          "private static readonly $T $LServiceProtocol = new $L().ForService($L);",
+          RuntimeTypes.I_SERVICE_PROTOCOL,
           mapSuffix(kind),
-          ProtocolSupport.protocolType(kind),
+          writer.typeName(ProtocolSupport.protocolType(kind)),
           SchemaGenerator.serviceSchemaAccessor(writer, context, service));
       for (OperationShape op : ops) {
         if (!canBindOperation(kind, op)) {
           continue;
         }
         writer.write(
-            "private static readonly IServerOperationProtocol<$L, $L> $L ="
-                + " $LServiceProtocol.ForServerOperation($L);",
+            "private static readonly $T<$L, $L> $L = $LServiceProtocol.ForServerOperation($L);",
+            RuntimeTypes.I_SERVER_OPERATION_PROTOCOL,
             SchemaGenerator.operationShapeType(writer, context, op.getInputShape()),
             SchemaGenerator.operationShapeType(writer, context, op.getOutputShape()),
             operationProtocolField(kind, op),
@@ -411,9 +414,10 @@ public final class ServerGenerator implements Runnable {
   private void writeSelectableMapMethod(
       String contract, List<Kind> serverKinds, String protocolEnum) {
     writer.write(
-        "public static IEndpointRouteBuilder Map$L(this IEndpointRouteBuilder endpoints,"
-            + " $L protocols = $L.$L)",
+        "public static $T Map$L(this $T endpoints, $L protocols = $L.$L)",
+        RuntimeTypes.I_ENDPOINT_ROUTE_BUILDER,
         contract,
+        RuntimeTypes.I_ENDPOINT_ROUTE_BUILDER,
         protocolEnum,
         protocolEnum,
         mapSuffix(serverKinds.get(0)));
@@ -421,26 +425,21 @@ public final class ServerGenerator implements Runnable {
         "{",
         "}",
         () -> {
-          writer.write(
-              writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(endpoints);");
+          writer.write("$T.ThrowIfNull(endpoints);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
           writer.write("if ((protocols & ~$L.All) != 0)", protocolEnum);
           writer.openBlock(
               "{",
               "}",
               () ->
                   writer.write(
-                      "throw new "
-                          + writer.frameworkType("System.ArgumentOutOfRangeException")
-                          + "(nameof(protocols), protocols,"
-                          + " \"Unknown $L value.\");",
+                      "throw new $T(nameof(protocols), protocols, \"Unknown $L value.\");",
+                      RuntimeTypes.ARGUMENT_OUT_OF_RANGE_EXCEPTION,
                       protocolEnum));
           writer.write("");
           writer.write(
-              "var mappedRoutes = new "
-                  + writer.frameworkType("System.Collections.Generic.HashSet")
-                  + "<string>("
-                  + writer.frameworkType("System.StringComparer")
-                  + ".Ordinal);");
+              "var mappedRoutes = new $T<string>($T.Ordinal);",
+              RuntimeTypes.HASH_SET,
+              RuntimeTypes.STRING_COMPARER);
           for (Kind kind : serverKinds) {
             writer.write("if ((protocols & $L.$L) != 0)", protocolEnum, mapSuffix(kind));
             writer.openBlock(
@@ -455,10 +454,9 @@ public final class ServerGenerator implements Runnable {
 
   private void writeRouteConflictHelper(String contract, String protocolEnum) {
     writer.write(
-        "private static void EnsureRouteAvailable("
-            + writer.frameworkType("System.Collections.Generic.HashSet")
-            + "<string>"
-            + " mappedRoutes, string method, string routePattern, $L protocol)",
+        "private static void EnsureRouteAvailable($T<string> mappedRoutes, string method, string"
+            + " routePattern, $L protocol)",
+        RuntimeTypes.HASH_SET,
         protocolEnum);
     writer.openBlock(
         "{",
@@ -471,11 +469,10 @@ public final class ServerGenerator implements Runnable {
               "}",
               () -> {
                 writer.write(
-                    "throw new "
-                        + writer.frameworkType("System.InvalidOperationException")
-                        + "(\"Mapping \" + protocol + \" for"
-                        + " $L would register duplicate route '\" + route + \"'. Map conflicting"
-                        + " protocols on different endpoint route builders, hosts, or ports.\");",
+                    "throw new $T(\"Mapping \" + protocol + \" for $L would register duplicate"
+                        + " route '\" + route + \"'. Map conflicting protocols on different"
+                        + " endpoint route builders, hosts, or ports.\");",
+                    RuntimeTypes.INVALID_OPERATION_EXCEPTION,
                     contract);
               });
         });
@@ -484,12 +481,11 @@ public final class ServerGenerator implements Runnable {
   private void writeProtocolMapHelper(
       Kind kind, List<OperationShape> ops, String contract, String protocolEnum) {
     writer.write(
-        "private static void Map$L$L(IEndpointRouteBuilder endpoints,"
-            + " "
-            + writer.frameworkType("System.Collections.Generic.HashSet")
-            + "<string> mappedRoutes)",
+        "private static void Map$L$L($T endpoints, $T<string> mappedRoutes)",
         contract,
-        mapSuffix(kind));
+        mapSuffix(kind),
+        RuntimeTypes.I_ENDPOINT_ROUTE_BUILDER,
+        RuntimeTypes.HASH_SET);
     writer.openBlock(
         "{",
         "}",
@@ -516,21 +512,20 @@ public final class ServerGenerator implements Runnable {
           protocolEnum,
           mapSuffix(kind));
       writer.openBlock(
-          "endpoints.MapMethods($L, [$L], async (HttpContext httpContext,"
-              + " [Microsoft.AspNetCore.Mvc.FromServices] SmithyServerRuntime runtime, $L handler,"
-              + " "
-              + writer.frameworkType("System.Threading.CancellationToken")
-              + " cancellationToken) => {",
+          writer.format(
+              "endpoints.MapMethods($L, [$L], async ($T httpContext, [$L] $T runtime, $L handler,"
+                  + " $T cancellationToken) => {",
+              CSharpNaming.formatString(routePattern(http)),
+              CSharpNaming.formatString(http.getMethod()),
+              RuntimeTypes.HTTP_CONTEXT,
+              writer.attributeName(RuntimeTypes.FROM_SERVICES_ATTRIBUTE),
+              RuntimeTypes.SMITHY_SERVER_RUNTIME,
+              opInterface,
+              RuntimeTypes.CANCELLATION_TOKEN),
           "});",
-          CSharpNaming.formatString(routePattern(http)),
-          CSharpNaming.formatString(http.getMethod()),
-          opInterface,
           () -> {
-            writer.write(
-                writer.frameworkType("System.ArgumentNullException")
-                    + ".ThrowIfNull(httpContext);");
-            writer.write(
-                writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(handler);");
+            writer.write("$T.ThrowIfNull(httpContext);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+            writer.write("$T.ThrowIfNull(handler);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
             writer.write("");
             writeStaticQueryValidation(http);
             writeDispatch(kind, op);
@@ -554,19 +549,19 @@ public final class ServerGenerator implements Runnable {
         protocolEnum,
         mapSuffix(kind));
     writer.openBlock(
-        "endpoints.MapPost($L, async (HttpContext httpContext,"
-            + " [Microsoft.AspNetCore.Mvc.FromServices] SmithyServerRuntime runtime, $L handler,"
-            + " "
-            + writer.frameworkType("System.Threading.CancellationToken")
-            + " cancellationToken) => {",
+        writer.format(
+            "endpoints.MapPost($L, async ($T httpContext, [$L] $T runtime, $L handler, $T"
+                + " cancellationToken) => {",
+            CSharpNaming.formatString(uri),
+            RuntimeTypes.HTTP_CONTEXT,
+            writer.attributeName(RuntimeTypes.FROM_SERVICES_ATTRIBUTE),
+            RuntimeTypes.SMITHY_SERVER_RUNTIME,
+            opInterface,
+            RuntimeTypes.CANCELLATION_TOKEN),
         "});",
-        CSharpNaming.formatString(uri),
-        opInterface,
         () -> {
-          writer.write(
-              writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(httpContext);");
-          writer.write(
-              writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(handler);");
+          writer.write("$T.ThrowIfNull(httpContext);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+          writer.write("$T.ThrowIfNull(handler);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
           writer.write("");
           writeDispatch(kind, op);
         });
@@ -579,8 +574,9 @@ public final class ServerGenerator implements Runnable {
             || ((kind == Kind.SIMPLE_REST_JSON || kind == Kind.REST_JSON_1)
                 && ShapeSupport.isStreamingBlobShape(model, op.getInputShape()));
     writer.write(
-        "await SmithyAspNetCoreHost.DispatchAsync(runtime, httpContext, $L, $L, $L,"
+        "await $T.DispatchAsync(runtime, httpContext, $L, $L, $L,"
             + " cancellationToken).ConfigureAwait(false);",
+        RuntimeTypes.SMITHY_ASP_NET_CORE_HOST,
         operationProtocolField(kind, op),
         unaryAdapter(op),
         streamRequestBody ? "true" : "false");
@@ -615,7 +611,9 @@ public final class ServerGenerator implements Runnable {
             + param
             + ", ct) => { await "
             + call
-            + ".ConfigureAwait(false); return SmithyUnit.Value; }";
+            + (".ConfigureAwait(false); return "
+                + writer.typeName(RuntimeTypes.SMITHY_UNIT)
+                + ".Value; }");
   }
 
   private String handlerMethod(OperationShape op, String handlerVariable) {
@@ -704,7 +702,8 @@ public final class ServerGenerator implements Runnable {
       String name = equalsIndex >= 0 ? segment.substring(0, equalsIndex) : segment;
       String value = equalsIndex >= 0 ? segment.substring(equalsIndex + 1) : null;
       writer.write(
-          "if (!SmithyAspNetCoreHost.HasExpectedQueryLiteral(httpContext, $L, $L))",
+          "if (!$T.HasExpectedQueryLiteral(httpContext, $L, $L))",
+          RuntimeTypes.SMITHY_ASP_NET_CORE_HOST,
           CSharpNaming.formatString(name),
           value == null ? "null" : CSharpNaming.formatString(value));
       writer.openBlock(
@@ -767,15 +766,15 @@ public final class ServerGenerator implements Runnable {
         hasOutput ? writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape()))) : null;
     String returnType =
         hasOutput
-            ? writer.frameworkType("System.Threading.Tasks.Task") + "<" + outputType + ">"
-            : writer.frameworkType("System.Threading.Tasks.Task");
+            ? writer.typeName(RuntimeTypes.TASK) + "<" + outputType + ">"
+            : writer.typeName(RuntimeTypes.TASK);
     String params = hasInput ? inputType + " input, " : "";
     return returnType
         + " "
         + name
         + "("
         + params
-        + writer.frameworkType("System.Threading.CancellationToken")
+        + writer.typeName(RuntimeTypes.CANCELLATION_TOKEN)
         + " cancellationToken = default)";
   }
 

@@ -1,6 +1,7 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.support;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
+import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -34,8 +35,6 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 public final class ShapeSupport {
 
   private static final ShapeId UNIT = ShapeId.from("smithy.api#Unit");
-
-  private ShapeSupport() {}
 
   /** smithy.framework#ValidationException, the error the server runtime itself returns. */
   public static final ShapeId VALIDATION_EXCEPTION =
@@ -86,141 +85,31 @@ public final class ShapeSupport {
     return literalForShape(writer, model, sp, target, node, typeName);
   }
 
-  private static String literalForShape(
-      CSharpWriter writer,
-      Model model,
-      SymbolProvider sp,
-      Shape target,
-      software.amazon.smithy.model.node.Node node,
-      String typeName) {
-    if (target.getType() == ShapeType.DOCUMENT) return documentLiteral(writer, node);
-    if (node.isNullNode()) return null;
-    return switch (target.getType()) {
-      case BLOB ->
-          node.isStringNode()
-              ? writer.frameworkType("System.Convert")
-                  + ".FromBase64String(\""
-                  + node.expectStringNode().getValue()
-                  + "\")"
-              : null;
-      case TIMESTAMP ->
-          node.isNumberNode()
-              ? writer.frameworkType("System.DateTimeOffset")
-                  + ".FromUnixTimeSeconds("
-                  + node.expectNumberNode().getValue().longValue()
-                  + ")"
-              : null;
-      case FLOAT ->
-          node.isNumberNode() ? node.expectNumberNode().getValue().floatValue() + "f" : null;
-      case ENUM ->
-          node.isStringNode()
-              ? "new "
-                  + typeName
-                  + "(\""
-                  + node.expectStringNode().getValue().replace("\\", "\\\\").replace("\"", "\\\"")
-                  + "\")"
-              : null;
-      case INT_ENUM ->
-          node.isNumberNode()
-              ? "(" + typeName + ")" + node.expectNumberNode().getValue().longValue()
-              : null;
-      case LIST, SET -> listLiteral(writer, model, sp, target, node, typeName);
-      case MAP -> mapLiteral(writer, model, sp, target, node, typeName);
-      default -> defaultLiteral(node);
-    };
-  }
-
-  private static String listLiteral(
-      CSharpWriter writer,
-      Model model,
-      SymbolProvider sp,
-      Shape target,
-      software.amazon.smithy.model.node.Node node,
-      String typeName) {
-    if (!node.isArrayNode()) return null;
-    Shape memberTarget =
-        model.expectShape(
-            switch (target.getType()) {
-              case LIST -> target.asListShape().orElseThrow().getMember().getTarget();
-              case SET -> target.asSetShape().orElseThrow().getMember().getTarget();
-              default ->
-                  throw new CodegenException(
-                      "Expected list or set shape while rendering @default for "
-                          + target.getId()
-                          + ", but found "
-                          + target.getType()
-                          + ".");
-            });
-    String elementType = writer.typeName(sp.toSymbol(memberTarget));
-    List<String> elements = new ArrayList<>();
-    for (var element : node.expectArrayNode().getElements()) {
-      String literal = literalForShape(writer, model, sp, memberTarget, element, elementType);
-      if (literal == null) return null;
-      elements.add(literal);
-    }
-    return "new " + typeName + "(new " + elementType + "[] {" + String.join(", ", elements) + "})";
-  }
-
-  private static String mapLiteral(
-      CSharpWriter writer,
-      Model model,
-      SymbolProvider sp,
-      Shape target,
-      software.amazon.smithy.model.node.Node node,
-      String typeName) {
-    if (!node.isObjectNode()) return null;
-    var mapShape =
-        target
-            .asMapShape()
-            .orElseThrow(
-                () ->
-                    new CodegenException(
-                        "Expected map shape while rendering @default for "
-                            + target.getId()
-                            + ", but found "
-                            + target.getType()
-                            + "."));
-    Shape keyTarget = model.expectShape(mapShape.getKey().getTarget());
-    Shape valueTarget = model.expectShape(mapShape.getValue().getTarget());
-    String keyType = writer.typeName(sp.toSymbol(keyTarget));
-    String valueType = writer.typeName(sp.toSymbol(valueTarget));
-    StringBuilder sb =
-        new StringBuilder("new ")
-            .append(typeName)
-            .append("(new " + writer.frameworkType("System.Collections.Generic.Dictionary") + "<")
-            .append(keyType)
-            .append(", ")
-            .append(valueType)
-            .append("> {");
-    boolean first = true;
-    for (var entry : node.expectObjectNode().getStringMap().entrySet()) {
-      String keyLiteral =
-          defaultLiteral(software.amazon.smithy.model.node.Node.from(entry.getKey()));
-      String valueLiteral =
-          literalForShape(writer, model, sp, valueTarget, entry.getValue(), valueType);
-      if (keyLiteral == null || valueLiteral == null) return null;
-      if (!first) sb.append(", ");
-      first = false;
-      sb.append("{ ").append(keyLiteral).append(", ").append(valueLiteral).append(" }");
-    }
-    return sb.append("})").toString();
-  }
-
   public static String documentLiteral(
       CSharpWriter writer, software.amazon.smithy.model.node.Node node) {
-    if (node.isNullNode()) return "NSmithy.Core.Document.Null";
+    if (node.isNullNode()) return writer.typeName(RuntimeTypes.DOCUMENT) + ".Null";
     if (node.isBooleanNode())
-      return "NSmithy.Core.Document.From(" + node.expectBooleanNode().getValue() + ")";
+      return writer.typeName(RuntimeTypes.DOCUMENT)
+          + ".From("
+          + node.expectBooleanNode().getValue()
+          + ")";
     if (node.isStringNode()) {
       String s = node.expectStringNode().getValue().replace("\\", "\\\\").replace("\"", "\\\"");
-      return "NSmithy.Core.Document.From(\"" + s + "\")";
+      return writer.typeName(RuntimeTypes.DOCUMENT) + ".From(\"" + s + "\")";
     }
     if (node.isNumberNode()) {
-      return "NSmithy.Core.Document.From((decimal)" + node.expectNumberNode().getValue() + ")";
+      return writer.typeName(RuntimeTypes.DOCUMENT)
+          + ".From((decimal)"
+          + node.expectNumberNode().getValue()
+          + ")";
     }
     if (node.isArrayNode()) {
       StringBuilder sb =
-          new StringBuilder("NSmithy.Core.Document.From(new NSmithy.Core.Document[] {");
+          new StringBuilder(
+              writer.typeName(RuntimeTypes.DOCUMENT)
+                  + ".From(new "
+                  + writer.typeName(RuntimeTypes.DOCUMENT)
+                  + "[] {");
       boolean first = true;
       for (var el : node.expectArrayNode().getElements()) {
         if (!first) sb.append(", ");
@@ -232,10 +121,13 @@ public final class ShapeSupport {
     if (node.isObjectNode()) {
       StringBuilder sb =
           new StringBuilder(
-              "NSmithy.Core.Document.From(new "
-                  + writer.frameworkType("System.Collections.Generic.Dictionary")
+              writer.typeName(RuntimeTypes.DOCUMENT)
+                  + ".From(new "
+                  + writer.typeName(RuntimeTypes.DICTIONARY)
                   + "<string,"
-                  + " NSmithy.Core.Document> {");
+                  + " "
+                  + writer.typeName(RuntimeTypes.DOCUMENT)
+                  + "> {");
       boolean first = true;
       for (var entry : node.expectObjectNode().getStringMap().entrySet()) {
         if (!first) sb.append(", ");
@@ -248,22 +140,7 @@ public final class ShapeSupport {
       }
       return sb.append("})").toString();
     }
-    return "NSmithy.Core.Document.Null";
-  }
-
-  private static String defaultLiteral(software.amazon.smithy.model.node.Node node) {
-    if (node.isStringNode()) {
-      String s = node.expectStringNode().getValue();
-      return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
-    }
-    if (node.isBooleanNode()) {
-      return node.expectBooleanNode().getValue() ? "true" : "false";
-    }
-    if (node.isNumberNode()) {
-      var num = node.expectNumberNode().getValue();
-      return num.toString();
-    }
-    return null;
+    return writer.typeName(RuntimeTypes.DOCUMENT) + ".Null";
   }
 
   /** A member is nullable iff not @required AND either has no @default or is @clientOptional. */
@@ -354,10 +231,10 @@ public final class ShapeSupport {
       CSharpWriter writer, Model model, SymbolProvider sp, MemberShape member, boolean nullable) {
     String base;
     if (isStreamingBlobMember(model, member)) {
-      base = writer.frameworkType("System.IO.Stream");
+      base = writer.typeName(RuntimeTypes.STREAM);
     } else if (isEventStreamMember(model, member)) {
       base =
-          writer.frameworkType("System.Collections.Generic.IAsyncEnumerable")
+          writer.typeName(RuntimeTypes.I_ASYNC_ENUMERABLE)
               + "<"
               + writer.typeName(sp.toSymbol(model.expectShape(member.getTarget())))
               + ">";
@@ -469,6 +346,173 @@ public final class ShapeSupport {
     requireGrpcEventStreamWrapperIsFlattenable(model, op, op.getOutputShape(), "output");
   }
 
+  public static boolean isStreamingBlobMember(Model model, MemberShape member) {
+    Shape target = model.expectShape(member.getTarget());
+    return target.getType() == ShapeType.BLOB
+        && (member.hasTrait(StreamingTrait.class) || target.hasTrait(StreamingTrait.class));
+  }
+
+  public static boolean isEventStreamMember(Model model, MemberShape member) {
+    Shape target = model.expectShape(member.getTarget());
+    return target.getType() == ShapeType.UNION
+        && (member.hasTrait(StreamingTrait.class) || target.hasTrait(StreamingTrait.class));
+  }
+
+  public static boolean isStreamingBlobShape(Model model, ShapeId shapeId) {
+    Shape shape = model.expectShape(shapeId);
+    if (shape.getType() == ShapeType.BLOB && shape.hasTrait(StreamingTrait.class)) {
+      return true;
+    }
+
+    return shape.members().stream().anyMatch(member -> isStreamingBlobMember(model, member));
+  }
+
+  public static boolean isEventStreamShape(Model model, ShapeId shapeId) {
+    return isStreamingShape(model, shapeId) && !isStreamingBlobShape(model, shapeId);
+  }
+
+  /** "Foo" -> "FooAsync". Convenience for generated method names. */
+  public static String asyncMethodName(String operationName) {
+    return CSharpNaming.propertyName(operationName) + "Async";
+  }
+
+  private ShapeSupport() {}
+
+  private static String literalForShape(
+      CSharpWriter writer,
+      Model model,
+      SymbolProvider sp,
+      Shape target,
+      software.amazon.smithy.model.node.Node node,
+      String typeName) {
+    if (target.getType() == ShapeType.DOCUMENT) return documentLiteral(writer, node);
+    if (node.isNullNode()) return null;
+    return switch (target.getType()) {
+      case BLOB ->
+          node.isStringNode()
+              ? writer.typeName(RuntimeTypes.CONVERT)
+                  + ".FromBase64String(\""
+                  + node.expectStringNode().getValue()
+                  + "\")"
+              : null;
+      case TIMESTAMP ->
+          node.isNumberNode()
+              ? writer.typeName(RuntimeTypes.DATE_TIME_OFFSET)
+                  + ".FromUnixTimeSeconds("
+                  + node.expectNumberNode().getValue().longValue()
+                  + ")"
+              : null;
+      case FLOAT ->
+          node.isNumberNode() ? node.expectNumberNode().getValue().floatValue() + "f" : null;
+      case ENUM ->
+          node.isStringNode()
+              ? "new "
+                  + typeName
+                  + "(\""
+                  + node.expectStringNode().getValue().replace("\\", "\\\\").replace("\"", "\\\"")
+                  + "\")"
+              : null;
+      case INT_ENUM ->
+          node.isNumberNode()
+              ? "(" + typeName + ")" + node.expectNumberNode().getValue().longValue()
+              : null;
+      case LIST, SET -> listLiteral(writer, model, sp, target, node, typeName);
+      case MAP -> mapLiteral(writer, model, sp, target, node, typeName);
+      default -> defaultLiteral(node);
+    };
+  }
+
+  private static String listLiteral(
+      CSharpWriter writer,
+      Model model,
+      SymbolProvider sp,
+      Shape target,
+      software.amazon.smithy.model.node.Node node,
+      String typeName) {
+    if (!node.isArrayNode()) return null;
+    Shape memberTarget =
+        model.expectShape(
+            switch (target.getType()) {
+              case LIST -> target.asListShape().orElseThrow().getMember().getTarget();
+              case SET -> target.asSetShape().orElseThrow().getMember().getTarget();
+              default ->
+                  throw new CodegenException(
+                      "Expected list or set shape while rendering @default for "
+                          + target.getId()
+                          + ", but found "
+                          + target.getType()
+                          + ".");
+            });
+    String elementType = writer.typeName(sp.toSymbol(memberTarget));
+    List<String> elements = new ArrayList<>();
+    for (var element : node.expectArrayNode().getElements()) {
+      String literal = literalForShape(writer, model, sp, memberTarget, element, elementType);
+      if (literal == null) return null;
+      elements.add(literal);
+    }
+    return "new " + typeName + "(new " + elementType + "[] {" + String.join(", ", elements) + "})";
+  }
+
+  private static String mapLiteral(
+      CSharpWriter writer,
+      Model model,
+      SymbolProvider sp,
+      Shape target,
+      software.amazon.smithy.model.node.Node node,
+      String typeName) {
+    if (!node.isObjectNode()) return null;
+    var mapShape =
+        target
+            .asMapShape()
+            .orElseThrow(
+                () ->
+                    new CodegenException(
+                        "Expected map shape while rendering @default for "
+                            + target.getId()
+                            + ", but found "
+                            + target.getType()
+                            + "."));
+    Shape keyTarget = model.expectShape(mapShape.getKey().getTarget());
+    Shape valueTarget = model.expectShape(mapShape.getValue().getTarget());
+    String keyType = writer.typeName(sp.toSymbol(keyTarget));
+    String valueType = writer.typeName(sp.toSymbol(valueTarget));
+    StringBuilder sb =
+        new StringBuilder("new ")
+            .append(typeName)
+            .append("(new " + writer.typeName(RuntimeTypes.DICTIONARY) + "<")
+            .append(keyType)
+            .append(", ")
+            .append(valueType)
+            .append("> {");
+    boolean first = true;
+    for (var entry : node.expectObjectNode().getStringMap().entrySet()) {
+      String keyLiteral =
+          defaultLiteral(software.amazon.smithy.model.node.Node.from(entry.getKey()));
+      String valueLiteral =
+          literalForShape(writer, model, sp, valueTarget, entry.getValue(), valueType);
+      if (keyLiteral == null || valueLiteral == null) return null;
+      if (!first) sb.append(", ");
+      first = false;
+      sb.append("{ ").append(keyLiteral).append(", ").append(valueLiteral).append(" }");
+    }
+    return sb.append("})").toString();
+  }
+
+  private static String defaultLiteral(software.amazon.smithy.model.node.Node node) {
+    if (node.isStringNode()) {
+      String s = node.expectStringNode().getValue();
+      return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+    if (node.isBooleanNode()) {
+      return node.expectBooleanNode().getValue() ? "true" : "false";
+    }
+    if (node.isNumberNode()) {
+      var num = node.expectNumberNode().getValue();
+      return num.toString();
+    }
+    return null;
+  }
+
   private static void requireGrpcEventStreamWrapperIsFlattenable(
       Model model, OperationShape op, ShapeId shapeId, String direction) {
     Shape shape = model.expectShape(shapeId);
@@ -504,35 +548,5 @@ public final class ShapeSupport {
             + " wrapper to 'stream <Event>', so sibling members cannot be represented. Members: "
             + members
             + ".");
-  }
-
-  public static boolean isStreamingBlobMember(Model model, MemberShape member) {
-    Shape target = model.expectShape(member.getTarget());
-    return target.getType() == ShapeType.BLOB
-        && (member.hasTrait(StreamingTrait.class) || target.hasTrait(StreamingTrait.class));
-  }
-
-  public static boolean isEventStreamMember(Model model, MemberShape member) {
-    Shape target = model.expectShape(member.getTarget());
-    return target.getType() == ShapeType.UNION
-        && (member.hasTrait(StreamingTrait.class) || target.hasTrait(StreamingTrait.class));
-  }
-
-  public static boolean isStreamingBlobShape(Model model, ShapeId shapeId) {
-    Shape shape = model.expectShape(shapeId);
-    if (shape.getType() == ShapeType.BLOB && shape.hasTrait(StreamingTrait.class)) {
-      return true;
-    }
-
-    return shape.members().stream().anyMatch(member -> isStreamingBlobMember(model, member));
-  }
-
-  public static boolean isEventStreamShape(Model model, ShapeId shapeId) {
-    return isStreamingShape(model, shapeId) && !isStreamingBlobShape(model, shapeId);
-  }
-
-  /** "Foo" -> "FooAsync". Convenience for generated method names. */
-  public static String asyncMethodName(String operationName) {
-    return CSharpNaming.propertyName(operationName) + "Async";
   }
 }

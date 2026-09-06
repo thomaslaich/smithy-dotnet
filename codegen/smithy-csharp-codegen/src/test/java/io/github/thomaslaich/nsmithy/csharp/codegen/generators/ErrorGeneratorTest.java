@@ -64,15 +64,12 @@ final class ErrorGeneratorTest {
 
     assertTrue(
         throttling.contains(
-            "public sealed partial class ThrottlingError : Exception,"
-                + " NSmithy.Core.ISmithyRetryableError"),
+            "public sealed partial class ThrottlingError : Exception," + " ISmithyRetryableError"),
         throttling);
     assertTrue(
-        throttling.contains("bool NSmithy.Core.ISmithyRetryableError.IsThrottlingError => true;"),
-        throttling);
+        throttling.contains("bool ISmithyRetryableError.IsThrottlingError => true;"), throttling);
     assertTrue(
-        transientError.contains(
-            "bool NSmithy.Core.ISmithyRetryableError.IsThrottlingError => false;"),
+        transientError.contains("bool ISmithyRetryableError.IsThrottlingError => false;"),
         transientError);
   }
 

@@ -31,8 +31,6 @@ public final class OperationSchemaGenerator implements Runnable {
 
   @Override
   public void run() {
-    writer.addImport(RuntimeTypes.NSMITHY_CORE);
-    writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
 
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     List<ShapeId> errors =
@@ -48,22 +46,25 @@ public final class OperationSchemaGenerator implements Runnable {
         "}",
         () -> {
           writer.write(
-              "public static OperationSchema<$L, $L> Schema { get; } =",
+              "public static $T<$L, $L> Schema { get; } =",
+              RuntimeTypes.OPERATION_SCHEMA,
               SchemaGenerator.operationShapeType(writer, context, shape.getInputShape()),
               SchemaGenerator.operationShapeType(writer, context, shape.getOutputShape()));
           writer.indent();
           if (isStreaming) {
             writer.write(
-                "Schemas.Operation($L, $L, $L, $L, $L, isStreaming: true);",
-                SchemaGenerator.shapeIdExpr(shape.getId()),
+                "$T.Operation($L, $L, $L, $L, $L, isStreaming: true);",
+                RuntimeTypes.SCHEMAS,
+                SchemaGenerator.shapeIdExpr(writer, shape.getId()),
                 SchemaGenerator.operationShapeSchema(writer, context, shape.getInputShape()),
                 SchemaGenerator.operationShapeSchema(writer, context, shape.getOutputShape()),
                 errorsLiteral(errors),
                 SchemaGenerator.traitsExpr(writer, shape.getAllTraits().values()));
           } else {
             writer.write(
-                "Schemas.Operation($L, $L, $L, $L, $L);",
-                SchemaGenerator.shapeIdExpr(shape.getId()),
+                "$T.Operation($L, $L, $L, $L, $L);",
+                RuntimeTypes.SCHEMAS,
+                SchemaGenerator.shapeIdExpr(writer, shape.getId()),
                 SchemaGenerator.operationShapeSchema(writer, context, shape.getInputShape()),
                 SchemaGenerator.operationShapeSchema(writer, context, shape.getOutputShape()),
                 errorsLiteral(errors),
@@ -83,8 +84,8 @@ public final class OperationSchemaGenerator implements Runnable {
             .map(
                 errorId -> {
                   StructureShape error = context.model().expectShape(errorId, StructureShape.class);
-                  return "Schemas.OperationError("
-                      + SchemaGenerator.shapeIdExpr(errorId)
+                  return (writer.typeName(RuntimeTypes.SCHEMAS) + ".OperationError(")
+                      + SchemaGenerator.shapeIdExpr(writer, errorId)
                       + ", "
                       + SchemaGenerator.shapeSchemaAccessor(writer, context, error)
                       + ", "

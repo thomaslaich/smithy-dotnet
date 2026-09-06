@@ -54,8 +54,6 @@ public final class FakeHandlerGenerator implements Runnable {
             .sorted(Comparator.comparing(o -> o.getId().toString()))
             .collect(Collectors.toList());
 
-    writer.addImport(RuntimeTypes.NSMITHY_CORE);
-
     String serviceTypeName = CSharpNaming.typeName(service.getId().getName());
     String contract =
         serviceTypeName.endsWith("Service") ? serviceTypeName : serviceTypeName + "Service";
@@ -108,11 +106,11 @@ public final class FakeHandlerGenerator implements Runnable {
     String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
     String returnType =
         hasOutput
-            ? writer.frameworkType("System.Threading.Tasks.Task")
+            ? writer.typeName(RuntimeTypes.TASK)
                 + "<"
                 + writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape())))
                 + ">"
-            : writer.frameworkType("System.Threading.Tasks.Task");
+            : writer.typeName(RuntimeTypes.TASK);
     String params =
         hasInput
             ? writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape()))) + " input, "
@@ -122,7 +120,7 @@ public final class FakeHandlerGenerator implements Runnable {
         + name
         + "("
         + params
-        + writer.frameworkType("System.Threading.CancellationToken")
+        + writer.typeName(RuntimeTypes.CANCELLATION_TOKEN)
         + " cancellationToken = default)";
   }
 }

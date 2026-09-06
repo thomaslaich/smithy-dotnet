@@ -26,12 +26,13 @@ public final class StringEnumGenerator implements Runnable {
 
   @Override
   public void run() {
-    writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
+
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     writer.writeXmlDocs(shape);
     writer.write(
-        "public readonly partial record struct $L(string Value) : IStringEnumValue<$L>",
+        "public readonly partial record struct $L(string Value) : $T<$L>",
         typeName,
+        RuntimeTypes.I_STRING_ENUM_VALUE,
         typeName);
     writer.openBlock(
         "{",

@@ -621,8 +621,7 @@ final class ClientGeneratorTest {
             "com.amazonaws.glacier#Glacier",
             "Auxiliary.Com.Amazonaws.Glacier");
 
-    assertTrue(
-        generated.contains("Interceptors.Add(new NSmithy.Aws.GlacierInterceptor());"), generated);
+    assertTrue(generated.contains("Interceptors.Add(new GlacierInterceptor());"), generated);
   }
 
   private String renderClient() throws Exception {

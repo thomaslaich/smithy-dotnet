@@ -11,6 +11,7 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.math.BigDecimal;
@@ -52,8 +53,6 @@ final class FakeValueSynthesizer {
   private final CSharpWriter writer;
   private final String subject;
   private final List<PendingIterator> pendingIterators = new ArrayList<>();
-
-  private record PendingIterator(String name, String eventType, List<String> events) {}
 
   /** `subject` names the consuming fake ("fake handler", "fake client") in codegen warnings. */
   FakeValueSynthesizer(GenerationContext context, CSharpWriter writer, String subject) {
@@ -147,25 +146,114 @@ final class FakeValueSynthesizer {
     for (PendingIterator iterator : pendingIterators) {
       writer.write("");
       writer.write(
-          "private static async "
-              + writer.frameworkType("System.Collections.Generic.IAsyncEnumerable")
-              + "<$L> $L()",
+          "private static async $T<$L> $L()",
+          RuntimeTypes.I_ASYNC_ENUMERABLE,
           iterator.eventType(),
           iterator.name());
       writer.openBlock(
           "{",
           "}",
           () -> {
-            writer.write(
-                "await "
-                    + writer.frameworkType("System.Threading.Tasks.Task")
-                    + ".CompletedTask.ConfigureAwait(false);");
+            writer.write("await $T.CompletedTask.ConfigureAwait(false);", RuntimeTypes.TASK);
             for (String event : iterator.events()) {
               writer.write("yield return $L;", event);
             }
           });
     }
   }
+
+  String enumExpr(Shape target, Node node) {
+    String typeName = qualifiedType(target);
+    if (node != null && node.isStringNode()) {
+      return "new "
+          + typeName
+          + "("
+          + CSharpNaming.formatString(node.expectStringNode().getValue())
+          + ")";
+    }
+    List<MemberShape> members = ShapeSupport.sortedMembers(target);
+    return typeName + "." + CSharpNaming.propertyName(members.get(0).getMemberName());
+  }
+
+  String intEnumExpr(Shape target, Node node) {
+    String typeName = qualifiedType(target);
+    if (node != null && node.isNumberNode()) {
+      return "(" + typeName + ")" + node.expectNumberNode().getValue().longValue();
+    }
+    List<MemberShape> members = ShapeSupport.sortedMembers(target);
+    return typeName + "." + CSharpNaming.propertyName(members.get(0).getMemberName());
+  }
+
+  String blobBytesExpr(Node node, String hint) {
+    if (node != null && node.isStringNode()) {
+      return writer.typeName(RuntimeTypes.CONVERT)
+          + ".FromBase64String("
+          + CSharpNaming.formatString(node.expectStringNode().getValue())
+          + ")";
+    }
+    return writer.typeName(RuntimeTypes.ENCODING)
+        + ".UTF8.GetBytes("
+        + CSharpNaming.formatString(hint)
+        + ")";
+  }
+
+  String timestampExpr(Node node) {
+    if (node != null && node.isNumberNode()) {
+      return writer.typeName(RuntimeTypes.DATE_TIME_OFFSET)
+          + ".FromUnixTimeSeconds("
+          + node.expectNumberNode().getValue().longValue()
+          + ")";
+    }
+    if (node != null && node.isStringNode()) {
+      return writer.typeName(RuntimeTypes.DATE_TIME_OFFSET)
+          + ".Parse("
+          + CSharpNaming.formatString(node.expectStringNode().getValue())
+          + ", "
+          + writer.typeName(RuntimeTypes.CULTURE_INFO)
+          + ".InvariantCulture)";
+    }
+    return writer.typeName(RuntimeTypes.DATE_TIME_OFFSET)
+        + ".FromUnixTimeSeconds("
+        + PLACEHOLDER_EPOCH_SECONDS
+        + ")";
+  }
+
+  String numberExpr(ShapeType type, Node node, MemberShape member, Shape target) {
+    if (node != null
+        && node.isStringNode()
+        && (type == ShapeType.FLOAT || type == ShapeType.DOUBLE)) {
+      String csType = type == ShapeType.FLOAT ? "float" : "double";
+      return switch (node.expectStringNode().getValue()) {
+        case "NaN" -> csType + ".NaN";
+        case "Infinity" -> csType + ".PositiveInfinity";
+        case "-Infinity" -> csType + ".NegativeInfinity";
+        default -> null;
+      };
+    }
+
+    BigDecimal value;
+    if (node != null && node.isNumberNode()) {
+      value = new BigDecimal(node.expectNumberNode().getValue().toString());
+    } else {
+      value = placeholderNumber(member, target);
+    }
+    return switch (type) {
+      case BYTE, SHORT, INTEGER -> Long.toString(value.longValue());
+      case LONG -> value.longValue() + "L";
+      case FLOAT -> value.floatValue() + "f";
+      case DOUBLE -> value.doubleValue() + "d";
+      case BIG_INTEGER ->
+          writer.typeName(RuntimeTypes.BIG_INTEGER) + ".Parse(\"" + value.toBigInteger() + "\")";
+      case BIG_DECIMAL -> value.toPlainString() + "m";
+      default -> throw new CodegenException("Not a numeric shape type: " + type);
+    };
+  }
+
+  String qualifiedType(Shape shape) {
+    return writer.typeName(context.symbolProvider().toSymbol(shape));
+  }
+
+  private record PendingIterator(String name, String eventType, List<String> events) {}
 
   private ObjectNode firstExampleOutput(OperationShape op) {
     return op.getTrait(ExamplesTrait.class).stream()
@@ -206,7 +294,7 @@ final class FakeValueSynthesizer {
         } else if (op != null && ShapeSupport.isStreamingBlobMember(model, member)) {
           expr =
               "new "
-                  + writer.frameworkType("System.IO.MemoryStream")
+                  + writer.typeName(RuntimeTypes.MEMORY_STREAM)
                   + "("
                   + blobBytesExpr(valueNode, CSharpNaming.camel(member.getMemberName()))
                   + ")";
@@ -254,12 +342,14 @@ final class FakeValueSynthesizer {
       case DOCUMENT ->
           node != null
               ? ShapeSupport.documentLiteral(writer, node)
-              : "NSmithy.Core.Document.From(" + CSharpNaming.formatString(hint) + ")";
+              : (writer.typeName(RuntimeTypes.DOCUMENT) + ".From(")
+                  + CSharpNaming.formatString(hint)
+                  + ")";
       case ENUM -> enumExpr(target, node);
       case INT_ENUM -> intEnumExpr(target, node);
       case STRUCTURE ->
           ShapeSupport.isUnit(target.getId())
-              ? "SmithyUnit.Value"
+              ? (writer.typeName(RuntimeTypes.SMITHY_UNIT) + ".Value")
               : structureExpr(
                   target.asStructureShape().orElseThrow(),
                   node != null && node.isObjectNode() ? node.expectObjectNode() : null,
@@ -270,28 +360,6 @@ final class FakeValueSynthesizer {
       case MAP -> mapExpr(target.asMapShape().orElseThrow(), node, stack, member);
       default -> null;
     };
-  }
-
-  String enumExpr(Shape target, Node node) {
-    String typeName = qualifiedType(target);
-    if (node != null && node.isStringNode()) {
-      return "new "
-          + typeName
-          + "("
-          + CSharpNaming.formatString(node.expectStringNode().getValue())
-          + ")";
-    }
-    List<MemberShape> members = ShapeSupport.sortedMembers(target);
-    return typeName + "." + CSharpNaming.propertyName(members.get(0).getMemberName());
-  }
-
-  String intEnumExpr(Shape target, Node node) {
-    String typeName = qualifiedType(target);
-    if (node != null && node.isNumberNode()) {
-      return "(" + typeName + ")" + node.expectNumberNode().getValue().longValue();
-    }
-    List<MemberShape> members = ShapeSupport.sortedMembers(target);
-    return typeName + "." + CSharpNaming.propertyName(members.get(0).getMemberName());
   }
 
   private String unionExpr(UnionShape union, Node node, Set<ShapeId> stack) {
@@ -367,7 +435,7 @@ final class FakeValueSynthesizer {
       return "new "
           + typeName
           + "("
-          + writer.frameworkType("System.Array")
+          + writer.typeName(RuntimeTypes.ARRAY)
           + ".Empty<"
           + elementType
           + ">())";
@@ -413,11 +481,7 @@ final class FakeValueSynthesizer {
     }
 
     String typeName = qualifiedType(map);
-    String dictionary =
-        writer.frameworkType("System.Collections.Generic.Dictionary")
-            + "<string, "
-            + valueType
-            + ">";
+    String dictionary = writer.typeName(RuntimeTypes.DICTIONARY) + "<string, " + valueType + ">";
     if (entries.isEmpty()) {
       return "new " + typeName + "(new " + dictionary + "())";
     }
@@ -471,74 +535,6 @@ final class FakeValueSynthesizer {
     return pendingIterators.stream().anyMatch(iterator -> iterator.name().equals(name));
   }
 
-  String blobBytesExpr(Node node, String hint) {
-    if (node != null && node.isStringNode()) {
-      return writer.frameworkType("System.Convert")
-          + ".FromBase64String("
-          + CSharpNaming.formatString(node.expectStringNode().getValue())
-          + ")";
-    }
-    return writer.frameworkType("System.Text.Encoding")
-        + ".UTF8.GetBytes("
-        + CSharpNaming.formatString(hint)
-        + ")";
-  }
-
-  String timestampExpr(Node node) {
-    if (node != null && node.isNumberNode()) {
-      return writer.frameworkType("System.DateTimeOffset")
-          + ".FromUnixTimeSeconds("
-          + node.expectNumberNode().getValue().longValue()
-          + ")";
-    }
-    if (node != null && node.isStringNode()) {
-      return writer.frameworkType("System.DateTimeOffset")
-          + ".Parse("
-          + CSharpNaming.formatString(node.expectStringNode().getValue())
-          + ", "
-          + writer.frameworkType("System.Globalization.CultureInfo")
-          + ".InvariantCulture)";
-    }
-    return writer.frameworkType("System.DateTimeOffset")
-        + ".FromUnixTimeSeconds("
-        + PLACEHOLDER_EPOCH_SECONDS
-        + ")";
-  }
-
-  String numberExpr(ShapeType type, Node node, MemberShape member, Shape target) {
-    if (node != null
-        && node.isStringNode()
-        && (type == ShapeType.FLOAT || type == ShapeType.DOUBLE)) {
-      String csType = type == ShapeType.FLOAT ? "float" : "double";
-      return switch (node.expectStringNode().getValue()) {
-        case "NaN" -> csType + ".NaN";
-        case "Infinity" -> csType + ".PositiveInfinity";
-        case "-Infinity" -> csType + ".NegativeInfinity";
-        default -> null;
-      };
-    }
-
-    BigDecimal value;
-    if (node != null && node.isNumberNode()) {
-      value = new BigDecimal(node.expectNumberNode().getValue().toString());
-    } else {
-      value = placeholderNumber(member, target);
-    }
-    return switch (type) {
-      case BYTE, SHORT, INTEGER -> Long.toString(value.longValue());
-      case LONG -> value.longValue() + "L";
-      case FLOAT -> value.floatValue() + "f";
-      case DOUBLE -> value.doubleValue() + "d";
-      case BIG_INTEGER ->
-          writer.frameworkType("System.Numerics.BigInteger")
-              + ".Parse(\""
-              + value.toBigInteger()
-              + "\")";
-      case BIG_DECIMAL -> value.toPlainString() + "m";
-      default -> throw new CodegenException("Not a numeric shape type: " + type);
-    };
-  }
-
   private BigDecimal placeholderNumber(MemberShape member, Shape target) {
     if (member != null && member.hasTrait(HttpResponseCodeTrait.class)) {
       return BigDecimal.valueOf(200);
@@ -581,9 +577,5 @@ final class FakeValueSynthesizer {
       return member.expectTrait(traitClass);
     }
     return target.getTrait(traitClass).orElse(null);
-  }
-
-  String qualifiedType(Shape shape) {
-    return writer.typeName(context.symbolProvider().toSymbol(shape));
   }
 }

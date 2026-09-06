@@ -28,8 +28,6 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 @SmithyInternalApi
 public final class ClientDependencyInjectionGenerator implements Runnable {
 
-  private static final String MS_EXT_DI = "Microsoft.Extensions.DependencyInjection";
-
   private final GenerationContext context;
   private final CSharpWriter writer;
   private final ServiceShape service;
@@ -52,7 +50,7 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
     String typeName = CSharpNaming.typeName(service.getId().getName());
     String clientName = typeName + "Client";
     String interfaceName = "I" + clientName;
-    String primaryProtocol = ProtocolSupport.protocolType(kinds.get(0));
+    String primaryProtocol = writer.typeName(ProtocolSupport.protocolType(kinds.get(0)));
     String modeledHttpVersionPreference =
         ClientGenerator.httpVersionPreferenceLiteral(
             writer,
@@ -64,9 +62,7 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
     String namespace = context.settings().csharpNamespace(service.getId().getNamespace());
     String clientKey = (namespace.isEmpty() ? "" : namespace + ".") + clientName;
 
-    writer.addImport(MS_EXT_DI);
-    writer.addImport(RuntimeTypes.NSMITHY_CLIENT);
-    writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kinds.get(0)));
+    writer.addImport(RuntimeTypes.MS_EXT_DI);
 
     writer.write("public static class $LServiceCollectionExtensions", clientName);
     writer.openBlock(
@@ -79,12 +75,10 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
                   + " (IHttpClientFactory) for the given endpoint. Set the protocol, auth schemes,"
                   + " and interceptors via <paramref name=\"configure\"/>.</summary>",
               interfaceName);
-          writer.write("public static IHttpClientBuilder Add$L(", clientName);
-          writer.write("    this IServiceCollection services,");
-          writer.write("    " + writer.frameworkType("System.Uri") + " endpoint,");
-          writer.write(
-              "    " + writer.frameworkType("System.Action") + "<$LConfig>? configure = null) =>",
-              clientName);
+          writer.write("public static $T Add$L(", RuntimeTypes.I_HTTP_CLIENT_BUILDER, clientName);
+          writer.write("    this $T services,", RuntimeTypes.I_SERVICE_COLLECTION);
+          writer.write("    $T endpoint,", RuntimeTypes.URI);
+          writer.write("    $T<$LConfig>? configure = null) =>", RuntimeTypes.ACTION, clientName);
           writer.write(
               "    services.Add$L(client => client.BaseAddress = endpoint, configure);",
               clientName);
@@ -97,24 +91,16 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
                   + " via <paramref name=\"configureClient\"/>; set the protocol, auth schemes, and"
                   + " interceptors via <paramref name=\"configure\"/>.</summary>",
               interfaceName);
-          writer.write("public static IHttpClientBuilder Add$L(", clientName);
-          writer.write("    this IServiceCollection services,");
+          writer.write("public static $T Add$L(", RuntimeTypes.I_HTTP_CLIENT_BUILDER, clientName);
+          writer.write("    this $T services,", RuntimeTypes.I_SERVICE_COLLECTION);
           writer.write(
-              "    "
-                  + writer.frameworkType("System.Action")
-                  + "<"
-                  + writer.frameworkType("System.Net.Http.HttpClient")
-                  + ">? configureClient = null,");
-          writer.write(
-              "    " + writer.frameworkType("System.Action") + "<$LConfig>? configure = null)",
-              clientName);
+              "    $T<$T>? configureClient = null,", RuntimeTypes.ACTION, RuntimeTypes.HTTP_CLIENT);
+          writer.write("    $T<$LConfig>? configure = null)", RuntimeTypes.ACTION, clientName);
           writer.openBlock(
               "{",
               "}",
               () -> {
-                writer.write(
-                    writer.frameworkType("System.ArgumentNullException")
-                        + ".ThrowIfNull(services);");
+                writer.write("$T.ThrowIfNull(services);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
                 writer.write("var config = new $LConfig();", clientName);
                 writer.write("configure?.Invoke(config);");
                 writer.write("return services");
@@ -123,8 +109,9 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
                 writer.write("        client =>");
                 writer.write("        {");
                 writer.write(
-                    "            SmithyHttpClientEnvironment.ConfigureHttpClient(client, config,"
-                        + " static () => new $L(), $L);",
+                    "            $T.ConfigureHttpClient(client, config, static () => new $L(),"
+                        + " $L);",
+                    RuntimeTypes.SMITHY_HTTP_CLIENT_ENVIRONMENT,
                     primaryProtocol,
                     modeledHttpVersionPreference);
                 writer.write("            configureClient?.Invoke(client);");

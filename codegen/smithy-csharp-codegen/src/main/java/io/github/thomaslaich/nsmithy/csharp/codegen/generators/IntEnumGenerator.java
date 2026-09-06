@@ -25,8 +25,7 @@ public final class IntEnumGenerator implements Runnable {
 
   @Override
   public void run() {
-    writer.addImport(RuntimeTypes.NSMITHY_CORE);
-    writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
+
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     writer.writeXmlDocs(shape);
     writer.write("public enum $L", typeName);
@@ -53,11 +52,13 @@ public final class IntEnumGenerator implements Runnable {
         "}",
         () ->
             writer.write(
-                "public static Schema<$L> Schema { get; } ="
-                    + " Schemas.IntEnum<$L>($L, values: $L, traits: $L);",
+                "public static $T<$L> Schema { get; } = $T.IntEnum<$L>($L, values: $L, traits:"
+                    + " $L);",
+                RuntimeTypes.SCHEMA,
                 typeName,
+                RuntimeTypes.SCHEMAS,
                 typeName,
-                SchemaGenerator.shapeIdExpr(shape.getId()),
+                SchemaGenerator.shapeIdExpr(writer, shape.getId()),
                 SchemaGenerator.intEnumValuesExpr(shape),
                 SchemaGenerator.traitsExpr(writer, shape.getAllTraits().values())));
   }

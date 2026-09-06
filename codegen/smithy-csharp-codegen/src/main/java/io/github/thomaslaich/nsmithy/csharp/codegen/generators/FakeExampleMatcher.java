@@ -13,6 +13,7 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.ArrayList;
@@ -43,11 +44,6 @@ final class FakeExampleMatcher {
   private final FakeValueSynthesizer values;
   private final List<PendingMatcher> pendingMatchers = new ArrayList<>();
 
-  private record PendingMatcher(
-      String name, String title, String inputType, List<String> conditions) {}
-
-  private record Arm(String matchMethod, String title, String statement) {}
-
   FakeExampleMatcher(GenerationContext context, CSharpWriter writer, FakeValueSynthesizer values) {
     this.context = context;
     this.writer = writer;
@@ -66,12 +62,9 @@ final class FakeExampleMatcher {
       writer.openBlock("{", "}", () -> writer.write("$L", arm.statement()));
     }
     if (hasOutput) {
-      writer.write(
-          "return " + writer.frameworkType("System.Threading.Tasks.Task") + ".FromResult($L);",
-          values.outputExpr(op));
+      writer.write("return $T.FromResult($L);", RuntimeTypes.TASK, values.outputExpr(op));
     } else {
-      writer.write(
-          "return " + writer.frameworkType("System.Threading.Tasks.Task") + ".CompletedTask;");
+      writer.write("return $T.CompletedTask;", RuntimeTypes.TASK);
     }
   }
 
@@ -94,6 +87,11 @@ final class FakeExampleMatcher {
           });
     }
   }
+
+  private record PendingMatcher(
+      String name, String title, String inputType, List<String> conditions) {}
+
+  private record Arm(String matchMethod, String title, String statement) {}
 
   private List<Arm> arms(OperationShape op) {
     List<ExamplesTrait.Example> examples =
@@ -137,14 +135,14 @@ final class FakeExampleMatcher {
         statement =
             hasOutput
                 ? "return "
-                    + writer.frameworkType("System.Threading.Tasks.Task")
+                    + writer.typeName(RuntimeTypes.TASK)
                     + ".FromException<"
                     + outputType
                     + ">("
                     + errorExpr
                     + ");"
                 : "return "
-                    + writer.frameworkType("System.Threading.Tasks.Task")
+                    + writer.typeName(RuntimeTypes.TASK)
                     + ".FromException("
                     + errorExpr
                     + ");";
@@ -152,13 +150,12 @@ final class FakeExampleMatcher {
         ObjectNode output = example.getOutput().orElse(Node.objectNode());
         statement =
             "return "
-                + writer.frameworkType("System.Threading.Tasks.Task")
+                + writer.typeName(RuntimeTypes.TASK)
                 + ".FromResult("
                 + values.outputExprFor(op, output)
                 + ");";
       } else {
-        statement =
-            "return " + writer.frameworkType("System.Threading.Tasks.Task") + ".CompletedTask;";
+        statement = "return " + writer.typeName(RuntimeTypes.TASK) + ".CompletedTask;";
       }
       arms.add(new Arm(name, example.getTitle(), statement));
     }
@@ -226,7 +223,7 @@ final class FakeExampleMatcher {
         String v = nextVar(counter);
         out.add(expr + " is { } " + v);
         out.add(
-            writer.frameworkType("System.Linq.Enumerable")
+            writer.typeName(RuntimeTypes.ENUMERABLE)
                 + ".SequenceEqual("
                 + v
                 + ", "

@@ -5,6 +5,7 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -38,48 +39,29 @@ public final class ListGenerator implements Runnable {
         "{",
         "}",
         () -> {
-          writer.write(
-              "public $L("
-                  + writer.frameworkType("System.Collections.Generic.IEnumerable")
-                  + "<$L> values)",
-              typeName,
-              memberType);
+          writer.write("public $L($T<$L> values)", typeName, RuntimeTypes.I_ENUMERABLE, memberType);
           writer.openBlock(
               "{",
               "}",
               () -> {
+                writer.write("$T.ThrowIfNull(values);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
                 writer.write(
-                    writer.frameworkType("System.ArgumentNullException") + ".ThrowIfNull(values);");
-                writer.write(
-                    "Values = "
-                        + writer.frameworkType("System.Array")
-                        + ".AsReadOnly("
-                        + writer.frameworkType("System.Linq.Enumerable")
-                        + ".ToArray(values));");
+                    "Values = $T.AsReadOnly($T.ToArray(values));",
+                    RuntimeTypes.ARRAY,
+                    RuntimeTypes.ENUMERABLE);
               });
           writer.write("");
-          writer.write(
-              "private $L("
-                  + writer.frameworkType("System.Collections.Generic.List")
-                  + "<$L> values)",
-              typeName,
-              memberType);
+          writer.write("private $L($T<$L> values)", typeName, RuntimeTypes.LIST, memberType);
           writer.openBlock("{", "}", () -> writer.write("Values = values.AsReadOnly();"));
           writer.write("");
           writer.write(
-              "internal static $L FromOwnedList("
-                  + writer.frameworkType("System.Collections.Generic.List")
-                  + "<$L> values)"
-                  + " => new(values);",
+              "internal static $L FromOwnedList($T<$L> values) => new(values);",
               typeName,
+              RuntimeTypes.LIST,
               memberType);
           writer.write("");
           writer.writeXmlDocs(shape.getMember());
-          writer.write(
-              "public "
-                  + writer.frameworkType("System.Collections.Generic.IReadOnlyList")
-                  + "<$L> Values { get; }",
-              memberType);
+          writer.write("public $T<$L> Values { get; }", RuntimeTypes.I_READ_ONLY_LIST, memberType);
         });
     writer.write("");
     SchemaGenerator.writeListSchema(writer, context, shape);

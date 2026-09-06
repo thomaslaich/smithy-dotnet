@@ -13,7 +13,6 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
-import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
 import java.util.List;
@@ -51,8 +50,6 @@ public final class FakeClientGenerator implements Runnable {
         idx.getContainedOperations(service).stream()
             .sorted(Comparator.comparing(o -> o.getId().toString()))
             .collect(Collectors.toList());
-
-    writer.addImport(RuntimeTypes.NSMITHY_CORE);
 
     String typeName = CSharpNaming.typeName(service.getId().getName()) + "Client";
     String interfaceName = "I" + typeName;
