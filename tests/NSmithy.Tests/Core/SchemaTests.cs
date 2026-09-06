@@ -608,6 +608,7 @@ public sealed class SchemaTests
         Assert.Equal(ShapeKind.Operation, operation.Kind);
         Assert.Same(inputSchema, operation.Input);
         Assert.Same(outputSchema, operation.Output);
+        Assert.False(operation.IsStreaming);
         Assert.Equal(
             "PUT",
             operation.GetTrait(RestTraits.Http)!.Value.Value.AsObject()["method"].AsString()

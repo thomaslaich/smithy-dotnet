@@ -4,6 +4,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
 import java.util.List;
@@ -38,6 +39,9 @@ public final class OperationSchemaGenerator implements Runnable {
         shape.getErrors().stream()
             .sorted(Comparator.comparing(ShapeId::toString))
             .collect(Collectors.toList());
+    boolean isStreaming =
+        ShapeSupport.isStreamingShape(context.model(), shape.getInputShape())
+            || ShapeSupport.isStreamingShape(context.model(), shape.getOutputShape());
     writer.write("public static partial class $LSchema", typeName);
     writer.openBlock(
         "{",
@@ -48,13 +52,23 @@ public final class OperationSchemaGenerator implements Runnable {
               SchemaGenerator.operationShapeType(context, shape.getInputShape()),
               SchemaGenerator.operationShapeType(context, shape.getOutputShape()));
           writer.indent();
-          writer.write(
-              "Schemas.Operation($L, $L, $L, $L, $L);",
-              SchemaGenerator.shapeIdExpr(shape.getId()),
-              SchemaGenerator.operationShapeSchema(context, shape.getInputShape()),
-              SchemaGenerator.operationShapeSchema(context, shape.getOutputShape()),
-              errorsLiteral(errors),
-              SchemaGenerator.traitsExpr(shape.getAllTraits().values()));
+          if (isStreaming) {
+            writer.write(
+                "Schemas.Operation($L, $L, $L, $L, $L, isStreaming: true);",
+                SchemaGenerator.shapeIdExpr(shape.getId()),
+                SchemaGenerator.operationShapeSchema(context, shape.getInputShape()),
+                SchemaGenerator.operationShapeSchema(context, shape.getOutputShape()),
+                errorsLiteral(errors),
+                SchemaGenerator.traitsExpr(shape.getAllTraits().values()));
+          } else {
+            writer.write(
+                "Schemas.Operation($L, $L, $L, $L, $L);",
+                SchemaGenerator.shapeIdExpr(shape.getId()),
+                SchemaGenerator.operationShapeSchema(context, shape.getInputShape()),
+                SchemaGenerator.operationShapeSchema(context, shape.getOutputShape()),
+                errorsLiteral(errors),
+                SchemaGenerator.traitsExpr(shape.getAllTraits().values()));
+          }
           writer.dedent();
         });
   }

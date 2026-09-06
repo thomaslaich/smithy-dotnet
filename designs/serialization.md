@@ -167,8 +167,21 @@ For each operation, the generator emits an `OperationSchema<TInput, TOutput>`
 that references the input and output schemas plus operation traits and modeled
 error descriptors. The generic schema implements `IOperationSchema`, retaining
 the same metadata through a non-generic input/output schema view for dynamic
-consumers. For each service, it emits a `ServiceSchema` with the service shape id
-and service-level traits.
+consumers. For each service, the generator emits a `ServiceSchema` with the
+service shape id and service-level traits.
+
+Server generation additionally binds each unary operation to JSON Schema
+2020-12 input and output documents in its `IServiceOperation`. These describe
+NSmithy's canonical JSON document representation (`@jsonName`, epoch-second
+timestamps, base64 blobs, unions, and constraints), not any particular HTTP or
+binary wire protocol. MCP tools consume this metadata without coupling the
+shared operation schema or client-only output to MCP concerns.
+
+Prompt metadata follows a separate path. Server generation converts
+`smithy.ai#prompts` traits into transport-neutral `ServicePromptDefinition`
+values on the generated `IServiceDefinition`; it does not add prompt semantics
+to `ServiceSchema` or `OperationSchema`. An MCP adapter renders those definitions
+into MCP prompts, while other hosts can ignore them.
 
 Traits stay on schemas and members. Core schemas carry any Smithy trait, but
 consumers decide which traits they interpret. REST protocols interpret

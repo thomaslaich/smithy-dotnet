@@ -34,6 +34,7 @@
     <ProjectReference Include="../../packages/NSmithy.Protocols.Rest/NSmithy.Protocols.Rest.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
+    <ProjectReference Include="../../packages/NSmithy.Server.Mcp/NSmithy.Server.Mcp.csproj" />
     <ProjectReference Include="../../packages/NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
   </ItemGroup>
 

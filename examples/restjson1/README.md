@@ -3,10 +3,11 @@
 A Weather service built with `aws.protocols#restJson1`. The model is adapted from
 the [Smithy quickstart](https://smithy.io/2.0/quickstart.html) and demonstrates
 resources, pagination, errors, retries (`@retryable`), HTTP binding traits, and
-end-to-end OpenTelemetry observability using the AWS REST JSON protocol.
+end-to-end OpenTelemetry observability using the AWS REST JSON protocol. The
+same generated operations and Smithy prompt templates are also exposed over MCP.
 
 - `contracts`: the Smithy model, packaged as a contracts project.
-- `server`: generated ASP.NET Core endpoints with a handwritten `IWeatherServiceHandler` implementation that supports real server-side pagination.
+- `server`: generated ASP.NET Core endpoints and an MCP stdio server backed by a handwritten `IWeatherServiceHandler` implementation that supports real server-side pagination.
 - `client`: generated typed client that pages through all cities using the `nextToken` continuation token.
 
 The server and client reference the contracts project directly. No
@@ -27,7 +28,6 @@ Start the server:
 
 ```bash
 cd examples/restjson1
-pixi shell  # not needed when using direnv
 dotnet run --project server --urls http://localhost:5000
 ```
 
@@ -55,6 +55,72 @@ curl -i http://localhost:5000/cities/SEA
 curl -i http://localhost:5000/cities/SEA/forecast
 curl -i http://localhost:5000/cities/SEA/flaky-forecast   # 503s two of every three calls
 ```
+
+## MCP tools and prompts
+
+Run the same Weather service as an MCP stdio server by passing `--mcp`:
+
+```bash
+dotnet run --no-build --project examples/restjson1/server -- --mcp
+```
+
+This is a separate runtime mode: the process hosts MCP over stdio and does not
+start the ASP.NET Core endpoints. Build it first because build output on stdout
+would interfere with the MCP message stream.
+
+Configure an MCP client to launch that built assembly (replace the repository
+path with an absolute path):
+
+```json
+{
+  "mcpServers": {
+    "weather": {
+      "command": "dotnet",
+      "args": [
+        "/path/to/smithy-dotnet/examples/restjson1/server/bin/Debug/net10.0/NSmithy.Examples.RestJson1.Server.dll",
+        "--mcp"
+      ]
+    }
+  }
+}
+```
+
+For [Claude Code](https://docs.anthropic.com/en/docs/claude-code/mcp), add the
+built server from the repository root:
+
+```bash
+claude mcp add weather -- dotnet /absolute/path/to/smithy-dotnet/examples/restjson1/server/bin/Debug/net10.0/NSmithy.Examples.RestJson1.Server.dll --mcp
+```
+
+Or let Claude Code launch the project through `dotnet run`. Keep `--no-build`:
+build output on stdout would corrupt the MCP stdio stream.
+
+```bash
+claude mcp add weather -- dotnet run --no-build --project /absolute/path/to/smithy-dotnet/examples/restjson1/server/NSmithy.Examples.RestJson1.Server.csproj -- --mcp
+```
+
+Check the registration with `claude mcp get weather`. Inside Claude Code, `/mcp`
+shows the connection, and the generated prompts are available as
+`/mcp__weather__city_weather_brief SEA` and
+`/mcp__weather__forecast_answer SEA`.
+
+The generated `GetCurrentTime`, `GetCity`, `ListCities`, `GetForecast`, and
+`GetFlakyForecast` operations appear as tools. Their descriptions, input and
+output schemas, validation, and read-only hints all come from the Smithy model.
+The model also contributes two prompts:
+
+- `city_weather_brief` guides the model to call both `GetCity` and `GetForecast`
+  before producing a combined summary.
+- `forecast_answer` guides the model to call `GetForecast` and explain its
+  numeric chance of rain in plain language.
+
+Both prompts accept a required `cityId` argument. A prompt template does not
+call a handler itself; the MCP client expands it into instructions for the model,
+which then chooses and invokes the named tools. The server exposes the tools and
+prompts together through `.WithSmithyService(WeatherSchema.Schema)`.
+
+The ASP.NET Core and MCP hosts share the same `WeatherHandler`; only the
+transport adapter changes.
 
 ## Rejecting a bad request
 

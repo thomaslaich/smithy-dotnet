@@ -2,6 +2,8 @@ using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Protocols.Rest;
 using NSmithy.Protocols.RestJson;
+using NSmithy.Server;
+using NSmithy.Server.Mcp;
 
 var inputSchema = Schemas
     .Structure<AotInput, AotInputBuilder>(new ShapeId("example", "AotInput"))
@@ -60,6 +62,45 @@ var actual = await serverProtocol.DeserializeRequestAsync(request);
 if (actual != expected)
 {
     throw new InvalidOperationException($"REST/JSON NativeAOT round trip failed: {actual}");
+}
+
+var mcpTools = SmithyMcpTools.Create(
+    new ServiceOperationCatalog(
+        Schemas.Service(new ShapeId("example", "Service")),
+        ServiceOperation.Create(
+            operation,
+            static (AotInput _, CancellationToken _) => Task.FromResult(SmithyUnit.Value),
+            new OperationJsonSchemas(
+                """
+                {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"userId":{"type":"string"},"requestToken":{"type":"string"},"pageSize":{"type":"integer"},"displayName":{"type":"string"}},"required":["userId","pageSize","displayName"],"additionalProperties":false}
+                """,
+                """
+                {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{},"additionalProperties":false}
+                """
+            )
+        )
+    )
+);
+var mcpTool = mcpTools.Single().ProtocolTool;
+if (mcpTool.Name != "UpdateUser" || mcpTool.InputSchema.GetProperty("type").GetString() != "object")
+{
+    throw new InvalidOperationException("MCP NativeAOT tool projection failed.");
+}
+
+var mcpPrompt = SmithyMcpPrompts
+    .Create([
+        new ServicePromptDefinition(
+            "update_user",
+            "Update one user",
+            "Use UpdateUser for {{userId}}.",
+            arguments: [new ServicePromptArgumentDefinition("userId", null, true)]
+        ),
+    ])
+    .Single()
+    .ProtocolPrompt;
+if (mcpPrompt.Name != "update_user" || mcpPrompt.Arguments?.Single().Name != "userId")
+{
+    throw new InvalidOperationException("MCP NativeAOT prompt projection failed.");
 }
 
 internal sealed record AotInput(
