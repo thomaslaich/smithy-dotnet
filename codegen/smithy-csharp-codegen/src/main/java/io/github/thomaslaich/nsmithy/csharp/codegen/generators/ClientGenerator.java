@@ -296,112 +296,14 @@ public final class ClientGenerator implements Runnable {
           }
           writer.write("");
 
-          // Constructor: endpoint convenience overload. The endpoint argument wins over any
-          // Endpoint already present on config; construction then flows through the config
-          // constructor so there is only one implementation path.
-          writer.write(
-              "public $L($T endpoint, $LConfig? config = null) : this(WithEndpoint(endpoint,"
-                  + " config))",
+          writeConstructors(
               typeName,
-              RuntimeTypes.URI,
-              typeName);
-          writer.openBlock("{", "}", () -> {});
-          writer.write("");
-
-          // Canonical config implementation for the endpoint constructor. This stays private so
-          // the public surface has one direct-construction path (`endpoint, config?`) while config
-          // remains the internal model.
-          writer.write("private $L($LConfig config)", typeName, typeName);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("$T.ThrowIfNull(config);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
-                if (needsRuntime) {
-                  writeEnvironmentCreation(
-                      serviceSchema, primaryProtocol, modeledHttpVersionPreference, "null");
-                }
-                writeIdempotencyAssignment(needsIdempotency);
-                if (needsRuntime) {
-                  writeSafeOperationBindings(operations);
-                }
-              });
-          writer.write("");
-
-          // Constructor: bring your own HttpClient (e.g. from IHttpClientFactory /
-          // AddHttpClient<I,T>). The endpoint comes from Config.Endpoint, falling back to the
-          // HttpClient's BaseAddress.
-          writer.write(
-              "public $L($T httpClient, $LConfig? config = null)",
-              typeName,
-              RuntimeTypes.HTTP_CLIENT,
-              typeName);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("$T.ThrowIfNull(httpClient);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
-                if (needsRuntime) {
-                  writer.write("config ??= new $LConfig();", typeName);
-                  writeEnvironmentCreation(
-                      serviceSchema, primaryProtocol, modeledHttpVersionPreference, "httpClient");
-                }
-                writeIdempotencyAssignment(needsIdempotency);
-                if (needsRuntime) {
-                  writeSafeOperationBindings(operations);
-                }
-              });
-          writer.write("");
-
-          if (needsRuntime) {
-            // Constructor: bring your own runtime (custom transport/interceptors, DI, testing). The
-            // runtime already owns the transport/interceptor pipeline, so config.AuthSchemes and
-            // config.Interceptors do not apply here; only Protocol and IdempotencyTokenProvider are
-            // read.
-            writer.write(
-                "public $L($T runtime, $LConfig? config = null)",
-                typeName,
-                RuntimeTypes.SMITHY_CLIENT_RUNTIME,
-                typeName);
-            writer.openBlock(
-                "{",
-                "}",
-                () -> {
-                  writer.write("config ??= new $LConfig();", typeName);
-                  writer.write(
-                      "this.environment = $T.FromRuntime($L, runtime, config, static () => new"
-                          + " $L());",
-                      RuntimeTypes.SMITHY_HTTP_CLIENT_ENVIRONMENT,
-                      serviceSchema,
-                      primaryProtocol);
-                  writer.write("this.runtime = environment.Runtime;");
-                  writer.write("var serviceProtocol = environment.ServiceProtocol;");
-                  writeIdempotencyAssignment(needsIdempotency);
-                  writeSafeOperationBindings(operations);
-                });
-            writer.write("");
-          }
-
-          // Copies the caller's config before setting the endpoint, so constructing a client
-          // never mutates a config instance the caller may share with other clients.
-          writer.write(
-              "private static $LConfig WithEndpoint($T endpoint, $LConfig? config)",
-              typeName,
-              RuntimeTypes.URI,
-              typeName);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("$T.ThrowIfNull(endpoint);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
-                writer.write(
-                    "var copy = config is null ? new $LConfig() : new $LConfig(config);",
-                    typeName,
-                    typeName);
-                writer.write("copy.Endpoint = endpoint;");
-                writer.write("return copy;");
-              });
-          writer.write("");
+              serviceSchema,
+              primaryProtocol,
+              modeledHttpVersionPreference,
+              needsRuntime,
+              needsIdempotency,
+              operations);
 
           // Every auth scheme that can be effective for a service operation. This includes schemes
           // introduced solely by an operation-level @auth override, so constructor validation does
@@ -437,6 +339,113 @@ public final class ClientGenerator implements Runnable {
         });
     writer.write("");
     writeConfigClass(typeName);
+  }
+
+  private void writeConstructors(
+      String typeName,
+      String serviceSchema,
+      String primaryProtocol,
+      String modeledHttpVersionPreference,
+      boolean needsRuntime,
+      boolean needsIdempotency,
+      List<OperationShape> operations) {
+    writer.pushState();
+    try {
+      writer.putContext("client", typeName);
+      writer.putContext("uri", RuntimeTypes.URI);
+      writer.putContext("httpClient", RuntimeTypes.HTTP_CLIENT);
+      writer.putContext("runtime", RuntimeTypes.SMITHY_CLIENT_RUNTIME);
+      writer.putContext("environment", RuntimeTypes.SMITHY_HTTP_CLIENT_ENVIRONMENT);
+      writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+      writer.putContext("serviceSchema", serviceSchema);
+      writer.putContext("protocol", primaryProtocol);
+      writer.putContext(
+          "ownedInitialization",
+          writer.consumer(
+              w -> {
+                if (needsRuntime) {
+                  writeEnvironmentCreation(
+                      serviceSchema, primaryProtocol, modeledHttpVersionPreference, "null");
+                }
+                writeConstructorBindings(needsRuntime, needsIdempotency, operations);
+              }));
+      writer.putContext(
+          "httpClientInitialization",
+          writer.consumer(
+              w -> {
+                if (needsRuntime) {
+                  w.write("config ??= new ${client:L}Config();");
+                  writeEnvironmentCreation(
+                      serviceSchema, primaryProtocol, modeledHttpVersionPreference, "httpClient");
+                }
+                writeConstructorBindings(needsRuntime, needsIdempotency, operations);
+              }));
+      writer.putContext(
+          "bindings",
+          writer.consumer(
+              w -> writeConstructorBindings(needsRuntime, needsIdempotency, operations)));
+
+      // The explicit endpoint wins over config.Endpoint. The private constructor receives a copy.
+      writer.write(
+          """
+          public ${client:L}(${uri:T} endpoint, ${client:L}Config? config = null) : this(WithEndpoint(endpoint, config))
+          {
+          }
+
+          private ${client:L}(${client:L}Config config)
+          {
+              ${argumentNullException:T}.ThrowIfNull(config);
+              ${ownedInitialization:C|}
+          }
+
+          public ${client:L}(${httpClient:T} httpClient, ${client:L}Config? config = null)
+          {
+              ${argumentNullException:T}.ThrowIfNull(httpClient);
+              ${httpClientInitialization:C|}
+          }
+          """);
+      writer.write("");
+
+      if (needsRuntime) {
+        // An injected runtime already owns its transport and interceptor pipeline.
+        // Only Protocol and IdempotencyTokenProvider are read from config in this overload.
+        writer.write(
+            """
+            public ${client:L}(${runtime:T} runtime, ${client:L}Config? config = null)
+            {
+                config ??= new ${client:L}Config();
+                this.environment = ${environment:T}.FromRuntime(${serviceSchema:L}, runtime, config, static () => new ${protocol:L}());
+                this.runtime = environment.Runtime;
+                var serviceProtocol = environment.ServiceProtocol;
+                ${bindings:C|}
+            }
+            """);
+        writer.write("");
+      }
+
+      // Copy before assigning the endpoint so a config shared by callers remains unchanged.
+      writer.write(
+          """
+          private static ${client:L}Config WithEndpoint(${uri:T} endpoint, ${client:L}Config? config)
+          {
+              ${argumentNullException:T}.ThrowIfNull(endpoint);
+              var copy = config is null ? new ${client:L}Config() : new ${client:L}Config(config);
+              copy.Endpoint = endpoint;
+              return copy;
+          }
+          """);
+      writer.write("");
+    } finally {
+      writer.popState();
+    }
+  }
+
+  private void writeConstructorBindings(
+      boolean needsRuntime, boolean needsIdempotency, List<OperationShape> operations) {
+    writeIdempotencyAssignment(needsIdempotency);
+    if (needsRuntime) {
+      writeSafeOperationBindings(operations);
+    }
   }
 
   private void writeSafeOperationBindings(List<OperationShape> operations) {
