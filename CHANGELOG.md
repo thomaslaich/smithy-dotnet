@@ -75,528 +75,277 @@ release version.
 
 ## [0.9.0]
 
-This release completes the generated client's endpoint, auth, and HTTP target
-behavior, and substantially expands the AWS client stack. AWS Query and EC2
-Query join the supported protocols, standard AWS credentials and endpoints are
-available out of the box, and generated fakes can stand in for either side of a
-service. The JSON, CBOR, and Proto hot paths also receive another round of
-performance work.
+Adds generated fakes, AWS Query and EC2 Query clients, and broader AWS endpoint,
+credential, and authentication support.
 
 ### Added
 
-- **Fake handlers: boot a working server from a contract with no
-  implementation.** Opt-in via `SmithyGenerateFakes` (or `"generateFakes"` on
-  the `csharp-codegen` plugin), codegen emits `Fake{Service}Handler`,
-  registered like any handler via `Add{Service}Handler<T>()`. With several
-  `@examples`, the fake matches the incoming input and returns the corresponding
-  output or throws the corresponding modeled error. Without a match it returns
-  the first non-error example, then falls back to deterministic placeholder
-  values synthesized from the model (constraint-aware and recursion-safe). Real
-  handlers take over individual operations by registering the per-operation
-  interface after the fake, or by overriding the fake's virtual methods in a
-  subclass. (#147, #150)
-- **Fake clients: run client consumers against canned responses with no
-  network call.** The same `SmithyGenerateFakes` setting now also emits
-  `Fake{Service}Client`, implementing `I{Service}Client` so it drops into any
-  code that depends on the generated client interface. Responses and modeled
-  errors use the same input-matched examples and deterministic synthesis as fake
-  handlers, with no serialization or protocol involvement. Paginators yield a
-  single page, and operation methods are virtual so a subclass can replace
-  individual operations. (#148, #150)
-- **AWS Query and EC2 Query clients.** The new
-  `NSmithy.Protocols.AwsQuery` package generates form-encoded requests and reads
-  the protocols' XML success and error envelopes. Both implementations pass
-  every applicable official client conformance case: AWS Query 38/38 requests
-  and 39/39 responses, and EC2 Query 30/30 requests and 29/29 responses. The
-  LocalStack example now exercises all five supported AWS HTTP protocols. (#155)
-- **Standard AWS client facilities.** `NSmithy.Aws` adds regional endpoint
-  resolution across AWS partitions; environment, shared-profile, IAM Identity
-  Center/SSO, and IMDSv2 credential providers; a default provider chain;
-  expiration-aware credential caching; and SigV4 presigning. SigV4 signing is
-  separated from identity resolution and covered against AWS's published S3
-  signing vectors. (#152, #155)
-- **Complete modeled client target behavior.** Generated clients apply
-  operation `@endpoint(hostPrefix)` traits, per-operation auth overrides,
-  endpoint-provided auth narrowing, modeled `http` / `eventStreamHttp` ALPN
-  preferences, and a default NSmithy user agent. Host-prefix injection and the
-  user agent are configurable through `SmithyClientConfig`; caller-owned
-  `HttpClient` instances remain untouched. (#152)
+- **Fake handlers and clients.** Enable `SmithyGenerateFakes` (or `generateFakes`
+  in codegen settings) to generate `Fake{Service}Handler` and `Fake{Service}Client`.
+  They match inputs against modeled `@examples`, return canned responses or modeled
+  errors, and fall back to deterministic placeholder values. Operation methods are
+  virtual; fake client paginators yield a single page. Register fake handlers with
+  `Add{Service}Handler<T>()`. (#147, #148, #150)
+- **AWS Query and EC2 Query clients.** The new `NSmithy.Protocols.AwsQuery` package
+  supports both protocols and passes their applicable official client conformance
+  cases. (#155)
+- **AWS endpoints and credentials.** `NSmithy.Aws` adds regional endpoint resolution
+  across AWS partitions; environment, shared-profile, IAM Identity Center/SSO, and
+  IMDSv2 credential providers; a default provider chain; credential caching; and
+  SigV4 presigning. (#152, #155)
+- **Modeled client behavior.** Generated clients support operation host prefixes,
+  per-operation auth overrides, endpoint-provided auth narrowing, modeled HTTP
+  version preferences, and a default NSmithy user agent. Host-prefix injection and
+  the user agent are configurable through `SmithyClientConfig`. (#152)
 
 ### Changed
 
-- **BREAKING: auth schemes now separate identity resolution from signing.**
-  `ISmithyAuthScheme.CreateInterceptor` is replaced by `IdentityResolver` and
-  `Signer`; custom schemes should implement `ISmithyIdentityResolver` and
-  `ISmithySigner`. `SmithyAuthSchemeContext`, `ISmithyAuthHandler`,
-  `HeaderAuthInterceptor`, and `QueryParameterAuthInterceptor` are removed, and
-  the low-level `SmithyClientRuntime` auth map now contains
-  `ISmithyAuthScheme` values. Built-in HTTP and SigV4 schemes already use the new
-  lifecycle, including per-attempt credential resolution and re-signing. (#152)
-- **BREAKING: protocol HTTP requirements are expressed as a preference.**
-  `IProtocol.RequiresHttp2` is replaced by `HttpVersionPreference`, which can
-  express HTTP/1.1, HTTP/2, or HTTP/3 plus downgrade policy. Existing custom
-  protocols that relied on the default continue to use HTTP/1.1; implementations
-  that declared `RequiresHttp2` must expose the equivalent preference. (#152)
-- **Lower codec and client overhead.** Generated structures write typed members
-  directly; model defaults and error writers are compiled once; the common
-  uninstrumented client path avoids unused telemetry, endpoint, retry, and auth
-  machinery; CBOR reuses writers; and Proto and JSON specialize their hot paths.
-  Together these changes reduce time and allocations across JSON, CBOR, Proto,
-  modeled-error, and end-to-end client benchmarks without changing the wire
+- **BREAKING: auth scheme interfaces.** Replace `ISmithyAuthScheme.CreateInterceptor`
+  with `IdentityResolver` and `Signer`, implementing `ISmithyIdentityResolver` and
+  `ISmithySigner` for custom schemes. `SmithyAuthSchemeContext`, `ISmithyAuthHandler`,
+  `HeaderAuthInterceptor`, and `QueryParameterAuthInterceptor` are removed.
+  `SmithyClientRuntime`'s auth map now contains `ISmithyAuthScheme` values. (#152)
+- **BREAKING: protocol HTTP preferences.** Replace `IProtocol.RequiresHttp2` with
+  `HttpVersionPreference`, which supports HTTP/1.1, HTTP/2, and HTTP/3 plus downgrade
+  policy. Custom protocols using the default continue to use HTTP/1.1. (#152)
+- **Lower codec and client overhead.** Reduced processing time and allocations for
+  JSON, CBOR, Proto, modeled errors, and client calls without changing the wire
   format. (#143, #146, #149, #151, #154)
-- **Documentation and landing page refresh.** Protocol documentation now
-  separates behavior, maturity, and conformance more clearly, and the landing
-  page restores scroll reveals and adds the animated aurora backdrop. (#144,
-  #153, #155)
-
-### Packages
-
-All packages are published to NuGet at `0.9.0`, including the new
-`NSmithy.Protocols.AwsQuery` package.
 
 ## [0.8.1]
 
-A patch release for the `dotnet new` templates, which scaffolded projects that
-did not build. Nothing in the runtime or the generated code changes.
-
 ### Fixed
 
-- **The `dotnet new` templates no longer scaffold projects that fail to build.**
-  The server template still called the pre-0.8.0 `Map{Service}Http()` mapper, a
-  server scaffolded without `--contracts` never referenced `NSmithy.MSBuild` so
-  codegen never ran, and the gRPC client template passed `protocol:` to a
-  constructor that now takes a config object. Every template combination is now
-  scaffolded and built in CI (`just smoke-templates`) against the packages built
-  from the working tree, so a codegen rename fails in the pull request that
-  causes it rather than after the next release. (#142)
-
-### Packages
-
-All packages are published to NuGet at `0.8.1`.
+- **Generated template projects build correctly.** Fixed the obsolete server mapper
+  call, missing `NSmithy.MSBuild` reference in servers created without `--contracts`,
+  and obsolete gRPC client constructor arguments. (#142)
 
 ## [0.8.0]
 
-This release makes the generated server enforce the model. Modelled constraints
-are validated at the boundary and rejected as `smithy.framework#ValidationException`,
-and a request that never becomes modeled input is answered with the structured
-4xx Smithy specifies rather than reaching the host as a 500. Underneath, the
-codecs are compiled: JSON, CBOR, XML, and Proto build their read and write paths
-from the schema ahead of time instead of walking erased shapes per message.
+Adds server-side model validation and structured errors for malformed requests.
 
 ### Added
 
-- **Modelled constraint validation.** `@length`, `@range`, `@pattern`,
-  `@required`, and enum value sets declared in the model are enforced by the
-  generated server before the operation runs, and a violation is returned as
-  `smithy.framework#ValidationException`, carrying the member path and the
-  constraint it failed. It is an implicit modeled error on every operation, so a
-  generated client deserializes it into a typed
-  `NSmithy.Core.Validation.ValidationException` rather than surfacing a bare 400.
-  Validation lives on the server rather than the client: a server cannot trust a
-  caller it does not control. (#131)
-- **Structured 4xx for a request the server cannot accept.** Input that never
-  becomes modeled input — a body that is not JSON, a non-numeric integer, an
-  out-of-range number, a timestamp in the wrong format, a blob that is not
-  base64, a dense list holding `null`, a union with two members set — is answered
-  with a 400 `SerializationException` instead of reaching the host as a 500. A
-  request body whose `Content-Type` is not the one the operation reads is
-  answered with 415 `UnsupportedMediaTypeException`, and an `Accept` that
-  excludes the response's media type with 406 `NotAcceptableException`. The
-  generated restJson1 server now passes all 655 cases of Smithy's
-  `httpMalformedRequestTests` suite. (#135)
-- **Legacy `@enum` validation.** A string shape carrying the deprecated `@enum`
-  trait has its value set enforced on the server, as an enum shape already did.
-  Values marked `@internal` are accepted but left out of the rejection message.
-  (#131, #135)
-- **XML documentation comments from the model.** Smithy documentation traits are
-  emitted as XML doc comments across the generated model, client, server, and
-  error surfaces, so modelled prose reaches IntelliSense. (#129)
+- **Modeled constraint validation.** Generated servers enforce `@length`, `@range`,
+  `@pattern`, `@required`, and enum values before invoking handlers. Clients receive
+  typed `NSmithy.Core.Validation.ValidationException` errors containing the member
+  path and failed constraint. (#131)
+- **Structured request errors.** Malformed values produce 400 `SerializationException`
+  responses, unsupported request media types produce 415 `UnsupportedMediaTypeException`,
+  and unacceptable response media types produce 406 `NotAcceptableException`.
+  Generated restJson1 servers pass all 655 applicable official malformed-request
+  cases. (#135)
+- **Legacy `@enum` validation.** Servers validate values on string shapes carrying
+  the deprecated trait. `@internal` values are accepted but omitted from rejection
+  messages. (#131, #135)
+- **Model documentation in IntelliSense.** Smithy documentation traits become XML
+  comments on generated models, clients, servers, and errors. (#129)
 
 ### Changed
 
-- **BREAKING: compiled schema codecs.** Runtime schema member access is built
-  around typed visitors, and the JSON, CBOR, XML, and Proto codecs compile their
-  paths from the schema instead of traversing erased shapes per message. Top-level
-  default materialization is aligned across the protocol codecs. (#134)
-- **BREAKING: server mappers are protocol-selectable.** The generated
-  protocol-specific mapper methods are replaced by a single mapper taking a
-  protocol flags argument — `app.MapWeatherServiceRpcV2Cbor()` becomes
-  `app.MapWeatherService()` — and routes are checked for conflicts across the
-  selected protocols. (#128)
-- **BREAKING: `RestServiceProtocol` takes a codec factory per read mode.** Its
-  first constructor parameter is now `Func<WireReadMode, IRestBodyCodecFactory>`
-  rather than a single factory, so each call side compiles codecs that read by
-  its own rules. A server holds a caller to exactly what the model declares; a
-  client stays permissive with a peer it does not control. (#135)
-- **BREAKING: a map schema carries the shape its key targets.** `Schemas.Map`
-  takes a `key` schema (defaulting to `Schemas.String`), and
-  `IMapSchema.TypedKeyMember` is replaced by the untyped `IMapSchema.KeyMember`,
-  whose target is that shape rather than a flattened `Schemas.String`. This is
-  what lets a server hold an enum-keyed map's keys to the enum's value set. A map
-  with an enum key generates a `string` key, since a map key is an object name;
-  the enum still types the value. (#134, #135)
-- **BREAKING: a string shape carrying `@enum` no longer generates an enum type.**
-  It was never reachable as one — every string shape maps to `string` — and
-  generating it produced a build error. Its value set is enforced from the trait.
-  (#131)
-- **Faster JSON codec.** Serialization writes through a pooled buffer with a
-  reused `Utf8JsonWriter`, member property names are encoded once at compile time
-  rather than transcoded per write, and structures are read in a single pass
-  instead of once per member. Serialization is now 1.75–1.86x `System.Text.Json`
-  source-gen (was 2.23–2.52x) at 1.2–1.6x the allocations (was 4.5–5.5x), and
-  deserialization 1.14–1.15x (was 1.38–1.44x). The wire output is unchanged. (#136)
-- **Smithy 1.73.0.** The bundled Smithy CLI and every `software.amazon.smithy:*`
-  pin move to 1.73.0. The CLI now bundles a JRE 25 rather than 17, which grows
-  `NSmithy.MSBuild` by roughly 20 MB and raises the codegen plugin's bytecode
-  target from Java 17 to 21. (#139)
-- **Clearer generator diagnostics.** Codegen reports unsupported prelude schemas,
-  gRPC stream wrappers, and other unsupported model constructs with messages that
-  name the shape and the reason. (#124, #125, #126, #127)
+- **BREAKING: schema codec APIs.** Runtime schema member access now uses typed
+  visitors. Top-level default materialization is aligned across JSON, CBOR, XML,
+  and Proto codecs. (#134)
+- **BREAKING: server mapper methods.** Use the single service mapper with protocol
+  flags instead of protocol-specific methods: `app.MapWeatherServiceRpcV2Cbor()`
+  becomes `app.MapWeatherService()`. Mapping conflicting routes is rejected. (#128)
+- **BREAKING: REST codec factory argument.** `RestServiceProtocol` now takes
+  `Func<WireReadMode, IRestBodyCodecFactory>` as its first constructor argument,
+  allowing strict server reads and permissive client reads. (#135)
+- **BREAKING: map key schemas.** `Schemas.Map` accepts a key schema, defaulting to
+  `Schemas.String`. Replace `IMapSchema.TypedKeyMember` with `IMapSchema.KeyMember`.
+  Enum-keyed maps generate `string` keys, while server validation enforces the
+  modeled enum values. (#134, #135)
+- **BREAKING: legacy enum generation.** String shapes with deprecated `@enum` traits
+  no longer generate enum types; they map to `string` and retain server-side value
+  validation. (#131)
+- **Faster JSON codecs.** Reduced serialization and deserialization time and
+  allocations without changing wire output. (#136)
+- **Smithy 1.73.0.** Updated the bundled CLI and Smithy dependencies. `NSmithy.MSBuild`
+  grows by roughly 20 MB with the bundled JRE 25; custom Java codegen integrations
+  must account for the plugin's bytecode target moving from Java 17 to 21. (#139)
+- **Clearer model errors.** Unsupported schemas, gRPC stream wrappers, and other
+  unsupported constructs produce diagnostics naming the shape and reason. (#124–#127)
 
 ### Fixed
 
-- **A modelled default is applied on explicit null.** An explicit `null` left a
-  member carrying `@default` unset instead of materializing the default, so the
-  codec could produce an object the model says cannot exist. Found while
-  rewriting the JSON read path; no test had covered it. (#136)
-
-### Packages
-
-All packages are published to NuGet at `0.8.0`.
+- **Defaults on explicit null.** Codecs now apply a member's modeled `@default`
+  when its input value is explicitly null. (#136)
 
 ## [0.7.0]
 
-This release brings event streaming to NSmithy: a standalone
-`vnd.amazon.eventstream` framing library and streaming support across the
-rpcv2Cbor and restJson1 protocols. Protocol interfaces are split by call side so
-each side owns its streaming framing, codegen dependencies are bundled so builds
-work on a clean machine, and the release version is decoupled from local dev
-builds.
+Adds event streaming across rpcv2Cbor and restJson1.
 
 ### Added
 
-- **`NSmithy.EventStream`.** A standalone library implementing
-  `vnd.amazon.eventstream` message framing. (#94)
-- **rpcv2Cbor event streaming.** The rpcv2Cbor protocol supports event-stream
-  operations, including initial request/response messages, with unified
-  operation dispatch. (#106, #108)
-- **restJson1 streaming.** The restJson1 protocol supports streaming. (#110)
+- **`NSmithy.EventStream`.** A standalone library for `vnd.amazon.eventstream`
+  message framing. (#94)
+- **rpcv2Cbor event streaming.** Supports event-stream operations and their initial
+  request and response messages. (#106, #108)
+- **restJson1 streaming.** Adds streaming support to the protocol. (#110)
 
 ### Changed
 
-- **BREAKING: protocol interfaces split by call side.** Client and server
-  protocol interfaces are separated, and streaming framing is owned by the
-  protocol implementation. (#93)
-- **BREAKING: unified streaming operation shape.** Streaming operations now use
-  the same `Task<TOutput>(TInput)` signature as unary operations — the event
-  stream is a member of the input/output structure (alongside any initial
-  request/response fields), rather than being passed or returned directly. This
-  applies across protocols, including gRPC. (#93, #108)
-- **Codegen dependencies bundled.** `NSmithy.MSBuild` ships the Smithy codegen
-  dependencies so code generation works on a clean machine without a locally
-  built codegen JAR. (#105)
-- **Release version decoupled from local dev builds.** Local builds use a fixed
-  `0.0.0-SNAPSHOT`; the real version comes from the `VERSION` file / release
-  tag. (#104)
-- **Docs and landing.** Added a Quick Start guide and protocol details, removed
-  the outdated modeling guide, and simplified the landing page (click-to-switch
-  protocol widgets, no scroll reveals) and docs (wordmark, no logo image).
-  (#102, #103, #107)
+- **BREAKING: protocol interfaces.** Client and server interfaces are separate;
+  custom protocol implementations own their streaming framing. (#93)
+- **BREAKING: streaming operation signatures.** Streaming operations now use
+  `Task<TOutput>(TInput)`, with the event stream carried inside the input/output
+  structure alongside any initial fields. This applies to gRPC as well. (#93, #108)
+- **Bundled codegen dependencies.** `NSmithy.MSBuild` includes the codegen
+  dependencies, so clean-machine builds need no locally built codegen JAR. (#105)
 
 ### Fixed
 
-- **rpcv2Cbor example.** Corrected the rpcv2Cbor example. (#111)
-- **Release template version guard.** The template pack guard compares only the
-  `Major.Minor.Patch` core, so a single `VERSION=0.7.0` covers every
-  `0.7.0-preview.N` tag, and scaffolded templates reference the actual published
-  tag version. (#109)
-
-### Packages
-
-All packages are published to NuGet at `0.7.0`.
+- **rpcv2Cbor example.** Corrected the runnable example. (#111)
+- **Prerelease templates.** Scaffolded projects reference the actual published
+  prerelease version. (#109)
 
 ## [0.6.0]
 
-This release adds a debug-logging interceptor to the client runtime, fixes the
-quick-start template setup, and reworks the examples: one solution with an
-index README, and a full-featured rpcv2Cbor example.
-
 ### Added
 
-- **`DebugInterceptor`.** A built-in client interceptor that logs the typed
-  input and output, each transport attempt's request and response, and a hex
-  dump of the body bytes. Useful for inspecting what a protocol puts on the
-  wire. The rpcv2cbor example client enables it with `--debug`. (#100)
-- **`rpcv2Cbor` template option.** The `dotnet new` templates accept
-  `--protocol rpcv2Cbor`. (#97)
-
-### Changed
-
-- **Examples reworked.** All examples live in a single solution with an index
-  README; the rpcv2cbor example is now the same Weather service as the
-  rest-json1 example (resources, pagination, errors, retries) served over
-  CBOR, and the grpc example README describes the actual native-gRPC
-  LibraryService. (#98, #99)
+- **`DebugInterceptor`.** Logs typed input/output, each transport attempt's request
+  and response, and body bytes as hex. Enable it in the rpcv2Cbor example client
+  with `--debug`. (#100)
+- **rpcv2Cbor templates.** `dotnet new` accepts `--protocol rpcv2Cbor`. (#97)
+- **Expanded rpcv2Cbor example.** Demonstrates resources, pagination, modeled errors,
+  and retries with the Weather service. (#98, #99)
 
 ### Fixed
 
-- **Quick-start template setup.** The client template's project setup was
-  corrected and stale template references were removed. (#97)
-
-### Packages
-
-All packages are published to NuGet at `0.6.0`.
+- **Client template setup.** Corrected project setup and stale template references
+  in the quick-start flow. (#97)
 
 ## [0.5.0]
 
-This release adds observability to the client runtime, generated paginators,
-per-operation endpoint and auth-scheme resolution, and a reworked retry
-strategy. It also fixes the release packaging bug that made previous releases
-unusable on machines without a locally built codegen JAR.
+Adds client observability, pagination, operation timeouts, and more capable retries.
 
 ### Added
 
-- **OpenTelemetry instrumentation.** The client runtime emits spans and metrics
-  for operation execution, and the rest-json1 example wires up an end-to-end
-  observability stack. (#86, #90)
-- **Generated paginators.** `@paginated` operations get `IAsyncEnumerable`
-  paginator methods on the generated client. (#89)
-- **Per-operation endpoint resolution and auth scheme selection.** Endpoint and
-  auth-scheme resolution now run per operation instead of per client. (#87)
-- **Operation timeout.** `OperationTimeout` applies a deadline over the whole
-  operation execution, including retries. (#85)
-- **Explicit HTTP body model.** Request and response bodies are represented by
-  an explicit model in the HTTP layer. (#79)
+- **OpenTelemetry instrumentation.** Client operations emit spans and metrics;
+  the restJson1 example demonstrates an observability setup. (#86, #90)
+- **Generated paginators.** `@paginated` operations expose `IAsyncEnumerable`
+  paginator methods on generated clients. (#89)
+- **Per-operation endpoint and auth selection.** Resolution runs for each operation
+  rather than once per client. (#87)
+- **Operation timeout.** `OperationTimeout` covers the entire execution, including
+  retries. (#85)
 
 ### Changed
 
-- **Retry overhaul.** The retry strategy was reworked. (#82)
-- **Docs reworked.** Protocol pages share a single usage example, design and
-  protocol docs were updated for 0.4.0 accuracy, and the landing page and docs
-  copy were toned down. (#78, #80, #81, #92)
+- **BREAKING: HTTP body APIs.** `SmithyHttpBody.Empty`, `Bytes`, and `Streaming`
+  replace separate buffered/streaming request and response fields. Streaming bodies
+  preserve their content length. (#79)
+- **BREAKING: retry and interceptor APIs.** Custom retry strategies now return an
+  `ISmithyRetrySession` from `Begin()`. `IClientInterceptor.OnAfterExecution` receives
+  an additional `Exception?` argument. Direct runtime callers use
+  `InvokeAsync(binding, input, ct)`. (#82)
+- **Standard retries.** `SmithyStandardRetryStrategy` supports jittered exponential
+  backoff, a shared retry quota, and `Retry-After`. Transport failures and modeled
+  `@retryable` errors participate in retry classification; interceptors observe
+  failures as well as successes. (#82)
 
 ### Fixed
 
-- **Released packages referenced an unpublished codegen JAR.** The packed
-  `NSmithy.MSBuild` build files shipped the `-SNAPSHOT` dev default for
-  `SmithyCSharpCodegenVersion`, so released packages injected a Maven dependency
-  on a codegen version that only exists in a dev `~/.m2` — code generation
-  failed on any clean machine following the quickstart. The release version is
-  now substituted into the packed files, and packing fails if the default
-  drifts. (#95)
-- **Streaming response bodies.** Abandoned streaming response bodies are now
-  disposed by the client runtime. (#84)
-- **Client configuration.** Caller-supplied config is copied at client
-  construction instead of being referenced. (#83)
-
-### Packages
-
-All packages are published to NuGet at `0.5.0`.
+- **Release packages build on clean machines.** `NSmithy.MSBuild` now references
+  the published codegen version instead of an unpublished `-SNAPSHOT` JAR. (#95)
+- **Streaming response cleanup.** The client runtime disposes abandoned streaming
+  response bodies. (#84)
+- **Client configuration isolation.** Client construction takes a copy of
+  caller-supplied configuration. (#83)
 
 ## [0.4.0]
 
-This release expands protocol and authentication coverage, adds generated
-bidirectional gRPC event streaming, and moves the generated client stack onto the
-new runtime pipeline with interceptors, auth-scheme resolution, retry, and
-precomputed operation bindings.
+Adds AWS JSON, SigV4 authentication, and bidirectional gRPC streaming.
 
 ### Added
 
-- **AWS JSON client protocol.** `NSmithy.Protocols.AwsJson` adds client-side
-  support for AWS JSON protocol services. (#60)
-- **AWS authentication.** `NSmithy.Aws` adds SigV4 request signing, generated
-  auth-scheme wiring, and an AWS LocalStack example for exercising real AWS-style
-  authentication locally. (#61)
-- **gRPC event streaming.** Generated gRPC clients and ASP.NET Core servers now
-  support bidirectional event streams, with an interop example that can compare
-  NSmithy's native gRPC transport against `Grpc.Net`. (#62)
-- **Client runtime pipeline.** Generated clients now route calls through
-  `SmithyClientRuntime`, interceptor hooks, auth resolution, and runtime-owned
-  retry strategy configuration. (#65, #66, #67)
-- **Analyzer coverage.** Java codegen builds now use Error Prone, and .NET builds
-  enable globalization analyzers. (#63)
+- **AWS JSON clients.** The new `NSmithy.Protocols.AwsJson` package supports AWS JSON
+  services. (#60)
+- **AWS authentication.** The new `NSmithy.Aws` package supports SigV4 signing and
+  generated auth configuration. An AWS LocalStack example demonstrates usage. (#61)
+- **Bidirectional gRPC streams.** Generated clients and ASP.NET Core servers support
+  bidirectional event streams, with a `Grpc.Net` interoperability example. (#62)
+- **Client interception and retries.** Generated clients use `SmithyClientRuntime`
+  with interceptor hooks, auth resolution, and configurable retries. (#65–#67)
 
 ### Changed
 
-- **Middleware replaced by interceptors.** The old client middleware abstraction
-  has been removed in favor of Smithy-style interceptors. (#69)
-- **Client operation dispatch simplified.** The generated client no longer wraps
-  calls in `SmithyOperationInvoker`; operation bindings and modeled error
-  deserializers are precomputed at construction time. (#70, #73, #74, #76)
-- **Docs reworked.** The README, landing page, docs theme, and client
-  configuration guides were reorganized around the current client architecture.
-  (#68, #72, #75)
-
-### Packages
-
-All packages are published to NuGet at `0.4.0`.
+- **Client middleware removed.** Migrate custom middleware to client interceptors.
+  (#69)
 
 ## [0.3.0]
 
-Native gRPC arrives, and client construction is reworked so a single generated
-`{Service}Client` can speak any protocol the service declares. gRPC now runs on
-NSmithy's own proto3 codec and gRPC protocol over the shared HTTP transport — no
-`protoc`, `Grpc.Tools`, or `Grpc.Net.Client` dependency.
+Adds native gRPC and clients that can use any protocol declared by a service.
 
 ### Added
 
-- **Native gRPC.** Two new packages — `NSmithy.Codecs.Proto` (a schema-driven
-  proto3 wire codec) and `NSmithy.Protocols.Grpc` (`GrpcProtocol`: 5-byte
-  message framing, `application/grpc+proto`, the `grpc-status` trailer error
-  model, and HTTP/2) — implement gRPC over the same `HttpClientTransport` as the
-  REST and rpcv2Cbor protocols, with no `protoc` / `Grpc.Tools` / `Grpc.Net`
-  dependency. Servers gain a native `Map{Service}Grpc` that coexists with the
-  REST map for dual-protocol services. (#58)
-- **Protocol-agnostic client construction.** Codegen now emits a single
-  `{Service}Client` with `(endpoint, …)`, `(httpClient, …)`, and `(invoker, …)`
-  constructors, each taking an optional `protocol` that defaults to the service's
-  primary declared protocol. The same client speaks whichever `IProtocol` it is
-  given, so a service may declare any combination of protocols. (#58)
-- **Opt-in generated dependency injection.** Setting
-  `SmithyGenerateDependencyInjection=true` generates an `Add{Service}Client(...)`
-  extension (flowing through `smithy-build.json` as the `generateDependencyInjection`
-  codegen setting). It is generation-gated, so the `Microsoft.Extensions.Http`
-  dependency is only pulled in when enabled, and it configures HTTP/2 from the
-  selected protocol. See the new
-  [Dependency Injection](https://thomaslaich.github.io/smithy-dotnet/guides/dependency-injection/)
-  guide. (#58)
+- **Native gRPC.** New packages `NSmithy.Codecs.Proto` and `NSmithy.Protocols.Grpc`
+  support HTTP/2 gRPC calls, modeled errors, and ASP.NET Core server mapping without
+  `protoc`, `Grpc.Tools`, or `Grpc.Net.Client`. `Map{Service}Grpc` can coexist with
+  REST mappings for services declaring both protocols. (#58)
+- **Protocol selection on clients.** A single `{Service}Client` accepts an endpoint,
+  `HttpClient`, or invoker, with an optional protocol defaulting to the service's
+  primary declared protocol. (#58)
+- **Opt-in dependency injection.** Set `SmithyGenerateDependencyInjection=true`
+  (or `generateDependencyInjection` in codegen settings) to generate
+  `Add{Service}Client(...)`. It configures HTTP/2 when required and only adds the
+  `Microsoft.Extensions.Http` dependency when enabled. (#58)
 
 ### Changed
 
-- **Protocols are instantiable.** `IProtocol` exposes `RequiresHttp2`, and
-  protocols are now constructed (`new GrpcProtocol()`) rather than reached through
-  static `.Instance` singletons. (#58)
-- **`SmithyClientOptions` removed.** `middleware` and `idempotencyTokenProvider`
-  are now first-class constructor parameters on the generated client. (#58)
-- **Protocol-agnostic request mutations.** Compression and content-MD5 handling
-  moved into `NSmithy.Http/SmithyRequestModifiers`, and error dispatch is unified
-  through `IOperationProtocol.RequiresErrorDiscriminator` /
-  `SupportsHttpStatusErrorFallback`. (#58)
-
-### Protocol support
-
-| Protocol | Generated surfaces | Stage |
-| --- | --- | --- |
-| `alloy#simpleRestJson` | client + ASP.NET Core server | Preview — most complete |
-| `aws.protocols#restJson1` | client + ASP.NET Core server | Preview |
-| `smithy.protocols#rpcv2Cbor` | client + ASP.NET Core server | Preview |
-| `aws.protocols#restXml` | client only | Early preview |
-| `alloy.proto#grpc` | `.proto` emission + native gRPC client + ASP.NET Core gRPC server | Experimental |
-
-gRPC now runs on NSmithy's own proto codec and gRPC protocol; see the
-[Protocol Status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/)
-page for current conformance numbers.
-
-### Packages
-
-All published to NuGet at `0.3.0`:
-
-- **Runtime / codegen:** `NSmithy.Core`, `NSmithy.Http`, `NSmithy.MSBuild`
-- **Client / server:** `NSmithy.Client`, `NSmithy.Server.AspNetCore`, `NSmithy.Server.AspNetCore.Docs`
-- **Codecs:** `NSmithy.Codecs.Json`, `NSmithy.Codecs.Cbor`, `NSmithy.Codecs.Xml`, `NSmithy.Codecs.Proto`
-- **Protocols:** `NSmithy.Protocols.Rest`, `NSmithy.Protocols.RestJson`, `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`, `NSmithy.Protocols.Grpc`
-- **Tooling:** `NSmithy.Templates` (project templates), `dotnet-nsmithy` (CLI tool)
-
-`NSmithy.Codecs.Proto` and `NSmithy.Protocols.Grpc` are new in this release.
+- **Protocol construction.** Instantiate protocols, such as `new GrpcProtocol()`,
+  instead of using `.Instance`. `IProtocol` now exposes `RequiresHttp2`. (#58)
+- **`SmithyClientOptions` removed.** Pass `middleware` and `idempotencyTokenProvider`
+  directly to the generated client constructor. (#58)
+- **Low-level HTTP APIs.** Request compression and content-MD5 handling move to
+  `NSmithy.Http/SmithyRequestModifiers`. Custom operation protocols use
+  `RequiresErrorDiscriminator` and `SupportsHttpStatusErrorFallback` for error
+  dispatch. (#58)
 
 ## [0.2.0]
 
-Server-side protocol support takes a big step forward. `smithy.protocols#rpcv2Cbor`
-gains a generated ASP.NET Core server, and REST servers learn to serialize
-responses and modeled errors — bringing `aws.protocols#restJson1` and
-`alloy#simpleRestJson` to full server-side conformance alongside their clients.
-
 ### Added
 
-- **rpcv2Cbor server generation.** `NSmithy.Server.AspNetCore` now emits ASP.NET
-  Core minimal-API servers for `smithy.protocols#rpcv2Cbor` services, routed at
-  `POST /service/{Service}/operation/{Operation}`, with CBOR request
-  deserialization plus response and modeled-error serialization. (#54)
-- **REST server response handling.** Generated REST servers now honor the
-  `@http(code)` success status, project outputs through their HTTP bindings
-  (header / payload / document), and serialize modeled errors with the protocol's
-  error-type header and HTTP status. `restJson1` and `simpleRestJson` now run the
-  full set of applicable server conformance cases, not just clients. (#55)
+- **rpcv2Cbor servers.** Generated ASP.NET Core servers handle CBOR requests,
+  responses, and modeled errors at
+  `POST /service/{Service}/operation/{Operation}`. (#54)
+- **REST server responses.** Generated servers honor `@http(code)`, output header,
+  payload, and document bindings, plus modeled-error headers and status codes. (#55)
 
 ### Changed
 
-- **`NSmithy.Server.AspNetCore` defaults to server-only codegen.** The package
-  now ships props setting `SmithyGenerateServer=true` / `SmithyGenerateClient=false`,
-  so server-only projects no longer compile the generated client (which referenced
-  `NSmithy.Client`) or need a manual `SmithyGenerateClient=false` workaround. (#53)
-
-### Protocol support
-
-| Protocol | Generated surfaces | Stage |
-| --- | --- | --- |
-| `alloy#simpleRestJson` | client + ASP.NET Core server | Preview — most complete |
-| `aws.protocols#restJson1` | client + ASP.NET Core server | Preview |
-| `smithy.protocols#rpcv2Cbor` | client + ASP.NET Core server | Preview |
-| `aws.protocols#restXml` | client only | Early preview |
-| `alloy.proto#grpc` | `.proto` emission + gRPC client + ASP.NET Core gRPC server | Experimental |
-
-`rpcv2Cbor` now generates servers in addition to clients; see the
-[Protocol Status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/)
-page for current conformance numbers.
-
-### Packages
-
-All published to NuGet at `0.2.0`:
-
-- **Runtime / codegen:** `NSmithy.Core`, `NSmithy.Http`, `NSmithy.MSBuild`
-- **Client / server:** `NSmithy.Client`, `NSmithy.Server.AspNetCore`, `NSmithy.Server.AspNetCore.Docs`
-- **Codecs:** `NSmithy.Codecs.Json`, `NSmithy.Codecs.Cbor`, `NSmithy.Codecs.Xml`
-- **Protocols:** `NSmithy.Protocols.Rest`, `NSmithy.Protocols.RestJson`, `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`
-- **Tooling:** `NSmithy.Templates` (project templates), `dotnet-nsmithy` (CLI tool)
+- **Server-only generation by default.** `NSmithy.Server.AspNetCore` sets
+  `SmithyGenerateServer=true` and `SmithyGenerateClient=false`. Server projects no
+  longer require `NSmithy.Client` or a manual setting to disable client generation.
+  (#53)
 
 ## [0.1.0]
 
-First tagged release. NSmithy turns a [Smithy](https://smithy.io) model into
-idiomatic C# at build time — typed clients, ASP.NET Core minimal-API server
-stubs, and shared model types, generated as part of `dotnet build`. No separate
-codegen step, and no Java or JRE required. Earlier `0.1.0-preview.*` builds are
-superseded.
+First tagged release, superseding `0.1.0-preview.*`. Generate typed C# clients,
+ASP.NET Core server stubs, and shared models from Smithy during `dotnet build`,
+without a separate codegen step or a Java installation.
 
-### Getting started
+### Added
 
-```bash
-dotnet new install NSmithy.Templates
-dotnet new nsmithy-server   # or: nsmithy-client, nsmithy-contracts
-dotnet build
-```
-
-See the [Quick Start guide](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/)
-for the full walkthrough.
-
-### Protocol support
-
-| Protocol | Generated surfaces | Stage |
-| --- | --- | --- |
-| `alloy#simpleRestJson` | client + ASP.NET Core server | Preview — most complete |
-| `aws.protocols#restJson1` | client + ASP.NET Core server | Preview |
-| `aws.protocols#restXml` | client only | Early preview |
-| `smithy.protocols#rpcv2Cbor` | client only | Early preview |
-| `alloy.proto#grpc` | `.proto` emission + gRPC client + ASP.NET Core gRPC server | Experimental |
-
-We recommend `aws.protocols#restJson1` for new projects. `restXml`
-and `rpcv2Cbor` are client-only for now. Full breakdown on the
-[Protocol Status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/) page.
-
-### Known limitations
-
-NSmithy is preview-stage and has rough edges — please read
-[Known Limitations](https://thomaslaich.github.io/smithy-dotnet/reference/known-limitations/)
-before filing issues, and report anything not already listed there.
+- **Project templates.** `NSmithy.Templates` provides `nsmithy-server`,
+  `nsmithy-client`, and `nsmithy-contracts` templates.
+- **REST clients and servers.** Supports `alloy#simpleRestJson` and
+  `aws.protocols#restJson1`.
+- **Additional client protocols.** Supports `aws.protocols#restXml` and
+  `smithy.protocols#rpcv2Cbor` clients.
+- **Experimental gRPC.** Supports `.proto` emission, clients, and ASP.NET Core
+  servers for `alloy.proto#grpc`.
 
 ### Packages
 
-All published to NuGet at `0.1.0`:
-
-- **Runtime / codegen:** `NSmithy.Core`, `NSmithy.Http`, `NSmithy.MSBuild`
-- **Client / server:** `NSmithy.Client`, `NSmithy.Server.AspNetCore`, `NSmithy.Server.AspNetCore.Docs`
-- **Codecs:** `NSmithy.Codecs.Json`, `NSmithy.Codecs.Cbor`, `NSmithy.Codecs.Xml`
-- **Protocols:** `NSmithy.Protocols.Rest`, `NSmithy.Protocols.RestJson`, `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`
-- **Tooling:** `NSmithy.Templates` (project templates), `dotnet-nsmithy` (CLI tool)
+- **Runtime and build integration:** `NSmithy.Core`, `NSmithy.Http`, `NSmithy.MSBuild`.
+- **Client and server:** `NSmithy.Client`, `NSmithy.Server.AspNetCore`,
+  `NSmithy.Server.AspNetCore.Docs`.
+- **Codecs:** `NSmithy.Codecs.Json`, `NSmithy.Codecs.Cbor`, `NSmithy.Codecs.Xml`.
+- **Protocols:** `NSmithy.Protocols.Rest`, `NSmithy.Protocols.RestJson`,
+  `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
+- **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
 [Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.10.0...HEAD
 [0.10.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.9.0...v0.10.0
