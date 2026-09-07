@@ -26,13 +26,9 @@ migration notes below.
   validation, modeled errors, and Smithy-derived annotations. Service and operation
   `smithy.ai#prompts` traits produce MCP prompts with modeled arguments. The
   restJson1 example includes an MCP stdio mode. (#165, #168, #169)
-- **Protocol-neutral service operation catalogs.** Generated service definitions
-  bind registered operation handlers into an executable catalog. Non-streaming
-  operations include JSON Schema 2020-12 metadata for their inputs and outputs.
-  These catalogs support MCP alongside the existing HTTP server surfaces. (#166,
-  #168)
-- **NativeAOT smoke coverage.** CI builds and executes a native REST/JSON client
-  operation covering labels, headers, query parameters, and document bodies. (#167)
+- **Service catalogs for custom integrations.** Generated service definitions expose
+  registered operation handlers and JSON Schema metadata for non-streaming inputs
+  and outputs, allowing custom hosts to reuse the same handlers. (#166, #168)
 
 ### Fixed
 
@@ -40,10 +36,8 @@ migration notes below.
   rpcv2Cbor now pass every applicable official request and response case on their
   client and server surfaces; restJson1 also passes all applicable malformed-request
   cases. AWS JSON 1.1, AWS Query, EC2 Query, and restXml pass every applicable
-  official client request and response case. This does not imply an independent
-  AWS JSON 1.0 suite or a gRPC interoperability matrix. (#157, #158, #161, #162)
-- **Documentation dependencies.** Updated vulnerable transitive npm dependencies
-  used by the documentation site. (#164)
+  official client request and response case. See [Protocol Status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/)
+  for coverage by protocol and surface. (#157, #158, #161, #162)
 
 ### Changed
 
@@ -66,21 +60,12 @@ migration notes below.
   Direct callers of `SmithyAspNetCoreHost.DispatchAsync` must supply the
   `SmithyServerRuntime` as the first argument. Existing application runtime
   registrations are preserved. (#170)
-- **Centralized client resource ownership.** `SmithyHttpClientEnvironment` handles
-  endpoint, protocol, auth, and transport initialization. Generated constructors
-  retain their public signatures. Owned transports are disposed on client disposal
-  or failed construction; injected HTTP clients and runtimes remain caller-owned.
-  (#170)
-- **Typed operation plans and defaults.** HTTP bindings and modeled errors compile
-  into typed plans, and modeled defaults are resolved into typed factories.
-  Unsupported HTTP binding kinds and non-integer `@httpResponseCode` members now
-  fail during operation protocol construction. (#167)
+- **Earlier errors for unsupported HTTP bindings.** Unsupported binding kinds and
+  non-integer `@httpResponseCode` members now fail during operation protocol
+  construction, before the first request. (#167)
 - **More readable generated C#.** Model and framework references use short names
   and collected imports where unambiguous, with `global::` qualification for name
-  collisions. Generator implementations use scoped symbols and readable templates.
-  (#171)
-- **Documentation refresh.** Simplified the landing page and updated protocol,
-  runtime, and MCP documentation. (#160, #165–#171)
+  collisions. (#171)
 
 ### Packages
 
