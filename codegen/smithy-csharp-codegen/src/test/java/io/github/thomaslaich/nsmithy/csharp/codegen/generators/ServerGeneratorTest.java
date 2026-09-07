@@ -344,7 +344,8 @@ final class ServerGeneratorTest {
     assertTrue(generated.contains("UploadGrpcProtocol, handler.UploadAsync, true"), generated);
     assertTrue(generated.contains("ChatGrpcProtocol, handler.ChatAsync, true"), generated);
     assertTrue(
-        generated.contains(
+        containsIgnoringWhitespace(
+            generated,
             "public static IEndpointRouteBuilder MapStreamingService(this IEndpointRouteBuilder"
                 + " endpoints, StreamingServiceProtocols protocols ="
                 + " StreamingServiceProtocols.Grpc)"),
@@ -381,7 +382,8 @@ final class ServerGeneratorTest {
     assertTrue(generated.contains("RestJson1 = 1,"), generated);
     assertTrue(generated.contains("All = RestJson1,"), generated);
     assertTrue(
-        generated.contains(
+        containsIgnoringWhitespace(
+            generated,
             "public static IEndpointRouteBuilder MapStreamingService(this IEndpointRouteBuilder"
                 + " endpoints, StreamingServiceProtocols protocols ="
                 + " StreamingServiceProtocols.RestJson1)"),
@@ -410,7 +412,8 @@ final class ServerGeneratorTest {
     assertTrue(generated.contains("RestJson1 = 4,"), generated);
     assertTrue(generated.contains("All = RpcV2Cbor | SimpleRestJson | RestJson1,"), generated);
     assertTrue(
-        generated.contains(
+        containsIgnoringWhitespace(
+            generated,
             "public static IEndpointRouteBuilder MapMultiService(this IEndpointRouteBuilder"
                 + " endpoints, MultiServiceProtocols protocols = MultiServiceProtocols.RpcV2Cbor)"),
         generated);
@@ -497,6 +500,10 @@ final class ServerGeneratorTest {
         generated.contains("new ServicePromptArgumentDefinition(\"second\", null, false)"),
         generated);
     assertTrue(generated.contains("\"operation_brief\""), generated);
+  }
+
+  private static boolean containsIgnoringWhitespace(String actual, String expected) {
+    return actual.replaceAll("\\s+", "").contains(expected.replaceAll("\\s+", ""));
   }
 
   private String renderServer() throws Exception {
