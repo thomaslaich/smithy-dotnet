@@ -6,10 +6,87 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 > **Preview.** NSmithy is in preview — expect some API changes before 1.0.
-> Protocol implementations are not yet on par with the
-> [Smithy reference implementations](https://github.com/smithy-lang/smithy).
+> See [Protocol Status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/)
+> for supported surfaces, maturity, and official conformance coverage.
 
 ## [Unreleased]
+
+## [0.10.0]
+
+This release adds MCP tools and prompts backed by generated service handlers,
+completes the applicable official HTTP protocol conformance suites, and simplifies
+the generated C#. It also makes codec construction consistent and removes the
+untyped schema API. Applications using low-level runtime APIs should review the
+migration notes below.
+
+### Added
+
+- **MCP tools and prompts.** The new `NSmithy.Server.Mcp` package exposes generated
+  unary service operations as MCP tools, with typed handlers, strict JSON codecs,
+  validation, modeled errors, and Smithy-derived annotations. Service and operation
+  `smithy.ai#prompts` traits produce MCP prompts with modeled arguments. The
+  restJson1 example includes an MCP stdio mode. (#165, #168, #169)
+- **Protocol-neutral service operation catalogs.** Generated service definitions
+  bind registered operation handlers into an executable catalog. Non-streaming
+  operations include JSON Schema 2020-12 metadata for their inputs and outputs.
+  These catalogs support MCP alongside the existing HTTP server surfaces. (#166,
+  #168)
+- **NativeAOT smoke coverage.** CI builds and executes a native REST/JSON client
+  operation covering labels, headers, query parameters, and document bodies. (#167)
+
+### Fixed
+
+- **Official HTTP protocol conformance gaps.** restJson1, simpleRestJson, and
+  rpcv2Cbor now pass every applicable official request and response case on their
+  client and server surfaces; restJson1 also passes all applicable malformed-request
+  cases. AWS JSON 1.1, AWS Query, EC2 Query, and restXml pass every applicable
+  official client request and response case. This does not imply an independent
+  AWS JSON 1.0 suite or a gRPC interoperability matrix. (#157, #158, #161, #162)
+- **Documentation dependencies.** Updated vulnerable transitive npm dependencies
+  used by the documentation site. (#164)
+
+### Changed
+
+- **BREAKING: consistent codec factories.** Replace the removed static codec entry
+  points with `JsonCodecFactory`, `XmlCodecFactory`, `CborCodecFactory`, or
+  `ProtoCodecFactory`. For example, construct a JSON codec with
+  `JsonCodecFactory.Default.FromSchema(schema)`. Custom factories implement
+  `ICodecFactory`, or `IProjectionCodecFactory` when projection support is needed;
+  construction options now use `CodecFactoryOptions`. (#159)
+- **BREAKING: typed schema APIs.** Removed the untyped/object schema tier, including
+  `GetObject`/`SetObject`, object-based collection and enum/union accessors, and
+  `Schemas.GetMembers`. Custom schema integrations should use typed schema visitors
+  and member APIs, including `PartialSchemaVisitor`, `IBuilderMemberSchema`, and
+  `ITypedTargetMemberSchema<TValue>.TypedTarget`. Structure projections now snapshot
+  their selected members. Regenerate models with the matching codegen version when
+  upgrading runtime packages. (#167)
+- **BREAKING: explicit server runtime registration for manual hosting.** Generated
+  aggregate handler registration calls `AddSmithyServer()` automatically.
+  Applications registering individual operation handlers must call it themselves.
+  Direct callers of `SmithyAspNetCoreHost.DispatchAsync` must supply the
+  `SmithyServerRuntime` as the first argument. Existing application runtime
+  registrations are preserved. (#170)
+- **Centralized client resource ownership.** `SmithyHttpClientEnvironment` handles
+  endpoint, protocol, auth, and transport initialization. Generated constructors
+  retain their public signatures. Owned transports are disposed on client disposal
+  or failed construction; injected HTTP clients and runtimes remain caller-owned.
+  (#170)
+- **Typed operation plans and defaults.** HTTP bindings and modeled errors compile
+  into typed plans, and modeled defaults are resolved into typed factories.
+  Unsupported HTTP binding kinds and non-integer `@httpResponseCode` members now
+  fail during operation protocol construction. (#167)
+- **More readable generated C#.** Model and framework references use short names
+  and collected imports where unambiguous, with `global::` qualification for name
+  collisions. Generator implementations use scoped symbols and readable templates.
+  (#171)
+- **Documentation refresh.** Simplified the landing page and updated protocol,
+  runtime, and MCP documentation. (#160, #165–#171)
+
+### Packages
+
+All packages are prepared for publication at `0.10.0`, including the new
+`NSmithy.Server.Mcp` package. Codegen JARs and NuGet packages must use the same
+release version.
 
 ## [0.9.0]
 
@@ -536,7 +613,8 @@ All published to NuGet at `0.1.0`:
 - **Protocols:** `NSmithy.Protocols.Rest`, `NSmithy.Protocols.RestJson`, `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`
 - **Tooling:** `NSmithy.Templates` (project templates), `dotnet-nsmithy` (CLI tool)
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.7.0...v0.8.0
