@@ -72,6 +72,7 @@ export default defineConfig({
 						{ label: 'Introduction', slug: 'getting-started/introduction' },
 						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
 						{ label: 'Distributing Contracts', slug: 'guides/distributing-contracts' },
+						{ label: 'Smithy and TypeSpec', slug: 'getting-started/smithy-and-typespec' },
 					],
 				},
 				{

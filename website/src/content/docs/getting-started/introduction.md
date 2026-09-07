@@ -35,6 +35,10 @@ and errors before building the service.
 Operations, data types (called *shapes*), and annotations (called *traits*) describe
 the API in files that teams can review and version independently of server code.
 
+TypeSpec also addresses this authoring problem. See
+[Smithy and TypeSpec](/smithy-dotnet/getting-started/smithy-and-typespec/) for a
+comparison of their modeling, tooling, and .NET workflows.
+
 Smithy's tooling also supports the governance around that contract:
 [validators](https://smithy.io/2.0/guides/model-linters.html) can enforce shared
 modeling rules, and [Smithy Diff](https://smithy.io/2.0/guides/evolving-models.html#using-smithy-diff)
