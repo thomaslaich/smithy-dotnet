@@ -170,7 +170,7 @@ policies are not implemented yet.
 ## Examples and AsyncAPI
 
 The [Redis examples](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/redisjson)
-include chat with shared command processing and independent event readers, plus
+include chat with direct event publishing and independent event readers, plus
 an inventory request/reply client and server.
 
 Set `SmithyGenerateAsyncApi` to `true` to generate AsyncAPI 3.1 and copy it to
