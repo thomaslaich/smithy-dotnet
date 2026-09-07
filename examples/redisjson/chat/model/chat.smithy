@@ -2,41 +2,24 @@ $version: "2"
 
 namespace examples.redis.chat
 
-use bote#command
 use bote#event
-use bote#redisStreamAdd
 use bote#redisStreamRead
 use bote#redisStreamsJson
 
-/// A durable chat contract: commands and events use separate Redis streams.
+/// Chat participants publish and independently read a shared Redis event stream.
 @title("Redis Chat API")
 @redisStreamsJson
 service ChatRoom {
     version: "1.0.0"
-    operations: [PostMessage, ReadMessages]
+    operations: [ReadMessages]
 }
 
-/// Ask the chat owner to post a message.
-@redisStreamAdd(stream: "chat:commands", maxLen: 10000)
-operation PostMessage {
-    input: PostMessageCommand
-}
-
-/// Follow messages emitted by the chat owner.
+/// Follow messages published directly by chat participants.
 @redisStreamRead(stream: "chat:events", maxLen: 10000)
 operation ReadMessages {
     output := {
         messages: ChatEvents
     }
-}
-
-@command
-structure PostMessageCommand {
-    roomId: String
-    userId: String
-
-    @length(min: 1, max: 4000)
-    body: String
 }
 
 @event

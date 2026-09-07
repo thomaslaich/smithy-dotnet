@@ -18,15 +18,7 @@ await using var connection = await ConnectionMultiplexer.ConnectAsync(redis);
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddSingleton(new ChatSession(roomId, userId));
 builder.Services.AddRedisStreamsMessaging(connection);
-builder.Services.AddChatRoomClient();
 builder.Services.AddChatRoomEventPublisher();
-builder.Services.AddChatRoomCommandConsumer(
-    new RedisStreamConsumerOptions
-    {
-        ConsumerGroup = "redis-chat-owner",
-        ConsumerName = $"example-{Environment.ProcessId}",
-    }
-);
 
 // Every terminal sees all new events. This demo keeps its XREAD cursor in memory;
 // configure CheckpointStore and a stable CheckpointName to resume across restarts.
@@ -37,7 +29,6 @@ builder.Services.AddChatRoomEventConsumer(
         StartPosition = "$",
     }
 );
-builder.Services.AddScoped<IPostMessageHandler, ChatOwner>();
 builder.Services.AddScoped<IReadMessagesHandler, ChatReader>();
 builder.Services.AddHostedService<ConsoleInput>();
 
@@ -47,7 +38,7 @@ await builder.Build().RunAsync();
 sealed record ChatSession(string RoomId, string UserId);
 
 sealed class ConsoleInput(
-    IChatRoomClient client,
+    IChatRoomEventPublisher publisher,
     ChatSession session,
     IHostApplicationLifetime lifetime
 ) : BackgroundService
@@ -65,8 +56,13 @@ sealed class ConsoleInput(
                 break;
             if (string.IsNullOrWhiteSpace(body))
                 continue;
-            await client.PostMessageAsync(
-                new PostMessageInput(Body: body, RoomId: session.RoomId, UserId: session.UserId),
+            await publisher.PublishMessagePostedAsync(
+                new MessagePosted(
+                    Body: body,
+                    RoomId: session.RoomId,
+                    SentAt: DateTimeOffset.UtcNow,
+                    UserId: session.UserId
+                ),
                 stoppingToken
             );
         }
@@ -86,21 +82,4 @@ sealed class ChatReader(ChatSession session) : IReadMessagesHandler
         }
         return Task.CompletedTask;
     }
-}
-
-sealed class ChatOwner(IChatRoomEventPublisher publisher) : IPostMessageHandler
-{
-    public Task HandleAsync(
-        PostMessageInput command,
-        CancellationToken cancellationToken = default
-    ) =>
-        publisher.PublishMessagePostedAsync(
-            new MessagePosted(
-                Body: command.Body,
-                RoomId: command.RoomId,
-                SentAt: DateTimeOffset.UtcNow,
-                UserId: command.UserId
-            ),
-            cancellationToken
-        );
 }
