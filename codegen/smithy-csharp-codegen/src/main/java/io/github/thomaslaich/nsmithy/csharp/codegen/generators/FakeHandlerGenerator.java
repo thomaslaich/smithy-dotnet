@@ -72,29 +72,54 @@ public final class FakeHandlerGenerator implements Runnable {
             + " register a real per-operation handler after this one, to replace individual"
             + " operations.",
         Map.of());
-    writer.write("public class $L : $L", fakeClass, aggInterface);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          boolean first = true;
-          for (OperationShape op : ops) {
-            if (!first) {
-              writer.write("");
-            }
-            first = false;
-            writeOperationMethod(op);
+    writer.pushState();
+    try {
+      writer.putContext("fakeClass", fakeClass);
+      writer.putContext("handler", aggInterface);
+      writer.putContext(
+          "members",
+          writer.consumer(
+              w -> {
+                boolean first = true;
+                for (OperationShape op : ops) {
+                  if (!first) {
+                    w.write("");
+                  }
+                  first = false;
+                  writeOperationMethod(op);
+                }
+                matcher.writePendingMatchers(w);
+                values.writePendingIterators(w);
+              }));
+      writer.write(
+          """
+          public class ${fakeClass:L} : ${handler:L}
+          {
+              ${members:C|}
           }
-          matcher.writePendingMatchers(writer);
-          values.writePendingIterators(writer);
-        });
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   // ---------------- operation methods ----------------
 
   private void writeOperationMethod(OperationShape op) {
-    writer.write("public virtual $L", operationSignature(op));
-    writer.openBlock("{", "}", () -> matcher.writeOperationBody(writer, op));
+    writer.pushState();
+    try {
+      writer.putContext("signature", operationSignature(op));
+      writer.putContext("body", writer.consumer(w -> matcher.writeOperationBody(w, op)));
+      writer.write(
+          """
+          public virtual ${signature:L}
+          {
+              ${body:C|}
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   /** Same delegate shape the handler interfaces declare; see ServerGenerator. */
@@ -115,12 +140,11 @@ public final class FakeHandlerGenerator implements Runnable {
         hasInput
             ? writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape()))) + " input, "
             : "";
-    return returnType
-        + " "
-        + name
-        + "("
-        + params
-        + writer.typeName(RuntimeTypes.CANCELLATION_TOKEN)
-        + " cancellationToken = default)";
+    return writer.format(
+        "$L $L($L$T cancellationToken = default)",
+        returnType,
+        name,
+        params,
+        RuntimeTypes.CANCELLATION_TOKEN);
   }
 }

@@ -183,7 +183,8 @@ final class FakeClientGeneratorTest {
                 + " CancellationToken cancellationToken = default)"),
         generated);
     assertTrue(
-        generated.contains(
+        containsIgnoringWhitespace(
+            generated,
             "await foreach (var page in ListCitiesPagesAsync(input,"
                 + " cancellationToken).ConfigureAwait(false))"),
         generated);
@@ -211,6 +212,10 @@ final class FakeClientGeneratorTest {
         generated.contains(
             "private static async" + " IAsyncEnumerable<ChatEvent>" + " FakeWatchEventsEvents()"),
         generated);
+  }
+
+  private static boolean containsIgnoringWhitespace(String actual, String expected) {
+    return actual.replaceAll("\\s+", "").contains(expected.replaceAll("\\s+", ""));
   }
 
   private String renderFake() throws Exception {

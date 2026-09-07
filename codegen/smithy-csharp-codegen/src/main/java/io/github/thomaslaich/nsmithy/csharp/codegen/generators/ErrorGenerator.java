@@ -45,37 +45,47 @@ public final class ErrorGenerator implements Runnable {
     List<MemberShape> members = ShapeSupport.sortedMembers(shape);
 
     Optional<RetryableTrait> retryable = shape.getTrait(RetryableTrait.class);
-    writer.writeXmlDocs(shape);
-    if (retryable.isPresent()) {
+    writer.pushState();
+    try {
+      writer.putContext("typeName", typeName);
+      writer.putContext("exception", RuntimeTypes.EXCEPTION);
+      writer.putContext(
+          "retryableInterface",
+          retryable.isPresent()
+              ? writer.format(", $T", RuntimeTypes.I_SMITHY_RETRYABLE_ERROR)
+              : "");
+      writer.putContext(
+          "members",
+          writer.consumer(
+              w -> {
+                retryable.ifPresent(
+                    trait -> {
+                      w.write(
+                          "bool $T.IsThrottlingError => $L;",
+                          RuntimeTypes.I_SMITHY_RETRYABLE_ERROR,
+                          trait.getThrottling() ? "true" : "false");
+                      w.write("");
+                    });
+                writeConstructor(typeName, messageMember.orElse(null));
+                messageMember.ifPresent(
+                    member -> {
+                      w.writeXmlDocs(member);
+                      w.write("public override string Message => base.Message!;");
+                      w.write("");
+                    });
+                writeProperties(sp, model, messageMember.orElse(null));
+              }));
+      writer.writeXmlDocs(shape);
       writer.write(
-          "public sealed partial class $L : $T, $T",
-          typeName,
-          RuntimeTypes.EXCEPTION,
-          RuntimeTypes.I_SMITHY_RETRYABLE_ERROR);
-    } else {
-      writer.write("public sealed partial class $L : $T", typeName, RuntimeTypes.EXCEPTION);
+          """
+          public sealed partial class ${typeName:L} : ${exception:T}${retryableInterface:L}
+          {
+              ${members:C|}
+          }
+          """);
+    } finally {
+      writer.popState();
     }
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          retryable.ifPresent(
-              trait -> {
-                writer.write(
-                    "bool $T.IsThrottlingError => $L;",
-                    RuntimeTypes.I_SMITHY_RETRYABLE_ERROR,
-                    trait.getThrottling() ? "true" : "false");
-                writer.write("");
-              });
-          writeConstructor(typeName, messageMember.orElse(null));
-          messageMember.ifPresent(
-              mm -> {
-                writer.writeXmlDocs(mm);
-                writer.write("public override string Message => base.Message!;");
-                writer.write("");
-              });
-          writeProperties(sp, model, messageMember.orElse(null));
-        });
     writer.write("");
     SchemaGenerator.writeStructureSchema(writer, context, shape, members);
   }
@@ -101,43 +111,66 @@ public final class ErrorGenerator implements Runnable {
     }
     writer.writeXmlDocs(shape, parameterDocs);
 
-    StringBuilder sig = new StringBuilder("public ").append(typeName).append("(");
-    sig.append("string? message");
-    if (!hasRequired) sig.append(" = null");
-    for (MemberShape m : ctor) {
-      sig.append(", ")
-          .append(ShapeSupport.parameterTypeExpr(writer, model, sp, m))
-          .append(' ')
-          .append(CSharpNaming.parameterName(m.getMemberName()));
-      if (ShapeSupport.isOptionalParameter(m)) sig.append(" = null");
-    }
-    sig.append(")");
-    writer.write(sig.toString());
-    writer.write("    : base(message)");
-    if (ctor.isEmpty()) {
-      writer.write("{ }");
-    } else {
-      writer.openBlock(
-          "{",
-          "}",
-          () -> {
-            for (MemberShape m : ctor) {
-              String prop = CSharpNaming.propertyName(m.getMemberName());
-              String param = CSharpNaming.parameterName(m.getMemberName());
-              if (!ShapeSupport.isNullable(m) && ShapeSupport.isReferenceType(model, m)) {
-                writer.write(
-                    "$L = $L ?? throw new $T(nameof($L));",
-                    prop,
-                    param,
-                    RuntimeTypes.ARGUMENT_NULL_EXCEPTION,
-                    param);
-              } else {
-                writer.write("$L = $L;", prop, param);
-              }
+    writer.pushState();
+    try {
+      writer.putContext("typeName", typeName);
+      if (ctor.isEmpty()) {
+        writer.write(
+            """
+            public ${typeName:L}(string? message = null)
+                : base(message)
+            { }
+            """);
+      } else {
+        writer.putContext(
+            "parameters",
+            writer.consumer(
+                w -> {
+                  w.write("string? message$L,", hasRequired ? "" : " = null");
+                  for (int i = 0; i < ctor.size(); i++) {
+                    MemberShape member = ctor.get(i);
+                    w.write(
+                        "$L $L$L$L",
+                        ShapeSupport.parameterTypeExpr(w, model, sp, member),
+                        CSharpNaming.parameterName(member.getMemberName()),
+                        ShapeSupport.isOptionalParameter(member) ? " = null" : "",
+                        i + 1 == ctor.size() ? "" : ",");
+                  }
+                }));
+        writer.putContext("assignments", writer.consumer(w -> writeAssignments(ctor)));
+        writer.write(
+            """
+            public ${typeName:L}(
+                ${parameters:C|}
+            )
+                : base(message)
+            {
+                ${assignments:C|}
             }
-          });
+            """);
+      }
+    } finally {
+      writer.popState();
     }
     writer.write("");
+  }
+
+  private void writeAssignments(List<MemberShape> members) {
+    for (MemberShape member : members) {
+      String property = CSharpNaming.propertyName(member.getMemberName());
+      String parameter = CSharpNaming.parameterName(member.getMemberName());
+      if (!ShapeSupport.isNullable(member)
+          && ShapeSupport.isReferenceType(context.model(), member)) {
+        writer.write(
+            "$L = $L ?? throw new $T(nameof($L));",
+            property,
+            parameter,
+            RuntimeTypes.ARGUMENT_NULL_EXCEPTION,
+            parameter);
+      } else {
+        writer.write("$L = $L;", property, parameter);
+      }
+    }
   }
 
   private void writeProperties(SymbolProvider sp, Model model, MemberShape excluded) {

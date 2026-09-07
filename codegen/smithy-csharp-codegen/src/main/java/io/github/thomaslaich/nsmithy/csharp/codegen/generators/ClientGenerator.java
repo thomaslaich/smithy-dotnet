@@ -66,30 +66,7 @@ public final class ClientGenerator implements Runnable {
     String interfaceName = "I" + typeName;
 
     // Interface — IDisposable so a client that owns its HttpClient is released via `using` or DI.
-    writer.writeXmlDocs(service);
-    writer.write("public interface $L : $T", interfaceName, RuntimeTypes.I_DISPOSABLE);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("");
-          for (OperationShape op : operations) {
-            writer.writeXmlDocs(op, operationParameterDocs(model, op));
-            writer.write("$L;", operationSignature(writer, context, op));
-            paginationInfo(context, service, op)
-                .ifPresent(
-                    info -> {
-                      writer.writeXmlDocs(op, operationParameterDocs(model, op));
-                      writer.write("$L;", paginatorPagesSignature(writer, context, op));
-                      paginatorItemsSignature(writer, context, info)
-                          .ifPresent(
-                              signature -> {
-                                writer.writeXmlDocs(op, operationParameterDocs(model, op));
-                                writer.write("$L;", signature);
-                              });
-                    });
-          }
-        });
+    writeInterface(model, operations, interfaceName);
     writer.write("");
 
     // Services with no supported protocol get the interface only; there is nothing to wire.
@@ -115,11 +92,11 @@ public final class ClientGenerator implements Runnable {
           case "http/1.1" -> writer.typeName(RuntimeTypes.HTTP_VERSION) + ".Version11";
           default -> throw new IllegalArgumentException(preference.get().alpnId());
         };
-    return ("new " + writer.typeName(RuntimeTypes.SMITHY_HTTP_VERSION_PREFERENCE) + "(")
-        + version
-        + ", allowDowngrade: "
-        + preference.get().allowDowngrade()
-        + ")";
+    return writer.format(
+        "new $T($L, allowDowngrade: $L)",
+        RuntimeTypes.SMITHY_HTTP_VERSION_PREFERENCE,
+        version,
+        preference.get().allowDowngrade());
   }
 
   // ---------------- paginators ----------------
@@ -143,16 +120,13 @@ public final class ClientGenerator implements Runnable {
     Model model = context.model();
     String inputType = writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape())));
     String outputType = writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape())));
-    return writer.typeName(RuntimeTypes.I_ASYNC_ENUMERABLE)
-        + "<"
-        + outputType
-        + "> "
-        + CSharpNaming.typeName(op.getId().getName())
-        + "PagesAsync("
-        + inputType
-        + " input, "
-        + writer.typeName(RuntimeTypes.CANCELLATION_TOKEN)
-        + " cancellationToken = default)";
+    return writer.format(
+        "$T<$L> $LPagesAsync($L input, $T cancellationToken = default)",
+        RuntimeTypes.I_ASYNC_ENUMERABLE,
+        outputType,
+        CSharpNaming.typeName(op.getId().getName()),
+        inputType,
+        RuntimeTypes.CANCELLATION_TOKEN);
   }
 
   /**
@@ -165,20 +139,15 @@ public final class ClientGenerator implements Runnable {
     return paginatorItemElementType(writer, context, info)
         .map(
             elementType ->
-                writer.typeName(RuntimeTypes.I_ASYNC_ENUMERABLE)
-                    + "<"
-                    + elementType
-                    + "> "
-                    + CSharpNaming.typeName(info.getOperation().getId().getName())
-                    + "ItemsAsync("
-                    + writer.typeName(
-                        context
-                            .symbolProvider()
-                            .toSymbol(
-                                context.model().expectShape(info.getOperation().getInputShape())))
-                    + " input, "
-                    + writer.typeName(RuntimeTypes.CANCELLATION_TOKEN)
-                    + " cancellationToken = default)");
+                writer.format(
+                    "$T<$L> $LItemsAsync($T input, $T cancellationToken = default)",
+                    RuntimeTypes.I_ASYNC_ENUMERABLE,
+                    elementType,
+                    CSharpNaming.typeName(info.getOperation().getId().getName()),
+                    context
+                        .symbolProvider()
+                        .toSymbol(context.model().expectShape(info.getOperation().getInputShape())),
+                    RuntimeTypes.CANCELLATION_TOKEN));
   }
 
   /** Renders a null-safe property access chain for a member path, e.g. {@code output.A?.B}. */
@@ -234,18 +203,57 @@ public final class ClientGenerator implements Runnable {
             ? writer.typeName(RuntimeTypes.TASK) + "<" + outputType + ">"
             : writer.typeName(RuntimeTypes.TASK);
     String params = hasInput ? inputType + " input, " : "";
-    return returnType
-        + " "
-        + name
-        + "("
-        + params
-        + writer.typeName(RuntimeTypes.CANCELLATION_TOKEN)
-        + " cancellationToken = default)";
+    return writer.format(
+        "$L $L($L$T cancellationToken = default)",
+        returnType,
+        name,
+        params,
+        RuntimeTypes.CANCELLATION_TOKEN);
   }
 
   // =====================================================================
   // client
   // =====================================================================
+
+  private void writeInterface(Model model, List<OperationShape> operations, String interfaceName) {
+    writer.pushState();
+    try {
+      writer.putContext("interfaceName", interfaceName);
+      writer.putContext("disposable", RuntimeTypes.I_DISPOSABLE);
+      writer.putContext(
+          "operations",
+          writer.consumer(
+              w -> {
+                w.write("");
+                for (OperationShape op : operations) {
+                  w.writeXmlDocs(op, operationParameterDocs(model, op));
+                  w.write("$L;", operationSignature(w, context, op));
+                  paginationInfo(context, service, op)
+                      .ifPresent(
+                          info -> {
+                            w.writeXmlDocs(op, operationParameterDocs(model, op));
+                            w.write("$L;", paginatorPagesSignature(w, context, op));
+                            paginatorItemsSignature(w, context, info)
+                                .ifPresent(
+                                    signature -> {
+                                      w.writeXmlDocs(op, operationParameterDocs(model, op));
+                                      w.write("$L;", signature);
+                                    });
+                          });
+                }
+              }));
+      writer.writeXmlDocs(service);
+      writer.write(
+          """
+          public interface ${interfaceName:L} : ${disposable:T}
+          {
+              ${operations:C|}
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
+  }
 
   private void writeClient(
       Model model,
@@ -266,79 +274,96 @@ public final class ClientGenerator implements Runnable {
     boolean needsRuntime = operations.stream().anyMatch(op -> canBindOperation(op));
     boolean needsIdempotency =
         operations.stream().anyMatch(op -> operationCanDefaultIdempotencyToken(model, op));
-    writer.writeXmlDocs(service);
-    writer.write("public sealed class $L : $L", typeName, interfaceName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          if (needsRuntime) {
-            writer.write("private readonly $T runtime;", RuntimeTypes.SMITHY_CLIENT_RUNTIME);
-            // The environment owns only resources created by the runtime factory.
-            writer.write(
-                "private readonly $T environment;", RuntimeTypes.SMITHY_HTTP_CLIENT_ENVIRONMENT);
-          }
-          if (needsIdempotency) {
-            writer.write(
-                "private readonly $T<string> idempotencyTokenProvider;", RuntimeTypes.FUNC);
-          }
-          // The protocol is bound at construction; per-operation protocols are built once from it.
-          for (OperationShape op : operations) {
-            if (!canBindOperation(op)) {
-              continue;
-            }
-            writer.write(
-                "private readonly $T<$L, $L> $LBinding;",
-                RuntimeTypes.SMITHY_OPERATION_BINDING,
-                SchemaGenerator.operationShapeType(writer, context, op.getInputShape()),
-                SchemaGenerator.operationShapeType(writer, context, op.getOutputShape()),
-                CSharpNaming.typeName(op.getId().getName()));
-          }
-          writer.write("");
+    writer.pushState();
+    try {
+      writer.putContext("client", typeName);
+      writer.putContext("interfaceName", interfaceName);
+      writer.putContext(
+          "fields", writer.consumer(w -> writeFields(operations, needsRuntime, needsIdempotency)));
+      writer.putContext(
+          "constructors",
+          writer.consumer(
+              w ->
+                  writeConstructors(
+                      typeName,
+                      serviceSchema,
+                      primaryProtocol,
+                      modeledHttpVersionPreference,
+                      needsRuntime,
+                      needsIdempotency,
+                      operations)));
+      writer.putContext("readOnlyList", RuntimeTypes.I_READ_ONLY_LIST);
+      // Include auth schemes introduced by operation-level overrides for constructor validation.
+      writer.putContext("authSchemes", modeledAuthSchemesLiteral());
+      writer.putContext(
+          "lifecycle",
+          writer.consumer(
+              w -> {
+                if (needsIdempotency) {
+                  w.write("");
+                  w.write(
+                      "private static string DefaultIdempotencyToken() => $T.NewGuid().ToString();",
+                      RuntimeTypes.GUID);
+                }
+                w.write("");
+                // Only dispose resources owned by the environment; injected transports stay open.
+                w.write(
+                    needsRuntime
+                        ? "public void Dispose() => environment.Dispose();"
+                        : "public void Dispose() { }");
+                w.write("");
+              }));
+      writer.putContext(
+          "operations",
+          writer.consumer(
+              w -> {
+                for (OperationShape op : operations) {
+                  writeOperationMethod(model, op);
+                  paginationInfo(context, service, op)
+                      .ifPresent(info -> writePaginatorMethods(op, info));
+                }
+              }));
+      writer.writeXmlDocs(service);
+      writer.write(
+          """
+          public sealed class ${client:L} : ${interfaceName:L}
+          {
+              ${fields:C|}
 
-          writeConstructors(
-              typeName,
-              serviceSchema,
-              primaryProtocol,
-              modeledHttpVersionPreference,
-              needsRuntime,
-              needsIdempotency,
-              operations);
+              ${constructors:C|}
+              private static readonly ${readOnlyList:T}<string> ModeledAuthSchemes = ${authSchemes:L};
 
-          // Every auth scheme that can be effective for a service operation. This includes schemes
-          // introduced solely by an operation-level @auth override, so constructor validation does
-          // not reject a client configured specifically for such an operation.
-          writer.write(
-              "private static readonly $T<string> ModeledAuthSchemes = $L;",
-              RuntimeTypes.I_READ_ONLY_LIST,
-              modeledAuthSchemesLiteral());
-          writer.write("");
-
-          if (needsIdempotency) {
-            writer.write("");
-            writer.write(
-                "private static string DefaultIdempotencyToken() => $T.NewGuid().ToString();",
-                RuntimeTypes.GUID);
+              ${lifecycle:C|}
+              ${operations:C|}
           }
-          writer.write("");
-
-          // Disposes the HttpClient the client created itself; a no-op when the caller supplied the
-          // HttpClient or runtime, so injected transports are never
-          // closed.
-          if (needsRuntime) {
-            writer.write("public void Dispose() => environment.Dispose();");
-          } else {
-            writer.write("public void Dispose() { }");
-          }
-          writer.write("");
-
-          for (OperationShape op : operations) {
-            writeOperationMethod(model, op);
-            paginationInfo(context, service, op).ifPresent(info -> writePaginatorMethods(op, info));
-          }
-        });
+          """);
+    } finally {
+      writer.popState();
+    }
     writer.write("");
     writeConfigClass(typeName);
+  }
+
+  private void writeFields(
+      List<OperationShape> operations, boolean needsRuntime, boolean needsIdempotency) {
+    if (needsRuntime) {
+      writer.write("private readonly $T runtime;", RuntimeTypes.SMITHY_CLIENT_RUNTIME);
+      writer.write("private readonly $T environment;", RuntimeTypes.SMITHY_HTTP_CLIENT_ENVIRONMENT);
+    }
+    if (needsIdempotency) {
+      writer.write("private readonly $T<string> idempotencyTokenProvider;", RuntimeTypes.FUNC);
+    }
+    // Bind each operation's protocol once, during construction.
+    for (OperationShape op : operations) {
+      if (canBindOperation(op)) {
+        writer.write(
+            "private readonly $T<$L, $L> $LBinding;",
+            RuntimeTypes.SMITHY_OPERATION_BINDING,
+            SchemaGenerator.operationShapeType(writer, context, op.getInputShape()),
+            SchemaGenerator.operationShapeType(writer, context, op.getOutputShape()),
+            CSharpNaming.typeName(op.getId().getName()));
+      }
+    }
   }
 
   private void writeConstructors(
@@ -388,7 +413,8 @@ public final class ClientGenerator implements Runnable {
       // The explicit endpoint wins over config.Endpoint. The private constructor receives a copy.
       writer.write(
           """
-          public ${client:L}(${uri:T} endpoint, ${client:L}Config? config = null) : this(WithEndpoint(endpoint, config))
+          public ${client:L}(${uri:T} endpoint, ${client:L}Config? config = null)
+              : this(WithEndpoint(endpoint, config))
           {
           }
 
@@ -414,7 +440,8 @@ public final class ClientGenerator implements Runnable {
             public ${client:L}(${runtime:T} runtime, ${client:L}Config? config = null)
             {
                 config ??= new ${client:L}Config();
-                this.environment = ${environment:T}.FromRuntime(${serviceSchema:L}, runtime, config, static () => new ${protocol:L}());
+                this.environment = ${environment:T}.FromRuntime(
+                    ${serviceSchema:L}, runtime, config, static () => new ${protocol:L}());
                 this.runtime = environment.Runtime;
                 var serviceProtocol = environment.ServiceProtocol;
                 ${bindings:C|}
@@ -449,30 +476,46 @@ public final class ClientGenerator implements Runnable {
   }
 
   private void writeSafeOperationBindings(List<OperationShape> operations) {
-    writer.write("try");
-    writer.openBlock("{", "}", () -> writeOperationBindings(operations));
-    writer.write("catch");
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("environment.Dispose();");
-          writer.write("throw;");
-        });
+    writer.pushState();
+    try {
+      writer.putContext("bindings", writer.consumer(w -> writeOperationBindings(operations)));
+      writer.write(
+          """
+          try
+          {
+              ${bindings:C|}
+          }
+          catch
+          {
+              environment.Dispose();
+              throw;
+          }\
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   private void writeEnvironmentCreation(
       String serviceSchema, String primaryProtocol, String preference, String httpClient) {
-    writer.write(
-        "this.environment = $T.Create($L, config, static () => new $L(), ModeledAuthSchemes, $L,"
-            + " $L);",
-        RuntimeTypes.SMITHY_HTTP_CLIENT_ENVIRONMENT,
-        serviceSchema,
-        primaryProtocol,
-        preference,
-        httpClient);
-    writer.write("this.runtime = environment.Runtime;");
-    writer.write("var serviceProtocol = environment.ServiceProtocol;");
+    writer.pushState();
+    try {
+      writer.putContext("environment", RuntimeTypes.SMITHY_HTTP_CLIENT_ENVIRONMENT);
+      writer.putContext("serviceSchema", serviceSchema);
+      writer.putContext("protocol", primaryProtocol);
+      writer.putContext("preference", preference);
+      writer.putContext("httpClientArgument", httpClient);
+      writer.write(
+          """
+          this.environment = ${environment:T}.Create(
+              ${serviceSchema:L}, config, static () => new ${protocol:L}(),
+              ModeledAuthSchemes, ${preference:L}, ${httpClientArgument:L});
+          this.runtime = environment.Runtime;
+          var serviceProtocol = environment.ServiceProtocol;\
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   /**
@@ -570,23 +613,34 @@ public final class ClientGenerator implements Runnable {
    * Binds each operation's protocol from the local {@code serviceProtocol} in a constructor body.
    */
   private void writeOperationBindings(List<OperationShape> operations) {
-    for (OperationShape op : operations) {
-      if (!canBindOperation(op)) {
-        continue;
+    writer.pushState();
+    try {
+      writer.putContext("binding", RuntimeTypes.SMITHY_OPERATION_BINDING);
+      writer.putContext(
+          "serviceSchema", SchemaGenerator.serviceSchemaAccessor(writer, context, service));
+      for (OperationShape op : operations) {
+        if (!canBindOperation(op)) {
+          continue;
+        }
+        writer.putContext("operation", CSharpNaming.typeName(op.getId().getName()));
+        writer.putContext(
+            "inputType", SchemaGenerator.operationShapeType(writer, context, op.getInputShape()));
+        writer.putContext(
+            "outputType", SchemaGenerator.operationShapeType(writer, context, op.getOutputShape()));
+        writer.putContext(
+            "operationSchema", SchemaGenerator.operationSchemaAccessor(writer, context, op));
+        writer.putContext("authSchemes", operationAuthSchemesLiteral(op));
+        writer.putContext("hostPrefix", operationHostPrefixLiteral(op));
+        writer.write(
+            """
+            this.${operation:L}Binding = new ${binding:T}<${inputType:L}, ${outputType:L}>(
+                ${serviceSchema:L}.Id, ${operationSchema:L}.Id,
+                serviceProtocol.ForClientOperation(${operationSchema:L}),
+                ${authSchemes:L}, ${hostPrefix:L});\
+            """);
       }
-      String operationSchema = SchemaGenerator.operationSchemaAccessor(writer, context, op);
-      writer.write(
-          "this.$LBinding = new $T<$L, $L>($L.Id, $L.Id, serviceProtocol.ForClientOperation($L),"
-              + " $L, $L);",
-          CSharpNaming.typeName(op.getId().getName()),
-          RuntimeTypes.SMITHY_OPERATION_BINDING,
-          SchemaGenerator.operationShapeType(writer, context, op.getInputShape()),
-          SchemaGenerator.operationShapeType(writer, context, op.getOutputShape()),
-          SchemaGenerator.serviceSchemaAccessor(writer, context, service),
-          operationSchema,
-          operationSchema,
-          operationAuthSchemesLiteral(op),
-          operationHostPrefixLiteral(op));
+    } finally {
+      writer.popState();
     }
   }
 
@@ -652,7 +706,8 @@ public final class ClientGenerator implements Runnable {
             """
             public ${signature:L}
             {
-                throw new ${notSupportedException:T}("Event-stream operations are not supported by the declared service protocols.");
+                throw new ${notSupportedException:T}(
+                  "Event-stream operations are not supported by the declared service protocols.");
             }
             """);
         writer.write("");
@@ -690,7 +745,8 @@ public final class ClientGenerator implements Runnable {
             public async ${signature:L}
             {
                 ${prepareInput:C|}
-                await runtime.InvokeAsync(${operation:L}Binding, ${inputArgument:L}, cancellationToken).ConfigureAwait(false);
+                await runtime.InvokeAsync(${operation:L}Binding, ${inputArgument:L}, cancellationToken)
+                  .ConfigureAwait(false);
                 return;
             }
             """);
@@ -711,16 +767,27 @@ public final class ClientGenerator implements Runnable {
       return;
     }
 
-    writer.write("input = input with");
-    writer.openBlock(
-        "{",
-        "};",
-        () -> {
-          for (MemberShape member : idempotencyMembers) {
-            String prop = CSharpNaming.propertyName(member.getMemberName());
-            writer.write("$L = input.$L ?? this.idempotencyTokenProvider(),", prop, prop);
-          }
-        });
+    writer.pushState();
+    try {
+      writer.putContext(
+          "defaults",
+          writer.consumer(
+              w -> {
+                for (MemberShape member : idempotencyMembers) {
+                  String property = CSharpNaming.propertyName(member.getMemberName());
+                  w.write("$L = input.$L ?? this.idempotencyTokenProvider(),", property, property);
+                }
+              }));
+      writer.write(
+          """
+          input = input with
+          {
+              ${defaults:C|}
+          };\
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   private static Optional<String> paginatorItemElementType(
@@ -781,21 +848,22 @@ public final class ClientGenerator implements Runnable {
                 writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
                 writer.write(
                     """
-                    public async ${itemsSignature:L}
-                    {
-                        await foreach (var page in ${operation:L}PagesAsync(input, cancellationToken).ConfigureAwait(false))
-                        {
-                            var items = ${items:L};
-                            if (items is null)
-                            {
-                                continue;
-                            }
-                            foreach (var item in items.Values)
-                            {
-                                yield return item;
-                            }
-                        }
-                    }
+                      public async ${itemsSignature:L}
+                      {
+                          await foreach (var page in ${operation:L}PagesAsync(input, cancellationToken)
+                    .ConfigureAwait(false))
+                          {
+                              var items = ${items:L};
+                              if (items is null)
+                              {
+                                  continue;
+                              }
+                              foreach (var item in items.Values)
+                              {
+                                  yield return item;
+                              }
+                          }
+                      }
                     """);
                 writer.write("");
               });

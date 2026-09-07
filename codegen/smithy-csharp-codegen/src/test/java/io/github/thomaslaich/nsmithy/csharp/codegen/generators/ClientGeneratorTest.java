@@ -488,13 +488,15 @@ final class ClientGeneratorTest {
         generated);
     // ReadThing inherits the service's explicitly selected default.
     assertTrue(
-        generated.contains(
+        containsIgnoringWhitespace(
+            generated,
             "serviceProtocol.ForClientOperation(global::Example.Example.Auth.ReadThingSchema.Schema),"
                 + " new string[] { \"smithy.api#httpBearerAuth\" }, null);"),
         generated);
     // AdminThing's @auth trait overrides the service default.
     assertTrue(
-        generated.contains(
+        containsIgnoringWhitespace(
+            generated,
             "serviceProtocol.ForClientOperation(global::Example.Example.Auth.AdminThingSchema.Schema),"
                 + " new string[] { \"smithy.api#httpApiKeyAuth\" }, null);"),
         generated);
@@ -622,6 +624,10 @@ final class ClientGeneratorTest {
             "Auxiliary.Com.Amazonaws.Glacier");
 
     assertTrue(generated.contains("Interceptors.Add(new GlacierInterceptor());"), generated);
+  }
+
+  private static boolean containsIgnoringWhitespace(String actual, String expected) {
+    return actual.replaceAll("\\s+", "").contains(expected.replaceAll("\\s+", ""));
   }
 
   private String renderClient() throws Exception {

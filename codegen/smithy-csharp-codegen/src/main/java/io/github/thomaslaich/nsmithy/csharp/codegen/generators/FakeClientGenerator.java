@@ -66,28 +66,59 @@ public final class FakeClientGenerator implements Runnable {
             + " synthesized from the model otherwise. Responses are deterministic. Override an"
             + " operation method in a subclass to replace individual operations.",
         Map.of());
-    writer.write("public class $L : $L", fakeClass, interfaceName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          for (OperationShape op : ops) {
-            writeOperationMethod(op);
-            ClientGenerator.paginationInfo(context, service, op)
-                .ifPresent(info -> writePaginatorMethods(op, info));
-            writer.write("");
+    writer.pushState();
+    try {
+      writer.putContext("fakeClass", fakeClass);
+      writer.putContext("interfaceName", interfaceName);
+      writer.putContext(
+          "operations",
+          writer.consumer(
+              w -> {
+                for (OperationShape op : ops) {
+                  writeOperationMethod(op);
+                  ClientGenerator.paginationInfo(context, service, op)
+                      .ifPresent(info -> writePaginatorMethods(op, info));
+                  w.write("");
+                }
+              }));
+      writer.putContext(
+          "helpers",
+          writer.consumer(
+              w -> {
+                w.write("public virtual void Dispose() { }");
+                matcher.writePendingMatchers(w);
+                values.writePendingIterators(w);
+              }));
+      writer.write(
+          """
+          public class ${fakeClass:L} : ${interfaceName:L}
+          {
+              ${operations:C|}
+              ${helpers:C|}
           }
-          writer.write("public virtual void Dispose() { }");
-          matcher.writePendingMatchers(writer);
-          values.writePendingIterators(writer);
-        });
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   // ---------------- operation methods ----------------
 
   private void writeOperationMethod(OperationShape op) {
-    writer.write("public virtual $L", ClientGenerator.operationSignature(writer, context, op));
-    writer.openBlock("{", "}", () -> matcher.writeOperationBody(writer, op));
+    writer.pushState();
+    try {
+      writer.putContext("signature", ClientGenerator.operationSignature(writer, context, op));
+      writer.putContext("body", writer.consumer(w -> matcher.writeOperationBody(w, op)));
+      writer.write(
+          """
+          public virtual ${signature:L}
+          {
+              ${body:C|}
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   /**
@@ -96,48 +127,52 @@ public final class FakeClientGenerator implements Runnable {
    * virtual unary method, so overriding it also changes what the paginators yield.
    */
   private void writePaginatorMethods(OperationShape op, PaginationInfo info) {
-    String opName = CSharpNaming.typeName(op.getId().getName());
-
-    writer.write("");
-    writer.write(
-        "public virtual async $L",
-        ClientGenerator.withEnumeratorCancellation(
-            writer, ClientGenerator.paginatorPagesSignature(writer, context, op)));
-    writer.openBlock(
-        "{",
-        "}",
-        () ->
-            writer.write(
-                "yield return await $LAsync(input, cancellationToken).ConfigureAwait(false);",
-                opName));
-
-    ClientGenerator.paginatorItemsSignature(writer, context, info)
-        .ifPresent(
-            signature -> {
-              String itemsExpr = ClientGenerator.memberPathExpr("page", info.getItemsMemberPath());
-              writer.write("");
-              writer.write(
-                  "public virtual async $L",
-                  ClientGenerator.withEnumeratorCancellation(writer, signature));
-              writer.openBlock(
-                  "{",
-                  "}",
-                  () -> {
-                    writer.write(
-                        "await foreach (var page in $LPagesAsync(input,"
-                            + " cancellationToken).ConfigureAwait(false))",
-                        opName);
-                    writer.openBlock(
-                        "{",
-                        "}",
-                        () -> {
-                          writer.write("var items = $L;", itemsExpr);
-                          writer.write("if (items is null)");
-                          writer.openBlock("{", "}", () -> writer.write("continue;"));
-                          writer.write("foreach (var item in items.Values)");
-                          writer.openBlock("{", "}", () -> writer.write("yield return item;"));
-                        });
-                  });
-            });
+    writer.pushState();
+    try {
+      writer.putContext("operation", CSharpNaming.typeName(op.getId().getName()));
+      writer.putContext(
+          "pagesSignature",
+          ClientGenerator.withEnumeratorCancellation(
+              writer, ClientGenerator.paginatorPagesSignature(writer, context, op)));
+      writer.write("");
+      writer.write(
+          """
+          public virtual async ${pagesSignature:L}
+          {
+              yield return await ${operation:L}Async(input, cancellationToken).ConfigureAwait(false);
+          }
+          """);
+      ClientGenerator.paginatorItemsSignature(writer, context, info)
+          .ifPresent(
+              signature -> {
+                writer.putContext(
+                    "itemsSignature",
+                    ClientGenerator.withEnumeratorCancellation(writer, signature));
+                writer.putContext(
+                    "items", ClientGenerator.memberPathExpr("page", info.getItemsMemberPath()));
+                writer.write("");
+                writer.write(
+                    """
+                    public virtual async ${itemsSignature:L}
+                    {
+                        await foreach (var page in ${operation:L}PagesAsync(input, cancellationToken)
+                            .ConfigureAwait(false))
+                        {
+                            var items = ${items:L};
+                            if (items is null)
+                            {
+                                continue;
+                            }
+                            foreach (var item in items.Values)
+                            {
+                                yield return item;
+                            }
+                        }
+                    }
+                    """);
+              });
+    } finally {
+      writer.popState();
+    }
   }
 }
