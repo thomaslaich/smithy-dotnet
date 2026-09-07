@@ -4,8 +4,8 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -34,63 +34,52 @@ public final class MapGenerator implements Runnable {
     // Always a string, even when the key targets an enum shape: a map key is a JSON object name,
     // which has no other form. What the key targets is not lost — the schema carries that shape, so
     // a server holds the key to whatever it says — but it is not what the key is typed as.
-    String keyType = "string";
-    String valueType =
-        CSharpSymbolProvider.qualified(value) + (ShapeSupport.isSparse(shape) ? "?" : "");
+    String valueType = writer.typeName(value) + (ShapeSupport.isSparse(shape) ? "?" : "");
 
-    writer.writeXmlDocs(shape);
-    writer.write("public sealed partial record class $L", typeName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write(
-              "public $L(System.Collections.Generic.IReadOnlyDictionary<$L, $L> values)",
-              typeName,
-              keyType,
-              valueType);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(values);");
-                writer.write(
-                    "Values = new System.Collections.ObjectModel.ReadOnlyDictionary<$L, $L>("
-                        + "new System.Collections.Generic.Dictionary<$L, $L>(values));",
-                    keyType,
-                    valueType,
-                    keyType,
+    writer.pushState();
+    try {
+      writer.putContext("typeName", typeName);
+      writer.putContext("valueType", valueType);
+      writer.putContext("readOnlyDictionaryInterface", RuntimeTypes.I_READ_ONLY_DICTIONARY);
+      writer.putContext("readOnlyDictionary", RuntimeTypes.READ_ONLY_DICTIONARY);
+      writer.putContext("dictionary", RuntimeTypes.DICTIONARY);
+      writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+      writer.putContext(
+          "valuesProperty",
+          writer.consumer(
+              w -> {
+                w.writeXmlDocs(shape.getValue());
+                w.write(
+                    "public $T<string, $L> Values { get; }",
+                    RuntimeTypes.I_READ_ONLY_DICTIONARY,
                     valueType);
-              });
-          writer.write("");
-          writer.write(
-              "private $L(System.Collections.Generic.Dictionary<$L, $L> values)",
-              typeName,
-              keyType,
-              valueType);
-          writer.openBlock(
-              "{",
-              "}",
-              () ->
-                  writer.write(
-                      "Values = new System.Collections.ObjectModel.ReadOnlyDictionary<$L,"
-                          + " $L>(values);",
-                      keyType,
-                      valueType));
-          writer.write("");
-          writer.write(
-              "internal static $L FromOwnedDictionary("
-                  + "System.Collections.Generic.Dictionary<$L, $L> values) => new(values);",
-              typeName,
-              keyType,
-              valueType);
-          writer.write("");
-          writer.writeXmlDocs(shape.getValue());
-          writer.write(
-              "public System.Collections.Generic.IReadOnlyDictionary<$L, $L> Values { get; }",
-              keyType,
-              valueType);
-        });
+              }));
+      writer.writeXmlDocs(shape);
+      writer.write(
+          """
+          public sealed partial record class ${typeName:L}
+          {
+              public ${typeName:L}(${readOnlyDictionaryInterface:T}<string, ${valueType:L}> values)
+              {
+                  ${argumentNullException:T}.ThrowIfNull(values);
+                  Values = new ${readOnlyDictionary:T}<string, ${valueType:L}>(
+                      new ${dictionary:T}<string, ${valueType:L}>(values));
+              }
+
+              private ${typeName:L}(${dictionary:T}<string, ${valueType:L}> values)
+              {
+                  Values = new ${readOnlyDictionary:T}<string, ${valueType:L}>(values);
+              }
+
+              internal static ${typeName:L} FromOwnedDictionary(
+                  ${dictionary:T}<string, ${valueType:L}> values) => new(values);
+
+              ${valuesProperty:C|}
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
     writer.write("");
     SchemaGenerator.writeMapSchema(writer, context, shape);
   }

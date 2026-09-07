@@ -28,8 +28,6 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 @SmithyInternalApi
 public final class ClientDependencyInjectionGenerator implements Runnable {
 
-  private static final String MS_EXT_DI = "Microsoft.Extensions.DependencyInjection";
-
   private final GenerationContext context;
   private final CSharpWriter writer;
   private final ServiceShape service;
@@ -52,9 +50,9 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
     String typeName = CSharpNaming.typeName(service.getId().getName());
     String clientName = typeName + "Client";
     String interfaceName = "I" + clientName;
-    String primaryProtocol = ProtocolSupport.protocolType(kinds.get(0));
     String modeledHttpVersionPreference =
         ClientGenerator.httpVersionPreferenceLiteral(
+            writer,
             ProtocolSupport.httpVersionPreference(
                 service,
                 kinds.get(0),
@@ -63,65 +61,56 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
     String namespace = context.settings().csharpNamespace(service.getId().getNamespace());
     String clientKey = (namespace.isEmpty() ? "" : namespace + ".") + clientName;
 
-    writer.addImport(MS_EXT_DI);
-    writer.addImport(RuntimeTypes.NSMITHY_CLIENT);
-    writer.addImport(ProtocolSupport.runtimeProtocolNamespace(kinds.get(0)));
+    writer.addImport(RuntimeTypes.MS_EXT_DI);
 
-    writer.write("public static class $LServiceCollectionExtensions", clientName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          // Overload 1: endpoint (turnkey).
-          writer.write(
-              "/// <summary>Registers <see cref=\"$L\"/> as a typed HttpClient"
-                  + " (IHttpClientFactory) for the given endpoint. Set the protocol, auth schemes,"
-                  + " and interceptors via <paramref name=\"configure\"/>.</summary>",
-              interfaceName);
-          writer.write("public static IHttpClientBuilder Add$L(", clientName);
-          writer.write("    this IServiceCollection services,");
-          writer.write("    System.Uri endpoint,");
-          writer.write("    System.Action<$LConfig>? configure = null) =>", clientName);
-          writer.write(
-              "    services.Add$L(client => client.BaseAddress = endpoint, configure);",
-              clientName);
-          writer.write("");
+    writer.pushState();
+    try {
+      writer.putContext("client", clientName);
+      writer.putContext("clientInterface", interfaceName);
+      writer.putContext("clientKey", CSharpNaming.formatString(clientKey));
+      writer.putContext("protocol", ProtocolSupport.protocolType(kinds.get(0)));
+      writer.putContext("httpVersionPreference", modeledHttpVersionPreference);
+      writer.putContext("httpClientBuilder", RuntimeTypes.I_HTTP_CLIENT_BUILDER);
+      writer.putContext("serviceCollection", RuntimeTypes.I_SERVICE_COLLECTION);
+      writer.putContext("uri", RuntimeTypes.URI);
+      writer.putContext("action", RuntimeTypes.ACTION);
+      writer.putContext("httpClient", RuntimeTypes.HTTP_CLIENT);
+      writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+      writer.putContext("httpClientEnvironment", RuntimeTypes.SMITHY_HTTP_CLIENT_ENVIRONMENT);
+      writer.write(
+          """
+          public static class ${client:L}ServiceCollectionExtensions
+          {
+              /// <summary>Registers <see cref="${clientInterface:L}"/> as a typed HttpClient (IHttpClientFactory) for the given endpoint. Set the protocol, auth schemes, and interceptors via <paramref name="configure"/>.</summary>
+              public static ${httpClientBuilder:T} Add${client:L}(
+                  this ${serviceCollection:T} services,
+                  ${uri:T} endpoint,
+                  ${action:T}<${client:L}Config>? configure = null) =>
+                  services.Add${client:L}(client => client.BaseAddress = endpoint, configure);
 
-          // Overload 2: configure callbacks (Refit-style HttpClient setup + client config).
-          writer.write(
-              "/// <summary>Registers <see cref=\"$L\"/> as a typed HttpClient"
-                  + " (IHttpClientFactory). Configure the HttpClient (at minimum its BaseAddress)"
-                  + " via <paramref name=\"configureClient\"/>; set the protocol, auth schemes, and"
-                  + " interceptors via <paramref name=\"configure\"/>.</summary>",
-              interfaceName);
-          writer.write("public static IHttpClientBuilder Add$L(", clientName);
-          writer.write("    this IServiceCollection services,");
-          writer.write("    System.Action<System.Net.Http.HttpClient>? configureClient = null,");
-          writer.write("    System.Action<$LConfig>? configure = null)", clientName);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("System.ArgumentNullException.ThrowIfNull(services);");
-                writer.write("var config = new $LConfig();", clientName);
-                writer.write("configure?.Invoke(config);");
-                writer.write("return services");
-                writer.write("    .AddHttpClient(");
-                writer.write("        $L,", CSharpNaming.formatString(clientKey));
-                writer.write("        client =>");
-                writer.write("        {");
-                writer.write(
-                    "            SmithyHttpClientEnvironment.ConfigureHttpClient(client, config,"
-                        + " static () => new $L(), $L);",
-                    primaryProtocol,
-                    modeledHttpVersionPreference);
-                writer.write("            configureClient?.Invoke(client);");
-                writer.write("        })");
-                writer.write(
-                    "    .AddTypedClient<$L>((httpClient, _) => new $L(httpClient, config));",
-                    interfaceName,
-                    clientName);
-              });
-        });
+              /// <summary>Registers <see cref="${clientInterface:L}"/> as a typed HttpClient (IHttpClientFactory). Configure the HttpClient (at minimum its BaseAddress) via <paramref name="configureClient"/>; set the protocol, auth schemes, and interceptors via <paramref name="configure"/>.</summary>
+              public static ${httpClientBuilder:T} Add${client:L}(
+                  this ${serviceCollection:T} services,
+                  ${action:T}<${httpClient:T}>? configureClient = null,
+                  ${action:T}<${client:L}Config>? configure = null)
+              {
+                  ${argumentNullException:T}.ThrowIfNull(services);
+                  var config = new ${client:L}Config();
+                  configure?.Invoke(config);
+                  return services
+                      .AddHttpClient(
+                          ${clientKey:L},
+                          client =>
+                          {
+                              ${httpClientEnvironment:T}.ConfigureHttpClient(client, config, static () => new ${protocol:T}(), ${httpVersionPreference:L});
+                              configureClient?.Invoke(client);
+                          })
+                      .AddTypedClient<${clientInterface:L}>((httpClient, _) => new ${client:L}(httpClient, config));
+              }
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 }

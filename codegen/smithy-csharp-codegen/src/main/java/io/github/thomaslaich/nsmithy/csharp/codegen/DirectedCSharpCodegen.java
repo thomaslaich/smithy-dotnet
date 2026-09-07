@@ -54,7 +54,12 @@ final class DirectedCSharpCodegen
         .settings(directive.settings())
         .symbolProvider(directive.symbolProvider())
         .fileManifest(directive.fileManifest())
-        .writerDelegator(new CSharpDelegator(directive.fileManifest(), directive.symbolProvider()))
+        .writerDelegator(
+            new CSharpDelegator(
+                directive.fileManifest(),
+                directive.symbolProvider(),
+                directive.model(),
+                directive.settings()))
         .integrations(directive.integrations().stream().toList())
         .build();
   }

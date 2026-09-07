@@ -12,5 +12,8 @@ public final class SymbolProperties {
   /** Marks a symbol as a C# value type (struct/primitive). */
   public static final String IS_VALUE_TYPE = "isValueType";
 
+  /** Marks a type reference used as a C# attribute, permitting the short attribute spelling. */
+  public static final String IS_ATTRIBUTE = "isAttribute";
+
   private SymbolProperties() {}
 }

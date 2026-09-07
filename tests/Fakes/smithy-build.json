@@ -1,6 +1,8 @@
 {
   "version": "1.0",
-  "sources": ["model/weather.smithy"],
+  "sources": [
+    "model"
+  ],
   "maven": {
     "repositories": [
       {
@@ -19,6 +21,14 @@
           "service": "example.weather#Weather",
           "baseNamespace": "",
           "generateFakes": true
+        }
+      }
+    },
+    "type-names": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "example.names#Names",
+          "baseNamespace": ""
         }
       }
     }
