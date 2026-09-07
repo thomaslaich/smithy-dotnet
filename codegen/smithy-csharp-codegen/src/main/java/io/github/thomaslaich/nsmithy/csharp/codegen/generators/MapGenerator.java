@@ -34,66 +34,52 @@ public final class MapGenerator implements Runnable {
     // Always a string, even when the key targets an enum shape: a map key is a JSON object name,
     // which has no other form. What the key targets is not lost — the schema carries that shape, so
     // a server holds the key to whatever it says — but it is not what the key is typed as.
-    String keyType = "string";
     String valueType = writer.typeName(value) + (ShapeSupport.isSparse(shape) ? "?" : "");
 
-    writer.writeXmlDocs(shape);
-    writer.write("public sealed partial record class $L", typeName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write(
-              "public $L($T<$L, $L> values)",
-              typeName,
-              RuntimeTypes.I_READ_ONLY_DICTIONARY,
-              keyType,
-              valueType);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("$T.ThrowIfNull(values);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
-                writer.write(
-                    "Values = new $T<$L, $L>(new $T<$L, $L>(values));",
-                    RuntimeTypes.READ_ONLY_DICTIONARY,
-                    keyType,
-                    valueType,
-                    RuntimeTypes.DICTIONARY,
-                    keyType,
+    writer.pushState();
+    try {
+      writer.putContext("typeName", typeName);
+      writer.putContext("valueType", valueType);
+      writer.putContext("readOnlyDictionaryInterface", RuntimeTypes.I_READ_ONLY_DICTIONARY);
+      writer.putContext("readOnlyDictionary", RuntimeTypes.READ_ONLY_DICTIONARY);
+      writer.putContext("dictionary", RuntimeTypes.DICTIONARY);
+      writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+      writer.putContext(
+          "valuesProperty",
+          writer.consumer(
+              w -> {
+                w.writeXmlDocs(shape.getValue());
+                w.write(
+                    "public $T<string, $L> Values { get; }",
+                    RuntimeTypes.I_READ_ONLY_DICTIONARY,
                     valueType);
-              });
-          writer.write("");
-          writer.write(
-              "private $L($T<$L, $L> values)",
-              typeName,
-              RuntimeTypes.DICTIONARY,
-              keyType,
-              valueType);
-          writer.openBlock(
-              "{",
-              "}",
-              () ->
-                  writer.write(
-                      "Values = new $T<$L, $L>(values);",
-                      RuntimeTypes.READ_ONLY_DICTIONARY,
-                      keyType,
-                      valueType));
-          writer.write("");
-          writer.write(
-              "internal static $L FromOwnedDictionary($T<$L, $L> values) => new(values);",
-              typeName,
-              RuntimeTypes.DICTIONARY,
-              keyType,
-              valueType);
-          writer.write("");
-          writer.writeXmlDocs(shape.getValue());
-          writer.write(
-              "public $T<$L, $L> Values { get; }",
-              RuntimeTypes.I_READ_ONLY_DICTIONARY,
-              keyType,
-              valueType);
-        });
+              }));
+      writer.writeXmlDocs(shape);
+      writer.write(
+          """
+          public sealed partial record class ${typeName:L}
+          {
+              public ${typeName:L}(${readOnlyDictionaryInterface:T}<string, ${valueType:L}> values)
+              {
+                  ${argumentNullException:T}.ThrowIfNull(values);
+                  Values = new ${readOnlyDictionary:T}<string, ${valueType:L}>(
+                      new ${dictionary:T}<string, ${valueType:L}>(values));
+              }
+
+              private ${typeName:L}(${dictionary:T}<string, ${valueType:L}> values)
+              {
+                  Values = new ${readOnlyDictionary:T}<string, ${valueType:L}>(values);
+              }
+
+              internal static ${typeName:L} FromOwnedDictionary(
+                  ${dictionary:T}<string, ${valueType:L}> values) => new(values);
+
+              ${valuesProperty:C|}
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
     writer.write("");
     SchemaGenerator.writeMapSchema(writer, context, shape);
   }

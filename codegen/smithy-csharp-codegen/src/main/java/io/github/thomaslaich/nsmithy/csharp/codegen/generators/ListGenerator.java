@@ -33,36 +33,47 @@ public final class ListGenerator implements Runnable {
     Symbol member = sp.toSymbol(context.model().expectShape(shape.getMember().getTarget()));
     String memberType = writer.typeName(member) + (ShapeSupport.isSparse(shape) ? "?" : "");
 
-    writer.writeXmlDocs(shape);
-    writer.write("public sealed partial record class $L", typeName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("public $L($T<$L> values)", typeName, RuntimeTypes.I_ENUMERABLE, memberType);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("$T.ThrowIfNull(values);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
-                writer.write(
-                    "Values = $T.AsReadOnly($T.ToArray(values));",
-                    RuntimeTypes.ARRAY,
-                    RuntimeTypes.ENUMERABLE);
-              });
-          writer.write("");
-          writer.write("private $L($T<$L> values)", typeName, RuntimeTypes.LIST, memberType);
-          writer.openBlock("{", "}", () -> writer.write("Values = values.AsReadOnly();"));
-          writer.write("");
-          writer.write(
-              "internal static $L FromOwnedList($T<$L> values) => new(values);",
-              typeName,
-              RuntimeTypes.LIST,
-              memberType);
-          writer.write("");
-          writer.writeXmlDocs(shape.getMember());
-          writer.write("public $T<$L> Values { get; }", RuntimeTypes.I_READ_ONLY_LIST, memberType);
-        });
+    writer.pushState();
+    try {
+      writer.putContext("typeName", typeName);
+      writer.putContext("memberType", memberType);
+      writer.putContext("enumerable", RuntimeTypes.I_ENUMERABLE);
+      writer.putContext("list", RuntimeTypes.LIST);
+      writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+      writer.putContext("array", RuntimeTypes.ARRAY);
+      writer.putContext("enumerableMethods", RuntimeTypes.ENUMERABLE);
+      writer.putContext(
+          "valuesProperty",
+          writer.consumer(
+              w -> {
+                w.writeXmlDocs(shape.getMember());
+                w.write("public $T<$L> Values { get; }", RuntimeTypes.I_READ_ONLY_LIST, memberType);
+              }));
+      writer.writeXmlDocs(shape);
+      writer.write(
+          """
+          public sealed partial record class ${typeName:L}
+          {
+              public ${typeName:L}(${enumerable:T}<${memberType:L}> values)
+              {
+                  ${argumentNullException:T}.ThrowIfNull(values);
+                  Values = ${array:T}.AsReadOnly(${enumerableMethods:T}.ToArray(values));
+              }
+
+              private ${typeName:L}(${list:T}<${memberType:L}> values)
+              {
+                  Values = values.AsReadOnly();
+              }
+
+              internal static ${typeName:L} FromOwnedList(${list:T}<${memberType:L}> values) =>
+                  new(values);
+
+              ${valuesProperty:C|}
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
     writer.write("");
     SchemaGenerator.writeListSchema(writer, context, shape);
   }
