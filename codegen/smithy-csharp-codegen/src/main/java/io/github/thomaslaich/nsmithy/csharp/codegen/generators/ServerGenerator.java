@@ -413,69 +413,83 @@ public final class ServerGenerator implements Runnable {
 
   private void writeSelectableMapMethod(
       String contract, List<Kind> serverKinds, String protocolEnum) {
-    writer.write(
-        "public static $T Map$L(this $T endpoints, $L protocols = $L.$L)",
-        RuntimeTypes.I_ENDPOINT_ROUTE_BUILDER,
-        contract,
-        RuntimeTypes.I_ENDPOINT_ROUTE_BUILDER,
-        protocolEnum,
-        protocolEnum,
-        mapSuffix(serverKinds.get(0)));
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("$T.ThrowIfNull(endpoints);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
-          writer.write("if ((protocols & ~$L.All) != 0)", protocolEnum);
-          writer.openBlock(
-              "{",
-              "}",
-              () ->
-                  writer.write(
-                      "throw new $T(nameof(protocols), protocols, \"Unknown $L value.\");",
-                      RuntimeTypes.ARGUMENT_OUT_OF_RANGE_EXCEPTION,
-                      protocolEnum));
-          writer.write("");
-          writer.write(
-              "var mappedRoutes = new $T<string>($T.Ordinal);",
-              RuntimeTypes.HASH_SET,
-              RuntimeTypes.STRING_COMPARER);
-          for (Kind kind : serverKinds) {
-            writer.write("if ((protocols & $L.$L) != 0)", protocolEnum, mapSuffix(kind));
-            writer.openBlock(
-                "{",
-                "}",
-                () -> writer.write("Map$L$L(endpoints, mappedRoutes);", contract, mapSuffix(kind)));
+    writer.pushState();
+    try {
+      writer.putContext("contract", contract);
+      writer.putContext("protocolEnum", protocolEnum);
+      writer.putContext("defaultProtocol", mapSuffix(serverKinds.get(0)));
+      writer.putContext("endpointRouteBuilder", RuntimeTypes.I_ENDPOINT_ROUTE_BUILDER);
+      writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+      writer.putContext(
+          "argumentOutOfRangeException", RuntimeTypes.ARGUMENT_OUT_OF_RANGE_EXCEPTION);
+      writer.putContext("hashSet", RuntimeTypes.HASH_SET);
+      writer.putContext("stringComparer", RuntimeTypes.STRING_COMPARER);
+      writer.putContext(
+          "protocolMappings",
+          writer.consumer(w -> writeSelectedProtocolMappings(contract, serverKinds, protocolEnum)));
+      writer.write(
+          """
+          public static ${endpointRouteBuilder:T} Map${contract:L}(this ${endpointRouteBuilder:T} endpoints, ${protocolEnum:L} protocols = ${protocolEnum:L}.${defaultProtocol:L})
+          {
+              ${argumentNullException:T}.ThrowIfNull(endpoints);
+              if ((protocols & ~${protocolEnum:L}.All) != 0)
+              {
+                  throw new ${argumentOutOfRangeException:T}(nameof(protocols), protocols, "Unknown ${protocolEnum:L} value.");
+              }
+
+              var mappedRoutes = new ${hashSet:T}<string>(${stringComparer:T}.Ordinal);
+              ${protocolMappings:C|}
+
+              return endpoints;
           }
-          writer.write("");
-          writer.write("return endpoints;");
-        });
+          """);
+    } finally {
+      writer.popState();
+    }
+  }
+
+  private void writeSelectedProtocolMappings(
+      String contract, List<Kind> serverKinds, String protocolEnum) {
+    writer.pushState();
+    try {
+      writer.putContext("contract", contract);
+      writer.putContext("protocolEnum", protocolEnum);
+      for (Kind kind : serverKinds) {
+        writer.putContext("protocol", mapSuffix(kind));
+        writer.write(
+            """
+            if ((protocols & ${protocolEnum:L}.${protocol:L}) != 0)
+            {
+                Map${contract:L}${protocol:L}(endpoints, mappedRoutes);
+            }
+            """);
+      }
+    } finally {
+      writer.popState();
+    }
   }
 
   private void writeRouteConflictHelper(String contract, String protocolEnum) {
-    writer.write(
-        "private static void EnsureRouteAvailable($T<string> mappedRoutes, string method, string"
-            + " routePattern, $L protocol)",
-        RuntimeTypes.HASH_SET,
-        protocolEnum);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("var route = method + \" \" + routePattern;");
-          writer.write("if (!mappedRoutes.Add(route))");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write(
-                    "throw new $T(\"Mapping \" + protocol + \" for $L would register duplicate"
-                        + " route '\" + route + \"'. Map conflicting protocols on different"
-                        + " endpoint route builders, hosts, or ports.\");",
-                    RuntimeTypes.INVALID_OPERATION_EXCEPTION,
-                    contract);
-              });
-        });
+    writer.pushState();
+    try {
+      writer.putContext("contract", contract);
+      writer.putContext("protocolEnum", protocolEnum);
+      writer.putContext("hashSet", RuntimeTypes.HASH_SET);
+      writer.putContext("invalidOperationException", RuntimeTypes.INVALID_OPERATION_EXCEPTION);
+      writer.write(
+          """
+          private static void EnsureRouteAvailable(${hashSet:T}<string> mappedRoutes, string method, string routePattern, ${protocolEnum:L} protocol)
+          {
+              var route = method + " " + routePattern;
+              if (!mappedRoutes.Add(route))
+              {
+                  throw new ${invalidOperationException:T}("Mapping " + protocol + " for ${contract:L} would register duplicate route '" + route + "'. Map conflicting protocols on different endpoint route builders, hosts, or ports.");
+              }
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   private void writeProtocolMapHelper(
