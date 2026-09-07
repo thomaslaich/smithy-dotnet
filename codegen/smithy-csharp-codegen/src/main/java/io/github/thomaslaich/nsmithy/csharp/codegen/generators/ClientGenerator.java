@@ -643,50 +643,62 @@ public final class ClientGenerator implements Runnable {
 
   private void writeOperationMethod(Model model, OperationShape op) {
     writer.writeXmlDocs(op, operationParameterDocs(model, op));
-    if (!canBindOperation(op)) {
-      writer.write("public $L", operationSignature(writer, context, op));
-      writer.openBlock(
-          "{",
-          "}",
-          () ->
-              writer.write(
-                  "throw new $T(\"Event-stream operations are not supported by the declared service"
-                      + " protocols.\");",
-                  RuntimeTypes.NOT_SUPPORTED_EXCEPTION));
+    writer.pushState();
+    try {
+      writer.putContext("signature", operationSignature(writer, context, op));
+      if (!canBindOperation(op)) {
+        writer.putContext("notSupportedException", RuntimeTypes.NOT_SUPPORTED_EXCEPTION);
+        writer.write(
+            """
+            public ${signature:L}
+            {
+                throw new ${notSupportedException:T}("Event-stream operations are not supported by the declared service protocols.");
+            }
+            """);
+        writer.write("");
+        return;
+      }
+
+      boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
+      boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
+      writer.putContext("operation", CSharpNaming.typeName(op.getId().getName()));
+      writer.putContext(
+          "inputArgument",
+          hasInput ? "input" : writer.typeName(RuntimeTypes.SMITHY_UNIT) + ".Value");
+      writer.putContext(
+          "prepareInput",
+          writer.consumer(
+              w -> {
+                if (hasInput) {
+                  w.write("$T.ThrowIfNull(input);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+                  writeIdempotencyTokenDefaults(
+                      model.expectShape(op.getInputShape(), StructureShape.class));
+                }
+              }));
+      if (hasOutput) {
+        writer.write(
+            """
+            public ${signature:L}
+            {
+                ${prepareInput:C|}
+                return runtime.InvokeAsync(${operation:L}Binding, ${inputArgument:L}, cancellationToken);
+            }
+            """);
+      } else {
+        writer.write(
+            """
+            public async ${signature:L}
+            {
+                ${prepareInput:C|}
+                await runtime.InvokeAsync(${operation:L}Binding, ${inputArgument:L}, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            """);
+      }
       writer.write("");
-      return;
+    } finally {
+      writer.popState();
     }
-
-    boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
-    boolean hasOutput = !ShapeSupport.isUnit(op.getOutputShape());
-    String opName = CSharpNaming.typeName(op.getId().getName());
-    String inputArg = hasInput ? "input" : (writer.typeName(RuntimeTypes.SMITHY_UNIT) + ".Value");
-
-    writer.write(
-        hasOutput ? "public $L" : "public async $L", operationSignature(writer, context, op));
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          if (hasInput) {
-            writer.write("$T.ThrowIfNull(input);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
-            writeIdempotencyTokenDefaults(
-                model.expectShape(op.getInputShape(), StructureShape.class));
-          }
-
-          if (hasOutput) {
-            writer.write(
-                "return runtime.InvokeAsync($LBinding, $L, cancellationToken);", opName, inputArg);
-          } else {
-            writer.write(
-                "await runtime.InvokeAsync($LBinding, $L,"
-                    + " cancellationToken).ConfigureAwait(false);",
-                opName,
-                inputArg);
-            writer.write("return;");
-          }
-        });
-    writer.write("");
   }
 
   private void writeIdempotencyTokenDefaults(StructureShape input) {
