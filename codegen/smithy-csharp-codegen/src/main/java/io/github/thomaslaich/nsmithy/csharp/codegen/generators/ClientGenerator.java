@@ -743,66 +743,65 @@ public final class ClientGenerator implements Runnable {
    * lifecycle (auth, retries, endpoint resolution, telemetry).
    */
   private void writePaginatorMethods(OperationShape op, PaginationInfo info) {
-    String opName = CSharpNaming.typeName(op.getId().getName());
-    String tokenProperty = CSharpNaming.propertyName(info.getInputTokenMember().getMemberName());
-    String outputTokenExpr = memberPathExpr("output", info.getOutputTokenMemberPath());
+    writer.pushState();
+    try {
+      writer.putContext("operation", CSharpNaming.typeName(op.getId().getName()));
+      writer.putContext(
+          "tokenProperty", CSharpNaming.propertyName(info.getInputTokenMember().getMemberName()));
+      writer.putContext("outputToken", memberPathExpr("output", info.getOutputTokenMemberPath()));
+      writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+      writer.putContext(
+          "pagesSignature",
+          withEnumeratorCancellation(writer, paginatorPagesSignature(writer, context, op)));
+      writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
+      writer.write(
+          """
+          public async ${pagesSignature:L}
+          {
+              ${argumentNullException:T}.ThrowIfNull(input);
+              var output = await ${operation:L}Async(input, cancellationToken).ConfigureAwait(false);
+              yield return output;
+              var token = ${outputToken:L};
+              while (token is not null)
+              {
+                  input = input with { ${tokenProperty:L} = token };
+                  output = await ${operation:L}Async(input, cancellationToken).ConfigureAwait(false);
+                  yield return output;
+                  token = ${outputToken:L};
+              }
+          }
+          """);
+      writer.write("");
 
-    writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
-    writer.write(
-        "public async $L",
-        withEnumeratorCancellation(writer, paginatorPagesSignature(writer, context, op)));
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("$T.ThrowIfNull(input);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
-          writer.write(
-              "var output = await $LAsync(input, cancellationToken).ConfigureAwait(false);",
-              opName);
-          writer.write("yield return output;");
-          writer.write("var token = $L;", outputTokenExpr);
-          writer.write("while (token is not null)");
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("input = input with { $L = token };", tokenProperty);
+      paginatorItemsSignature(writer, context, info)
+          .ifPresent(
+              signature -> {
+                writer.putContext("itemsSignature", withEnumeratorCancellation(writer, signature));
+                writer.putContext("items", memberPathExpr("page", info.getItemsMemberPath()));
+                writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
                 writer.write(
-                    "output = await $LAsync(input, cancellationToken).ConfigureAwait(false);",
-                    opName);
-                writer.write("yield return output;");
-                writer.write("token = $L;", outputTokenExpr);
+                    """
+                    public async ${itemsSignature:L}
+                    {
+                        await foreach (var page in ${operation:L}PagesAsync(input, cancellationToken).ConfigureAwait(false))
+                        {
+                            var items = ${items:L};
+                            if (items is null)
+                            {
+                                continue;
+                            }
+                            foreach (var item in items.Values)
+                            {
+                                yield return item;
+                            }
+                        }
+                    }
+                    """);
+                writer.write("");
               });
-        });
-    writer.write("");
-
-    paginatorItemsSignature(writer, context, info)
-        .ifPresent(
-            signature -> {
-              String itemsExpr = memberPathExpr("page", info.getItemsMemberPath());
-              writer.writeXmlDocs(op, operationParameterDocs(context.model(), op));
-              writer.write("public async $L", withEnumeratorCancellation(writer, signature));
-              writer.openBlock(
-                  "{",
-                  "}",
-                  () -> {
-                    writer.write(
-                        "await foreach (var page in $LPagesAsync(input,"
-                            + " cancellationToken).ConfigureAwait(false))",
-                        opName);
-                    writer.openBlock(
-                        "{",
-                        "}",
-                        () -> {
-                          writer.write("var items = $L;", itemsExpr);
-                          writer.write("if (items is null)");
-                          writer.openBlock("{", "}", () -> writer.write("continue;"));
-                          writer.write("foreach (var item in items.Values)");
-                          writer.openBlock("{", "}", () -> writer.write("yield return item;"));
-                        });
-                  });
-              writer.write("");
-            });
+    } finally {
+      writer.popState();
+    }
   }
 
   private Map<String, String> operationParameterDocs(Model model, OperationShape op) {
