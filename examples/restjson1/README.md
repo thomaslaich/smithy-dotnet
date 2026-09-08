@@ -85,6 +85,25 @@ path with an absolute path):
 }
 ```
 
+For [Claude Code](https://docs.anthropic.com/en/docs/claude-code/mcp), add the
+built server from the repository root:
+
+```bash
+claude mcp add weather -- dotnet /absolute/path/to/smithy-dotnet/examples/restjson1/server/bin/Debug/net10.0/NSmithy.Examples.RestJson1.Server.dll --mcp
+```
+
+Or let Claude Code launch the project through `dotnet run`. Keep `--no-build`:
+build output on stdout would corrupt the MCP stdio stream.
+
+```bash
+claude mcp add weather -- dotnet run --no-build --project /absolute/path/to/smithy-dotnet/examples/restjson1/server/NSmithy.Examples.RestJson1.Server.csproj -- --mcp
+```
+
+Check the registration with `claude mcp get weather`. Inside Claude Code, `/mcp`
+shows the connection, and the generated prompts are available as
+`/mcp__weather__city_weather_brief SEA` and
+`/mcp__weather__forecast_answer SEA`.
+
 The generated `GetCurrentTime`, `GetCity`, `ListCities`, `GetForecast`, and
 `GetFlakyForecast` operations appear as tools. Their descriptions, input and
 output schemas, validation, and read-only hints all come from the Smithy model.
