@@ -1,5 +1,5 @@
 ---
-title: Design Docs
+title: Design docs
 description: Links to the NSmithy design documents on GitHub.
 ---
 

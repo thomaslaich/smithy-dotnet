@@ -1,0 +1,60 @@
+<iframe
+  class="nsl-tree"
+  src="/smithy-dotnet/generative-tree.html"
+  title="Decorative growing tree"
+  aria-hidden="true"
+  sandbox="allow-scripts"
+  tabindex="-1"
+></iframe>
+
+<script>
+  const tree = document.querySelector<HTMLIFrameElement>('.nsl-tree');
+  if (tree) {
+    // Forward pointer positions without making the decorative frame intercept clicks.
+    const sendWind = (force: number) => tree.contentWindow?.postMessage({ type: 'tree-wind', force }, '*');
+    const followPointer = (event: PointerEvent) => {
+      if (event.pointerType !== 'mouse') return;
+      const bounds = tree.getBoundingClientRect();
+      const inside = event.clientY >= bounds.top && event.clientY <= bounds.bottom;
+      sendWind(inside && bounds.width > 0
+        ? Math.max(-1, Math.min(1, (event.clientX - bounds.left) / bounds.width * 2 - 1))
+        : 0);
+    };
+    const resetWind = () => sendWind(0);
+    window.addEventListener('pointermove', followPointer, { passive: true });
+    document.documentElement.addEventListener('pointerleave', resetWind);
+    window.addEventListener('blur', resetWind);
+    window.addEventListener('scroll', resetWind, { passive: true });
+    document.addEventListener('astro:before-swap', () => {
+      window.removeEventListener('pointermove', followPointer);
+      document.documentElement.removeEventListener('pointerleave', resetWind);
+      window.removeEventListener('blur', resetWind);
+      window.removeEventListener('scroll', resetWind);
+    }, { once: true });
+  }
+</script>
+
+<style>
+  .nsl-tree {
+    --tree-height: clamp(768px, 95.5vh, 1229px);
+    position: absolute;
+    top: calc(100svh - var(--tree-height));
+    left: 0;
+    width: 100%;
+    height: var(--tree-height);
+    display: block;
+    pointer-events: none;
+    z-index: 0;
+    border: 0;
+    opacity: 0.42;
+    mix-blend-mode: screen;
+  }
+  :global(html[data-theme='dark']) .nsl-tree {
+    filter: brightness(0.9) saturate(1.4);
+  }
+  :global(html[data-theme='light']) .nsl-tree {
+    filter: invert(1) hue-rotate(180deg);
+    mix-blend-mode: multiply;
+    opacity: 0.32;
+  }
+</style>

@@ -12,7 +12,8 @@ available.
 Use EC2 Query only to call EC2 or an emulator that reproduces its Query
 endpoint.
 
-See [Protocol Status](../status/) for maturity and current conformance numbers.
+See [Protocol status](../status/) for coverage and [AWS protocols](../aws-overview/)
+for authentication, endpoints, and runtime limitations.
 
 ## Protocol behavior
 
@@ -115,20 +116,11 @@ The client uses `NSmithy.Client` and `NSmithy.Protocols.AwsQuery`. The same
 protocol package provides both AWS Query implementations and includes the XML
 codec transitively.
 
-## Calling AWS
-
-AWS endpoints normally require SigV4, regional endpoint resolution, and
-credentials. See
-[Authentication](/smithy-dotnet/guides/client-configuration/authentication/)
-for the NSmithy setup and [AWS Protocols](../aws-overview/) for current runtime
-gaps.
-
 ## Example
 
 The [AWS LocalStack
 example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/aws-localstack)
-uses an EC2 Query client to call EC2 `DescribeRegions`. EC2 Query does not
-support streaming, so there is no streaming example.
+uses an EC2 Query client to call EC2 `DescribeRegions`.
 
 ## Specification and tests
 

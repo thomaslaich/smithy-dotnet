@@ -1,11 +1,11 @@
 ---
 title: Validation
-description: The server rejects a request the model does not allow before the handler runs, with the status and body Smithy specifies.
+description: Supported input constraints, malformed requests, and validation errors.
 ---
 
-A handler only sees input the model permits. Everything that could make a request
-something else is answered before the handler runs, and each kind of problem has
-its own answer:
+The server checks supported constraints on deserialized inputs before invoking
+the handler. HTTP bindings also reject malformed bodies and incompatible media
+types:
 
 | What is wrong | Status | Error type |
 | --- | --- | --- |
@@ -13,10 +13,6 @@ its own answer:
 | The bytes are not the shape the model declares | 400 | `SerializationException` |
 | The `Content-Type` is not the one the operation reads | 415 | `UnsupportedMediaTypeException` |
 | The `Accept` excludes the response's media type | 406 | `NotAcceptableException` |
-
-The rest of this page covers each in turn. The generated server is run against
-Smithy's `httpMalformedRequestTests` suite for restJson1, which asserts every one
-of these; see [Protocol Status](/smithy-dotnet/protocols/status/).
 
 ## Constraint traits
 
@@ -65,10 +61,7 @@ declares it.
 }
 ```
 
-The top-level `message` repeats every field message, joined with `; `, after the
-count. This wording is what Smithy's malformed-request conformance tests assert,
-so a caller — or a generic client — reads the same text it would get from any
-other Smithy server. The generated server is run against that suite.
+The top-level `message` summarizes the entries in `fieldList`.
 
 Validation reports every violation it finds rather than stopping at the first,
 and a member that breaks two constraints produces two entries: `@length` and
@@ -106,11 +99,8 @@ Value at '/name' failed to satisfy constraint: Member must not be null
 
 ### Event streams
 
-For a streaming operation the initial request is validated exactly as a unary
-input is: an event stream changes how the body is framed, not what the input
-structure has to satisfy. The events themselves are not validated — rejecting
-one mid-stream would mean reporting a violation after the response has already
-begun.
+The initial input of a streaming operation is validated before the handler runs.
+Individual events are not validated.
 
 ### Cost
 
@@ -119,31 +109,19 @@ starts, and reused for every request. An operation whose input carries no
 constraints anywhere reachable gets no validator at all and skips validation
 entirely.
 
-Only servers build one. Clients take their half of the protocol from a separate
-factory, so a client never compiles a validator it would not run.
-
 ## Unreadable input
 
-A constraint violation is a value the model does not allow. A request can also
-fail earlier than that, on bytes that never become a value at all: a body that is
-not JSON, a non-numeric integer, a number outside its type's range, a timestamp in
-a format the member does not use, a blob that is not base64, a dense list holding
-`null`, a union with two members set. None of these reach the validator, because
-there is nothing to validate.
-
-They are still the caller's mistake rather than a server fault, so they are
-answered with a 400 carrying `SerializationException`:
+Malformed bodies, invalid numeric or timestamp representations, invalid base64,
+null elements in dense lists, and unions with multiple members fail during
+deserialization. HTTP bindings return 400 with `SerializationException`:
 
 ```json
 { "message": "Expected an integer but found \"10\"." }
 ```
 
-A server reads by exactly what the model declares. A client is more forgiving of
-the same wire — a real service may be looser than the spec, and a response it can
-understand is worth reading — so the two sides compile their codecs separately.
-The one rule that currently differs is the UTC offset on a `date-time` timestamp,
-which Smithy's own protocol tests require a server to reject and a client to
-accept.
+Server and client codecs use separate parsing rules where the protocol requires
+it. For example, servers reject UTC offsets in `date-time` timestamps where
+clients accept them.
 
 ## Content negotiation
 
@@ -165,11 +143,9 @@ nothing, and an operation with no modeled output has no media type to negotiate.
 
 ## Clients do not validate
 
-This is deliberate. The server is the authority on the contract, so checking on
-the client would duplicate the check that actually decides, add latency to every
-call, and go stale as soon as the model changes without a client rebuild. A
-generated client sends what it is given and surfaces the server's
-`ValidationException` as a modeled error.
+Generated clients send inputs without constraint validation and deserialize the
+server's `ValidationException` as a modeled error. Validation remains on the
+server, where it uses the deployed contract.
 
 ## Not covered
 
