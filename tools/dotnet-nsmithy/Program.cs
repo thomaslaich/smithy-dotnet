@@ -5,6 +5,6 @@ var rootCommand = new RootCommand(
     "NSmithy CLI — publish Maven JARs produced by 'dotnet pack' to a Maven registry."
 );
 
-rootCommand.AddCommand(PushCommand.Create());
+rootCommand.Subcommands.Add(PushCommand.Create());
 
-return await rootCommand.InvokeAsync(args);
+return await rootCommand.Parse(args).InvokeAsync();

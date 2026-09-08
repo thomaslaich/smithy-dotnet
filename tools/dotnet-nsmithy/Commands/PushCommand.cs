@@ -8,73 +8,72 @@ internal static class PushCommand
 {
     public static Command Create()
     {
-        var directoryArg = new Argument<DirectoryInfo>(
-            name: "directory",
-            description: "Directory containing the packed artifacts (JAR, POM, and checksum files). Defaults to the current directory.",
-            getDefaultValue: () => new DirectoryInfo(Directory.GetCurrentDirectory())
-        );
-
-        var projectOption = new Option<FileInfo?>(
-            aliases: ["--project", "-p"],
-            description: "Path to the .csproj file. Auto-discovered in the current directory when omitted."
-        );
-
-        var groupOption = new Option<string?>(
-            aliases: ["--group", "-g"],
-            description: "Maven groupId. Overrides SmithyMavenGroupId in the .csproj."
-        );
-
-        var artifactOption = new Option<string?>(
-            aliases: ["--artifact", "-a"],
-            description: "Maven artifactId. Overrides SmithyMavenArtifactId in the .csproj."
-        );
-
-        var versionOption = new Option<string?>(
-            aliases: ["--version", "-v"],
-            description: "Maven version. Overrides the version in the .csproj."
-        );
-
-        var registryOption = new Option<Uri>(
-            aliases: ["--registry", "-r"],
-            description: "Maven registry base URL (e.g. https://maven.pkg.github.com/ORG/REPO)."
-        )
+        var directoryArg = new Argument<DirectoryInfo>("directory")
         {
-            IsRequired = true,
+            Description = "Directory containing the packed artifacts (JAR, POM, and checksum files). Defaults to the current directory.",
+            DefaultValueFactory = _ => new DirectoryInfo(Directory.GetCurrentDirectory()),
         };
-
-        var usernameOption = new Option<string?>(
-            aliases: ["--username", "-u"],
-            description: "Registry username. Falls back to MAVEN_USERNAME or GITHUB_ACTOR environment variable."
-        );
-
-        var tokenOption = new Option<string?>(
-            aliases: ["--token", "-t"],
-            description: "Registry password / token. Falls back to MAVEN_TOKEN or GITHUB_TOKEN environment variable."
-        );
-
+        var projectOption = new Option<FileInfo?>("--project", "-p")
+        {
+            Description = "Path to the .csproj file. Auto-discovered in the current directory when omitted.",
+        };
+        var groupOption = new Option<string?>("--group", "-g")
+        {
+            Description = "Maven groupId. Overrides SmithyMavenGroupId in the .csproj.",
+        };
+        var artifactOption = new Option<string?>("--artifact", "-a")
+        {
+            Description = "Maven artifactId. Overrides SmithyMavenArtifactId in the .csproj.",
+        };
+        var versionOption = new Option<string?>("--version", "-v")
+        {
+            Description = "Maven version. Overrides the version in the .csproj.",
+        };
+        var registryOption = new Option<Uri>("--registry", "-r")
+        {
+            Description = "Maven registry base URL (e.g. https://maven.pkg.github.com/ORG/REPO).",
+            Required = true,
+            CustomParser = result =>
+            {
+                if (Uri.TryCreate(result.Tokens.Single().Value, UriKind.Absolute, out var uri))
+                    return uri;
+                result.AddError("The registry must be an absolute URI.");
+                return null;
+            },
+        };
+        var usernameOption = new Option<string?>("--username", "-u")
+        {
+            Description = "Registry username. Falls back to MAVEN_USERNAME or GITHUB_ACTOR environment variable.",
+        };
+        var tokenOption = new Option<string?>("--token", "-t")
+        {
+            Description = "Registry password / token. Falls back to MAVEN_TOKEN or GITHUB_TOKEN environment variable.",
+        };
         var command = new Command("push", "Publish a packed Maven artifact to a Maven registry.")
         {
-            directoryArg,
-            projectOption,
-            groupOption,
-            artifactOption,
-            versionOption,
-            registryOption,
-            usernameOption,
-            tokenOption,
+            Arguments = { directoryArg },
+            Options =
+            {
+                projectOption,
+                groupOption,
+                artifactOption,
+                versionOption,
+                registryOption,
+                usernameOption,
+                tokenOption,
+            },
         };
 
-        command.SetHandler(
-            ExecuteAsync,
-            directoryArg,
-            projectOption,
-            groupOption,
-            artifactOption,
-            versionOption,
-            registryOption,
-            usernameOption,
-            tokenOption
-        );
+        command.SetAction(parseResult => ExecuteAsync(
+            parseResult.GetValue(directoryArg)!,
+            parseResult.GetValue(projectOption),
+            parseResult.GetValue(groupOption),
+            parseResult.GetValue(artifactOption),
+            parseResult.GetValue(versionOption),
+            parseResult.GetValue(registryOption)!,
+            parseResult.GetValue(usernameOption),
+            parseResult.GetValue(tokenOption)
+        ));
 
         return command;
     }
