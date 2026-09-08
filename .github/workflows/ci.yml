@@ -9,6 +9,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Cache build dependencies
+        uses: ./.github/actions/cache-dependencies
       - name: Install Nix
         uses: cachix/install-nix-action@v31
       - name: Configure devenv cache
