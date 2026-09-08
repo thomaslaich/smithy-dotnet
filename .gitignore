@@ -26,6 +26,9 @@ build/
 
 *.binlog
 
+# Local agent state
+.claude/
+
 # macOS Finder metadata
 .DS_Store
 
