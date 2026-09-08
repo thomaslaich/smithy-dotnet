@@ -49,6 +49,8 @@ subprojects {
 
     tasks.withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
+        // Error Prone 2.50 requires javac to retain type annotations on JDK 21.
+        options.compilerArgs.add("-XDaddTypeAnnotationsToSymbol=true")
         // Target Java 21 bytecode — the toolchain above, and what the JRE 25
         // bundled with the Smithy CLI since 1.73.0 loads. Consumers pointing
         // SmithyCliPath at an own install need a CLI at least that new.
