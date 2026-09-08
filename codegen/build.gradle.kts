@@ -19,7 +19,7 @@ plugins {
     // Error Prone: javac-integrated static analysis for correctness bugs the
     // Java compiler does not report. Runs on every compile, locally and in CI.
     // See roadmap §4 "Improve generator clarity and diagnostics".
-    id("net.ltgt.errorprone") version "4.1.0" apply false
+    id("net.ltgt.errorprone") version "5.1.1" apply false
 }
 
 allprojects {
@@ -81,7 +81,7 @@ subprojects {
     // Don't gate test compilation on Error Prone — keep the signal focused on
     // shipped generator code.
     tasks.named<JavaCompile>("compileTestJava") {
-        options.errorprone.isEnabled.set(false)
+        options.errorprone.enabled.set(false)
     }
 }
 
