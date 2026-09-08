@@ -8,7 +8,7 @@
 
 import com.vanniktech.maven.publish.JavaLibrary
 import com.vanniktech.maven.publish.JavadocJar
-import com.vanniktech.maven.publish.SonatypeHost
+import com.vanniktech.maven.publish.SourcesJar
 
 val smithyVersion: String by project
 val smithyAiTraitsVersion: String by project
@@ -40,7 +40,7 @@ tasks.test {
 mavenPublishing {
     // Targets the new Sonatype Central Portal (https://central.sonatype.com).
     // Requires MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD secrets (user token).
-    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
+    publishToMavenCentral()
     // Sign publications when a PGP key is supplied via env vars
     // ORG_GRADLE_PROJECT_signingInMemoryKey / signingInMemoryKeyPassword.
     // Skipped for local `publishToMavenLocal` runs that don't carry secrets.
@@ -48,7 +48,7 @@ mavenPublishing {
         signAllPublications()
     }
 
-    configure(JavaLibrary(javadocJar = JavadocJar.Empty(), sourcesJar = true))
+    configure(JavaLibrary(javadocJar = JavadocJar.Empty(), sourcesJar = SourcesJar.Sources()))
 
     coordinates(group.toString(), "smithy-csharp-codegen", version.toString())
 
