@@ -10,12 +10,14 @@ internal static class PushCommand
     {
         var directoryArg = new Argument<DirectoryInfo>("directory")
         {
-            Description = "Directory containing the packed artifacts (JAR, POM, and checksum files). Defaults to the current directory.",
+            Description =
+                "Directory containing the packed artifacts (JAR, POM, and checksum files). Defaults to the current directory.",
             DefaultValueFactory = _ => new DirectoryInfo(Directory.GetCurrentDirectory()),
         };
         var projectOption = new Option<FileInfo?>("--project", "-p")
         {
-            Description = "Path to the .csproj file. Auto-discovered in the current directory when omitted.",
+            Description =
+                "Path to the .csproj file. Auto-discovered in the current directory when omitted.",
         };
         var groupOption = new Option<string?>("--group", "-g")
         {
@@ -43,11 +45,13 @@ internal static class PushCommand
         };
         var usernameOption = new Option<string?>("--username", "-u")
         {
-            Description = "Registry username. Falls back to MAVEN_USERNAME or GITHUB_ACTOR environment variable.",
+            Description =
+                "Registry username. Falls back to MAVEN_USERNAME or GITHUB_ACTOR environment variable.",
         };
         var tokenOption = new Option<string?>("--token", "-t")
         {
-            Description = "Registry password / token. Falls back to MAVEN_TOKEN or GITHUB_TOKEN environment variable.",
+            Description =
+                "Registry password / token. Falls back to MAVEN_TOKEN or GITHUB_TOKEN environment variable.",
         };
         var command = new Command("push", "Publish a packed Maven artifact to a Maven registry.")
         {
@@ -64,16 +68,18 @@ internal static class PushCommand
             },
         };
 
-        command.SetAction(parseResult => ExecuteAsync(
-            parseResult.GetValue(directoryArg)!,
-            parseResult.GetValue(projectOption),
-            parseResult.GetValue(groupOption),
-            parseResult.GetValue(artifactOption),
-            parseResult.GetValue(versionOption),
-            parseResult.GetValue(registryOption)!,
-            parseResult.GetValue(usernameOption),
-            parseResult.GetValue(tokenOption)
-        ));
+        command.SetAction(parseResult =>
+            ExecuteAsync(
+                parseResult.GetValue(directoryArg)!,
+                parseResult.GetValue(projectOption),
+                parseResult.GetValue(groupOption),
+                parseResult.GetValue(artifactOption),
+                parseResult.GetValue(versionOption),
+                parseResult.GetValue(registryOption)!,
+                parseResult.GetValue(usernameOption),
+                parseResult.GetValue(tokenOption)
+            )
+        );
 
         return command;
     }

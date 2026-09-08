@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      - name: Cache build dependencies
+        uses: ./.github/actions/cache-dependencies
       - name: Resolve release version
         id: version
         # Strip a leading `v` from the release tag (e.g. v0.1.0 -> 0.1.0).

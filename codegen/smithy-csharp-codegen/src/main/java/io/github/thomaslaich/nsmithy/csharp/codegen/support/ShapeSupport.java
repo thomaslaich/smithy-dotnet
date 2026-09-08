@@ -197,7 +197,7 @@ public final class ShapeSupport {
       list.removeIf(m -> m.getId().equals(excluded.getId()));
     }
     list.sort(
-        Comparator.comparing((MemberShape m) -> isOptionalParameter(m) ? 1 : 0)
+        Comparator.comparingInt((MemberShape m) -> isOptionalParameter(m) ? 1 : 0)
             .thenComparing(MemberShape::getMemberName));
     return list;
   }
