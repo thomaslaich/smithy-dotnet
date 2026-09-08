@@ -5,19 +5,19 @@
     <PackageVersion Include="Grpc.AspNetCore" Version="2.71.0" />
     <PackageVersion Include="Grpc.Net.Client" Version="2.71.0" />
     <PackageVersion Include="Grpc.Tools" Version="2.71.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
     <PackageVersion Include="NSwag.ApiDescription.Client" Version="14.7.1" />
     <PackageVersion Include="Microsoft.Extensions.ApiDescription.Client" Version="10.0.0" />
     <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.11.3" />
-    <PackageVersion Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.3" />
+    <PackageVersion Include="System.CommandLine" Version="2.0.12" />
     <PackageVersion Include="System.Formats.Cbor" Version="10.0.12" />
     <PackageVersion Include="System.IO.Hashing" Version="10.0.12" />
     <PackageVersion Include="coverlet.collector" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Build.Framework" Version="18.3.3" />
-    <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="18.3.3" />
+    <PackageVersion Include="Microsoft.Build.Framework" Version="18.9.6" />
+    <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="18.9.6" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>
 </Project>
