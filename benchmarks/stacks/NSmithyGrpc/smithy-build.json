@@ -8,7 +8,7 @@
       }
     ],
     "dependencies": [
-      "com.disneystreaming.alloy:alloy-core:0.3.38",
+      "com.disneystreaming.alloy:alloy-core:0.3.40",
       "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
       "io.github.thomaslaich.nsmithy:smithy-proto-codegen:0.0.0-SNAPSHOT"
     ]
