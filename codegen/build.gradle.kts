@@ -79,7 +79,7 @@ subprojects {
     // Don't gate test compilation on Error Prone — keep the signal focused on
     // shipped generator code.
     tasks.named<JavaCompile>("compileTestJava") {
-        options.errorprone.isEnabled.set(false)
+        options.errorprone.enabled.set(false)
     }
 }
 
