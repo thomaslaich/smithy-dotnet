@@ -3,17 +3,13 @@ title: Protocols
 description: Choose a Smithy protocol and understand what it changes in generated .NET clients and servers.
 ---
 
-A protocol defines the HTTP route, headers, body encoding, error format, and
-streaming transport for a Smithy service. NSmithy reads the protocol trait and
-generates the matching .NET runtime bindings.
-
-The protocol does not change your application model. Generated clients expose
-typed operations, and generated servers expose typed handler interfaces,
-regardless of the wire format.
+NSmithy binds modeled operations to the protocols below. For the separation
+between a contract and its wire representation, see
+[Protocol bindings](/smithy-dotnet/concepts/modeling/#add-protocol-bindings).
 
 ## Choose a protocol
 
-| Protocol | Generated surfaces | Choose it for |
+| Protocol | Generated APIs | Choose it for |
 | --- | --- | --- |
 | [`aws.protocols#restJson1`](../rest-json/) | Client and server | General REST APIs, broad tooling support, streaming, and AWS-compatible behavior |
 | [`smithy.protocols#rpcv2Cbor`](../rpc-v2-cbor/) | Client and server | Compact binary RPC with CBOR and event streaming |
@@ -32,42 +28,11 @@ are primarily for existing AWS services and emulators.
 
 See [Protocol Status](../status/) for maturity and current conformance numbers.
 
-## What changes with the protocol
-
-- Request routes, methods, and required headers
-- JSON, XML, CBOR, or protobuf body encoding
-- Error discriminators and response envelopes
-- Streaming framing and HTTP version requirements
-- The protocol runtime and codec packages used by generated code
-
-REST protocols also use Smithy HTTP binding traits such as `@http`,
-`@httpLabel`, `@httpQuery`, and `@httpHeader`. RPC protocols derive their routes
-from the service and operation names.
-
-## What stays the same
-
-The generated client keeps the same typed operation surface:
-
-```csharp
-using Example.Weather;
-
-var client = new WeatherClient(new Uri("https://api.example.com"));
-var city = await client.GetCityAsync(new GetCityInput("SEA"));
-Console.WriteLine(city.Name);
-```
-
-Generated servers use a handler interface with one method per operation. The
-adapter handles routing, serialization, validation, and modeled errors before
-or after the handler call.
-
-Changing a service protocol does not require changes to handler code or client
-call sites if the model stays within the feature set shared by both protocols.
-
 ## Services with multiple protocols
 
 A service can declare more than one supported protocol. Generated clients can
 select a non-default protocol through their configuration, and generated servers
-can map several protocol surfaces to the same handler.
+can map several protocols to the same handler.
 
 See [Hosting and Multiple Protocols](/smithy-dotnet/servers/hosting/) for route
 mapping and [Client Configuration](/smithy-dotnet/guides/client-configuration/)

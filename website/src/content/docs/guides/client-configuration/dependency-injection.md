@@ -1,5 +1,5 @@
 ---
-title: Dependency Injection
+title: Dependency injection
 description: Register a generated NSmithy client with IHttpClientFactory and the .NET service container.
 ---
 
@@ -18,10 +18,7 @@ Enable the helper in the client project:
 </PropertyGroup>
 ```
 
-This flows into the generated `smithy-build.json` so the extension is **only
-generated when enabled** (it isn't emitted otherwise). If your project uses an
-explicit `smithy-build.json` instead of one synthesized from a contracts
-reference, set it on the plugin directly:
+With an explicit `smithy-build.json`, set the plugin option instead:
 
 ```json
 { "plugins": { "csharp-codegen": { "service": "...", "generateDependencyInjection": true } } }
@@ -115,10 +112,3 @@ services.AddHttpClient<IWeatherClient, WeatherClient>(client =>
 Use this only when you need full control over `IHttpClientFactory` registration.
 For non-default protocols or gRPC, prefer `AddWeatherClient(...)`; otherwise you
 must configure the `HttpClient` version and policy yourself.
-
-## Constructors
-
-Outside of DI, the generated `{Service}Client` is constructed from a
-direct endpoint argument plus an optional `{Service}ClientConfig`, or from an
-`HttpClient` / runtime plus an optional config. See
-[Client Configuration](/smithy-dotnet/guides/client-configuration/).

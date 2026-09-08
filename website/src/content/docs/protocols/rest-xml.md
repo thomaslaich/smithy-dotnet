@@ -12,7 +12,8 @@ Use restXml to call an existing AWS XML service or a compatible emulator. For a
 new service, prefer [restJson1](../rest-json/),
 [rpcv2Cbor](../rpc-v2-cbor/), or [gRPC](../grpc/).
 
-See [Protocol Status](../status/) for maturity and current conformance numbers.
+See [Protocol status](../status/) for coverage and [AWS protocols](../aws-overview/)
+for authentication, endpoints, and runtime limitations.
 
 ## Protocol behavior
 
@@ -98,20 +99,11 @@ Add the AWS trait package to `smithy-build.json`:
 The client uses `NSmithy.Client`, `NSmithy.Codecs.Xml`, and
 `NSmithy.Protocols.RestXml`.
 
-## Calling AWS
-
-AWS endpoints normally require SigV4, regional endpoint resolution, and
-credentials. See
-[Authentication](/smithy-dotnet/guides/client-configuration/authentication/)
-for the NSmithy setup and [AWS Protocols](../aws-overview/) for current runtime
-gaps.
-
 ## Example
 
 The [AWS LocalStack
 example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/aws-localstack)
-uses a restXml client to call S3 `ListBuckets`. NSmithy does not implement
-restXml streaming yet, so there is no streaming example.
+uses a restXml client to call S3 `ListBuckets`.
 
 ## Specification and tests
 

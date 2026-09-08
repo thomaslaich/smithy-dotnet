@@ -12,7 +12,8 @@ Smithy deprecates AWS Query for new services. Use it for existing AWS services
 and compatible local emulators.
 :::
 
-See [Protocol Status](../status/) for maturity and current conformance numbers.
+See [Protocol status](../status/) for coverage and [AWS protocols](../aws-overview/)
+for authentication, endpoints, and runtime limitations.
 
 ## Protocol behavior
 
@@ -104,20 +105,11 @@ Add the AWS trait package to `smithy-build.json`:
 The client uses `NSmithy.Client` and `NSmithy.Protocols.AwsQuery`. The
 protocol package includes the XML codec transitively.
 
-## Calling AWS
-
-AWS endpoints normally require SigV4, regional endpoint resolution, and
-credentials. See
-[Authentication](/smithy-dotnet/guides/client-configuration/authentication/)
-for the NSmithy setup and [AWS Protocols](../aws-overview/) for current runtime
-gaps.
-
 ## Example
 
 The [AWS LocalStack
 example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/aws-localstack)
-uses an AWS Query client to call SQS `ListQueues`. AWS Query does not support
-streaming, so there is no streaming example.
+uses an AWS Query client to call SQS `ListQueues`.
 
 ## Specification and tests
 

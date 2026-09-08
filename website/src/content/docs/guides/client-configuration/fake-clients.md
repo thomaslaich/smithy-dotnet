@@ -1,5 +1,5 @@
 ---
-title: Fake Clients
+title: Fake clients
 description: A generated client that returns canned responses without a network call. Canned responses from @examples, placeholders everywhere else.
 ---
 

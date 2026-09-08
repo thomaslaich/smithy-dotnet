@@ -11,7 +11,8 @@ Use AWS JSON to call an existing AWS JSON RPC service or a compatible emulator.
 For a new service, prefer [restJson1](../rest-json/),
 [rpcv2Cbor](../rpc-v2-cbor/), or [gRPC](../grpc/).
 
-See [Protocol Status](../status/) for maturity and current conformance numbers.
+See [Protocol status](../status/) for coverage and [AWS protocols](../aws-overview/)
+for authentication, endpoints, and runtime limitations.
 
 ## Protocol behavior
 
@@ -101,20 +102,11 @@ Add the AWS trait package to `smithy-build.json`:
 The client uses `NSmithy.Client`, `NSmithy.Codecs.Json`, and
 `NSmithy.Protocols.AwsJson`.
 
-## Calling AWS
-
-AWS endpoints normally require SigV4, regional endpoint resolution, and
-credentials. See
-[Authentication](/smithy-dotnet/guides/client-configuration/authentication/)
-for the NSmithy setup and [AWS Protocols](../aws-overview/) for current runtime
-gaps.
-
 ## Example
 
 The [AWS LocalStack
 example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/aws-localstack)
-uses an AWS JSON 1.0 client to call DynamoDB `ListTables`. NSmithy does not
-implement AWS JSON streaming yet, so there is no streaming example.
+uses an AWS JSON 1.0 client to call DynamoDB `ListTables`.
 
 ## Specification and tests
 
