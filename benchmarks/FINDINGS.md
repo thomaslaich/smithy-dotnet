@@ -868,11 +868,10 @@ BenchmarkDotNet code path computes that root is still unknown.
 
 ### Formatting could not run in the original benchmark worktree
 
-`OBSERVED`. `csharpier` finds zero files anywhere under
-`.claude/worktrees/performance-suite`, because the whole path is inside gitignored
-`.claude/`. The benchmark sources were subsequently formatted from the main
-checkout; the limitation remains relevant when using a worktree below an ignored
-directory.
+`OBSERVED`. `csharpier` found zero files in the original benchmark worktree
+because its parent directory was gitignored. The benchmark sources were
+subsequently formatted from the main checkout; the limitation remains relevant
+when using a worktree below an ignored directory.
 
 ---
 

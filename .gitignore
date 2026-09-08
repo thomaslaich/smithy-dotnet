@@ -26,9 +26,6 @@ build/
 
 *.binlog
 
-# LLM things
-.claude/
-
 # macOS Finder metadata
 .DS_Store
 
