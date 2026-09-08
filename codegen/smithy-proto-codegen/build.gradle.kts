@@ -9,7 +9,7 @@
 
 import com.vanniktech.maven.publish.JavaLibrary
 import com.vanniktech.maven.publish.JavadocJar
-import com.vanniktech.maven.publish.SonatypeHost
+import com.vanniktech.maven.publish.SourcesJar
 
 val smithyVersion: String by project
 
@@ -32,12 +32,12 @@ tasks.test {
 }
 
 mavenPublishing {
-    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
+    publishToMavenCentral()
     if (providers.environmentVariable("ORG_GRADLE_PROJECT_signingInMemoryKey").isPresent) {
         signAllPublications()
     }
 
-    configure(JavaLibrary(javadocJar = JavadocJar.Empty(), sourcesJar = true))
+    configure(JavaLibrary(javadocJar = JavadocJar.Empty(), sourcesJar = SourcesJar.Sources()))
 
     coordinates(group.toString(), "smithy-proto-codegen", version.toString())
 

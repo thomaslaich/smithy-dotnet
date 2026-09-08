@@ -3,7 +3,7 @@
   "sources": ["model"],
   "maven": {
     "dependencies": [
-      "com.disneystreaming.alloy:alloy-core:0.3.38"
+      "com.disneystreaming.alloy:alloy-core:0.3.40"
     ]
   }
 }

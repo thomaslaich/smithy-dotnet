@@ -15,7 +15,7 @@ import org.gradle.maven.MavenPomArtifact
 
 plugins {
     `java-library`
-    id("com.vanniktech.maven.publish") version "0.30.0" apply false
+    id("com.vanniktech.maven.publish") version "0.37.0" apply false
     // Error Prone: javac-integrated static analysis for correctness bugs the
     // Java compiler does not report. Runs on every compile, locally and in CI.
     // See roadmap §4 "Improve generator clarity and diagnostics".
@@ -44,11 +44,13 @@ subprojects {
     }
 
     dependencies {
-        "errorprone"("com.google.errorprone:error_prone_core:2.36.0")
+        "errorprone"("com.google.errorprone:error_prone_core:2.50.0")
     }
 
     tasks.withType<JavaCompile>().configureEach {
         options.encoding = "UTF-8"
+        // Error Prone 2.50 requires javac to retain type annotations on JDK 21.
+        options.compilerArgs.add("-XDaddTypeAnnotationsToSymbol=true")
         // Target Java 21 bytecode — the toolchain above, and what the JRE 25
         // bundled with the Smithy CLI since 1.73.0 loads. Consumers pointing
         // SmithyCliPath at an own install need a CLI at least that new.
@@ -112,7 +114,7 @@ dependencies {
     codegenBundle("software.amazon.smithy:smithy-protocol-traits:$smithyVer")
     codegenBundle("software.amazon.smithy:smithy-docgen:$smithyVer")
     codegenBundle("software.amazon.smithy:smithy-openapi:$smithyVer")
-    codegenBundle("com.disneystreaming.alloy:alloy-core:0.3.38")
+    codegenBundle("com.disneystreaming.alloy:alloy-core:0.3.40")
 }
 
 tasks.register("bundleMavenRepo") {
