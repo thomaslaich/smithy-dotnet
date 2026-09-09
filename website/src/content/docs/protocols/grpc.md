@@ -157,7 +157,7 @@ The supported protobuf surface includes scalars, `@protoNumType`, lists, maps,
 Add the Alloy model package to `smithy-build.json`:
 
 ```json
-"com.disneystreaming.alloy:alloy-core:0.3.38"
+"com.disneystreaming.alloy:alloy-core:0.3.40"
 ```
 
 | Surface | Packages |

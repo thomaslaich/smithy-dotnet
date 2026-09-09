@@ -1,5 +1,5 @@
 ---
-title: Client Configuration
+title: Client configuration
 description: Construct and configure generated NSmithy clients.
 ---
 
@@ -45,48 +45,26 @@ when you want to set client options.
 | `EndpointResolver` | Per-operation endpoint resolution. Overrides the static `Endpoint` for request routing; can vary the endpoint by operation, add endpoint headers, and narrow auth schemes. |
 | `DisableHostPrefixInjection` | Disables generated `@endpoint(hostPrefix)` / `@hostLabel` expansion. |
 | `UserAgent` | User-Agent used when the modeled request does not set one. Defaults to `NSmithy.Client/{version}`. |
-| `AuthSchemes` | Configured auth schemes; the resolver installs the first scheme the service models. An empty list means anonymous. |
+| `AuthSchemes` | Available auth implementations. Selection uses the operation’s effective modeled schemes and configured implementations; see [Authentication](/smithy-dotnet/guides/client-configuration/authentication/). |
 | `RetryStrategy` | Runtime-owned retry policy. `null` disables runtime retries. |
 | `OperationTimeout` | Deadline for one operation execution, spanning all retry attempts and backoff delays. Throws `TimeoutException` when exceeded; `null` (default) means no deadline. |
 | `Interceptors` | Protocol-agnostic hooks for observing and modifying client execution. |
 | `IdempotencyTokenProvider` | Overrides the idempotency-token generator (default: a random GUID). |
 
-Everything except `Endpoint` is optional. The config is a per-service type
-(`WeatherClientConfig`), so service-specific options can be added later without
-changing the constructor signature.
+Configuration options are optional; supply an endpoint through the constructor,
+configuration, or the provided `HttpClient`.
 
-## Constructors
+## Transport and lifetime
 
-The public constructors differ mainly by who owns the HTTP transport:
-
-```csharp
-new WeatherClient(endpoint, config);      // normal direct construction; endpoint wins over config.Endpoint
-new WeatherClient(httpClient, config);    // you own the HttpClient; endpoint from config.Endpoint ?? BaseAddress
-new WeatherClient(runtime, config);       // you own the lower-level runtime path
-```
-
-`config` is optional on all public constructors.
-
-Keep the constructor choice simple:
-
-- Use the endpoint constructor for normal application code.
-- Use the generated `Add{Service}Client` helper for dependency injection.
-- Use the `HttpClient` constructor only when something else already owns and
-  configures the `HttpClient`.
-- Use the runtime constructor only for custom transports and low-level tests.
-
-## Lifetime
-
-The client implements `IDisposable`. When the client creates the `HttpClient`
-itself, `Dispose` releases it. When you supply an `HttpClient` or runtime,
-`Dispose` is a no-op, so the transport you own is never closed:
+For direct construction, dispose the client when its lifetime ends:
 
 ```csharp
 using var client = new WeatherClient(new Uri("https://api.example.com"));
 ```
 
-For a long-lived application, prefer registering the client once with
-`IHttpClientFactory` over constructing one per call.
+For application services, use [dependency injection](/smithy-dotnet/guides/client-configuration/dependency-injection/).
+See [Transport](/smithy-dotnet/guides/client-configuration/transport/) for constructor
+variants, endpoint precedence, and ownership of supplied transports.
 
 ## Topics
 

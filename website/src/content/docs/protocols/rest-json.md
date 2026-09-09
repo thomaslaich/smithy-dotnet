@@ -150,7 +150,7 @@ Add the model package for the selected protocol to `smithy-build.json`:
 
 | Protocol | Maven dependency |
 | --- | --- |
-| simpleRestJson | `com.disneystreaming.alloy:alloy-core:0.3.38` |
+| simpleRestJson | `com.disneystreaming.alloy:alloy-core:0.3.40` |
 | restJson1 | `software.amazon.smithy:smithy-aws-traits:1.73.0` |
 
 | Surface | Packages |

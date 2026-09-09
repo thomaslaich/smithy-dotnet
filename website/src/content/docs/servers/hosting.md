@@ -1,13 +1,12 @@
 ---
-title: Hosting & Multiple Protocols
+title: Hosting multiple protocols
 description: Expose one service over several protocols from a single handler set, and the listener/port rules that decide what can share a port.
 ---
 
 A service can declare more than one protocol trait. When it does, codegen emits
 a `Map{Service}` extension with a generated `{Service}Protocols` flags enum.
-Every selected protocol resolves the **same** handler you registered with
-`Add{Service}Handler`. The handler deals only in model types, so nothing about
-it is protocol-specific.
+Each selected protocol resolves the registered operation handlers. Their method
+signatures use the same model types across protocols.
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
@@ -19,8 +18,25 @@ app.MapWeatherService(
 app.Run();
 ```
 
-A client picks the protocol by which endpoint it calls; the wire serialization
-lives entirely in each protocol's binding.
+The client must select the matching protocol as well as the endpoint.
+
+## Server runtime registration
+
+`Add{Service}Handler<THandler>()` also registers a default `SmithyServerRuntime`.
+Endpoints resolve it from request services and pass it to the ASP.NET Core host
+adapter. An existing application registration takes precedence.
+
+If you register operation handlers individually, register the runtime explicitly:
+
+```csharp
+using NSmithy.Server.AspNetCore;
+
+builder.Services.AddSmithyServer();
+builder.Services.AddScoped<IGetWeatherHandler, GetWeatherHandler>();
+```
+
+The runtime currently has no configurable lifecycle options. DI establishes its
+ownership and lifetime; it does not add interceptors or telemetry by itself.
 
 ## What can share a port
 
@@ -28,16 +44,12 @@ Endpoints are port-agnostic — ports are a deployment concern, so the generated
 `Map` extension never binds one. Whether two protocols can share a listener
 depends on their routes and transport:
 
-- **Disjoint routes share a port.** restJson1 (`@http` paths), rpcv2Cbor
-  (`/service/…/operation/…`), and the awsJson family (`POST /` with
-  `X-Amz-Target`) occupy different route shapes, so any mix of these coexists on
-  one listener.
-- **Same-route protocols need separate listeners.** `awsJson1_0` and
-  `awsJson1_1` both bind `POST /` and differ only by `Content-Type`. Generated
-  routing does not dispatch on `Content-Type`, so exposing both means pinning
-  each to its own port.
-- **gRPC needs its own listener.** gRPC requires HTTP/2; cleartext gRPC does not
-  share an HTTP/1.1 port reliably. Give it a dedicated HTTP/2 port.
+- Protocols can share a listener when their routes do not conflict. REST paths
+  are model-defined, so check them against RPC or gRPC dispatch paths.
+- Conflicting routes need separate host or port constraints; the generated
+  router does not distinguish protocols by `Content-Type`.
+- gRPC requires HTTP/2. Use a dedicated HTTP/2 listener for cleartext development.
+  With TLS, HTTP/1.1 and HTTP/2 can share a listener through ALPN negotiation.
 
 ## Pinning a protocol to a port
 
@@ -53,6 +65,7 @@ builder.WebHost.ConfigureKestrel(options =>
 
 var app = builder.Build();
 app.MapGroup("")
+    .RequireHost("*:5000")
     .MapWeatherService(WeatherServiceProtocols.RestJson1);
 app.MapGroup("")
     .RequireHost("*:5001")

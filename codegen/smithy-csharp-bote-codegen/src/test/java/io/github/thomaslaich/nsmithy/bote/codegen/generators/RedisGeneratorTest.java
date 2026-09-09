@@ -103,7 +103,7 @@ final class RedisGeneratorTest {
             .settings(settings)
             .symbolProvider(symbolProvider)
             .fileManifest(manifest)
-            .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
+            .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
             .build();
     var writer = new CSharpWriter("Example.Example.Messaging");
     var service = model.expectShape(ShapeId.from("example.messaging#Chat"), ServiceShape.class);

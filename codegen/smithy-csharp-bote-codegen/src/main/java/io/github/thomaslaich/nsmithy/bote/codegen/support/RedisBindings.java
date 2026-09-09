@@ -2,7 +2,6 @@ package io.github.thomaslaich.nsmithy.bote.codegen.support;
 
 import io.github.thomaslaich.nsmithy.bote.codegen.TraitIds;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -161,6 +160,6 @@ public final class RedisBindings {
 
   private static String qualified(
       SymbolProvider symbols, software.amazon.smithy.model.shapes.Shape shape) {
-    return CSharpSymbolProvider.qualified(symbols.toSymbol(shape));
+    return symbols.toSymbol(shape).getFullName();
   }
 }

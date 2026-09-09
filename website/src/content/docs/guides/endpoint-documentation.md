@@ -1,5 +1,5 @@
 ---
-title: Endpoint Documentation
+title: Endpoint documentation
 description: Serve an interactive OpenAPI explorer and generated Sphinx documentation alongside your ASP.NET Core server.
 ---
 
@@ -32,7 +32,7 @@ ASP.NET Core's static file middleware can serve it.
   <figcaption>smithy-docgen generated reference documentation at <code>/docs</code></figcaption>
 </figure>
 
-## Install the Package
+## Install the package
 
 Add `NSmithy.Server.AspNetCore.Docs` to your server project:
 
@@ -46,7 +46,7 @@ This package provides the `MapSmithyOpenApi()`, `MapSmithyDocs()`, and
 For Bote AsyncAPI generation, also reference `NSmithy.Bote`; that extension
 owns the `SmithyGenerateAsyncApi` property and the AsyncAPI build plugin.
 
-## Enable the Generators
+## Enable the generators
 
 Set the MSBuild properties you need in your server `.csproj`:
 
@@ -63,7 +63,8 @@ Set the MSBuild properties you need in your server `.csproj`:
 </PropertyGroup>
 ```
 
-All properties are `false`/empty by default.
+All properties are disabled by default. Sphinx generation requires Python 3.11+
+on the build host.
 
 :::note[Protocol support for OpenAPI]
 `SmithyOpenApiProtocol` requires a registered Smithy OpenAPI protocol converter.
@@ -72,7 +73,7 @@ Currently only `aws.protocols#restJson1` is supported by smithy-openapi.
 for alloy-based services and use only `SmithyGenerateDocs`.
 :::
 
-## Register the Endpoints
+## Register the endpoints
 
 Map the generated documentation endpoints in `Program.cs`:
 
@@ -102,7 +103,7 @@ See
 [Kafka JSON](/smithy-dotnet/protocols/bote-kafka-json/#asyncapi-documentation)
 for a messaging example.
 
-## What Gets Generated
+## Generated output
 
 On `dotnet build`, NSmithy:
 
@@ -113,18 +114,14 @@ On `dotnet build`, NSmithy:
 3. MSBuild copies the HTML to `wwwroot/docs/` and the OpenAPI spec to
    `wwwroot/openapi.json`.
 
-Python 3.11 or newer must be available on the host. A system Python installation
-is sufficient. If you use [pixi](https://pixi.sh) or
-[devenv](https://devenv.sh), declare Python as a dependency there.
-
-Add `wwwroot/` to your `.gitignore` since the output is always regenerated at
-build time:
+Ignore only the generated files:
 
 ```txt
-wwwroot/
+/wwwroot/docs/
+/wwwroot/openapi.json
 ```
 
-## Model Requirements for Docs Generation
+## Model requirements
 
 smithy-docgen validates that input and output structures follow the Smithy best
 practices before generating documentation. Specifically, structures used as
@@ -135,24 +132,14 @@ same structure must not serve as both the input and output of an operation.
 their `@command` payloads are shared contract types and do not carry `@input`.
 Use `SmithyGenerateAsyncApi` for those services instead.
 
-Use the inline `input :=` / `output :=` syntax (which applies these traits
-automatically) or annotate named structures explicitly:
+Inline inputs and outputs apply these traits automatically:
 
 ```smithy
-// ✅ inline syntax — @input and @output are applied automatically
 operation Echo {
     input := { @required message: String }
     output := { @required message: String }
 }
-
-// ✅ named structures with explicit traits
-@input  structure EchoInput  { @required message: String }
-@output structure EchoOutput { @required message: String }
-
-// ❌ shared structure — smithy-docgen will refuse this
-structure EchoPayload { @required message: String }
-operation Echo {
-    input: EchoPayload
-    output: EchoPayload  // same shape used for both roles
-}
 ```
+
+For named structures, add `@input` and `@output` explicitly and use a distinct
+shape for each role.

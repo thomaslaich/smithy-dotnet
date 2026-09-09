@@ -106,9 +106,11 @@ final class AiTraitsGeneratorTest {
             .settings(settings)
             .symbolProvider(symbolProvider)
             .fileManifest(manifest)
-            .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
+            .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
             .build();
-    var writer = new CSharpWriter("Example.Weather");
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", "Example.Weather");
 
     new OperationSchemaGenerator(context, writer, operation).run();
 

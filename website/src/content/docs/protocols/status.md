@@ -1,5 +1,5 @@
 ---
-title: Protocol Status
+title: Protocol status
 description: Maturity and official conformance coverage for every NSmithy protocol.
 ---
 

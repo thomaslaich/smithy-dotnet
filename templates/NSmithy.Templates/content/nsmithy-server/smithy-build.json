@@ -8,7 +8,7 @@
       //#elseif (IsRpcv2Cbor)
       "software.amazon.smithy:smithy-protocol-traits:1.73.0",
       //#elseif (IsSimpleRestJson || IsGrpc)
-      "com.disneystreaming.alloy:alloy-core:0.3.38",
+      "com.disneystreaming.alloy:alloy-core:0.3.40",
       //#endif
       "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:NSMITHY_VERSION"
     ]

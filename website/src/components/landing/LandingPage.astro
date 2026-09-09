@@ -1,36 +1,20 @@
 ---
 /**
- * LandingPage — full custom landing, ported from the Claude Design
- * "Smithy Landing.dc.html" (violet / Space Grotesk design).
+ * LandingPage — custom landing page.
  *
  * Rendered inside Starlight's splash page; Starlight's own chrome (header,
  * content max-width) is hidden/neutralised on the landing page only — see the
  * `html.nsmithy-landing` rules below. The marker class is added in <head> via
  * index.mdx frontmatter so there is no flash.
  */
-import Walkthrough from './Walkthrough.astro';
-import ProtocolSwitch from './ProtocolSwitch.astro';
-import LandingShader from './LandingShader.astro';
+import LandingTree from './LandingTree.astro';
 
 // Base-relative so it works on the local dev server and the deployed site
 // (the GitHub Pages base is /smithy-dotnet). `repo` stays absolute — it's external.
 const intro = '/smithy-dotnet/getting-started/introduction/';
+const quickstart = '/smithy-dotnet/getting-started/quick-start/';
 const repo = 'https://github.com/thomaslaich/smithy-dotnet';
 
-// Each language links to its Smithy code generator.
-const langs = [
-  { name: 'C#', url: repo },
-  { name: 'Java', url: 'https://github.com/smithy-lang/smithy-java' },
-  { name: 'TypeScript', url: 'https://github.com/smithy-lang/smithy-typescript' },
-  { name: 'Python', url: 'https://github.com/smithy-lang/smithy-python' },
-  { name: 'Rust', url: 'https://github.com/smithy-lang/smithy-rs' },
-  { name: 'Swift', url: 'https://github.com/smithy-lang/smithy-swift' },
-  { name: 'Kotlin', url: 'https://github.com/smithy-lang/smithy-kotlin' },
-  { name: 'Go', url: 'https://github.com/aws/smithy-go' },
-  { name: 'Scala', url: 'https://github.com/disneystreaming/smithy4s' },
-  { name: 'Ruby', url: 'https://github.com/smithy-lang/smithy-ruby' },
-  { name: 'Dafny', url: 'https://github.com/smithy-lang/smithy-dafny' },
-];
 ---
 
 <script is:inline>
@@ -64,23 +48,18 @@ const langs = [
 </script>
 
 <div class="nsl not-content">
-  <LandingShader />
+  <LandingTree />
 
   <!-- Header -->
   <header class="nsl-header">
-    <a class="nsl-brand" href="/smithy-dotnet/">
-      <span>NSmithy</span>
-    </a>
-    <nav class="nsl-nav">
-      <a href="#workflow">Workflow</a>
-      <a href="#protocols">Protocols</a>
-      <a href="#ecosystem">Ecosystem</a>
-      <a href={repo}>GitHub</a>
-      <a class="nsl-nav-ext" href="https://smithy.io">Smithy.io <span aria-hidden="true">↗</span></a>
-    </nav>
-    <div class="nsl-header-actions">
-      <button type="button" class="nsl-theme" aria-label="Toggle theme"></button>
-      <a class="nsl-btn nsl-btn-primary nsl-btn-sm" href={intro}>Get Started</a>
+    <div class="nsl-header-inner">
+      <a class="nsl-brand" href="/smithy-dotnet/">
+        <span>NSmithy</span>
+      </a>
+      <div class="nsl-header-actions">
+        <button type="button" class="nsl-theme" aria-label="Toggle theme"></button>
+        <a class="nsl-btn nsl-btn-primary nsl-btn-sm" href={quickstart}>Get Started</a>
+      </div>
     </div>
   </header>
 
@@ -88,85 +67,15 @@ const langs = [
   <section class="nsl-hero">
     <div class="nsl-hero-inner">
       <div class="nsl-hero-copy">
-        <h1 class="nsl-h1 reveal">Smithy code generation for&nbsp;.NET</h1>
+        <h1 class="nsl-h1 reveal">Smithy for&nbsp;.NET</h1>
         <p class="nsl-lead reveal" style="--reveal-delay: 60ms">
-          Typed servers, clients, and API documentation, generated from Smithy models
-          inside your MSBuild workflow.
+          Generate C# clients and servers from <a href="https://smithy.io">Smithy</a> models.
+          Integrated with MSBuild.
         </p>
         <div class="nsl-hero-actions reveal" style="--reveal-delay: 120ms">
-          <a class="nsl-btn nsl-btn-primary" href={intro}>Get Started</a>
+          <a class="nsl-btn nsl-btn-primary" href={quickstart}>Get Started</a>
           <a class="nsl-btn nsl-btn-ghost" href={repo}>View on GitHub</a>
         </div>
-      </div>
-    </div>
-    <div class="nsl-hero-glow" aria-hidden="true"></div>
-  </section>
-
-  <!-- Workflow -->
-  <section id="workflow" class="nsl-section">
-    <div class="nsl-sechead reveal">
-      <h2 class="nsl-h2">From model to runtime</h2>
-      <p class="nsl-secp">Describe operations, shapes, and traits once. <code>dotnet&nbsp;build</code> emits the server stub, the client, and the docs.</p>
-    </div>
-    <div class="reveal"><Walkthrough /></div>
-  </section>
-
-  <!-- Protocols -->
-  <section id="protocols" class="nsl-section">
-    <div class="nsl-sechead nsl-sechead-wide reveal">
-      <h2 class="nsl-h2">The protocol is a trait on the model</h2>
-      <p class="nsl-secp">Handler and client code stay the same. Changing the protocol trait on the service changes the wire format — REST, JSON-RPC, binary CBOR, or gRPC over HTTP/2.</p>
-    </div>
-    <div class="reveal"><ProtocolSwitch /></div>
-  </section>
-
-  <!-- Ecosystem -->
-  <section id="ecosystem" class="nsl-section nsl-eco">
-    <h2 class="nsl-h2 reveal">Part of the Smithy ecosystem</h2>
-    <p class="nsl-secp nsl-eco-p reveal" style="--reveal-delay: 60ms">Smithy is the IDL behind AWS's public APIs. The same model works with the official Smithy code generators for other languages.</p>
-    <div class="nsl-langs reveal" style="--reveal-delay: 120ms">
-      {
-        langs.map((l) => (
-          <a
-            class={`nsl-lang${l.name === 'C#' ? ' nsl-lang-on' : ''}`}
-            href={l.url}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {l.name}
-          </a>
-        ))
-      }
-    </div>
-  </section>
-
-  <!-- Docs -->
-  <section class="nsl-section">
-    <div class="nsl-docs reveal">
-      <div>
-        <h2 class="nsl-h2 nsl-docs-h">Generated API documentation</h2>
-        <p class="nsl-secp nsl-docs-p">
-          <code>app.MapSmithyOpenApi()</code> mounts an interactive Scalar explorer;
-          <code>app.MapSmithyDocs()</code> serves the Sphinx reference — both generated straight from the model at build time.
-        </p>
-      </div>
-      <div class="nsl-docs-shots">
-        <figure class="nsl-shot">
-          <img
-            src="/smithy-dotnet/screenshots/scalar-ui.png"
-            alt="Scalar OpenAPI explorer showing the GetForecast endpoint"
-            loading="lazy"
-          />
-          <figcaption>Scalar explorer&nbsp;·&nbsp;<code>/openapi</code></figcaption>
-        </figure>
-        <figure class="nsl-shot">
-          <img
-            src="/smithy-dotnet/screenshots/smithy-docs.png"
-            alt="Sphinx reference documentation showing the GetForecast operation"
-            loading="lazy"
-          />
-          <figcaption>Sphinx reference&nbsp;·&nbsp;<code>/docs</code></figcaption>
-        </figure>
       </div>
     </div>
   </section>
@@ -259,6 +168,12 @@ const langs = [
   html.nsmithy-landing main {
     width: 100% !important;
   }
+  html.nsmithy-landing main {
+    padding-bottom: 0;
+  }
+  html.nsmithy-landing main footer:not(.nsl-footer) {
+    display: none;
+  }
   html.nsmithy-landing .content-panel {
     padding: 0 !important;
     border: 0 !important;
@@ -272,11 +187,18 @@ const langs = [
     background: rgba(109, 74, 255, 0.3);
   }
 
+  html.nsmithy-landing .sl-markdown-content > .nsl {
+    margin: 0;
+  }
+
   /* ── Landing root ────────────────────────────────────────────────────────── */
   .nsl {
+    position: relative;
+    display: flex;
+    flex-direction: column;
     background: var(--bg);
     color: var(--text);
-    min-height: 100vh;
+    min-height: 100svh;
   }
   .nsl a {
     text-decoration: none;
@@ -288,14 +210,27 @@ const langs = [
 
   /* ── Header ──────────────────────────────────────────────────────────────── */
   .nsl-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: transparent;
+    transition: background-color 180ms ease;
+  }
+  .nsl-header.is-scrolled {
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .nsl-header { transition: none; }
+  }
+  .nsl-header-inner {
     display: flex;
     align-items: center;
     justify-content: space-between;
     max-width: 1180px;
     margin: 0 auto;
     padding: 18px 40px;
-    position: relative;
-    z-index: 3;
   }
   .nsl-brand {
     display: flex;
@@ -307,25 +242,6 @@ const langs = [
     font-size: 19px;
     letter-spacing: -0.01em;
     color: var(--text);
-  }
-  .nsl-nav {
-    display: flex;
-    align-items: center;
-    gap: 30px;
-    font-size: 14.5px;
-  }
-  .nsl-nav a {
-    color: var(--dim);
-    transition: color 0.15s ease;
-  }
-  .nsl-nav a:hover {
-    color: var(--text);
-  }
-  .nsl-nav-ext {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    color: var(--accentText) !important;
   }
   .nsl-header-actions {
     display: flex;
@@ -384,21 +300,52 @@ const langs = [
     border-color: var(--accent);
   }
 
-  /* ── Hero (centered copy over a soft glow) ───────────────────────────────── */
+  /* ── Hero ──────────────────────────────────────────────────────────────── */
   .nsl-hero {
     position: relative;
-    padding: 88px 40px 96px;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 64px 40px 128px;
+    box-sizing: border-box;
+    max-width: 1180px;
+    margin: 0 auto;
     overflow: hidden;
   }
   .nsl-hero-inner {
     position: relative;
     z-index: 1;
-    max-width: 860px;
+    max-width: 1100px;
     margin: 0 auto;
     text-align: center;
   }
   .nsl-hero-copy {
+    max-width: 560px;
+    width: 100%;
+    margin-inline: auto;
     min-width: 0;
+  }
+  .nsl .nsl-hero-copy {
+    position: relative;
+    isolation: isolate;
+  }
+  .nsl .nsl-hero-copy::before {
+    content: '';
+    position: absolute;
+    inset: -80px auto;
+    left: 50%;
+    width: calc(100% + 200px);
+    max-width: calc(100vw - 44px);
+    transform: translateX(-50%);
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse at center,
+      color-mix(in srgb, var(--bg) 65%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 45%, transparent) 40%,
+      transparent 72%
+    );
   }
   .nsl-h1 {
     font-family: 'Space Grotesk', sans-serif;
@@ -414,7 +361,7 @@ const langs = [
     line-height: 1.55;
     color: var(--dim);
     max-width: 560px;
-    margin: 0 auto 34px;
+    margin: 0 0 34px;
     text-wrap: pretty;
   }
   .nsl-hero-actions {
@@ -424,154 +371,21 @@ const langs = [
     margin-bottom: 0;
     flex-wrap: wrap;
   }
-
-  /* Soft glow behind the centered copy (kept subtle; clipped by the hero). */
-  .nsl-hero-glow {
-    position: absolute;
-    inset: 0;
-    max-width: 100%;
-    background: radial-gradient(
-      560px 300px at 50% 32%,
-      rgba(109, 74, 255, 0.14),
-      transparent 70%
-    );
-    pointer-events: none;
-    z-index: 0;
+  .nsl-lead a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--faint);
+    text-underline-offset: 3px;
   }
-  /* ── Sections ────────────────────────────────────────────────────────────── */
-  /* Positioned so they paint above the fixed shader canvas (z-index 0). */
-  .nsl-section {
-    position: relative;
-    z-index: 1;
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 0 40px 100px;
-  }
-  #workflow.nsl-section {
-    padding-top: 8px;
-  }
-  .nsl-sechead {
-    text-align: center;
-    max-width: 700px;
-    margin: 0 auto 40px;
-  }
-  .nsl-sechead-wide {
-    max-width: 740px;
-  }
-  .nsl-h2 {
-    font-family: 'Space Grotesk', sans-serif;
-    font-weight: 600;
-    font-size: clamp(28px, 4vw, 42px);
-    letter-spacing: -0.025em;
+  .nsl-lead a:hover {
     color: var(--text);
-    margin: 0 0 14px;
-  }
-  .nsl-secp {
-    font-size: 16.5px;
-    line-height: 1.6;
-    color: var(--dim);
-    margin: 0;
-  }
-  .nsl-secp code {
-    color: var(--accentText);
-  }
-
-  /* Ecosystem */
-  .nsl-eco {
-    text-align: center;
-  }
-  .nsl-eco .nsl-h2 {
-    font-size: clamp(26px, 3.4vw, 36px);
-    margin-bottom: 12px;
-  }
-  .nsl-eco-p {
-    max-width: 620px;
-    margin: 0 auto 34px;
-    font-size: 16px;
-  }
-  .nsl-langs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px 18px;
-    justify-content: center;
-    max-width: 840px;
-    margin: 0 auto;
-  }
-  .nsl-lang {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 14.5px;
-    color: var(--dim);
-    padding: 4px 0;
-    transition: color 0.15s ease;
-  }
-  .nsl-lang:hover {
-    color: var(--text);
-  }
-  .nsl-lang-on {
-    color: var(--accentText);
-    font-weight: 600;
-  }
-
-  /* Docs */
-  .nsl-docs {
-    display: grid;
-    grid-template-columns: 1fr 1.15fr;
-    gap: 44px;
-    align-items: center;
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    background: var(--panel);
-    padding: 44px;
-  }
-  .nsl-docs-h {
-    font-size: clamp(26px, 3vw, 34px);
-    margin: 0 0 16px;
-    line-height: 1.1;
-  }
-  .nsl-docs-p {
-    margin: 0 0 22px;
-    font-size: 16px;
-  }
-  .nsl-docs-routes {
-    display: flex;
-    gap: 22px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13.5px;
-  }
-  .nsl-docs-routes span {
-    color: var(--accentText);
-  }
-  .nsl-docs-shots {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-    min-width: 0;
-  }
-  .nsl-shot {
-    margin: 0;
-  }
-  .nsl-shot img {
-    width: 100%;
-    height: 200px;
-    object-fit: cover;
-    object-position: top left;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    display: block;
-    background: #fff;
-  }
-  .nsl-shot figcaption {
-    margin-top: 9px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12.5px;
-    color: var(--dim);
-  }
-  .nsl-shot figcaption code {
-    color: var(--accentText);
   }
 
   /* Footer */
   .nsl-footer {
+    margin-top: auto;
+    position: relative;
+    z-index: 1;
     position: relative;
     z-index: 1;
     border-top: 1px solid var(--borderSoft);
@@ -604,27 +418,22 @@ const langs = [
   }
 
   /* ── Responsive ──────────────────────────────────────────────────────────── */
-  @media (max-width: 60rem) {
-    .nsl-docs {
-      grid-template-columns: 1fr;
-      gap: 28px;
-      padding: 32px;
-    }
-    .nsl-shot img {
-      height: 180px;
-    }
-  }
   @media (max-width: 48rem) {
-    .nsl-nav {
-      display: none;
-    }
-    .nsl-header,
-    .nsl-section,
+    .nsl-header-inner,
     .nsl-footer {
       padding-inline: 22px;
     }
     .nsl-hero {
-      padding: 64px 22px 60px;
+      padding: 48px 22px 80px;
+    }
+    .nsl-hero-copy {
+      width: 100%;
+      max-width: 560px;
+      margin-inline: auto;
+      text-align: center;
+    }
+    .nsl-hero-actions {
+      justify-content: center;
     }
     .nsl-footer-inner {
       justify-content: center;
@@ -634,6 +443,18 @@ const langs = [
 </style>
 
 <script>
+  const header = document.querySelector<HTMLElement>('.nsl-header');
+  if (header) {
+    const updateHeader = () => header.classList.toggle('is-scrolled', window.scrollY > 16);
+    updateHeader();
+    window.addEventListener('scroll', updateHeader, { passive: true });
+    window.addEventListener('pageshow', updateHeader);
+    document.addEventListener('astro:before-swap', () => {
+      window.removeEventListener('scroll', updateHeader);
+      window.removeEventListener('pageshow', updateHeader);
+    }, { once: true });
+  }
+
   // Theme toggle — drives Starlight's theme (data-theme + localStorage) so the
   // landing and the docs pages stay in sync.
   (function () {

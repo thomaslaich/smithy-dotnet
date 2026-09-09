@@ -58,32 +58,6 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
     return CSharpNaming.propertyName(shape.getMemberName());
   }
 
-  private Symbol primitive(String namespace, String name, boolean isValueType) {
-    return Symbol.builder()
-        .name(name)
-        .namespace(namespace, ".")
-        .putProperty(SymbolProperties.IS_VALUE_TYPE, isValueType)
-        .build();
-  }
-
-  /** Generated user-defined shape: lives in the per-shape C# namespace, has its own .cs file. */
-  private Symbol generated(Shape shape, String typeName) {
-    String csNamespace = settings.csharpNamespace(shape.getId().getNamespace());
-    String file = csNamespace.replace('.', '/') + "/" + typeName + ".g.cs";
-    return Symbol.builder()
-        .name(typeName)
-        .namespace(csNamespace, ".")
-        .definitionFile(file)
-        .putProperty(SymbolProperties.IS_VALUE_TYPE, false)
-        .build();
-  }
-
-  /** A *qualified* type expression for use in inline generic args: "ns.Name" or "Name". */
-  public static String qualified(Symbol s) {
-    String ns = s.getNamespace();
-    return (ns == null || ns.isEmpty()) ? s.getName() : ns + "." + s.getName();
-  }
-
   @Override
   public Symbol blobShape(BlobShape s) {
     return primitive("", "byte[]", false);
@@ -126,7 +100,9 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
 
   @Override
   public Symbol bigIntegerShape(BigIntegerShape s) {
-    return primitive("System.Numerics", "BigInteger", true);
+    return RuntimeTypes.BIG_INTEGER.toBuilder()
+        .putProperty(SymbolProperties.IS_VALUE_TYPE, true)
+        .build();
   }
 
   @Override
@@ -141,12 +117,16 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
 
   @Override
   public Symbol timestampShape(TimestampShape s) {
-    return primitive("", "System.DateTimeOffset", true);
+    return RuntimeTypes.DATE_TIME_OFFSET.toBuilder()
+        .putProperty(SymbolProperties.IS_VALUE_TYPE, true)
+        .build();
   }
 
   @Override
   public Symbol documentShape(DocumentShape s) {
-    return primitive(RuntimeTypes.NSMITHY_CORE, "Document", false);
+    return RuntimeTypes.DOCUMENT.toBuilder()
+        .putProperty(SymbolProperties.IS_VALUE_TYPE, false)
+        .build();
   }
 
   @Override
@@ -165,12 +145,16 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
     // so union members and other references agree with Schemas.Unit
     // (Schema<SmithyUnit>).
     if (ShapeSupport.isUnit(s.getId())) {
-      return primitive(RuntimeTypes.NSMITHY_CORE, "SmithyUnit", true);
+      return RuntimeTypes.SMITHY_UNIT.toBuilder()
+          .putProperty(SymbolProperties.IS_VALUE_TYPE, true)
+          .build();
     }
     // The server runtime throws this one itself, so a model that declares it must bind to the
     // runtime's type — a generated copy would be a different type the runtime never throws.
     if (ShapeSupport.isValidationException(s.getId())) {
-      return primitive(RuntimeTypes.NSMITHY_CORE_VALIDATION, "ValidationException", false);
+      return RuntimeTypes.VALIDATION_EXCEPTION.toBuilder()
+          .putProperty(SymbolProperties.IS_VALUE_TYPE, false)
+          .build();
     }
     return generated(s, CSharpNaming.typeName(s.getId().getName()));
   }
@@ -210,5 +194,25 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
   @Override
   public Symbol resourceShape(ResourceShape s) {
     return generated(s, CSharpNaming.typeName(s.getId().getName()));
+  }
+
+  private Symbol primitive(String namespace, String name, boolean isValueType) {
+    return Symbol.builder()
+        .name(name)
+        .namespace(namespace, ".")
+        .putProperty(SymbolProperties.IS_VALUE_TYPE, isValueType)
+        .build();
+  }
+
+  /** Generated user-defined shape: lives in the per-shape C# namespace, has its own .cs file. */
+  private Symbol generated(Shape shape, String typeName) {
+    String csNamespace = settings.csharpNamespace(shape.getId().getNamespace());
+    String file = csNamespace.replace('.', '/') + "/" + typeName + ".g.cs";
+    return Symbol.builder()
+        .name(typeName)
+        .namespace(csNamespace, ".")
+        .definitionFile(file)
+        .putProperty(SymbolProperties.IS_VALUE_TYPE, false)
+        .build();
   }
 }

@@ -19,13 +19,9 @@ public static class SmithyAspNetCoreHost
     private const string BufferedRequestBodyItemKey =
         "NSmithy.Server.AspNetCore.BufferedRequestBody";
 
-    // The runtime is currently stateless, so a shared default suffices and generated endpoints do
-    // not depend on it being registered in DI. When server interceptors/telemetry land, this is
-    // the seam that becomes configurable.
-    private static readonly SmithyServerRuntime Runtime = new();
-
     /// <summary>Dispatch. Set <paramref name="streamRequestBody"/> for streaming request bodies.</summary>
     public static async Task DispatchAsync<TInput, TOutput>(
+        SmithyServerRuntime runtime,
         HttpContext httpContext,
         IServerOperationProtocol<TInput, TOutput> protocol,
         Func<TInput, CancellationToken, Task<TOutput>> handler,
@@ -33,6 +29,7 @@ public static class SmithyAspNetCoreHost
         CancellationToken cancellationToken = default
     )
     {
+        ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(httpContext);
         if (streamRequestBody)
         {
@@ -41,7 +38,7 @@ public static class SmithyAspNetCoreHost
 
         var request = await ToSmithyRequestAsync(httpContext, streamRequestBody, cancellationToken)
             .ConfigureAwait(false);
-        var response = await Runtime
+        var response = await runtime
             .DispatchAsync(protocol, request, handler, cancellationToken)
             .ConfigureAwait(false);
         await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);

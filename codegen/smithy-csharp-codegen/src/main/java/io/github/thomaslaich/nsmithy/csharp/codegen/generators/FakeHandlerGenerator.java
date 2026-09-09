@@ -13,7 +13,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
@@ -42,8 +41,8 @@ public final class FakeHandlerGenerator implements Runnable {
     this.context = c;
     this.writer = w;
     this.service = s;
-    this.values = new FakeValueSynthesizer(c, "fake handler");
-    this.matcher = new FakeExampleMatcher(c, values);
+    this.values = new FakeValueSynthesizer(c, w, "fake handler");
+    this.matcher = new FakeExampleMatcher(c, w, values);
   }
 
   @Override
@@ -54,8 +53,6 @@ public final class FakeHandlerGenerator implements Runnable {
         idx.getContainedOperations(service).stream()
             .sorted(Comparator.comparing(o -> o.getId().toString()))
             .collect(Collectors.toList());
-
-    writer.addImport(RuntimeTypes.NSMITHY_CORE);
 
     String serviceTypeName = CSharpNaming.typeName(service.getId().getName());
     String contract =
@@ -75,29 +72,54 @@ public final class FakeHandlerGenerator implements Runnable {
             + " register a real per-operation handler after this one, to replace individual"
             + " operations.",
         Map.of());
-    writer.write("public class $L : $L", fakeClass, aggInterface);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          boolean first = true;
-          for (OperationShape op : ops) {
-            if (!first) {
-              writer.write("");
-            }
-            first = false;
-            writeOperationMethod(op);
+    writer.pushState();
+    try {
+      writer.putContext("fakeClass", fakeClass);
+      writer.putContext("handler", aggInterface);
+      writer.putContext(
+          "members",
+          writer.consumer(
+              w -> {
+                boolean first = true;
+                for (OperationShape op : ops) {
+                  if (!first) {
+                    w.write("");
+                  }
+                  first = false;
+                  writeOperationMethod(op);
+                }
+                matcher.writePendingMatchers(w);
+                values.writePendingIterators(w);
+              }));
+      writer.write(
+          """
+          public class ${fakeClass:L} : ${handler:L}
+          {
+              ${members:C|}
           }
-          matcher.writePendingMatchers(writer);
-          values.writePendingIterators(writer);
-        });
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   // ---------------- operation methods ----------------
 
   private void writeOperationMethod(OperationShape op) {
-    writer.write("public virtual $L", operationSignature(op));
-    writer.openBlock("{", "}", () -> matcher.writeOperationBody(writer, op));
+    writer.pushState();
+    try {
+      writer.putContext("signature", operationSignature(op));
+      writer.putContext("body", writer.consumer(w -> matcher.writeOperationBody(w, op)));
+      writer.write(
+          """
+          public virtual ${signature:L}
+          {
+              ${body:C|}
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 
   /** Same delegate shape the handler interfaces declare; see ServerGenerator. */
@@ -109,21 +131,20 @@ public final class FakeHandlerGenerator implements Runnable {
     String name = CSharpNaming.typeName(op.getId().getName()) + "Async";
     String returnType =
         hasOutput
-            ? "System.Threading.Tasks.Task<"
-                + CSharpSymbolProvider.qualified(
-                    sp.toSymbol(model.expectShape(op.getOutputShape())))
+            ? writer.typeName(RuntimeTypes.TASK)
+                + "<"
+                + writer.typeName(sp.toSymbol(model.expectShape(op.getOutputShape())))
                 + ">"
-            : "System.Threading.Tasks.Task";
+            : writer.typeName(RuntimeTypes.TASK);
     String params =
         hasInput
-            ? CSharpSymbolProvider.qualified(sp.toSymbol(model.expectShape(op.getInputShape())))
-                + " input, "
+            ? writer.typeName(sp.toSymbol(model.expectShape(op.getInputShape()))) + " input, "
             : "";
-    return returnType
-        + " "
-        + name
-        + "("
-        + params
-        + "System.Threading.CancellationToken cancellationToken = default)";
+    return writer.format(
+        "$L $L($L$T cancellationToken = default)",
+        returnType,
+        name,
+        params,
+        RuntimeTypes.CANCELLATION_TOKEN);
   }
 }

@@ -9,7 +9,7 @@
 
 import com.vanniktech.maven.publish.JavaLibrary
 import com.vanniktech.maven.publish.JavadocJar
-import com.vanniktech.maven.publish.SonatypeHost
+import com.vanniktech.maven.publish.SourcesJar
 
 val smithyVersion: String by project
 
@@ -23,8 +23,10 @@ dependencies {
     api("software.amazon.smithy:smithy-build:$smithyVersion")
     api("software.amazon.smithy:smithy-utils:$smithyVersion")
 
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.11.4")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.11.4")
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
+    testImplementation("org.junit.jupiter:junit-jupiter-api")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.test {
@@ -32,12 +34,12 @@ tasks.test {
 }
 
 mavenPublishing {
-    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
+    publishToMavenCentral()
     if (providers.environmentVariable("ORG_GRADLE_PROJECT_signingInMemoryKey").isPresent) {
         signAllPublications()
     }
 
-    configure(JavaLibrary(javadocJar = JavadocJar.Empty(), sourcesJar = true))
+    configure(JavaLibrary(javadocJar = JavadocJar.Empty(), sourcesJar = SourcesJar.Sources()))
 
     coordinates(group.toString(), "smithy-proto-codegen", version.toString())
 

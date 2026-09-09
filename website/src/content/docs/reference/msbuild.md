@@ -1,5 +1,5 @@
 ---
-title: MSBuild Reference
+title: MSBuild reference
 description: MSBuild properties and items for NSmithy.MSBuild.
 ---
 
@@ -8,6 +8,12 @@ generation pipeline. It invokes the `smithy` CLI, which runs the
 `csharp-codegen` Java plugin to emit `.g.cs` files, then registers those files
 with the .NET toolchain.
 
+## Configuration sources
+
+When a project supplies `smithy-build.json`, configure generator options in its
+`csharp-codegen` plugin settings. Without one, NSmithy synthesizes the file from
+MSBuild properties and model sources. See [Code generation](/smithy-dotnet/concepts/code-generation/).
+
 ## Properties
 
 ### Code generation
@@ -15,7 +21,7 @@ with the .NET toolchain.
 | Property | Default | Description |
 | --- | --- | --- |
 | `SmithyService` | — | Smithy shape ID of the service to generate (e.g. `example.hello#HelloService`). Required when synthesizing a `smithy-build.json` from local or referenced model sources. |
-| `SmithyBaseNamespace` | — | Restricts generated C# types to shapes whose Smithy namespace starts with this value. Leave empty to emit all shapes. |
+| `SmithyBaseNamespace` | — | Prefix prepended to generated C# namespaces. For example, `Acme` maps `example.library` to `Acme.Example.Library`. It does not filter model shapes. |
 | `SmithyGenerateServer` | `true` | Emit server stub types. Set to `false` in client-only projects. |
 | `SmithyGenerateClient` | `true` | Emit client types. Set to `false` in server-only projects. |
 | `SmithyGenerateDependencyInjection` | `false` | Generate DI registrations (flows into `smithy-build.json` as the `csharp-codegen` `generateDependencyInjection` setting). HTTP services get the `Add{Service}Client` IHttpClientFactory extension (requires `Microsoft.Extensions.Http` or the `Microsoft.AspNetCore.App` shared framework); `bote#kafkaJson` services get `Add{Service}Client`, `Add{Service}EventPublisher`, and `Add{Service}*Consumer` registrations (requires `NSmithy.Messaging.Kafka`). See [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/) and [Kafka JSON](/smithy-dotnet/protocols/bote-kafka-json/#dependency-injection). |
@@ -32,6 +38,15 @@ with the .NET toolchain.
 `BoteVersion`, and `NSmithyBoteVersion`. Most applications should set only
 `SmithyGenerateAsyncApi`; the version properties exist for advanced development
 and release scenarios.
+
+### Documentation
+
+| Property | Default | Description |
+| --- | --- | --- |
+| `SmithyGenerateDocs` | `false` | Generate Sphinx HTML documentation. Requires Python 3.11+. |
+| `SmithyOpenApiProtocol` | — | Protocol shape ID for OpenAPI generation. |
+
+See [Endpoint documentation](/smithy-dotnet/guides/endpoint-documentation/) for setup.
 
 ### gRPC / Protobuf
 
@@ -57,34 +72,24 @@ and release scenarios.
 | `SmithyMavenRepository` | Maven repository URI made available to the Smithy CLI. Extension packages use this to expose bundled, offline artifacts. |
 | `SmithyCodegenInput` | Files that participate in incremental codegen invalidation, typically an extension package's bundled JARs. |
 | `SmithyBuildPlugin` | Additional smithy-build plugin. The item identity is the plugin name; `Service` and `SettingsJson` metadata configure it. |
+| `SmithyContractsBuildFile` | Contract build configuration used when synthesizing a consumer build file. Collected automatically from a contracts project reference; set explicitly for packaged models. |
 
-## Mixing model sources
+## Contract inputs
 
-A single project can consume Smithy models from multiple sources simultaneously.
-`SmithySource` items and `SmithyMavenDependency` items are additive — NSmithy
-collects them all and writes a single synthesized `smithy-build.json`:
+A contracts project reference supplies model sources and its `smithy-build.json`
+automatically. NuGet packages require explicit `SmithySource` and
+`SmithyContractsBuildFile` items; a package reference alone is insufficient.
+See [Distributing contracts](/smithy-dotnet/guides/distributing-contracts/)
+for both configurations.
 
-```xml
-<!-- Model files from a contracts project in the same repo -->
-<ProjectReference Include="../ServiceA.Contracts/ServiceA.Contracts.csproj" />
-
-<!-- Model JAR from a Maven registry -->
-<SmithyMavenDependency Include="io.github.acme:service-b-contracts:1.0.0" />
-```
-
-`ProjectReference` items are the recommended way to consume contracts within
-a solution. `SmithyMavenDependency` covers external dependencies — whether
-published by a team using NSmithy or any other Smithy toolchain.
-
-:::note
-Consuming a contracts model from a **published NuGet package** (rather than a
-`ProjectReference`) is not yet supported. Use `SmithyMavenDependency` for
-cross-team model sharing outside the solution.
-:::
+Declare Maven dependencies in `smithy-build.json` under `maven.dependencies`
+or add `SmithyMavenDependency` items. Build-file synthesis reads one contract
+build configuration; use an explicit build file when combining models with
+separate configurations.
 
 ## Smithy CLI
 
-NSmithy bundles the Smithy CLI (version 1.73.0) inside `NSmithy.MSBuild` and
+NSmithy bundles the Smithy CLI inside `NSmithy.MSBuild` and
 selects the correct platform binary automatically. No separate installation is
 required. The bundle is self-contained and includes a JRE, so Java does not
 need to be installed either.
@@ -97,3 +102,9 @@ and may require access to the configured Maven repositories.
 
 Set `SmithyCliPath` to override the bundled binary with a specific executable,
 for example when testing against a different CLI version:
+
+```xml
+<PropertyGroup>
+  <SmithyCliPath>/path/to/smithy</SmithyCliPath>
+</PropertyGroup>
+```

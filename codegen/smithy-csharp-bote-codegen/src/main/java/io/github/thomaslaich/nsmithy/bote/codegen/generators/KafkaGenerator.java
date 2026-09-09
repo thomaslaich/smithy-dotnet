@@ -5,7 +5,6 @@ import io.github.thomaslaich.nsmithy.bote.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.bote.codegen.TraitIds;
 import io.github.thomaslaich.nsmithy.bote.codegen.support.KafkaBindings;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.SchemaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
@@ -370,8 +369,7 @@ public final class KafkaGenerator implements Runnable {
   // Trait / model helpers
 
   private String qualified(Model model, MemberShape member) {
-    return CSharpSymbolProvider.qualified(
-        context.symbolProvider().toSymbol(model.expectShape(member.getTarget())));
+    return context.symbolProvider().toSymbol(model.expectShape(member.getTarget())).getFullName();
   }
 
   private String codecFieldName(String qualifiedType) {
@@ -381,10 +379,10 @@ public final class KafkaGenerator implements Runnable {
 
   // Header-bound members use a body projection because they never appear in JSON.
   private void writePayloadCodecField(Shape shape) {
-    String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(shape));
+    String type = context.symbolProvider().toSymbol(shape).getFullName();
     Optional<StructureShape> structure = shape.asStructureShape();
     if (structure.isPresent() && hasHeaderMembers(structure.get())) {
-      String schema = SchemaGenerator.schemaClassName(context, shape);
+      String schema = SchemaGenerator.schemaClassName(writer, context, shape);
       String builder = schema + ".Builder";
       String structSchemaField = structSchemaFieldName(type);
       String excluded =
@@ -414,7 +412,7 @@ public final class KafkaGenerator implements Runnable {
         "private static readonly ICodec<$L> $L = JsonCodecFactory.Default.FromSchema($L.Schema);",
         type,
         codecFieldName(type),
-        SchemaGenerator.schemaClassName(context, shape));
+        SchemaGenerator.schemaClassName(writer, context, shape));
   }
 
   private Set<Shape> eventCodecShapes(List<KafkaBindings.Consume> consumes, Model model) {
@@ -429,7 +427,7 @@ public final class KafkaGenerator implements Runnable {
 
   private void writePayloadDeserialization(
       StructureShape payload, String local, String valueExpr, String headersExpr) {
-    String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(payload));
+    String type = context.symbolProvider().toSymbol(payload).getFullName();
     if (hasHeaderMembers(payload)) {
       writer.write(
           "var $L = $L($L, $L);", local, deserializeMethodName(type), valueExpr, headersExpr);
@@ -439,7 +437,7 @@ public final class KafkaGenerator implements Runnable {
   }
 
   private void writeHeaderDeserializer(StructureShape payload) {
-    String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(payload));
+    String type = context.symbolProvider().toSymbol(payload).getFullName();
     String structSchemaField = structSchemaFieldName(type);
     writer.write("");
     writer.write(
@@ -578,7 +576,7 @@ public final class KafkaGenerator implements Runnable {
   }
 
   private String headerParseExpression(Shape target, String textExpr) {
-    String type = CSharpSymbolProvider.qualified(context.symbolProvider().toSymbol(target));
+    String type = context.symbolProvider().toSymbol(target).getFullName();
     String invariant = "System.Globalization.CultureInfo.InvariantCulture";
     return switch (target.getType()) {
       case STRING -> textExpr;

@@ -10,7 +10,6 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
-import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.MemberShape;
 import software.amazon.smithy.model.shapes.UnionShape;
@@ -31,106 +30,157 @@ public final class UnionGenerator implements Runnable {
 
   @Override
   public void run() {
-    SymbolProvider sp = context.symbolProvider();
-    Model model = context.model();
+    writer.reserveMemberNames(shape);
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     List<MemberShape> members = ShapeSupport.sortedMembers(shape);
 
-    writer.write("public abstract partial record class $L", typeName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          writer.write("private protected $L() { }", typeName);
-          writer.write("");
-          for (MemberShape m : members) {
-            String variantName = CSharpNaming.typeName(m.getMemberName());
-            String valueType = ShapeSupport.memberTypeExpr(model, sp, m, false);
-            writer.write("public sealed partial record class $L : $L", variantName, typeName);
-            writer.openBlock(
-                "{",
-                "}",
-                () -> {
-                  writer.write("public $L($L value)", variantName, valueType);
-                  writer.openBlock(
-                      "{",
-                      "}",
-                      () -> {
-                        if (ShapeSupport.isReferenceType(model, m)) {
-                          writer.write(
-                              "Value = value ?? throw new"
-                                  + " System.ArgumentNullException(nameof(value));");
-                        } else {
-                          writer.write("Value = value;");
-                        }
-                      });
-                  writer.write("");
-                  writer.write("public $L Value { get; }", valueType);
-                });
-            writer.write("");
-            writer.write("public static $L From$L($L value)", typeName, variantName, valueType);
-            writer.openBlock("{", "}", () -> writer.write("return new $L(value);", variantName));
-            writer.write("");
-          }
-
-          writer.addImport(RuntimeTypes.NSMITHY_CORE);
-          writer.write("public sealed partial record class Unknown : $L", typeName);
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                writer.write("public Unknown(string tag, Document value)");
-                writer.openBlock(
-                    "{",
-                    "}",
-                    () -> {
-                      writer.write(
-                          "Tag = tag ?? throw new System.ArgumentNullException(nameof(tag));");
-                      writer.write("Value = value;");
-                    });
-                writer.write("");
-                writer.write("public string Tag { get; }");
-                writer.write("public Document Value { get; }");
-              });
-          writer.write("");
-          writer.write("public static $L FromUnknown(string tag, Document value)", typeName);
-          writer.openBlock("{", "}", () -> writer.write("return new Unknown(tag, value);"));
-          writer.write("");
-
-          // Match method
-          StringBuilder header = new StringBuilder("public T Match<T>(");
-          for (MemberShape m : members) {
-            String pn = CSharpNaming.parameterName(m.getMemberName());
-            String vt = ShapeSupport.memberTypeExpr(model, sp, m, false);
-            header.append("System.Func<").append(vt).append(", T> ").append(pn).append(", ");
-          }
-          header.append("System.Func<string, Document, T> unknown)");
-          writer.write(header.toString());
-          writer.openBlock(
-              "{",
-              "}",
-              () -> {
-                for (MemberShape m : members) {
-                  String pn = CSharpNaming.parameterName(m.getMemberName());
-                  writer.write("System.ArgumentNullException.ThrowIfNull($L);", pn);
+    writer.pushState();
+    try {
+      writer.putContext("typeName", typeName);
+      writer.putContext("document", RuntimeTypes.DOCUMENT);
+      writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+      writer.putContext(
+          "variants",
+          writer.consumer(
+              w -> {
+                for (MemberShape member : members) {
+                  writeVariant(typeName, member);
+                  w.write("");
                 }
-                writer.write("System.ArgumentNullException.ThrowIfNull(unknown);");
-                writer.write("");
-                writer.write("return this switch {");
-                writer.indent();
-                for (MemberShape m : members) {
-                  String variantName = CSharpNaming.typeName(m.getMemberName());
-                  String pn = CSharpNaming.parameterName(m.getMemberName());
-                  writer.write("$L value => $L(value.Value),", variantName, pn);
-                }
-                writer.write("Unknown value => unknown(value.Tag, value.Value),");
-                writer.write(
-                    "_ => throw new System.InvalidOperationException(\"Unknown union variant.\"),");
-                writer.dedent();
-                writer.write("};");
-              });
-        });
+              }));
+      writer.putContext("match", writer.consumer(w -> writeMatch(members)));
+      writer.write(
+          """
+          public abstract partial record class ${typeName:L}
+          {
+              private protected ${typeName:L}() { }
+
+              ${variants:C|}
+              public sealed partial record class Unknown : ${typeName:L}
+              {
+                  public Unknown(string tag, ${document:T} value)
+                  {
+                      Tag = tag ?? throw new ${argumentNullException:T}(nameof(tag));
+                      Value = value;
+                  }
+
+                  public string Tag { get; }
+                  public ${document:T} Value { get; }
+              }
+
+              public static ${typeName:L} FromUnknown(string tag, ${document:T} value)
+              {
+                  return new Unknown(tag, value);
+              }
+
+              ${match:C|}
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
     writer.write("");
     SchemaGenerator.writeUnionSchema(writer, context, shape, members);
+  }
+
+  private void writeVariant(String typeName, MemberShape member) {
+    Model model = context.model();
+    String valueType =
+        ShapeSupport.memberTypeExpr(writer, model, context.symbolProvider(), member, false);
+    String valueExpression =
+        ShapeSupport.isReferenceType(model, member)
+            ? writer.format(
+                "value ?? throw new $T(nameof(value))", RuntimeTypes.ARGUMENT_NULL_EXCEPTION)
+            : "value";
+    writer.pushState();
+    try {
+      writer.putContext("typeName", typeName);
+      writer.putContext("variantName", CSharpNaming.typeName(member.getMemberName()));
+      writer.putContext("valueType", valueType);
+      writer.putContext("valueExpression", valueExpression);
+      writer.write(
+          """
+          public sealed partial record class ${variantName:L} : ${typeName:L}
+          {
+              public ${variantName:L}(${valueType:L} value)
+              {
+                  Value = ${valueExpression:L};
+              }
+
+              public ${valueType:L} Value { get; }
+          }
+
+          public static ${typeName:L} From${variantName:L}(${valueType:L} value)
+          {
+              return new ${variantName:L}(value);
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
+  }
+
+  private void writeMatch(List<MemberShape> members) {
+    writer.pushState();
+    try {
+      writer.putContext("func", RuntimeTypes.FUNC);
+      writer.putContext("document", RuntimeTypes.DOCUMENT);
+      writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+      writer.putContext("invalidOperationException", RuntimeTypes.INVALID_OPERATION_EXCEPTION);
+      writer.putContext(
+          "parameters",
+          writer.consumer(
+              w -> {
+                for (MemberShape member : members) {
+                  w.write(
+                      "$T<$L, T> $L,",
+                      RuntimeTypes.FUNC,
+                      ShapeSupport.memberTypeExpr(
+                          w, context.model(), context.symbolProvider(), member, false),
+                      CSharpNaming.parameterName(member.getMemberName()));
+                }
+              }));
+      writer.putContext(
+          "nullChecks",
+          writer.consumer(
+              w -> {
+                for (MemberShape member : members) {
+                  w.write(
+                      "$T.ThrowIfNull($L);",
+                      RuntimeTypes.ARGUMENT_NULL_EXCEPTION,
+                      CSharpNaming.parameterName(member.getMemberName()));
+                }
+              }));
+      writer.putContext(
+          "cases",
+          writer.consumer(
+              w -> {
+                for (MemberShape member : members) {
+                  w.write(
+                      "$L value => $L(value.Value),",
+                      CSharpNaming.typeName(member.getMemberName()),
+                      CSharpNaming.parameterName(member.getMemberName()));
+                }
+              }));
+      writer.write(
+          """
+          public T Match<T>(
+              ${parameters:C|}
+              ${func:T}<string, ${document:T}, T> unknown)
+          {
+              ${nullChecks:C|}
+              ${argumentNullException:T}.ThrowIfNull(unknown);
+
+              return this switch
+              {
+                  ${cases:C|}
+                  Unknown value => unknown(value.Tag, value.Value),
+                  _ => throw new ${invalidOperationException:T}("Unknown union variant."),
+              };
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
   }
 }

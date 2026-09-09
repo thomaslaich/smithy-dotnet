@@ -1,5 +1,5 @@
 ---
-title: AWS Protocols
+title: AWS protocols
 description: Choose an AWS wire protocol and understand the runtime features needed to call AWS services.
 ---
 
@@ -66,17 +66,6 @@ from your own Smithy models. See
 [Authentication](/smithy-dotnet/guides/client-configuration/authentication/),
 [Retry](/smithy-dotnet/guides/client-configuration/retry/), and
 [Pagination](/smithy-dotnet/guides/client-configuration/pagination/) for details.
-
-## AWS as a proving ground
-
-AWS is also a demanding test bed for NSmithy. The official AWS protocol test
-suites exercise a wide range of HTTP bindings, data shapes, error responses,
-and edge cases. LocalStack and real service calls add interoperability coverage
-beyond the fixtures.
-
-Supporting these protocols helps find weaknesses in serialization, transport,
-authentication, and generated clients. Those improvements also harden the same
-runtime used for non-AWS Smithy services, especially `restJson1` services.
 
 ## Examples
 

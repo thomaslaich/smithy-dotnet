@@ -1,5 +1,5 @@
 ---
-title: Fake Handlers
+title: Fake handlers
 description: Boot a working server from a contract with no handler implementation. Canned responses from @examples, placeholders everywhere else.
 ---
 

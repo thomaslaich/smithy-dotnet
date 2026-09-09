@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.Server.AspNetCore;
 
 namespace SimpleRestJson.Conformance;
 
@@ -54,6 +55,7 @@ internal sealed class RestJsonServerHost : IAsyncDisposable
         var map = ResolveMapMethod(aggregateHandler);
         var handler = CreateProxy(aggregateHandler, invoker);
 
+        builder.Services.AddSmithyServer();
         builder.Services.AddSingleton(aggregateHandler, handler);
         foreach (var contract in aggregateHandler.GetInterfaces())
         {

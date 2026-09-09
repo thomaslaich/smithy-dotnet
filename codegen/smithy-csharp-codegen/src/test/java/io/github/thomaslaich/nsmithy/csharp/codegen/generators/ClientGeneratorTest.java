@@ -127,29 +127,29 @@ final class ClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<Example.Example.Streaming.WatchOutput>"
-                + " WatchAsync(Example.Example.Streaming.WatchInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+            "Task<global::Example.Example.Streaming.WatchOutput>"
+                + " WatchAsync(global::Example.Example.Streaming.WatchInput input,"
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<Example.Example.Streaming.UploadOutput>"
-                + " UploadAsync(Example.Example.Streaming.UploadInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+            "Task<global::Example.Example.Streaming.UploadOutput>"
+                + " UploadAsync(global::Example.Example.Streaming.UploadInput input,"
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<Example.Example.Streaming.ChatOutput>"
-                + " ChatAsync(Example.Example.Streaming.ChatInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+            "Task<global::Example.Example.Streaming.ChatOutput>"
+                + " ChatAsync(global::Example.Example.Streaming.ChatInput input,"
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertFalse(generated.contains("ForOutputEventStreamOperation"), generated);
     assertFalse(generated.contains("Streaming operations are not wired"), generated);
     assertTrue(
         generated.contains(
             "private readonly"
-                + " SmithyOperationBinding<Example.Example.Streaming.WatchInput,"
-                + " Example.Example.Streaming.WatchOutput> WatchBinding;"));
+                + " SmithyOperationBinding<global::Example.Example.Streaming.WatchInput,"
+                + " global::Example.Example.Streaming.WatchOutput> WatchBinding;"));
     assertTrue(generated.contains("runtime.InvokeAsync(WatchBinding"), generated);
     assertFalse(generated.contains("SmithyEventStreamOperationInvoker"), generated);
   }
@@ -396,12 +396,12 @@ final class ClientGeneratorTest {
     assertTrue(
         generated.contains(
             "private readonly"
-                + " SmithyOperationBinding<Example.Example.Reststreaming.WatchInput,"
-                + " Example.Example.Reststreaming.WatchOutput> WatchBinding;"),
+                + " SmithyOperationBinding<global::Example.Example.Reststreaming.WatchInput,"
+                + " global::Example.Example.Reststreaming.WatchOutput> WatchBinding;"),
         generated);
     assertTrue(
         generated.contains(
-            "serviceProtocol.ForClientOperation(Example.Example.Reststreaming.WatchSchema.Schema)"),
+            "serviceProtocol.ForClientOperation(global::Example.Example.Reststreaming.WatchSchema.Schema)"),
         generated);
     assertTrue(generated.contains("runtime.InvokeAsync(WatchBinding"), generated);
     assertFalse(generated.contains("Event-stream operations are not supported"), generated);
@@ -434,9 +434,9 @@ final class ClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "config.Protocol is null ? new"
-                + " SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
-                + " allowDowngrade: true) : null"),
+            "new"
+                + " SmithyHttpVersionPreference(HttpVersion.Version20,"
+                + " allowDowngrade: true)"),
         generated);
   }
 
@@ -451,12 +451,10 @@ final class ClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "SmithyHttpVersionPreference? modeledHttpVersionPreference = config.Protocol is null ?"
-                + " new SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
-                + " allowDowngrade: true) : null;"),
+            "new SmithyHttpVersionPreference(HttpVersion.Version20," + " allowDowngrade: true));"),
         generated);
     assertTrue(
-        generated.indexOf("resolvedProtocol.HttpVersionPreference).Apply(client);")
+        generated.indexOf("SmithyHttpClientEnvironment.ConfigureHttpClient(client,")
             < generated.indexOf("configureClient?.Invoke(client);"),
         generated);
   }
@@ -472,9 +470,9 @@ final class ClientGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "config.Protocol is null ? new"
-                + " SmithyHttpVersionPreference(System.Net.HttpVersion.Version20,"
-                + " allowDowngrade: false) : null"),
+            "new"
+                + " SmithyHttpVersionPreference(HttpVersion.Version20,"
+                + " allowDowngrade: false)"),
         generated);
   }
 
@@ -490,15 +488,17 @@ final class ClientGeneratorTest {
         generated);
     // ReadThing inherits the service's explicitly selected default.
     assertTrue(
-        generated.contains(
-            "serviceProtocol.ForClientOperation(Example.Example.Auth.ReadThingSchema.Schema), new"
-                + " string[] { \"smithy.api#httpBearerAuth\" }, null);"),
+        containsIgnoringWhitespace(
+            generated,
+            "serviceProtocol.ForClientOperation(global::Example.Example.Auth.ReadThingSchema.Schema),"
+                + " new string[] { \"smithy.api#httpBearerAuth\" }, null);"),
         generated);
     // AdminThing's @auth trait overrides the service default.
     assertTrue(
-        generated.contains(
-            "serviceProtocol.ForClientOperation(Example.Example.Auth.AdminThingSchema.Schema), new"
-                + " string[] { \"smithy.api#httpApiKeyAuth\" }, null);"),
+        containsIgnoringWhitespace(
+            generated,
+            "serviceProtocol.ForClientOperation(global::Example.Example.Auth.AdminThingSchema.Schema),"
+                + " new string[] { \"smithy.api#httpApiKeyAuth\" }, null);"),
         generated);
   }
 
@@ -568,9 +568,9 @@ final class ClientGeneratorTest {
     // Pages paginator: repeats the call while the response carries a token.
     assertTrue(
         generated.contains(
-            "System.Collections.Generic.IAsyncEnumerable<Example.Example.Pages.ListThingsOutput>"
-                + " ListThingsPagesAsync(Example.Example.Pages.ListThingsInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+            "IAsyncEnumerable<global::Example.Example.Pages.ListThingsOutput>"
+                + " ListThingsPagesAsync(global::Example.Example.Pages.ListThingsInput input,"
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(generated.contains("input = input with { NextToken = token };"), generated);
     assertTrue(generated.contains("while (token is not null)"), generated);
@@ -578,11 +578,20 @@ final class ClientGeneratorTest {
     // Items paginator: flattens the pages' list member.
     assertTrue(
         generated.contains(
-            "System.Collections.Generic.IAsyncEnumerable<Example.Example.Pages.Thing>"
-                + " ListThingsItemsAsync(Example.Example.Pages.ListThingsInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+            "IAsyncEnumerable<global::Example.Example.Pages.Thing>"
+                + " ListThingsItemsAsync(global::Example.Example.Pages.ListThingsInput input,"
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(generated.contains("foreach (var item in items.Values)"), generated);
+    assertTrue(generated.contains("using System.Collections.Generic;"), generated);
+    assertTrue(generated.contains("using System.Threading;"), generated);
+    assertTrue(generated.contains("using System.Runtime.CompilerServices;"), generated);
+    assertTrue(
+        generated.contains("[EnumeratorCancellation] CancellationToken cancellationToken"),
+        generated);
+    assertFalse(generated.contains("System.Collections.Generic.IAsyncEnumerable<"), generated);
+    assertFalse(
+        generated.contains("System.Threading.CancellationToken cancellationToken"), generated);
 
     // Unpaginated operations get no paginators.
     assertFalse(generated.contains("GetThingPagesAsync"), generated);
@@ -614,8 +623,11 @@ final class ClientGeneratorTest {
             "com.amazonaws.glacier#Glacier",
             "Auxiliary.Com.Amazonaws.Glacier");
 
-    assertTrue(
-        generated.contains("Interceptors.Add(new NSmithy.Aws.GlacierInterceptor());"), generated);
+    assertTrue(generated.contains("Interceptors.Add(new GlacierInterceptor());"), generated);
+  }
+
+  private static boolean containsIgnoringWhitespace(String actual, String expected) {
+    return actual.replaceAll("\\s+", "").contains(expected.replaceAll("\\s+", ""));
   }
 
   private String renderClient() throws Exception {
@@ -648,9 +660,11 @@ final class ClientGeneratorTest {
             .settings(settings)
             .symbolProvider(symbolProvider)
             .fileManifest(manifest)
-            .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
+            .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
             .build();
-    var writer = new CSharpWriter(writerNamespace);
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", writerNamespace);
     var service = model.expectShape(ShapeId.from(serviceId), ServiceShape.class);
 
     new ClientGenerator(context, writer, service).run();
@@ -683,9 +697,11 @@ final class ClientGeneratorTest {
             .settings(settings)
             .symbolProvider(symbolProvider)
             .fileManifest(manifest)
-            .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
+            .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
             .build();
-    var writer = new CSharpWriter(writerNamespace);
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", writerNamespace);
     var service = model.expectShape(ShapeId.from(serviceId), ServiceShape.class);
 
     new ClientDependencyInjectionGenerator(context, writer, service).run();

@@ -64,15 +64,12 @@ final class ErrorGeneratorTest {
 
     assertTrue(
         throttling.contains(
-            "public sealed partial class ThrottlingError : System.Exception,"
-                + " NSmithy.Core.ISmithyRetryableError"),
+            "public sealed partial class ThrottlingError : Exception," + " ISmithyRetryableError"),
         throttling);
     assertTrue(
-        throttling.contains("bool NSmithy.Core.ISmithyRetryableError.IsThrottlingError => true;"),
-        throttling);
+        throttling.contains("bool ISmithyRetryableError.IsThrottlingError => true;"), throttling);
     assertTrue(
-        transientError.contains(
-            "bool NSmithy.Core.ISmithyRetryableError.IsThrottlingError => false;"),
+        transientError.contains("bool ISmithyRetryableError.IsThrottlingError => false;"),
         transientError);
   }
 
@@ -81,8 +78,7 @@ final class ErrorGeneratorTest {
     String generated = renderError("example.weather#ValidationError");
 
     assertTrue(
-        generated.contains("public sealed partial class ValidationError : System.Exception"),
-        generated);
+        generated.contains("public sealed partial class ValidationError : Exception"), generated);
     assertFalse(generated.contains("ISmithyRetryableError"), generated);
   }
 
@@ -93,7 +89,7 @@ final class ErrorGeneratorTest {
     assertTrue(
         generated.contains(
             "private sealed class ValueSerializer :"
-                + " IStructValueSerializer<Example.Example.Weather.ValidationError>"),
+                + " IStructValueSerializer<global::Example.Example.Weather.ValidationError>"),
         generated);
     assertTrue(generated.contains("writer.WriteMember<string?>(0, value.Message);"), generated);
     assertTrue(generated.contains("new ValueSerializer())"), generated);
@@ -116,9 +112,11 @@ final class ErrorGeneratorTest {
             .settings(settings)
             .symbolProvider(symbolProvider)
             .fileManifest(manifest)
-            .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
+            .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
             .build();
-    var writer = new CSharpWriter("Example.Weather");
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", "Example.Weather");
     var shape = model.expectShape(ShapeId.from(shapeId), StructureShape.class);
 
     new ErrorGenerator(context, writer, shape).run();

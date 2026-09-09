@@ -210,7 +210,7 @@ final class KafkaGeneratorTest {
             .settings(settings)
             .symbolProvider(symbolProvider)
             .fileManifest(manifest)
-            .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
+            .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
             .build();
     var service = model.expectShape(ShapeId.from("example.messaging#Device"), ServiceShape.class);
     return new RenderContext(context, service);

@@ -67,11 +67,19 @@ export default defineConfig({
 			},
 			sidebar: [
 				{
-					label: 'Overview',
+					label: 'Getting started',
 					items: [
 						{ label: 'Introduction', slug: 'getting-started/introduction' },
-						{ label: 'Quick Start', slug: 'getting-started/quick-start' },
-						{ label: 'Distributing Contracts', slug: 'guides/distributing-contracts' },
+						{ label: 'Quick start', slug: 'getting-started/quick-start' },
+					],
+				},
+				{
+					label: 'Concepts',
+					items: [
+						{ label: 'Modeling contracts', slug: 'concepts/modeling' },
+						{ label: 'Code generation', slug: 'concepts/code-generation' },
+						{ label: 'Distributing contracts', slug: 'guides/distributing-contracts' },
+						{ label: 'Smithy and TypeSpec', slug: 'concepts/smithy-and-typespec' },
 					],
 				},
 				{
@@ -84,8 +92,8 @@ export default defineConfig({
 						{ label: 'Observability', slug: 'guides/client-configuration/observability' },
 						{ label: 'Pagination', slug: 'guides/client-configuration/pagination' },
 						{ label: 'Transport', slug: 'guides/client-configuration/transport' },
-						{ label: 'Dependency Injection', slug: 'guides/client-configuration/dependency-injection' },
-						{ label: 'Fake Clients', slug: 'guides/client-configuration/fake-clients' },
+						{ label: 'Dependency injection', slug: 'guides/client-configuration/dependency-injection' },
+						{ label: 'Fake clients', slug: 'guides/client-configuration/fake-clients' },
 					],
 				},
 				{
@@ -93,10 +101,10 @@ export default defineConfig({
 					items: [
 						{ label: 'Overview', slug: 'servers' },
 						{ label: 'Validation', slug: 'servers/validation' },
-						{ label: 'Hosting & Multiple Protocols', slug: 'servers/hosting' },
-						{ label: 'Fake Handlers', slug: 'servers/fake-handlers' },
+						{ label: 'Hosting multiple protocols', slug: 'servers/hosting' },
+						{ label: 'Fake handlers', slug: 'servers/fake-handlers' },
 						{ label: 'MCP', slug: 'servers/mcp' },
-						{ label: 'Endpoint Documentation', slug: 'guides/endpoint-documentation' },
+						{ label: 'Endpoint documentation', slug: 'guides/endpoint-documentation' },
 					],
 				},
 				{
@@ -107,7 +115,7 @@ export default defineConfig({
 						{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor' },
 						{ label: 'gRPC', slug: 'protocols/grpc' },
 						{
-							label: 'AWS Protocols',
+							label: 'AWS protocols',
 							items: [
 								{ label: 'Overview', slug: 'protocols/aws-overview' },
 								{ label: 'AWS JSON', slug: 'protocols/aws-json' },
@@ -117,22 +125,22 @@ export default defineConfig({
 							],
 						},
 						{
-							label: 'bote Protocols',
+							label: 'bote protocols',
 							items: [
 								{ label: 'Overview', slug: 'protocols/bote-overview' },
 								{ label: 'Kafka JSON', slug: 'protocols/bote-kafka-json' },
 								{ label: 'Redis JSON', slug: 'protocols/bote-redis-json' },
 							],
 						},
-						{ label: 'Protocol Status', slug: 'protocols/status' },
+						{ label: 'Protocol status', slug: 'protocols/status' },
 					],
 				},
 				{
 					label: 'Reference',
 					items: [
 						{ label: 'MSBuild', slug: 'reference/msbuild' },
-						{ label: 'Known Limitations', slug: 'reference/known-limitations' },
-						{ label: 'Design Docs', slug: 'reference/design' },
+						{ label: 'Known limitations', slug: 'reference/known-limitations' },
+						{ label: 'Design docs', slug: 'reference/design' },
 					],
 				},
 				{

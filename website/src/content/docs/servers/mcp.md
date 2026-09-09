@@ -18,7 +18,7 @@ The package integrates with the official
 select a transport: the application can use stdio, HTTP, or another transport
 provided by that SDK.
 
-## Install the Package
+## Install the package
 
 ```xml
 <PackageReference Include="NSmithy.Server.Mcp" Version="NSMITHY_VERSION" />
@@ -27,7 +27,7 @@ provided by that SDK.
 The package brings in the MCP server hosting APIs and the NSmithy JSON and
 server runtimes.
 
-## Register a Generated Service
+## Register a generated service
 
 Register the generated handler as usual, then select the service by its generated
 schema. This exposes its tools and prompts together:
@@ -69,7 +69,7 @@ The tools adapter uses generated JSON Schema 2020-12 documents, JSON codecs,
 constraint validation, and typed handlers shared with the other NSmithy server
 surfaces.
 
-### Operation Mapping
+### Operation mapping
 
 Each supported operation becomes one MCP tool:
 

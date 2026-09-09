@@ -1,0 +1,64 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      github-actions:
+        patterns: ['*']
+        update-types: [minor, patch]
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    # Template sources contain release-time placeholders, not NuGet versions.
+    exclude-paths:
+      - templates/NSmithy.Templates/content/**
+    ignore:
+      # Examples consume locally packed packages pinned to 0.0.0-SNAPSHOT.
+      - dependency-name: NSmithy.*
+    groups:
+      nuget:
+        patterns: ['*']
+        update-types: [minor, patch]
+  - package-ecosystem: gradle
+    directories:
+      - /codegen
+      - /examples/polyglot/java
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    ignore:
+      - dependency-name: io.github.thomaslaich.nsmithy:*
+    groups:
+      gradle:
+        patterns: ['*']
+        update-types: [minor, patch]
+  - package-ecosystem: npm
+    directories:
+      - /website
+      - /benchmarks/stacks/TypeSpec
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      npm:
+        patterns: ['*']
+        update-types: [minor, patch]
+  - package-ecosystem: docker
+    directory: /examples/polyglot/java
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      docker:
+        patterns: ['*']
+        update-types: [minor, patch]

@@ -205,23 +205,27 @@ A host adapter binds a host framework to the runtime. It owns two conversions â€
 the host request into a `SmithyHttpRequest`, and a `SmithyHttpServerResponse` onto
 the host response â€” and one dispatch entry point that generated endpoints call:
 
-The runtime is currently stateless, so the host adapter owns a shared default
-instance rather than requiring it in DI; generated endpoints never reference it.
+Generated endpoints resolve `SmithyServerRuntime` from request services and pass
+it to the host. `Add{Service}Handler<THandler>()` calls `AddSmithyServer()`, which
+uses `TryAddSingleton` to register a default without replacing application
+registrations. Applications registering operation handlers individually must call
+`services.AddSmithyServer()` before building the host. The runtime is currently
+stateless; this ownership boundary allows future lifecycle configuration without
+adding global host state.
 
 ```csharp
 public static class SmithyAspNetCoreHost
 {
-    private static readonly SmithyServerRuntime Runtime = new();
-
     public static async Task DispatchAsync<TInput, TOutput>(
+        SmithyServerRuntime runtime,
         HttpContext context,
         IServerOperationProtocol<TInput, TOutput> protocol,
         Func<TInput, CancellationToken, Task<TOutput>> handler,
         bool streamRequestBody = false,
         CancellationToken cancellationToken = default)
     {
-        var request = await ToSmithyRequestAsync(context, cancellationToken).ConfigureAwait(false);
-        var response = await Runtime.DispatchAsync(protocol, request, handler, cancellationToken).ConfigureAwait(false);
+        var request = await ToSmithyRequestAsync(context, streamRequestBody, cancellationToken).ConfigureAwait(false);
+        var response = await runtime.DispatchAsync(protocol, request, handler, cancellationToken).ConfigureAwait(false);
         await WriteAsync(context, response, cancellationToken).ConfigureAwait(false);
     }
 
@@ -274,20 +278,45 @@ public static class SmithyAspNetCoreHost
 Whether a connection can carry trailers is transport-level and belongs to the
 host. The trailer values (`grpc-status: 13`, the message) belong to the protocol.
 
+Direct callers of `SmithyAspNetCoreHost.DispatchAsync` pass the runtime as the
+first argument. Generated endpoints use `[FromServices]` to resolve it, preserving
+application-selected lifetimes and avoiding request-body inference. This is an
+ownership seam; server interceptors and telemetry remain future work.
+
 ## Generated Endpoint
 
 A generated endpoint is a route bound to a handler method and the operation's
 protocol, delegating to the host adapter:
 
 ```csharp
-endpoints.MapMethods("/foo", ["POST"], (HttpContext context, IFooHandler handler, CancellationToken ct) =>
-    SmithyAspNetCoreHost.DispatchAsync(context, FooProtocol, handler.FooAsync, ct));
+endpoints.MapMethods("/foo", ["POST"], (HttpContext context, [FromServices] SmithyServerRuntime runtime, IFooHandler handler, CancellationToken ct) =>
+    SmithyAspNetCoreHost.DispatchAsync(runtime, context, FooProtocol, handler.FooAsync, cancellationToken: ct));
 ```
 
 The only per-operation variation in codegen is the handler-adapter lambda (by
 input/output presence and stream direction), the route and URI derived from the
 model, and any static query validation from `@http`. The dispatch algorithm is
 not generated.
+
+### Endpoint Mapping and Shared Metadata
+
+Generated code contains contract-specific facts; runtimes own reusable behavior.
+Explicit endpoint mappings retain the route, protocol selection, static query
+guards, streaming flags, and typed handler adapters. Dispatch already delegates
+to the host in one call.
+
+Descriptor-driven endpoint mapping remains deferred. A descriptor would also
+need typed handler resolution and protocol route collision handling. Before
+introducing it, compare generated source size and total runtime complexity for
+unary, streaming, multi-protocol, and static-query services. Reducing generated
+lines alone does not justify another public abstraction or reflection-based
+dispatch.
+
+New host integrations should reuse the transport-neutral service definition,
+operation catalog, and service/operation schemas as their metadata root.
+Adapter-specific descriptors should reference those definitions. HTTP routes,
+MCP JSON Schema, and framework types belong in their respective adapters, rather
+than in a parallel service model or the shared definition.
 
 ## Multiple Protocols per Service
 

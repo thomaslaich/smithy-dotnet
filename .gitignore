@@ -27,7 +27,7 @@ build/
 
 *.binlog
 
-# LLM things
+# Local agent state
 .claude/
 
 # macOS Finder metadata

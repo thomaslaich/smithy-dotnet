@@ -25,40 +25,48 @@ public final class IntEnumGenerator implements Runnable {
 
   @Override
   public void run() {
-    writer.addImport(RuntimeTypes.NSMITHY_CORE);
-    writer.addImport(RuntimeTypes.NSMITHY_CORE_SERDE);
     String typeName = CSharpNaming.typeName(shape.getId().getName());
-    writer.writeXmlDocs(shape);
-    writer.write("public enum $L", typeName);
-    writer.openBlock(
-        "{",
-        "}",
-        () -> {
-          for (MemberShape m : ShapeSupport.sortedMembers(shape)) {
-            String prop = CSharpNaming.propertyName(m.getMemberName());
-            Integer value =
-                m.getTrait(EnumValueTrait.class).flatMap(t -> t.getIntValue()).orElse(null);
-            writer.writeXmlDocs(m);
-            if (value != null) {
-              writer.write("$L = $L,", prop, value);
-            } else {
-              writer.write("$L,", prop);
-            }
+    writer.pushState();
+    try {
+      writer.putContext("typeName", typeName);
+      writer.putContext("schema", RuntimeTypes.SCHEMA);
+      writer.putContext("schemas", RuntimeTypes.SCHEMAS);
+      writer.putContext("shapeId", SchemaGenerator.shapeIdExpr(writer, shape.getId()));
+      writer.putContext("values", SchemaGenerator.intEnumValuesExpr(shape));
+      writer.putContext(
+          "traits", SchemaGenerator.traitsExpr(writer, shape.getAllTraits().values()));
+      writer.putContext("variants", writer.consumer(w -> writeVariants()));
+      writer.writeXmlDocs(shape);
+      writer.write(
+          """
+          public enum ${typeName:L}
+          {
+              ${variants:C|}
           }
-        });
-    writer.write("");
-    writer.write("public static partial class $LSchema", typeName);
-    writer.openBlock(
-        "{",
-        "}",
-        () ->
-            writer.write(
-                "public static Schema<$L> Schema { get; } ="
-                    + " Schemas.IntEnum<$L>($L, values: $L, traits: $L);",
-                typeName,
-                typeName,
-                SchemaGenerator.shapeIdExpr(shape.getId()),
-                SchemaGenerator.intEnumValuesExpr(shape),
-                SchemaGenerator.traitsExpr(shape.getAllTraits().values())));
+
+          public static partial class ${typeName:L}Schema
+          {
+              public static ${schema:T}<${typeName:L}> Schema { get; } =
+                  ${schemas:T}.IntEnum<${typeName:L}>(
+                      ${shapeId:L}, values: ${values:L}, traits: ${traits:L});
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
+  }
+
+  private void writeVariants() {
+    for (MemberShape member : ShapeSupport.sortedMembers(shape)) {
+      String property = CSharpNaming.propertyName(member.getMemberName());
+      Integer value =
+          member.getTrait(EnumValueTrait.class).flatMap(EnumValueTrait::getIntValue).orElse(null);
+      writer.writeXmlDocs(member);
+      if (value != null) {
+        writer.write("$L = $L,", property, value);
+      } else {
+        writer.write("$L,", property);
+      }
+    }
   }
 }

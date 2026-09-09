@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using NSmithy.Server.AspNetCore;
 
 namespace RpcV2Cbor.Conformance;
 
@@ -47,6 +48,7 @@ internal sealed class RpcV2CborServerHost : IAsyncDisposable
         var map = ResolveMapMethod(aggregateHandler);
         var handler = CreateProxy(aggregateHandler, invoker);
 
+        builder.Services.AddSmithyServer();
         builder.Services.AddSingleton(aggregateHandler, handler);
         foreach (var contract in aggregateHandler.GetInterfaces())
         {

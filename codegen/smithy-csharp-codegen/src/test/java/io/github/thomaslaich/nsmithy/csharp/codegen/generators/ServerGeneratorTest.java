@@ -321,21 +321,21 @@ final class ServerGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<Example.Example.Streaming.WatchOutput>"
-                + " WatchAsync(Example.Example.Streaming.WatchInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+            "Task<global::Example.Example.Streaming.WatchOutput>"
+                + " WatchAsync(global::Example.Example.Streaming.WatchInput input,"
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<Example.Example.Streaming.UploadOutput>"
-                + " UploadAsync(Example.Example.Streaming.UploadInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+            "Task<global::Example.Example.Streaming.UploadOutput>"
+                + " UploadAsync(global::Example.Example.Streaming.UploadInput input,"
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertTrue(
         generated.contains(
-            "System.Threading.Tasks.Task<Example.Example.Streaming.ChatOutput>"
-                + " ChatAsync(Example.Example.Streaming.ChatInput input,"
-                + " System.Threading.CancellationToken cancellationToken = default);"),
+            "Task<global::Example.Example.Streaming.ChatOutput>"
+                + " ChatAsync(global::Example.Example.Streaming.ChatInput input,"
+                + " CancellationToken cancellationToken = default);"),
         generated);
     assertFalse(generated.contains("IEventStreamServiceProtocol"));
     // Streaming endpoints delegate to the shared runtime path; only request-body streaming is
@@ -344,7 +344,8 @@ final class ServerGeneratorTest {
     assertTrue(generated.contains("UploadGrpcProtocol, handler.UploadAsync, true"), generated);
     assertTrue(generated.contains("ChatGrpcProtocol, handler.ChatAsync, true"), generated);
     assertTrue(
-        generated.contains(
+        containsIgnoringWhitespace(
+            generated,
             "public static IEndpointRouteBuilder MapStreamingService(this IEndpointRouteBuilder"
                 + " endpoints, StreamingServiceProtocols protocols ="
                 + " StreamingServiceProtocols.Grpc)"),
@@ -381,7 +382,8 @@ final class ServerGeneratorTest {
     assertTrue(generated.contains("RestJson1 = 1,"), generated);
     assertTrue(generated.contains("All = RestJson1,"), generated);
     assertTrue(
-        generated.contains(
+        containsIgnoringWhitespace(
+            generated,
             "public static IEndpointRouteBuilder MapStreamingService(this IEndpointRouteBuilder"
                 + " endpoints, StreamingServiceProtocols protocols ="
                 + " StreamingServiceProtocols.RestJson1)"),
@@ -410,7 +412,8 @@ final class ServerGeneratorTest {
     assertTrue(generated.contains("RestJson1 = 4,"), generated);
     assertTrue(generated.contains("All = RpcV2Cbor | SimpleRestJson | RestJson1,"), generated);
     assertTrue(
-        generated.contains(
+        containsIgnoringWhitespace(
+            generated,
             "public static IEndpointRouteBuilder MapMultiService(this IEndpointRouteBuilder"
                 + " endpoints, MultiServiceProtocols protocols = MultiServiceProtocols.RpcV2Cbor)"),
         generated);
@@ -466,13 +469,14 @@ final class ServerGeneratorTest {
     assertTrue(generated.contains("draft/2020-12/schema"), generated);
     assertTrue(
         generated.contains(
-            "ServiceOperation.Create(Example.Example.Catalog.NotifySchema.Schema, async (input, ct)"
-                + " => { await notifyHandler.NotifyAsync(input, ct).ConfigureAwait(false); return"
-                + " SmithyUnit.Value; }, NotifyJsonSchemas.Value),"),
+            "ServiceOperation.Create(global::Example.Example.Catalog.NotifySchema.Schema, async"
+                + " (input, ct) => { await notifyHandler.NotifyAsync(input,"
+                + " ct).ConfigureAwait(false); return SmithyUnit.Value; },"
+                + " NotifyJsonSchemas.Value),"),
         generated);
     assertTrue(
         generated.contains(
-            "ServiceOperation.Create(Example.Example.Catalog.PingSchema.Schema, "
+            "ServiceOperation.Create(global::Example.Example.Catalog.PingSchema.Schema, "
                 + "(_, ct) => pingHandler.PingAsync(ct), PingJsonSchemas.Value),"),
         generated);
   }
@@ -496,6 +500,10 @@ final class ServerGeneratorTest {
         generated.contains("new ServicePromptArgumentDefinition(\"second\", null, false)"),
         generated);
     assertTrue(generated.contains("\"operation_brief\""), generated);
+  }
+
+  private static boolean containsIgnoringWhitespace(String actual, String expected) {
+    return actual.replaceAll("\\s+", "").contains(expected.replaceAll("\\s+", ""));
   }
 
   private String renderServer() throws Exception {
@@ -533,9 +541,11 @@ final class ServerGeneratorTest {
             .settings(settings)
             .symbolProvider(symbolProvider)
             .fileManifest(manifest)
-            .writerDelegator(new CSharpDelegator(manifest, symbolProvider))
+            .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
             .build();
-    var writer = new CSharpWriter(writerNamespace);
+    var writer =
+        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
+            .apply("test.g.cs", writerNamespace);
     var service = model.expectShape(ShapeId.from(serviceId), ServiceShape.class);
 
     new ServerGenerator(context, writer, service).run();
