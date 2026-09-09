@@ -5,79 +5,13 @@
 [![License](https://img.shields.io/github/license/thomaslaich/smithy-dotnet)](https://github.com/thomaslaich/smithy-dotnet/blob/main/LICENSE)
 [![Smithy CLI](https://img.shields.io/badge/smithy--cli-1.73.0-orange)](https://github.com/smithy-lang/smithy/releases/tag/1.73.0)
 
-> **Preview:** NSmithy is in preview; expect some API changes before 1.0. Protocol implementations are not yet on par with the [Smithy reference implementations](https://github.com/smithy-lang/smithy).
+> **Preview:** NSmithy is in preview; expect some API changes before 1.0.
 
 # NSmithy
 
-**[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Examples](examples/README.md)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
+**[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Quick Start](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/)** · **[Examples](examples/README.md)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
 
-NSmithy is a .NET toolkit that turns a [Smithy](https://smithy.io) model into idiomatic C# at build time.
-
-## Quick Start
-
-Start with a Smithy model in a contracts project:
-
-```smithy
-$version: "2"
-namespace hello.world
-
-use aws.protocols#restJson1
-
-@restJson1
-service HelloService {
-    version: "1.0.0"
-    operations: [SayHello]
-}
-
-@http(method: "POST", uri: "/hello", code: 200)
-operation SayHello {
-    input := {
-        @required
-        name: String
-    }
-    output := {
-        @required
-        message: String
-    }
-}
-```
-
-`dotnet build` runs NSmithy codegen and produces the C# model types, generated
-ASP.NET Core server hooks, and a typed client. Implement the generated handler
-on the server:
-
-```csharp
-using Hello.World;
-
-var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddHelloServiceHandler<HelloHandler>();
-
-var app = builder.Build();
-app.MapHelloService();
-app.Run();
-
-internal sealed class HelloHandler : IHelloServiceHandler
-{
-    public Task<SayHelloOutput> SayHelloAsync(
-        SayHelloInput input,
-        CancellationToken cancellationToken = default
-    ) =>
-        Task.FromResult(new SayHelloOutput($"Hello, {input.Name}!"));
-}
-```
-
-Then call it through the generated client from another .NET project:
-
-```csharp
-using Hello.World;
-
-var client = new HelloServiceClient(new Uri("http://localhost:5000"));
-var response = await client.SayHelloAsync(new SayHelloInput("world"));
-Console.WriteLine(response.Message); // Hello, world!
-```
-
-See the [Quick Start guide](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/)
-for the full walkthrough.
+[Smithy](https://smithy.io) toolkit for .NET.
 
 ## Development
 
