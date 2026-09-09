@@ -5,13 +5,13 @@
 [![License](https://img.shields.io/github/license/thomaslaich/smithy-dotnet)](https://github.com/thomaslaich/smithy-dotnet/blob/main/LICENSE)
 [![Smithy CLI](https://img.shields.io/badge/smithy--cli-1.73.0-orange)](https://github.com/smithy-lang/smithy/releases/tag/1.73.0)
 
-> **Preview:** NSmithy is in preview; expect some API changes before 1.0. Protocol implementations are not yet on par with the [Smithy reference implementations](https://github.com/smithy-lang/smithy).
+> **Preview:** NSmithy is in preview; expect some API changes before 1.0.
 
 # NSmithy
 
 **[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Quick Start](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/)** · **[Examples](examples/README.md)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
 
-[Smithy](https://smithy.io) toolkit for .NET that generates idiomatic C# at build time.
+[Smithy](https://smithy.io) toolkit for .NET.
 
 ## Development
 
