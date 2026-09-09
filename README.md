@@ -9,9 +9,9 @@
 
 # NSmithy
 
-**[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Quick Start](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/)** · **[Examples](examples/README.md)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
+**[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Examples](examples/README.md)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
 
-[Smithy](https://smithy.io) toolkit for .NET.
+Smithy toolkit for .NET.
 
 ## Development
 
