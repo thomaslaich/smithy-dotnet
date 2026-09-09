@@ -10,10 +10,9 @@ commands and consuming events.
 ## Projects
 
 - `device.contracts`: the portable Smithy messaging contract.
-- `device`: the owner application; it emits events and handles commands.
+- `device`: the owner application; it emits events, handles commands, and serves AsyncAPI documentation.
 - `controller`: a client; it sends commands and handles events.
 - `device.infra`: the deployment overlay and topic reconciler.
-- `device.docs`: generated AsyncAPI documentation.
 
 ## Generated code
 
@@ -74,7 +73,7 @@ putting environment-specific configuration in the portable contract.
 
 NSmithy generates `StreetlightDeviceKafkaInfrastructure.Topics` from that
 overlay. The `device.infra` console reconciles the typed desired state through
-Confluent's Admin API; it does not deploy a Kafka cluster. The `device.docs`
+Confluent's Admin API; it does not deploy a Kafka cluster. The `device`
 project composes the same models into an AsyncAPI 3.1 document.
 
 ## Prerequisites
@@ -148,7 +147,7 @@ docker compose down
 
 ## View the AsyncAPI document
 
-The `device.docs` project serves the generated AsyncAPI 3.1 document and renders
+The `device` application also serves the generated AsyncAPI 3.1 document and renders
 it with [Scalar](https://scalar.com/products/api-references/asyncapi). It opts in
 with the AsyncAPI analogue of `SmithyOpenApiProtocol`:
 
@@ -157,12 +156,8 @@ with the AsyncAPI analogue of `SmithyOpenApiProtocol`:
 ```
 
 This setting injects bote's `asyncapi` plugin and copies the document to
-`wwwroot/asyncapi.json`. Run it with:
-
-```bash
-dotnet run --project device.docs
-```
-
-The raw document is available at `/asyncapi.json`, and `/` renders it in Scalar.
+`wwwroot/asyncapi.json`. With the device running, open
+[the interactive reference](http://localhost:5000/asyncapi) or
+[the raw document](http://localhost:5000/asyncapi.json).
 Scalar's AsyncAPI rendering remains limited; the document is standard AsyncAPI
 3.1 and also opens in [AsyncAPI Studio](https://studio.asyncapi.com/).

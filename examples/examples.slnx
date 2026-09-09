@@ -47,7 +47,6 @@
     <Project Path="kafkajson/device.infra/NSmithy.Examples.Kafka.Device.Infra.csproj" />
     <Project Path="kafkajson/device/NSmithy.Examples.Kafka.Device.csproj" />
     <Project Path="kafkajson/controller/NSmithy.Examples.Kafka.Controller.csproj" />
-    <Project Path="kafkajson/device.docs/NSmithy.Examples.Kafka.Device.Docs.csproj" />
   </Folder>
   <Folder Name="/redisjson/">
     <Project Path="redisjson/chat/NSmithy.Examples.Redis.Chat.csproj" />

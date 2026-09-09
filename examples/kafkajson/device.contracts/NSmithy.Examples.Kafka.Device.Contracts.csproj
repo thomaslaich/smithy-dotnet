@@ -7,7 +7,7 @@
     <VersionSuffix>SNAPSHOT</VersionSuffix>
     <!--
       Model-only contract. It holds streetlights.smithy; the device, controller and
-      device.docs projects reference it and synthesize their own smithy build (the
+      device.infra projects reference it and synthesize their own smithy build (the
       csharp-codegen / asyncapi plugins) from it. NSmithy.Bote supplies the Bote
       model and generators hermetically.
     -->

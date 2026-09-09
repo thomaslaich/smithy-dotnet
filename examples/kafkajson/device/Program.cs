@@ -1,15 +1,16 @@
 using Confluent.Kafka;
 using Examples.Kafka.Streetlights;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NSmithy.Messaging.Kafka;
+using NSmithy.Server.AspNetCore.Docs;
 
 // The device owns the StreetlightDevice contract: it EMITS LightMeasured events
 // and HANDLES DimLight commands sent by controllers.
 //
 var bootstrap = args.Length > 0 ? args[0] : "localhost:9092";
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder();
+builder.WebHost.UseUrls("http://localhost:5000");
 
 builder.Services.AddKafkaMessaging(
     new KafkaMessagingOptions
@@ -37,7 +38,9 @@ Console.WriteLine(
     "[device] online — handling DimLight commands and emitting LightMeasured events. Ctrl+C to stop."
 );
 
-await builder.Build().RunAsync();
+var app = builder.Build();
+app.MapSmithyAsyncApi();
+await app.RunAsync();
 Console.WriteLine("[device] stopped.");
 
 sealed class DimLightHandler : IDimLightHandler
