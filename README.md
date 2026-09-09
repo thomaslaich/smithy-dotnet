@@ -11,7 +11,7 @@
 
 **[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Quick Start](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/)** · **[Examples](examples/README.md)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
 
-NSmithy is a .NET toolkit that turns a [Smithy](https://smithy.io) model into idiomatic C# at build time.
+NSmithy is a [Smithy](https://smithy.io) toolkit for .NET that generates idiomatic C# at build time.
 
 ## Development
 
