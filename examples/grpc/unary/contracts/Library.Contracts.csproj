@@ -4,6 +4,7 @@
     <!-- Embed model files in the NuGet package so dependents can pick them up. -->
     <SmithyPublish>true</SmithyPublish>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
   </PropertyGroup>
 
   <ItemGroup>
