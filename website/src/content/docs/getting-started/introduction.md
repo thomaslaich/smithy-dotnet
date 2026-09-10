@@ -5,7 +5,9 @@ description: Design, share, and evolve API contracts with Smithy, then build the
 
 [Smithy](https://smithy.io/2.0/) is a language for defining API contracts. NSmithy
 uses those contracts to generate C# clients, data types, and ASP.NET Core server
-interfaces, so teams can agree on an API before implementing it.
+interfaces, so teams can agree on an API before implementing it. The core contract
+defines operations, data, and errors independently of a wire protocol. Protocol
+traits then describe how callers and servers exchange those values.
 
 AWS developed Smithy to address a problem at scale: many services, continually
 evolving APIs, and SDKs in many programming languages. A change to a service needs
@@ -25,15 +27,12 @@ implementation. Reviewing a proposed interface means reviewing server changes, a
 client developers may have to wait for that work before they can generate types or
 try a mock implementation.
 
-OpenAPI supports [design-first development](https://learn.openapis.org/best-practices.html),
-but authoring and reviewing a large YAML or JSON description can be cumbersome.
-It can be easier to write server code and generate the description afterward,
-tying the contract to the implementation again. Smithy provides a compact language
-for writing the contract itself, making it practical to discuss operations, data,
-and errors before building the service.
-
-Operations, data types (called *shapes*), and annotations (called *traits*) describe
-the API in files that teams can review and version independently of server code.
+OpenAPI also supports [design-first development](https://learn.openapis.org/best-practices.html),
+but authoring and reviewing large contracts in YAML or JSON can be cumbersome.
+Smithy's compact language makes operations, data, and errors easier to express
+and review directly. Its protocol-independent service model also lets teams
+agree on that contract before choosing HTTP routes or message encoding, then
+use it across multiple wire protocols.
 
 Smithy's tooling also supports the governance around that contract:
 [validators](https://smithy.io/2.0/guides/model-linters.html) can enforce shared
@@ -44,17 +43,27 @@ API review and compatibility checks a place in the build process.
 
 ## A contract that can span protocols
 
-Protobuf and gRPC also let teams define interfaces before writing implementations.
-But an organization may need REST APIs for external consumers, gRPC between
-services, and asynchronous messages between systems. Choosing gRPC for some calls
-still leaves contracts to manage for those other interfaces.
+[OpenAPI describes HTTP APIs](https://spec.openapis.org/oas/v3.2.0.html): paths,
+HTTP methods, parameters, responses, and their media types. It supports JSON, XML,
+binary payloads, and other formats, and does not require a REST architecture.
+Its scope is still HTTP, so the contract incorporates HTTP-specific decisions.
+Protobuf and gRPC also support defining interfaces before implementation, with
+their own encoding and RPC conventions.
 
-Smithy separates the service model from its wire protocol. The operations and data
-can be shared while protocol traits specify how they are transmitted. A service
-can declare multiple protocols, and generators can produce the corresponding
-clients and servers. Smithy tooling can also
+Smithy separates the service model from those wire-level choices. For example,
+the Weather service in [Modeling contracts](/smithy-dotnet/concepts/modeling/)
+defines `GetCity` with a city identifier, a response, and a possible error. That
+same operation can be exposed through REST/JSON, RPC v2 CBOR, or gRPC by adding
+protocol traits and the bindings each protocol requires. The meaning of the operation and
+its data stays shared; routing, serialization, and error encoding depend on the
+selected protocol.
+
+A service can declare multiple protocols, allowing external REST clients and
+internal RPC clients to use the same modeled operations. Generators and runtimes
+must support each chosen protocol, and some require additional annotations, such
+as protobuf field indices for gRPC. Smithy tooling can also
 [derive OpenAPI descriptions](https://smithy.io/2.0/guides/model-translations/converting-to-openapi.html)
-for HTTP APIs.
+for the HTTP API, so a shared Smithy contract can feed existing OpenAPI tooling.
 
 That separation is useful for asynchronous contracts too, where a shared data
 model should not dictate a single message encoding. Delivery semantics and
