@@ -108,8 +108,8 @@ or output around the event stream.
 
 ## Examples
 
-- [Unary rpcv2Cbor weather service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/rpcv2cbor)
-- [Streaming rpcv2Cbor chat service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/rpcv2cbor-streaming)
+- [Unary rpcv2Cbor weather service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/rpcv2cbor/unary)
+- [Streaming rpcv2Cbor chat service](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/rpcv2cbor/streaming)
 
 ## Specification and tests
 

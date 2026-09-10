@@ -154,7 +154,7 @@ missing required arguments produce MCP `InvalidParams` errors.
 Handwritten prompt definitions can be registered directly with
 `WithSmithyPrompts(definitions)`, independently of generated service tools.
 
-The [restJson1 Weather example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/restjson1)
+The [restJson1 Weather example](https://github.com/thomaslaich/smithy-dotnet/tree/main/examples/restjson1/unary)
 runs the same generated service and handler as either an ASP.NET Core server or
 an MCP stdio server, and includes both single-tool and multi-tool prompts.
 

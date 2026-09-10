@@ -47,7 +47,7 @@ The runtime is already factored exactly the way this needs:
 - **Codecs are schema-driven.** `CborCodecFactory.Default.FromSchema(schema)` walks a
   `Schema<T>` and emits/reads bytes. A protobuf codec is the same walk over the
   same schemas, reading the `alloy.proto#protoIndex` / `alloy.proto#protoNumType`
-  traits that the model already carries (see `examples/grpc/.../library.smithy`).
+  traits that the model already carries (see `examples/grpc/unary/.../library.smithy`).
 - **Protocols are pluggable.** `RpcV2CborProtocol.ForService(serviceSchema)`
   returns an `IServiceProtocol`; the generated client/server glue calls only the
   protocol interface. The interface doc comment in
@@ -109,7 +109,7 @@ protoc/Grpc.* anywhere.
 ## Unary coverage: complete
 
 The full unary `alloy.proto#grpc` surface now works, verified end-to-end by the
-`examples/grpc` library service (no protoc/Grpc.Tools/Grpc.Net):
+`examples/grpc/unary` library service (no protoc/Grpc.Tools/Grpc.Net):
 
 - **String enums** → proto enum ordinals (`UNSPECIFIED=0`, then declaration order),
   read from the `smithy.synthetic#enum` trait the schema already carries.
@@ -153,7 +153,7 @@ The full unary `alloy.proto#grpc` surface now works, verified end-to-end by the
   either.
 - **Native streaming codegen.** Streaming gRPC operations use
   `IAsyncEnumerable<TEvent>` for server streaming, client streaming, and
-  bidirectional streaming. `examples/grpc-streaming` exercises the generated
+  bidirectional streaming. `examples/grpc/streaming` exercises the generated
   event-stream surface without `Grpc.Tools` or `Grpc.Net`.
 - **Runtime member traits already flow.** `SchemaGenerator.memberTraitsExpr`
   emits *all* member traits (including `@protoIndex` / `@protoNumType`) into the
@@ -162,7 +162,7 @@ The full unary `alloy.proto#grpc` surface now works, verified end-to-end by the
 
 ## Status
 
-`examples/grpc` is fully native and **runs end-to-end** —
+`examples/grpc/unary` is fully native and **runs end-to-end** —
 `NSmithy.Protocols.Grpc` replaces `Grpc.AspNetCore`/`Grpc.Tools`/`Grpc.Net.Client`,
 `AddGrpc()` is gone, the client runs over an HTTP/2 `HttpClient`, and the server
 maps via `GrpcProtocol.ForService(...)`. `GetBook`, `ListBooks` (with the

@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../NSmithy.Messaging/NSmithy.Messaging.csproj" />
+    <PackageReference Include="Confluent.Kafka" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <InternalsVisibleTo Include="NSmithy.Tests" />
+  </ItemGroup>
+</Project>

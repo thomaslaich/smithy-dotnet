@@ -1,21 +1,30 @@
-# NSmithy simpleRestJson Example
+# simpleRestJson example
 
 A Pizza Admin service built with `alloy#simpleRestJson`. The model is adapted from the
 [Alloy protocol tests](https://github.com/disneystreaming/alloy) and demonstrates
 unions, enums, maps, errors, client API-key auth, HTTP header binding, and
 payload binding.
 
+## Projects
+
 - `contracts`: the Smithy model, packaged as a contracts project.
-- `server`: generated ASP.NET Core endpoints with a handwritten `IPizzaAdminServiceHandler` implementation.
+- `server`: generated ASP.NET Core endpoints with a handwritten
+  `IPizzaAdminServiceHandler` implementation.
 - `client`: generated typed client that calls the server.
 
 The server and client reference the contracts project directly. No
 `smithy-build.json` is needed — NSmithy synthesizes one from the model sources
 and Maven dependencies declared in the contracts project.
 
-## Run
+## Prerequisites
 
-From the repository root, build and pack local packages:
+- .NET 10 SDK
+- `just`, or the repository toolchain through `devenv shell`
+
+## Build
+
+Run all commands in this README from `examples/simplerestjson`. First build the
+local packages and examples:
 
 ```bash
 just build
@@ -23,18 +32,17 @@ just pack
 just refresh-examples
 ```
 
+## Run
+
 Start the server:
 
 ```bash
-cd examples/simplerestjson
-pixi shell  # not needed when using direnv
 dotnet run --project server --urls http://localhost:5000
 ```
 
 In another shell, run the client:
 
 ```bash
-cd examples/simplerestjson
 dotnet run --project client -- http://localhost:5000
 ```
 
@@ -61,9 +69,12 @@ The generated client configures `HttpApiKeyAuthScheme`, which adds the
 `/authenticated-health` handler validates that header to keep the example
 end-to-end.
 
-The `/openUnions` endpoint round-trips an `OpenUnionsPayload` union. There are two variants:
+The `/openUnions` endpoint round-trips an `OpenUnionsPayload` union. There are
+two variants.
 
-**Tagged union** — the variant name is the key, and its value is the payload:
+### Tagged union
+
+The variant name is the key, and its value is the payload:
 
 ```bash
 curl -i -X PUT http://localhost:5000/openUnions \
@@ -71,7 +82,10 @@ curl -i -X PUT http://localhost:5000/openUnions \
   -d '{"tagged":{"str":"hello"}}'
 ```
 
-**Discriminated union** — the discriminator field (`key`) is inlined into the object alongside the payload fields:
+### Discriminated union
+
+The discriminator field (`key`) is inlined into the object alongside the
+payload fields:
 
 ```bash
 curl -i -X PUT http://localhost:5000/openUnions \

@@ -93,6 +93,24 @@ in the service closure:
 All files are written under the Smithy projection's output directory:
 `<SmithyBuildOutputPath>/<projection>/csharp-codegen/`.
 
+### External protocol integrations
+
+`CSharpIntegration` is a Java SPI discovered by `CodegenDirector`. An
+integration may return a `CSharpServiceGenerator` for a service; exactly one
+integration may claim it. The integration replaces only the service-level
+surface, while NSmithy continues to own symbol mapping and shape/operation
+schema generation. Services not claimed by an integration use the built-in
+HTTP/gRPC client and server generators.
+
+This is the boundary for optional protocol families. The in-repository
+`smithy-csharp-bote-codegen` module registers its integration through
+`META-INF/services/io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration`.
+The host module contains no Bote trait IDs or transport generators, so the
+integration can move to an independently versioned repository later without
+changing the SPI. An integration artifact currently depends on the complete C#
+codegen artifact; a separate `codegen-core` artifact is deferred until more than
+one extension demonstrates that the smaller binary/API boundary is useful.
+
 ### Symbol provider
 
 `CSharpSymbolProvider` maps each Smithy shape to a C# `Symbol` carrying the
@@ -127,6 +145,12 @@ Depends on `GenerateSmithyCode`. Adds all `.g.cs` files matching
 `<SmithyBuildOutputPath>*/csharp-codegen/**/*.g.cs` to `<Compile>`.
 Respects `SmithyGenerateClient` / `SmithyGenerateServer` properties to
 optionally exclude client or server files.
+
+Extension NuGet packages contribute `SmithyMavenRepository`,
+`SmithyMavenDependency`, `SmithyBuildPlugin`, and `SmithyCodegenInput` items.
+The synthesized build merges those dependencies/plugins, and the CLI receives
+all contributed Maven repositories through `SMITHY_MAVEN_REPOS`. This lets an
+extension remain hermetic without copying its JARs into `NSmithy.MSBuild`.
 
 ## Configuration
 
