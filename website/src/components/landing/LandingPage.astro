@@ -12,7 +12,6 @@ import LandingTree from './LandingTree.astro';
 // Base-relative so it works on the local dev server and the deployed site
 // (the GitHub Pages base is /smithy-dotnet). `repo` stays absolute — it's external.
 const intro = '/smithy-dotnet/getting-started/introduction/';
-const quickstart = '/smithy-dotnet/getting-started/quick-start/';
 const repo = 'https://github.com/thomaslaich/smithy-dotnet';
 
 ---
@@ -58,7 +57,7 @@ const repo = 'https://github.com/thomaslaich/smithy-dotnet';
       </a>
       <div class="nsl-header-actions">
         <button type="button" class="nsl-theme" aria-label="Toggle theme"></button>
-        <a class="nsl-btn nsl-btn-primary nsl-btn-sm" href={quickstart}>Get Started</a>
+        <a class="nsl-btn nsl-btn-primary nsl-btn-sm" href={intro}>Get Started</a>
       </div>
     </div>
   </header>
@@ -73,7 +72,7 @@ const repo = 'https://github.com/thomaslaich/smithy-dotnet';
           Integrated with MSBuild.
         </p>
         <div class="nsl-hero-actions reveal" style="--reveal-delay: 120ms">
-          <a class="nsl-btn nsl-btn-primary" href={quickstart}>Get Started</a>
+          <a class="nsl-btn nsl-btn-primary" href={intro}>Get Started</a>
           <a class="nsl-btn nsl-btn-ghost" href={repo}>View on GitHub</a>
         </div>
       </div>
