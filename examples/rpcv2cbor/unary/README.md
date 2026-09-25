@@ -1,6 +1,6 @@
-# NSmithy rpcv2Cbor Example
+# rpcv2Cbor unary example
 
-The Weather service from the [restjson1 example](../restjson1/), served over
+The Weather service from the [restJson1 unary example](../../restjson1/unary/), served over
 `smithy.protocols#rpcv2Cbor` instead of REST. The model demonstrates resources,
 pagination, typed errors, and retries (`@retryable`); the protocol swap shows
 that neither the handler implementation nor the client call sites depend on the
@@ -10,6 +10,8 @@ rpcv2Cbor is an RPC protocol: every operation is a `POST` to
 `/service/Weather/operation/{OperationName}` with CBOR request and response
 bodies, so the model carries no HTTP binding traits.
 
+## Projects
+
 - `contracts`: the Smithy model, packaged as a contracts project.
 - `server`: generated ASP.NET Core endpoints with a handwritten
   `IWeatherServiceHandler` implementation that supports real server-side
@@ -17,9 +19,15 @@ bodies, so the model carries no HTTP binding traits.
 - `client`: generated typed client that pages through cities with the generated
   paginators and retries the flaky operation.
 
-## Run
+## Prerequisites
 
-From the repository root, build and pack local packages:
+- .NET 10 SDK
+- `just`, or the repository toolchain through `devenv shell`
+
+## Build
+
+Run all commands in this README from `examples/rpcv2cbor/unary`. First build the
+local packages and examples:
 
 ```bash
 just build
@@ -27,17 +35,17 @@ just pack
 just refresh-examples
 ```
 
+## Run
+
 Start the server:
 
 ```bash
-cd examples/rpcv2cbor
 dotnet run --project server
 ```
 
 In another shell, run the client:
 
 ```bash
-cd examples/rpcv2cbor
 dotnet run --project client -- http://localhost:5001
 ```
 
@@ -45,7 +53,7 @@ The client walks the full surface: current time, paginated city listing (pages
 and flattened items), city lookup, forecast, a modeled `NoSuchResource` error,
 and three flaky forecast calls that succeed after transparent retries.
 
-## On the Wire
+## On the wire
 
 There is nothing to explore in a browser; requests and responses are CBOR over
 POST. Pass `--debug` to the client to log every request and response with a hex
@@ -55,7 +63,7 @@ dump of the CBOR bytes, using the client runtime's built-in `DebugInterceptor`:
 dotnet run --project client -- http://localhost:5001 --debug
 ```
 
-```
+```text
 [Weather.ListCities] request (attempt 1): POST http://localhost:5001/service/Weather/operation/ListCities
   Smithy-Protocol: rpc-v2-cbor
   Accept: application/cbor

@@ -1,4 +1,4 @@
-# NSmithy restJson1 Example
+# restJson1 unary example
 
 A Weather service built with `aws.protocols#restJson1`. The model is adapted from
 the [Smithy quickstart](https://smithy.io/2.0/quickstart.html) and demonstrates
@@ -6,17 +6,27 @@ resources, pagination, errors, retries (`@retryable`), HTTP binding traits, and
 end-to-end OpenTelemetry observability using the AWS REST JSON protocol. The
 same generated operations and Smithy prompt templates are also exposed over MCP.
 
+## Projects
+
 - `contracts`: the Smithy model, packaged as a contracts project.
-- `server`: generated ASP.NET Core endpoints and an MCP stdio server backed by a handwritten `IWeatherServiceHandler` implementation that supports real server-side pagination.
-- `client`: generated typed client that pages through all cities using the `nextToken` continuation token.
+- `server`: generated ASP.NET Core endpoints and an MCP stdio server backed by a
+  handwritten `IWeatherServiceHandler` with real server-side pagination.
+- `client`: generated typed client that pages through all cities using the
+  `nextToken` continuation token.
 
 The server and client reference the contracts project directly. No
 `smithy-build.json` is needed — NSmithy synthesizes one from the model sources
 and Maven dependencies declared in the contracts project.
 
-## Run
+## Prerequisites
 
-From the repository root, build and pack local packages:
+- .NET 10 SDK
+- `just`, or the repository toolchain through `devenv shell`
+
+## Build
+
+Run all commands in this README from `examples/restjson1/unary`. First build the
+local packages and examples:
 
 ```bash
 just build
@@ -24,17 +34,17 @@ just pack
 just refresh-examples
 ```
 
+## Run
+
 Start the server:
 
 ```bash
-cd examples/restjson1
 dotnet run --project server --urls http://localhost:5000
 ```
 
 In another shell, run the client:
 
 ```bash
-cd examples/restjson1
 dotnet run --project client -- http://localhost:5000
 ```
 
@@ -61,7 +71,7 @@ curl -i http://localhost:5000/cities/SEA/flaky-forecast   # 503s two of every th
 Run the same Weather service as an MCP stdio server by passing `--mcp`:
 
 ```bash
-dotnet run --no-build --project examples/restjson1/server -- --mcp
+dotnet run --no-build --project server -- --mcp
 ```
 
 This is a separate runtime mode: the process hosts MCP over stdio and does not
@@ -77,7 +87,7 @@ path with an absolute path):
     "weather": {
       "command": "dotnet",
       "args": [
-        "/path/to/smithy-dotnet/examples/restjson1/server/bin/Debug/net10.0/NSmithy.Examples.RestJson1.Server.dll",
+        "/path/to/smithy-dotnet/examples/restjson1/unary/server/bin/Debug/net10.0/NSmithy.Examples.RestJson1.Server.dll",
         "--mcp"
       ]
     }
@@ -86,17 +96,17 @@ path with an absolute path):
 ```
 
 For [Claude Code](https://docs.anthropic.com/en/docs/claude-code/mcp), add the
-built server from the repository root:
+built server:
 
 ```bash
-claude mcp add weather -- dotnet /absolute/path/to/smithy-dotnet/examples/restjson1/server/bin/Debug/net10.0/NSmithy.Examples.RestJson1.Server.dll --mcp
+claude mcp add weather -- dotnet /absolute/path/to/smithy-dotnet/examples/restjson1/unary/server/bin/Debug/net10.0/NSmithy.Examples.RestJson1.Server.dll --mcp
 ```
 
 Or let Claude Code launch the project through `dotnet run`. Keep `--no-build`:
 build output on stdout would corrupt the MCP stdio stream.
 
 ```bash
-claude mcp add weather -- dotnet run --no-build --project /absolute/path/to/smithy-dotnet/examples/restjson1/server/NSmithy.Examples.RestJson1.Server.csproj -- --mcp
+claude mcp add weather -- dotnet run --no-build --project /absolute/path/to/smithy-dotnet/examples/restjson1/unary/server/NSmithy.Examples.RestJson1.Server.csproj -- --mcp
 ```
 
 Check the registration with `claude mcp get weather`. Inside Claude Code, `/mcp`
@@ -136,7 +146,7 @@ names the member and the constraint it failed:
 curl -i 'http://localhost:5000/cities/SEA%21'   # "SEA!"
 ```
 
-```
+```http
 HTTP/1.1 400 Bad Request
 X-Amzn-Errortype: ValidationException
 
@@ -153,7 +163,7 @@ modeled as `Integer`:
 curl -i 'http://localhost:5000/cities?pageSize=abc'
 ```
 
-```
+```http
 HTTP/1.1 400 Bad Request
 X-Amzn-Errortype: SerializationException
 
@@ -167,7 +177,7 @@ before the operation runs:
 curl -i -H 'Accept: application/xml' http://localhost:5000/current-time
 ```
 
-```
+```http
 HTTP/1.1 406 Not Acceptable
 X-Amzn-Errortype: NotAcceptableException
 
@@ -182,7 +192,7 @@ handler and returns the error the operation models — a space is inside
 curl -i 'http://localhost:5000/cities/%20'
 ```
 
-```
+```http
 HTTP/1.1 400 Bad Request
 X-Amzn-Errortype: NoSuchResource
 

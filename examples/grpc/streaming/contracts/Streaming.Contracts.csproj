@@ -3,6 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <SmithyPublish>true</SmithyPublish>
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesPath>$(MSBuildProjectDirectory)/obj/packages</RestorePackagesPath>
   </PropertyGroup>
 
   <ItemGroup>
