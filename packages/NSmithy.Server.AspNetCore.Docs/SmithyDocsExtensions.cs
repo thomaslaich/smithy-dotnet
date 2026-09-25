@@ -24,10 +24,10 @@ public static class SmithyDocsExtensions
     }
 
     /// <summary>
-    /// Serves the bote AsyncAPI generated <c>asyncapi.json</c> as a static file at
+    /// Serves a generated <c>asyncapi.json</c> as a static file at
     /// <c>/asyncapi.json</c> and mounts the Scalar interactive reference at <c>/asyncapi</c>.
-    /// Pair with <c>&lt;SmithyGenerateAsyncApi&gt;true&lt;/SmithyGenerateAsyncApi&gt;</c>, which
-    /// generates the document and copies it to <c>wwwroot/asyncapi.json</c>.
+    /// Pair with an AsyncAPI codegen extension such as NSmithy.Bote, which generates the document
+    /// and copies it to <c>wwwroot/asyncapi.json</c>.
     /// </summary>
     public static WebApplication MapSmithyAsyncApi(this WebApplication app)
     {

@@ -12,14 +12,17 @@ test totals.
 | Protocol | Surfaces | Stage | Client conformance | Server conformance |
 | --- | --- | --- | --- | --- |
 | [`aws.protocols#restJson1`](../rest-json/) | Client and server | Preview | Requests 142/142 (100%), responses 108/108 (100%) | Requests 132/132 (100%), responses 92/92 (100%), malformed 655/655 (100%) |
+| [`smithy.protocols#rpcv2Cbor`](../rpc-v2-cbor/) | Client and server | Preview | Requests 29/29 (100%), responses 43/43 (100%) | Requests 37/37 (100%), responses 27/27 (100%) |
+| [`alloy#simpleRestJson`](../rest-json/) | Client and server | Preview | Requests 23/23 (100%), responses 20/20 (100%) | Requests 23/23 (100%), responses 20/20 (100%) |
+| [`alloy.proto#grpc`](../grpc/) | Client and server | Experimental | End-to-end examples | End-to-end examples |
 | [`aws.protocols#awsJson1_1`](../aws-json/) | Client | Early preview | Requests 57/57 (100%), responses 62/62 (100%) | N/A |
 | [`aws.protocols#awsJson1_0`](../aws-json/) | Client | Early preview | Runtime support, no conformance project | N/A |
 | [`aws.protocols#awsQuery`](../aws-query/) | Client | Preview | Requests 38/38 (100%), responses 39/39 (100%) | N/A |
 | [`aws.protocols#ec2Query`](../aws-ec2-query/) | Client | Preview | Requests 30/30 (100%), responses 29/29 (100%) | N/A |
 | [`aws.protocols#restXml`](../rest-xml/) | Client | Preview | Requests 109/109 (100%), responses 84/84 (100%) | N/A |
-| [`smithy.protocols#rpcv2Cbor`](../rpc-v2-cbor/) | Client and server | Preview | Requests 29/29 (100%), responses 43/43 (100%) | Requests 37/37 (100%), responses 27/27 (100%) |
-| [`alloy#simpleRestJson`](../rest-json/) | Client and server | Preview | Requests 23/23 (100%), responses 20/20 (100%) | Requests 23/23 (100%), responses 20/20 (100%) |
-| [`alloy.proto#grpc`](../grpc/) | Client and server | Experimental | End-to-end examples | End-to-end examples |
+| [`bote#kafkaJson`](../bote-kafka-json/) | Producer and consumers | Experimental | End-to-end examples | N/A |
+| [`bote#redisStreamsJson`](../bote-redis-json/) | Typed roles, group recovery, checkpoints, request/reply | Experimental | Runtime and broker tests | N/A |
+| [`bote#redisPubSubJson`](../bote-redis-json/) | Typed roles and bounded handler dispatch | Experimental | Runtime and broker tests | N/A |
 
 ## How the numbers are counted
 
@@ -60,6 +63,9 @@ count as official conformance.
   documents, errors, trailers, and all three streaming modes. Grpc.Net
   interoperability is demonstrated by runnable examples but is not yet an
   automated cross-implementation test matrix.
+- Bote messaging protocols have no applicable Smithy HTTP conformance suite.
+  Their optional C# generator and examples are validated in this repository
+  through the `NSmithy.Bote` package.
 
 See [Validation](/smithy-dotnet/servers/validation/) for malformed request
 behavior.

@@ -15,7 +15,7 @@
     {
       "name": "Benchmarks",
       "path": "benchmarks"
-    },
+    }
   ],
   "settings": {
     "dotnet.defaultSolution": "NSmithy.slnx",

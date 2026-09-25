@@ -52,7 +52,7 @@ stale or missing staged JAR produces confusing codegen errors.
   protocol, run against the official Smithy/AWS protocol-test fixtures).
 - `examples/` — runnable end-to-end samples (`simplerestjson`, nested
   `restjson1` / `rpcv2cbor` / `grpc` unary and streaming variants,
-  `aws-localstack`, `polyglot`). These
+  `aws-localstack`, `kafkajson`, `redisjson`, `polyglot`). These
   consume **packed** packages from `artifacts/packages`, not project references —
   see the gotcha below.
 - `templates/NSmithy.Templates` — `dotnet new` project templates.

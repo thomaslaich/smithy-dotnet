@@ -5,6 +5,7 @@ self-contained and consumes NSmithy the way an application would: as NuGet
 packages, resolved from the locally packed feed in `artifacts/packages`.
 
 All .NET example projects are collected in [`examples.slnx`](examples.slnx).
+Broker-backed examples include Docker Compose files for local dependencies.
 
 | Example | Protocol | Shows |
 | --- | --- | --- |
@@ -17,12 +18,14 @@ All .NET example projects are collected in [`examples.slnx`](examples.slnx).
 | [grpc/streaming](grpc/streaming/) | `alloy.proto#grpc` | Bidirectional gRPC event streaming (chat service), with a `Grpc.Net` interop comparison |
 | [aws-localstack](aws-localstack/) | AWS JSON, REST XML, REST JSON, AWS Query, EC2 Query | Generated AWS clients with SigV4 signing against LocalStack |
 | [polyglot](polyglot/) | `aws.protocols#restJson1` | .NET client calling a Smithy Java server through Docker Compose |
+| [kafkajson](kafkajson/) | `bote#kafkaJson` | Device-owned commands/events, generated Kafka consumers, hosting integration, AsyncAPI |
+| [redisjson](redisjson/) | `bote#redisStreamsJson` | Durable chat command/event streams and unary inventory request/reply |
 
 ## Prerequisites
 
 - .NET 10 SDK
 - `just`, or the repository toolchain through `devenv shell`
-- Docker for the LocalStack and polyglot examples
+- Docker for the broker-backed, LocalStack, and polyglot examples
 
 ## Build
 

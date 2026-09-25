@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../NSmithy.Messaging/NSmithy.Messaging.csproj" />
+    <PackageReference Include="StackExchange.Redis" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <InternalsVisibleTo Include="NSmithy.Tests" />
+    <InternalsVisibleTo Include="Messaging.Tests" />
+  </ItemGroup>
+</Project>
