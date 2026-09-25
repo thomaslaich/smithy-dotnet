@@ -52,6 +52,10 @@ updates:
       npm:
         patterns: ['*']
         update-types: [minor, patch]
+    ignore:
+      # astro-mermaid 2.x supports Mermaid 10 and 11.
+      - dependency-name: mermaid
+        versions: [">=12.0.0"]
   - package-ecosystem: docker
     directory: /examples/polyglot/java
     schedule:
