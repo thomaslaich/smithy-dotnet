@@ -386,7 +386,7 @@ public final class RedisGenerator implements Runnable {
         "private static readonly ICodec<$L> $L = JsonCodecFactory.Default.FromSchema($L.Schema);",
         type,
         codecFieldName(type),
-        SchemaGenerator.schemaClassName(context, shape));
+        SchemaGenerator.schemaClassName(writer, context, shape));
   }
 
   private String qualified(MemberShape member) {

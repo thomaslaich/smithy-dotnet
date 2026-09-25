@@ -3,7 +3,6 @@ package io.github.thomaslaich.nsmithy.bote.codegen.support;
 
 import io.github.thomaslaich.nsmithy.bote.codegen.TraitIds;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
-import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -110,7 +109,7 @@ public final class KafkaBindings {
           "@kafkaProduce operation " + op.getId() + " must have a @command input");
     }
     StructureShape command = model.expectShape(op.getInputShape(), StructureShape.class);
-    String commandType = CSharpSymbolProvider.qualified(sp.toSymbol(command));
+    String commandType = sp.toSymbol(command).getFullName();
     return new Produce(
         op.getId().toString(),
         CSharpNaming.typeName(op.getId().getName()),
@@ -136,7 +135,7 @@ public final class KafkaBindings {
         union.members().stream()
             .sorted(Comparator.comparing(MemberShape::getMemberName))
             .collect(Collectors.toList());
-    String unionType = CSharpSymbolProvider.qualified(sp.toSymbol(union));
+    String unionType = sp.toSymbol(union).getFullName();
     return new Consume(
         op.getId().toString(),
         CSharpNaming.typeName(op.getId().getName()),
