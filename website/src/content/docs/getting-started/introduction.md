@@ -4,14 +4,12 @@ description: Design, share, and evolve API contracts with Smithy, then build the
 ---
 
 [Smithy](https://smithy.io/2.0/) is an interface definition language (IDL) developed
-by AWS to keep evolving APIs consistent across SDKs in many programming languages.
-A Smithy model defines a service’s operations, data types, errors, and behavior.
-Code generators use that shared contract to produce SDKs for each language.
+by AWS to maintain its SDKs across many programming languages.
+A Smithy model defines a service’s operations, data types, errors, and behavior;
+code generators use that shared contract to produce client SDKs for each language.
 
-NSmithy brings Smithy to .NET, generating C# clients, data types, and ASP.NET Core
-server interfaces from Smithy models as part of `dotnet build`.
-
-For example, this contract defines a greeting service with one operation:
+Smithy is useful well beyond AWS SDKs. For example, this contract defines a
+greeting service with one operation:
 
 ```smithy
 $version: "2"
@@ -34,64 +32,104 @@ operation Greet {
 }
 ```
 
-A client supplies a `name` and receives a `message`. The contract defines that
-exchange; the server implementation decides how to compose the greeting.
-Protocol traits, introduced later, specify how the request and response travel
-over the wire.
+This contract can be versioned and distributed before any server exists.
+The IDL captures the semantics of the exchange, and code generators turn it into
+clients and server interfaces for the protocols the service declares.
+Serialization, error behavior, authentication, and validation are encoded in the
+contract as traits.
 
-## An API contract teams can share and evolve
-
-One team may implement a service while several others build applications that
-call it. Those teams need to agree on the interface, know which version they
-depend on, and understand how proposed changes affect their applications.
-
-A Smithy model gives them a contract they can review and version independently
-of server code. Teams can discuss operations, inputs, outputs, and errors before
-implementing the service. Once they agree on the contract, client and server
-teams can generate code from it and work in parallel.
-
-Teams can publish models as
-[versioned dependencies](/smithy-dotnet/guides/distributing-contracts/), so each
-consumer can choose when to adopt a new contract version.
-[Smithy Diff](https://smithy.io/2.0/guides/evolving-models.html#using-smithy-diff)
-can detect backward-compatibility issues between versions during review or in CI.
-[Validators](https://smithy.io/2.0/guides/model-linters.html) can also enforce
-shared modeling conventions across services.
+NSmithy brings Smithy to .NET, generating C# clients, data types, and ASP.NET Core
+server interfaces from Smithy models as part of `dotnet build`. It is listed in
+[awesome-smithy](https://github.com/smithy-lang/awesome-smithy) as the community
+C# client and server generator.
 
 ## Why Smithy?
 
-Smithy combines a dedicated language for API design with a service model that
-can support multiple wire protocols. These are useful advantages when choosing
-how to define and maintain contracts across services.
+Smithy can carry the API governance of a whole organization: one modeling
+language for every service, whatever protocol each one speaks. Four properties
+make that possible.
 
-OpenAPI supports [design-first development](https://learn.openapis.org/best-practices.html),
-but authoring and reviewing a large API description in YAML or JSON can be
-cumbersome. Smithy's [modeling language](https://smithy.io/2.0/spec/idl.html)
-provides compact syntax for operations and reusable data types, called *shapes*.
-Annotations called *traits* add constraints, documentation, and protocol details.
-Teams can maintain the Smithy model and
-[generate OpenAPI descriptions](https://smithy.io/2.0/guides/model-translations/converting-to-openapi.html)
-for compatible HTTP APIs that need OpenAPI tooling.
+### Schema first
 
-[OpenAPI describes HTTP APIs](https://spec.openapis.org/oas/v3.2.0.html), including
-their paths, methods, and media types. It supports different payload formats,
-but the contract still incorporates HTTP-specific choices.
+One team may implement a service while several others build applications that
+call it. A Smithy model gives them a contract they can review and version
+independently of server code. Teams can discuss operations, inputs, outputs,
+and errors before implementing the service, then generate code from the agreed
+contract and work in parallel.
 
-[Protobuf and gRPC](https://grpc.io/docs/what-is-grpc/introduction/) also support
-contract-first development: Protobuf defines messages and service interfaces,
-while gRPC provides the RPC framework, using Protobuf by default. This is a
-natural fit for services communicating over gRPC. An organization that also
-exposes REST APIs, however, needs a way to describe those interfaces too.
+Smithy's [modeling language](https://smithy.io/2.0/spec/idl.html) is built for
+this review. It provides compact syntax for operations and reusable data types,
+called *shapes*, and annotations called *traits* for constraints, documentation,
+and protocol details. Authoring and reviewing the same API as a large OpenAPI
+description in YAML or JSON is more cumbersome.
+
+Teams can publish models as
+[versioned dependencies](/smithy-dotnet/guides/distributing-contracts/), so each
+consumer chooses when to adopt a new contract version.
+[Smithy Diff](https://smithy.io/2.0/guides/evolving-models.html#using-smithy-diff)
+detects backward-compatibility issues between versions during review or in CI.
+
+### Protocol-agnostic
 
 Smithy [separates the service model from its wire protocol](https://smithy.io/2.0/index.html#what-does-protocol-agnostic-mean).
 Protocol traits specify how operations and data are transmitted, and a service
-can declare multiple protocols. With suitable generators, the same model can
-produce clients and servers for different protocols, reducing the need to
-maintain separate contracts for each interface.
-Each protocol may require additional annotations, such as HTTP bindings or
-protobuf field indices for gRPC.
+can declare multiple protocols. With suitable generators, the same model
+produces clients and servers for each of them, so an organization does not
+maintain one contract per interface style. Each protocol may require additional
+annotations, such as HTTP bindings or protobuf field indices for gRPC.
 
-The practical choice depends on generator support. Before adopting Smithy,
+[OpenAPI](https://spec.openapis.org/oas/v3.2.0.html) describes HTTP APIs,
+including paths, methods, and media types, so the contract incorporates
+HTTP-specific choices. [Protobuf and gRPC](https://grpc.io/docs/what-is-grpc/introduction/)
+also support contract-first development, but an organization that exposes REST
+APIs as well needs a second way to describe those. Smithy covers both from one
+model, and can still
+[generate OpenAPI descriptions](https://smithy.io/2.0/guides/model-translations/converting-to-openapi.html)
+for HTTP APIs that need OpenAPI tooling.
+
+### Extensible
+
+Traits are the extension point. Organizations define
+[custom traits](https://smithy.io/2.0/spec/model.html#defining-traits) for their
+own conventions, and
+[validators](https://smithy.io/2.0/guides/model-linters.html) enforce those
+conventions across every service in review or CI. Code generators read the same
+traits, so a convention captured in the model reaches generated clients and
+servers without extra tooling.
+
+A data classification trait, for example, marks members that carry personal
+data:
+
+```smithy
+@trait(selector: "structure > member")
+structure pii {}
+
+structure Customer {
+    @required
+    id: String
+
+    @pii
+    email: String
+}
+```
+
+A validator can then require that every operation returning `@pii` members
+declares an authorization trait, and a generator can redact those members from
+logs.
+
+Protocols are traits too. An organization that sends commands over a message
+broker such as RabbitMQ can define a
+[protocol trait](https://smithy.io/2.0/spec/protocol-traits.html#protocoldefinition-trait)
+for that transport and write a generator for it. The service model stays the
+same; only the protocol trait and the generator are new.
+
+### Mature
+
+Smithy is the IDL AWS uses to define its own services and generate its SDKs.
+It has been open source since 2019 and reached a stable 2.0 specification in
+2022, with a CLI, build tooling, and IDE support maintained alongside it.
+
+The practical choice still depends on generator support. Before adopting Smithy,
 check that the available generators cover the languages, protocols, and features
 your clients and servers need. For NSmithy, see
 [Protocol Status](/smithy-dotnet/protocols/status/).
