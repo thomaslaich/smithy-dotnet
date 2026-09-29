@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <NSmithyBoteVersion Condition="'$(NSmithyBoteVersion)' == ''">0.0.0-SNAPSHOT</NSmithyBoteVersion>
+    <BoteVersion Condition="'$(BoteVersion)' == ''">0.1.0</BoteVersion>
+    <SmithyGenerateAsyncApi Condition="'$(SmithyGenerateAsyncApi)' == ''">false</SmithyGenerateAsyncApi>
+  </PropertyGroup>
+</Project>

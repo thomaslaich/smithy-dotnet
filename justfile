@@ -21,22 +21,24 @@ clean:
 check-format:
     treefmt --ci
 
-# Stage the bundled Maven repo consumed by NSmithy.MSBuild during `dotnet build`.
+# Stage the Maven repos consumed by NSmithy.MSBuild and NSmithy.Bote.
 codegen:
     # bundleMavenRepo builds the plugins and assembles the offline Maven bundle
     # (it depends on publishToMavenLocal). Staging it into tools/maven-repo means
     # in-repo builds (conformance/examples) resolve NSmithy codegen from the bundle
     # too, so no smithy-build.json needs a ~/.m2 repository entry.
-    cd codegen && gradle bundleMavenRepo
+    cd codegen && gradle bundleMavenRepo bundleBoteMavenRepo
     find packages/NSmithy.MSBuild/tools/maven-repo -mindepth 1 -not -name .gitignore -delete
     cp -R codegen/build/maven-bundle/. packages/NSmithy.MSBuild/tools/maven-repo/
+    find packages/NSmithy.Bote/tools/maven-repo -mindepth 1 -not -name .gitignore -delete
+    cp -R codegen/build/bote-maven-bundle/. packages/NSmithy.Bote/tools/maven-repo/
 
 # Publish the codegen JARs to Maven Central via the Sonatype Central Portal.
 publish-codegen VERSION:
     # Used by the release workflow; expects MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD and
     # ORG_GRADLE_PROJECT_signingInMemoryKey / ORG_GRADLE_PROJECT_signingInMemoryKeyPassword to be
     # set in the environment.
-    cd codegen && gradle -Pversion={{ VERSION }} :smithy-csharp-codegen:publishAndReleaseToMavenCentral :smithy-proto-codegen:publishAndReleaseToMavenCentral
+    cd codegen && gradle -Pversion={{ VERSION }} :smithy-csharp-codegen:publishAndReleaseToMavenCentral :smithy-csharp-bote-codegen:publishAndReleaseToMavenCentral :smithy-proto-codegen:publishAndReleaseToMavenCentral
 
 build: codegen restore
     dotnet build NSmithy.slnx --configuration Release --no-restore --disable-build-servers ${VERSION:+-p:Version=$VERSION}
@@ -53,9 +55,11 @@ aot-smoke:
     artifacts/aot-smoke/NSmithy.AotSmoke
 
 pack:
-    cd codegen && gradle bundleMavenRepo ${VERSION:+-Pversion=$VERSION}
+    cd codegen && gradle bundleMavenRepo bundleBoteMavenRepo ${VERSION:+-Pversion=$VERSION}
     find packages/NSmithy.MSBuild/tools/maven-repo -mindepth 1 -not -name .gitignore -delete
     cp -R codegen/build/maven-bundle/. packages/NSmithy.MSBuild/tools/maven-repo/
+    find packages/NSmithy.Bote/tools/maven-repo -mindepth 1 -not -name .gitignore -delete
+    cp -R codegen/build/bote-maven-bundle/. packages/NSmithy.Bote/tools/maven-repo/
     bash packages/NSmithy.MSBuild/tools/download-smithy-cli.sh
     dotnet pack NSmithy.slnx --configuration Release --no-build --output artifacts/packages ${VERSION:+-p:Version=$VERSION}
 

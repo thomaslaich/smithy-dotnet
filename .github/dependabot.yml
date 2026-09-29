@@ -22,6 +22,11 @@ updates:
     ignore:
       # Examples consume locally packed packages pinned to 0.0.0-SNAPSHOT.
       - dependency-name: NSmithy.*
+      # MSBuild 18.10+ runtime assemblies require .NET 11; this repo targets .NET 10.
+      - dependency-name: Microsoft.Build.Framework
+        versions: [">=18.10.0"]
+      - dependency-name: Microsoft.Build.Utilities.Core
+        versions: [">=18.10.0"]
     groups:
       nuget:
         patterns: ['*']
