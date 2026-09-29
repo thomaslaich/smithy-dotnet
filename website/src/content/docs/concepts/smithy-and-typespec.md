@@ -4,10 +4,12 @@ description: How the two IDLs differ, and when each is the better fit for a .NET
 ---
 
 [TypeSpec](https://typespec.io/) is the IDL most .NET teams meet first. Microsoft
-created it to author Azure's REST API specifications; it compiles to OpenAPI and
-drives Microsoft's own client generators. Smithy came from the other direction.
-AWS created it to generate its SDKs, so the model is designed to be consumed by
-code generators rather than translated into another description format.
+created it to author Azure's REST API specifications, and OpenAPI is still its
+primary output. Microsoft's newer client emitters, including the C# one, read
+the compiled TypeSpec program directly instead of going through an OpenAPI
+document. Smithy came from the other direction. AWS created it to generate its
+SDKs, so the model is designed to be consumed by code generators rather than
+translated into another description format.
 
 Both can describe the same HTTP API. The differences that matter for a .NET team
 are where the model lives, how a protocol attaches to it, and what the toolchain
@@ -48,15 +50,16 @@ a protocol.
 
 ```smithy
 @error("client")
-structure BookNotFound {
-    message: String
+structure NoSuchResource {
+    @required
+    resourceType: String
 }
 
-apply Library @alloy#simpleRestJson
-apply BookNotFound @httpError(404)
+apply Weather @alloy#simpleRestJson
+apply NoSuchResource @httpError(404)
 ```
 
-Replace the two `apply` lines with `apply Library @smithy.protocols#rpcv2Cbor`
+Replace the two `apply` lines with `apply Weather @smithy.protocols#rpcv2Cbor`
 and the same operations, types, and errors travel as CBOR RPC instead. A service
 can declare both protocols at once, and NSmithy serves them from
 [one handler set](/smithy-dotnet/servers/hosting/). Smithy's standard protocols
@@ -70,9 +73,9 @@ themselves:
 
 ```typespec
 @error
-model BookNotFound {
+model NoSuchResource {
   @statusCode statusCode: 404;
-  message: string;
+  resourceType: string;
 }
 ```
 

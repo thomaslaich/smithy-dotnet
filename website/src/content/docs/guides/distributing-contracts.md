@@ -6,10 +6,10 @@ description: Share your Smithy model across projects and ecosystems via a NuGet 
 Distributing your Smithy model lets other projects consume the contract without
 copying model files. NSmithy supports two packaging paths:
 
-- **Maven JAR** — any Smithy-based toolchain (Java, TypeScript, Python, .NET,
+- **Maven JAR**: any Smithy-based toolchain (Java, TypeScript, Python, .NET,
   and others) can consume it from a Maven registry. This is the more portable
   option.
-- **NuGet package** — contains model files and their Smithy build configuration.
+- **NuGet package**: contains model files and their Smithy build configuration.
   Consumers currently need explicit MSBuild items to import them.
 
 ## Within a solution

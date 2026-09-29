@@ -9,7 +9,8 @@ serialization, dispatch, and modeled errors.
 
 ## Implement an operation
 
-For the [Book model](/smithy-dotnet/concepts/modeling/), implement the generated
+For a `Library` service with a `GetBook` operation, modeled as in
+[Modeling contracts](/smithy-dotnet/concepts/modeling/), implement the generated
 service interface:
 
 ```csharp

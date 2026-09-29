@@ -78,7 +78,6 @@ export default defineConfig({
 					items: [
 						{ label: 'Modeling contracts', slug: 'concepts/modeling' },
 						{ label: 'Code generation', slug: 'concepts/code-generation' },
-						{ label: 'Distributing contracts', slug: 'guides/distributing-contracts' },
 						{ label: 'Smithy and TypeSpec', slug: 'concepts/smithy-and-typespec' },
 					],
 				},
@@ -131,6 +130,7 @@ export default defineConfig({
 					label: 'Reference',
 					items: [
 						{ label: 'MSBuild', slug: 'reference/msbuild' },
+						{ label: 'Distributing contracts', slug: 'guides/distributing-contracts' },
 						{ label: 'Known limitations', slug: 'reference/known-limitations' },
 						{ label: 'Design docs', slug: 'reference/design' },
 					],
