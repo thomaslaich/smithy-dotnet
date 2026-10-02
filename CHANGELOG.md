@@ -11,6 +11,26 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.10.1]
+
+Maintenance release with updated runtime and tooling dependencies, refreshed
+templates, and clearer documentation and examples.
+
+### Changed
+
+- **Updated runtime and build dependencies.** Refresh CBOR, hashing, Scalar, and
+  MSBuild dependencies. The `dotnet-nsmithy` tool now uses the stable
+  System.CommandLine API.
+- **Updated Alloy traits.** The bundled Maven repository and project templates
+  now use `alloy-core` 0.3.40.
+- **Clearer guides and examples.** Rework the getting-started and Concepts pages,
+  and organize examples by protocol and unary or streaming interaction style.
+
+### Packages
+
+All packages are prepared for publication at `0.10.1`. Codegen JARs and NuGet
+packages must use the same release version.
+
 ## [0.10.0]
 
 This release adds MCP tools and prompts backed by generated service handlers,
@@ -347,7 +367,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.8.0...v0.8.1
