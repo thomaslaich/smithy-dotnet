@@ -1,7 +1,12 @@
 ---
 title: Servers
 description: Implement generated handlers and expose them through ASP.NET Core.
+# The topic cards replace the prev/next links on this overview.
+prev: false
+next: false
 ---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 NSmithy generates handler interfaces whose methods accept modeled inputs and
 return modeled outputs. You implement the operations; the runtime handles
@@ -32,7 +37,7 @@ The selected protocol determines the response encoding and status.
 
 ## Register and map
 
-```csharp
+```csharp title="Program.cs"
 using Example.Library;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -80,4 +85,14 @@ See [Validation](/smithy-dotnet/servers/validation/) for checked traits,
 error responses, and streaming limits.
 
 See [Protocol status](/smithy-dotnet/protocols/status/) for ASP.NET Core protocol
-support, or [MCP](/smithy-dotnet/servers/mcp/) to expose handlers as tools and prompts.
+support.
+
+## Topics
+
+<CardGrid>
+  <LinkCard title="Validation" href="/smithy-dotnet/servers/validation/" description="Supported input constraints, malformed requests, and validation errors." />
+  <LinkCard title="Hosting multiple protocols" href="/smithy-dotnet/servers/hosting/" description="One handler set over several protocols, and which listeners can share a port." />
+  <LinkCard title="Fake handlers" href="/smithy-dotnet/servers/fake-handlers/" description="A working server from a contract with no handler implementation." />
+  <LinkCard title="MCP" href="/smithy-dotnet/servers/mcp/" description="Expose handlers as Model Context Protocol tools and prompts." />
+  <LinkCard title="Endpoint documentation" href="/smithy-dotnet/guides/endpoint-documentation/" description="Serve an OpenAPI explorer and generated reference docs alongside the server." />
+</CardGrid>

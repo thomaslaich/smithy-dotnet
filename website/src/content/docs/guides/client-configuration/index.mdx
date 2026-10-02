@@ -1,7 +1,12 @@
 ---
 title: Client configuration
 description: Construct and configure generated NSmithy clients.
+# The topic cards replace the prev/next links on this overview.
+prev: false
+next: false
 ---
+
+import { CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 Every service generates a concrete `{Service}Client` and an `I{Service}Client`
 interface. You can construct the client directly or register it with the .NET
@@ -68,18 +73,13 @@ variants, endpoint precedence, and ownership of supplied transports.
 
 ## Topics
 
-- [Authentication](/smithy-dotnet/guides/client-configuration/authentication/)
-  covers HTTP auth schemes and early-preview AWS SigV4 signing.
-- [Retry](/smithy-dotnet/guides/client-configuration/retry/) covers
-  runtime-owned retry configuration.
-- [Interceptors](/smithy-dotnet/guides/client-configuration/interceptors/)
-  covers client execution hooks.
-- [Observability](/smithy-dotnet/guides/client-configuration/observability/)
-  covers OpenTelemetry tracing and metrics.
-- [Pagination](/smithy-dotnet/guides/client-configuration/pagination/)
-  covers the generated `IAsyncEnumerable` paginators for `@paginated`
-  operations.
-- [Transport](/smithy-dotnet/guides/client-configuration/transport/) covers
-  endpoint, `HttpClient`, and low-level runtime ownership.
-- [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/)
-  covers `Add{Service}Client`, `IHttpClientFactory`, and typed-client lifetime.
+<CardGrid>
+  <LinkCard title="Authentication" href="/smithy-dotnet/guides/client-configuration/authentication/" description="HTTP auth schemes and early-preview AWS SigV4 signing." />
+  <LinkCard title="Retry" href="/smithy-dotnet/guides/client-configuration/retry/" description="Runtime-owned retry configuration." />
+  <LinkCard title="Interceptors" href="/smithy-dotnet/guides/client-configuration/interceptors/" description="Client execution hooks." />
+  <LinkCard title="Observability" href="/smithy-dotnet/guides/client-configuration/observability/" description="OpenTelemetry tracing and metrics." />
+  <LinkCard title="Pagination" href="/smithy-dotnet/guides/client-configuration/pagination/" description="Generated IAsyncEnumerable paginators for @paginated operations." />
+  <LinkCard title="Transport" href="/smithy-dotnet/guides/client-configuration/transport/" description="Endpoint, HttpClient, and low-level runtime ownership." />
+  <LinkCard title="Dependency injection" href="/smithy-dotnet/guides/client-configuration/dependency-injection/" description="Add{Service}Client, IHttpClientFactory, and typed-client lifetime." />
+  <LinkCard title="Fake clients" href="/smithy-dotnet/guides/client-configuration/fake-clients/" description="Canned responses without a network call, for tests and early integration." />
+</CardGrid>

@@ -35,7 +35,7 @@ and XML traits control names and collection flattening.
 
 Apply `@awsQuery` and `@xmlNamespace` to the service:
 
-```smithy
+```smithy title="model/queue.smithy" {7-8,19-20}
 $version: "2"
 
 namespace example.queue
@@ -98,7 +98,7 @@ and `value` segments. Successful output members are nested inside
 
 Add the AWS trait package to `smithy-build.json`:
 
-```json
+```json title="smithy-build.json"
 "software.amazon.smithy:smithy-aws-traits:1.73.0"
 ```
 

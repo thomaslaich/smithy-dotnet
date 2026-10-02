@@ -37,3 +37,14 @@ html:not(.nsmithy-landing) .content-panel h1 {
   --sl-color-bg-sidebar: #17181f; /* left sidebar */
   --sl-color-bg-inline-code: #21232c;
 }
+
+/* A wider text column than Starlight's 45rem default, so reference tables and
+   code blocks fit without cramped wrapping or horizontal scrolling. */
+:root {
+  --sl-content-width: 52rem;
+}
+
+/* Keep multi-word badges ("Early preview") on one line in table cells. */
+.sl-badge {
+  white-space: nowrap;
+}

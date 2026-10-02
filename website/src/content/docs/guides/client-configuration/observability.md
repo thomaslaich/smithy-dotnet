@@ -7,7 +7,7 @@ The client runtime emits OpenTelemetry-friendly telemetry through the standard
 .NET primitives — no NSmithy-specific setup, no extra packages. Subscribe with
 your tracer/meter provider:
 
-```csharp
+```csharp title="Program.cs"
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 

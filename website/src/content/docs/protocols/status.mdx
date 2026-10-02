@@ -3,23 +3,25 @@ title: Protocol status
 description: Maturity and official conformance coverage for every NSmithy protocol.
 ---
 
+import { Badge } from '@astrojs/starlight/components';
+
 This page is the source of truth for protocol maturity and conformance. The
 individual protocol pages describe behavior without repeating status labels or
 test totals.
 
 ## Current status
 
-| Protocol | Surfaces | Stage | Client conformance | Server conformance |
-| --- | --- | --- | --- | --- |
-| [`aws.protocols#restJson1`](../rest-json/) | Client and server | Preview | Requests 142/142 (100%), responses 108/108 (100%) | Requests 132/132 (100%), responses 92/92 (100%), malformed 655/655 (100%) |
-| [`aws.protocols#awsJson1_1`](../aws-json/) | Client | Early preview | Requests 57/57 (100%), responses 62/62 (100%) | N/A |
-| [`aws.protocols#awsJson1_0`](../aws-json/) | Client | Early preview | Runtime support, no conformance project | N/A |
-| [`aws.protocols#awsQuery`](../aws-query/) | Client | Preview | Requests 38/38 (100%), responses 39/39 (100%) | N/A |
-| [`aws.protocols#ec2Query`](../aws-ec2-query/) | Client | Preview | Requests 30/30 (100%), responses 29/29 (100%) | N/A |
-| [`aws.protocols#restXml`](../rest-xml/) | Client | Preview | Requests 109/109 (100%), responses 84/84 (100%) | N/A |
-| [`smithy.protocols#rpcv2Cbor`](../rpc-v2-cbor/) | Client and server | Preview | Requests 29/29 (100%), responses 43/43 (100%) | Requests 37/37 (100%), responses 27/27 (100%) |
-| [`alloy#simpleRestJson`](../rest-json/) | Client and server | Preview | Requests 23/23 (100%), responses 20/20 (100%) | Requests 23/23 (100%), responses 20/20 (100%) |
-| [`alloy.proto#grpc`](../grpc/) | Client and server | Experimental | End-to-end examples | End-to-end examples |
+| Protocol | Stage | Client conformance | Server conformance |
+| --- | --- | --- | --- |
+| [`restJson1`](../rest-json/) | <Badge text="Stable" variant="success" /> | Requests 142/142 (100%)<br />Responses 108/108 (100%) | Requests 132/132 (100%)<br />Responses 92/92 (100%)<br />Malformed 655/655 (100%) |
+| [`awsJson1_1`](../aws-json/) | <Badge text="Early preview" variant="caution" /> | Requests 57/57 (100%)<br />Responses 62/62 (100%) | Client only |
+| [`awsJson1_0`](../aws-json/) | <Badge text="Early preview" variant="caution" /> | Runtime support, no conformance project | Client only |
+| [`awsQuery`](../aws-query/) | <Badge text="Preview" variant="note" /> | Requests 38/38 (100%)<br />Responses 39/39 (100%) | Client only |
+| [`ec2Query`](../aws-ec2-query/) | <Badge text="Preview" variant="note" /> | Requests 30/30 (100%)<br />Responses 29/29 (100%) | Client only |
+| [`restXml`](../rest-xml/) | <Badge text="Preview" variant="note" /> | Requests 109/109 (100%)<br />Responses 84/84 (100%) | Client only |
+| [`rpcv2Cbor`](../rpc-v2-cbor/) | <Badge text="Stable" variant="success" /> | Requests 29/29 (100%)<br />Responses 43/43 (100%) | Requests 37/37 (100%)<br />Responses 27/27 (100%) |
+| [`simpleRestJson`](../rest-json/) | <Badge text="Preview" variant="note" /> | Requests 23/23 (100%)<br />Responses 20/20 (100%) | Requests 23/23 (100%)<br />Responses 20/20 (100%) |
+| [`grpc`](../grpc/) | <Badge text="Experimental" variant="danger" /> | End-to-end examples | End-to-end examples |
 
 ## How the numbers are counted
 
@@ -66,11 +68,14 @@ behavior.
 
 ## Maturity labels
 
-- **Preview:** useful end-to-end support with meaningful conformance coverage.
+- <Badge text="Stable" variant="success" /> every applicable official conformance case
+  passes on every generated surface, and the generated API changes only with
+  care for existing users.
+- <Badge text="Preview" variant="note" /> useful end-to-end support with meaningful conformance coverage.
   Some protocol features or convenience APIs are still incomplete.
-- **Early preview:** a narrower verified slice. Check the conformance totals and
+- <Badge text="Early preview" variant="caution" /> a narrower verified slice. Check the conformance totals and
   known limitations before adopting it.
-- **Experimental:** the API and supported model surface can still change.
+- <Badge text="Experimental" variant="danger" /> the API and supported model surface can still change.
 
 ## Reproducing the report
 

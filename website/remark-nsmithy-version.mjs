@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 const PLACEHOLDER = /NSMITHY_VERSION/g;
 
 // Read once at config load. rootDir is website/, VERSION lives at the repo root.
-const version = readFileSync(new URL('../VERSION', import.meta.url), 'utf-8').trim();
+export const version = readFileSync(new URL('../VERSION', import.meta.url), 'utf-8').trim();
 
 export function remarkNSmithyVersion() {
 	return (tree) => {

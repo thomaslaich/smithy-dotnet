@@ -8,7 +8,7 @@ a `Map{Service}` extension with a generated `{Service}Protocols` flags enum.
 Each selected protocol resolves the registered operation handlers. Their method
 signatures use the same model types across protocols.
 
-```csharp
+```csharp title="Program.cs"
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddWeatherServiceHandler<WeatherHandler>();   // one handler
 

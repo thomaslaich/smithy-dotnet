@@ -20,7 +20,7 @@ provided by that SDK.
 
 ## Install the package
 
-```xml
+```xml title="MyService.csproj"
 <PackageReference Include="NSmithy.Server.Mcp" Version="NSMITHY_VERSION" />
 ```
 
@@ -32,7 +32,7 @@ server runtimes.
 Register the generated handler as usual, then select the service by its generated
 schema. This exposes its tools and prompts together:
 
-```csharp
+```csharp title="Program.cs"
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NSmithy.Server.Mcp;

@@ -12,7 +12,7 @@ container.
 
 Enable the helper in the client project:
 
-```xml
+```xml title="MyService.Client.csproj"
 <PropertyGroup>
   <SmithyGenerateDependencyInjection>true</SmithyGenerateDependencyInjection>
 </PropertyGroup>
@@ -20,7 +20,7 @@ Enable the helper in the client project:
 
 With an explicit `smithy-build.json`, set the plugin option instead:
 
-```json
+```json title="smithy-build.json"
 { "plugins": { "csharp-codegen": { "service": "...", "generateDependencyInjection": true } } }
 ```
 

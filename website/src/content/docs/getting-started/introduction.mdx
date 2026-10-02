@@ -3,6 +3,8 @@ title: Introduction
 description: Design, share, and evolve API contracts with Smithy, then build their .NET implementation with NSmithy.
 ---
 
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
 [Smithy](https://smithy.io/2.0/) is an interface definition language (IDL) developed
 by AWS to maintain its SDKs across many programming languages.
 A Smithy model defines a service’s operations, data types, errors, and behavior;
@@ -48,6 +50,25 @@ C# client and server generator.
 Smithy can carry the API governance of a whole organization: one modeling
 language for every service, whatever protocol each one speaks. Four properties
 make that possible.
+
+<CardGrid>
+  <Card title="Schema first" icon="document">
+    Review and version the contract before the server exists.
+    [More](#schema-first)
+  </Card>
+  <Card title="Protocol-agnostic" icon="random">
+    One model, many wire protocols: REST, RPC, and gRPC.
+    [More](#protocol-agnostic)
+  </Card>
+  <Card title="Extensible" icon="puzzle">
+    Custom traits and validators encode organization conventions.
+    [More](#extensible)
+  </Card>
+  <Card title="Mature" icon="approve-check">
+    The IDL behind AWS SDKs, stable 2.0 since 2022.
+    [More](#mature)
+  </Card>
+</CardGrid>
 
 ### Schema first
 
