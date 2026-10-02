@@ -34,7 +34,7 @@ restXml does not support document shapes.
 Apply `@restXml` to the service and `@http` to each operation. XML traits
 control element names, namespaces, and collection layout.
 
-```smithy title="model/weather.smithy" {7}
+```smithy title="model/weather.smithy" {7,14,18,23}
 $version: "2"
 
 namespace example.weather

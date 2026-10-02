@@ -36,7 +36,7 @@ are capitalized by default, and lists are flattened with one-based indexes.
 Apply `@ec2Query` and `@xmlNamespace` to the service. Use `@ec2QueryName`
 when a request key differs from the modeled member name.
 
-```smithy title="model/compute.smithy" {8-9}
+```smithy title="model/compute.smithy" {8-9,17,21,31,36}
 $version: "2"
 
 namespace example.compute

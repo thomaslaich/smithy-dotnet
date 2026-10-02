@@ -35,7 +35,7 @@ and XML traits control names and collection flattening.
 
 Apply `@awsQuery` and `@xmlNamespace` to the service:
 
-```smithy title="model/queue.smithy" {7-8}
+```smithy title="model/queue.smithy" {7-8,19-20}
 $version: "2"
 
 namespace example.queue

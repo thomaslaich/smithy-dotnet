@@ -50,7 +50,7 @@ needed by a wider range of services.
 Apply the protocol trait to the service and `@http` to each operation. The
 example uses `restJson1`:
 
-```smithy title="model/weather.smithy" {7}
+```smithy title="model/weather.smithy" {7,14,18}
 $version: "2"
 
 namespace example.weather

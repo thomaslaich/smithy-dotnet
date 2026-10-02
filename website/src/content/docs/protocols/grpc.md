@@ -30,7 +30,7 @@ See [Protocol Status](../status/) for maturity and test coverage.
 Apply `@grpc` to the service and give each protobuf field a stable
 `@protoIndex`:
 
-```smithy title="model/weather.smithy" {8}
+```smithy title="model/weather.smithy" {8,17,22}
 $version: "2"
 
 namespace example.weather
@@ -114,7 +114,7 @@ HTTP/2 automatically. A caller-owned `HttpClient` must set
 
 Model an event stream with an `@streaming` union:
 
-```smithy
+```smithy {3,10}
 @streaming
 union ChatEvent {
     @protoIndex(1)
