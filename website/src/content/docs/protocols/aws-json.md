@@ -32,7 +32,7 @@ for authentication, endpoints, and runtime limitations.
 Apply one AWS JSON protocol trait to the service. Operations do not use `@http`
 because the protocol always posts to the root path.
 
-```smithy
+```smithy title="model/weather.smithy" {7}
 $version: "2"
 
 namespace example.weather
@@ -95,7 +95,7 @@ the modeled HTTP status code.
 
 Add the AWS trait package to `smithy-build.json`:
 
-```json
+```json title="smithy-build.json"
 "software.amazon.smithy:smithy-aws-traits:1.73.0"
 ```
 

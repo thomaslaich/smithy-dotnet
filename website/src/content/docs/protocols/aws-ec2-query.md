@@ -36,7 +36,7 @@ are capitalized by default, and lists are flattened with one-based indexes.
 Apply `@ec2Query` and `@xmlNamespace` to the service. Use `@ec2QueryName`
 when a request key differs from the modeled member name.
 
-```smithy
+```smithy title="model/compute.smithy" {8-9}
 $version: "2"
 
 namespace example.compute
@@ -108,7 +108,7 @@ root instead of an `{Operation}Result` wrapper.
 
 Add the AWS trait package to `smithy-build.json`:
 
-```json
+```json title="smithy-build.json"
 "software.amazon.smithy:smithy-aws-traits:1.73.0"
 ```
 

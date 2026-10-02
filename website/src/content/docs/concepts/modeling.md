@@ -18,7 +18,7 @@ This model, adapted from the
 [Smithy quickstart](https://smithy.io/2.0/quickstart.html), lets callers look
 up a city by identifier:
 
-```smithy
+```smithy title="model/weather.smithy"
 $version: "2"
 namespace example.weather
 
@@ -86,7 +86,7 @@ selects one with a trait, and some protocols need further bindings on operations
 and members. `apply` attaches a trait to an existing shape, so the bindings can
 live in a second `.smithy` file in the same namespace:
 
-```smithy
+```smithy title="model/weather-bindings.smithy"
 $version: "2"
 namespace example.weather
 

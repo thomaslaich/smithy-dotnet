@@ -19,3 +19,6 @@ pnpm-debug.log*
 
 # macOS-specific files
 .DS_Store
+
+# generated from the repo-root CHANGELOG.md (changelog-page.mjs)
+src/content/docs/reference/changelog.md

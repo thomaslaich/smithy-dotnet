@@ -94,7 +94,7 @@ and may require access to the configured Maven repositories.
 Set `SmithyCliPath` to override the bundled binary with a specific executable,
 for example when testing against a different CLI version:
 
-```xml
+```xml title="MyService.csproj"
 <PropertyGroup>
   <SmithyCliPath>/path/to/smithy</SmithyCliPath>
 </PropertyGroup>

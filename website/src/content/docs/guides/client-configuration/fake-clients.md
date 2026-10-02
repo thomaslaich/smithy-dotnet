@@ -7,7 +7,7 @@ With `SmithyGenerateFakes` enabled, codegen emits a `Fake{Service}Client`
 implementing `I{Service}Client`. Code that depends on the client interface
 runs against it with no server and no network:
 
-```xml
+```xml title="MyService.Client.csproj"
 <PropertyGroup>
   <SmithyGenerateFakes>true</SmithyGenerateFakes>
 </PropertyGroup>

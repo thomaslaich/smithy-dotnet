@@ -7,13 +7,13 @@ With `SmithyGenerateFakes` enabled, codegen emits a `Fake{Service}Handler`
 implementing the full service handler interface. A working server without
 writing a handler:
 
-```xml
+```xml title="MyService.Server.csproj"
 <PropertyGroup>
   <SmithyGenerateFakes>true</SmithyGenerateFakes>
 </PropertyGroup>
 ```
 
-```csharp
+```csharp title="Program.cs"
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddWeatherServiceHandler<FakeWeatherServiceHandler>();
 

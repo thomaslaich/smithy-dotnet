@@ -34,7 +34,7 @@ restXml does not support document shapes.
 Apply `@restXml` to the service and `@http` to each operation. XML traits
 control element names, namespaces, and collection layout.
 
-```smithy
+```smithy title="model/weather.smithy" {7}
 $version: "2"
 
 namespace example.weather
@@ -92,7 +92,7 @@ direct `Error` body and the common `ErrorResponse > Error` envelope.
 
 Add the AWS trait package to `smithy-build.json`:
 
-```json
+```json title="smithy-build.json"
 "software.amazon.smithy:smithy-aws-traits:1.73.0"
 ```
 

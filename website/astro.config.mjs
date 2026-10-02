@@ -4,7 +4,11 @@ import starlight from '@astrojs/starlight';
 import starlightLlmsTxt from 'starlight-llms-txt';
 import mermaid from 'astro-mermaid';
 import { readFileSync } from 'node:fs';
-import { remarkNSmithyVersion } from './remark-nsmithy-version.mjs';
+import { remarkNSmithyVersion, version } from './remark-nsmithy-version.mjs';
+import { generateChangelogPage } from './changelog-page.mjs';
+
+// Render the repo-root CHANGELOG.md as the Reference > Changelog page.
+generateChangelogPage();
 
 const smithyGrammar = JSON.parse(
 	readFileSync(new URL('./src/smithy.tmLanguage.json', import.meta.url), 'utf-8')
@@ -17,6 +21,10 @@ export default defineConfig({
 	// Substitute the NSMITHY_VERSION placeholder in docs with the repo-root VERSION.
 	markdown: {
 		remarkPlugins: [remarkNSmithyVersion],
+	},
+	// Expose the same version to components (the header's version link).
+	vite: {
+		define: { __NSMITHY_VERSION__: JSON.stringify(version) },
 	},
 	integrations: [
 		mermaid({ autoTheme: true }),
@@ -50,9 +58,11 @@ export default defineConfig({
 			editLink: {
 				baseUrl: 'https://github.com/thomaslaich/smithy-dotnet/edit/main/website/',
 			},
-			// Replace the default theme dropdown with the landing's sun/moon toggle.
+			// Replace the default theme dropdown with the landing's sun/moon toggle, and
+			// append the current version to the site title.
 			components: {
 				ThemeSelect: './src/components/StarlightThemeToggle.astro',
+				SiteTitle: './src/components/SiteTitle.astro',
 			},
 			// Shared code-block styling (src/styles/code.css), plus landing/docs theme
 			// alignment, fonts, and a near-black dark mode (src/styles/docs-theme.css).
@@ -61,6 +71,13 @@ export default defineConfig({
 				// Match TypeHintCode's highlighter (github-dark / github-light) so
 				// token colours and code backgrounds are identical across both.
 				themes: ['github-dark', 'github-light'],
+				// Untitled shell snippets render as plain code frames instead of
+				// terminal windows with an empty title bar.
+				defaultProps: {
+					overridesByLang: {
+						'bash,console,powershell,ps,sh,shell,zsh': { frame: 'code' },
+					},
+				},
 				shiki: {
 					langs: [smithyGrammar],
 				},
@@ -110,19 +127,19 @@ export default defineConfig({
 					label: 'Protocols',
 					items: [
 						{ label: 'Overview', slug: 'protocols/overview' },
-						{ label: 'REST JSON', slug: 'protocols/rest-json' },
-						{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor' },
+						{ label: 'REST JSON', slug: 'protocols/rest-json', badge: { text: 'Stable', variant: 'success' } },
+						{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor', badge: { text: 'Stable', variant: 'success' } },
 						{
 							label: 'AWS protocols',
 							items: [
 								{ label: 'Overview', slug: 'protocols/aws-overview' },
-								{ label: 'AWS JSON', slug: 'protocols/aws-json' },
-								{ label: 'AWS Query', slug: 'protocols/aws-query' },
-								{ label: 'AWS EC2 Query', slug: 'protocols/aws-ec2-query' },
-								{ label: 'AWS restXml', slug: 'protocols/rest-xml' },
+								{ label: 'AWS JSON', slug: 'protocols/aws-json', badge: { text: 'Early preview', variant: 'caution' } },
+								{ label: 'AWS Query', slug: 'protocols/aws-query', badge: { text: 'Preview', variant: 'note' } },
+								{ label: 'AWS EC2 Query', slug: 'protocols/aws-ec2-query', badge: { text: 'Preview', variant: 'note' } },
+								{ label: 'AWS restXml', slug: 'protocols/rest-xml', badge: { text: 'Preview', variant: 'note' } },
 							],
 						},
-						{ label: 'gRPC', slug: 'protocols/grpc' },
+						{ label: 'gRPC', slug: 'protocols/grpc', badge: { text: 'Experimental', variant: 'danger' } },
 						{ label: 'Protocol status', slug: 'protocols/status' },
 					],
 				},
@@ -132,6 +149,7 @@ export default defineConfig({
 						{ label: 'MSBuild', slug: 'reference/msbuild' },
 						{ label: 'Distributing contracts', slug: 'guides/distributing-contracts' },
 						{ label: 'Known limitations', slug: 'reference/known-limitations' },
+						{ label: 'Changelog', slug: 'reference/changelog' },
 						{ label: 'Design docs', slug: 'reference/design' },
 					],
 				},

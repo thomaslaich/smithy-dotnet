@@ -56,7 +56,7 @@ The generated `.nupkg` files are written to `artifacts/packages`.
 Add a `NuGet.config` next to the consumer project to make the local feed
 available alongside nuget.org:
 
-```xml
+```xml title="NuGet.config"
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
   <packageSources>

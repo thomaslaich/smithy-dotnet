@@ -30,7 +30,7 @@ See [Protocol Status](../status/) for maturity and test coverage.
 Apply `@grpc` to the service and give each protobuf field a stable
 `@protoIndex`:
 
-```smithy
+```smithy title="model/weather.smithy" {8}
 $version: "2"
 
 namespace example.weather
@@ -68,7 +68,7 @@ contract. Omitting it from an input or output member is a model error.
 gRPC requires HTTP/2. Configure a dedicated cleartext HTTP/2 port for local
 development, then map the generated service:
 
-```csharp
+```csharp title="Program.cs"
 using Example.Weather;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 
@@ -156,7 +156,7 @@ The supported protobuf surface includes scalars, `@protoNumType`, lists, maps,
 
 Add the Alloy model package to `smithy-build.json`:
 
-```json
+```json title="smithy-build.json"
 "com.disneystreaming.alloy:alloy-core:0.3.40"
 ```
 

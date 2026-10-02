@@ -32,7 +32,7 @@ The selected protocol determines the response encoding and status.
 
 ## Register and map
 
-```csharp
+```csharp title="Program.cs"
 using Example.Library;
 
 var builder = WebApplication.CreateBuilder(args);

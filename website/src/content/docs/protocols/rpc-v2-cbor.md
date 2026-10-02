@@ -30,7 +30,7 @@ See [Protocol Status](../status/) for maturity and current conformance numbers.
 Apply `@rpcv2Cbor` to the service. The protocol derives routes automatically,
 so operations do not use `@http`:
 
-```smithy
+```smithy title="model/weather.smithy" {7}
 $version: "2"
 
 namespace example.weather

@@ -3,35 +3,36 @@ title: Endpoint documentation
 description: Serve an interactive OpenAPI explorer and generated Sphinx documentation alongside your ASP.NET Core server.
 ---
 
+import { FileTree, TabItem, Tabs } from '@astrojs/starlight/components';
+
 NSmithy can generate two documentation UIs from your Smithy model and serve them
 alongside your ASP.NET Core application:
 
-- **Scalar** — an interactive OpenAPI explorer at `/openapi`, backed by a
+- **Scalar**: an interactive OpenAPI explorer at `/openapi`, backed by a
   `openapi.json` generated from the model by
   [smithy-openapi](https://smithy.io/2.0/guides/converting-to-openapi.html).
   Available for AWS restJson1 services.
-- **Sphinx HTML** — auto-generated reference documentation at `/docs`, produced
+- **Sphinx HTML**: auto-generated reference documentation at `/docs`, produced
   by [smithy-docgen](https://github.com/smithy-lang/smithy-docgen) and compiled
   to HTML automatically at build time. Available for all services.
 
 Both are opt-in MSBuild features. Their output is copied into `wwwroot/`, where
 ASP.NET Core's static file middleware can serve it.
 
-<figure>
-  <img src="/smithy-dotnet/screenshots/scalar-ui.png" alt="Scalar interactive API explorer showing the GetForecast endpoint" style="border-radius: 0.5rem; border: 1px solid var(--sl-color-gray-5);" />
-  <figcaption>Scalar interactive API explorer at <code>/openapi</code></figcaption>
-</figure>
-
-<figure>
-  <img src="/smithy-dotnet/screenshots/smithy-docs.png" alt="smithy-docgen generated Sphinx HTML showing the GetForecast operation" style="border-radius: 0.5rem; border: 1px solid var(--sl-color-gray-5);" />
-  <figcaption>smithy-docgen generated reference documentation at <code>/docs</code></figcaption>
-</figure>
+<Tabs>
+  <TabItem label="Scalar (/openapi)">
+    <img src="/smithy-dotnet/screenshots/scalar-ui.png" alt="Scalar interactive API explorer showing the GetForecast endpoint" style={{ borderRadius: '0.5rem', border: '1px solid var(--sl-color-gray-5)' }} />
+  </TabItem>
+  <TabItem label="Sphinx HTML (/docs)">
+    <img src="/smithy-dotnet/screenshots/smithy-docs.png" alt="smithy-docgen generated Sphinx HTML showing the GetForecast operation" style={{ borderRadius: '0.5rem', border: '1px solid var(--sl-color-gray-5)' }} />
+  </TabItem>
+</Tabs>
 
 ## Install the package
 
 Add `NSmithy.Server.AspNetCore.Docs` to your server project:
 
-```xml
+```xml title="MyService.Server.csproj"
 <PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="NSMITHY_VERSION" />
 ```
 
@@ -42,7 +43,7 @@ methods.
 
 Set the MSBuild properties you need in your server `.csproj`:
 
-```xml
+```xml title="MyService.Server.csproj"
 <PropertyGroup>
   <!-- Generate Sphinx HTML documentation (all services) -->
   <SmithyGenerateDocs>true</SmithyGenerateDocs>
@@ -58,7 +59,7 @@ on the build host.
 :::note[Protocol support for OpenAPI]
 `SmithyOpenApiProtocol` requires a registered Smithy OpenAPI protocol converter.
 Currently only `aws.protocols#restJson1` is supported by smithy-openapi.
-`alloy#simpleRestJson` does not have a converter — omit `SmithyOpenApiProtocol`
+`alloy#simpleRestJson` does not have a converter. Omit `SmithyOpenApiProtocol`
 for alloy-based services and use only `SmithyGenerateDocs`.
 :::
 
@@ -66,7 +67,7 @@ for alloy-based services and use only `SmithyGenerateDocs`.
 
 Map the generated documentation endpoints in `Program.cs`:
 
-```csharp
+```csharp title="Program.cs" ins={1,4-5}
 using NSmithy.Server.AspNetCore.Docs;
 
 var app = builder.Build();
@@ -95,9 +96,18 @@ On `dotnet build`, NSmithy:
 3. MSBuild copies the HTML to `wwwroot/docs/` and the OpenAPI spec to
    `wwwroot/openapi.json`.
 
+<FileTree>
+- MyService.Server/
+  - wwwroot/
+    - docs/
+      - **index.html** Sphinx reference docs, served at `/docs`
+      - …
+    - **openapi.json** read by Scalar at `/openapi`
+</FileTree>
+
 Ignore only the generated files:
 
-```txt
+```txt title=".gitignore"
 /wwwroot/docs/
 /wwwroot/openapi.json
 ```

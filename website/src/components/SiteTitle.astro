@@ -1,0 +1,43 @@
+---
+// Starlight's site title followed by the current NSmithy version, linking to
+// its entry on the Changelog page. The version comes from the repo-root VERSION
+// file via the `__NSMITHY_VERSION__` define in astro.config.mjs.
+import Default from '@astrojs/starlight/components/SiteTitle.astro';
+
+const version = __NSMITHY_VERSION__;
+// Heading anchors drop the dots: `## 0.10.1` → `#0101`.
+const href = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/reference/changelog/#${version.replaceAll('.', '')}`;
+---
+
+<div class="sl-flex title-with-version">
+	<Default />
+	<a
+		class="version"
+		href={href}
+		title={`NSmithy ${version} changelog`}
+	>
+		v{version}
+	</a>
+</div>
+
+<style>
+	.title-with-version {
+		align-items: center;
+		gap: 0.6rem;
+	}
+	.version {
+		font-family: var(--sl-font-mono);
+		font-size: var(--sl-text-xs);
+		line-height: 1;
+		padding: 0.25rem 0.45rem;
+		border: 1px solid var(--sl-color-gray-5);
+		border-radius: 999px;
+		color: var(--sl-color-gray-2);
+		text-decoration: none;
+		white-space: nowrap;
+	}
+	.version:hover {
+		color: var(--sl-color-white);
+		border-color: var(--sl-color-gray-3);
+	}
+</style>
