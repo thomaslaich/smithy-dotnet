@@ -5,9 +5,7 @@
 [![License](https://img.shields.io/github/license/thomaslaich/smithy-dotnet)](https://github.com/thomaslaich/smithy-dotnet/blob/main/LICENSE)
 [![Smithy CLI](https://img.shields.io/badge/smithy--cli-1.73.0-orange)](https://github.com/smithy-lang/smithy/releases/tag/1.73.0)
 
-> **Status:** restJson1 and rpcv2Cbor are stable. Other protocols are in preview,
-> and APIs may still change before 1.0. See
-> [Protocol Status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/).
+> **Preview:** NSmithy is in preview; expect some API changes before 1.0.
 
 # NSmithy
 
