@@ -84,6 +84,48 @@ public sealed class HttpClientTransportTests
         }
     }
 
+    [Fact]
+    public async Task SendAsyncLeavesTheCallersRequestStreamOpen()
+    {
+        var handler = new CapturingHandler();
+        using var httpClient = new HttpClient(handler);
+        var transport = new HttpClientTransport(httpClient);
+        using var payload = new MemoryStream("upload"u8.ToArray());
+
+        await transport.SendAsync(
+            new SmithyHttpRequest(HttpMethod.Put, "https://example.test/objects/key")
+            {
+                Body = new SmithyHttpBody.Streaming(payload),
+            },
+            SmithyHttpClientResponseMode.Buffer
+        );
+
+        Assert.Equal("upload"u8.ToArray(), handler.Content);
+        Assert.Equal(6, handler.ContentLength);
+        Assert.True(payload.CanRead);
+        payload.Position = 0;
+        Assert.Equal((byte)'u', payload.ReadByte());
+    }
+
+    private sealed class CapturingHandler : HttpMessageHandler
+    {
+        public byte[]? Content { get; private set; }
+
+        public long? ContentLength { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        )
+        {
+            ContentLength = request.Content?.Headers.ContentLength;
+            Content = request.Content is null
+                ? null
+                : await request.Content.ReadAsByteArrayAsync(cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
+    }
+
     private sealed class Handler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
