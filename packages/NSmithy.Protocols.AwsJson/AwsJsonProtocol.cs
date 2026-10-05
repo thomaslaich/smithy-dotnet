@@ -162,10 +162,15 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         )
             where TError : Exception
         {
+            var structure =
+                schema.Schema.Resolved as IStructSchema<TError>
+                ?? throw new InvalidOperationException(
+                    $"Error schema '{schema.Schema.Id}' must be a structure schema."
+                );
             var codec = CodecFactory.FromSchema(schema.Schema);
             return response =>
                 response.Content.Length == 0
-                    ? CreateEmptyError<TError>()
+                    ? structure.BuildEmpty()
                     : codec.Deserialize(response.Content);
         }
     }
@@ -217,30 +222,6 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         }
 
         return null;
-    }
-
-    private static TError CreateEmptyError<TError>()
-    {
-        var type = typeof(TError);
-        try
-        {
-            if (Activator.CreateInstance(type) is TError parameterless)
-            {
-                return parameterless;
-            }
-        }
-        catch (MissingMethodException)
-        {
-            // Generated error types always accept a nullable message constructor, but not every
-            // runtime type exposes a parameterless constructor.
-        }
-
-        if (Activator.CreateInstance(type, [null]) is TError messageOnly)
-        {
-            return messageOnly;
-        }
-
-        return default!;
     }
 
     private static string? TryGetFirstHeaderValue(
