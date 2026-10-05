@@ -145,8 +145,17 @@ public sealed record GetObjectOutput(Stream Body, string? ContentType);
 
 ### Ownership
 
-The transport disposes a request stream once the request has been sent. The
-caller owns a response stream: disposing it releases the connection.
+Whoever creates a stream owns it, unless it is handed over:
+
+- **Client request.** The caller owns the stream. The transport sends it from
+  its current position and leaves it open, so the caller can rewind and resend
+  it.
+- **Client response.** The stream is handed to the caller, who owns it;
+  disposing it releases the connection.
+- **Server request.** The host owns the stream, which is valid only while the
+  handler runs.
+- **Server response.** The handler hands its stream to the runtime, which
+  disposes it once the body is written.
 
 A streaming request body cannot be replayed, so an operation with one gets
 exactly one attempt regardless of the retry strategy.

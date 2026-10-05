@@ -553,19 +553,25 @@ public static class RestProtocol
         yield return chunk;
     }
 
-    // The buffer is reused across iterations: valid because the host writer consumes each chunk
-    // before pulling the next.
+    // A handler hands its response stream to the runtime, so the stream is disposed once written
+    // (or once the host abandons the enumeration). The buffer is reused across iterations: valid
+    // because the host writer consumes each chunk before pulling the next.
     private static async IAsyncEnumerable<ReadOnlyMemory<byte>> ReadStream(
         Stream stream,
         [System.Runtime.CompilerServices.EnumeratorCancellation]
             CancellationToken cancellationToken = default
     )
     {
-        var buffer = new byte[81920];
-        int read;
-        while ((read = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+        await using (stream.ConfigureAwait(false))
         {
-            yield return buffer.AsMemory(0, read);
+            var buffer = new byte[81920];
+            int read;
+            while (
+                (read = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0
+            )
+            {
+                yield return buffer.AsMemory(0, read);
+            }
         }
     }
 

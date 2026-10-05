@@ -159,9 +159,9 @@ public sealed class HttpClientTransport : IHttpTransport
             _ => null,
         };
 
-    private static StreamContent CreateStreamContent(SmithyHttpBody.Streaming streaming)
+    private static CallerStreamContent CreateStreamContent(SmithyHttpBody.Streaming streaming)
     {
-        var content = new StreamContent(streaming.Content);
+        var content = new CallerStreamContent(streaming.Content);
         if (streaming.ContentLength is { } contentLength)
         {
             content.Headers.ContentLength = contentLength;
@@ -245,6 +245,35 @@ public sealed class HttpClientTransport : IHttpTransport
 
         protected override bool TryComputeLength(out long length)
         {
+            length = 0;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Sends a caller's stream from its current position without taking ownership of it. Unlike
+    /// <see cref="StreamContent"/>, disposing the request leaves the stream open, so the caller can
+    /// still read, rewind, or resend it.
+    /// </summary>
+    private sealed class CallerStreamContent(Stream content) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            SerializeToStreamAsync(stream, context, CancellationToken.None);
+
+        protected override Task SerializeToStreamAsync(
+            Stream stream,
+            TransportContext? context,
+            CancellationToken cancellationToken
+        ) => content.CopyToAsync(stream, cancellationToken);
+
+        protected override bool TryComputeLength(out long length)
+        {
+            if (content.CanSeek)
+            {
+                length = content.Length - content.Position;
+                return true;
+            }
+
             length = 0;
             return false;
         }

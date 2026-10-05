@@ -995,6 +995,9 @@ public sealed class RestJson1ProtocolTests
         Assert.Equal("application/octet-stream", response.Headers["Content-Type"].Single());
         Assert.Equal(payload.Length, response.ContentLength);
         Assert.Equal("avatar bytes", Encoding.UTF8.GetString(await DrainAsync(response)));
+
+        // The handler handed the stream over; the runtime disposes it once written.
+        Assert.False(payload.CanRead);
     }
 
     [Fact]
