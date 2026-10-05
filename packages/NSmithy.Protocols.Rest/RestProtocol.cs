@@ -318,80 +318,54 @@ public static class RestProtocol
         bool rawStringPayloads
     )
     {
-        ArgumentNullException.ThrowIfNull(errors);
         ArgumentNullException.ThrowIfNull(codecFactory);
-        var compiler = new ErrorDeserializerCompiler(codecFactory, rawStringPayloads);
-        return errors.Select(error => error.Accept(compiler)).ToArray();
+        return HttpOperationError.Compile(errors, new ErrorReader(codecFactory, rawStringPayloads));
     }
 
-    private sealed class ErrorDeserializerCompiler(
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads
-    ) : IOperationErrorSchemaVisitor<HttpOperationError>
+    /// <summary>
+    /// Reads a modeled error the way a response is read: header and payload bindings first, then
+    /// the remaining members from the body.
+    /// </summary>
+    private sealed class ErrorReader(IRestBodyCodecFactory codecFactory, bool rawStringPayloads)
+        : IErrorReaderCompiler
     {
-        public HttpOperationError Visit<TError>(OperationErrorSchema<TError> error)
+        public Func<SmithyHttpClientResponse, TError> Compile<TError>(
+            OperationErrorSchema<TError> schema
+        )
             where TError : Exception =>
-            CompileErrorDeserializer(error, codecFactory, rawStringPayloads);
+            schema.Schema.Resolved is IStructSchema<TError> structure
+                ? structure.Accept(new ErrorStructReader<TError>(codecFactory, rawStringPayloads))
+                : throw new InvalidOperationException(
+                    $"Error schema '{schema.Schema.Id}' must be a structure schema."
+                );
     }
 
-    private static HttpOperationError CompileErrorDeserializer<TError>(
-        OperationErrorSchema<TError> error,
+    private sealed class ErrorStructReader<TError>(
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads
-    )
-        where TError : Exception
+    ) : IStructSchemaVisitor<TError, Func<SmithyHttpClientResponse, TError>>
     {
-        if (error.Schema.Resolved is not IStructSchema<TError> schema)
+        public Func<SmithyHttpClientResponse, TError> Visit<TBuilder>(
+            IStructSchema<TError, TBuilder> schema
+        )
         {
-            throw new InvalidOperationException(
-                $"Error schema '{error.Schema.Id}' must be a structure schema."
-            );
-        }
-
-        return schema.Accept(
-            new ErrorStructDeserializerCompiler<TError>(error, codecFactory, rawStringPayloads)
-        );
-    }
-
-    private sealed class ErrorStructDeserializerCompiler<TError>(
-        OperationErrorSchema<TError> error,
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads
-    ) : IStructSchemaVisitor<TError, HttpOperationError>
-        where TError : Exception
-    {
-        public HttpOperationError Visit<TBuilder>(IStructSchema<TError, TBuilder> schema) =>
-            CompileErrorDeserializer(error, schema, codecFactory, rawStringPayloads);
-    }
-
-    private static HttpOperationError CompileErrorDeserializer<TError, TBuilder>(
-        OperationErrorSchema<TError> error,
-        IStructSchema<TError, TBuilder> schema,
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads
-    )
-        where TError : Exception
-    {
-        var bound = RestStructBinding<TError, TBuilder>.Compile(
-            schema,
-            HttpBindingSide.Response,
-            codecFactory,
-            rawStringPayloads,
-            emptyStructOnNullPayload: false
-        );
-        if (bound.PayloadMember is null && bound.BodyMemberNames.Count > 0)
-        {
-            bound.BodyCodec = bound.CompileBodyCodec(
+            var bound = RestStructBinding<TError, TBuilder>.Compile(
+                schema,
+                HttpBindingSide.Response,
                 codecFactory,
-                new CodecFactoryOptions { MaterializeTopLevelDefaults = true }
+                rawStringPayloads,
+                emptyStructOnNullPayload: false
             );
-        }
+            if (bound.PayloadMember is null && bound.BodyMemberNames.Count > 0)
+            {
+                bound.BodyCodec = bound.CompileBodyCodec(
+                    codecFactory,
+                    new CodecFactoryOptions { MaterializeTopLevelDefaults = true }
+                );
+            }
 
-        return new HttpOperationError(
-            error.Id,
-            error.HttpStatusCode,
-            response => ReadResponse(bound, response, codecFactory.PrepareErrorBody)
-        );
+            return response => ReadResponse(bound, response, codecFactory.PrepareErrorBody);
+        }
     }
 
     /// <summary>
@@ -611,27 +585,6 @@ public static class RestProtocol
     private static Stream? BodyStreamOrNull(SmithyHttpBody body) =>
         body is SmithyHttpBody.Streaming stream ? stream.Content : null;
 
-    internal static async IAsyncEnumerable<ReadOnlyMemory<byte>> FrameEventsAsync<TEvent>(
-        IAsyncEnumerable<TEvent> events,
-        ICodec<TEvent> codec,
-        Func<TEvent, string> eventTypeOf,
-        string payloadContentType,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default
-    )
-    {
-        await foreach (
-            var value in events.WithCancellation(cancellationToken).ConfigureAwait(false)
-        )
-        {
-            yield return CreateEventStreamMessage(
-                    eventTypeOf(value),
-                    codec.Serialize(value),
-                    payloadContentType
-                )
-                .Encode();
-        }
-    }
-
     internal static async IAsyncEnumerable<TEvent> ReadEventsAsync<TEvent>(
         Stream stream,
         ICodec<TEvent> codec,
@@ -648,109 +601,15 @@ public static class RestProtocol
                     .ConfigureAwait(false)
             )
             {
-                var value = DeserializeEventMessage(codec, message, payloadContentType);
+                var value = codec.Deserialize(
+                    EventStreamEvents.ReadPayload(message, payloadContentType).ToArray()
+                );
                 if (value is not null)
                 {
                     yield return value;
                 }
             }
         }
-    }
-
-    private static EventStreamMessage CreateEventStreamMessage(
-        string eventType,
-        ReadOnlyMemory<byte> payload,
-        string payloadContentType
-    ) =>
-        new(
-            new Dictionary<string, EventStreamHeaderValue>
-            {
-                [EventStreamHeaders.MessageType] = new EventStreamHeaderValue.Text(
-                    EventStreamHeaders.EventMessageType
-                ),
-                [EventStreamHeaders.EventType] = new EventStreamHeaderValue.Text(eventType),
-                [EventStreamHeaders.ContentType] = new EventStreamHeaderValue.Text(
-                    payloadContentType
-                ),
-            },
-            payload
-        );
-
-    private static TEvent? DeserializeEventMessage<TEvent>(
-        ICodec<TEvent> codec,
-        EventStreamMessage message,
-        string payloadContentType
-    )
-    {
-        EnsureEventMessage(message);
-        EnsureEventPayload(message, payloadContentType);
-        return codec.Deserialize(message.Payload.ToArray());
-    }
-
-    private static void EnsureEventMessage(EventStreamMessage message)
-    {
-        var messageType = message.StringHeader(EventStreamHeaders.MessageType);
-        if (
-            string.Equals(
-                messageType,
-                EventStreamHeaders.EventMessageType,
-                StringComparison.Ordinal
-            )
-        )
-        {
-            return;
-        }
-
-        ThrowEventStreamException(message);
-    }
-
-    private static void EnsureEventPayload(EventStreamMessage message, string payloadContentType)
-    {
-        var contentType = message.StringHeader(EventStreamHeaders.ContentType);
-        if (
-            contentType is not null
-            && !contentType.StartsWith(payloadContentType, StringComparison.OrdinalIgnoreCase)
-        )
-        {
-            throw new InvalidDataException(
-                $"Expected REST event payload content type '{payloadContentType}' but received '{contentType}'."
-            );
-        }
-    }
-
-    private static void ThrowEventStreamException(EventStreamMessage message)
-    {
-        var messageType = message.StringHeader(EventStreamHeaders.MessageType);
-        if (
-            string.Equals(
-                messageType,
-                EventStreamHeaders.ErrorMessageType,
-                StringComparison.Ordinal
-            )
-        )
-        {
-            var code = message.StringHeader(EventStreamHeaders.ErrorCode) ?? "UnknownError";
-            var text = message.StringHeader(EventStreamHeaders.ErrorMessage);
-            throw new InvalidOperationException(
-                string.IsNullOrEmpty(text) ? code : $"{code}: {text}"
-            );
-        }
-
-        if (
-            string.Equals(
-                messageType,
-                EventStreamHeaders.ExceptionMessageType,
-                StringComparison.Ordinal
-            )
-        )
-        {
-            var type = message.StringHeader(EventStreamHeaders.ExceptionType) ?? "UnknownException";
-            throw new InvalidOperationException($"REST event stream exception: {type}.");
-        }
-
-        throw new InvalidDataException(
-            $"Unknown REST event stream message type '{messageType ?? "<missing>"}'."
-        );
     }
 
     private static string LocalName(string shapeId)

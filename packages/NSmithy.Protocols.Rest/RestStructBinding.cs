@@ -1,6 +1,7 @@
 using System.Text;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.EventStream;
 
 namespace NSmithy.Protocols.Rest;
 
@@ -502,10 +503,10 @@ internal sealed class RestStructBinding<T, TBuilder>
                     ? new RestBody(
                         [],
                         RestProtocol.EventStreamContentType,
-                        EventStreamingContent: RestProtocol.FrameEventsAsync(
+                        EventStreamingContent: EventStreamEvents.EncodeAsync(
                             events,
-                            codec,
                             eventTypeOf,
+                            codec.Serialize,
                             payloadContentType
                         )
                     )

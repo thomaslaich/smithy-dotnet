@@ -36,7 +36,12 @@ the protocol's normal rules.
 Event-stream operations are bound through the same `IServiceProtocol` operation
 factories as unary operations. Each receives the modeled input/output schemas,
 detects event-stream members from those schemas, and returns the same operation
-protocol interface for every operation shape:
+protocol interface for every operation shape. Detection is shared:
+`EventStreamBinding.TryBind` finds a structure's single event-stream member and
+hands the protocol an `EventStreamBinding<TShape, TBuilder, TEvent>` with the
+builder and event types in scope, which reads the events off a value, builds a
+value around incoming events, and exposes the remaining members as a projection
+for protocols that send them in an initial message:
 
 ```csharp
 public interface IServiceProtocol
@@ -113,8 +118,11 @@ emit framed response chunks:
 
 - gRPC owns the 5-byte message prefix and validates the `grpc-status` HTTP/2
   trailer after the response stream ends.
-- AWS event stream protocols own `vnd.amazon.eventstream` message framing,
-  typed per-message headers, and CRC validation.
+- AWS event stream protocols use `vnd.amazon.eventstream` message framing,
+  typed per-message headers, and CRC validation from `NSmithy.EventStream`,
+  whose `EventStreamEvents` carries the Smithy event semantics they share:
+  `:event-type` and `:content-type` headers, and `error`/`exception` messages
+  that end the stream.
 - Other event-stream protocols can provide their own frame encoding without
   changing generated client signatures.
 

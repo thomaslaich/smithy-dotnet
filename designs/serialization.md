@@ -680,9 +680,13 @@ public interface IOperationProtocol<TInput, TOutput>
       IServerOperationProtocol<TInput, TOutput>;
 ```
 
-Modeled-error handling is precomputed: each protocol compiles its operation's
-modeled errors into `HttpOperationError` deserializers and implements
-`DeserializeErrorAsync` by composing the shared
+Modeled-error handling is precomputed. A protocol supplies an
+`IErrorReaderCompiler` and an `IErrorWriterCompiler`, each a single generic
+method that compiles one error with its CLR type in scope;
+`HttpOperationError.Compile` and `ModeledErrorSerializer.Compile` apply them to
+every modeled error of an operation. `CodecErrorReader` covers protocols whose
+error payload is the whole error structure in the body codec's format. Each
+protocol implements `DeserializeErrorAsync` by composing the shared
 `OperationProtocolErrors.DeserializeModeledError` resolver with its own
 discrimination rules: the discriminator extractor, whether a discriminator is
 required (rpc-style protocols always carry one), and whether the HTTP status

@@ -19,23 +19,19 @@ public sealed class ModeledErrorSerializer
         this.handlers = handlers;
     }
 
-    /// <summary>
-    /// Compiles the operation's modeled errors into a matcher. <paramref name="compile"/> maps one
-    /// modeled error to its CLR exception type and a serializer; a protocol can use
-    /// <see cref="IOperationErrorSchema.Accept{TResult}(IOperationErrorSchemaVisitor{TResult})"/> to
-    /// recover that type without reflection or the runtime binder.
-    /// </summary>
+    /// <summary>A serializer for an operation that serializes no modeled errors.</summary>
+    public static ModeledErrorSerializer None { get; } = new([]);
+
+    /// <summary>Compiles each of an operation's modeled errors with <paramref name="writer"/>.</summary>
     public static ModeledErrorSerializer Compile(
         IReadOnlyList<IOperationErrorSchema> errors,
-        Func<
-            IOperationErrorSchema,
-            (Type ClrType, Func<Exception, SmithyHttpServerResponse> Serialize)
-        > compile
+        IErrorWriterCompiler writer
     )
     {
         ArgumentNullException.ThrowIfNull(errors);
-        ArgumentNullException.ThrowIfNull(compile);
-        return new ModeledErrorSerializer([.. errors.Select(compile)]);
+        ArgumentNullException.ThrowIfNull(writer);
+        var compiler = new Compiler(writer);
+        return new ModeledErrorSerializer([.. errors.Select(error => error.Accept(compiler))]);
     }
 
     /// <summary>
@@ -57,4 +53,28 @@ public sealed class ModeledErrorSerializer
         response = null!;
         return false;
     }
+
+    private sealed class Compiler(IErrorWriterCompiler writer)
+        : IOperationErrorSchemaVisitor<(Type, Func<Exception, SmithyHttpServerResponse>)>
+    {
+        public (Type, Func<Exception, SmithyHttpServerResponse>) Visit<TError>(
+            OperationErrorSchema<TError> error
+        )
+            where TError : Exception
+        {
+            var write = writer.Compile(error);
+            return (typeof(TError), exception => write((TError)exception));
+        }
+    }
+}
+
+/// <summary>
+/// Compiles one modeled error into the function that writes it as an error response, with the
+/// error's CLR type in scope. Compilation runs once per operation; the returned function runs per
+/// response.
+/// </summary>
+public interface IErrorWriterCompiler
+{
+    Func<TError, SmithyHttpServerResponse> Compile<TError>(OperationErrorSchema<TError> schema)
+        where TError : Exception;
 }

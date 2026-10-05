@@ -6,6 +6,30 @@ public abstract record SmithyHttpBody
 
     public static SmithyHttpBody Empty { get; } = new EmptyBody();
 
+    /// <summary>The buffered content of a <see cref="Bytes"/> body; empty for any other body.</summary>
+    public byte[] BufferedContent => this is Bytes bytes ? bytes.Content : [];
+
+    /// <summary>
+    /// Opens the body for reading: a streaming body's own stream, a buffered body over its bytes,
+    /// and an empty stream for anything else.
+    /// </summary>
+    public Stream OpenRead() =>
+        this switch
+        {
+            Streaming streaming => streaming.Content,
+            Bytes bytes => new MemoryStream(bytes.Content, writable: false),
+            _ => Stream.Null,
+        };
+
+    /// <summary>Disposes a streaming body's stream; other bodies hold nothing to release.</summary>
+    public void DisposeStream()
+    {
+        if (this is Streaming streaming)
+        {
+            streaming.Content.Dispose();
+        }
+    }
+
     public sealed record Bytes(byte[] Content) : SmithyHttpBody
     {
         public byte[] Content { get; } =
