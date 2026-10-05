@@ -367,6 +367,12 @@ public interface IStructValueSerializer<T>
         where TWriter : struct, IStructMemberWriter;
 }
 
+internal interface IMemberValueSource<in TContainer>
+{
+    void WriteMember<TWriter>(TContainer container, int index, ref TWriter writer)
+        where TWriter : struct, IStructMemberWriter;
+}
+
 public interface IStructSchema
 {
     IMemberSchema? GetMember(string name);
@@ -374,7 +380,12 @@ public interface IStructSchema
 
 public interface IStructSchema<T> : IStructSchema
 {
-    IStructValueSerializer<T>? ValueSerializer => null;
+    /// <summary>
+    /// Writes this structure's member values in declaration order. Every structure has one: a
+    /// generated schema supplies a serializer that reads its properties directly, and a schema built
+    /// without one reads them through the member getters.
+    /// </summary>
+    IStructValueSerializer<T> ValueSerializer { get; }
 
     /// <summary>
     /// Dispatches to <paramref name="visitor"/> with this structure's otherwise hidden builder type.
@@ -425,10 +436,10 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
         this.build = build;
         this.members = [.. members];
         membersByName = BuildMembersByName(this.members);
-        ValueSerializer = valueSerializer;
+        ValueSerializer = valueSerializer ?? new MemberGetterValueSerializer(this.members);
     }
 
-    public IStructValueSerializer<T>? ValueSerializer { get; }
+    public IStructValueSerializer<T> ValueSerializer { get; }
 
     public IMemberSchema? GetMember(string name)
     {
@@ -472,6 +483,26 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
         return visitor.VisitStruct(this);
     }
 
+    private sealed class MemberGetterValueSerializer(IBuilderMemberSchema<T, TBuilder>[] members)
+        : IStructValueSerializer<T>
+    {
+        // Every member a StructSchemaBuilder adds is a MemberSchema, which can hand its own value
+        // to a writer without the caller knowing its value type.
+        private readonly IMemberValueSource<T>[] sources =
+        [
+            .. members.Select(static member => (IMemberValueSource<T>)member),
+        ];
+
+        public void WriteMembers<TWriter>(T value, ref TWriter writer)
+            where TWriter : struct, IStructMemberWriter
+        {
+            for (var index = 0; index < sources.Length; index++)
+            {
+                sources[index].WriteMember(value, index, ref writer);
+            }
+        }
+    }
+
     private static Dictionary<string, IMemberSchema> BuildMembersByName(
         IBuilderMemberSchema<T, TBuilder>[] members
     )
@@ -491,6 +522,8 @@ public sealed class UnitSchema : Schema<SmithyUnit>, IStructSchema<SmithyUnit, S
     internal UnitSchema()
         : base(new ShapeId("smithy.api", "Unit"), ShapeKind.Structure) { }
 
+    public IStructValueSerializer<SmithyUnit> ValueSerializer { get; } = new NoMembers();
+
     public IMemberSchema? GetMember(string name) => null;
 
     public void VisitMembers(IMemberVisitor<SmithyUnit> visitor) { }
@@ -502,6 +535,12 @@ public sealed class UnitSchema : Schema<SmithyUnit>, IStructSchema<SmithyUnit, S
     public SmithyUnit Build(SmithyUnit builder) => SmithyUnit.Value;
 
     public SmithyUnit BuildEmpty() => SmithyUnit.Value;
+
+    private sealed class NoMembers : IStructValueSerializer<SmithyUnit>
+    {
+        public void WriteMembers<TWriter>(SmithyUnit value, ref TWriter writer)
+            where TWriter : struct, IStructMemberWriter { }
+    }
 
     public TResult Accept<TResult>(IStructSchemaVisitor<SmithyUnit, TResult> visitor)
     {
@@ -1083,7 +1122,8 @@ public sealed class UnionSchema<T> : Schema<T>, IUnionSchema<T>
 
 public sealed class MemberSchema<TContainer, TBuilder, TValue>
     : Schema<TValue>,
-        IMemberSchema<TContainer, TBuilder, TValue>
+        IMemberSchema<TContainer, TBuilder, TValue>,
+        IMemberValueSource<TContainer>
 {
     private readonly Func<TContainer, TValue> get;
     private readonly Action<TBuilder, TValue> set;
@@ -1124,6 +1164,12 @@ public sealed class MemberSchema<TContainer, TBuilder, TValue>
     public Schema Target => TypedTarget;
 
     public TValue GetValue(TContainer container) => get(container);
+
+    void IMemberValueSource<TContainer>.WriteMember<TWriter>(
+        TContainer container,
+        int index,
+        ref TWriter writer
+    ) => writer.WriteMember(index, get(container));
 
     public void Set(TBuilder builder, TValue value) => set(builder, value);
 

@@ -19,11 +19,6 @@ internal interface IProtoValueWriter<in T>
     void WriteBody(ProtoWriter writer, T value);
 }
 
-internal interface IProtoMemberWriter<in TContainer>
-{
-    void Write(ProtoWriter writer, TContainer value);
-}
-
 internal interface IProtoMemberPlan<in TValue>
 {
     void Write(ProtoWriter writer, TValue value);
@@ -156,10 +151,7 @@ internal sealed class ProtoValueWriterCompiler : ISchemaVisitor<object>
     internal static IProtoMessageWriter<T> CreateStructureWriter<T>(
         IStructSchema<T> schema,
         ProtoMemberWriterCompiler<T> compiler
-    ) =>
-        schema.ValueSerializer is { } valueSerializer
-            ? new DirectStructureProtoMessageWriter<T>(valueSerializer, compiler.Plans)
-            : new FallbackStructureProtoMessageWriter<T>(compiler.Writers);
+    ) => new StructureProtoMessageWriter<T>(schema.ValueSerializer, compiler.Plans);
 }
 
 internal sealed class MessageWriterVisitor(ProtoValueWriterCompiler compiler)
@@ -464,10 +456,7 @@ internal sealed class DocumentProtoValueWriter : IProtoValueWriter<Document>
 internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterCompiler compiler)
     : IMemberVisitor<TContainer>
 {
-    private readonly List<IProtoMemberWriter<TContainer>> writers = [];
     private readonly List<object> plans = [];
-
-    public IProtoMemberWriter<TContainer>[] Writers => [.. writers];
 
     public object[] Plans => [.. plans];
 
@@ -480,10 +469,9 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
             return;
         }
 
-        var fieldNumber = ProtoWire.FieldNumber(member.Id, member.MemberTraits, writers.Count);
+        var fieldNumber = ProtoWire.FieldNumber(member.Id, member.MemberTraits, plans.Count);
         var plan = target.Accept(new PlanCompiler<TValue>(this, member, fieldNumber));
         plans.Add(plan);
-        writers.Add(new ProtoMemberWriter<TContainer, TValue>(member, plan));
     }
 
     // A repeated or map field's element type only comes into scope by visiting the target.
@@ -531,7 +519,6 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
         union.VisitCases(visitor);
         var plan = new InlinedProtoUnionMemberPlan<TUnion>(visitor.Writers);
         plans.Add(plan);
-        writers.Add(new ProtoMemberWriter<TContainer, TUnion>(member, plan));
     }
 
     private ListProtoMemberPlan<TValue, TElement> CreateListPlan<TValue, TElement>(
@@ -560,15 +547,6 @@ internal sealed class ProtoMemberWriterCompiler<TContainer>(ProtoValueWriterComp
                 map.TypedValueMember.MemberTraits
             )
         );
-}
-
-internal sealed class ProtoMemberWriter<TContainer, TValue>(
-    IMemberSchema<TContainer, TValue> member,
-    IProtoMemberPlan<TValue> plan
-) : IProtoMemberWriter<TContainer>
-{
-    public void Write(ProtoWriter writer, TContainer value) =>
-        plan.Write(writer, member.GetValue(value));
 }
 
 internal sealed class ValueProtoMemberPlan<TValue>(
@@ -738,7 +716,7 @@ internal readonly struct ProtoStructMemberWriter(ProtoWriter writer, object[] me
         ((IProtoMemberPlan<TValue>)memberPlans[index]).Write(writer, value);
 }
 
-internal sealed class DirectStructureProtoMessageWriter<T>(
+internal sealed class StructureProtoMessageWriter<T>(
     IStructValueSerializer<T> valueSerializer,
     object[] memberPlans
 ) : IProtoMessageWriter<T>
@@ -747,18 +725,6 @@ internal sealed class DirectStructureProtoMessageWriter<T>(
     {
         var memberWriter = new ProtoStructMemberWriter(writer, memberPlans);
         valueSerializer.WriteMembers(value, ref memberWriter);
-    }
-}
-
-internal sealed class FallbackStructureProtoMessageWriter<T>(IProtoMemberWriter<T>[] memberWriters)
-    : IProtoMessageWriter<T>
-{
-    public void Write(ProtoWriter writer, T value)
-    {
-        foreach (var memberWriter in memberWriters)
-        {
-            memberWriter.Write(writer, value);
-        }
     }
 }
 

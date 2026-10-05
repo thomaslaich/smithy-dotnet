@@ -12,11 +12,6 @@ internal interface ICborValueWriter<in T>
     void Write(CborWriter writer, T value);
 }
 
-internal interface ICborMemberWriter<in TContainer>
-{
-    void Write(CborWriter writer, TContainer value);
-}
-
 internal interface ICborUnionCaseWriter<in TUnion>
 {
     bool TryWrite(CborWriter writer, TUnion value);
@@ -133,16 +128,23 @@ internal sealed class CborWriterCompiler : ISchemaVisitor<object>
         return CompileStructure(schema, materializeDefaults: true);
     }
 
-    private ICborValueWriter<T> CompileStructure<T>(
+    private StructureCborValueWriter<T> CompileStructure<T>(
+        IStructSchema<T> schema,
+        bool materializeDefaults
+    ) => new(CompileMembers(schema, materializeDefaults));
+
+    /// <summary>
+    /// Compiles the writer for a structure's members alone, without the enclosing map, for callers
+    /// that add entries of their own (such as an error's <c>__type</c>).
+    /// </summary>
+    internal CborStructMembersWriter<T> CompileMembers<T>(
         IStructSchema<T> schema,
         bool materializeDefaults
     )
     {
         var visitor = new CborMemberWriterCompiler<T>(this, materializeDefaults);
         schema.VisitMembers(visitor);
-        return schema.ValueSerializer is { } valueSerializer
-            ? new DirectStructureCborValueWriter<T>(valueSerializer, visitor.Plans)
-            : new FallbackStructureCborValueWriter<T>(visitor.Writers);
+        return new CborStructMembersWriter<T>(schema.ValueSerializer, visitor.Plans);
     }
 
     public object VisitUnion<T>(IUnionSchema<T> schema)
@@ -218,13 +220,7 @@ internal sealed class CborMemberWriterCompiler<TContainer>(
     ISet<IMemberSchema<TContainer>>? includedMembers = null
 ) : IMemberVisitor<TContainer>
 {
-    private readonly List<ICborMemberWriter<TContainer>> writers = [];
     private readonly List<object?> plans = [];
-
-    // An array, not the interface: the write path iterates this once per object, and
-    // foreach over IReadOnlyList<T> goes through IEnumerable<T>.GetEnumerator, which
-    // boxes List<T>.Enumerator — a heap allocation per structure written.
-    public ICborMemberWriter<TContainer>[] Writers => [.. writers];
 
     public object?[] Plans => [.. plans];
 
@@ -242,7 +238,6 @@ internal sealed class CborMemberWriterCompiler<TContainer>(
             materializeDefaults
         );
         plans.Add(plan);
-        writers.Add(new CborMemberWriter<TContainer, TValue>(member, plan));
     }
 }
 
@@ -252,15 +247,6 @@ internal sealed class CborMemberCollector<TContainer> : IMemberVisitor<TContaine
         new HashSet<IMemberSchema<TContainer>>(ReferenceEqualityComparer.Instance);
 
     public void Visit<TValue>(IMemberSchema<TContainer, TValue> member) => Members.Add(member);
-}
-
-internal sealed class CborMemberWriter<TContainer, TValue>(
-    IMemberSchema<TContainer, TValue> member,
-    CborMemberPlan<TValue> plan
-) : ICborMemberWriter<TContainer>
-{
-    public void Write(CborWriter writer, TContainer value) =>
-        plan.Write(writer, member.GetValue(value));
 }
 
 internal sealed class CborMemberPlan<TValue>(
@@ -308,27 +294,19 @@ internal readonly struct CborStructMemberWriter(CborWriter writer, object?[] mem
     }
 }
 
-internal sealed class DirectStructureCborValueWriter<T>(
+internal sealed class CborStructMembersWriter<T>(
     IStructValueSerializer<T> valueSerializer,
     object?[] memberPlans
-) : ICborValueWriter<T>
+)
 {
     public void Write(CborWriter writer, T value)
     {
-        if (value is null)
-        {
-            writer.WriteNull();
-            return;
-        }
-
-        writer.WriteStartMap(null);
         var memberWriter = new CborStructMemberWriter(writer, memberPlans);
         valueSerializer.WriteMembers(value, ref memberWriter);
-        writer.WriteEndMap();
     }
 }
 
-internal sealed class FallbackStructureCborValueWriter<T>(ICborMemberWriter<T>[] memberWriters)
+internal sealed class StructureCborValueWriter<T>(CborStructMembersWriter<T> members)
     : ICborValueWriter<T>
 {
     public void Write(CborWriter writer, T value)
@@ -340,11 +318,7 @@ internal sealed class FallbackStructureCborValueWriter<T>(ICborMemberWriter<T>[]
         }
 
         writer.WriteStartMap(null);
-        foreach (var memberWriter in memberWriters)
-        {
-            memberWriter.Write(writer, value);
-        }
-
+        members.Write(writer, value);
         writer.WriteEndMap();
     }
 }

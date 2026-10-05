@@ -11,11 +11,6 @@ internal interface IXmlValueWriter<in T>
     void Write(XElement element, T value);
 }
 
-internal interface IXmlMemberWriter<in TContainer>
-{
-    void Write(XElement element, TContainer container);
-}
-
 internal interface IXmlMemberPlan<in TValue>
 {
     void Write(XElement element, TValue value);
@@ -54,13 +49,6 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
     {
         ArgumentNullException.ThrowIfNull(projection);
         var compiler = new XmlWriterCompiler();
-        if (projection.Source.ValueSerializer is not { } valueSerializer)
-        {
-            var fallback = new XmlMemberWriterCompiler<T>(compiler, materializeTopLevelDefaults);
-            projection.VisitMembers(fallback);
-            return new FallbackStructureXmlValueWriter<T>(fallback.Writers);
-        }
-
         var included = new XmlMemberCollector<T>();
         projection.VisitMembers(included);
         var visitor = new XmlMemberWriterCompiler<T>(
@@ -69,7 +57,7 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
             included.Members
         );
         projection.Source.VisitMembers(visitor);
-        return new DirectStructureXmlValueWriter<T>(valueSerializer, visitor.Plans);
+        return new StructureXmlValueWriter<T>(projection.Source.ValueSerializer, visitor.Plans);
     }
 
     private IXmlValueWriter<T> CompileTopLevelValue<T>(
@@ -191,16 +179,14 @@ internal sealed class XmlWriterCompiler : ISchemaVisitor<object>
         IReadOnlyDictionary<ShapeId, Trait> traits
     ) => new(schema, traits);
 
-    private IXmlValueWriter<T> CompileStructure<T>(
+    private StructureXmlValueWriter<T> CompileStructure<T>(
         IStructSchema<T> schema,
         bool materializeDefaults
     )
     {
         var visitor = new XmlMemberWriterCompiler<T>(this, materializeDefaults);
         schema.VisitMembers(visitor);
-        return schema.ValueSerializer is { } valueSerializer
-            ? new DirectStructureXmlValueWriter<T>(valueSerializer, visitor.Plans)
-            : new FallbackStructureXmlValueWriter<T>(visitor.Writers);
+        return new StructureXmlValueWriter<T>(schema.ValueSerializer, visitor.Plans);
     }
 }
 
@@ -347,13 +333,7 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(
     ISet<IMemberSchema<TContainer>>? includedMembers = null
 ) : IMemberVisitor<TContainer>
 {
-    private readonly List<IXmlMemberWriter<TContainer>> writers = [];
     private readonly List<object?> plans = [];
-
-    // An array, not the interface: the write path iterates this once per object, and
-    // foreach over IReadOnlyList<T> goes through IEnumerable<T>.GetEnumerator, which
-    // boxes List<T>.Enumerator — a heap allocation per structure written.
-    public IXmlMemberWriter<TContainer>[] Writers => [.. writers];
 
     public object?[] Plans => [.. plans];
 
@@ -373,7 +353,6 @@ internal sealed class XmlMemberWriterCompiler<TContainer>(
                 materializeDefaults
             );
         plans.Add(plan);
-        writers.Add(new FallbackXmlMemberWriter<TContainer, TValue>(member, plan));
     }
 
     private IXmlMemberPlan<TValue> CreateFlattenedPlan<TValue>(
@@ -443,15 +422,6 @@ internal sealed class XmlMemberCollector<TContainer> : IMemberVisitor<TContainer
         new HashSet<IMemberSchema<TContainer>>(ReferenceEqualityComparer.Instance);
 
     public void Visit<TValue>(IMemberSchema<TContainer, TValue> member) => Members.Add(member);
-}
-
-internal sealed class FallbackXmlMemberWriter<TContainer, TValue>(
-    IMemberSchema<TContainer, TValue> member,
-    IXmlMemberPlan<TValue> plan
-) : IXmlMemberWriter<TContainer>
-{
-    public void Write(XElement element, TContainer container) =>
-        plan.Write(element, member.GetValue(container));
 }
 
 internal sealed class XmlMemberPlan<TValue>(
@@ -645,7 +615,7 @@ internal readonly struct XmlStructMemberWriter(XElement element, object?[] membe
     }
 }
 
-internal sealed class DirectStructureXmlValueWriter<T>(
+internal sealed class StructureXmlValueWriter<T>(
     IStructValueSerializer<T> valueSerializer,
     object?[] memberPlans
 ) : IXmlValueWriter<T>
@@ -659,23 +629,6 @@ internal sealed class DirectStructureXmlValueWriter<T>(
 
         var memberWriter = new XmlStructMemberWriter(element, memberPlans);
         valueSerializer.WriteMembers(value, ref memberWriter);
-    }
-}
-
-internal sealed class FallbackStructureXmlValueWriter<T>(IXmlMemberWriter<T>[] memberWriters)
-    : IXmlValueWriter<T>
-{
-    public void Write(XElement element, T value)
-    {
-        if (value is null)
-        {
-            return;
-        }
-
-        foreach (var memberWriter in memberWriters)
-        {
-            memberWriter.Write(element, value);
-        }
     }
 }
 

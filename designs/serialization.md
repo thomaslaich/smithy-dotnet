@@ -393,11 +393,12 @@ the fold handles it; a fold that admits only a few kinds derives from
 `VisitDefault`. Exhaustiveness is enforced by the type system rather than by
 runtime `default:` branches.
 
-A generated structure also carries an `IStructValueSerializer<T>`, which hands
-a writer its members' values straight from the generated properties, in
-declaration order, through a `struct` member writer. A writer that finds one
-skips the member getter delegates; one that does not, or that writes a
-projection, uses them. Both paths produce the same bytes.
+Every structure schema carries an `IStructValueSerializer<T>`, which hands a
+writer its members' values in declaration order through a `struct` member
+writer. A generated structure supplies one that reads its properties directly; a
+schema built without one gets a serializer over its member getters. Codecs have
+a single structure write path: they compile one plan per member, indexed by
+declaration order, and a projection leaves the plans of excluded members empty.
 
 ## Shape–Schema Binding
 

@@ -430,7 +430,7 @@ public sealed class RpcV2CborProtocol : IProtocol
     }
 
     private static SmithyHttpServerResponse SerializeError<TError>(
-        ICborMemberWriter<TError>[] memberWriters,
+        CborStructMembersWriter<TError> memberWriters,
         TError error,
         string errorShapeId,
         int statusCode
@@ -455,7 +455,7 @@ public sealed class RpcV2CborProtocol : IProtocol
     /// the <c>SchemaCompilationCache</c> that the fresh <c>CborWriterCompiler</c> carries, so a
     /// shape referenced twice was compiled twice, every time.
     /// </remarks>
-    internal static ICborMemberWriter<TError>[] CompileErrorMemberWriters<TError>(
+    internal static CborStructMembersWriter<TError> CompileErrorMemberWriters<TError>(
         Schema<TError> errorSchema
     )
     {
@@ -468,16 +468,11 @@ public sealed class RpcV2CborProtocol : IProtocol
             );
         }
 
-        var visitor = new CborMemberWriterCompiler<TError>(
-            new CborWriterCompiler(),
-            materializeDefaults: true
-        );
-        structSchema.VisitMembers(visitor);
-        return visitor.Writers;
+        return new CborWriterCompiler().CompileMembers(structSchema, materializeDefaults: true);
     }
 
     private static byte[] SerializeErrorBody<TError>(
-        ICborMemberWriter<TError>[] memberWriters,
+        CborStructMembersWriter<TError> memberWriters,
         TError error,
         string errorShapeId
     )
@@ -486,11 +481,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         writer.WriteStartMap(null);
         writer.WriteTextString("__type");
         writer.WriteTextString(errorShapeId);
-        foreach (var memberWriter in memberWriters)
-        {
-            memberWriter.Write(writer, error);
-        }
-
+        memberWriters.Write(writer, error);
         writer.WriteEndMap();
         return writer.Encode();
     }
