@@ -206,7 +206,7 @@ internal struct ValidatingSerializer : IShapeSerializer
 
     private readonly ValidatorShapePlan? container;
     private readonly ValidatorMemberPlan? root;
-    private readonly string path;
+    private readonly PathNode? node;
     private readonly List<SmithyValidationError> errors;
 
     // The next list element's index, and the key of the map entry whose value comes next.
@@ -217,17 +217,16 @@ internal struct ValidatingSerializer : IShapeSerializer
     {
         this.root = root;
         this.errors = errors;
-        path = JsonPointer.Root;
     }
 
     private ValidatingSerializer(
         ValidatorShapePlan container,
-        string path,
+        PathNode node,
         List<SmithyValidationError> errors
     )
     {
         this.container = container;
-        this.path = path;
+        this.node = node;
         this.errors = errors;
     }
 
@@ -237,13 +236,13 @@ internal struct ValidatingSerializer : IShapeSerializer
         : container.Members[member];
 
     /// <summary>The path of the value <paramref name="member"/> is written as, advancing a list's index.</summary>
-    private string PathOf(int member) =>
+    private ValuePath PathOf(int member) =>
         container?.Kind switch
         {
-            null => path,
-            ShapeKind.List or ShapeKind.Set => JsonPointer.Append(path, index++),
-            ShapeKind.Map => JsonPointer.Append(path, key!),
-            _ => JsonPointer.Append(path, container.Members[member].Name),
+            null => new ValuePath(node),
+            ShapeKind.List or ShapeKind.Set => new ValuePath(node, index: index++),
+            ShapeKind.Map => new ValuePath(node, key!),
+            _ => new ValuePath(node, container.Members[member].Name),
         };
 
     public void WriteNull(int member)
@@ -253,7 +252,7 @@ internal struct ValidatingSerializer : IShapeSerializer
             var entry = container.Members[member];
             if (entry.IsRequired)
             {
-                var memberPath = PathOf(member);
+                var memberPath = PathOf(member).Render();
                 errors.Add(
                     new SmithyValidationError(
                         memberPath,
@@ -315,12 +314,12 @@ internal struct ValidatingSerializer : IShapeSerializer
         if (container?.Kind == ShapeKind.Map && member == 0)
         {
             var keyPlan = container.Members[0];
-            keyPlan.Member?.CheckString(value, path, errors);
+            keyPlan.Member?.CheckString(value, new ValuePath(node), errors);
             if (keyPlan.StringEnum is { } keyEnum && !keyEnum.Contains(value))
             {
                 errors.Add(
                     ConstraintMessages.EnumMembership(
-                        path,
+                        new ValuePath(node).Render(),
                         keyPlan.TargetId,
                         keyEnum.PublishedValues
                     )
@@ -358,7 +357,11 @@ internal struct ValidatingSerializer : IShapeSerializer
         if (entry.StringEnum is { } @enum && !@enum.Contains(value))
         {
             errors.Add(
-                ConstraintMessages.EnumMembership(valuePath, entry.TargetId, @enum.PublishedValues)
+                ConstraintMessages.EnumMembership(
+                    valuePath.Render(),
+                    entry.TargetId,
+                    @enum.PublishedValues
+                )
             );
         }
     }
@@ -371,7 +374,7 @@ internal struct ValidatingSerializer : IShapeSerializer
         {
             errors.Add(
                 ConstraintMessages.EnumMembership(
-                    valuePath,
+                    valuePath.Render(),
                     entry.TargetId,
                     @enum.Values.Select(number =>
                         number.ToString(System.Globalization.CultureInfo.InvariantCulture)
@@ -395,7 +398,7 @@ internal struct ValidatingSerializer : IShapeSerializer
         var valuePath = PathOf(member);
         if (entry.Shape is { Needs: true } plan)
         {
-            var nested = new ValidatingSerializer(plan, valuePath, errors);
+            var nested = new ValidatingSerializer(plan, valuePath.ToNode(), errors);
             schema.SerializeMembers(value, ref nested);
         }
     }
@@ -421,12 +424,13 @@ internal struct ValidatingSerializer : IShapeSerializer
             schema.SerializeElements(value, ref elements);
             if (elements.HasDuplicate)
             {
+                var rendered = valuePath.Render();
                 errors.Add(
                     new SmithyValidationError(
-                        valuePath,
+                        rendered,
                         entry.TargetId,
                         ConstraintTraits.UniqueItems,
-                        ConstraintMessages.Failed(valuePath, "Member must have unique values")
+                        ConstraintMessages.Failed(rendered, "Member must have unique values")
                     )
                 );
             }
@@ -434,7 +438,7 @@ internal struct ValidatingSerializer : IShapeSerializer
 
         if (entry.Shape is { Needs: true } plan)
         {
-            var nested = new ValidatingSerializer(plan, valuePath, errors);
+            var nested = new ValidatingSerializer(plan, valuePath.ToNode(), errors);
             schema.SerializeElements(value, ref nested);
         }
     }
@@ -456,7 +460,7 @@ internal struct ValidatingSerializer : IShapeSerializer
 
         if (entry.Shape is { Needs: true } plan)
         {
-            var nested = new ValidatingSerializer(plan, valuePath, errors);
+            var nested = new ValidatingSerializer(plan, valuePath.ToNode(), errors);
             schema.SerializeEntries(value, ref nested);
         }
     }
@@ -467,7 +471,7 @@ internal struct ValidatingSerializer : IShapeSerializer
         var valuePath = PathOf(member);
         if (entry.Shape is { Needs: true } plan)
         {
-            var nested = new ValidatingSerializer(plan, valuePath, errors);
+            var nested = new ValidatingSerializer(plan, valuePath.ToNode(), errors);
             schema.SerializeCase(value, ref nested);
         }
     }

@@ -68,6 +68,33 @@ internal static class JsonPointer
 }
 
 /// <summary>
+/// An aggregate the validator has descended into, linked to the aggregate holding it. The pointer
+/// string is only rendered when a value inside it fails a check, so a valid request builds none.
+/// </summary>
+internal sealed class PathNode(PathNode? parent, string? name, int index)
+{
+    public string Render()
+    {
+        var path = parent?.Render() ?? JsonPointer.Root;
+        return name is not null ? JsonPointer.Append(path, name)
+            : index >= 0 ? JsonPointer.Append(path, index)
+            : path;
+    }
+}
+
+/// <summary>
+/// Where a value sits: its container's node, plus the member name or element index within it. A
+/// value with neither is the container itself, such as the root or a map key.
+/// </summary>
+internal readonly struct ValuePath(PathNode? container, string? name = null, int index = -1)
+{
+    public string Render() => new PathNode(container, name, index).Render();
+
+    /// <summary>The node for an aggregate the validator descends into at this path.</summary>
+    public PathNode ToNode() => new(container, name, index);
+}
+
+/// <summary>
 /// Validates a value by serializing it into a <see cref="ValidatingSerializer"/>, whose plan checks
 /// each member's constraints as the value is written.
 /// </summary>
@@ -258,7 +285,7 @@ internal sealed class EdgeConstraints
             : new EdgeConstraints(shapeId, length, range, pattern, enumTrait);
     }
 
-    public void CheckLength(int actual, string path, List<SmithyValidationError> errors)
+    public void CheckLength(int actual, ValuePath path, List<SmithyValidationError> errors)
     {
         // One error per constraint, worded from the bounds the model declares rather than from the
         // side that was crossed: a value can only cross one, and the caller needs to be told both.
@@ -269,18 +296,19 @@ internal sealed class EdgeConstraints
             )
         )
         {
+            var rendered = path.Render();
             errors.Add(
                 new SmithyValidationError(
-                    path,
+                    rendered,
                     shapeId,
                     ConstraintTraits.Length,
-                    ConstraintMessages.FailedWithLength(path, actual, bounds.Requirement)
+                    ConstraintMessages.FailedWithLength(rendered, actual, bounds.Requirement)
                 )
             );
         }
     }
 
-    public void CheckRange(decimal? actual, string path, List<SmithyValidationError> errors)
+    public void CheckRange(decimal? actual, ValuePath path, List<SmithyValidationError> errors)
     {
         if (
             range is { } bounds
@@ -288,34 +316,42 @@ internal sealed class EdgeConstraints
             && ((bounds.Min is { } low && value < low) || (bounds.Max is { } high && value > high))
         )
         {
+            var rendered = path.Render();
             errors.Add(
                 new SmithyValidationError(
-                    path,
+                    rendered,
                     shapeId,
                     ConstraintTraits.Range,
-                    ConstraintMessages.Failed(path, bounds.Requirement)
+                    ConstraintMessages.Failed(rendered, bounds.Requirement)
                 )
             );
         }
     }
 
-    public void CheckString(string value, string path, List<SmithyValidationError> errors)
+    public void CheckString(string value, ValuePath path, List<SmithyValidationError> errors)
     {
         // Smithy measures a string's length in Unicode code points, not UTF-16 units.
         if (length is not null)
         {
-            CheckLength(value.EnumerateRunes().Count(), path, errors);
+            var codePoints = 0;
+            foreach (var _ in value.EnumerateRunes())
+            {
+                codePoints++;
+            }
+
+            CheckLength(codePoints, path, errors);
         }
 
         if (pattern is { } expected && !Matches(expected.Regex, value))
         {
+            var rendered = path.Render();
             errors.Add(
                 new SmithyValidationError(
-                    path,
+                    rendered,
                     shapeId,
                     ConstraintTraits.Pattern,
                     ConstraintMessages.Failed(
-                        path,
+                        rendered,
                         $"Member must satisfy regular expression pattern: {expected.Pattern}"
                     )
                 )
@@ -324,7 +360,7 @@ internal sealed class EdgeConstraints
 
         if (enumTrait is { } set && !set.Values.Contains(value))
         {
-            errors.Add(ConstraintMessages.EnumMembership(path, shapeId, set.Published));
+            errors.Add(ConstraintMessages.EnumMembership(path.Render(), shapeId, set.Published));
         }
     }
 
