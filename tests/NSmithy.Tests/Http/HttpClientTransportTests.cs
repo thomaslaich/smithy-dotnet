@@ -93,6 +93,37 @@ public sealed class HttpClientTransportTests
         }
     }
 
+    [Theory]
+    [InlineData(5L)] // declared length matches the body
+    [InlineData(3L)] // body longer than declared
+    [InlineData(8L)] // body shorter than declared
+    [InlineData(null)] // no declared length
+    public async Task SendAsyncBuffersTheWholeBodyWhateverItsDeclaredLength(long? declared)
+    {
+        using var httpClient = new HttpClient(new BodyHandler("hello"u8.ToArray(), declared));
+        var transport = new HttpClientTransport(httpClient);
+
+        var response = await transport.SendAsync(
+            new SmithyHttpRequest(HttpMethod.Get, "https://example.test/body"),
+            SmithyHttpClientResponseMode.Buffer
+        );
+
+        Assert.Equal("hello"u8.ToArray(), response.Content);
+    }
+
+    private sealed class BodyHandler(byte[] body, long? declaredLength) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        )
+        {
+            var content = new StreamContent(new MemoryStream(body));
+            content.Headers.ContentLength = declaredLength;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+        }
+    }
+
     private sealed class Handler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
