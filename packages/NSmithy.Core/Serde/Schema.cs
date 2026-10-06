@@ -846,6 +846,9 @@ public interface IStringEnumSchema
     /// <summary>Whether the value is one the model declares.</summary>
     bool Contains(string value);
 
+    /// <summary>Every value the model declares.</summary>
+    IReadOnlyList<string> Values { get; }
+
     /// <summary>
     /// The values without <c>@internal</c> — what a caller is told when a value is rejected. See
     /// <see cref="StringEnumSchema{T}.PublishedValues"/>.
@@ -922,7 +925,15 @@ public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
         deserializer.ReadStringEnum() is { } value ? T.FromValue(value) : default!;
 }
 
-public sealed class IntEnumSchema<T> : Schema<T>
+public interface IIntEnumSchema
+{
+    /// <summary>Whether the value is one the model declares.</summary>
+    bool Contains(int value);
+
+    IReadOnlyList<int> Values { get; }
+}
+
+public sealed class IntEnumSchema<T> : Schema<T>, IIntEnumSchema
     where T : struct, Enum
 {
     internal IntEnumSchema(
