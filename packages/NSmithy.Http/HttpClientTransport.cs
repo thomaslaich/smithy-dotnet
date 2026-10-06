@@ -295,12 +295,16 @@ public sealed class HttpClientTransport(HttpClient httpClient) : IHttpTransport
     }
 
     /// <summary>
-    /// Sends a caller's stream from its current position without taking ownership of it. Unlike
-    /// <see cref="StreamContent"/>, disposing the request leaves the stream open, so the caller can
-    /// still read, rewind, or resend it.
+    /// Sends a caller's stream from the position it had when the request was built, without taking
+    /// ownership of it. Unlike <see cref="StreamContent"/>, disposing the request leaves the stream
+    /// open, so the caller can still read, rewind, or resend it. Like it, a seekable stream is
+    /// rewound to that position on every send, so a handler that resends the request sends the
+    /// same bytes.
     /// </summary>
     private sealed class CallerStreamContent(Stream content) : HttpContent
     {
+        private readonly long start = content.CanSeek ? content.Position : -1;
+
         protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
             SerializeToStreamAsync(stream, context, CancellationToken.None);
 
@@ -308,13 +312,21 @@ public sealed class HttpClientTransport(HttpClient httpClient) : IHttpTransport
             Stream stream,
             TransportContext? context,
             CancellationToken cancellationToken
-        ) => content.CopyToAsync(stream, cancellationToken);
+        )
+        {
+            if (start >= 0)
+            {
+                content.Position = start;
+            }
+
+            return content.CopyToAsync(stream, cancellationToken);
+        }
 
         protected override bool TryComputeLength(out long length)
         {
-            if (content.CanSeek)
+            if (start >= 0)
             {
-                length = content.Length - content.Position;
+                length = content.Length - start;
                 return true;
             }
 

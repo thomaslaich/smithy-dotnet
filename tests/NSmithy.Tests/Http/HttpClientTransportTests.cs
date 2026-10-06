@@ -107,6 +107,58 @@ public sealed class HttpClientTransportTests
         Assert.Equal((byte)'u', payload.ReadByte());
     }
 
+    [Fact]
+    public async Task SendAsyncResendsTheSameBytesFromTheStartPosition()
+    {
+        var handler = new ResendingHandler();
+        using var httpClient = new HttpClient(handler);
+        var transport = new HttpClientTransport(httpClient);
+        using var payload = new MemoryStream("--upload"u8.ToArray()) { Position = 2 };
+
+        await transport.SendAsync(
+            new SmithyHttpRequest(HttpMethod.Put, "https://example.test/objects/key")
+            {
+                Body = new SmithyHttpBody.Streaming(payload),
+            },
+            SmithyHttpClientResponseMode.Buffer
+        );
+
+        Assert.Equal(6, handler.ContentLength);
+        Assert.Equal("upload"u8.ToArray(), handler.First);
+        Assert.Equal("upload"u8.ToArray(), handler.Second);
+    }
+
+    // Serializes the request body twice, as a retrying handler does when it resends a request.
+    private sealed class ResendingHandler : HttpMessageHandler
+    {
+        public long? ContentLength { get; private set; }
+
+        public byte[]? First { get; private set; }
+
+        public byte[]? Second { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        )
+        {
+            ContentLength = request.Content!.Headers.ContentLength;
+            First = await SerializeAsync(request.Content, cancellationToken);
+            Second = await SerializeAsync(request.Content, cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
+
+        private static async Task<byte[]> SerializeAsync(
+            HttpContent content,
+            CancellationToken cancellationToken
+        )
+        {
+            using var buffer = new MemoryStream();
+            await content.CopyToAsync(buffer, cancellationToken);
+            return buffer.ToArray();
+        }
+    }
+
     private sealed class CapturingHandler : HttpMessageHandler
     {
         public byte[]? Content { get; private set; }
