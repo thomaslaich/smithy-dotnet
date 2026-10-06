@@ -1,4 +1,4 @@
-FROM gradle:9.7.1-jdk21 AS build
+FROM gradle:9.8.0-jdk21 AS build
 
 WORKDIR /app
 COPY java/ java/
