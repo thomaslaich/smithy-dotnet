@@ -49,14 +49,38 @@
        the DLL lives in tasks/net10.0/ one level up.
        ================================================================ -->
 
+  <PropertyGroup>
+    <_NSmithyTasksAssembly>$(MSBuildThisFileDirectory)..\tasks\net10.0\NSmithy.MSBuild.dll</_NSmithyTasksAssembly>
+    <!-- In-repo consumers import Targets/ directly and reference NSmithy.MSBuild as a project,
+         so the tasks come from its build output. They run out of process so a reused MSBuild
+         node does not keep that freshly built DLL loaded. -->
+    <_NSmithyTasksFromProject Condition="!Exists('$(_NSmithyTasksAssembly)')"
+      >true</_NSmithyTasksFromProject
+    >
+    <_NSmithyTasksAssembly Condition="'$(_NSmithyTasksFromProject)' == 'true'"
+      >$(MSBuildThisFileDirectory)..\bin\$(Configuration)\net10.0\NSmithy.MSBuild.dll</_NSmithyTasksAssembly
+    >
+    <_NSmithyTaskFactory Condition="'$(_NSmithyTasksFromProject)' == 'true'"
+      >TaskHostFactory</_NSmithyTaskFactory
+    >
+  </PropertyGroup>
+
   <UsingTask
     TaskName="CreateSmithyJar"
-    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\net10.0\NSmithy.MSBuild.dll"
+    AssemblyFile="$(_NSmithyTasksAssembly)"
+    TaskFactory="$(_NSmithyTaskFactory)"
   />
 
   <UsingTask
     TaskName="SynthesizeSmithyBuildFile"
-    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\net10.0\NSmithy.MSBuild.dll"
+    AssemblyFile="$(_NSmithyTasksAssembly)"
+    TaskFactory="$(_NSmithyTaskFactory)"
+  />
+
+  <UsingTask
+    TaskName="ReportSmithyCliDiagnostics"
+    AssemblyFile="$(_NSmithyTasksAssembly)"
+    TaskFactory="$(_NSmithyTaskFactory)"
   />
 
   <!-- ================================================================
@@ -469,6 +493,7 @@
     </PropertyGroup>
     <PropertyGroup>
       <_SmithyCliBuildOutput>$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\'))</_SmithyCliBuildOutput>
+      <_SmithyCliCommand>&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)</_SmithyCliCommand>
     </PropertyGroup>
     <!-- What the previous run produced, and when this one starts: see the stale-output cleanup
          after the CLI. -->
@@ -479,18 +504,25 @@
       <_SmithyGenerationStart>$([System.DateTime]::Now.Ticks)</_SmithyGenerationStart>
     </PropertyGroup>
     <Exec
-      Command="&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)"
+      Command="$(_SmithyCliCommand)"
       EnvironmentVariables="$(_SmithyMavenEnv)"
       IgnoreExitCode="true"
+      ConsoleToMSBuild="true"
+      StdOutEncoding="utf-8"
+      StdErrEncoding="utf-8"
       StandardOutputImportance="High"
       StandardErrorImportance="High"
       WorkingDirectory="$(MSBuildProjectDirectory)"
     >
       <Output TaskParameter="ExitCode" PropertyName="_SmithyCliExitCode" />
+      <Output TaskParameter="ConsoleOutput" ItemName="_SmithyCliOutput" />
     </Exec>
-    <Error
-      Code="NSMITHYCLI"
-      Text="NSmithy: Smithy CLI failed with exit code $(_SmithyCliExitCode). Command: &quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)"
+    <!-- The terminal logger hides the CLI's output, so re-report its failures as MSBuild errors. -->
+    <ReportSmithyCliDiagnostics
+      Output="@(_SmithyCliOutput)"
+      ExitCode="$(_SmithyCliExitCode)"
+      Command="$(_SmithyCliCommand)"
+      WorkingDirectory="$(MSBuildProjectDirectory)"
       Condition="'$(_SmithyCliExitCode)' != '0'"
     />
 
