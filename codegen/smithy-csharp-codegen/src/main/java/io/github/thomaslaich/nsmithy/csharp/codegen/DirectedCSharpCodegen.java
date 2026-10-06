@@ -21,8 +21,8 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
 import java.util.function.Consumer;
-import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.CodegenException;
+import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.codegen.core.directed.CreateContextDirective;
 import software.amazon.smithy.codegen.core.directed.CreateSymbolProviderDirective;
@@ -259,7 +259,9 @@ final class DirectedCSharpCodegen
         .writerDelegator()
         .useShapeWriter(enumShape, writer -> new StringEnumGenerator(writer, enumShape).run());
     writeSchema(
-        directive.context(), enumShape, writer -> SchemaGenerator.writeSimpleSchema(writer, enumShape));
+        directive.context(),
+        enumShape,
+        writer -> SchemaGenerator.writeSimpleSchema(writer, enumShape));
   }
 
   @Override
@@ -289,8 +291,8 @@ final class DirectedCSharpCodegen
   }
 
   /**
-   * Writes a shape's schema to a file beside the shape's type: {@code Person.g.cs} holds the type
-   * a consumer uses, {@code Person.Schema.g.cs} the schema the runtime serializes it with.
+   * Writes a shape's schema to a file beside the shape's type: {@code Person.g.cs} holds the type a
+   * consumer uses, {@code Person.Schema.g.cs} the schema the runtime serializes it with.
    */
   private static void writeSchema(
       GenerationContext context, Shape shape, Consumer<CSharpWriter> body) {

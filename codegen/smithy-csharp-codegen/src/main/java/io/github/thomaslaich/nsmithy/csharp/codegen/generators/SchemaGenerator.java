@@ -171,7 +171,6 @@ public final class SchemaGenerator {
    */
   public static void writeStructureSchema(
       CSharpWriter writer, GenerationContext context, Shape shape, List<MemberShape> members) {
-    writer.reserveName(GENERATED_SCHEMA);
     writer.pushState();
     try {
       writer.putContext("schemaClass", localSchemaClassName(shape));
@@ -211,18 +210,22 @@ public final class SchemaGenerator {
                 if (members.isEmpty()) {
                   return;
                 }
-                w.openBlock("switch (index)\n{", "}", () -> {
-                  for (int index = 0; index < members.size(); index++) {
-                    w.write(
-                        """
-                        case $L:
-                            builder.$L = Target$L.Read(ref deserializer);
-                            break;""",
-                        index,
-                        CSharpNaming.propertyName(members.get(index).getMemberName()),
-                        index);
-                  }
-                });
+                w.openBlock(
+                    "switch (index)\n{",
+                    "}",
+                    () -> {
+                      for (int index = 0; index < members.size(); index++) {
+                        w.write(
+                            """
+                            case $L:
+                                builder.$L = Target$L.Read(ref deserializer);
+                                break;\
+                            """,
+                            index,
+                            CSharpNaming.propertyName(members.get(index).getMemberName()),
+                            index);
+                      }
+                    });
               }));
       writer.write(
           """
@@ -402,7 +405,6 @@ public final class SchemaGenerator {
    */
   public static void writeUnionSchema(
       CSharpWriter writer, GenerationContext context, UnionShape shape, List<MemberShape> members) {
-    writer.reserveName(GENERATED_SCHEMA);
     Symbol unionType = context.symbolProvider().toSymbol(shape);
     writer.pushState();
     try {
@@ -463,7 +465,8 @@ public final class SchemaGenerator {
                       """
                       case $T.$L @case:
                           Target$L.Write($L, @case.Value, ref serializer);
-                          break;""",
+                          break;\
+                      """,
                       unionType,
                       CSharpNaming.typeName(members.get(index).getMemberName()),
                       index,

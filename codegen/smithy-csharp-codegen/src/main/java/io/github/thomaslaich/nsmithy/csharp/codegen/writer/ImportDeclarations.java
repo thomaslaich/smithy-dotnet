@@ -23,7 +23,15 @@ public final class ImportDeclarations implements ImportContainer {
   private final Set<String> reservedNames =
       new HashSet<>(
           Set.of(
-              "Builder", "ValueSerializer", "Schema", "Unknown", "Value", "Tag", "T", "TWriter"));
+              "Builder",
+              "GeneratedSchema",
+              "Schema",
+              "Unknown",
+              "Value",
+              "Tag",
+              "T",
+              "TSerializer",
+              "TDeserializer"));
 
   public ImportDeclarations(String currentNamespace) {
     this.currentNamespace = currentNamespace;

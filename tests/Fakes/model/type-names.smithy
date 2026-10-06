@@ -34,6 +34,7 @@ structure Payload {
     namespaceRoot: Example
     genericWriter: TWriter
     serverHelper: RoundTripJsonSchemas
+    schemaNames: SchemaNames
 }
 
 structure Builder {}
@@ -105,3 +106,27 @@ structure Schemas {}
 structure ShapeId {}
 structure Trait {}
 structure SmithyServerRuntime {}
+
+// A generated schema class derives from the runtime's schema base classes and declares its own
+// nested names, so shapes named after either must still resolve to the model's types.
+structure SchemaNames {
+    generatedSchema: GeneratedSchema
+    serializerType: TSerializer
+    deserializerType: TDeserializer
+    target: Target0
+    structSchema: StructSchema
+    unionSchema: UnionSchema
+    kind: Kind
+    members: Members
+    traits: Traits
+}
+
+structure GeneratedSchema {}
+structure TSerializer {}
+structure TDeserializer {}
+structure Target0 {}
+structure StructSchema {}
+structure UnionSchema {}
+structure Kind {}
+structure Members {}
+structure Traits {}
