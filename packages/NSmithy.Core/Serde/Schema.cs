@@ -985,6 +985,18 @@ public sealed class IntEnumSchema<T> : Schema<T>, IIntEnumSchema
 public interface IEventStreamSchema
 {
     Schema EventSchema { get; }
+
+    /// <summary>Dispatches to <paramref name="visitor"/> with the event type in scope.</summary>
+    TResult Accept<TResult>(IEventStreamSchemaVisitor<TResult> visitor);
+}
+
+/// <summary>
+/// Recovers the event type hidden by <see cref="IEventStreamSchema"/> without reflection or the
+/// runtime binder.
+/// </summary>
+public interface IEventStreamSchemaVisitor<out TResult>
+{
+    TResult Visit<TEvent>(EventStreamSchema<TEvent> schema);
 }
 
 public sealed class EventStreamSchema<TEvent> : Schema<IAsyncEnumerable<TEvent>>, IEventStreamSchema
@@ -999,6 +1011,12 @@ public sealed class EventStreamSchema<TEvent> : Schema<IAsyncEnumerable<TEvent>>
     public Schema<TEvent> TypedEventSchema { get; }
 
     public Schema EventSchema => TypedEventSchema;
+
+    public TResult Accept<TResult>(IEventStreamSchemaVisitor<TResult> visitor)
+    {
+        ArgumentNullException.ThrowIfNull(visitor);
+        return visitor.Visit(this);
+    }
 
     public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
     {

@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
 
 namespace NSmithy.Core.Serde;
 
@@ -9,22 +10,22 @@ namespace NSmithy.Core.Serde;
 /// </summary>
 public sealed class EventStreamBinding<TShape, TBuilder, TEvent>
 {
+    private readonly int index;
+
     internal EventStreamBinding(
         IStructSchema<TShape, TBuilder> structure,
-        IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>> member,
-        Schema<TEvent> eventSchema,
-        bool hasInitialMembers
+        int index,
+        Schema<TEvent> eventSchema
     )
     {
         Structure = structure;
-        Member = member;
+        this.index = index;
         EventSchema = eventSchema;
-        HasInitialMembers = hasInitialMembers;
     }
 
     public IStructSchema<TShape, TBuilder> Structure { get; }
 
-    public IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>> Member { get; }
+    public IMemberSchema Member => Structure.Members[index];
 
     public Schema<TEvent> EventSchema { get; }
 
@@ -32,15 +33,27 @@ public sealed class EventStreamBinding<TShape, TBuilder, TEvent>
     /// Whether the structure has members besides the event stream. Protocols that support them
     /// send them as an initial message ahead of the events.
     /// </summary>
-    public bool HasInitialMembers { get; }
+    public bool HasInitialMembers => Structure.Members.Count > 1;
 
     /// <summary>The structure's members other than the event stream.</summary>
-    public StructProjection<TShape, TBuilder> InitialMembers =>
-        Schemas.Project(Structure, member => !ReferenceEquals(member, Member));
+    public StructProjection<TShape, TBuilder> InitialMembers
+    {
+        get
+        {
+            var member = Member;
+            return Schemas.Project(Structure, other => !ReferenceEquals(other, member));
+        }
+    }
 
-    public IAsyncEnumerable<TEvent> GetEvents(TShape shape) =>
-        Member.GetValue(shape)
-        ?? throw new InvalidOperationException($"Event stream member '{Member.Name}' was null.");
+    public IAsyncEnumerable<TEvent> GetEvents(TShape shape)
+    {
+        var capture = new EventCapture<TEvent>(index);
+        Structure.SerializeMembers(shape, ref capture);
+        return capture.Events
+            ?? throw new InvalidOperationException(
+                $"Event stream member '{Member.Name}' was null."
+            );
+    }
 
     /// <summary>
     /// Builds a value carrying <paramref name="events"/>. <paramref name="readInitialMembers"/>
@@ -53,7 +66,8 @@ public sealed class EventStreamBinding<TShape, TBuilder, TEvent>
     {
         var builder = Structure.CreateTypedBuilder();
         readInitialMembers?.Invoke(builder);
-        Member.SetValue(builder, events);
+        var deserializer = new EventSource<TEvent>(events);
+        Structure.DeserializeMember(builder, index, ref deserializer);
         return Structure.Build(builder);
     }
 }
@@ -89,94 +103,180 @@ public static class EventStreamBinding
             return false;
         }
 
-        var (found, value) = structure.Accept(new StructBinder<TShape, TResult>(visitor));
-        result = value;
-        return found;
-    }
-
-    private sealed class StructBinder<TShape, TResult>(
-        IEventStreamBindingVisitor<TShape, TResult> visitor
-    ) : IStructSchemaVisitor<TShape, (bool Found, TResult? Result)>
-    {
-        public (bool Found, TResult? Result) Visit<TBuilder>(
-            IStructSchema<TShape, TBuilder> structure
-        )
+        var members = structure.Members;
+        var index = -1;
+        for (var position = 0; position < members.Count; position++)
         {
-            var finder = new MemberFinder<TShape, TBuilder>();
-            structure.VisitMembers(finder);
-            return finder.Stream is { } stream
-                ? (true, stream.Bind(structure, finder.MemberCount > 1, visitor))
-                : (false, default);
-        }
-    }
-
-    private sealed class MemberFinder<TShape, TBuilder> : IMemberVisitor<TShape, TBuilder>
-    {
-        public IUnboundStream<TShape, TBuilder>? Stream { get; private set; }
-
-        public int MemberCount { get; private set; }
-
-        public void Visit<TValue>(IMemberSchema<TShape, TBuilder, TValue> member)
-        {
-            MemberCount++;
-            if (member.Target.Resolved is not IEventStreamSchema)
+            if (members[position].Target.Resolved is not IEventStreamSchema)
             {
-                return;
+                continue;
             }
 
-            if (Stream is not null)
+            if (index >= 0)
             {
+                var id = members[position].Id;
                 throw new InvalidOperationException(
-                    $"Shape '{member.Id.Namespace}#{member.Id.Name}' has more than one event stream member."
+                    $"Shape '{id.Namespace}#{id.Name}' has more than one event stream member."
                 );
             }
 
-            Stream = member.TypedTarget.Resolved.Accept(
-                new StreamMemberCompiler<TShape, TBuilder, TValue>(member)
-            );
+            index = position;
         }
+
+        if (index < 0)
+        {
+            result = default;
+            return false;
+        }
+
+        result = structure.Accept(new StructBinder<TShape, TResult>(index, visitor))!;
+        return true;
     }
 
-    // The event type only comes into scope by visiting the member's target.
-    private sealed class StreamMemberCompiler<TShape, TBuilder, TValue>(
-        IMemberSchema<TShape, TBuilder, TValue> member
-    ) : PartialSchemaVisitor<IUnboundStream<TShape, TBuilder>>
+    private sealed class StructBinder<TShape, TResult>(
+        int index,
+        IEventStreamBindingVisitor<TShape, TResult> visitor
+    ) : IStructSchemaVisitor<TShape, TResult>
     {
-        public override IUnboundStream<TShape, TBuilder> VisitEventStream<TEvent>(
-            EventStreamSchema<TEvent> schema
-        ) =>
-            new UnboundStream<TShape, TBuilder, TEvent>(
-                (IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>>)(object)member,
-                schema.TypedEventSchema
+        public TResult Visit<TBuilder>(IStructSchema<TShape, TBuilder> structure) =>
+            ((IEventStreamSchema)structure.Members[index].Target.Resolved).Accept(
+                new StreamBinder<TShape, TBuilder, TResult>(structure, index, visitor)
             );
     }
 
-    private interface IUnboundStream<TShape, TBuilder>
+    private sealed class StreamBinder<TShape, TBuilder, TResult>(
+        IStructSchema<TShape, TBuilder> structure,
+        int index,
+        IEventStreamBindingVisitor<TShape, TResult> visitor
+    ) : IEventStreamSchemaVisitor<TResult>
     {
-        TResult Bind<TResult>(
-            IStructSchema<TShape, TBuilder> structure,
-            bool hasInitialMembers,
-            IEventStreamBindingVisitor<TShape, TResult> visitor
-        );
-    }
-
-    private sealed class UnboundStream<TShape, TBuilder, TEvent>(
-        IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>> member,
-        Schema<TEvent> eventSchema
-    ) : IUnboundStream<TShape, TBuilder>
-    {
-        public TResult Bind<TResult>(
-            IStructSchema<TShape, TBuilder> structure,
-            bool hasInitialMembers,
-            IEventStreamBindingVisitor<TShape, TResult> visitor
-        ) =>
+        public TResult Visit<TEvent>(EventStreamSchema<TEvent> schema) =>
             visitor.Visit(
                 new EventStreamBinding<TShape, TBuilder, TEvent>(
                     structure,
-                    member,
-                    eventSchema,
-                    hasInitialMembers
+                    index,
+                    schema.TypedEventSchema
                 )
             );
     }
+}
+
+/// <summary>Captures the event stream a structure writes as member <c>index</c>, ignoring the rest.</summary>
+internal struct EventCapture<TEvent>(int index) : IShapeSerializer
+{
+    public IAsyncEnumerable<TEvent>? Events { get; private set; }
+
+    public readonly void WriteNull(int member) { }
+
+    public readonly void WriteBoolean(int member, bool value) { }
+
+    public readonly void WriteByte(int member, sbyte value) { }
+
+    public readonly void WriteShort(int member, short value) { }
+
+    public readonly void WriteInteger(int member, int value) { }
+
+    public readonly void WriteLong(int member, long value) { }
+
+    public readonly void WriteFloat(int member, float value) { }
+
+    public readonly void WriteDouble(int member, double value) { }
+
+    public readonly void WriteBigInteger(int member, BigInteger value) { }
+
+    public readonly void WriteBigDecimal(int member, decimal value) { }
+
+    public readonly void WriteString(int member, string value) { }
+
+    public readonly void WriteBlob(int member, byte[] value) { }
+
+    public readonly void WriteTimestamp(int member, DateTimeOffset value) { }
+
+    public readonly void WriteDocument(int member, Document value) { }
+
+    public readonly void WriteStringEnum(int member, string value) { }
+
+    public readonly void WriteIntEnum(int member, int value) { }
+
+    public readonly void WriteStream(int member, Stream value) { }
+
+    public void WriteEventStream<T>(int member, IAsyncEnumerable<T> events, Schema<T> eventSchema)
+    {
+        if (member == index)
+        {
+            Events = (IAsyncEnumerable<TEvent>)events;
+        }
+    }
+
+    public readonly void WriteStruct<T>(int member, T value, IStructSchema<T> schema) { }
+
+    public readonly void WriteList<TCollection, TElement>(
+        int member,
+        TCollection value,
+        IListSchema<TCollection, TElement> schema
+    ) { }
+
+    public readonly void WriteMap<TDictionary, TValue>(
+        int member,
+        TDictionary value,
+        IMapSchema<TDictionary, TValue> schema
+    ) { }
+
+    public readonly void WriteUnion<T>(int member, T value, IUnionSchema<T> schema) { }
+}
+
+/// <summary>Supplies an event stream to the member that reads one.</summary>
+internal readonly struct EventSource<TEvent>(IAsyncEnumerable<TEvent> events) : IShapeDeserializer
+{
+    public bool TryReadNull() => false;
+
+    public IAsyncEnumerable<T> ReadEventStream<T>(Schema<T> eventSchema) =>
+        (IAsyncEnumerable<T>)events;
+
+    public bool ReadBoolean() => throw NotAStream();
+
+    public sbyte ReadByte() => throw NotAStream();
+
+    public short ReadShort() => throw NotAStream();
+
+    public int ReadInteger() => throw NotAStream();
+
+    public long ReadLong() => throw NotAStream();
+
+    public float ReadFloat() => throw NotAStream();
+
+    public double ReadDouble() => throw NotAStream();
+
+    public BigInteger ReadBigInteger() => throw NotAStream();
+
+    public decimal ReadBigDecimal() => throw NotAStream();
+
+    public string ReadString() => throw NotAStream();
+
+    public byte[] ReadBlob() => throw NotAStream();
+
+    public DateTimeOffset ReadTimestamp() => throw NotAStream();
+
+    public Document ReadDocument() => throw NotAStream();
+
+    public string ReadStringEnum() => throw NotAStream();
+
+    public int ReadIntEnum() => throw NotAStream();
+
+    public Stream ReadStream() => throw NotAStream();
+
+    public T ReadStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema) => throw NotAStream();
+
+    public TCollection ReadList<TCollection, TElement, TBuilder>(
+        IListSchema<TCollection, TElement, TBuilder> schema
+    ) => throw NotAStream();
+
+    public TDictionary ReadMap<TDictionary, TValue, TBuilder>(
+        IMapSchema<TDictionary, TValue, TBuilder> schema
+    ) => throw NotAStream();
+
+    public T ReadUnion<T>(IUnionSchema<T> schema) => throw NotAStream();
+
+    private static InvalidOperationException NotAStream() =>
+        new("The bound member does not target an event stream.");
 }
