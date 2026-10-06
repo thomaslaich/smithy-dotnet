@@ -163,13 +163,20 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
             where TError : Exception
         {
+            // An empty body still identifies the error through its discriminator, and yields an
+            // instance with no members.
+            var structure =
+                error.Schema.Resolved as IStructSchema<TError>
+                ?? throw new InvalidOperationException(
+                    $"Error schema '{error.Schema.Id}' must be a structure schema."
+                );
             var codec = CodecFactory.FromSchema(error.Schema);
             return new HttpOperationError(
                 error.Id,
                 error.HttpStatusCode,
                 response =>
                     response.Content.Length == 0
-                        ? CreateEmptyError<TError>()
+                        ? structure.BuildEmpty()
                         : codec.Deserialize(response.Content)
             );
         }
@@ -222,30 +229,6 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         }
 
         return null;
-    }
-
-    private static TError CreateEmptyError<TError>()
-    {
-        var type = typeof(TError);
-        try
-        {
-            if (Activator.CreateInstance(type) is TError parameterless)
-            {
-                return parameterless;
-            }
-        }
-        catch (MissingMethodException)
-        {
-            // Generated error types always accept a nullable message constructor, but not every
-            // runtime type exposes a parameterless constructor.
-        }
-
-        if (Activator.CreateInstance(type, [null]) is TError messageOnly)
-        {
-            return messageOnly;
-        }
-
-        return default!;
     }
 
     private static string? TryGetFirstHeaderValue(

@@ -3,19 +3,15 @@ using System.Net.Http.Headers;
 
 namespace NSmithy.Http;
 
-public sealed class HttpClientTransport : IHttpTransport
+public sealed class HttpClientTransport(HttpClient httpClient) : IHttpTransport
 {
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> NoHeaders =
         new System.Collections.ObjectModel.ReadOnlyDictionary<string, IReadOnlyList<string>>(
             new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         );
 
-    private readonly HttpClient httpClient;
-
-    public HttpClientTransport(HttpClient httpClient)
-    {
-        this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-    }
+    private readonly HttpClient httpClient =
+        httpClient ?? throw new ArgumentNullException(nameof(httpClient));
 
     public Task<SmithyHttpClientResponse> SendAsync(
         SmithyHttpRequest request,
@@ -207,9 +203,9 @@ public sealed class HttpClientTransport : IHttpTransport
             _ => null,
         };
 
-    private static StreamContent CreateStreamContent(SmithyHttpBody.Streaming streaming)
+    private static CallerStreamContent CreateStreamContent(SmithyHttpBody.Streaming streaming)
     {
-        var content = new StreamContent(streaming.Content);
+        var content = new CallerStreamContent(streaming.Content);
         if (streaming.ContentLength is { } contentLength)
         {
             content.Headers.ContentLength = contentLength;
@@ -293,6 +289,47 @@ public sealed class HttpClientTransport : IHttpTransport
 
         protected override bool TryComputeLength(out long length)
         {
+            length = 0;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Sends a caller's stream from the position it had when the request was built, without taking
+    /// ownership of it. Unlike <see cref="StreamContent"/>, disposing the request leaves the stream
+    /// open, so the caller can still read, rewind, or resend it. Like it, a seekable stream is
+    /// rewound to that position on every send, so a handler that resends the request sends the
+    /// same bytes.
+    /// </summary>
+    private sealed class CallerStreamContent(Stream content) : HttpContent
+    {
+        private readonly long start = content.CanSeek ? content.Position : -1;
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            SerializeToStreamAsync(stream, context, CancellationToken.None);
+
+        protected override Task SerializeToStreamAsync(
+            Stream stream,
+            TransportContext? context,
+            CancellationToken cancellationToken
+        )
+        {
+            if (start >= 0)
+            {
+                content.Position = start;
+            }
+
+            return content.CopyToAsync(stream, cancellationToken);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            if (start >= 0)
+            {
+                length = content.Length - start;
+                return true;
+            }
+
             length = 0;
             return false;
         }
