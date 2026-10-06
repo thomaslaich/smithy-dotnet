@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <IsPackable>false</IsPackable>
+    <SmithyBuildFile>smithy-build.json</SmithyBuildFile>
+    <SmithyBuildOutputPath>$(BaseIntermediateOutputPath)Smithy/</SmithyBuildOutputPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -42,4 +44,6 @@
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
+
+  <Import Project="../../packages/NSmithy.MSBuild/Targets/NSmithy.MSBuild.targets" />
 </Project>
