@@ -3,19 +3,15 @@ using System.Net.Http.Headers;
 
 namespace NSmithy.Http;
 
-public sealed class HttpClientTransport : IHttpTransport
+public sealed class HttpClientTransport(HttpClient httpClient) : IHttpTransport
 {
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> NoHeaders =
         new System.Collections.ObjectModel.ReadOnlyDictionary<string, IReadOnlyList<string>>(
             new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         );
 
-    private readonly HttpClient httpClient;
-
-    public HttpClientTransport(HttpClient httpClient)
-    {
-        this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-    }
+    private readonly HttpClient httpClient =
+        httpClient ?? throw new ArgumentNullException(nameof(httpClient));
 
     public Task<SmithyHttpClientResponse> SendAsync(
         SmithyHttpRequest request,
@@ -65,7 +61,7 @@ public sealed class HttpClientTransport : IHttpTransport
         using var bufferedResponse = response;
         var content = response.Content is null
             ? []
-            : await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+            : await ReadBodyAsync(response.Content, cancellationToken).ConfigureAwait(false);
 
         // The body is fully read, so any HTTP/2 trailers have arrived. Capture the leading and
         // trailing headers now: the returned Trailer closure must not read them off `response`,
@@ -85,6 +81,54 @@ public sealed class HttpClientTransport : IHttpTransport
             response.Content is null ? NoHeaders : ToHeaderDictionary(response.Content.Headers),
             getTrailer
         );
+    }
+
+    /// <summary>
+    /// Reads a buffered body. With a declared length the body is read straight into one array of
+    /// that size; <see cref="HttpContent.ReadAsByteArrayAsync()"/> would buffer it in a growing
+    /// stream and then copy it out, which for a large body means several large-object-heap arrays.
+    /// </summary>
+    private static async Task<byte[]> ReadBodyAsync(
+        HttpContent content,
+        CancellationToken cancellationToken
+    )
+    {
+        if (content.Headers.ContentLength is not { } declared || declared > Array.MaxLength)
+        {
+            return await content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (declared == 0)
+        {
+            return [];
+        }
+
+        var body = new byte[declared];
+        var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using (stream.ConfigureAwait(false))
+        {
+            var read = await stream
+                .ReadAtLeastAsync(body, body.Length, throwOnEndOfStream: false, cancellationToken)
+                .ConfigureAwait(false);
+            if (read < body.Length)
+            {
+                // Shorter than declared: return what arrived rather than trailing zeros.
+                return body[..read];
+            }
+
+            // Longer than declared: keep reading rather than truncate.
+            var next = new byte[1];
+            if (await stream.ReadAsync(next, cancellationToken).ConfigureAwait(false) == 0)
+            {
+                return body;
+            }
+
+            using var overflow = new MemoryStream();
+            overflow.Write(body);
+            overflow.Write(next);
+            await stream.CopyToAsync(overflow, cancellationToken).ConfigureAwait(false);
+            return overflow.ToArray();
+        }
     }
 
     // Buffered responses capture their trailers eagerly (the source HttpResponseMessage is disposed
@@ -251,12 +295,16 @@ public sealed class HttpClientTransport : IHttpTransport
     }
 
     /// <summary>
-    /// Sends a caller's stream from its current position without taking ownership of it. Unlike
-    /// <see cref="StreamContent"/>, disposing the request leaves the stream open, so the caller can
-    /// still read, rewind, or resend it.
+    /// Sends a caller's stream from the position it had when the request was built, without taking
+    /// ownership of it. Unlike <see cref="StreamContent"/>, disposing the request leaves the stream
+    /// open, so the caller can still read, rewind, or resend it. Like it, a seekable stream is
+    /// rewound to that position on every send, so a handler that resends the request sends the
+    /// same bytes.
     /// </summary>
     private sealed class CallerStreamContent(Stream content) : HttpContent
     {
+        private readonly long start = content.CanSeek ? content.Position : -1;
+
         protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
             SerializeToStreamAsync(stream, context, CancellationToken.None);
 
@@ -264,13 +312,21 @@ public sealed class HttpClientTransport : IHttpTransport
             Stream stream,
             TransportContext? context,
             CancellationToken cancellationToken
-        ) => content.CopyToAsync(stream, cancellationToken);
+        )
+        {
+            if (start >= 0)
+            {
+                content.Position = start;
+            }
+
+            return content.CopyToAsync(stream, cancellationToken);
+        }
 
         protected override bool TryComputeLength(out long length)
         {
-            if (content.CanSeek)
+            if (start >= 0)
             {
-                length = content.Length - content.Position;
+                length = content.Length - start;
                 return true;
             }
 

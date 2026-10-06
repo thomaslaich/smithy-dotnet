@@ -162,6 +162,8 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
         )
             where TError : Exception
         {
+            // An empty body still identifies the error through its discriminator, and yields an
+            // instance with no members.
             var structure =
                 schema.Schema.Resolved as IStructSchema<TError>
                 ?? throw new InvalidOperationException(

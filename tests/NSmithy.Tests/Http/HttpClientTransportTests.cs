@@ -51,6 +51,39 @@ public sealed class HttpClientTransportTests
         Assert.Equal("0", response.Trailer?.Invoke("grpc-status"));
     }
 
+    [Theory]
+    [InlineData(5L)] // declared length matches the body
+    [InlineData(3L)] // body longer than declared
+    [InlineData(8L)] // body shorter than declared
+    [InlineData(null)] // no declared length
+    public async Task SendAsyncBuffersTheWholeBodyWhateverItsDeclaredLength(long? declared)
+    {
+        using var httpClient = new HttpClient(new BodyHandler("hello"u8.ToArray(), declared));
+        var transport = new HttpClientTransport(httpClient);
+
+        var response = await transport.SendAsync(
+            new SmithyHttpRequest(HttpMethod.Get, "https://example.test/body"),
+            SmithyHttpClientResponseMode.Buffer
+        );
+
+        Assert.Equal("hello"u8.ToArray(), response.Content);
+    }
+
+    private sealed class BodyHandler(byte[] body, long? declaredLength) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        )
+        {
+            var content = new StreamContent(new MemoryStream(body));
+            content.Headers.ContentLength = declaredLength;
+            return Task.FromResult(
+                new HttpResponseMessage(HttpStatusCode.OK) { Content = content }
+            );
+        }
+    }
+
     [Fact]
     public async Task SendAsyncLeavesTheCallersRequestStreamOpen()
     {
@@ -72,6 +105,58 @@ public sealed class HttpClientTransportTests
         Assert.True(payload.CanRead);
         payload.Position = 0;
         Assert.Equal((byte)'u', payload.ReadByte());
+    }
+
+    [Fact]
+    public async Task SendAsyncResendsTheSameBytesFromTheStartPosition()
+    {
+        var handler = new ResendingHandler();
+        using var httpClient = new HttpClient(handler);
+        var transport = new HttpClientTransport(httpClient);
+        using var payload = new MemoryStream("--upload"u8.ToArray()) { Position = 2 };
+
+        await transport.SendAsync(
+            new SmithyHttpRequest(HttpMethod.Put, "https://example.test/objects/key")
+            {
+                Body = new SmithyHttpBody.Streaming(payload),
+            },
+            SmithyHttpClientResponseMode.Buffer
+        );
+
+        Assert.Equal(6, handler.ContentLength);
+        Assert.Equal("upload"u8.ToArray(), handler.First);
+        Assert.Equal("upload"u8.ToArray(), handler.Second);
+    }
+
+    // Serializes the request body twice, as a retrying handler does when it resends a request.
+    private sealed class ResendingHandler : HttpMessageHandler
+    {
+        public long? ContentLength { get; private set; }
+
+        public byte[]? First { get; private set; }
+
+        public byte[]? Second { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        )
+        {
+            ContentLength = request.Content!.Headers.ContentLength;
+            First = await SerializeAsync(request.Content, cancellationToken);
+            Second = await SerializeAsync(request.Content, cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        }
+
+        private static async Task<byte[]> SerializeAsync(
+            HttpContent content,
+            CancellationToken cancellationToken
+        )
+        {
+            using var buffer = new MemoryStream();
+            await content.CopyToAsync(buffer, cancellationToken);
+            return buffer.ToArray();
+        }
     }
 
     private sealed class CapturingHandler : HttpMessageHandler
