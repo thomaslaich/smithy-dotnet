@@ -79,8 +79,6 @@ public final class UnionGenerator implements Runnable {
     } finally {
       writer.popState();
     }
-    writer.write("");
-    SchemaGenerator.writeUnionSchema(writer, context, shape, members);
   }
 
   private void writeVariant(String typeName, MemberShape member) {

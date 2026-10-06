@@ -161,16 +161,24 @@ public final class SchemaGenerator {
         + "]";
   }
 
+  /** The name of the schema class generated inside each shape's {@code ...Schema} class. */
+  private static final String GENERATED_SCHEMA = "GeneratedSchema";
+
+  /**
+   * Writes a structure's schema as a class deriving from {@code StructSchema}: the members are
+   * declared once, and the structure's properties are read and written directly, one call per
+   * member, with no per-member delegates.
+   */
   public static void writeStructureSchema(
       CSharpWriter writer, GenerationContext context, Shape shape, List<MemberShape> members) {
+    writer.reserveName(GENERATED_SCHEMA);
     writer.pushState();
     try {
       writer.putContext("schemaClass", localSchemaClassName(shape));
+      writer.putContext("generatedSchema", GENERATED_SCHEMA);
       writer.putContext("type", context.symbolProvider().toSymbol(shape));
       writer.putContext("schema", RuntimeTypes.SCHEMA);
-      writer.putContext("schemas", RuntimeTypes.SCHEMAS);
-      writer.putContext("structValueSerializer", RuntimeTypes.I_STRUCT_VALUE_SERIALIZER);
-      writer.putContext("structMemberWriter", RuntimeTypes.I_STRUCT_MEMBER_WRITER);
+      writer.putContext("structSchema", RuntimeTypes.STRUCT_SCHEMA);
       writer.putContext("shapeId", shapeIdExpr(writer, shape.getId()));
       writer.putContext("traits", traitsExpr(writer, shape.getAllTraits().values()));
       writer.putContext(
@@ -179,11 +187,43 @@ public final class SchemaGenerator {
           "builderProperties",
           writer.consumer(w -> writeStructureBuilderProperties(w, context, members)));
       writer.putContext(
-          "serializationCalls",
-          writer.consumer(w -> writeStructureSerializationCalls(w, context, members)));
+          "memberDeclarations",
+          writer.consumer(w -> writeStructureMemberDeclarations(w, context, members)));
       writer.putContext(
-          "memberBindings",
-          writer.consumer(w -> writeStructureMemberBindings(w, context, members)));
+          "targets", writer.consumer(w -> writeStructureTargets(w, context, members)));
+      writer.putContext(
+          "writes",
+          writer.consumer(
+              w -> {
+                for (int index = 0; index < members.size(); index++) {
+                  w.write(
+                      "Target$L.Write($L, value.$L, ref serializer);",
+                      index,
+                      index,
+                      CSharpNaming.propertyName(members.get(index).getMemberName()));
+                }
+              }));
+      // A structure with no members has nothing to read, and an empty switch does not compile.
+      writer.putContext(
+          "reads",
+          writer.consumer(
+              w -> {
+                if (members.isEmpty()) {
+                  return;
+                }
+                w.openBlock("switch (index)\n{", "}", () -> {
+                  for (int index = 0; index < members.size(); index++) {
+                    w.write(
+                        """
+                        case $L:
+                            builder.$L = Target$L.Read(ref deserializer);
+                            break;""",
+                        index,
+                        CSharpNaming.propertyName(members.get(index).getMemberName()),
+                        index);
+                  }
+                });
+              }));
       writer.write(
           """
           public static partial class ${schemaClass:L}
@@ -193,22 +233,38 @@ public final class SchemaGenerator {
                   ${builderProperties:C|}
               }
 
-              private sealed class ValueSerializer : ${structValueSerializer:T}<${type:T}>
+              public static ${schema:T}<${type:T}> Schema { get; } = new ${generatedSchema:L}();
+
+              private sealed class ${generatedSchema:L}()
+                  : ${structSchema:T}<${type:T}, Builder>(
+                      ${shapeId:L},
+                      [
+                          ${memberDeclarations:C|}
+                      ],
+                      ${traits:L})
               {
-                  public void WriteMembers<TWriter>(${type:T} value, ref TWriter writer)
-                      where TWriter : struct, ${structMemberWriter:T}
+                  ${targets:C|}
+
+                  public override Builder CreateTypedBuilder() => new();
+
+                  public override ${type:T} Build(Builder builder) =>
+                      new ${type:T}(${constructorArguments:L});
+
+                  public override void SerializeMembers<TSerializer>(
+                      ${type:T} value,
+                      ref TSerializer serializer)
                   {
-                      ${serializationCalls:C|}
+                      ${writes:C|}
+                  }
+
+                  public override void DeserializeMember<TDeserializer>(
+                      Builder builder,
+                      int index,
+                      ref TDeserializer deserializer)
+                  {
+                      ${reads:C|}
                   }
               }
-
-              public static ${schema:T}<${type:T}> Schema { get; } =
-                  ${schemas:T}.Structure<${type:T}, Builder>(${shapeId:L}, ${traits:L})
-                      ${memberBindings:C|}
-                      .Build(
-                          static () => new Builder(),
-                          static builder => new ${type:T}(${constructorArguments:L}),
-                          new ValueSerializer());
           }
           """);
     } finally {
@@ -340,25 +396,162 @@ public final class SchemaGenerator {
     }
   }
 
+  /**
+   * Writes a union's schema as a class deriving from {@code UnionSchema}: the cases are declared
+   * once, and each case is told apart, read, and written by the generated variant type it maps to.
+   */
   public static void writeUnionSchema(
       CSharpWriter writer, GenerationContext context, UnionShape shape, List<MemberShape> members) {
+    writer.reserveName(GENERATED_SCHEMA);
+    Symbol unionType = context.symbolProvider().toSymbol(shape);
     writer.pushState();
     try {
       writer.putContext("schemaClass", localSchemaClassName(shape));
-      writer.putContext("type", context.symbolProvider().toSymbol(shape));
+      writer.putContext("generatedSchema", GENERATED_SCHEMA);
+      writer.putContext("type", unionType);
       writer.putContext("schema", RuntimeTypes.SCHEMA);
-      writer.putContext("schemas", RuntimeTypes.SCHEMAS);
+      writer.putContext("unionSchema", RuntimeTypes.UNION_SCHEMA);
       writer.putContext("shapeId", shapeIdExpr(writer, shape.getId()));
       writer.putContext("traits", traitsExpr(writer, shape.getAllTraits().values()));
-      writer.putContext("cases", writer.consumer(w -> writeUnionCases(w, context, shape, members)));
+      writer.putContext(
+          "caseDeclarations",
+          writer.consumer(
+              w -> {
+                for (int index = 0; index < members.size(); index++) {
+                  MemberShape member = members.get(index);
+                  String traits = memberTraitsExpr(w, context, member);
+                  w.write(
+                      "new($L, Target$L$L),",
+                      CSharpNaming.formatString(member.getMemberName()),
+                      index,
+                      "null".equals(traits) ? "" : ", " + traits);
+                }
+              }));
+      writer.putContext(
+          "targets",
+          writer.consumer(
+              w -> {
+                for (int index = 0; index < members.size(); index++) {
+                  MemberShape member = members.get(index);
+                  w.write(
+                      "private static readonly $T<$L> Target$L = $L;",
+                      RuntimeTypes.SCHEMA,
+                      ShapeSupport.memberTypeExpr(
+                          w, context.model(), context.symbolProvider(), member, false),
+                      index,
+                      rawMemberTargetExpr(w, context, member));
+                }
+              }));
+      writer.putContext(
+          "caseOf",
+          writer.consumer(
+              w -> {
+                for (int index = 0; index < members.size(); index++) {
+                  w.write(
+                      "$T.$L => $L,",
+                      unionType,
+                      CSharpNaming.typeName(members.get(index).getMemberName()),
+                      index);
+                }
+              }));
+      writer.putContext(
+          "writes",
+          writer.consumer(
+              w -> {
+                for (int index = 0; index < members.size(); index++) {
+                  w.write(
+                      """
+                      case $T.$L @case:
+                          Target$L.Write($L, @case.Value, ref serializer);
+                          break;""",
+                      unionType,
+                      CSharpNaming.typeName(members.get(index).getMemberName()),
+                      index,
+                      index);
+                }
+              }));
+      writer.putContext(
+          "reads",
+          writer.consumer(
+              w -> {
+                for (int index = 0; index < members.size(); index++) {
+                  w.write(
+                      "$L => new $T.$L(Target$L.Read(ref deserializer)!),",
+                      index,
+                      unionType,
+                      CSharpNaming.typeName(members.get(index).getMemberName()),
+                      index);
+                }
+              }));
       writer.write(
           """
           public static partial class ${schemaClass:L}
           {
-              public static ${schema:T}<${type:T}> Schema { get; } =
-                  ${schemas:T}.Union<${type:T}>(${shapeId:L}, ${traits:L})
-                      ${cases:C|}
-                      .Build();
+              public static ${schema:T}<${type:T}> Schema { get; } = new ${generatedSchema:L}();
+
+              private sealed class ${generatedSchema:L}()
+                  : ${unionSchema:T}<${type:T}>(
+                      ${shapeId:L},
+                      [
+                          ${caseDeclarations:C|}
+                      ],
+                      ${traits:L})
+              {
+                  ${targets:C|}
+
+                  public override int CaseOf(${type:T} value) =>
+                      value switch
+                      {
+                          ${caseOf:C|}
+                          _ => throw NoCaseMatched(),
+                      };
+
+                  public override void SerializeCase<TSerializer>(
+                      ${type:T} value,
+                      ref TSerializer serializer)
+                  {
+                      switch (value)
+                      {
+                          ${writes:C|}
+                          default:
+                              throw NoCaseMatched();
+                      }
+                  }
+
+                  public override ${type:T} DeserializeCase<TDeserializer>(
+                      int index,
+                      ref TDeserializer deserializer) =>
+                      index switch
+                      {
+                          ${reads:C|}
+                          _ => throw NoCaseMatched(),
+                      };
+              }
+          }
+          """);
+    } finally {
+      writer.popState();
+    }
+  }
+
+  public static void writeIntEnumSchema(CSharpWriter writer, IntEnumShape shape) {
+    writer.pushState();
+    try {
+      String typeName = CSharpNaming.typeName(shape.getId().getName());
+      writer.putContext("schemaClass", localSchemaClassName(shape));
+      writer.putContext("typeName", typeName);
+      writer.putContext("schema", RuntimeTypes.SCHEMA);
+      writer.putContext("schemas", RuntimeTypes.SCHEMAS);
+      writer.putContext("shapeId", shapeIdExpr(writer, shape.getId()));
+      writer.putContext("values", intEnumValuesExpr(shape));
+      writer.putContext("traits", traitsExpr(writer, shape.getAllTraits().values()));
+      writer.write(
+          """
+          public static partial class ${schemaClass:L}
+          {
+              public static ${schema:T}<${typeName:L}> Schema { get; } =
+                  ${schemas:T}.IntEnum<${typeName:L}>(
+                      ${shapeId:L}, values: ${values:L}, traits: ${traits:L});
           }
           """);
     } finally {
@@ -411,32 +604,6 @@ public final class SchemaGenerator {
 
   private SchemaGenerator() {}
 
-  private static void writeUnionCases(
-      CSharpWriter writer, GenerationContext context, UnionShape shape, List<MemberShape> members) {
-    for (MemberShape member : members) {
-      writer.pushState();
-      try {
-        writer.putContext("unionType", context.symbolProvider().toSymbol(shape));
-        writer.putContext("variant", CSharpNaming.typeName(member.getMemberName()));
-        writer.putContext("name", CSharpNaming.formatString(member.getMemberName()));
-        writer.putContext("target", rawMemberTargetExpr(writer, context, member));
-        writer.putContext("memberTraits", memberTraitsExpr(writer, context, member));
-        writer.write(
-            """
-            .Case(
-                ${name:L},
-                static value => value is ${unionType:T}.${variant:L},
-                static value => ((${unionType:T}.${variant:L})value).Value,
-                static value => new ${unionType:T}.${variant:L}(value!),
-                ${target:L},
-                ${memberTraits:L})
-            """);
-      } finally {
-        writer.popState();
-      }
-    }
-  }
-
   private static void writeStructureBuilderProperties(
       CSharpWriter writer, GenerationContext context, List<MemberShape> members) {
     for (MemberShape member : members) {
@@ -448,41 +615,31 @@ public final class SchemaGenerator {
     }
   }
 
-  private static void writeStructureSerializationCalls(
+  private static void writeStructureMemberDeclarations(
+      CSharpWriter writer, GenerationContext context, List<MemberShape> members) {
+    for (int index = 0; index < members.size(); index++) {
+      MemberShape member = members.get(index);
+      String traits = memberTraitsExpr(writer, context, member);
+      writer.write(
+          "new($L, Target$L$L$L),",
+          CSharpNaming.formatString(member.getMemberName()),
+          index,
+          ShapeSupport.isRequired(member) ? ", isRequired: true" : "",
+          "null".equals(traits) ? "" : ", traits: " + traits);
+    }
+  }
+
+  private static void writeStructureTargets(
       CSharpWriter writer, GenerationContext context, List<MemberShape> members) {
     for (int index = 0; index < members.size(); index++) {
       MemberShape member = members.get(index);
       writer.write(
-          "writer.WriteMember<$L>($L, value.$L);",
+          "private static readonly $T<$L> Target$L = $L;",
+          RuntimeTypes.SCHEMA,
           ShapeSupport.memberTypeExpr(
               writer, context.model(), context.symbolProvider(), member, true),
           index,
-          CSharpNaming.propertyName(member.getMemberName()));
-    }
-  }
-
-  private static void writeStructureMemberBindings(
-      CSharpWriter writer, GenerationContext context, List<MemberShape> members) {
-    for (MemberShape member : members) {
-      writer.pushState();
-      try {
-        writer.putContext("method", ShapeSupport.isRequired(member) ? "Required" : "Optional");
-        writer.putContext("name", CSharpNaming.formatString(member.getMemberName()));
-        writer.putContext("property", CSharpNaming.propertyName(member.getMemberName()));
-        writer.putContext("target", memberTargetExpr(writer, context, member));
-        writer.putContext("memberTraits", memberTraitsExpr(writer, context, member));
-        writer.write(
-            """
-            .${method:L}(
-                ${name:L},
-                static value => value.${property:L},
-                static (builder, value) => builder.${property:L} = value,
-                ${target:L},
-                ${memberTraits:L})
-            """);
-      } finally {
-        writer.popState();
-      }
+          memberTargetExpr(writer, context, member));
     }
   }
 

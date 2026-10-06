@@ -29,12 +29,6 @@ public final class IntEnumGenerator implements Runnable {
     writer.pushState();
     try {
       writer.putContext("typeName", typeName);
-      writer.putContext("schema", RuntimeTypes.SCHEMA);
-      writer.putContext("schemas", RuntimeTypes.SCHEMAS);
-      writer.putContext("shapeId", SchemaGenerator.shapeIdExpr(writer, shape.getId()));
-      writer.putContext("values", SchemaGenerator.intEnumValuesExpr(shape));
-      writer.putContext(
-          "traits", SchemaGenerator.traitsExpr(writer, shape.getAllTraits().values()));
       writer.putContext("variants", writer.consumer(w -> writeVariants()));
       writer.writeXmlDocs(shape);
       writer.write(
@@ -42,13 +36,6 @@ public final class IntEnumGenerator implements Runnable {
           public enum ${typeName:L}
           {
               ${variants:C|}
-          }
-
-          public static partial class ${typeName:L}Schema
-          {
-              public static ${schema:T}<${typeName:L}> Schema { get; } =
-                  ${schemas:T}.IntEnum<${typeName:L}>(
-                      ${shapeId:L}, values: ${values:L}, traits: ${traits:L});
           }
           """);
     } finally {

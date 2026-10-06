@@ -51,10 +51,8 @@ public final class RuntimeTypes {
   public static final Symbol DOCUMENT = type("NSmithy.Core.Document");
   public static final Symbol I_SMITHY_RETRYABLE_ERROR = type("NSmithy.Core.ISmithyRetryableError");
   public static final Symbol I_STRING_ENUM_VALUE = type("NSmithy.Core.Serde.IStringEnumValue");
-  public static final Symbol I_STRUCT_MEMBER_WRITER =
-      type("NSmithy.Core.Serde.IStructMemberWriter");
-  public static final Symbol I_STRUCT_VALUE_SERIALIZER =
-      type("NSmithy.Core.Serde.IStructValueSerializer");
+  public static final Symbol STRUCT_SCHEMA = type("NSmithy.Core.Serde.StructSchema");
+  public static final Symbol UNION_SCHEMA = type("NSmithy.Core.Serde.UnionSchema");
   public static final Symbol MISSING_REQUIRED_MEMBER_EXCEPTION =
       type("NSmithy.Core.Serde.MissingRequiredMemberException");
   public static final Symbol OPERATION_SCHEMA = type("NSmithy.Core.Serde.OperationSchema");

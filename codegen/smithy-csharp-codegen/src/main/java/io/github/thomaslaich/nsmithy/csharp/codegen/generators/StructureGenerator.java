@@ -36,8 +36,6 @@ public final class StructureGenerator implements Runnable {
     writer.reserveMemberNames(shape);
     SymbolProvider sp = context.symbolProvider();
     String typeName = CSharpNaming.typeName(shape.getId().getName());
-    List<MemberShape> members = List.copyOf(shape.members());
-
     Map<String, String> parameterDocs = parameterDocs(ShapeSupport.constructorMembers(shape));
     if (shape.hasTrait(DocumentationTrait.class)) {
       writer.writeXmlDocs(shape, parameterDocs);
@@ -47,8 +45,6 @@ public final class StructureGenerator implements Runnable {
       writer.writeXmlDocs(shape);
     }
     writer.write("public sealed record class $L$L;", typeName, primaryConstructorParameters(sp));
-    writer.write("");
-    SchemaGenerator.writeStructureSchema(writer, context, shape, members);
   }
 
   private Map<String, String> parameterDocs(List<MemberShape> members) {

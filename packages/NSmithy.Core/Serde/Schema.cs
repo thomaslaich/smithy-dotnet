@@ -32,8 +32,6 @@ public abstract class Schema
 
     public virtual Schema Resolved => this;
 
-    public abstract TResult Accept<TResult>(ISchemaVisitor<TResult> visitor);
-
     public bool IsMember => Id.IsMember;
 
     public string? MemberName => Id.MemberName;
@@ -86,65 +84,6 @@ public abstract class Schema<T> : Schema
     }
 }
 
-public interface ISchemaVisitor<out TResult>
-{
-    TResult VisitBoolean(Schema<bool> schema);
-
-    TResult VisitByte(Schema<sbyte> schema);
-
-    TResult VisitShort(Schema<short> schema);
-
-    TResult VisitInteger(Schema<int> schema);
-
-    TResult VisitLong(Schema<long> schema);
-
-    TResult VisitFloat(Schema<float> schema);
-
-    TResult VisitDouble(Schema<double> schema);
-
-    TResult VisitBigInteger(Schema<BigInteger> schema);
-
-    TResult VisitBigDecimal(Schema<decimal> schema);
-
-    TResult VisitString(Schema<string> schema);
-
-    TResult VisitBlob(Schema<byte[]> schema);
-
-    /// <summary>
-    /// A <c>@streaming</c> blob, whose value is an unread <see cref="Stream"/> rather than a
-    /// buffered payload. Most consumers cannot handle one — but each says so itself, rather than
-    /// the schema refusing to be visited at all.
-    /// </summary>
-    TResult VisitStreamingBlob(Schema<Stream> schema);
-
-    TResult VisitTimestamp(Schema<DateTimeOffset> schema);
-
-    TResult VisitDocument(Schema<Document> schema);
-
-    TResult VisitNullable<T>(NullableSchema<T> schema)
-        where T : struct;
-
-    TResult VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema);
-
-    TResult VisitList<TCollection, TElement, TBuilder>(
-        IListSchema<TCollection, TElement, TBuilder> schema
-    );
-
-    TResult VisitMap<TDictionary, TValue, TBuilder>(
-        IMapSchema<TDictionary, TValue, TBuilder> schema
-    );
-
-    TResult VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema);
-
-    TResult VisitUnion<T>(IUnionSchema<T> schema);
-
-    TResult VisitStringEnum<T>(StringEnumSchema<T> schema)
-        where T : IStringEnumValue<T>;
-
-    TResult VisitIntEnum<T>(IntEnumSchema<T> schema)
-        where T : struct, Enum;
-}
-
 public sealed class LazySchema<T> : Schema<T>
 {
     private readonly Lazy<Schema<T>> target;
@@ -166,12 +105,6 @@ public sealed class LazySchema<T> : Schema<T>
 
     public override Schema Resolved => TargetSchema.Resolved;
 
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return TargetSchema.Accept(visitor);
-    }
-
     public override void Write<TSerializer>(int member, T value, ref TSerializer serializer) =>
         TargetSchema.Write(member, value, ref serializer);
 
@@ -188,12 +121,6 @@ public abstract class PrimitiveSchema<T> : Schema<T>
 public sealed class BooleanSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<bool>(id, ShapeKind.Boolean, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitBoolean(this);
-    }
-
     public override void Write<TSerializer>(int member, bool value, ref TSerializer serializer) =>
         serializer.WriteBoolean(member, value);
 
@@ -204,12 +131,6 @@ public sealed class BooleanSchema(ShapeId id, IEnumerable<Trait>? traits = null)
 public sealed class ByteSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<sbyte>(id, ShapeKind.Byte, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitByte(this);
-    }
-
     public override void Write<TSerializer>(int member, sbyte value, ref TSerializer serializer) =>
         serializer.WriteByte(member, value);
 
@@ -220,12 +141,6 @@ public sealed class ByteSchema(ShapeId id, IEnumerable<Trait>? traits = null)
 public sealed class ShortSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<short>(id, ShapeKind.Short, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitShort(this);
-    }
-
     public override void Write<TSerializer>(int member, short value, ref TSerializer serializer) =>
         serializer.WriteShort(member, value);
 
@@ -236,12 +151,6 @@ public sealed class ShortSchema(ShapeId id, IEnumerable<Trait>? traits = null)
 public sealed class IntegerSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<int>(id, ShapeKind.Integer, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitInteger(this);
-    }
-
     public override void Write<TSerializer>(int member, int value, ref TSerializer serializer) =>
         serializer.WriteInteger(member, value);
 
@@ -252,12 +161,6 @@ public sealed class IntegerSchema(ShapeId id, IEnumerable<Trait>? traits = null)
 public sealed class LongSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<long>(id, ShapeKind.Long, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitLong(this);
-    }
-
     public override void Write<TSerializer>(int member, long value, ref TSerializer serializer) =>
         serializer.WriteLong(member, value);
 
@@ -268,12 +171,6 @@ public sealed class LongSchema(ShapeId id, IEnumerable<Trait>? traits = null)
 public sealed class FloatSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<float>(id, ShapeKind.Float, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitFloat(this);
-    }
-
     public override void Write<TSerializer>(int member, float value, ref TSerializer serializer) =>
         serializer.WriteFloat(member, value);
 
@@ -284,12 +181,6 @@ public sealed class FloatSchema(ShapeId id, IEnumerable<Trait>? traits = null)
 public sealed class DoubleSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<double>(id, ShapeKind.Double, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitDouble(this);
-    }
-
     public override void Write<TSerializer>(int member, double value, ref TSerializer serializer) =>
         serializer.WriteDouble(member, value);
 
@@ -300,12 +191,6 @@ public sealed class DoubleSchema(ShapeId id, IEnumerable<Trait>? traits = null)
 public sealed class BigIntegerSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<BigInteger>(id, ShapeKind.BigInteger, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitBigInteger(this);
-    }
-
     public override void Write<TSerializer>(
         int member,
         BigInteger value,
@@ -319,12 +204,6 @@ public sealed class BigIntegerSchema(ShapeId id, IEnumerable<Trait>? traits = nu
 public sealed class BigDecimalSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<decimal>(id, ShapeKind.BigDecimal, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitBigDecimal(this);
-    }
-
     public override void Write<TSerializer>(
         int member,
         decimal value,
@@ -338,12 +217,6 @@ public sealed class BigDecimalSchema(ShapeId id, IEnumerable<Trait>? traits = nu
 public sealed class StringSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<string>(id, ShapeKind.String, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitString(this);
-    }
-
     public override void Write<TSerializer>(int member, string value, ref TSerializer serializer)
     {
         if (value is null)
@@ -363,12 +236,6 @@ public sealed class StringSchema(ShapeId id, IEnumerable<Trait>? traits = null)
 public sealed class BlobSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<byte[]>(id, ShapeKind.Blob, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitBlob(this);
-    }
-
     public override void Write<TSerializer>(int member, byte[] value, ref TSerializer serializer)
     {
         if (value is null)
@@ -388,12 +255,6 @@ public sealed class BlobSchema(ShapeId id, IEnumerable<Trait>? traits = null)
 public sealed class StreamingBlobSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<Stream>(id, ShapeKind.Blob, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitStreamingBlob(this);
-    }
-
     public override void Write<TSerializer>(int member, Stream value, ref TSerializer serializer)
     {
         if (value is null)
@@ -413,12 +274,6 @@ public sealed class StreamingBlobSchema(ShapeId id, IEnumerable<Trait>? traits =
 public sealed class TimestampSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<DateTimeOffset>(id, ShapeKind.Timestamp, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitTimestamp(this);
-    }
-
     public override void Write<TSerializer>(
         int member,
         DateTimeOffset value,
@@ -432,12 +287,6 @@ public sealed class TimestampSchema(ShapeId id, IEnumerable<Trait>? traits = nul
 public sealed class DocumentSchema(ShapeId id, IEnumerable<Trait>? traits = null)
     : PrimitiveSchema<Document>(id, ShapeKind.Document, traits)
 {
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitDocument(this);
-    }
-
     public override void Write<TSerializer>(
         int member,
         Document value,
@@ -467,82 +316,51 @@ public interface IMemberSchema
     bool HasTrait(ShapeId id) => GetTrait(id) is not null;
 }
 
-public interface ITypedTargetMemberSchema<TValue> : IMemberSchema
-{
-    Schema<TValue> TypedTarget { get; }
-}
-
-public interface IMemberSchema<TContainer> : IMemberSchema
-{
-    void Accept(IMemberVisitor<TContainer> visitor);
-}
-
-public interface IMemberSchema<TContainer, TValue>
-    : IMemberSchema<TContainer>,
-        ITypedTargetMemberSchema<TValue>
-{
-    TValue GetValue(TContainer container);
-}
-
 /// <summary>
-/// A member whose builder type is known while its value type is erased, which is what a reader
-/// needs to dispatch without reflection or the runtime binder.
+/// A member of a structure, list, or map: its name, the shape it targets, and the traits declared
+/// on it. A member's position in its container is its index on the wire; the container gives the
+/// member its id.
 /// </summary>
-public interface IBuilderMemberSchema<TContainer, TBuilder> : IMemberSchema<TContainer>
+public sealed class MemberSchema : IMemberSchema
 {
-    void Accept(IMemberVisitor<TContainer, TBuilder> visitor);
-}
+    private ShapeId? id;
 
-public interface IMemberSchema<TContainer, TBuilder, TValue>
-    : IMemberSchema<TContainer, TValue>,
-        IBuilderMemberSchema<TContainer, TBuilder>
-{
-    void SetValue(TBuilder builder, TValue value);
-}
+    public MemberSchema(
+        string name,
+        Schema target,
+        bool isRequired = false,
+        IEnumerable<Trait>? traits = null
+    )
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(target);
+        Name = name;
+        Target = target;
+        IsRequired = isRequired;
+        MemberTraits = Trait.Index(traits);
+    }
 
-public interface IMemberVisitor<TContainer>
-{
-    void Visit<TValue>(IMemberSchema<TContainer, TValue> member);
-}
+    public ShapeId Id =>
+        id ?? throw new InvalidOperationException($"Member '{Name}' belongs to no shape.");
 
-public interface IMemberVisitor<TContainer, TBuilder>
-{
-    void Visit<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member);
-}
+    public string Name { get; }
 
-/// <summary>
-/// Receives statically typed structure members during serialization. Member indexes follow the
-/// structure schema's declaration order.
-/// </summary>
-public interface IStructMemberWriter
-{
-    void WriteMember<TValue>(int index, TValue value);
-}
+    public IReadOnlyDictionary<ShapeId, Trait> MemberTraits { get; }
 
-/// <summary>
-/// Supplies a structure's values directly to a wire-format serializer without using member getter
-/// delegates.
-/// </summary>
-public interface IStructValueSerializer<T>
-{
-    void WriteMembers<TWriter>(T value, ref TWriter writer)
-        where TWriter : struct, IStructMemberWriter;
-}
+    public Schema Target { get; }
 
-internal interface IMemberValueSource<in TContainer>
-{
-    void WriteMember<TWriter>(TContainer container, int index, ref TWriter writer)
-        where TWriter : struct, IStructMemberWriter;
-}
+    public bool IsRequired { get; }
 
-/// <summary>Moves one member's value between a container and a shape serializer.</summary>
-internal interface IMemberSerialization<in TContainer, in TBuilder>
-{
-    void Serialize<TSerializer>(int index, TContainer container, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct;
+    internal MemberSchema BindTo(ShapeId container)
+    {
+        if (id is not null)
+        {
+            throw new InvalidOperationException($"Member '{Name}' already belongs to '{id}'.");
+        }
 
-    void Deserialize<TDeserializer>(TBuilder builder, ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
+        id = container.WithMember(Name);
+        return this;
+    }
 }
 
 public interface IStructSchema
@@ -560,18 +378,9 @@ public interface IStructSchema
 public interface IStructSchema<T> : IStructSchema
 {
     /// <summary>
-    /// Writes this structure's member values in declaration order. Every structure has one: a
-    /// generated schema supplies a serializer that reads its properties directly, and a schema built
-    /// without one reads them through the member getters.
-    /// </summary>
-    IStructValueSerializer<T> ValueSerializer { get; }
-
-    /// <summary>
     /// Dispatches to <paramref name="visitor"/> with this structure's otherwise hidden builder type.
     /// </summary>
     TResult Accept<TResult>(IStructSchemaVisitor<T, TResult> visitor);
-
-    void VisitMembers(IMemberVisitor<T> visitor);
 
     T BuildEmpty();
 
@@ -595,8 +404,6 @@ public interface IStructSchema<T, TBuilder> : IStructSchema<T>
 
     T Build(TBuilder builder);
 
-    void VisitMembers(IMemberVisitor<T, TBuilder> visitor);
-
     /// <summary>Reads member <paramref name="index"/> into <paramref name="builder"/>.</summary>
     void DeserializeMember<TDeserializer>(
         TBuilder builder,
@@ -606,31 +413,30 @@ public interface IStructSchema<T, TBuilder> : IStructSchema<T>
         where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 
-public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBuilder>
+/// <summary>
+/// A structure. Code generation derives one class per structure, which reads and writes the
+/// structure's properties directly; this base carries what every structure has in common.
+/// </summary>
+public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBuilder>
 {
-    private readonly Func<TBuilder> createBuilder;
-    private readonly Func<TBuilder, T> build;
-    private readonly IBuilderMemberSchema<T, TBuilder>[] members;
+    private readonly MemberSchema[] members;
     private readonly Dictionary<string, IMemberSchema> membersByName;
 
-    internal StructSchema(
+    protected StructSchema(
         ShapeId id,
-        Func<TBuilder> createBuilder,
-        Func<TBuilder, T> build,
-        IReadOnlyList<IBuilderMemberSchema<T, TBuilder>> members,
-        IEnumerable<Trait>? traits = null,
-        IStructValueSerializer<T>? valueSerializer = null
+        IEnumerable<MemberSchema> members,
+        IEnumerable<Trait>? traits = null
     )
         : base(id, ShapeKind.Structure, traits)
     {
-        this.createBuilder = createBuilder;
-        this.build = build;
-        this.members = [.. members];
-        membersByName = BuildMembersByName(this.members);
-        ValueSerializer = valueSerializer ?? new MemberGetterValueSerializer(this.members);
+        ArgumentNullException.ThrowIfNull(members);
+        this.members = [.. members.Select(member => member.BindTo(id))];
+        membersByName = this.members.ToDictionary(
+            member => member.Name,
+            member => (IMemberSchema)member,
+            StringComparer.Ordinal
+        );
     }
-
-    public IStructValueSerializer<T> ValueSerializer { get; }
 
     public IReadOnlyList<IMemberSchema> Members => members;
 
@@ -655,32 +461,21 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
     public override T Read<TDeserializer>(ref TDeserializer deserializer) =>
         deserializer.ReadStruct(this);
 
-    public void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct
-    {
-        for (var index = 0; index < members.Length; index++)
-        {
-            ((IMemberSerialization<T, TBuilder>)members[index]).Serialize(
-                index,
-                value,
-                ref serializer
-            );
-        }
-    }
+    public abstract void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 
-    public void DeserializeMember<TDeserializer>(
+    public abstract void DeserializeMember<TDeserializer>(
         TBuilder builder,
         int index,
         ref TDeserializer deserializer
     )
-        where TDeserializer : struct, IShapeDeserializer, allows ref struct =>
-        ((IMemberSerialization<T, TBuilder>)members[index]).Deserialize(builder, ref deserializer);
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 
-    public TBuilder CreateTypedBuilder() => createBuilder();
+    public abstract TBuilder CreateTypedBuilder();
 
-    public T Build(TBuilder builder) => build(builder);
+    public abstract T Build(TBuilder builder);
 
-    public T BuildEmpty() => build(createBuilder());
+    public T BuildEmpty() => Build(CreateTypedBuilder());
 
     public void WriteEmpty<TSerializer>(int member, ref TSerializer serializer)
         where TSerializer : struct, IShapeSerializer, allows ref struct =>
@@ -691,71 +486,12 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.Visit(this);
     }
-
-    public void VisitMembers(IMemberVisitor<T> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        foreach (var member in members)
-        {
-            member.Accept(visitor);
-        }
-    }
-
-    public void VisitMembers(IMemberVisitor<T, TBuilder> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        foreach (var member in members)
-        {
-            member.Accept(visitor);
-        }
-    }
-
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitStruct(this);
-    }
-
-    private sealed class MemberGetterValueSerializer(IBuilderMemberSchema<T, TBuilder>[] members)
-        : IStructValueSerializer<T>
-    {
-        // Every member a StructSchemaBuilder adds is a MemberSchema, which can hand its own value
-        // to a writer without the caller knowing its value type.
-        private readonly IMemberValueSource<T>[] sources =
-        [
-            .. members.Select(static member => (IMemberValueSource<T>)member),
-        ];
-
-        public void WriteMembers<TWriter>(T value, ref TWriter writer)
-            where TWriter : struct, IStructMemberWriter
-        {
-            for (var index = 0; index < sources.Length; index++)
-            {
-                sources[index].WriteMember(value, index, ref writer);
-            }
-        }
-    }
-
-    private static Dictionary<string, IMemberSchema> BuildMembersByName(
-        IBuilderMemberSchema<T, TBuilder>[] members
-    )
-    {
-        var byName = new Dictionary<string, IMemberSchema>(StringComparer.Ordinal);
-        foreach (var member in members)
-        {
-            byName.Add(member.Name, member);
-        }
-
-        return byName;
-    }
 }
 
 public sealed class UnitSchema : Schema<SmithyUnit>, IStructSchema<SmithyUnit, SmithyUnit>
 {
     internal UnitSchema()
         : base(new ShapeId("smithy.api", "Unit"), ShapeKind.Structure) { }
-
-    public IStructValueSerializer<SmithyUnit> ValueSerializer { get; } = new NoMembers();
 
     public IMemberSchema? GetMember(string name) => null;
 
@@ -780,10 +516,6 @@ public sealed class UnitSchema : Schema<SmithyUnit>, IStructSchema<SmithyUnit, S
     )
         where TDeserializer : struct, IShapeDeserializer, allows ref struct { }
 
-    public void VisitMembers(IMemberVisitor<SmithyUnit> visitor) { }
-
-    public void VisitMembers(IMemberVisitor<SmithyUnit, SmithyUnit> visitor) { }
-
     public SmithyUnit CreateTypedBuilder() => SmithyUnit.Value;
 
     public SmithyUnit Build(SmithyUnit builder) => SmithyUnit.Value;
@@ -794,22 +526,10 @@ public sealed class UnitSchema : Schema<SmithyUnit>, IStructSchema<SmithyUnit, S
         where TSerializer : struct, IShapeSerializer, allows ref struct =>
         Write(member, SmithyUnit.Value, ref serializer);
 
-    private sealed class NoMembers : IStructValueSerializer<SmithyUnit>
-    {
-        public void WriteMembers<TWriter>(SmithyUnit value, ref TWriter writer)
-            where TWriter : struct, IStructMemberWriter { }
-    }
-
     public TResult Accept<TResult>(IStructSchemaVisitor<SmithyUnit, TResult> visitor)
     {
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.Visit(this);
-    }
-
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitStruct(this);
     }
 }
 
@@ -830,12 +550,6 @@ public sealed class NullableSchema<T> : Schema<T?>, INullableSchema
     public Schema<T> TypedTarget { get; }
 
     public Schema Target => TypedTarget;
-
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitNullable(this);
-    }
 
     public override void Write<TSerializer>(int member, T? value, ref TSerializer serializer)
     {
@@ -913,12 +627,6 @@ public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
 
     public T Create(string value) => T.FromValue(value);
 
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitStringEnum(this);
-    }
-
     public override void Write<TSerializer>(int member, T value, ref TSerializer serializer)
     {
         if (value is null)
@@ -969,12 +677,6 @@ public sealed class IntEnumSchema<T> : Schema<T>, IIntEnumSchema
 
     public T Create(int value) => (T)Enum.ToObject(typeof(T), value);
 
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitIntEnum(this);
-    }
-
     public override void Write<TSerializer>(int member, T value, ref TSerializer serializer) =>
         serializer.WriteIntEnum(member, GetIntegerValue(value));
 
@@ -1018,12 +720,6 @@ public sealed class EventStreamSchema<TEvent> : Schema<IAsyncEnumerable<TEvent>>
         return visitor.Visit(this);
     }
 
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitEventStream(this);
-    }
-
     public override void Write<TSerializer>(
         int member,
         IAsyncEnumerable<TEvent> value,
@@ -1053,8 +749,6 @@ public interface IListSchema
 
 public interface IListSchema<TCollection, TElement> : IListSchema
 {
-    ITypedTargetMemberSchema<TElement> TypedElementMember { get; }
-
     Schema<TElement> ElementSchema { get; }
 
     IEnumerable<TElement> GetElements(TCollection value);
@@ -1094,8 +788,6 @@ public interface IMapSchema
 
 public interface IMapSchema<TDictionary, TValue> : IMapSchema
 {
-    ITypedTargetMemberSchema<TValue> TypedValueMember { get; }
-
     Schema<TValue> ValueSchema { get; }
 
     IEnumerable<KeyValuePair<string, TValue>> GetEntries(TDictionary value);
@@ -1133,35 +825,6 @@ public interface IUnionCaseSchema
     Schema Target { get; }
 }
 
-public interface IUnionCaseSchema<TUnion, TValue> : IUnionCaseSchema
-{
-    Schema<TValue> TargetSchema { get; }
-
-    bool Matches(TUnion value);
-
-    TValue GetValue(TUnion value);
-
-    TUnion Create(TValue value);
-}
-
-public interface IUnionCaseVisitor<TUnion>
-{
-    void Visit<TValue>(IUnionCaseSchema<TUnion, TValue> unionCase);
-}
-
-internal interface IUnionCaseSchema<TUnion>
-{
-    void Accept(IUnionCaseVisitor<TUnion> visitor);
-
-    bool Matches(TUnion value);
-
-    bool TrySerialize<TSerializer>(int index, TUnion value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct;
-
-    TUnion Deserialize<TDeserializer>(ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
-}
-
 public interface IUnionSchema
 {
     ShapeId Id { get; }
@@ -1176,8 +839,6 @@ public interface IUnionSchema
 
 public interface IUnionSchema<T> : IUnionSchema
 {
-    void VisitCases(IUnionCaseVisitor<T> visitor);
-
     /// <summary>The index of the case <paramref name="value"/> holds.</summary>
     int CaseOf(T value);
 
@@ -1188,83 +849,6 @@ public interface IUnionSchema<T> : IUnionSchema
     /// <summary>Reads case <paramref name="index"/> and returns the union holding it.</summary>
     T DeserializeCase<TDeserializer>(int index, ref TDeserializer deserializer)
         where TDeserializer : struct, IShapeDeserializer, allows ref struct;
-}
-
-public sealed class CollectionMemberSchema<TValue> : ITypedTargetMemberSchema<TValue>
-{
-    private readonly IReadOnlyDictionary<ShapeId, Trait> memberTraits;
-
-    internal CollectionMemberSchema(
-        ShapeId id,
-        Schema<TValue> target,
-        IEnumerable<Trait>? traits = null
-    )
-    {
-        ArgumentNullException.ThrowIfNull(target);
-        if (!id.IsMember)
-        {
-            throw new ArgumentException(
-                $"Member schema id must include a member name; got '{id}'.",
-                nameof(id)
-            );
-        }
-
-        Id = id;
-        TypedTarget = target;
-        memberTraits = Trait.Index(traits);
-    }
-
-    public ShapeId Id { get; }
-
-    public string Name => Id.MemberName!;
-
-    public IReadOnlyDictionary<ShapeId, Trait> MemberTraits => memberTraits;
-
-    public Schema<TValue> TypedTarget { get; }
-
-    public Schema Target => TypedTarget;
-
-    // A collection element or map entry is always present when the collection holds it; there is
-    // no absent case for a consumer to check.
-    public bool IsRequired => true;
-}
-
-/// <summary>
-/// A map's key member. Untyped, unlike every other member, because a key's CLR type and its modeled
-/// shape need not agree: the key of a map is a <see cref="string"/> whatever it targets — a JSON
-/// object name has no other form — while the shape it targets may be an enum, whose own CLR type is
-/// the generated enum. Carrying the shape is what lets a server hold the key to it.
-/// </summary>
-public sealed class MapKeyMemberSchema : IMemberSchema
-{
-    private readonly IReadOnlyDictionary<ShapeId, Trait> memberTraits;
-
-    internal MapKeyMemberSchema(ShapeId id, Schema target, IEnumerable<Trait>? traits = null)
-    {
-        ArgumentNullException.ThrowIfNull(target);
-        if (!id.IsMember)
-        {
-            throw new ArgumentException(
-                $"Member schema id must include a member name; got '{id}'.",
-                nameof(id)
-            );
-        }
-
-        Id = id;
-        Target = target;
-        memberTraits = Trait.Index(traits);
-    }
-
-    public ShapeId Id { get; }
-
-    public string Name => Id.MemberName!;
-
-    public IReadOnlyDictionary<ShapeId, Trait> MemberTraits => memberTraits;
-
-    public Schema Target { get; }
-
-    // An entry's key is always present when the map holds the entry.
-    public bool IsRequired => true;
 }
 
 /// <summary>
@@ -1300,10 +884,8 @@ public sealed class CollectionSchema<TCollection, TElement, TBuilder>
         ArgumentNullException.ThrowIfNull(build);
 
         ElementSchema = element;
-        TypedElementMember = new CollectionMemberSchema<TElement>(
-            id.WithMember("member"),
-            element,
-            elementTraits
+        ElementMember = new MemberSchema("member", element, isRequired: true, elementTraits).BindTo(
+            id
         );
         this.getElements = getElements;
         this.createBuilder = createBuilder;
@@ -1311,9 +893,9 @@ public sealed class CollectionSchema<TCollection, TElement, TBuilder>
         this.build = build;
     }
 
-    public ITypedTargetMemberSchema<TElement> TypedElementMember { get; }
-
-    public IMemberSchema ElementMember => TypedElementMember;
+    // An element is always present when the collection holds it; there is no absent case for a
+    // consumer to check.
+    public IMemberSchema ElementMember { get; }
 
     public Schema<TElement> ElementSchema { get; }
 
@@ -1326,12 +908,6 @@ public sealed class CollectionSchema<TCollection, TElement, TBuilder>
     public void Add(TBuilder builder, TElement value) => add(builder, value);
 
     public TCollection Build(TBuilder builder) => build(builder);
-
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitList(this);
-    }
 
     public override void Write<TSerializer>(
         int member,
@@ -1408,12 +984,13 @@ public sealed class MapSchema<TDictionary, TValue, TBuilder>
         ArgumentNullException.ThrowIfNull(add);
         ArgumentNullException.ThrowIfNull(build);
 
-        KeyMember = new MapKeyMemberSchema(id.WithMember("key"), key ?? Schemas.String, keyTraits);
-        TypedValueMember = new CollectionMemberSchema<TValue>(
-            id.WithMember("value"),
-            value,
-            valueTraits
-        );
+        KeyMember = new MemberSchema(
+            "key",
+            key ?? Schemas.String,
+            isRequired: true,
+            keyTraits
+        ).BindTo(id);
+        ValueMember = new MemberSchema("value", value, isRequired: true, valueTraits).BindTo(id);
         ValueSchema = value;
         this.getEntries = getEntries;
         this.createBuilder = createBuilder;
@@ -1423,9 +1000,7 @@ public sealed class MapSchema<TDictionary, TValue, TBuilder>
 
     public IMemberSchema KeyMember { get; }
 
-    public ITypedTargetMemberSchema<TValue> TypedValueMember { get; }
-
-    public IMemberSchema ValueMember => TypedValueMember;
+    public IMemberSchema ValueMember { get; }
 
     public Schema<TValue> ValueSchema { get; }
 
@@ -1439,12 +1014,6 @@ public sealed class MapSchema<TDictionary, TValue, TBuilder>
     public void Add(TBuilder builder, string key, TValue value) => add(builder, key, value);
 
     public TDictionary Build(TBuilder builder) => build(builder);
-
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitMap(this);
-    }
 
     public override void Write<TSerializer>(
         int member,
@@ -1484,93 +1053,72 @@ public sealed class MapSchema<TDictionary, TValue, TBuilder>
         add(builder, key, ValueSchema.Read(ref deserializer));
 }
 
-public sealed class UnionCaseSchema<TUnion, TValue>
-    : IUnionCaseSchema<TUnion, TValue>,
-        IUnionCaseSchema<TUnion>
+/// <summary>
+/// A case of a union: its name, the shape it holds, and the traits declared on it. The union gives
+/// the case its id.
+/// </summary>
+public sealed class UnionCaseSchema : IUnionCaseSchema
 {
-    private readonly Func<TUnion, bool> matches;
-    private readonly Func<TUnion, TValue> get;
-    private readonly Func<TValue, TUnion> create;
+    private ShapeId? id;
 
-    internal UnionCaseSchema(
-        ShapeId id,
-        Schema<TValue> target,
-        Func<TUnion, bool> matches,
-        Func<TUnion, TValue> get,
-        Func<TValue, TUnion> create,
-        IEnumerable<Trait>? traits = null
-    )
+    public UnionCaseSchema(string name, Schema target, IEnumerable<Trait>? traits = null)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(target);
-        if (!id.IsMember)
-        {
-            throw new ArgumentException(
-                $"Union case id must include a member name; got '{id}'.",
-                nameof(id)
-            );
-        }
-
-        ArgumentNullException.ThrowIfNull(matches);
-        ArgumentNullException.ThrowIfNull(get);
-        ArgumentNullException.ThrowIfNull(create);
-
-        Id = id;
+        Name = name;
+        Target = target;
         Traits = Trait.Index(traits);
-        TargetSchema = target;
-        this.matches = matches;
-        this.get = get;
-        this.create = create;
     }
 
-    public ShapeId Id { get; }
+    public ShapeId Id =>
+        id ?? throw new InvalidOperationException($"Union case '{Name}' belongs to no union.");
 
-    public string Name => Id.MemberName!;
+    public string Name { get; }
 
     public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
 
-    public Schema<TValue> TargetSchema { get; }
+    public Schema Target { get; }
 
-    public Schema Target => TargetSchema;
-
-    public bool Matches(TUnion value) => matches(value);
-
-    public TValue GetValue(TUnion value) => get(value);
-
-    public TUnion Create(TValue value) => create(value);
-
-    public void Accept(IUnionCaseVisitor<TUnion> visitor) => visitor.Visit(this);
-
-    public bool TrySerialize<TSerializer>(int index, TUnion value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct
+    internal UnionCaseSchema BindTo(ShapeId union)
     {
-        if (!matches(value))
+        if (id is not null)
         {
-            return false;
+            throw new InvalidOperationException($"Union case '{Name}' already belongs to '{id}'.");
         }
 
-        TargetSchema.Write(index, get(value), ref serializer);
-        return true;
+        id = union.WithMember(Name);
+        return this;
     }
-
-    public TUnion Deserialize<TDeserializer>(ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer, allows ref struct =>
-        create(TargetSchema.Read(ref deserializer));
 }
 
-public sealed class UnionSchema<T> : Schema<T>, IUnionSchema<T>
+/// <summary>
+/// A union. Code generation derives one class per union, which tells the cases apart and reads and
+/// writes the value each holds; this base carries what every union has in common.
+/// </summary>
+public abstract class UnionSchema<T> : Schema<T>, IUnionSchema<T>
 {
-    private readonly ReadOnlyCollection<IUnionCaseSchema> cases;
+    private readonly UnionCaseSchema[] cases;
     private readonly Dictionary<string, IUnionCaseSchema> casesByName;
 
-    internal UnionSchema(
+    protected UnionSchema(
         ShapeId id,
-        IReadOnlyList<IUnionCaseSchema> cases,
+        IEnumerable<UnionCaseSchema> cases,
         IEnumerable<Trait>? traits = null
     )
         : base(id, ShapeKind.Union, traits)
     {
-        this.cases = new ReadOnlyCollection<IUnionCaseSchema>(cases.ToArray());
-        casesByName = BuildCasesByName(this.cases);
+        ArgumentNullException.ThrowIfNull(cases);
+        this.cases = [.. cases.Select(@case => @case.BindTo(id))];
+        if (this.cases.Length == 0)
+        {
+            throw new ArgumentException($"Union schema '{id}' requires at least one case.");
+        }
+
+        casesByName = this.cases.ToDictionary(
+            @case => @case.Name,
+            @case => (IUnionCaseSchema)@case,
+            StringComparer.Ordinal
+        );
     }
 
     public IReadOnlyList<IUnionCaseSchema> Cases => cases;
@@ -1581,19 +1129,10 @@ public sealed class UnionSchema<T> : Schema<T>, IUnionSchema<T>
         return casesByName.TryGetValue(name, out var @case) ? @case : null;
     }
 
-    public void VisitCases(IUnionCaseVisitor<T> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        foreach (var @case in cases)
-        {
-            ((IUnionCaseSchema<T>)@case).Accept(visitor);
-        }
-    }
-
     public int IndexOf(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
-        for (var index = 0; index < cases.Count; index++)
+        for (var index = 0; index < cases.Length; index++)
         {
             if (string.Equals(cases[index].Name, name, StringComparison.Ordinal))
             {
@@ -1604,18 +1143,7 @@ public sealed class UnionSchema<T> : Schema<T>, IUnionSchema<T>
         return -1;
     }
 
-    public int CaseOf(T value)
-    {
-        for (var index = 0; index < cases.Count; index++)
-        {
-            if (((IUnionCaseSchema<T>)cases[index]).Matches(value))
-            {
-                return index;
-            }
-        }
-
-        throw new InvalidOperationException($"No union case matched '{typeof(T).Name}'.");
-    }
+    public abstract int CaseOf(T value);
 
     public override void Write<TSerializer>(int member, T value, ref TSerializer serializer)
     {
@@ -1632,131 +1160,15 @@ public sealed class UnionSchema<T> : Schema<T>, IUnionSchema<T>
     public override T Read<TDeserializer>(ref TDeserializer deserializer) =>
         deserializer.ReadUnion(this);
 
-    public void SerializeCase<TSerializer>(T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct
-    {
-        for (var index = 0; index < cases.Count; index++)
-        {
-            if (((IUnionCaseSchema<T>)cases[index]).TrySerialize(index, value, ref serializer))
-            {
-                return;
-            }
-        }
+    public abstract void SerializeCase<TSerializer>(T value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 
-        throw new InvalidOperationException($"No union case matched '{typeof(T).Name}'.");
-    }
+    public abstract T DeserializeCase<TDeserializer>(int index, ref TDeserializer deserializer)
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 
-    public T DeserializeCase<TDeserializer>(int index, ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer, allows ref struct =>
-        ((IUnionCaseSchema<T>)cases[index]).Deserialize(ref deserializer);
-
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.VisitUnion(this);
-    }
-
-    private static Dictionary<string, IUnionCaseSchema> BuildCasesByName(
-        ReadOnlyCollection<IUnionCaseSchema> cases
-    )
-    {
-        var byName = new Dictionary<string, IUnionCaseSchema>(StringComparer.Ordinal);
-        foreach (var @case in cases)
-        {
-            byName.Add(@case.Name, @case);
-        }
-
-        return byName;
-    }
-}
-
-public sealed class MemberSchema<TContainer, TBuilder, TValue>
-    : Schema<TValue>,
-        IMemberSchema<TContainer, TBuilder, TValue>,
-        IMemberValueSource<TContainer>,
-        IMemberSerialization<TContainer, TBuilder>
-{
-    private readonly Func<TContainer, TValue> get;
-    private readonly Action<TBuilder, TValue> set;
-
-    internal MemberSchema(
-        ShapeId id,
-        bool isRequired,
-        Schema<TValue> target,
-        Func<TContainer, TValue> get,
-        Action<TBuilder, TValue> set,
-        IEnumerable<Trait>? traits = null
-    )
-        : base(id, ShapeKind.Member, traits)
-    {
-        ArgumentNullException.ThrowIfNull(target);
-        if (!id.IsMember)
-        {
-            throw new ArgumentException(
-                $"Member schema id must include a member name; got '{id}'.",
-                nameof(id)
-            );
-        }
-
-        IsRequired = isRequired;
-        TypedTarget = target;
-        this.get = get;
-        this.set = set;
-    }
-
-    public string Name => MemberName!;
-
-    public bool IsRequired { get; }
-
-    public IReadOnlyDictionary<ShapeId, Trait> MemberTraits => base.Traits;
-
-    public Schema<TValue> TypedTarget { get; }
-
-    public Schema Target => TypedTarget;
-
-    public TValue GetValue(TContainer container) => get(container);
-
-    void IMemberValueSource<TContainer>.WriteMember<TWriter>(
-        TContainer container,
-        int index,
-        ref TWriter writer
-    ) => writer.WriteMember(index, get(container));
-
-    public void Set(TBuilder builder, TValue value) => set(builder, value);
-
-    void IMemberSerialization<TContainer, TBuilder>.Serialize<TSerializer>(
-        int index,
-        TContainer container,
-        ref TSerializer serializer
-    ) => TypedTarget.Write(index, get(container), ref serializer);
-
-    void IMemberSerialization<TContainer, TBuilder>.Deserialize<TDeserializer>(
-        TBuilder builder,
-        ref TDeserializer deserializer
-    ) => set(builder, TypedTarget.Read(ref deserializer));
-
-    public override void Write<TSerializer>(int member, TValue value, ref TSerializer serializer) =>
-        TypedTarget.Write(member, value, ref serializer);
-
-    public override TValue Read<TDeserializer>(ref TDeserializer deserializer) =>
-        TypedTarget.Read(ref deserializer);
-
-    public void SetValue(TBuilder builder, TValue value) => set(builder, value);
-
-    public void Accept(IMemberVisitor<TContainer> visitor) => visitor.Visit(this);
-
-    public void Accept(IMemberVisitor<TContainer, TBuilder> visitor) => visitor.Visit(this);
-
-    public override Trait? GetTrait(ShapeId id) =>
-        MemberTraits.TryGetValue(id, out var trait) ? trait : TypedTarget.GetTrait(id);
-
-    public override bool HasTrait(ShapeId id) => GetTrait(id) is not null;
-
-    public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return TypedTarget.Accept(visitor);
-    }
+    /// <summary>The error for a value holding no modeled case, such as a variant this client does not know.</summary>
+    protected static InvalidOperationException NoCaseMatched() =>
+        new($"No union case matched '{typeof(T).Name}'.");
 }
 
 /// <summary>
@@ -1765,7 +1177,6 @@ public sealed class MemberSchema<TContainer, TBuilder, TValue>
 /// </summary>
 public sealed class StructProjection<T, TBuilder>
 {
-    private readonly IBuilderMemberSchema<T, TBuilder>[] members;
     private readonly Dictionary<string, IMemberSchema> membersByName;
 
     internal StructProjection(IStructSchema<T, TBuilder> source, Func<IMemberSchema, bool> include)
@@ -1773,14 +1184,9 @@ public sealed class StructProjection<T, TBuilder>
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(include);
         Source = source;
-        var collector = new MemberCollector(include);
-        source.VisitMembers(collector);
-        members = [.. collector.Members];
-        membersByName = members.ToDictionary(
-            member => member.Name,
-            member => (IMemberSchema)member,
-            StringComparer.Ordinal
-        );
+        membersByName = source
+            .Members.Where(include)
+            .ToDictionary(member => member.Name, StringComparer.Ordinal);
     }
 
     public IStructSchema<T, TBuilder> Source { get; }
@@ -1789,159 +1195,6 @@ public sealed class StructProjection<T, TBuilder>
     {
         ArgumentNullException.ThrowIfNull(name);
         return membersByName.TryGetValue(name, out var member) ? member : null;
-    }
-
-    public void VisitMembers(IMemberVisitor<T> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        foreach (var member in members)
-        {
-            member.Accept(visitor);
-        }
-    }
-
-    public void VisitMembers(IMemberVisitor<T, TBuilder> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        foreach (var member in members)
-        {
-            member.Accept(visitor);
-        }
-    }
-
-    private sealed class MemberCollector(Func<IMemberSchema, bool> include)
-        : IMemberVisitor<T, TBuilder>
-    {
-        public List<IBuilderMemberSchema<T, TBuilder>> Members { get; } = [];
-
-        public void Visit<TValue>(IMemberSchema<T, TBuilder, TValue> member)
-        {
-            if (include(member))
-            {
-                Members.Add(member);
-            }
-        }
-    }
-}
-
-public sealed class StructSchemaBuilder<T, TBuilder>
-{
-    private readonly ShapeId id;
-    private readonly IReadOnlyList<Trait>? traits;
-    private readonly List<IBuilderMemberSchema<T, TBuilder>> members = [];
-
-    internal StructSchemaBuilder(ShapeId id, IEnumerable<Trait>? traits = null)
-    {
-        this.id = id;
-        this.traits = traits?.ToArray();
-    }
-
-    public StructSchemaBuilder<T, TBuilder> Required<TValue>(
-        string name,
-        Func<T, TValue> get,
-        Action<TBuilder, TValue> set,
-        Schema<TValue> target,
-        IEnumerable<Trait>? traits = null
-    ) => Member(name, isRequired: true, get, set, target, traits);
-
-    public StructSchemaBuilder<T, TBuilder> Optional<TValue>(
-        string name,
-        Func<T, TValue> get,
-        Action<TBuilder, TValue> set,
-        Schema<TValue> target,
-        IEnumerable<Trait>? traits = null
-    ) => Member(name, isRequired: false, get, set, target, traits);
-
-    public StructSchema<T, TBuilder> Build(
-        Func<TBuilder> createBuilder,
-        Func<TBuilder, T> build,
-        IStructValueSerializer<T>? valueSerializer = null
-    )
-    {
-        ArgumentNullException.ThrowIfNull(createBuilder);
-        ArgumentNullException.ThrowIfNull(build);
-
-        return new StructSchema<T, TBuilder>(
-            id,
-            createBuilder,
-            build,
-            members,
-            traits,
-            valueSerializer
-        );
-    }
-
-    private StructSchemaBuilder<T, TBuilder> Member<TValue>(
-        string name,
-        bool isRequired,
-        Func<T, TValue> get,
-        Action<TBuilder, TValue> set,
-        Schema<TValue> target,
-        IEnumerable<Trait>? traits
-    )
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentNullException.ThrowIfNull(get);
-        ArgumentNullException.ThrowIfNull(set);
-        ArgumentNullException.ThrowIfNull(target);
-
-        members.Add(
-            new MemberSchema<T, TBuilder, TValue>(
-                id.WithMember(name),
-                isRequired,
-                target,
-                get,
-                set,
-                traits
-            )
-        );
-        return this;
-    }
-}
-
-public sealed class UnionSchemaBuilder<T>
-{
-    private readonly ShapeId id;
-    private readonly IReadOnlyList<Trait>? traits;
-    private readonly List<IUnionCaseSchema> cases = [];
-
-    internal UnionSchemaBuilder(ShapeId id, IEnumerable<Trait>? traits = null)
-    {
-        this.id = id;
-        this.traits = traits?.ToArray();
-    }
-
-    public UnionSchemaBuilder<T> Case<TValue>(
-        string name,
-        Func<T, bool> matches,
-        Func<T, TValue> get,
-        Func<TValue, T> create,
-        Schema<TValue> target,
-        IEnumerable<Trait>? traits = null
-    )
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        cases.Add(
-            new UnionCaseSchema<T, TValue>(
-                id.WithMember(name),
-                target,
-                matches,
-                get,
-                create,
-                traits
-            )
-        );
-        return this;
-    }
-
-    public UnionSchema<T> Build()
-    {
-        if (cases.Count == 0)
-        {
-            throw new InvalidOperationException($"Union schema '{id}' requires at least one case.");
-        }
-
-        return new UnionSchema<T>(id, cases, traits);
     }
 }
 
@@ -2221,14 +1474,6 @@ public static class Schemas
         IEnumerable<Trait>? traits = null
     )
         where T : struct, Enum => new(id, values, traits);
-
-    public static StructSchemaBuilder<T, TBuilder> Structure<T, TBuilder>(
-        ShapeId id,
-        IEnumerable<Trait>? traits = null
-    ) => new(id, traits);
-
-    public static UnionSchemaBuilder<T> Union<T>(ShapeId id, IEnumerable<Trait>? traits = null) =>
-        new(id, traits);
 
     /// <summary>A list read as <see cref="IReadOnlyList{T}"/>; the form a hand-written schema wants.</summary>
     public static CollectionSchema<

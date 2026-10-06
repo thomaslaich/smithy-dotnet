@@ -74,7 +74,5 @@ public final class ListGenerator implements Runnable {
     } finally {
       writer.popState();
     }
-    writer.write("");
-    SchemaGenerator.writeListSchema(writer, context, shape);
   }
 }
