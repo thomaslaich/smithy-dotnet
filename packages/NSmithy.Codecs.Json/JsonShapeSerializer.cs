@@ -288,14 +288,30 @@ internal struct JsonShapeSerializer : IShapeSerializer
 
     public void WriteIntEnum(int member, int value) => WriteInteger(member, value);
 
-    public readonly void WriteStream(int member, Stream value) =>
-        throw new NotSupportedException("JSON codec does not support streaming blob schemas.");
+    // A member a projection excludes is skipped like any other; only one that would be written is
+    // a stream this codec cannot encode.
+    public readonly void WriteStream(int member, Stream value)
+    {
+        if (!IsExcluded(member))
+        {
+            throw new NotSupportedException("JSON codec does not support streaming blob schemas.");
+        }
+    }
 
     public readonly void WriteEventStream<TEvent>(
         int member,
         IAsyncEnumerable<TEvent> events,
         Schema<TEvent> eventSchema
-    ) => throw new NotSupportedException("JSON codec does not support event stream schemas.");
+    )
+    {
+        if (!IsExcluded(member))
+        {
+            throw new NotSupportedException("JSON codec does not support event stream schemas.");
+        }
+    }
+
+    private readonly bool IsExcluded(int member) =>
+        container?.Kind == ShapeKind.Structure && !container.IsIncluded(member);
 
     public void WriteStruct<T>(int member, T value, IStructSchema<T> schema)
     {
