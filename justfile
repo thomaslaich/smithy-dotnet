@@ -146,7 +146,7 @@ bench-server: bench-server-rest-json bench-server-grpc
 # Level A, client side: request building and response parsing, no server.
 bench-client-rest-json:
     dotnet run --project benchmarks/Benchmarks.Micro --configuration Release -- \
-        --filter '*Bench.Micro.ClientBenchmarks*' '*ClientCeremonyBenchmarks*' \
+        --filter '*Bench.Micro.ClientBenchmarks*' '*ClientCeremonyBenchmarks*' '*ListItemsAttributionBenchmarks*' \
         --inProcess \
         --artifacts benchmarks/results/client/rest-json
 
