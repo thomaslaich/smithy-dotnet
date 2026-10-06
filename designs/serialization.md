@@ -568,6 +568,16 @@ cast back on each value. Rejected: generated serialization methods make the
 walk a single generated method per shape, leave each consumer only its own
 concern, and keep the schema itself non-generic metadata.
 
+### Fluent schema builders
+
+Schemas could be assembled with a fluent builder, one call per member, as a
+convenience over subclassing. Rejected: the serialization methods are generic
+over the serializer, and a generic method cannot be a lambda or delegate, so a
+builder could describe only metadata, which the base-class constructor already
+takes as a member list. Every schema is therefore a class that declares its
+members and implements its serialization methods, and tests build theirs from a
+Smithy model through the same code generator as any consumer.
+
 ### Reflection-based serialization
 
 Scanning properties at runtime via reflection is common in .NET serializers.
