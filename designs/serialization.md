@@ -49,16 +49,25 @@ interface and hold no serializer callbacks. When deserialization needs staged
 construction, the generator emits a separate builder type instead of adding
 mutable hooks to the model.
 
-A shape's schema is a sibling class named after the shape, with a single
-instance:
+A shape's schema lives in a sibling class named after the shape, generated
+into its own file: `MenuItem.g.cs` holds the type a consumer uses,
+`MenuItem.Schema.g.cs` the schema the runtime serializes it with.
 
 ```csharp
+// MenuItem.g.cs
 public sealed record class MenuItem(Food Food, float Price);
 
-public sealed partial class MenuItemSchema : StructSchema<MenuItem, MenuItemSchema.Builder>
+// MenuItem.Schema.g.cs
+public static partial class MenuItemSchema
 {
-    public static MenuItemSchema Schema { get; } = new();
-    // ...
+    public sealed class Builder { /* ... */ }
+
+    public static Schema<MenuItem> Schema { get; } = new GeneratedSchema();
+
+    private sealed class GeneratedSchema() : StructSchema<MenuItem, Builder>(/* ... */)
+    {
+        // ...
+    }
 }
 ```
 
@@ -85,81 +94,97 @@ public abstract class Schema
     public ShapeId Id { get; }
     public ShapeKind Kind { get; }
     public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
-    public IReadOnlyList<Member> Members { get; }
 }
 
 public abstract class Schema<T> : Schema
 {
-    public abstract void Serialize<TSerializer>(T value, ref TSerializer serializer)
+    public abstract void Write<TSerializer>(int member, T value, ref TSerializer serializer)
         where TSerializer : struct, IShapeSerializer, allows ref struct;
 
-    public abstract T Deserialize<TDeserializer>(ref TDeserializer deserializer)
+    public abstract T Read<TDeserializer>(ref TDeserializer deserializer)
         where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 ```
 
-The non-generic `Schema` is the whole metadata surface: kind, traits, and
+The non-generic `Schema` and its aggregate interfaces (`IStructSchema.Members`,
+`IListSchema.ElementMember`, `IMapSchema.KeyMember`/`ValueMember`,
+`IUnionSchema.Cases`) are the whole metadata surface: kind, traits, and
 members, which is everything a consumer needs to build its plan. `Schema<T>`
-binds a shape to its CLR type `T` and adds the two generated methods, the only
-code that touches values.
+binds a shape to its CLR type `T` and adds the two methods that touch values:
+`Write` hands a value to a serializer as member `member` of whatever is being
+written, and `Read` takes one from a deserializer.
 
 A scalar is the smallest schema: an id and a kind, no members. The prelude
 shapes are therefore shared singletons (`Schemas.String`, `Schemas.Integer`).
 One instance serves every integer in every model, because a constraint like
 `@range` is declared where the shape is *used*, so it lives on the member.
 
-A structure schema declares its members and implements the generated methods:
+A structure schema declares its members and implements the generated methods.
+Each member's target is a typed static field, so a member is written and read
+with one call on its target schema, which also covers nullability and lazy
+references:
 
 ```csharp
 // structure Rating { @required title: String, @range(min: 1, max: 5) score: Integer, author: User }
-public sealed partial class RatingSchema : StructSchema<Rating, RatingSchema.Builder>
+public static partial class RatingSchema
 {
-    public static RatingSchema Schema { get; } = new();
+    public sealed class Builder
+    {
+        public string? Title { get; set; }
+        public int? Score { get; set; }
+        public User? Author { get; set; }
+    }
 
-    private RatingSchema()
-        : base(
+    public static Schema<Rating> Schema { get; } = new GeneratedSchema();
+
+    private sealed class GeneratedSchema()
+        : StructSchema<Rating, Builder>(
             ShapeId.Parse("example#Rating"),
             [
-                new Member("title", Schemas.String, isRequired: true),
-                new Member(
-                    "score",
-                    Schemas.Integer,
-                    traits: [new Trait(ShapeId.Parse("smithy.api#range"), Document.From(
-                        new Dictionary<string, Document>
-                        {
-                            ["min"] = Document.From(1),
-                            ["max"] = Document.From(5),
-                        }))]),
-                new Member("author", Schemas.Lazy(() => UserSchema.Schema)),
-            ]) { }
-
-    public override void Serialize<TSerializer>(Rating value, ref TSerializer serializer)
+                new("title", Target0, isRequired: true),
+                new("score", Target1, traits: [new Trait(ShapeId.Parse("smithy.api#range"), /* ... */)]),
+                new("author", Target2),
+            ])
     {
-        serializer.WriteString(0, value.Title);
-        serializer.WriteInt(1, value.Score);
-        serializer.WriteStruct(2, value.Author, UserSchema.Schema);
-    }
+        private static readonly Schema<string?> Target0 = Schemas.NullableReference(Schemas.String);
+        private static readonly Schema<int?> Target1 = Schemas.Nullable(Schemas.Integer);
+        private static readonly Schema<User?> Target2 =
+            Schemas.NullableReference(Schemas.Lazy(() => UserSchema.Schema));
 
-    public override void DeserializeMember<TDeserializer>(
-        Builder builder,
-        int index,
-        ref TDeserializer deserializer)
-    {
-        switch (index)
+        public override Builder CreateTypedBuilder() => new();
+
+        public override Rating Build(Builder builder) =>
+            new(builder.Author, builder.Score, builder.Title ?? throw new MissingRequiredMemberException("title"));
+
+        public override void SerializeMembers<TSerializer>(Rating value, ref TSerializer serializer)
         {
-            case 0: builder.Title = deserializer.ReadString(); break;
-            case 1: builder.Score = deserializer.ReadInt(); break;
-            case 2: builder.Author = deserializer.ReadStruct(UserSchema.Schema); break;
+            Target0.Write(0, value.Title, ref serializer);
+            Target1.Write(1, value.Score, ref serializer);
+            Target2.Write(2, value.Author, ref serializer);
+        }
+
+        public override void DeserializeMember<TDeserializer>(
+            Builder builder,
+            int index,
+            ref TDeserializer deserializer)
+        {
+            switch (index)
+            {
+                case 0: builder.Title = Target0.Read(ref deserializer); break;
+                case 1: builder.Score = Target1.Read(ref deserializer); break;
+                case 2: builder.Author = Target2.Read(ref deserializer); break;
+            }
         }
     }
-
-    public override Rating Build(Builder builder) =>
-        new(
-            builder.Title ?? throw new MissingRequiredMemberException("title"),
-            builder.Score,
-            builder.Author);
 }
 ```
+
+A union schema derives from `UnionSchema<T>` the same way: it declares its
+cases and implements `CaseOf`, `SerializeCase`, and `DeserializeCase` by
+switching over the generated variant types. Lists, maps, and enums need no
+generated class; `Schemas.List`, `Schemas.Map`, `Schemas.StringEnum`, and
+`Schemas.IntEnum` build them from the element or value schema and the
+collection's own accessors.
 
 `Build` is where a required member absent from the payload fails, throwing
 where the codec can turn it into a modeled error. A defaulted member's builder
@@ -185,30 +210,30 @@ A member is the association between a container shape and a target shape, and
 it is the one place member-level traits live:
 
 ```csharp
-public sealed class Member
+public interface IMemberSchema
 {
-    public string Name { get; }
-    public int Index { get; }
-    public Schema Target { get; }
-    public bool IsRequired { get; }
+    ShapeId Id { get; }
+    string Name { get; }
+    Schema Target { get; }
+    bool IsRequired { get; }
 
     /// Traits declared on the member itself.
-    public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
+    IReadOnlyDictionary<ShapeId, Trait> MemberTraits { get; }
 
     /// Effective trait resolution per the Smithy spec: the member's
     /// declaration supersedes the target shape's. The only place
     /// precedence is implemented.
-    public Trait? GetTrait(ShapeId id);
+    Trait? GetTrait(ShapeId id);
 }
 ```
 
-`Index` is the member's declaration position, the number generated code passes
-to the serializer. Only ground truth is stored, each set where the model
+A member's position in its container's `Members` is its index, the number
+generated code passes to the serializer. Only ground truth is stored, each set where the model
 declares it: member traits on the member, shape traits on the target.
 Effective-value consumers (codecs resolving `@xmlName` or `@timestampFormat`,
 the validator reading `@length`) call `GetTrait` and never re-implement
 precedence; origin-aware consumers (documentation generation, model diffing)
-read `Member.Traits` and `Target.Traits` directly.
+read `MemberTraits` and `Target.Traits` directly.
 
 A union case, a list element, and a map key and value are members too. Because
 map keys are members, a constraint such as `@length` on `map$key` is
@@ -293,40 +318,33 @@ list, a map key and value are members 0 and 1, and a union writes its one case
 under the case's index:
 
 ```csharp
-// list SimpleList { member: String }
-public override void Serialize<TSerializer>(SimpleList value, ref TSerializer serializer)
+// The list schema `Schemas.List` builds for `list Names { member: String }`
+public void SerializeElements<TSerializer>(Names value, ref TSerializer serializer)
 {
     foreach (var item in value.Values)
     {
-        serializer.WriteString(0, item);
+        element.Write(0, item, ref serializer);
     }
 }
 
-public override SimpleList Deserialize<TDeserializer>(ref TDeserializer deserializer)
-{
-    var items = new List<string>();
-    while (deserializer.NextElement())
-    {
-        items.Add(deserializer.ReadString());
-    }
-
-    return SimpleList.FromOwnedList(items);
-}
+public void DeserializeElement<TDeserializer>(List<string> builder, ref TDeserializer deserializer) =>
+    builder.Add(element.Read(ref deserializer));
 ```
 
 The deserializer drives a structure read. It walks its input (JSON properties,
 XML elements and attributes, CBOR keys, protobuf field numbers, HTTP headers),
 maps each to a member index, and calls the generated `DeserializeMember`, so
-input order is irrelevant. `StructSchema<T, TBuilder>.Deserialize` creates the
-builder, hands it to `deserializer.ReadStruct`, and finalizes it with `Build`.
-A union read works the same way through the union's case reader.
+input order is irrelevant. `StructSchema<T, TBuilder>.Read` hands the schema to
+`deserializer.ReadStruct`, which creates the builder, fills it member by member,
+and finalizes it with `Build`. Lists, maps, and unions work the same way: the
+deserializer finds each element, entry, or case and calls back into the schema's
+`DeserializeElement`, `DeserializeEntry`, or `DeserializeCase`.
 
 `IShapeSerializer` and `IShapeDeserializer` have one method per simple shape
-kind (`WriteString`, `ReadInt`, `WriteTimestamp`, and so on), enum value
+kind (`WriteString`, `ReadInteger`, `WriteTimestamp`, and so on), enum value
 methods, `WriteStruct`/`ReadStruct` and their list, map, and union counterparts
-for a nested aggregate through its schema, `NextElement` and `NextEntry` for
-collections, and `WriteEventStream`/`ReadEventStream` for an event-stream
-member (see [streaming.md](streaming.md)). A nested write creates a child
+for a nested aggregate through its schema, and
+`WriteEventStream`/`ReadEventStream` for an event-stream member (see [streaming.md](streaming.md)). A nested write creates a child
 serializer positioned on the nested shape's plan, so generated code never
 tracks where it is.
 
