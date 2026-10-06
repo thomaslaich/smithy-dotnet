@@ -14,23 +14,9 @@ internal static class TimestampFormat
 {
     private static readonly ShapeId TimestampFormatTrait = new("smithy.api", "timestampFormat");
 
-    public static string Resolve(IReadOnlyDictionary<ShapeId, Trait>? memberTraits, Schema schema)
-    {
-        if (
-            memberTraits is not null
-            && memberTraits.TryGetValue(TimestampFormatTrait, out var memberTrait)
-        )
-        {
-            return memberTrait.Value.AsString();
-        }
-
-        if (schema.Resolved.Traits.TryGetValue(TimestampFormatTrait, out var schemaTrait))
-        {
-            return schemaTrait.Value.AsString();
-        }
-
-        return "epoch-seconds";
-    }
+    /// <summary>The effective <c>@timestampFormat</c>, or the body default when there is none.</summary>
+    public static string Resolve(Func<ShapeId, Trait?> getTrait) =>
+        getTrait(TimestampFormatTrait)?.Value.AsString() ?? "epoch-seconds";
 
     public static void Write(Utf8JsonWriter writer, DateTimeOffset value, string format)
     {

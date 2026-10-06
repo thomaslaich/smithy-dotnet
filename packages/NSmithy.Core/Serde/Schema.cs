@@ -1307,7 +1307,20 @@ public sealed class CollectionSchema<TCollection, TElement, TBuilder>
     public void SerializeElements<TSerializer>(TCollection value, ref TSerializer serializer)
         where TSerializer : struct, IShapeSerializer
     {
-        foreach (var element in getElements(value))
+        // Indexed when possible: foreach over an IEnumerable boxes the collection's enumerator,
+        // an allocation per list written.
+        var elements = getElements(value);
+        if (elements is IReadOnlyList<TElement> list)
+        {
+            for (var index = 0; index < list.Count; index++)
+            {
+                ElementSchema.Write(0, list[index], ref serializer);
+            }
+
+            return;
+        }
+
+        foreach (var element in elements)
         {
             ElementSchema.Write(0, element, ref serializer);
         }

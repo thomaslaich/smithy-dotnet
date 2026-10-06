@@ -200,8 +200,9 @@ public class SerializationExecutionBenchmarks : IDisposable
     private static readonly JsonEncodedText CategoryName = JsonEncodedText.Encode("category");
     private static readonly JsonEncodedText TagsName = JsonEncodedText.Encode("tags");
 
-    private static readonly IJsonValueWriter<ListItemsOutput> SchemaWriter =
-        JsonWriterCompiler.Compile(ListItemsOutputSchema.Schema);
+    private static readonly JsonMemberPlan SchemaPlan = new JsonPlans(
+        honorJsonNameTrait: true
+    ).ForRoot(ListItemsOutputSchema.Schema, traits: null);
 
     private readonly ArrayBufferWriter<byte> destination = new();
     private Utf8JsonWriter writer = null!;
@@ -280,7 +281,8 @@ public class SerializationExecutionBenchmarks : IDisposable
     public int Schema()
     {
         ResetWriter();
-        SchemaWriter.Write(writer, smithyList);
+        var serializer = new JsonShapeSerializer(writer, SchemaPlan, materializeDefaults: true);
+        ListItemsOutputSchema.Schema.Write(MemberIndex.Root, smithyList, ref serializer);
         writer.Flush();
         return destination.WrittenCount;
     }
