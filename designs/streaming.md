@@ -33,11 +33,13 @@ input stream is an `IAsyncEnumerable<TEvent>` member on `TInput`, an output
 stream is one on `TOutput`, and a duplex operation has both. A protocol resolves
 each direction into framing delegates when it binds the operation.
 
-`EventStreamBinding.TryBind` finds a structure's event-stream member and hands
-the protocol an `EventStreamBinding<TShape, TBuilder, TEvent>` with the builder
-and event types in scope. The binding reads the events off a value, builds a
-value around incoming events, and exposes the other members as a projection.
-A structure has at most one event-stream member.
+The event-stream member is serialized like any other member: the generated
+code calls `WriteEventStream(index, value.Events, ChatEventSchema.Schema)` and
+`ReadEventStream(ChatEventSchema.Schema)`. A protocol's binding serializer
+handles that call by framing each event through the event union's own
+`Serialize`, and handles every other member as an initial member. A body codec
+rejects an event-stream member when it builds its plan. A structure has at most
+one event-stream member.
 
 Generated operations keep the unary signature whatever the direction:
 
@@ -174,7 +176,8 @@ cancellation propagation, the response buffering mode, and stream ownership.
 
 ## Package Boundaries
 
-- `NSmithy.Core`: `EventStreamSchema<TEvent>` and `EventStreamBinding`.
+- `NSmithy.Core`: event-stream schemas and the `WriteEventStream` and
+  `ReadEventStream` serializer calls.
 - `NSmithy.EventStream`: `vnd.amazon.eventstream` message framing and the
   shared Smithy event semantics.
 - `NSmithy.Http`: the body union, the transport, and the protocol interfaces.

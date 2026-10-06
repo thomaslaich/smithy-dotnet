@@ -6,42 +6,40 @@ the runtime libraries that consume them: codecs, protocols, and validators.
 The generator emits plain model types plus schemas. A schema describes its
 shape and, through generated code, serializes values of that shape: it hands
 each member to a *shape serializer* and takes each member from a *shape
-deserializer*, in calls typed at the member's static type. A codec implements
-the shape serializer and deserializer for one wire format, and knows nothing
-about any particular shape. Everything else that consumes schemas (protocols, the validator,
-documentation) is a *fold*: a typed walk of the schema graph that compiles a
-plan once and caches it. Adding CBOR, XML, JSON, REST, rpcv2Cbor, or gRPC
-behavior therefore never requires regenerating format-specific code into every
-shape.
+deserializer*, in calls typed at the member's static type. Everything that
+consumes values implements those two interfaces: each codec for its wire format,
+the validator to check constraints, and HTTP bindings to route members to
+labels, headers, query parameters, and the body. Adding CBOR, XML, JSON, REST,
+rpcv2Cbor, or gRPC behavior therefore never requires regenerating
+format-specific code into every shape.
 
 ## Goals
 
 - **Fidelity.** The schema model mirrors the Smithy meta-model. Anything the
   model can express is representable: member-level traits on list elements and
   map keys, presence semantics, service structure.
-- **One path per concern.** Values cross a codec only through the schema's
-  generated serialization methods; schemas are traversed through a single typed
-  visitor. Neither has an interpretive fallback.
-- **No boxing.** Trait values, member access, and construction are statically
-  typed, so a compiled plan moves values of any type without boxing them.
-- **AOT-safe.** Plans are composed from delegates, never emitted IL. The model
-  works unchanged under Native AOT.
-- **Pay once.** Member lookup tables are built at schema construction; trait
-  resolution and consumer plans are computed at fold time. Nothing is resolved
-  per call.
+- **One path for values.** Values are read and written only through the
+  schema's generated `Serialize` and `Deserialize` methods. There is no second,
+  interpretive path.
+- **No boxing.** Every value crosses into a serializer at its static type.
+- **AOT-safe.** Serialization is generated code and plans are plain data. Nothing
+  emits IL or reflects over model types.
+- **Pay once.** Each consumer builds its per-shape plan once. Nothing is
+  resolved per call.
 
 ## Layers
 
 1. **Model types** are plain C# values.
-2. **Schemas** describe Smithy metadata, typed member access, and construction,
-   and serialize values through generated methods.
-3. **Codecs** implement shape serializers and deserializers for one wire format.
-4. **Protocols** project operation schemas into transport requests and responses.
-5. **Validators** compile schemas into constraint checkers.
+2. **Schemas** describe Smithy metadata and serialize values through generated
+   methods.
+3. **Codecs** implement the shape serializer and deserializer for one wire
+   format.
+4. **Protocols** bind operation schemas to transport requests and responses.
+5. **The validator** implements a shape serializer that checks constraints.
 
-Only the first two layers are generated. Codecs, protocols, and validators are
-runtime libraries configured from the generated schemas. For a worked example of
-what generation produces, see the
+Only the first two layers are generated. Codecs, protocols, and the validator
+are runtime libraries configured from the generated schemas. For a worked
+example of what generation produces, see the
 [Quick Start](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/).
 
 ## Generated Model Types
@@ -51,14 +49,16 @@ interface and hold no serializer callbacks. When deserialization needs staged
 construction, the generator emits a separate builder type instead of adding
 mutable hooks to the model.
 
-A shape's schema lives on a sibling static class named after the shape:
+A shape's schema is a sibling class named after the shape, with a single
+instance:
 
 ```csharp
 public sealed record class MenuItem(Food Food, float Price);
 
-public static partial class MenuItemSchema
+public sealed partial class MenuItemSchema : StructSchema<MenuItem, MenuItemSchema.Builder>
 {
-    public static Schema<MenuItem> Schema { get; } = /* ... */;
+    public static MenuItemSchema Schema { get; } = new();
+    // ...
 }
 ```
 
@@ -66,20 +66,18 @@ The model type carries no reference to its schema. A consumer is handed the
 schema rather than deriving it from the value:
 `JsonCodecFactory.Default.FromSchema(MenuItemSchema.Schema)`, and a generated
 client passes `MenuItemSchema.Schema` to the protocol when it binds an
-operation. One shape references another's schema by naming the sibling class
-(`Schemas.Lazy(() => FoodSchema.Schema)`). Every reference is an ordinary static
-property, so there is no registry, no reflection, and no startup scan. The
-schema class is `partial` so a project can add members to it without touching
-generated code.
+operation. Every reference is an ordinary static property, so there is no
+registry, no reflection, and no startup scan. The schema class is `partial` so
+a project can add members to it without touching generated code.
 
-## The Schema Algebra
+## Schemas
 
 Every shape is a `Schema`, and every aggregate shape is made of *members*,
 exactly as in the Smithy model:
 
 - Structures and unions have named members.
-- Lists have a single `Member`.
-- Maps have `Key` and `Value` members.
+- Lists have a single element member.
+- Maps have a key member and a value member.
 
 ```csharp
 public abstract class Schema
@@ -87,92 +85,90 @@ public abstract class Schema
     public ShapeId Id { get; }
     public ShapeKind Kind { get; }
     public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
+    public IReadOnlyList<Member> Members { get; }
 }
 
-public abstract class Schema<T> : Schema;
+public abstract class Schema<T> : Schema
+{
+    public abstract void Serialize<TSerializer>(T value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer;
+
+    public abstract T Deserialize<TDeserializer>(ref TDeserializer deserializer)
+        where TDeserializer : struct, IShapeDeserializer;
+}
 ```
 
-`Schema<T>` binds a shape to its exact CLR type `T`, including nullability
-annotations. The typed layer is the only real layer.
+The non-generic `Schema` is the whole metadata surface: kind, traits, and
+members, which is everything a consumer needs to build its plan. `Schema<T>`
+binds a shape to its CLR type `T` and adds the two generated methods, the only
+code that touches values.
 
-The non-generic `Schema` is a storage handle, not a second API. Some positions
-hold shapes whose type arguments all differ and need a common supertype to be
-stored at all: a structure's member list, an error registry keyed by `ShapeId`,
-a server's dispatch table. Its entire surface is `Id`, `Kind`, `Traits`, and
-`Accept`; construction, member access, and serde exist only on `Schema<T>`,
-which `schema.Accept(visitor)` gets back to.
+A scalar is the smallest schema: an id and a kind, no members. The prelude
+shapes are therefore shared singletons (`Schemas.String`, `Schemas.Integer`).
+One instance serves every integer in every model, because a constraint like
+`@range` is declared where the shape is *used*, so it lives on the member.
 
-A scalar is the smallest node in the algebra: an id and a kind, no members and
-no accessors. The prelude shapes are therefore shared singletons:
+A structure schema declares its members and implements the generated methods:
 
 ```csharp
-public static Schema<int> Integer { get; } =
-    new IntegerSchema(new ShapeId("smithy.api", "Integer"));
+// structure Rating { @required title: String, @range(min: 1, max: 5) score: Integer, author: User }
+public sealed partial class RatingSchema : StructSchema<Rating, RatingSchema.Builder>
+{
+    public static RatingSchema Schema { get; } = new();
+
+    private RatingSchema()
+        : base(
+            ShapeId.Parse("example#Rating"),
+            [
+                new Member("title", Schemas.String, isRequired: true),
+                new Member(
+                    "score",
+                    Schemas.Integer,
+                    traits: [new Trait(ShapeId.Parse("smithy.api#range"), Document.From(
+                        new Dictionary<string, Document>
+                        {
+                            ["min"] = Document.From(1),
+                            ["max"] = Document.From(5),
+                        }))]),
+                new Member("author", Schemas.Lazy(() => UserSchema.Schema)),
+            ]) { }
+
+    public override void Serialize<TSerializer>(Rating value, ref TSerializer serializer)
+    {
+        serializer.WriteString(0, value.Title);
+        serializer.WriteInt(1, value.Score);
+        serializer.WriteStruct(2, value.Author, UserSchema.Schema);
+    }
+
+    public override void DeserializeMember<TDeserializer>(
+        Builder builder,
+        int index,
+        ref TDeserializer deserializer)
+    {
+        switch (index)
+        {
+            case 0: builder.Title = deserializer.ReadString(); break;
+            case 1: builder.Score = deserializer.ReadInt(); break;
+            case 2: builder.Author = deserializer.ReadStruct(UserSchema.Schema); break;
+        }
+    }
+
+    public override Rating Build(Builder builder) =>
+        new(
+            builder.Title ?? throw new MissingRequiredMemberException("title"),
+            builder.Score,
+            builder.Author);
+}
 ```
 
-One instance serves every integer in every model. A constraint like `@range` is
-declared where the shape is *used*, so it lives on the member rather than on a
-private copy of the integer schema.
-
-A structure schema names its members, pairs each with the schema of its target,
-and closes with the two halves of construction: how to make a builder and how to
-finalize one:
-
-```csharp
-// structure Rating { @required title: String, @range(min: 1, max: 5) score: Integer }
-public static Schema<Rating> Schema { get; } =
-    Schemas.Structure<Rating, Builder>(ShapeId.Parse("example#Rating"))
-        .Required(
-            "title",
-            static value => value.Title,
-            static (builder, value) => builder.Title = value,
-            Schemas.NullableReference(Schemas.String))
-        .Optional(
-            "score",
-            static value => value.Score,
-            static (builder, value) => builder.Score = value,
-            Schemas.Nullable(Schemas.Integer),
-            [new Trait(ShapeId.Parse("smithy.api#range"), Document.From(
-                new Dictionary<string, Document>
-                {
-                    ["min"] = Document.From(1),
-                    ["max"] = Document.From(5),
-                }))])
-        .Build(
-            static () => new Builder(),
-            static builder => new Rating(
-                builder.Title ?? throw new MissingRequiredMemberException("title"),
-                builder.Score),
-            new Serializer());
-```
-
-The accessors are delegates over the concrete type, so reading and writing a
-member costs no reflection and no boxing. The finalizer is where a required
-member absent from the payload fails, throwing where the codec can turn it into
-a modeled error. `Serializer` holds the generated serialization methods; see
-[Serializing Values](#serializing-values).
-
-Construction style follows how many typed parts a shape kind has. A shape with
-none is a constructor (`new IntegerSchema(id)`). A shape whose parts are fixed
-by its kind is a factory method: `Schemas.List(id, element)` takes exactly one
-element schema and `Schemas.Map(id, value)` exactly one value schema. Only a
-shape with an unbounded number of *differently typed* parts is fluent, which
-means structures and unions.
-
-The fluency is there for type inference. Each `.Required` or `.Optional` call
-infers its own `TValue` from the accessor pair and the target schema, and stores
-a `MemberSchema<T, TBuilder, TValue>` that keeps the member's value type. A
-constructor taking a member collection would erase `TValue`, so every member
-would have to spell out `MemberSchema<Rating, Builder, string>` at the call
-site. The builder also derives each member id from the shape id, so a member
-cannot be given an id that disagrees with the shape it belongs to.
+`Build` is where a required member absent from the payload fails, throwing
+where the codec can turn it into a modeled error. A defaulted member's builder
+property starts at its modeled default, so an absent member keeps it.
 
 For each operation, the generator emits an `OperationSchema<TInput, TOutput>`
 that references the input and output schemas, the operation traits, and the
-modeled error descriptors. It implements `IOperationSchema`, a non-generic view
-of the same metadata for heterogeneous consumers. For each service, the
-generator emits a `ServiceSchema` with the service shape id, version, and
-service-level traits.
+modeled error descriptors. For each service, it emits a `ServiceSchema` with
+the service shape id, version, and service-level traits.
 
 Server generation additionally binds each unary operation to JSON Schema
 2020-12 input and output documents in its `IServiceOperation`. These describe
@@ -189,126 +185,62 @@ A member is the association between a container shape and a target shape, and
 it is the one place member-level traits live:
 
 ```csharp
-public interface IMemberSchema
+public sealed class Member
 {
-    string Name { get; }
+    public string Name { get; }
+    public int Index { get; }
+    public Schema Target { get; }
+    public bool IsRequired { get; }
 
     /// Traits declared on the member itself.
-    IReadOnlyDictionary<ShapeId, Trait> MemberTraits { get; }
-
-    Schema Target { get; }
+    public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
 
     /// Effective trait resolution per the Smithy spec: the member's
     /// declaration supersedes the target shape's. The only place
     /// precedence is implemented.
-    Trait? GetTrait(ShapeId id);
+    public Trait? GetTrait(ShapeId id);
 }
 ```
 
-Only ground truth is stored, each set where the model declares it: member
-traits on the member, shape traits on the target. Effective-value consumers
-(codecs resolving `@xmlName` or `@timestampFormat`, validators reading
-`@length`) call `GetTrait(ShapeId)` and never re-implement precedence. Since
-consumers are compiled folds, resolution runs once per consumer and schema, so
-no merged view is materialized. Origin-aware consumers (documentation
-generation, model diffing) read `MemberTraits` and `Target.Traits` directly.
+`Index` is the member's declaration position, the number generated code passes
+to the serializer. Only ground truth is stored, each set where the model
+declares it: member traits on the member, shape traits on the target.
+Effective-value consumers (codecs resolving `@xmlName` or `@timestampFormat`,
+the validator reading `@length`) call `GetTrait` and never re-implement
+precedence; origin-aware consumers (documentation generation, model diffing)
+read `Member.Traits` and `Target.Traits` directly.
 
-What every member has in common is its target's static type, which is what a
-consumer needs to compile anything per member. That is one interface, shared by
-structure members, list elements, and map keys and values:
-
-```csharp
-public interface ITypedTargetMemberSchema<TValue> : IMemberSchema
-{
-    Schema<TValue> TypedTarget { get; }
-}
-```
-
-A structure member additionally reads and writes its value on a container,
-which a collection member cannot do. Those accessors are typed over the
-container and its builder, so a plan compiled for a member moves the value
-without boxing it. A consumer that only knows the container reaches the value
-type through the member visitor:
-
-```csharp
-public interface IMemberSchema<TContainer, TValue>
-    : IMemberSchema<TContainer>, ITypedTargetMemberSchema<TValue>
-{
-    TValue GetValue(TContainer container);
-}
-
-public interface IMemberSchema<TContainer, TBuilder, TValue>
-    : IMemberSchema<TContainer, TValue>, IBuilderMemberSchema<TContainer, TBuilder>
-{
-    void SetValue(TBuilder builder, TValue value);
-}
-
-public interface IMemberVisitor<TContainer, TBuilder>
-{
-    void Visit<TValue>(IMemberSchema<TContainer, TBuilder, TValue> member);
-}
-```
-
-A union case is a member too, and carries a member id, so a consumer reports a
-case the way it reports any other member.
-
-List and map members expose typed collection-member schemas, not container
-accessors: an element is enumerated and appended, never read by member name.
-Because map keys are members, a constraint such as `@length` on `map$key` is
+A union case, a list element, and a map key and value are members too. Because
+map keys are members, a constraint such as `@length` on `map$key` is
 representable and validated like any other member trait.
 
 ### Recursion
 
 Recursive models form a cyclic schema graph. A schema cannot reference itself
-while it is still being built, so the cycle is tied through `Schemas.Lazy(...)`:
+while it is still being constructed, so a member that closes a cycle targets
+`Schemas.Lazy(() => NodeSchema.Schema)`, which resolves once on first use and
+forwards everything to its target. Generated serialization code references
+other schemas directly, so only member metadata needs the indirection.
 
-```csharp
-// structure TreeNode { @required label: String, child: TreeNode }
-Schema<TreeNode>? node = null;
-node = Schemas
-    .Structure<TreeNode, Builder>(ShapeId.Parse("example#TreeNode"))
-    .Required(
-        "label",
-        static value => value.Label,
-        static (builder, value) => builder.Label = value,
-        Schemas.NullableReference(Schemas.String))
-    .Optional(
-        "child",
-        static value => value.Child,
-        static (builder, value) => builder.Child = value,
-        Schemas.NullableReference(Schemas.Lazy(() => node!)))
-    .Build(
-        static () => new Builder(),
-        static builder => new TreeNode(builder.Label!, builder.Child));
-```
-
-`LazySchema<T>` resolves once and caches. It is invisible to consumers: it
-forwards `Id`, `Kind`, `Traits`, and `Resolved` to its target, and its `Accept`
-delegates to the target's `Accept`, so the visitor is always called by the
-sealed leaf that knows its own type arguments. There is no `VisitLazy` case.
-
-A fold cannot walk a cyclic graph eagerly, so a consumer either defers each
-member body until first use or memoizes what it has already compiled. The
-validator does the first. Codec plans and protocol bindings do the second,
-through `SchemaCompilationCache`, which registers a placeholder for a shape
-before compiling it so a self-reference resolves to the in-progress plan. The
-cache keys on `Schema.Resolved`, because two references to the same shape are
-different objects when one of them is a lazy stand-in.
+A consumer cannot walk a cyclic graph eagerly when it builds a plan, so plans
+are memoized through `SchemaCompilationCache`, which registers a placeholder for
+a shape before building it so a self-reference resolves to the in-progress
+plan. The cache keys on the resolved schema, because two references to the same
+shape are different objects when one of them is a lazy stand-in.
 
 ### Projections
 
 A projection narrows a structure's visible members while keeping the same
 container type. REST protocols use one for the body: the members bound to
-labels, headers, and query parameters are excluded, and the body codec is
-compiled for the rest.
+labels, headers, and query parameters are excluded, and the body codec writes
+and reads the rest.
 
 ```csharp
 var bodyProjection = Schemas.Project(inputSchema, bodyMemberNames);
 ```
 
-A projection evaluates its selection once at construction and snapshots the
-matching member schemas, so a codec compiled for it sees a stable view even when
-the selection came from a mutable set.
+A projection is a member mask evaluated once at construction, so a codec built
+for it sees a stable view even when the selection came from a mutable set.
 
 ## Traits
 
@@ -329,140 +261,97 @@ parsing stay centralized while the core model remains open-ended.
 
 Presence is a property of the *member position*, never of the target shape:
 
-- `required` is member metadata (`IMemberSchema.IsRequired`).
-- Modeled defaults are member traits, resolved once at fold time into a typed
-  factory (`DefaultValues.TryCompile`).
+- `required` is member metadata (`Member.IsRequired`).
+- Modeled defaults are member traits. Generated builders start defaulted
+  members at their default; a codec writing a default reads it from the trait.
 - `@sparse` is metadata on the list or map schema, declaring that the
   collection holds nullable elements or values.
 
-A member's target is wrapped to carry nullability: `Schemas.NullableReference`
-for a reference type and `Schemas.Nullable` for a value type. Reference-type
-nullability is only an annotation in the `Schema<T>` type argument. Value-type
-nullability needs `NullableSchema<T>`, because C# represents `T?` as a distinct
-runtime type. A fold reads required and default metadata from the member and
-value-type nullability from the schema.
-
-## Dispatch: Folds Over the Algebra
-
-There is exactly one way to consume a schema: a generic visitor covering the
-whole algebra.
-
-```csharp
-public interface ISchemaVisitor<out TResult>
-{
-    TResult VisitBoolean(Schema<bool> schema);
-    TResult VisitString(Schema<string> schema);
-    TResult VisitTimestamp(Schema<DateTimeOffset> schema);
-    // ... remaining simple shapes ...
-
-    TResult VisitNullable<T>(NullableSchema<T> schema)
-        where T : struct;
-
-    TResult VisitList<TCollection, TElement, TBuilder>(
-        IListSchema<TCollection, TElement, TBuilder> schema);
-
-    TResult VisitMap<TDictionary, TValue, TBuilder>(
-        IMapSchema<TDictionary, TValue, TBuilder> schema);
-
-    TResult VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema);
-    TResult VisitUnion<T>(IUnionSchema<T> schema);
-    TResult VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema);
-}
-```
-
-A consumer is a fold: it visits the schema graph once and compiles a typed plan,
-cached per consumer and schema. A protocol compiles transport bindings, and the
-validator compiles an `ISmithyValidator<T>`. Codecs are not folds; they run the
-schema's generated [serialization methods](#serializing-values).
-
-The hot path runs only precompiled plans: no schema dispatch, no per-value trait
-lookup, no boxing. A REST operation's labels, headers, query parameters, and
-status code are each a plan compiled from the member and its value codec.
-
-A fold that handles every kind implements `ISchemaVisitor<TResult>` directly, so
-a new shape kind fails to compile until the fold handles it. A fold that admits
-only a few kinds derives from `PartialSchemaVisitor<TResult>`, overrides those,
-and answers the rest through `VisitDefault`.
+Nullability lives in the generated code, not in the schema: an optional
+`Integer` member is an `int?` property, and the generated call passes it to
+`WriteInt(int index, int? value)`. The serializer decides what a null means
+for the member from its plan: omit it, write its default, or write an explicit
+null in a sparse collection.
 
 ## Serializing Values
 
-Every aggregate schema (structure, union, list, and map) serializes values of
-its shape through generated code that knows the shape's CLR types and nothing
-about any wire format:
-
-```csharp
-public abstract class Schema<T> : Schema
-{
-    public abstract void Serialize<TSerializer>(T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
-
-    public abstract T Deserialize<TDeserializer>(ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer;
-}
-```
+Every call names a member of the shape being serialized by its index and passes
+the value at its static type. One call carries both, so the serializer decides
+in one place whether to write the member, write its default, write an explicit
+null, or skip it because it is outside the projection being written.
 
 The serializer and deserializer are `struct` type arguments, so the JIT
-compiles the generated code once per codec with every call bound directly: no
-interface dispatch and no casts per value.
-
-Every call names a member of the shape being serialized by its declaration
-index and passes the value at its static type. One call carries both, so the
-codec decides in one place whether to write the member, write its default, write
-an explicit null, or skip it because it is outside the projection being written:
-
-```csharp
-// structure Rating { @required title: String, score: Integer, author: User }
-serializer.WriteString(0, value.Title);
-serializer.WriteInt(1, value.Score);                       // int?: the codec handles null
-serializer.WriteStruct(2, value.Author, UserSchema.Schema);
-```
+compiles the generated methods once per implementation with every call bound
+directly: no interface dispatch and no casts per value.
 
 Collections and unions use the same calls. A list element is member 0 of the
 list, a map key and value are members 0 and 1, and a union writes its one case
 under the case's index:
 
 ```csharp
-foreach (var item in value.Values)
+// list SimpleList { member: String }
+public override void Serialize<TSerializer>(SimpleList value, ref TSerializer serializer)
 {
-    serializer.WriteString(0, item);
+    foreach (var item in value.Values)
+    {
+        serializer.WriteString(0, item);
+    }
+}
+
+public override SimpleList Deserialize<TDeserializer>(ref TDeserializer deserializer)
+{
+    var items = new List<string>();
+    while (deserializer.NextElement())
+    {
+        items.Add(deserializer.ReadString());
+    }
+
+    return SimpleList.FromOwnedList(items);
 }
 ```
 
-The codec drives a structure read. It walks the wire format (JSON properties,
-XML elements and attributes, CBOR keys, protobuf field numbers), maps each to a
-member index, and calls the generated member reader, so wire order is
-irrelevant:
-
-```csharp
-switch (index)
-{
-    case 0: builder.Title = deserializer.ReadString(); break;
-    case 1: builder.Score = deserializer.ReadInt(); break;
-    case 2: builder.Author = deserializer.ReadStruct(UserSchema.Schema); break;
-}
-```
-
-Once the structure ends, absent members take their modeled defaults and the
-builder is finalized, which is where a missing required member fails. A list or
-map read loops over `deserializer.NextElement()` or `NextEntry()` and reads each
-value the same way.
+The deserializer drives a structure read. It walks its input (JSON properties,
+XML elements and attributes, CBOR keys, protobuf field numbers, HTTP headers),
+maps each to a member index, and calls the generated `DeserializeMember`, so
+input order is irrelevant. `StructSchema<T, TBuilder>.Deserialize` creates the
+builder, hands it to `deserializer.ReadStruct`, and finalizes it with `Build`.
+A union read works the same way through the union's case reader.
 
 `IShapeSerializer` and `IShapeDeserializer` have one method per simple shape
 kind (`WriteString`, `ReadInt`, `WriteTimestamp`, and so on), enum value
 methods, `WriteStruct`/`ReadStruct` and their list, map, and union counterparts
-for a nested aggregate through its schema, and `NextElement` and `NextEntry` for
-collections.
+for a nested aggregate through its schema, `NextElement` and `NextEntry` for
+collections, and `WriteEventStream`/`ReadEventStream` for an event-stream
+member (see [streaming.md](streaming.md)). A nested write creates a child
+serializer positioned on the nested shape's plan, so generated code never
+tracks where it is.
+
+## Plans
+
+Each implementation of `IShapeSerializer` or `IShapeDeserializer` keeps a *plan*:
+per-shape tables of the metadata it needs, indexed by member position and
+built once from the schema graph. Building one is a walk of the non-generic
+schema (`Kind`, `Members`, `Member.Target`, traits) that switches on the shape
+kind. Each table links to the tables of its members' targets, so a nested write
+switches tables without a lookup, and a recursive shape links back to its own
+table.
+
+- A JSON plan holds each member's pre-encoded property name (honoring
+  `@jsonName`), timestamp format, and default.
+- An XML plan holds element and attribute names, flattening, and namespaces.
+- A protobuf plan holds field numbers and packing, and inlines a union's cases
+  into the enclosing message.
+- The validator's plan holds each member's constraints.
+- An HTTP binding plan holds each member's binding: label, header, query
+  parameter, payload, status code, or body.
+
+A plan builder rejects a shape kind its format cannot represent, such as an
+event stream in a JSON body, when the plan is built rather than when a value is
+written.
 
 ## Codec Model
 
-A codec implements `IShapeSerializer` and `IShapeDeserializer` for one wire
-format, plus a *plan*: per-shape tables of wire metadata indexed by member position, built
-once from the schema graph. A JSON plan holds each member's pre-encoded property
-name (honoring `@jsonName`), timestamp format, and default; an XML plan holds
-element and attribute names, flattening, and namespaces; a protobuf plan holds
-field numbers and packing. Each table links to the tables of its members'
-targets, so writing a nested value switches tables without a lookup, and a
-recursive shape links back to its own table.
+A codec implements the shape serializer and deserializer for one wire format.
 
 ```csharp
 public interface ICodec<TValue>
@@ -480,18 +369,14 @@ public interface IProjectionCodec<TValue, in TBuilder>
 public interface ICodecFactory
 {
     ICodec<T> FromSchema<T>(Schema<T> schema, CodecFactoryOptions? options = null);
-    ICodec<T> FromMember<T>(
-        ITypedTargetMemberSchema<T> member,
-        CodecFactoryOptions? options = null
-    );
+    ICodec<T> FromMember<T>(Member member, Schema<T> target, CodecFactoryOptions? options = null);
 }
 
 public interface IProjectionCodecFactory : ICodecFactory
 {
     IProjectionCodec<T, TBuilder> FromProjection<T, TBuilder>(
         StructProjection<T, TBuilder> projection,
-        CodecFactoryOptions? options = null
-    );
+        CodecFactoryOptions? options = null);
 }
 ```
 
@@ -508,51 +393,50 @@ Each format exposes one factory: `JsonCodecFactory`, `XmlCodecFactory`,
 `CborCodecFactory`, and `ProtoCodecFactory`, in the `NSmithy.Codecs.*`
 packages. JSON, XML, and CBOR implement `IProjectionCodecFactory`; Protobuf
 implements only `ICodecFactory`, because gRPC always encodes complete messages.
-A projection is a member mask over the structure's table, which every write
-consults. `FromMember` retains traits declared on the member, for a payload
-member whose traits control its target's wire representation (`@xmlName`,
+`FromMember` applies traits declared on the member, for a payload member whose
+traits control its target's wire representation (`@xmlName`,
 `@timestampFormat`).
 
 A projection codec reads into a builder rather than producing a value. A
-protocol creates one builder per request, lets the body codec and each HTTP
-binding reader set the members they own, and finalizes the builder once.
+protocol creates one builder per request, lets the HTTP binding deserializer and
+the body codec set the members they own, and finalizes the builder once.
 
 Codecs handle body-format concerns: names, timestamp formats, enum values,
 sparse collections, documents, and protobuf field numbers. They do not build
 HTTP requests, expand URI labels, choose headers, or map status codes; those
-belong to protocols. A format whose layout does not fit member-at-a-time
-writing, such as protobuf inlining a union's cases into the enclosing message,
-resolves it in its plan rather than in generated code.
+belong to protocols.
 
 ## Validation
 
 The server enforces the constraint traits: `@required`, `@length`, `@range`,
-`@pattern`, `@uniqueItems`, and enum membership. Validation is a fold like any
-other: it compiles a schema into an `ISmithyValidator<T>` that walks a
-deserialized value and collects every violation.
+`@pattern`, `@uniqueItems`, and enum membership. The validator is a shape
+serializer: validating a value means serializing it into the validator, whose
+plan checks each member's constraints as the value is written and collects
+every violation.
 
 ```csharp
 ISmithyValidator<T>? validator = SmithyValidator.FromSchema(inputSchema);
 ```
 
-The fold resolves each constraint through member precedence
-(`member.GetTrait(LengthTraitId)`) and compiles one checker per constrained
-node. A subgraph with no reachable constraints compiles to nothing, and a schema
-with no constraints at all yields no validator, so unconstrained operations pay
-nothing per request.
+A subgraph with no reachable constraints is skipped, and a schema with no
+constraints at all yields no validator, so unconstrained operations pay nothing
+per request.
 
 A validator reports all violations in one pass. Each violation carries a JSON
-Pointer into the value (`/tags/2`, `/attributes/color`) and a message, matching
-the path `smithy.framework#ValidationExceptionField` documents, so a caller can
-correct every problem from a single response.
+Pointer into the value (`/tags/2`, `/attributes/color`), tracked by the
+validator as nested writes descend, and a message, matching the path
+`smithy.framework#ValidationExceptionField` documents, so a caller can correct
+every problem from a single response.
 
 Generated enum types stay open, so an unrecognized value deserializes rather
 than throwing and a client is not broken by a server that added a member. The
-server is where that openness stops: enum membership is checked from the values
-the schema carries.
+server is where that openness stops: the validator checks each written enum
+value against the values the schema carries.
 
-`@uniqueItems` compares elements through equality derived from the schema, not
-from .NET: a blob is a `byte[]` and a generated structure holding a list compares
+`@uniqueItems` compares elements by their canonical encoding: each element is
+serialized with the CBOR codec, with map entries sorted by key, and duplicates
+are equal byte sequences. Equality is therefore the model's equality, not
+.NET's: a blob is a `byte[]` and a generated structure holding a list compares
 that member by reference, so .NET equality would let duplicates through.
 
 A missing `@required` member is detected during deserialization, where the
@@ -636,19 +520,24 @@ discriminator extractor, whether a discriminator is required (rpc-style
 protocols always carry one), and whether the HTTP status may resolve an error
 the discriminator did not.
 
-### REST binding layer
+### HTTP bindings
 
 `NSmithy.Protocols.Rest` holds the REST wire format, shared by restJson1 and
-restXml, which differ only in the `IRestBodyCodecFactory` they supply:
+restXml, which differ only in the `IRestBodyCodecFactory` they supply.
 
-- `RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder>`
-  precomputes everything the operation schema determines: HTTP method, URI
-  template, the label, header, query, and payload members, and the input and
-  output body projections.
-- `RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutputBuilder>` is the
-  per-operation protocol. It holds the binding and compiled error handling and
-  delegates to `RestProtocol`, the stateless engine for URI templating, HTTP
-  binding values, payloads, and error parsing.
+The REST protocol serializes an operation's input or output through an *HTTP
+binding serializer*. Its plan maps each member to its binding, and each write
+goes there: a label into the URI template, a header or query parameter through
+the HTTP binding value rules below, a status code onto the response, a
+`@httpPayload` member through the body codec on its own, and every other member
+into the body codec's serializer for the body projection. Deserialization
+mirrors it: the HTTP binding deserializer reads labels, headers, and query
+parameters into the builder through the generated `DeserializeMember`, and the
+body codec reads the body into the same builder.
+
+`RestOperationProtocol` holds the compiled binding plans and error handling for
+one operation and delegates to `RestProtocol`, the stateless engine for URI
+templating, HTTP binding values, payloads, and error parsing.
 
 ### HTTP binding values
 
@@ -663,18 +552,28 @@ binding rules, not by a body codec:
 - `@mediaType` strings are base64-encoded.
 - Header lists are comma-separated with RFC 7230 quoting and escaping.
 
-Each binding compiles a typed value reader or writer in `RestProtocol` from the
-member's schema.
-
 ## Alternatives Considered
+
+### Consumers as schema folds
+
+Every consumer could walk the schema graph through a generic visitor and compile
+a tree of typed nodes: readers and writers for a codec, checkers for the
+validator, accessors for HTTP bindings. That needs a schema visitor with a case
+per shape kind, a tower of member interfaces typed over container, builder, and
+value so each node can read and write its member, and getter and setter
+delegates on every member of every generated schema. Each consumer then
+reimplements the same walk with its own typed node classes for every shape
+kind, and a structure's per-member nodes can only be stored as `object` and
+cast back on each value. Rejected: generated serialization methods make the
+walk a single generated method per shape, leave each consumer only its own
+concern, and keep the schema itself non-generic metadata.
 
 ### Reflection-based serialization
 
 Scanning properties at runtime via reflection is common in .NET serializers.
 Rejected: reflection loses Smithy member metadata unless the model carries
 serializer-specific attributes, multiple protocols would need competing
-attributes or converters on the same type, and it rules out the precomputation
-that keeps the hot path free of boxing and lookups.
+attributes or converters on the same type, and it rules out precomputed plans.
 
 ### Format-specific generated serializers
 
@@ -682,21 +581,16 @@ The generator could emit a JSON, CBOR, or XML serializer per shape, as
 `System.Text.Json` source generation does. Rejected: it couples generated code
 to specific wire formats, adding a codec would require regenerating every
 model, and protocol projections would still need to redirect member writes.
+The generated serialization methods are format-agnostic: they know only member
+indices and CLR types, and every codec uses the same ones.
 
-What is generated per shape is format-agnostic: the schema's serialization
-methods move values through typed shape serializer calls and know nothing about
-any wire format. They live on the schema rather than the model type, and every
-codec uses the same ones.
+### Serialization methods on the model type
 
-### Codecs as schema folds
-
-A codec could fold the schema graph through the visitor into a tree of typed
-reader and writer objects, as protocols and the validator do. Rejected: every
-codec then reimplements the same walk over structures, unions, lists, and maps,
-each with typed node classes for every shape kind, and a structure's per-member
-plans can only be stored as `object` and cast back on each value. Generated
-serializers make the walk a single generated method per shape and leave each
-codec only its format.
+The model type could implement the serialization interface itself, as
+smithy-java's generated shapes implement `SerializableStruct`. Rejected: it
+puts serialization members on a type that is otherwise a plain value, and the
+schema would still be needed separately for metadata. The schema class owns
+both.
 
 ### Protocol locations in core schema metadata
 
@@ -708,10 +602,9 @@ location is a protocol's interpretation of traits, not a property of the shape.
 
 Schemas could expose `object`-typed accessors and builders so heterogeneous
 infrastructure can read and construct values without knowing the CLR type.
-Rejected: a codec built on that surface boxes and casts on the hot path, and
-keeping it alongside the typed surface means two behaviors to keep identical.
-Heterogeneous code holds the non-generic `Schema` and re-enters typed code
-through `Accept`.
+Rejected: anything built on that surface boxes and casts on the hot path, and
+keeping it alongside the generated methods means two behaviors to keep
+identical.
 
 ### Trait overlays instead of members
 
@@ -725,16 +618,16 @@ itself as a node. An overlay erases those.
 
 Members could carry a third trait collection: the member-over-target merge,
 computed at construction. Rejected: trait resolution already runs once per
-consumer and schema, so caching the merge buys nothing on the hot path, and the
-merge cannot represent origin. A member re-declaring a trait with the target's
-value is indistinguishable from declaring nothing.
+consumer plan, so caching the merge buys nothing on the hot path, and the merge
+cannot represent origin. A member re-declaring a trait with the target's value
+is indistinguishable from declaring nothing.
 
 ### Presence as nullable wrapper schemas
 
-Optionality could be expressed entirely by wrapping target schemas in nullable
-adapters. Rejected: presence is positional in Smithy, so required, optional, and
-defaulted all belong to the member. Nullable wrappers carry only the CLR
-nullability of the member's value.
+Optionality could be expressed by wrapping target schemas in nullable adapters.
+Rejected: presence is positional in Smithy, so required, optional, and defaulted
+all belong to the member, and CLR nullability belongs to the generated code that
+reads and writes the value.
 
 ### Generated typed trait classes
 
