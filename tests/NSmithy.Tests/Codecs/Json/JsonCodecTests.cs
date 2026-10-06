@@ -1,6 +1,6 @@
 using NSmithy.Codecs.Json;
-using NSmithy.Core;
 using NSmithy.Core.Serde;
+using Nsmithy.Tests.Json;
 
 namespace NSmithy.Tests.Codecs.Json;
 
@@ -11,42 +11,18 @@ public sealed class JsonCodecTests
 {
     // ---------------- scalars ----------------
 
-    public sealed record Scalars(
-        string Text,
-        int Count,
-        long Big,
-        double Ratio,
-        bool Flag,
-        byte[] Data
-    );
-
-    public sealed class ScalarsBuilder
-    {
-        public string? Text { get; set; }
-        public int Count { get; set; }
-        public long Big { get; set; }
-        public double Ratio { get; set; }
-        public bool Flag { get; set; }
-        public byte[]? Data { get; set; }
-    }
-
     [Fact]
     public void JsonCodecRoundTripsScalarMembers()
     {
-        var input = new Scalars("hi", 7, 9_000_000_000L, 1.5, true, [1, 2, 3]);
-        var schema = Schemas
-            .Structure<Scalars, ScalarsBuilder>(new ShapeId("example", "Scalars"))
-            .Required("text", static s => s.Text, static (b, v) => b.Text = v, Schemas.String)
-            .Required("count", static s => s.Count, static (b, v) => b.Count = v, Schemas.Integer)
-            .Required("big", static s => s.Big, static (b, v) => b.Big = v, Schemas.Long)
-            .Required("ratio", static s => s.Ratio, static (b, v) => b.Ratio = v, Schemas.Double)
-            .Required("flag", static s => s.Flag, static (b, v) => b.Flag = v, Schemas.Boolean)
-            .Required("data", static s => s.Data, static (b, v) => b.Data = v, Schemas.Blob)
-            .Build(
-                static () => new ScalarsBuilder(),
-                static b => new Scalars(b.Text!, b.Count, b.Big, b.Ratio, b.Flag, b.Data!)
-            );
-        var codec = JsonCodecFactory.Default.FromSchema(schema);
+        var input = new Scalars(
+            Text: "hi",
+            Count: 7,
+            Big: 9_000_000_000L,
+            Ratio: 1.5,
+            Flag: true,
+            Data: [1, 2, 3]
+        );
+        var codec = JsonCodecFactory.Default.FromSchema(ScalarsSchema.Schema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -60,78 +36,52 @@ public sealed class JsonCodecTests
         Assert.Equal(json, codec.SerializeText(decoded));
     }
 
-    // ---------------- optional / absent members ----------------
-
-    public sealed record Profile(string Name, string? Nickname);
-
-    public sealed class ProfileBuilder
+    [Fact]
+    public void JsonCodecRoundTripsPrimitiveRootValue()
     {
-        public string? Name { get; set; }
-        public string? Nickname { get; set; }
+        var codec = JsonCodecFactory.Default.FromSchema(Schemas.Integer);
+
+        var json = codec.SerializeText(36);
+        var decoded = codec.DeserializeText(json);
+
+        Assert.Equal("36", json);
+        Assert.Equal(36, decoded);
     }
 
-    private static Schema<Profile> ProfileSchema() =>
-        Schemas
-            .Structure<Profile, ProfileBuilder>(new ShapeId("example", "Profile"))
-            .Required("name", static p => p.Name, static (b, v) => b.Name = v, Schemas.String)
-            .Optional(
-                "nickname",
-                static p => p.Nickname!,
-                static (b, v) => b.Nickname = v,
-                Schemas.String
-            )
-            .Build(static () => new ProfileBuilder(), static b => new Profile(b.Name!, b.Nickname));
-
-    private static Schema<Profile> JsonNamedProfileSchema() =>
-        Schemas
-            .Structure<Profile, ProfileBuilder>(new ShapeId("example", "JsonNamedProfile"))
-            .Required(
-                "name",
-                static p => p.Name,
-                static (b, v) => b.Name = v,
-                Schemas.String,
-                [new Trait(ShapeId.Parse("smithy.api#jsonName"), Document.From("displayName"))]
-            )
-            .Optional(
-                "nickname",
-                static p => p.Nickname!,
-                static (b, v) => b.Nickname = v,
-                Schemas.String
-            )
-            .Build(static () => new ProfileBuilder(), static b => new Profile(b.Name!, b.Nickname));
+    // ---------------- optional / absent members ----------------
 
     [Fact]
     public void JsonCodecHonorsJsonNameTraitByDefault()
     {
-        var codec = JsonCodecFactory.Default.FromSchema(JsonNamedProfileSchema());
+        var codec = JsonCodecFactory.Default.FromSchema(JsonNamedProfileSchema.Schema);
 
-        var json = codec.SerializeText(new Profile("Ada", null));
+        var json = codec.SerializeText(new JsonNamedProfile("Ada"));
         var decoded = codec.DeserializeText("{\"displayName\":\"Grace\"}");
 
         Assert.Equal("{\"displayName\":\"Ada\"}", json);
-        Assert.Equal(new Profile("Grace", null), decoded);
+        Assert.Equal(new JsonNamedProfile("Grace"), decoded);
     }
 
     [Fact]
     public void JsonCodecCanUseModeledMemberNamesInsteadOfJsonNameTrait()
     {
         var codec = new JsonCodecFactory(honorJsonNameTrait: false).FromSchema(
-            JsonNamedProfileSchema()
+            JsonNamedProfileSchema.Schema
         );
 
-        var json = codec.SerializeText(new Profile("Ada", null));
+        var json = codec.SerializeText(new JsonNamedProfile("Ada"));
         var decoded = codec.DeserializeText("{\"name\":\"Grace\"}");
 
         Assert.Equal("{\"name\":\"Ada\"}", json);
-        Assert.Equal(new Profile("Grace", null), decoded);
+        Assert.Equal(new JsonNamedProfile("Grace"), decoded);
     }
 
     [Fact]
     public void JsonCodecOmitsNullOptionalMember()
     {
-        var codec = JsonCodecFactory.Default.FromSchema(ProfileSchema());
+        var codec = JsonCodecFactory.Default.FromSchema(ProfileSchema.Schema);
 
-        var json = codec.SerializeText(new Profile("Ada", null));
+        var json = codec.SerializeText(new Profile("Ada"));
 
         Assert.Equal("{\"name\":\"Ada\"}", json);
     }
@@ -139,43 +89,63 @@ public sealed class JsonCodecTests
     [Fact]
     public void JsonCodecDeserializesAbsentOptionalMemberAsNull()
     {
-        var codec = JsonCodecFactory.Default.FromSchema(ProfileSchema());
+        var codec = JsonCodecFactory.Default.FromSchema(ProfileSchema.Schema);
 
         var decoded = codec.DeserializeText("{\"name\":\"Ada\"}");
 
-        Assert.Equal(new Profile("Ada", null), decoded);
+        Assert.Equal(new Profile("Ada"), decoded);
+    }
+
+    // ---------------- required members ----------------
+
+    [Fact]
+    public void JsonCodecRejectsMissingRequiredMember()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(RequiredPersonSchema.Schema);
+
+        var ex = Assert.Throws<MissingRequiredMemberException>(() => codec.DeserializeText("{}"));
+
+        Assert.Equal("Missing required member 'name'.", ex.Message);
+    }
+
+    [Fact]
+    public void JsonCodecRejectsNullRequiredMember()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(RequiredPersonSchema.Schema);
+
+        var ex = Assert.Throws<MissingRequiredMemberException>(() =>
+            codec.DeserializeText("{\"name\":null}")
+        );
+
+        // An explicitly null required member is the same violation as an absent one, and reaches
+        // the server runtime the same way.
+        Assert.Equal("Missing required member 'name'.", ex.Message);
+    }
+
+    [Fact]
+    public void JsonCodecReportsPathOfNestedMissingRequiredMember()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(OrderSchema.Schema);
+
+        var ex = Assert.Throws<MissingRequiredMemberException>(() =>
+            codec.DeserializeText("""{"buyer":{}}""")
+        );
+
+        // The reader that finds the omission knows only "name"; the enclosing reader supplies the
+        // rest as the exception unwinds.
+        Assert.Equal(["buyer", "name"], ex.PathTokens);
     }
 
     // ---------------- list + map ----------------
 
-    public sealed record Bag(IReadOnlyList<string> Tags, IReadOnlyDictionary<string, int> Counts);
-
-    public sealed class BagBuilder
-    {
-        public IReadOnlyList<string>? Tags { get; set; }
-        public IReadOnlyDictionary<string, int>? Counts { get; set; }
-    }
-
     [Fact]
     public void JsonCodecRoundTripsListAndMap()
     {
-        var input = new Bag(["a", "b"], new Dictionary<string, int> { ["x"] = 1, ["y"] = 2 });
-        var schema = Schemas
-            .Structure<Bag, BagBuilder>(new ShapeId("example", "Bag"))
-            .Required(
-                "tags",
-                static b => b.Tags,
-                static (b, v) => b.Tags = v,
-                Schemas.List(new ShapeId("example", "Tags"), Schemas.String)
-            )
-            .Required(
-                "counts",
-                static b => b.Counts,
-                static (b, v) => b.Counts = v,
-                Schemas.Map(new ShapeId("example", "Counts"), Schemas.Integer)
-            )
-            .Build(static () => new BagBuilder(), static b => new Bag(b.Tags!, b.Counts!));
-        var codec = JsonCodecFactory.Default.FromSchema(schema);
+        var input = new Bag(
+            Tags: new Tags(["a", "b"]),
+            Counts: new Counts(new Dictionary<string, int> { ["x"] = 1, ["y"] = 2 })
+        );
+        var codec = JsonCodecFactory.Default.FromSchema(BagSchema.Schema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
@@ -185,70 +155,25 @@ public sealed class JsonCodecTests
         Assert.Equal(json, codec.SerializeText(decoded));
     }
 
-    public sealed record Timeline(IReadOnlyList<DateTimeOffset> Events);
-
-    public sealed class TimelineBuilder
-    {
-        public IReadOnlyList<DateTimeOffset>? Events { get; set; }
-    }
-
     [Fact]
     public void JsonCodecAppliesListElementMemberTraits()
     {
-        var timestampFormat = ShapeId.Parse("smithy.api#timestampFormat");
-        var schema = Schemas
-            .Structure<Timeline, TimelineBuilder>(new ShapeId("example", "Timeline"))
-            .Required(
-                "events",
-                static timeline => timeline.Events,
-                static (builder, value) => builder.Events = value,
-                Schemas.List(
-                    new ShapeId("example", "Events"),
-                    Schemas.Timestamp,
-                    elementTraits: [new Trait(timestampFormat, Document.From("date-time"))]
-                )
-            )
-            .Build(
-                static () => new TimelineBuilder(),
-                static builder => new Timeline(builder.Events!)
-            );
-        var codec = JsonCodecFactory.Default.FromSchema(schema);
-        var input = new Timeline([new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero)]);
+        var codec = JsonCodecFactory.Default.FromSchema(TimelineSchema.Schema);
+        var input = new Timeline(
+            new Events([new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero)])
+        );
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
 
         Assert.Equal("{\"events\":[\"2026-08-09T12:34:56Z\"]}", json);
-        Assert.Equal(input.Events, decoded.Events);
-    }
-
-    public sealed record TimestampRecord(DateTimeOffset Created);
-
-    public sealed class TimestampRecordBuilder
-    {
-        public DateTimeOffset Created { get; set; }
+        Assert.Equal(input.Events.Values, decoded.Events.Values);
     }
 
     [Fact]
     public void JsonCodecAppliesStructureMemberTraits()
     {
-        var timestampFormat = ShapeId.Parse("smithy.api#timestampFormat");
-        var schema = Schemas
-            .Structure<TimestampRecord, TimestampRecordBuilder>(
-                new ShapeId("example", "TimestampRecord")
-            )
-            .Required(
-                "created",
-                static record => record.Created,
-                static (builder, value) => builder.Created = value,
-                Schemas.Timestamp,
-                [new Trait(timestampFormat, Document.From("date-time"))]
-            )
-            .Build(
-                static () => new TimestampRecordBuilder(),
-                static builder => new TimestampRecord(builder.Created)
-            );
-        var codec = JsonCodecFactory.Default.FromSchema(schema);
+        var codec = JsonCodecFactory.Default.FromSchema(TimestampRecordSchema.Schema);
         var input = new TimestampRecord(new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero));
 
         var json = codec.SerializeText(input);
@@ -260,41 +185,12 @@ public sealed class JsonCodecTests
 
     // ---------------- nested structure ----------------
 
-    public sealed record Address(string City);
-
-    public sealed class AddressBuilder
-    {
-        public string? City { get; set; }
-    }
-
-    public sealed record Person(string Name, Address Address);
-
-    public sealed class PersonBuilder
-    {
-        public string? Name { get; set; }
-        public Address? Address { get; set; }
-    }
-
     [Fact]
     public void JsonCodecRoundTripsNestedStructure()
     {
-        var addressSchema = Schemas
-            .Structure<Address, AddressBuilder>(new ShapeId("example", "Address"))
-            .Required("city", static a => a.City, static (b, v) => b.City = v, Schemas.String)
-            .Build(static () => new AddressBuilder(), static b => new Address(b.City!));
-        var schema = Schemas
-            .Structure<Person, PersonBuilder>(new ShapeId("example", "Person"))
-            .Required("name", static p => p.Name, static (b, v) => b.Name = v, Schemas.String)
-            .Required(
-                "address",
-                static p => p.Address,
-                static (b, v) => b.Address = v,
-                addressSchema
-            )
-            .Build(static () => new PersonBuilder(), static b => new Person(b.Name!, b.Address!));
-        var codec = JsonCodecFactory.Default.FromSchema(schema);
+        var codec = JsonCodecFactory.Default.FromSchema(PersonSchema.Schema);
 
-        var input = new Person("Ada", new Address("London"));
+        var input = new Person(Name: "Ada", Address: new Address("London"));
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
 
@@ -302,129 +198,80 @@ public sealed class JsonCodecTests
         Assert.Equal(input, decoded);
     }
 
-    // ---------------- enums ----------------
-
-    public readonly record struct Status(string Value) : IStringEnumValue<Status>
-    {
-        public static readonly Status Active = new("ACTIVE");
-
-        public static Status FromValue(string value) => new(value);
-    }
-
-    public sealed record Deployment(string Name, Status Status);
-
-    public sealed class DeploymentBuilder
-    {
-        public string? Name { get; set; }
-
-        public Status Status { get; set; }
-    }
-
     [Fact]
-    public void JsonCodecRoundTripsStringEnumMember()
+    public void JsonCodecRoundTripsRecursiveStructure()
     {
-        var input = new Deployment("deploy-api", Status.Active);
-        var expectedJson = "{\"name\":\"deploy-api\",\"status\":\"ACTIVE\"}";
-
-        var statusSchema = Schemas.StringEnum<Status>(new ShapeId("example", "Status"));
-        var deploymentSchema = Schemas
-            .Structure<Deployment, DeploymentBuilder>(new ShapeId("example", "Deployment"))
-            .Required(
-                "name",
-                static deployment => deployment.Name,
-                static (builder, value) => builder.Name = value,
-                Schemas.String
-            )
-            .Required(
-                "status",
-                static deployment => deployment.Status,
-                static (builder, value) => builder.Status = value,
-                statusSchema
-            )
-            .Build(
-                static () => new DeploymentBuilder(),
-                static builder => new Deployment(builder.Name!, builder.Status)
-            );
-        var codec = JsonCodecFactory.Default.FromSchema(deploymentSchema);
+        var input = new TreeNode("root", new TreeNodeList([new TreeNode("leaf")]));
+        var codec = JsonCodecFactory.Default.FromSchema(TreeNodeSchema.Schema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
 
-        Assert.Equal(expectedJson, json);
+        Assert.Equal("{\"value\":\"root\",\"children\":[{\"value\":\"leaf\"}]}", json);
+        Assert.Equal(input.Value, decoded.Value);
+        Assert.Equal(input.Children!.Values.Single(), decoded.Children!.Values.Single());
+        Assert.Null(decoded.Children.Values.Single().Children);
+    }
+
+    // ---------------- unions ----------------
+
+    [Fact]
+    public void JsonCodecRoundTripsUnion()
+    {
+        Choice input = new Choice.StringValue("hello");
+        var codec = JsonCodecFactory.Default.FromSchema(ChoiceSchema.Schema);
+
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
+
+        Assert.Equal("{\"stringValue\":\"hello\"}", json);
         Assert.Equal(input, decoded);
     }
 
-    public enum Priority
+    [Fact]
+    public void JsonCodecRejectsUnknownUnionMember()
     {
-        Low = 1,
-        High = 2,
+        var codec = JsonCodecFactory.Default.FromSchema(ChoiceSchema.Schema);
+
+        // A payload that does not match the schema is the caller's mistake, not a fault: on a server
+        // the runtime turns this into a structured 400.
+        var ex = Assert.Throws<MalformedRequestException>(() =>
+            codec.DeserializeText("{\"missing\":\"hello\"}")
+        );
+
+        Assert.Equal(MalformedRequestKind.Serialization, ex.Kind);
+        Assert.Equal("Unknown union member 'missing'.", ex.Message);
     }
 
-    public sealed record WorkItem(string Title, Priority Priority);
+    // ---------------- enums ----------------
 
-    public sealed class WorkItemBuilder
+    [Fact]
+    public void JsonCodecRoundTripsStringEnumMember()
     {
-        public string? Title { get; set; }
+        var input = new Deployment(Name: "deploy-api", Status: Status.ACTIVE);
+        var codec = JsonCodecFactory.Default.FromSchema(DeploymentSchema.Schema);
 
-        public Priority Priority { get; set; }
+        var json = codec.SerializeText(input);
+        var decoded = codec.DeserializeText(json);
+
+        Assert.Equal("{\"name\":\"deploy-api\",\"status\":\"ACTIVE\"}", json);
+        Assert.Equal(input, decoded);
     }
 
     [Fact]
     public void JsonCodecRoundTripsIntEnumMember()
     {
-        var input = new WorkItem("rollback", Priority.High);
-        var expectedJson = "{\"title\":\"rollback\",\"priority\":2}";
-
-        var prioritySchema = Schemas.IntEnum<Priority>(new ShapeId("example", "Priority"));
-        var workItemSchema = Schemas
-            .Structure<WorkItem, WorkItemBuilder>(new ShapeId("example", "WorkItem"))
-            .Required(
-                "title",
-                static workItem => workItem.Title,
-                static (builder, value) => builder.Title = value,
-                Schemas.String
-            )
-            .Required(
-                "priority",
-                static workItem => workItem.Priority,
-                static (builder, value) => builder.Priority = value,
-                prioritySchema
-            )
-            .Build(
-                static () => new WorkItemBuilder(),
-                static builder => new WorkItem(builder.Title!, builder.Priority)
-            );
-        var codec = JsonCodecFactory.Default.FromSchema(workItemSchema);
+        var input = new WorkItem(Title: "rollback", Priority: Priority.HIGH);
+        var codec = JsonCodecFactory.Default.FromSchema(WorkItemSchema.Schema);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
 
-        Assert.Equal(expectedJson, json);
+        Assert.Equal("{\"title\":\"rollback\",\"priority\":2}", json);
         Assert.Equal(input, decoded);
     }
 
     // ---------------- explicit null vs absent, on a defaulted member ----------------
-
-    public sealed record Defaulted(int Count);
-
-    public sealed class DefaultedBuilder
-    {
-        // Sentinel, so a member the codec never touched is distinguishable from one
-        // it set to the modelled default of 7.
-        public int Count { get; set; } = -1;
-    }
-
-    private static StructSchema<Defaulted, DefaultedBuilder> DefaultedSchema() =>
-        Schemas
-            .Structure<Defaulted, DefaultedBuilder>(new ShapeId("example", "Defaulted"))
-            .Optional(
-                "count",
-                static s => s.Count,
-                static (b, v) => b.Count = v,
-                Schemas.Integer,
-                [new Trait(new ShapeId("smithy.api", "default"), Document.From(7))]
-            )
-            .Build(static () => new DefaultedBuilder(), static b => new Defaulted(b.Count));
 
     // A member carrying @default always has a value in Smithy, so an explicit null
     // must materialize the default rather than leaving the member unset. The value
@@ -434,7 +281,7 @@ public sealed class JsonCodecTests
     [InlineData("{\"count\":null}")]
     public void DefaultedMemberIsMaterializedWhetherAbsentOrExplicitlyNull(string json)
     {
-        var codec = JsonCodecFactory.Default.FromSchema(DefaultedSchema());
+        var codec = JsonCodecFactory.Default.FromSchema(DefaultedSchema.Schema);
 
         Assert.Equal(7, codec.DeserializeText(json).Count);
     }
@@ -446,12 +293,12 @@ public sealed class JsonCodecTests
     [InlineData("{\"count\":null}")]
     public void ProjectionReaderAgreesOnDefaultedMembers(string json)
     {
-        var schema = DefaultedSchema();
-        var codec = JsonCodecFactory.Default.FromProjection(
-            Schemas.Project<Defaulted, DefaultedBuilder>(schema, _ => true)
-        );
+        var schema = (IStructSchema<Defaulted, DefaultedSchema.Builder>)DefaultedSchema.Schema;
+        var codec = JsonCodecFactory.Default.FromProjection(Schemas.Project(schema, _ => true));
 
-        var builder = new DefaultedBuilder();
+        // Sentinel, so a member the codec never touched is distinguishable from one
+        // it set to the modelled default of 7.
+        var builder = new DefaultedSchema.Builder { Count = -1 };
         codec.ReadInto(System.Text.Encoding.UTF8.GetBytes(json), builder);
 
         Assert.Equal(7, builder.Count);
