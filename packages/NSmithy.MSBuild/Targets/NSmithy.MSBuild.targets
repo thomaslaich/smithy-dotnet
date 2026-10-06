@@ -470,6 +470,14 @@
     <PropertyGroup>
       <_SmithyCliBuildOutput>$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\'))</_SmithyCliBuildOutput>
     </PropertyGroup>
+    <!-- The CLI writes over the previous output without removing it, so a file the model no longer
+         produces (a renamed shape, or a new NSmithy version laying files out differently) would
+         still be compiled next to its replacement. Every build starts from what the model produces
+         now. -->
+    <ItemGroup>
+      <_SmithyPreviousOutput Include="$(SmithyAllProjectionsGlob);$(SmithyAllProtosGlob)" />
+    </ItemGroup>
+    <Delete Files="@(_SmithyPreviousOutput)" />
     <Exec
       Command="&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)"
       EnvironmentVariables="$(_SmithyMavenEnv)"
