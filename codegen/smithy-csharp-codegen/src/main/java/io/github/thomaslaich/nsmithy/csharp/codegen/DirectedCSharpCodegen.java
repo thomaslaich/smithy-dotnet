@@ -283,11 +283,11 @@ final class DirectedCSharpCodegen
 
   @Override
   public void generateOperation(GenerateOperationDirective<GenerationContext, CSharpSettings> d) {
-    d.context()
-        .writerDelegator()
-        .useShapeWriter(
-            d.shape(),
-            writer -> new OperationSchemaGenerator(d.context(), writer, d.shape()).run());
+    // An operation has no C# type of its own, only a schema.
+    writeSchema(
+        d.context(),
+        d.shape(),
+        writer -> new OperationSchemaGenerator(d.context(), writer, d.shape()).run());
   }
 
   /**

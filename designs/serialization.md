@@ -51,7 +51,8 @@ mutable hooks to the model.
 
 A shape's schema lives in a sibling class named after the shape, generated
 into its own file: `MenuItem.g.cs` holds the type a consumer uses,
-`MenuItem.Schema.g.cs` the schema the runtime serializes it with.
+`MenuItem.Schema.g.cs` the schema the runtime serializes it with. An operation
+or service has no type of its own, so it gets only the `.Schema.g.cs` file.
 
 ```csharp
 // MenuItem.g.cs
