@@ -97,13 +97,27 @@ the small-call end of it is reliable run to run, see below.
 **The two columns are two different problems.** Time decays 1.62× → 0.78×, which
 is a fixed per-call cost. Allocations do not: they sit near 2× across three orders
 of magnitude, which is a *proportional* cost that no per-call feature can explain.
-At 10,000 items NSmithy allocates 7.66 MB against NSwag's 3.84 MB, and no amount
-of retry policy accounts for 3.82 MB. The read-path backing-array copy has already
-been removed. The remaining named suspects are the JSON reader materialising a
-`JsonDocument` before producing any value, plus the immutable generated model and
-collection-wrapper objects that NSwag's mutable DTOs do not need. Do not answer
-the allocation column with "we do more" — it is a read-path problem, and it is
-unsolved.
+At 10,000 items NSmithy allocated 7.66 MB against NSwag's 3.84 MB. `MEASURED`
+attribution (`ListItemsAttributionBenchmarks`, report under
+`results/client/rest-json/`), all on one captured response:
+
+| Path | 100 items | 10,000 items |
+| --- | --- | --- |
+| STJ source-gen, body only | 54.7 KB | 5,489 KB |
+| NSmithy codec, body only | 48.8 KB | 4,942 KB |
+| NSmithy client call | 66.4 KB | 6,395 KB |
+| NSwag client call | 41.4 KB | 3,929 KB |
+
+The JSON codec is not the gap: on the same body it allocates less than STJ
+source-gen. The transport was. It buffered the body with `ReadAsByteArrayAsync`,
+which grows a stream and then copies it out; reading a body with a declared
+length into one array of that size took the 10,000-item call from 7.66 MB to
+6.24 MB (see [Fixed](#buffered-responses-were-copied-twice)). The client now adds
+1,453 KB to the codec, which is the 1,449 KB body array itself. What remains
+against NSwag is that array, which only a pooled buffer and a span-based codec
+API would remove, and the codec's own output: the immutable generated model and
+collection wrappers already allocate more than NSwag's entire call, where NSwag
+deserializes into mutable DTOs straight from the response stream.
 
 The remaining focused ratio includes the public runtime, protocol and transport
 abstractions plus HTTP request/response objects. Retry, interceptors, telemetry,
@@ -272,7 +286,7 @@ lower on the server.
 `OBSERVED` from source unless a measurement is listed. The microbenchmark suite
 now covers JSON, CBOR, XML and proto serialization.
 
-**JSON read path, materializes a DOM.**
+**JSON read path, materializes a DOM, and the DOM costs time, not allocations.**
 
 ```csharp
 using var document = JsonDocument.Parse(payload);
@@ -280,12 +294,17 @@ return valueReader.Read(document.RootElement);
 ```
 
 Every reader in the compiled chain takes a `JsonElement`, so the whole payload is
-parsed into a document before any value is produced. `System.Text.Json`'s source
-generator uses a forward-only `Utf8JsonReader` and never builds one. This is the
-most likely explanation for the read path's 1.38–1.44× time and 1.17–1.29×
-allocation gap that remains after the member-lookup fix below (now 1.14–1.15×
-time, 1.11–1.24× allocations). Worth noting the CBOR codec already reads
-forward-only via `CborReader`, so JSON is the outlier here, not the norm.
+parsed into a document before any value is produced, where `System.Text.Json`'s
+source generator reads forward-only with `Utf8JsonReader`. `MEASURED`
+(`DeserializationBenchmarks`, report under `results/codec/json/`):
+`JsonDocument.Parse` alone takes 0.44–0.46× of STJ source-gen's whole
+deserialization of the order bodies and allocates 72–81 bytes, because it rents
+its buffers from a pool. NSmithy's codec runs at 1.03× (large) and 1.09× (small)
+of STJ and allocates 0.94× and 0.88× of it; on list bodies
+(`ListItemsAttributionBenchmarks`) it is 1.13–1.14× in time and 0.89–0.90× in
+allocations. A forward-only reader is therefore a time target only, with no
+allocation win to pair with it. The CBOR codec already reads forward-only via
+`CborReader`.
 
 **CBOR write path, now close to its allocation floor.**
 
@@ -332,6 +351,24 @@ was neutral at 1.90 µs for one item and about 105 µs for 100 items.
 ---
 
 ## Fixed
+
+### Buffered responses were copied twice
+
+`MEASURED`. `HttpClientTransport` read buffered responses with
+`ReadAsByteArrayAsync`, which buffers into a growing stream and copies the result
+out, so a large body cost several arrays on the large-object heap. Reading a body
+with a declared `Content-Length` into one array of that size, measured against
+`main` in the same session with NSwag as an unchanged control:
+
+| `list-items` client call | Before | After |
+| --- | --- | --- |
+| 100 items | 80.5 KB | 66.4 KB (−17.5%) |
+| 10,000 items | 7,843 KB, Gen2 203 per 1,000 calls | 6,394 KB (−18.5%), Gen2 78 |
+
+Time did not move measurably: NSwag's unchanged call shifted by 3.4% between the
+two runs, and NSmithy's ratio to it stayed at 1.14× at 10,000 items. The win is
+allocations and Gen2 collections, which matter under concurrent load rather than
+in a single-threaded call.
 
 ### The untyped schema surface is gone, and it was not where the time went
 

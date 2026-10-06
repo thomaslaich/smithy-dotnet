@@ -366,6 +366,14 @@ public class DeserializationBenchmarks
 
     [Benchmark(Description = "NSmithy schema codec")]
     public CreateOrderInput Smithy() => OrderCodec.Deserialize(payload);
+
+    /// <summary>Only the DOM parse the JSON codec does before reading any value.</summary>
+    [Benchmark(Description = "JsonDocument.Parse only")]
+    public JsonValueKind ParseOnly()
+    {
+        using var document = JsonDocument.Parse(payload);
+        return document.RootElement.ValueKind;
+    }
 }
 
 internal static class CodecBenchmarkValues
