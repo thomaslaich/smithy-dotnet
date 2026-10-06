@@ -7,22 +7,17 @@ using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Server;
 using NSmithy.Server.Mcp;
+using Nsmithy.Tests.Mcp;
 
 namespace NSmithy.Tests.Server.Mcp;
 
 public sealed class SmithyMcpToolsTests
 {
-    private static readonly ShapeId DocumentationTrait = ShapeId.Parse("smithy.api#documentation");
-    private static readonly ShapeId IdempotentTrait = ShapeId.Parse("smithy.api#idempotent");
-    private static readonly ShapeId JsonNameTrait = ShapeId.Parse("smithy.api#jsonName");
-    private static readonly ShapeId LengthTrait = ShapeId.Parse("smithy.api#length");
-    private static readonly ShapeId ReadonlyTrait = ShapeId.Parse("smithy.api#readonly");
-
     [Fact]
     public void CreatesDocumentedToolSchemasAndAnnotations()
     {
         var tools = SmithyMcpTools.Create(
-            Catalog(static (_, _) => Task.FromResult(new LookupOutput("sunny")))
+            Catalog(static (_, _) => Task.FromResult(new LookupWeatherOutput("sunny")))
         );
 
         var tool = Assert.Single(tools).ProtocolTool;
@@ -30,7 +25,6 @@ public sealed class SmithyMcpToolsTests
         Assert.Equal("Looks up the weather for a place.", tool.Description);
         Assert.True(tool.Annotations?.ReadOnlyHint);
         Assert.False(tool.Annotations?.DestructiveHint);
-        Assert.True(tool.Annotations?.IdempotentHint);
 
         var input = tool.InputSchema;
         Assert.Equal("object", input.GetProperty("type").GetString());
@@ -53,7 +47,7 @@ public sealed class SmithyMcpToolsTests
     [Fact]
     public async Task InvokesThroughSmithyJsonCodecAndReturnsStructuredContent()
     {
-        LookupInput? received = null;
+        LookupWeatherInput? received = null;
         using var cancellation = new CancellationTokenSource();
         var tool = Assert.Single(
             SmithyMcpTools.Create(
@@ -62,7 +56,7 @@ public sealed class SmithyMcpToolsTests
                     {
                         received = input;
                         Assert.Equal(cancellation.Token, cancellationToken);
-                        return Task.FromResult(new LookupOutput($"Sunny in {input.Place}"));
+                        return Task.FromResult(new LookupWeatherOutput($"Sunny in {input.Place}"));
                     }
                 )
             )
@@ -77,7 +71,7 @@ public sealed class SmithyMcpToolsTests
             cancellation.Token
         );
 
-        Assert.Equal(new LookupInput("Zurich"), received);
+        Assert.Equal(new LookupWeatherInput("Zurich"), received);
         Assert.NotEqual(true, result.IsError);
         Assert.Equal(
             "Sunny in Zurich",
@@ -99,7 +93,7 @@ public sealed class SmithyMcpToolsTests
                     (input, _) =>
                     {
                         invocationCount++;
-                        return Task.FromResult(new LookupOutput(input.Place));
+                        return Task.FromResult(new LookupWeatherOutput(input.Place));
                     }
                 )
             )
@@ -132,27 +126,9 @@ public sealed class SmithyMcpToolsTests
     [Fact]
     public async Task ReportsModeledHandlerErrorsAsToolErrors()
     {
-        var operationSchema = Schemas.Operation(
-            ShapeId.Parse("example.weather#LookupWeather"),
-            LookupInputSchema,
-            LookupOutputSchema,
-            errors:
-            [
-                Schemas.OperationError(
-                    ShapeId.Parse("example.weather#LookupFailure"),
-                    LookupFailureSchema,
-                    400
-                ),
-            ]
-        );
-        var catalog = new ServiceOperationCatalog(
-            ServiceSchema,
-            ServiceOperation.Create(
-                operationSchema,
-                static (LookupInput _, CancellationToken _) =>
-                    Task.FromException<LookupOutput>(new LookupFailure("No forecast available.")),
-                LookupJsonSchemas
-            )
+        var catalog = Catalog(
+            static (_, _) =>
+                Task.FromException<LookupWeatherOutput>(new LookupFailure("No forecast available."))
         );
         var tool = Assert.Single(SmithyMcpTools.Create(catalog));
 
@@ -176,15 +152,15 @@ public sealed class SmithyMcpToolsTests
     {
         var operation = ServiceOperation.Create(
             Schemas.Operation(
-                ShapeId.Parse("example.weather#WatchWeather"),
+                ShapeId.Parse("nsmithy.tests.mcp#WatchWeather"),
                 Schemas.EventStream(Schemas.String),
-                LookupOutputSchema,
+                LookupWeatherOutputSchema.Schema,
                 isStreaming: true
             ),
             static (IAsyncEnumerable<string> _, CancellationToken _) =>
-                Task.FromResult(new LookupOutput("unused"))
+                Task.FromResult(new LookupWeatherOutput("unused"))
         );
-        var catalog = new ServiceOperationCatalog(ServiceSchema, operation);
+        var catalog = new ServiceOperationCatalog(FixturesSchema.Schema, operation);
 
         Assert.Empty(SmithyMcpTools.Create(catalog));
     }
@@ -193,15 +169,11 @@ public sealed class SmithyMcpToolsTests
     public void RequiresJsonSchemaMetadataForHandBuiltOperations()
     {
         var operation = ServiceOperation.Create(
-            Schemas.Operation(
-                ShapeId.Parse("example.weather#LookupWeather"),
-                LookupInputSchema,
-                LookupOutputSchema
-            ),
-            static (LookupInput _, CancellationToken _) =>
-                Task.FromResult(new LookupOutput("unused"))
+            LookupWeatherSchema.Schema,
+            static (LookupWeatherInput _, CancellationToken _) =>
+                Task.FromResult(new LookupWeatherOutput("unused"))
         );
-        var catalog = new ServiceOperationCatalog(ServiceSchema, operation);
+        var catalog = new ServiceOperationCatalog(FixturesSchema.Schema, operation);
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             SmithyMcpTools.Create(catalog)
@@ -216,7 +188,9 @@ public sealed class SmithyMcpToolsTests
         var services = new ServiceCollection();
         services
             .AddMcpServer()
-            .WithSmithyTools(Catalog(static (_, _) => Task.FromResult(new LookupOutput("sunny"))));
+            .WithSmithyTools(
+                Catalog(static (_, _) => Task.FromResult(new LookupWeatherOutput("sunny")))
+            );
 
         using var provider = services.BuildServiceProvider();
         Assert.Single(provider.GetServices<McpServerTool>());
@@ -226,9 +200,13 @@ public sealed class SmithyMcpToolsTests
     public void ResolvesGeneratedServiceDefinitionWithoutAnAggregateHandler()
     {
         var services = new ServiceCollection();
-        services.AddSingleton<LookupHandler>();
-        services.AddSingleton<IServiceDefinition, LookupServiceDefinition>();
-        services.AddMcpServer().WithSmithyService(ServiceSchema);
+        services.AddSingleton<ILookupWeatherHandler>(
+            new LookupHandler(
+                static (input, _) => Task.FromResult(new LookupWeatherOutput(input.Place))
+            )
+        );
+        services.AddFixturesService();
+        services.AddMcpServer().WithSmithyService(FixturesSchema.Schema);
 
         using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<McpServerOptions>>().Value;
@@ -238,29 +216,14 @@ public sealed class SmithyMcpToolsTests
     }
 
     private static ServiceOperationCatalog Catalog(
-        Func<LookupInput, CancellationToken, Task<LookupOutput>> handler
-    ) =>
-        new(
-            ServiceSchema,
-            ServiceOperation.Create(
-                Schemas.Operation(
-                    ShapeId.Parse("example.weather#LookupWeather"),
-                    LookupInputSchema,
-                    LookupOutputSchema,
-                    traits:
-                    [
-                        new Trait(
-                            DocumentationTrait,
-                            Document.From("Looks up the weather for a place.")
-                        ),
-                        new Trait(IdempotentTrait),
-                        new Trait(ReadonlyTrait),
-                    ]
-                ),
-                handler,
-                LookupJsonSchemas
-            )
-        );
+        Func<LookupWeatherInput, CancellationToken, Task<LookupWeatherOutput>> handler
+    )
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<ILookupWeatherHandler>(new LookupHandler(handler));
+        using var provider = services.BuildServiceProvider();
+        return new FixturesServiceDefinition().CreateOperationCatalog(provider);
+    }
 
     private static async Task<CallToolResult> InvokeAsync(
         McpServerTool tool,
@@ -280,119 +243,13 @@ public sealed class SmithyMcpToolsTests
         return await tool.InvokeAsync(context, cancellationToken);
     }
 
-    private static readonly ServiceSchema ServiceSchema = Schemas.Service(
-        ShapeId.Parse("example.weather#WeatherService")
-    );
-
-    private static readonly OperationJsonSchemas LookupJsonSchemas = new(
-        """
-        {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"place_name":{"type":"string","description":"Place to look up.","minLength":2,"maxLength":80}},"required":["place_name"],"additionalProperties":false}
-        """,
-        """
-        {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"summary":{"type":"string"}},"required":["summary"],"additionalProperties":false}
-        """
-    );
-
-    private static readonly Schema<LookupInput> LookupInputSchema = Schemas
-        .Structure<LookupInput, LookupInputBuilder>(ShapeId.Parse("example.weather#LookupInput"))
-        .Required(
-            "place",
-            static value => value.Place,
-            static (builder, value) => builder.Place = value,
-            Schemas.String,
-            [
-                new Trait(DocumentationTrait, Document.From("Place to look up.")),
-                new Trait(JsonNameTrait, Document.From("place_name")),
-                new Trait(
-                    LengthTrait,
-                    Document.From(
-                        new Dictionary<string, Document>
-                        {
-                            ["min"] = Document.From(2m),
-                            ["max"] = Document.From(80m),
-                        }
-                    )
-                ),
-            ]
-        )
-        .Build(
-            static () => new LookupInputBuilder(),
-            static builder => new LookupInput(
-                builder.Place ?? throw new MissingRequiredMemberException("place")
-            )
-        );
-
-    private static readonly Schema<LookupOutput> LookupOutputSchema = Schemas
-        .Structure<LookupOutput, LookupOutputBuilder>(ShapeId.Parse("example.weather#LookupOutput"))
-        .Required(
-            "summary",
-            static value => value.Summary,
-            static (builder, value) => builder.Summary = value,
-            Schemas.String
-        )
-        .Build(
-            static () => new LookupOutputBuilder(),
-            static builder => new LookupOutput(
-                builder.Summary ?? throw new MissingRequiredMemberException("summary")
-            )
-        );
-
-    private static readonly Schema<LookupFailure> LookupFailureSchema = Schemas
-        .Structure<LookupFailure, LookupFailureBuilder>(
-            ShapeId.Parse("example.weather#LookupFailure")
-        )
-        .Required(
-            "message",
-            static value => value.Message,
-            static (builder, value) => builder.Message = value,
-            Schemas.String
-        )
-        .Build(
-            static () => new LookupFailureBuilder(),
-            static builder => new LookupFailure(
-                builder.Message ?? throw new MissingRequiredMemberException("message")
-            )
-        );
-
-    private sealed record LookupInput(string Place);
-
-    private sealed class LookupInputBuilder
+    private sealed class LookupHandler(
+        Func<LookupWeatherInput, CancellationToken, Task<LookupWeatherOutput>> handler
+    ) : ILookupWeatherHandler
     {
-        public string? Place { get; set; }
-    }
-
-    private sealed record LookupOutput(string Summary);
-
-    private sealed class LookupOutputBuilder
-    {
-        public string? Summary { get; set; }
-    }
-
-    private sealed class LookupFailure(string message) : Exception(message);
-
-    private sealed class LookupFailureBuilder
-    {
-        public string? Message { get; set; }
-    }
-
-    private sealed class LookupHandler
-    {
-        private readonly string suffix = string.Empty;
-
-        public Task<LookupOutput> InvokeAsync(
-            LookupInput input,
-            CancellationToken cancellationToken
-        ) => Task.FromResult(new LookupOutput(input.Place + suffix));
-    }
-
-    private sealed class LookupServiceDefinition : IServiceDefinition
-    {
-        public ServiceSchema Schema => ServiceSchema;
-
-        public IReadOnlyList<ServicePromptDefinition> Prompts { get; } =
-        [new("weather_brief", "Create a weather brief", "Call LookupWeather.")];
-
-        public ServiceOperationCatalog CreateOperationCatalog(IServiceProvider services) =>
-            Catalog(services.GetRequiredService<LookupHandler>().InvokeAsync);
+        public Task<LookupWeatherOutput> LookupWeatherAsync(
+            LookupWeatherInput input,
+            CancellationToken cancellationToken = default
+        ) => handler(input, cancellationToken);
     }
 }

@@ -3,35 +3,19 @@ using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Core.Validation;
 using NSmithy.Http;
-using NSmithy.Protocols.Rest;
 using NSmithy.Protocols.RestJson;
 using NSmithy.Server;
+using Nsmithy.Tests.Server;
 
 namespace NSmithy.Tests.Server;
 
 public sealed class SmithyServerRuntimeTests
 {
-    private static readonly ShapeId LengthTrait = new("smithy.api", "length");
-
-    public sealed record CreateUserInput(string Name);
-
-    public sealed class CreateUserInputBuilder
-    {
-        public string? Name { get; set; }
-    }
-
-    public sealed record CreateUserOutput(string Name);
-
-    public sealed class CreateUserOutputBuilder
-    {
-        public string? Name { get; set; }
-    }
-
     [Fact]
     public async Task DispatchReturnsValidationExceptionResponseForInvalidInput()
     {
         var protocol = Protocol();
-        var request = protocol.SerializeRequest(new CreateUserInput("ab"));
+        var request = Request(new CreateUserInput("ab"));
         var handled = false;
 
         var response = await new SmithyServerRuntime().DispatchAsync(
@@ -55,7 +39,7 @@ public sealed class SmithyServerRuntimeTests
     public async Task DispatchInvokesHandlerForValidInput()
     {
         var protocol = Protocol();
-        var request = protocol.SerializeRequest(new CreateUserInput("Ada"));
+        var request = Request(new CreateUserInput("Ada"));
 
         var response = await new SmithyServerRuntime().DispatchAsync(
             protocol,
@@ -70,7 +54,7 @@ public sealed class SmithyServerRuntimeTests
     public void OperationSchemaCarriesImplicitValidationError()
     {
         var error = Assert.Single(
-            Operation().Errors,
+            CreateUserSchema.Schema.Errors,
             error => error.Id == ValidationExceptionSchema.Id
         );
 
@@ -120,59 +104,14 @@ public sealed class SmithyServerRuntimeTests
         Assert.Contains("/name", body, StringComparison.Ordinal);
     }
 
-    private static OperationSchema<CreateUserInput, CreateUserOutput> Operation()
-    {
-        var inputSchema = Schemas
-            .Structure<CreateUserInput, CreateUserInputBuilder>(
-                new ShapeId("test", "CreateUserInput")
-            )
-            .Required(
-                "name",
-                static value => value.Name,
-                static (builder, value) => builder.Name = value,
-                Schemas.String,
-                [
-                    new Trait(
-                        LengthTrait,
-                        Document.From(
-                            new Dictionary<string, Document>(StringComparer.Ordinal)
-                            {
-                                ["min"] = Document.From(3),
-                            }
-                        )
-                    ),
-                ]
-            )
-            .Build(
-                static () => new CreateUserInputBuilder(),
-                static builder => new CreateUserInput(builder.Name!)
-            );
-        var outputSchema = Schemas
-            .Structure<CreateUserOutput, CreateUserOutputBuilder>(
-                new ShapeId("test", "CreateUserOutput")
-            )
-            .Required(
-                "name",
-                static value => value.Name,
-                static (builder, value) => builder.Name = value,
-                Schemas.String
-            )
-            .Build(
-                static () => new CreateUserOutputBuilder(),
-                static builder => new CreateUserOutput(builder.Name!)
-            );
-        return Schemas.Operation(
-            new ShapeId("test", "CreateUser"),
-            inputSchema,
-            outputSchema,
-            traits: [RestTraits.HttpTrait("POST", "/users")]
-        );
-    }
+    private static IServiceProtocol Service() =>
+        new RestJson1Protocol().ForService(FixturesSchema.Schema);
 
-    private static IOperationProtocol<CreateUserInput, CreateUserOutput> Protocol() =>
-        new RestJson1Protocol()
-            .ForService(Schemas.Service(ShapeId.Parse("test#Service")))
-            .ForOperation(Operation());
+    private static IServerOperationProtocol<CreateUserInput, CreateUserOutput> Protocol() =>
+        Service().ForServerOperation(CreateUserSchema.Schema);
+
+    private static SmithyHttpRequest Request(CreateUserInput input) =>
+        Service().ForClientOperation(CreateUserSchema.Schema).SerializeRequest(input);
 
     private static async Task<string> ReadBodyAsync(SmithyHttpServerResponse response)
     {
