@@ -4,15 +4,15 @@ namespace NSmithy.Codecs.Proto;
 
 internal sealed class CompiledProtoCodec<T> : ICodec<T>
 {
-    private readonly IProtoMessageWriter<T> writer;
-    private readonly IProtoMessageReader<T> reader;
+    private readonly Schema<T> schema;
+    private readonly ProtoMemberPlan root;
     private int sizeHint = 64;
 
     public CompiledProtoCodec(Schema<T> schema)
     {
         ArgumentNullException.ThrowIfNull(schema);
-        writer = ProtoWriterCompiler.Compile(schema);
-        reader = ProtoReaderCompiler.Compile(schema);
+        this.schema = schema;
+        root = new ProtoPlans().ForRoot(schema);
     }
 
     public byte[] Serialize(T value)
@@ -25,7 +25,8 @@ internal sealed class CompiledProtoCodec<T> : ICodec<T>
         var writer = ProtoWriterCache.Rent(sizeHint);
         try
         {
-            this.writer.Write(writer, value);
+            var serializer = new ProtoShapeSerializer(writer, root);
+            schema.Write(MemberIndex.Root, value, ref serializer);
             var result = writer.ToArray();
             sizeHint = result.Length;
             return result;
@@ -39,6 +40,11 @@ internal sealed class CompiledProtoCodec<T> : ICodec<T>
     public T Deserialize(byte[] payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        return reader.Read(payload);
+        var deserializer = new ProtoShapeDeserializer(
+            payload,
+            new ProtoOccurrence(0, payload.Length, WireType.Len),
+            root
+        );
+        return schema.Read(ref deserializer);
     }
 }

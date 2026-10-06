@@ -916,8 +916,10 @@ public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
         }
     }
 
+    // A format whose enums are ordinals (protobuf) has no value for an ordinal the model does not
+    // know, and reads it as null.
     public override T Read<TDeserializer>(ref TDeserializer deserializer) =>
-        T.FromValue(deserializer.ReadStringEnum());
+        deserializer.ReadStringEnum() is { } value ? T.FromValue(value) : default!;
 }
 
 public sealed class IntEnumSchema<T> : Schema<T>

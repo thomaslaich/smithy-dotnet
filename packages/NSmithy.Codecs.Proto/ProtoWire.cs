@@ -239,6 +239,27 @@ internal ref struct ProtoReader(ReadOnlySpan<byte> buffer)
 
     public readonly bool End => position >= buffer.Length;
 
+    public readonly int Position => position;
+
+    /// <summary>
+    /// Skips one field value and returns where its content lies: a length-delimited field's
+    /// payload without its length prefix, or the raw bytes of any other wire type.
+    /// </summary>
+    public (int Start, int Length) ReadValueRange(WireType wireType)
+    {
+        if (wireType == WireType.Len)
+        {
+            var length = (int)ReadVarint();
+            var start = position;
+            Take(length);
+            return (start, length);
+        }
+
+        var valueStart = position;
+        SkipField(wireType);
+        return (valueStart, position - valueStart);
+    }
+
     public ulong ReadVarint()
     {
         ulong result = 0;
