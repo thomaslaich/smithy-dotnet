@@ -1,4 +1,4 @@
-using System.Numerics;
+using System.Text;
 using System.Xml.Linq;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
@@ -14,21 +14,13 @@ internal sealed class CompiledXmlCodec<T>(
     string? defaultNamespacePrefix = null
 ) : ICodec<T>
 {
-    private readonly IXmlValueWriter<T> valueWriter = XmlWriterCompiler.Compile(
-        schema,
-        materializeTopLevelDefaults,
-        memberTraits
-    );
-    private readonly IXmlValueReader<T> valueReader = XmlReaderCompiler.Compile(
-        schema,
-        memberTraits
-    );
+    private readonly XmlMemberPlan root = new XmlPlans().ForRoot(schema, memberTraits);
 
     public byte[] Serialize(T value)
     {
-        var root = new XElement(XmlTraits.GetXmlName(memberTraits) ?? RootElementName(schema));
+        var element = new XElement(XmlTraits.GetXmlName(memberTraits) ?? RootElementName(schema));
         ApplyNamespace(
-            root,
+            element,
             XmlTraits.GetXmlNamespace(schema)
                 ?? (
                     defaultNamespaceUri is null
@@ -36,9 +28,10 @@ internal sealed class CompiledXmlCodec<T>(
                         : new XmlNamespace(defaultNamespaceUri, defaultNamespacePrefix)
                 )
         );
-        valueWriter.Write(root, value);
-        return System.Text.Encoding.UTF8.GetBytes(
-            root.ToString(SaveOptions.DisableFormatting | SaveOptions.OmitDuplicateNamespaces)
+        var serializer = new XmlShapeSerializer(element, root, materializeTopLevelDefaults);
+        schema.Write(MemberIndex.Root, value, ref serializer);
+        return Encoding.UTF8.GetBytes(
+            element.ToString(SaveOptions.DisableFormatting | SaveOptions.OmitDuplicateNamespaces)
         );
     }
 
@@ -50,11 +43,12 @@ internal sealed class CompiledXmlCodec<T>(
             return default!;
         }
 
-        var root = XElement.Parse(
-            System.Text.Encoding.UTF8.GetString(payload),
+        var element = XElement.Parse(
+            Encoding.UTF8.GetString(payload),
             LoadOptions.PreserveWhitespace
         );
-        return valueReader.Read(root);
+        var deserializer = new XmlShapeDeserializer(element, null, root);
+        return schema.Read(ref deserializer);
     }
 }
 
@@ -66,20 +60,18 @@ internal sealed class CompiledXmlProjectionCodec<T, TBuilder>(
     string? defaultNamespacePrefix
 ) : IProjectionCodec<T, TBuilder>
 {
-    private readonly IXmlValueWriter<T> valueWriter = XmlWriterCompiler.Compile(
-        projection,
-        materializeTopLevelDefaults
-    );
-    private readonly StructureXmlProjectionReader<TBuilder> valueReader = XmlReaderCompiler.Compile(
-        projection
-    );
+    private readonly XmlShapePlan plan = new XmlPlans()
+        .ForTarget((Schema)projection.Source)!
+        .Project(name => projection.GetMember(name) is not null);
 
     public byte[] Serialize(T value)
     {
         var source = (Schema)projection.Source;
-        var root = new XElement(XmlTraits.GetXmlName(source) ?? defaultRootName ?? source.Id.Name);
+        var element = new XElement(
+            XmlTraits.GetXmlName(source) ?? defaultRootName ?? source.Id.Name
+        );
         ApplyNamespace(
-            root,
+            element,
             XmlTraits.GetXmlNamespace(source)
                 ?? (
                     defaultNamespaceUri is null
@@ -87,9 +79,14 @@ internal sealed class CompiledXmlProjectionCodec<T, TBuilder>(
                         : new XmlNamespace(defaultNamespaceUri, defaultNamespacePrefix)
                 )
         );
-        valueWriter.Write(root, value);
-        return System.Text.Encoding.UTF8.GetBytes(
-            root.ToString(SaveOptions.DisableFormatting | SaveOptions.OmitDuplicateNamespaces)
+        if (value is not null)
+        {
+            var serializer = new XmlShapeSerializer(element, plan, materializeTopLevelDefaults);
+            projection.Source.SerializeMembers(value, ref serializer);
+        }
+
+        return Encoding.UTF8.GetBytes(
+            element.ToString(SaveOptions.DisableFormatting | SaveOptions.OmitDuplicateNamespaces)
         );
     }
 
@@ -102,10 +99,10 @@ internal sealed class CompiledXmlProjectionCodec<T, TBuilder>(
             return;
         }
 
-        var root = XElement.Parse(
-            System.Text.Encoding.UTF8.GetString(payload),
+        var element = XElement.Parse(
+            Encoding.UTF8.GetString(payload),
             LoadOptions.PreserveWhitespace
         );
-        valueReader.ReadInto(builder, root);
+        XmlShapeDeserializer.ReadMembers(element, plan, projection.Source, builder);
     }
 }
