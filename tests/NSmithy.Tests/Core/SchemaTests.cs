@@ -756,21 +756,16 @@ public sealed class SchemaTests
     }
 
     [Fact]
-    public void CompiledCollectionDefaultsDoNotAlias()
+    public void DefaultsReadFromDocumentsDoNotAlias()
     {
-        var defaultId = ShapeId.Parse("smithy.api#default");
         var schema = Schemas.List(new ShapeId("example", "Names"), Schemas.String);
-        IReadOnlyDictionary<ShapeId, Trait> traits = new Dictionary<ShapeId, Trait>
-        {
-            [defaultId] = new(defaultId, Document.From([Document.From("Ada")])),
-        };
+        var document = Document.From([Document.From("Ada")]);
 
-        Assert.True(
-            DefaultValues.TryCompile(schema, traits, honorClientOptional: false, out var create)
-        );
+        var firstReader = new DocumentDeserializer(document);
+        var first = schema.Read(ref firstReader);
+        var secondReader = new DocumentDeserializer(document);
+        var second = schema.Read(ref secondReader);
 
-        var first = create();
-        var second = create();
         Assert.NotSame(first, second);
         Assert.Equal(["Ada"], first);
         Assert.Equal(["Ada"], second);

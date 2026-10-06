@@ -1965,6 +1965,18 @@ public interface IOperationSchema
     Trait? GetTrait(ShapeId id);
 
     bool HasTrait(ShapeId id);
+
+    /// <summary>Dispatches to <paramref name="visitor"/> with the input and output types in scope.</summary>
+    TResult Accept<TResult>(IOperationSchemaVisitor<TResult> visitor);
+}
+
+/// <summary>
+/// Recovers the input and output types hidden by <see cref="IOperationSchema"/> without reflection
+/// or the runtime binder.
+/// </summary>
+public interface IOperationSchemaVisitor<out TResult>
+{
+    TResult Visit<TInput, TOutput>(OperationSchema<TInput, TOutput> schema);
 }
 
 public interface IOperationErrorSchema
@@ -2019,6 +2031,12 @@ public sealed class OperationSchema<TInput, TOutput> : IOperationSchema
     Schema IOperationSchema.Output => Output;
 
     public bool IsStreaming { get; }
+
+    public TResult Accept<TResult>(IOperationSchemaVisitor<TResult> visitor)
+    {
+        ArgumentNullException.ThrowIfNull(visitor);
+        return visitor.Visit(this);
+    }
 
     public IReadOnlyList<IOperationErrorSchema> Errors { get; }
 
