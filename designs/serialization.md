@@ -4,10 +4,11 @@ The runtime schema model is the contract between generated C# model types and
 the runtime libraries that consume them: codecs, protocols, and validators.
 
 The generator emits plain model types plus schemas. A schema describes its
-shape and carries a generated, format-agnostic *shape serializer* that moves
-values in and out of a typed writer or reader. A codec supplies that writer and
-reader for one wire format, so serialization is typed calls from generated code
-into the codec. Everything else that consumes schemas (protocols, the validator,
+shape and, through generated code, serializes values of that shape: it hands
+each member to a *shape serializer* and takes each member from a *shape
+deserializer*, in calls typed at the member's static type. A codec implements
+the shape serializer and deserializer for one wire format, and knows nothing
+about any particular shape. Everything else that consumes schemas (protocols, the validator,
 documentation) is a *fold*: a typed walk of the schema graph that compiles a
 plan once and caches it. Adding CBOR, XML, JSON, REST, rpcv2Cbor, or gRPC
 behavior therefore never requires regenerating format-specific code into every
@@ -18,9 +19,9 @@ shape.
 - **Fidelity.** The schema model mirrors the Smithy meta-model. Anything the
   model can express is representable: member-level traits on list elements and
   map keys, presence semantics, service structure.
-- **One path per concern.** Values cross a codec through generated shape
-  serializers only; schemas are traversed through a single typed visitor. Neither
-  has an interpretive fallback.
+- **One path per concern.** Values cross a codec only through the schema's
+  generated serialization methods; schemas are traversed through a single typed
+  visitor. Neither has an interpretive fallback.
 - **No boxing.** Trait values, member access, and construction are statically
   typed, so a compiled plan moves values of any type without boxing them.
 - **AOT-safe.** Plans are composed from delegates, never emitted IL. The model
@@ -33,8 +34,8 @@ shape.
 
 1. **Model types** are plain C# values.
 2. **Schemas** describe Smithy metadata, typed member access, and construction,
-   and carry the generated shape serializers.
-3. **Codecs** implement typed writers and readers for one wire format.
+   and serialize values through generated methods.
+3. **Codecs** implement shape serializers and deserializers for one wire format.
 4. **Protocols** project operation schemas into transport requests and responses.
 5. **Validators** compile schemas into constraint checkers.
 
@@ -148,8 +149,8 @@ public static Schema<Rating> Schema { get; } =
 The accessors are delegates over the concrete type, so reading and writing a
 member costs no reflection and no boxing. The finalizer is where a required
 member absent from the payload fails, throwing where the codec can turn it into
-a modeled error. `Serializer` is the generated shape serializer; see
-[Shape Serializers](#shape-serializers).
+a modeled error. `Serializer` holds the generated serialization methods; see
+[Serializing Values](#serializing-values).
 
 Construction style follows how many typed parts a shape kind has. A shape with
 none is a constructor (`new IntegerSchema(id)`). A shape whose parts are fixed
@@ -372,7 +373,7 @@ public interface ISchemaVisitor<out TResult>
 A consumer is a fold: it visits the schema graph once and compiles a typed plan,
 cached per consumer and schema. A protocol compiles transport bindings, and the
 validator compiles an `ISmithyValidator<T>`. Codecs are not folds; they run the
-generated [shape serializers](#shape-serializers).
+schema's generated [serialization methods](#serializing-values).
 
 The hot path runs only precompiled plans: no schema dispatch, no per-value trait
 lookup, no boxing. A REST operation's labels, headers, query parameters, and
@@ -383,93 +384,79 @@ a new shape kind fails to compile until the fold handles it. A fold that admits
 only a few kinds derives from `PartialSchemaVisitor<TResult>`, overrides those,
 and answers the rest through `VisitDefault`.
 
-## Shape Serializers
+## Serializing Values
 
-Every aggregate schema (structure, union, list, and map) carries a generated
-shape serializer. It knows the shape's CLR types and nothing about any wire
-format: it hands each value to a writer, and takes each value from a reader,
-through calls typed at the value's static type.
+Every aggregate schema (structure, union, list, and map) serializes values of
+its shape through generated code that knows the shape's CLR types and nothing
+about any wire format:
 
 ```csharp
-public interface IShapeSerializer<T>
+public abstract class Schema<T> : Schema
 {
-    void Write<TWriter>(T value, ref TWriter writer)
-        where TWriter : struct, IShapeWriter;
+    public abstract void Serialize<TSerializer>(T value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer;
 
-    T Read<TReader>(ref TReader reader)
-        where TReader : struct, IShapeReader;
+    public abstract T Deserialize<TDeserializer>(ref TDeserializer deserializer)
+        where TDeserializer : struct, IShapeDeserializer;
 }
 ```
 
-The writer and reader are `struct` type arguments, so the JIT compiles each
-serializer once per codec with every call bound directly: no interface dispatch
-and no casts per value.
+The serializer and deserializer are `struct` type arguments, so the JIT
+compiles the generated code once per codec with every call bound directly: no
+interface dispatch and no casts per value.
 
-A structure's serializer addresses members by declaration index. `Member(index)`
-returns false when the member is outside the projection being written, and
-nested aggregates are written through their own serializers:
+Every call names a member of the shape being serialized by its declaration
+index and passes the value at its static type. One call carries both, so the
+codec decides in one place whether to write the member, write its default, write
+an explicit null, or skip it because it is outside the projection being written:
 
 ```csharp
 // structure Rating { @required title: String, score: Integer, author: User }
-public void Write<TWriter>(Rating value, ref TWriter writer)
-    where TWriter : struct, IShapeWriter
-{
-    if (writer.Member(0)) writer.WriteString(value.Title);
-    if (writer.Member(1))
-    {
-        if (value.Score is { } score) writer.WriteInt(score);
-        else writer.WriteNull();
-    }
-    if (writer.Member(2)) writer.Write(value.Author, UserSchema.Serializer);
-}
+serializer.WriteString(0, value.Title);
+serializer.WriteInt(1, value.Score);                       // int?: the codec handles null
+serializer.WriteStruct(2, value.Author, UserSchema.Schema);
+```
 
-public void ReadMember<TReader>(Builder builder, int index, ref TReader reader)
-    where TReader : struct, IShapeReader
+Collections and unions use the same calls. A list element is member 0 of the
+list, a map key and value are members 0 and 1, and a union writes its one case
+under the case's index:
+
+```csharp
+foreach (var item in value.Values)
 {
-    switch (index)
-    {
-        case 0: builder.Title = reader.ReadString(); break;
-        case 1: builder.Score = reader.ReadInt(); break;
-        case 2: builder.Author = reader.Read(UserSchema.Serializer); break;
-    }
+    serializer.WriteString(0, item);
 }
 ```
 
 The codec drives a structure read. It walks the wire format (JSON properties,
 XML elements and attributes, CBOR keys, protobuf field numbers), maps each to a
-member index, and calls `ReadMember`, so wire order is irrelevant. Once the
-structure ends, absent members take their modeled defaults and the builder is
-finalized, which is where a missing required member fails.
-
-A list or map serializer iterates its own collection, and a union serializer
-writes its one case as a member:
+member index, and calls the generated member reader, so wire order is
+irrelevant:
 
 ```csharp
-public void Write<TWriter>(SimpleList value, ref TWriter writer)
-    where TWriter : struct, IShapeWriter
+switch (index)
 {
-    foreach (var item in value.Values) writer.WriteString(item);
-}
-
-public SimpleList Read<TReader>(ref TReader reader)
-    where TReader : struct, IShapeReader
-{
-    var items = new List<string>();
-    while (reader.NextElement()) items.Add(reader.ReadString());
-    return SimpleList.FromOwnedList(items);
+    case 0: builder.Title = deserializer.ReadString(); break;
+    case 1: builder.Score = deserializer.ReadInt(); break;
+    case 2: builder.Author = deserializer.ReadStruct(UserSchema.Schema); break;
 }
 ```
 
-`IShapeWriter` and `IShapeReader` have one method per simple shape kind
-(`WriteString`, `ReadInt`, `WriteTimestamp`, and so on), `WriteNull` and
-`ReadNull`, enum value methods, `Member` for structure and union members,
-`NextElement` and `NextEntry` for collections, and `Write`/`Read` for a nested
-aggregate through its serializer.
+Once the structure ends, absent members take their modeled defaults and the
+builder is finalized, which is where a missing required member fails. A list or
+map read loops over `deserializer.NextElement()` or `NextEntry()` and reads each
+value the same way.
+
+`IShapeSerializer` and `IShapeDeserializer` have one method per simple shape
+kind (`WriteString`, `ReadInt`, `WriteTimestamp`, and so on), enum value
+methods, `WriteStruct`/`ReadStruct` and their list, map, and union counterparts
+for a nested aggregate through its schema, and `NextElement` and `NextEntry` for
+collections.
 
 ## Codec Model
 
-A codec implements `IShapeWriter` and `IShapeReader` for one wire format, plus
-a *plan*: per-shape tables of wire metadata indexed by member position, built
+A codec implements `IShapeSerializer` and `IShapeDeserializer` for one wire
+format, plus a *plan*: per-shape tables of wire metadata indexed by member position, built
 once from the schema graph. A JSON plan holds each member's pre-encoded property
 name (honoring `@jsonName`), timestamp format, and default; an XML plan holds
 element and attribute names, flattening, and namespaces; a protobuf plan holds
@@ -521,7 +508,7 @@ Each format exposes one factory: `JsonCodecFactory`, `XmlCodecFactory`,
 `CborCodecFactory`, and `ProtoCodecFactory`, in the `NSmithy.Codecs.*`
 packages. JSON, XML, and CBOR implement `IProjectionCodecFactory`; Protobuf
 implements only `ICodecFactory`, because gRPC always encodes complete messages.
-A projection is a member mask over the structure's table, which `Member(index)`
+A projection is a member mask over the structure's table, which every write
 consults. `FromMember` retains traits declared on the member, for a payload
 member whose traits control its target's wire representation (`@xmlName`,
 `@timestampFormat`).
@@ -696,10 +683,10 @@ The generator could emit a JSON, CBOR, or XML serializer per shape, as
 to specific wire formats, adding a codec would require regenerating every
 model, and protocol projections would still need to redirect member writes.
 
-What is generated per shape is format-agnostic: a shape serializer moves
-values through typed writer and reader calls and knows nothing about any wire
-format. It lives on the schema class rather than the model type, and every
-codec uses the same one.
+What is generated per shape is format-agnostic: the schema's serialization
+methods move values through typed shape serializer calls and know nothing about
+any wire format. They live on the schema rather than the model type, and every
+codec uses the same ones.
 
 ### Codecs as schema folds
 
