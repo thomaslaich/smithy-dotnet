@@ -3,19 +3,15 @@ using System.Net.Http.Headers;
 
 namespace NSmithy.Http;
 
-public sealed class HttpClientTransport : IHttpTransport
+public sealed class HttpClientTransport(HttpClient httpClient) : IHttpTransport
 {
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> NoHeaders =
         new System.Collections.ObjectModel.ReadOnlyDictionary<string, IReadOnlyList<string>>(
             new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         );
 
-    private readonly HttpClient httpClient;
-
-    public HttpClientTransport(HttpClient httpClient)
-    {
-        this.httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-    }
+    private readonly HttpClient httpClient =
+        httpClient ?? throw new ArgumentNullException(nameof(httpClient));
 
     public Task<SmithyHttpClientResponse> SendAsync(
         SmithyHttpRequest request,
