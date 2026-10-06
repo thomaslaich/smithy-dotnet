@@ -551,6 +551,10 @@ public interface IStructSchema
 
     /// <summary>The members in declaration order; a member's position is its index.</summary>
     IReadOnlyList<IMemberSchema> Members { get; }
+
+    /// <summary>Writes a value of this structure with no member set, as member <paramref name="member"/>.</summary>
+    void WriteEmpty<TSerializer>(int member, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 }
 
 public interface IStructSchema<T> : IStructSchema
@@ -678,6 +682,10 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
 
     public T BuildEmpty() => build(createBuilder());
 
+    public void WriteEmpty<TSerializer>(int member, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer, allows ref struct =>
+        Write(member, BuildEmpty(), ref serializer);
+
     public TResult Accept<TResult>(IStructSchemaVisitor<T, TResult> visitor)
     {
         ArgumentNullException.ThrowIfNull(visitor);
@@ -781,6 +789,10 @@ public sealed class UnitSchema : Schema<SmithyUnit>, IStructSchema<SmithyUnit, S
     public SmithyUnit Build(SmithyUnit builder) => SmithyUnit.Value;
 
     public SmithyUnit BuildEmpty() => SmithyUnit.Value;
+
+    public void WriteEmpty<TSerializer>(int member, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer, allows ref struct =>
+        Write(member, SmithyUnit.Value, ref serializer);
 
     private sealed class NoMembers : IStructValueSerializer<SmithyUnit>
     {
@@ -1123,6 +1135,8 @@ internal interface IUnionCaseSchema<TUnion>
 {
     void Accept(IUnionCaseVisitor<TUnion> visitor);
 
+    bool Matches(TUnion value);
+
     bool TrySerialize<TSerializer>(int index, TUnion value, ref TSerializer serializer)
         where TSerializer : struct, IShapeSerializer, allows ref struct;
 
@@ -1145,6 +1159,9 @@ public interface IUnionSchema
 public interface IUnionSchema<T> : IUnionSchema
 {
     void VisitCases(IUnionCaseVisitor<T> visitor);
+
+    /// <summary>The index of the case <paramref name="value"/> holds.</summary>
+    int CaseOf(T value);
 
     /// <summary>Writes the case <paramref name="value"/> holds under the case's index.</summary>
     void SerializeCase<TSerializer>(T value, ref TSerializer serializer)
@@ -1567,6 +1584,19 @@ public sealed class UnionSchema<T> : Schema<T>, IUnionSchema<T>
         }
 
         return -1;
+    }
+
+    public int CaseOf(T value)
+    {
+        for (var index = 0; index < cases.Count; index++)
+        {
+            if (((IUnionCaseSchema<T>)cases[index]).Matches(value))
+            {
+                return index;
+            }
+        }
+
+        throw new InvalidOperationException($"No union case matched '{typeof(T).Name}'.");
     }
 
     public override void Write<TSerializer>(int member, T value, ref TSerializer serializer)
@@ -2360,43 +2390,7 @@ public static class Schemas
     public static Func<TUnion, string> CompileCaseName<TUnion>(IUnionSchema<TUnion> schema)
     {
         ArgumentNullException.ThrowIfNull(schema);
-        var collector = new CaseNameCollector<TUnion>();
-        schema.VisitCases(collector);
-        var cases = collector.Cases.ToArray();
-        return value =>
-        {
-            foreach (var @case in cases)
-            {
-                if (@case.Matches(value))
-                {
-                    return @case.Name;
-                }
-            }
-
-            throw new InvalidOperationException($"No union case matched '{typeof(TUnion).Name}'.");
-        };
-    }
-
-    private interface ICaseMatch<in TUnion>
-    {
-        string Name { get; }
-
-        bool Matches(TUnion value);
-    }
-
-    private sealed class CaseMatch<TUnion, TValue>(IUnionCaseSchema<TUnion, TValue> @case)
-        : ICaseMatch<TUnion>
-    {
-        public string Name => @case.Name;
-
-        public bool Matches(TUnion value) => @case.Matches(value);
-    }
-
-    private sealed class CaseNameCollector<TUnion> : IUnionCaseVisitor<TUnion>
-    {
-        public List<ICaseMatch<TUnion>> Cases { get; } = [];
-
-        public void Visit<TValue>(IUnionCaseSchema<TUnion, TValue> unionCase) =>
-            Cases.Add(new CaseMatch<TUnion, TValue>(unionCase));
+        var names = schema.Cases.Select(@case => @case.Name).ToArray();
+        return value => names[schema.CaseOf(value)];
     }
 }

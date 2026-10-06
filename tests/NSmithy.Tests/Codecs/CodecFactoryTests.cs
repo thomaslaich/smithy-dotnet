@@ -26,7 +26,7 @@ public sealed class CodecFactoryTests
     public void JsonFactoryRetainsTraitsFromTargetedMember()
     {
         var member = TimestampMember();
-        var codec = JsonCodecFactory.Default.FromMember(member);
+        var codec = JsonCodecFactory.Default.FromMember(member.TypedTarget, member.MemberTraits);
         var value = new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero);
 
         var json = codec.SerializeText(value);
@@ -39,7 +39,7 @@ public sealed class CodecFactoryTests
     public void XmlFactoryRetainsTraitsFromTargetedMember()
     {
         var member = TimestampMember();
-        var codec = XmlCodecFactory.Default.FromMember(member);
+        var codec = XmlCodecFactory.Default.FromMember(member.TypedTarget, member.MemberTraits);
         var value = new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero);
 
         var xml = codec.SerializeText(value);

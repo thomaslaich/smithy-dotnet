@@ -1,3 +1,4 @@
+using NSmithy.Core;
 using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Xml;
@@ -26,16 +27,17 @@ public sealed class XmlCodecFactory(
     }
 
     public ICodec<T> FromMember<T>(
-        ITypedTargetMemberSchema<T> member,
+        Schema<T> target,
+        IReadOnlyDictionary<ShapeId, Trait> memberTraits,
         CodecFactoryOptions? options = null
     )
     {
-        ArgumentNullException.ThrowIfNull(member);
+        ArgumentNullException.ThrowIfNull(target);
         var resolved = options ?? CodecFactoryOptions.Default;
         return new CompiledXmlCodec<T>(
-            member.TypedTarget,
+            target,
             resolved.MaterializeTopLevelDefaults,
-            member.MemberTraits,
+            memberTraits,
             defaultNamespaceUri,
             defaultNamespacePrefix
         );

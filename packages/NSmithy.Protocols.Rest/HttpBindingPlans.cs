@@ -3,22 +3,18 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Protocols.Rest;
 
-// One plan per bound member, compiled once from the member schema and its value codec. A plan
-// knows its member's value type; the binding that holds it only knows the container and builder,
-// so the per-request loops stay monomorphic without ever boxing a value.
-
-internal interface IHttpLabelWriter<in T>
+/// <summary>Where a structure member travels in an HTTP message.</summary>
+internal enum HttpBinding
 {
-    void Write(HttpUriBuilder uri, T container);
-}
-
-internal interface IHttpLabelReader<in TBuilder>
-{
-    string Name { get; }
-
-    bool IsRequired { get; }
-
-    void Read(TBuilder builder, string value);
+    /// <summary>In the structured body, written by the body codec rather than the binding.</summary>
+    Body,
+    Label,
+    Query,
+    QueryParams,
+    Header,
+    PrefixHeaders,
+    StatusCode,
+    Payload,
 }
 
 /// <summary>Where a request header lands: the transport owns the content headers.</summary>
@@ -29,320 +25,169 @@ internal enum HeaderSlot
     ContentHeaders,
 }
 
-internal interface IHttpHeaderWriter<in T>
+/// <summary>How an <c>@httpPayload</c> member becomes the message body.</summary>
+internal enum PayloadKind
 {
-    string Name { get; }
+    /// <summary>
+    /// Encoded by the body codec: structures, unions, documents, alloy's lists and maps, and some
+    /// strings.
+    /// </summary>
+    Codec,
+    Blob,
+    StreamingBlob,
 
-    HeaderSlot Slot { get; }
-
-    string? Format(T container);
-}
-
-internal interface IHttpHeaderReader<in TBuilder>
-{
-    string Name { get; }
-
-    string MemberName { get; }
-
-    bool IsRequired { get; }
-
-    void Read(TBuilder builder, string value);
-}
-
-internal interface IHttpQueryWriter<in T>
-{
-    void Write(HttpUriBuilder uri, T container);
-}
-
-internal interface IHttpQueryReader<in TBuilder>
-{
-    string Name { get; }
-
-    string MemberName { get; }
-
-    bool IsRequired { get; }
-
-    void Read(TBuilder builder, IReadOnlyList<string> values);
-}
-
-internal interface IHttpPrefixHeaderWriter<in T>
-{
-    void Write(IDictionary<string, IReadOnlyList<string>> headers, T container);
-}
-
-internal interface IHttpPrefixHeaderReader<in TBuilder>
-{
-    void Read(TBuilder builder, IEnumerable<KeyValuePair<string, IReadOnlyList<string>>> headers);
-}
-
-internal interface IHttpQueryParamsWriter<in T>
-{
-    void Write(HttpUriBuilder uri, T container, HashSet<string> excludedNames);
-}
-
-internal interface IHttpQueryParamsReader<in TBuilder>
-{
-    void Read(TBuilder builder, Dictionary<string, IReadOnlyList<string>> query);
+    /// <summary>A string or enum sent as its raw UTF-8 text.</summary>
+    Text,
+    EventStream,
 }
 
 /// <summary>
-/// The plan for a map-valued binding, which serves as either side of <c>@httpPrefixHeaders</c> or
-/// <c>@httpQueryParams</c>.
+/// How the scalars of an HTTP-bound value are written as text: the shape they target, and the
+/// traits that change their text form. A list's elements and a map's values are the scalars here.
 /// </summary>
-internal interface IMapBindingPlan<in T, in TBuilder>
-    : IHttpPrefixHeaderWriter<T>,
-        IHttpPrefixHeaderReader<TBuilder>,
-        IHttpQueryParamsWriter<T>,
-        IHttpQueryParamsReader<TBuilder>;
-
-internal interface IHttpStatusCodeWriter<in T>
+internal sealed record HttpTextFormat(ShapeKind Kind, string TimestampFormat, bool Base64Strings)
 {
-    int? Get(T container);
-}
+    /// <summary>Whether a header list quotes its elements, which only string-like elements need.</summary>
+    public bool QuoteHeaderElements => Kind is ShapeKind.String or ShapeKind.Enum;
 
-internal interface IHttpStatusCodeReader<in TBuilder>
-{
-    void Read(TBuilder builder, int statusCode);
-}
-
-internal sealed class LabelPlan<T, TBuilder, TValue>(
-    IMemberSchema<T, TBuilder, TValue> member,
-    IHttpValueCodec<TValue> codec,
-    bool greedy
-) : IHttpLabelWriter<T>, IHttpLabelReader<TBuilder>
-{
-    private readonly string placeholder = greedy
-        ? "{" + member.Name + "+}"
-        : "{" + member.Name + "}";
-
-    public string Name => member.Name;
-
-    public bool IsRequired => member.IsRequired;
-
-    public void Write(HttpUriBuilder uri, T container)
-    {
-        if (member.GetValue(container) is not { } value)
-        {
-            throw new InvalidOperationException(
-                $"HTTP label member '{member.Name}' cannot be null."
-            );
-        }
-
-        var text = codec.Format(value);
-        uri.ReplaceLabel(
-            placeholder,
-            greedy ? HttpValueText.EscapeGreedyLabel(text) : Uri.EscapeDataString(text)
-        );
-    }
-
-    public void Read(TBuilder builder, string value) =>
-        member.SetValue(builder, codec.Parse(value));
-}
-
-internal sealed class HeaderPlan<T, TBuilder, TValue>(
-    IMemberSchema<T, TBuilder, TValue> member,
-    IHttpValueCodec<TValue> codec,
-    string name
-) : IHttpHeaderWriter<T>, IHttpHeaderReader<TBuilder>
-{
-    public string Name => name;
-
-    public string MemberName => member.Name;
-
-    public bool IsRequired => member.IsRequired;
-
-    public HeaderSlot Slot { get; } =
-        string.Equals(name, "Content-Type", StringComparison.OrdinalIgnoreCase)
-            ? HeaderSlot.ContentType
-        : string.Equals(name, "Content-Encoding", StringComparison.OrdinalIgnoreCase)
-            ? HeaderSlot.ContentHeaders
-        : HeaderSlot.Headers;
-
-    public string? Format(T container) =>
-        member.GetValue(container) is { } value ? codec.FormatHeader(value) : null;
-
-    public void Read(TBuilder builder, string value) =>
-        member.SetValue(builder, codec.ParseHeader(value));
-}
-
-internal sealed class QueryPlan<T, TBuilder, TValue>(
-    IMemberSchema<T, TBuilder, TValue> member,
-    IHttpValueCodec<TValue> codec,
-    string name
-) : IHttpQueryWriter<T>, IHttpQueryReader<TBuilder>
-{
-    public string Name => name;
-
-    public string MemberName => member.Name;
-
-    public bool IsRequired => member.IsRequired;
-
-    public void Write(HttpUriBuilder uri, T container)
-    {
-        if (member.GetValue(container) is { } value)
-        {
-            codec.AppendQuery(uri, name, value);
-        }
-    }
-
-    public void Read(TBuilder builder, IReadOnlyList<string> values) =>
-        member.SetValue(builder, codec.ParseMany(values));
-}
-
-/// <summary>
-/// An <c>@httpPrefixHeaders</c> or <c>@httpQueryParams</c> member targets a map; the map's own
-/// types only come into scope by visiting it, which is what this does.
-/// </summary>
-internal sealed class MapBindingPlanCompiler<T, TBuilder, TValue>(
-    IMemberSchema<T, TBuilder, TValue> member,
-    string prefix
-) : PartialSchemaVisitor<IMapBindingPlan<T, TBuilder>>
-{
-    public override IMapBindingPlan<T, TBuilder> VisitMap<TDictionary, TMapValue, TMapBuilder>(
-        IMapSchema<TDictionary, TMapValue, TMapBuilder> schema
-    ) =>
-        new MapBindingPlan<T, TBuilder, TDictionary, TMapValue, TMapBuilder>(
-            (IMemberSchema<T, TBuilder, TDictionary>)(object)member,
-            schema,
-            HttpBindingCompiler.Compile(schema.ValueSchema, memberTraits: null),
-            prefix
-        );
-
-    protected override IMapBindingPlan<T, TBuilder> VisitDefault(Schema schema) =>
-        throw new InvalidOperationException(
-            $"HTTP binding member '{member.Name}' must target a map schema."
-        );
-}
-
-internal sealed class MapBindingPlan<T, TBuilder, TDictionary, TValue, TMapBuilder>(
-    IMemberSchema<T, TBuilder, TDictionary> member,
-    IMapSchema<TDictionary, TValue, TMapBuilder> map,
-    IHttpValueCodec<TValue> value,
-    string prefix
-) : IMapBindingPlan<T, TBuilder>
-{
-    public void Write(IDictionary<string, IReadOnlyList<string>> headers, T container)
-    {
-        if (member.GetValue(container) is not { } entries)
-        {
-            return;
-        }
-
-        foreach (var entry in map.GetEntries(entries))
-        {
-            if (entry.Value is null)
-            {
-                continue;
-            }
-
-            var headerName = prefix + entry.Key;
-            if (!headers.ContainsKey(headerName))
-            {
-                headers[headerName] = [value.Format(entry.Value)];
-            }
-        }
-    }
-
-    public void Read(
-        TBuilder builder,
-        IEnumerable<KeyValuePair<string, IReadOnlyList<string>>> headers
+    /// <summary>
+    /// The format of the scalars <paramref name="target"/> holds. The member's traits apply to each
+    /// element of a list: a header list of timestamps is a list of http-dates, a <c>@mediaType</c>
+    /// string list a list of base64 strings.
+    /// </summary>
+    public static HttpTextFormat For(
+        Schema target,
+        IReadOnlyDictionary<ShapeId, Trait>? memberTraits
     )
     {
-        var entries = map.CreateTypedBuilder();
-        foreach (var header in headers)
+        var scalar = HttpBindingPlans.UnwrapNullable(target);
+        if (scalar is IListSchema list)
         {
-            if (
-                !header.Key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                || (prefix.Length == 0 && IsTransportManagedHeader(header.Key))
-                || header.Value.Count == 0
-            )
-            {
-                continue;
-            }
-
-            map.Add(entries, header.Key[prefix.Length..], value.Parse(header.Value[0]));
+            scalar = HttpBindingPlans.UnwrapNullable(list.Element);
         }
 
-        member.SetValue(builder, map.Build(entries));
+        var timestampFormat =
+            memberTraits?.TryGetValue(RestTraits.TimestampFormat, out var memberFormat) == true
+                ? memberFormat.Value.AsString()
+            : scalar.GetTrait(RestTraits.TimestampFormat) is { } shapeFormat
+                ? shapeFormat.Value.AsString()
+            : memberTraits?.ContainsKey(RestTraits.HttpHeader) == true ? "http-date"
+            : "date-time";
+        var base64Strings =
+            scalar.Kind == ShapeKind.String
+            && (
+                memberTraits?.ContainsKey(RestTraits.MediaType) == true
+                || scalar.HasTrait(RestTraits.MediaType)
+            );
+        return new HttpTextFormat(scalar.Kind, timestampFormat, base64Strings);
     }
-
-    public void Write(HttpUriBuilder uri, T container, HashSet<string> excludedNames)
-    {
-        if (member.GetValue(container) is not { } entries)
-        {
-            return;
-        }
-
-        foreach (var entry in map.GetEntries(entries))
-        {
-            if (entry.Value is not null && !excludedNames.Contains(entry.Key))
-            {
-                value.AppendQuery(uri, entry.Key, entry.Value);
-            }
-        }
-    }
-
-    public void Read(TBuilder builder, Dictionary<string, IReadOnlyList<string>> query)
-    {
-        var entries = map.CreateTypedBuilder();
-        foreach (var entry in query)
-        {
-            if (entry.Value.Count > 0)
-            {
-                map.Add(entries, entry.Key, value.ParseMany(entry.Value));
-            }
-        }
-
-        member.SetValue(builder, map.Build(entries));
-    }
-
-    private static bool IsTransportManagedHeader(string name) =>
-        name.Equals("Host", StringComparison.OrdinalIgnoreCase)
-        || name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase);
 }
 
-/// <summary><c>@httpResponseCode</c> targets an integer, optional or not.</summary>
-internal sealed class StatusCodePlan<T, TBuilder>
+/// <summary>
+/// One structure member's HTTP binding, compiled once. A binding's serializer and deserializer
+/// look the plan up by the member's index.
+/// </summary>
+internal sealed class HttpMemberPlan
 {
-    internal static (
-        IHttpStatusCodeWriter<T> Writer,
-        IHttpStatusCodeReader<TBuilder> Reader
-    ) Compile<TValue>(IMemberSchema<T, TBuilder, TValue> member)
-    {
-        if (member is IMemberSchema<T, TBuilder, int> required)
-        {
-            var plan = new Required(required);
-            return (plan, plan);
-        }
+    // A payload's codec, compiled on first use: the payload's value type is only in scope once a
+    // value is written or read.
+    private object? codec;
+    private object? caseName;
 
-        if (member is IMemberSchema<T, TBuilder, int?> optional)
-        {
-            var plan = new Optional(optional);
-            return (plan, plan);
-        }
+    public required int Index { get; init; }
 
-        throw new InvalidOperationException(
-            $"@httpResponseCode member '{member.Name}' must target an integer."
+    public required HttpBinding Binding { get; init; }
+
+    public required IMemberSchema Member { get; init; }
+
+    /// <summary>The member's target with any nullable wrapper removed.</summary>
+    public required Schema Target { get; init; }
+
+    public string MemberName => Member.Name;
+
+    /// <summary>The header or query parameter name, or the <c>@httpPrefixHeaders</c> prefix.</summary>
+    public string Name { get; init; } = "";
+
+    public bool IsRequired => Member.IsRequired;
+
+    public bool IsList => Target is IListSchema;
+
+    public HttpTextFormat Format { get; init; } = null!;
+
+    /// <summary>The URI template placeholder a label replaces.</summary>
+    public string Placeholder { get; init; } = "";
+
+    public bool Greedy { get; init; }
+
+    public HeaderSlot Slot { get; init; }
+
+    public PayloadKind PayloadKind { get; init; }
+
+    public string? ContentType { get; init; }
+
+    public bool RequiresLength { get; init; }
+
+    /// <summary>The modeled <c>@default</c> of a payload, which an empty body reads as.</summary>
+    public Document? Default { get; init; }
+
+    /// <summary>Whether a null structure payload is still sent, as the empty structure.</summary>
+    public bool EmptyStructOnNull { get; init; }
+
+    public IRestBodyCodecFactory CodecFactory { get; init; } = null!;
+
+    public ICodec<T> CodecFor<T>(Schema<T> schema) =>
+        (ICodec<T>)(codec ??= CodecFactory.FromMember(schema, Member.MemberTraits));
+
+    public ICodec<TEvent> EventCodecFor<TEvent>(Schema<TEvent> eventSchema) =>
+        (ICodec<TEvent>)(codec ??= CodecFactory.FromSchema(eventSchema));
+
+    /// <summary>Names the union case an event holds, which frames it on the event stream.</summary>
+    public Func<TEvent, string> EventTypeOf<TEvent>(Schema<TEvent> eventSchema) =>
+        (Func<TEvent, string>)(
+            caseName ??= Schemas.CompileCaseName(
+                eventSchema.Resolved as IUnionSchema<TEvent>
+                    ?? throw new InvalidOperationException(
+                        "REST event stream payloads must target a union schema."
+                    )
+            )
         );
-    }
 
-    private sealed class Required(IMemberSchema<T, TBuilder, int> member)
-        : IHttpStatusCodeWriter<T>,
-            IHttpStatusCodeReader<TBuilder>
-    {
-        public int? Get(T container) => member.GetValue(container);
+    /// <summary>The schema a string or enum payload is encoded with: as a string either way.</summary>
+    public Schema<string> StringSchema => Target as Schema<string> ?? Schemas.String;
 
-        public void Read(TBuilder builder, int statusCode) => member.SetValue(builder, statusCode);
-    }
+    public Schema<Document> DocumentSchema => Target as Schema<Document> ?? Schemas.Document;
 
-    private sealed class Optional(IMemberSchema<T, TBuilder, int?> member)
-        : IHttpStatusCodeWriter<T>,
-            IHttpStatusCodeReader<TBuilder>
-    {
-        public int? Get(T container) => member.GetValue(container);
+    /// <summary>A payload equal to its modeled default is not written, as a body codec would not write it.</summary>
+    public bool IsDefault(string value) =>
+        Default is { Kind: DocumentKind.String } text && text.AsString() == value;
 
-        public void Read(TBuilder builder, int statusCode) => member.SetValue(builder, statusCode);
-    }
+    public bool IsDefault(Document value) => Default is { } document && document.Equals(value);
+}
+
+/// <summary>
+/// The parts of an HTTP message a binding's serializer collects. The protocol assembles them,
+/// since the order they go on the wire is not the members' order.
+/// </summary>
+internal sealed class HttpMessageParts(HttpUriBuilder? uri)
+{
+    public HttpUriBuilder? Uri { get; } = uri;
+
+    public List<KeyValuePair<string, string>> Query { get; } = [];
+
+    public List<KeyValuePair<string, string>> QueryParams { get; } = [];
+
+    public List<KeyValuePair<HttpMemberPlan, string>> Headers { get; } = [];
+
+    public List<KeyValuePair<string, string>> PrefixHeaders { get; } = [];
+
+    public int? StatusCode { get; set; }
+
+    public RestBody Payload { get; set; } = RestBody.None;
+
+    // Scratch space for the text forms of the member being written.
+    internal List<string> Texts { get; } = [];
+
+    internal List<KeyValuePair<string, List<string>>> Entries { get; } = [];
 }
 
 internal static class HttpBindingPlans

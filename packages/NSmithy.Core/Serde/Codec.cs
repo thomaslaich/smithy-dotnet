@@ -36,15 +36,15 @@ public interface ICodecFactory
     ICodec<T> FromSchema<T>(Schema<T> schema, CodecFactoryOptions? options = null);
 
     /// <summary>
-    /// Creates a codec for a member target while retaining traits declared on the member. The
+    /// Creates a codec for a member's target while retaining the traits declared on the member. The
     /// default is correct for formats whose representation is controlled entirely by the target
     /// schema; trait-sensitive factories can override it.
     /// </summary>
-    ICodec<T> FromMember<T>(ITypedTargetMemberSchema<T> member, CodecFactoryOptions? options = null)
-    {
-        ArgumentNullException.ThrowIfNull(member);
-        return FromSchema(member.TypedTarget, options);
-    }
+    ICodec<T> FromMember<T>(
+        Schema<T> target,
+        IReadOnlyDictionary<ShapeId, Trait> memberTraits,
+        CodecFactoryOptions? options = null
+    ) => FromSchema(target, options);
 }
 
 /// <summary>

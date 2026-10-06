@@ -1,3 +1,4 @@
+using NSmithy.Core;
 using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Json;
@@ -25,18 +26,19 @@ public sealed class JsonCodecFactory(
     }
 
     public ICodec<T> FromMember<T>(
-        ITypedTargetMemberSchema<T> member,
+        Schema<T> target,
+        IReadOnlyDictionary<ShapeId, Trait> memberTraits,
         CodecFactoryOptions? options = null
     )
     {
-        ArgumentNullException.ThrowIfNull(member);
+        ArgumentNullException.ThrowIfNull(target);
         var resolved = options ?? CodecFactoryOptions.Default;
         return new CompiledJsonCodec<T>(
-            member.TypedTarget,
+            target,
             resolved.MaterializeTopLevelDefaults,
             readMode,
             honorJsonNameTrait,
-            member.MemberTraits
+            memberTraits
         );
     }
 
