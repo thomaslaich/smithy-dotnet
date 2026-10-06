@@ -65,7 +65,7 @@ public sealed class HttpClientTransport : IHttpTransport
         using var bufferedResponse = response;
         var content = response.Content is null
             ? []
-            : await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+            : await ReadBodyAsync(response.Content, cancellationToken).ConfigureAwait(false);
 
         // The body is fully read, so any HTTP/2 trailers have arrived. Capture the leading and
         // trailing headers now: the returned Trailer closure must not read them off `response`,
@@ -85,6 +85,56 @@ public sealed class HttpClientTransport : IHttpTransport
             response.Content is null ? NoHeaders : ToHeaderDictionary(response.Content.Headers),
             getTrailer
         );
+    }
+
+    /// <summary>
+    /// Reads a buffered body. With a declared length the body is read straight into one array of
+    /// that size; <see cref="HttpContent.ReadAsByteArrayAsync()"/> would buffer it in a growing
+    /// stream and then copy it out, which for a large body means several large-object-heap arrays.
+    /// </summary>
+    private static async Task<byte[]> ReadBodyAsync(
+        HttpContent content,
+        CancellationToken cancellationToken
+    )
+    {
+        if (content.Headers.ContentLength is not { } declared || declared > Array.MaxLength)
+        {
+            return await content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (declared == 0)
+        {
+            return [];
+        }
+
+        var body = new byte[declared];
+        var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using (stream.ConfigureAwait(false))
+        {
+            var read = await stream
+                .ReadAtLeastAsync(body, body.Length, throwOnEndOfStream: false, cancellationToken)
+                .ConfigureAwait(false);
+            if (read < body.Length)
+            {
+                // Shorter than declared: return what arrived rather than trailing zeros.
+                return body[..read];
+            }
+
+            // Longer than declared: keep reading rather than truncate.
+            var next = new byte[1];
+            if (
+                await stream.ReadAsync(next, cancellationToken).ConfigureAwait(false) == 0
+            )
+            {
+                return body;
+            }
+
+            using var overflow = new MemoryStream();
+            overflow.Write(body);
+            overflow.Write(next);
+            await stream.CopyToAsync(overflow, cancellationToken).ConfigureAwait(false);
+            return overflow.ToArray();
+        }
     }
 
     // Buffered responses capture their trailers eagerly (the source HttpResponseMessage is disposed
