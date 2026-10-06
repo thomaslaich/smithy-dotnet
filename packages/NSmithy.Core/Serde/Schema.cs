@@ -42,6 +42,17 @@ public abstract class Schema
         Traits.TryGetValue(id, out var trait) ? trait : null;
 
     public virtual bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
+
+    /// <summary>
+    /// Writes <paramref name="value"/>, the Smithy document form of a value of this shape such as a
+    /// modeled <c>@default</c>, as member <paramref name="member"/> of the shape being serialized.
+    /// </summary>
+    public abstract void WriteDocumentValue<TSerializer>(
+        int member,
+        Document value,
+        ref TSerializer serializer
+    )
+        where TSerializer : struct, IShapeSerializer;
 }
 
 public abstract class Schema<T> : Schema
@@ -51,6 +62,28 @@ public abstract class Schema<T> : Schema
 
     protected Schema(ShapeId id, ShapeKind kind, IEnumerable<Trait>? traits = null)
         : base(id, kind, traits) { }
+
+    /// <summary>
+    /// Writes <paramref name="value"/> as member <paramref name="member"/> of the shape being
+    /// serialized, or as the top-level value when <paramref name="member"/> is
+    /// <see cref="MemberIndex.Root"/>.
+    /// </summary>
+    public abstract void Write<TSerializer>(int member, T value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer;
+
+    /// <summary>Reads the value <paramref name="deserializer"/> is positioned on.</summary>
+    public abstract T Read<TDeserializer>(ref TDeserializer deserializer)
+        where TDeserializer : struct, IShapeDeserializer;
+
+    public override void WriteDocumentValue<TSerializer>(
+        int member,
+        Document value,
+        ref TSerializer serializer
+    )
+    {
+        var deserializer = new DocumentDeserializer(value);
+        Write(member, Read(ref deserializer), ref serializer);
+    }
 }
 
 public interface ISchemaVisitor<out TResult>
@@ -138,6 +171,12 @@ public sealed class LazySchema<T> : Schema<T>
         ArgumentNullException.ThrowIfNull(visitor);
         return TargetSchema.Accept(visitor);
     }
+
+    public override void Write<TSerializer>(int member, T value, ref TSerializer serializer) =>
+        TargetSchema.Write(member, value, ref serializer);
+
+    public override T Read<TDeserializer>(ref TDeserializer deserializer) =>
+        TargetSchema.Read(ref deserializer);
 }
 
 public abstract class PrimitiveSchema<T> : Schema<T>
@@ -154,6 +193,12 @@ public sealed class BooleanSchema(ShapeId id, IEnumerable<Trait>? traits = null)
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitBoolean(this);
     }
+
+    public override void Write<TSerializer>(int member, bool value, ref TSerializer serializer) =>
+        serializer.WriteBoolean(member, value);
+
+    public override bool Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadBoolean();
 }
 
 public sealed class ByteSchema(ShapeId id, IEnumerable<Trait>? traits = null)
@@ -164,6 +209,12 @@ public sealed class ByteSchema(ShapeId id, IEnumerable<Trait>? traits = null)
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitByte(this);
     }
+
+    public override void Write<TSerializer>(int member, sbyte value, ref TSerializer serializer) =>
+        serializer.WriteByte(member, value);
+
+    public override sbyte Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadByte();
 }
 
 public sealed class ShortSchema(ShapeId id, IEnumerable<Trait>? traits = null)
@@ -174,6 +225,12 @@ public sealed class ShortSchema(ShapeId id, IEnumerable<Trait>? traits = null)
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitShort(this);
     }
+
+    public override void Write<TSerializer>(int member, short value, ref TSerializer serializer) =>
+        serializer.WriteShort(member, value);
+
+    public override short Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadShort();
 }
 
 public sealed class IntegerSchema(ShapeId id, IEnumerable<Trait>? traits = null)
@@ -184,6 +241,12 @@ public sealed class IntegerSchema(ShapeId id, IEnumerable<Trait>? traits = null)
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitInteger(this);
     }
+
+    public override void Write<TSerializer>(int member, int value, ref TSerializer serializer) =>
+        serializer.WriteInteger(member, value);
+
+    public override int Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadInteger();
 }
 
 public sealed class LongSchema(ShapeId id, IEnumerable<Trait>? traits = null)
@@ -194,6 +257,12 @@ public sealed class LongSchema(ShapeId id, IEnumerable<Trait>? traits = null)
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitLong(this);
     }
+
+    public override void Write<TSerializer>(int member, long value, ref TSerializer serializer) =>
+        serializer.WriteLong(member, value);
+
+    public override long Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadLong();
 }
 
 public sealed class FloatSchema(ShapeId id, IEnumerable<Trait>? traits = null)
@@ -204,6 +273,12 @@ public sealed class FloatSchema(ShapeId id, IEnumerable<Trait>? traits = null)
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitFloat(this);
     }
+
+    public override void Write<TSerializer>(int member, float value, ref TSerializer serializer) =>
+        serializer.WriteFloat(member, value);
+
+    public override float Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadFloat();
 }
 
 public sealed class DoubleSchema(ShapeId id, IEnumerable<Trait>? traits = null)
@@ -214,6 +289,12 @@ public sealed class DoubleSchema(ShapeId id, IEnumerable<Trait>? traits = null)
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitDouble(this);
     }
+
+    public override void Write<TSerializer>(int member, double value, ref TSerializer serializer) =>
+        serializer.WriteDouble(member, value);
+
+    public override double Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadDouble();
 }
 
 public sealed class BigIntegerSchema(ShapeId id, IEnumerable<Trait>? traits = null)
@@ -224,6 +305,15 @@ public sealed class BigIntegerSchema(ShapeId id, IEnumerable<Trait>? traits = nu
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitBigInteger(this);
     }
+
+    public override void Write<TSerializer>(
+        int member,
+        BigInteger value,
+        ref TSerializer serializer
+    ) => serializer.WriteBigInteger(member, value);
+
+    public override BigInteger Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadBigInteger();
 }
 
 public sealed class BigDecimalSchema(ShapeId id, IEnumerable<Trait>? traits = null)
@@ -234,6 +324,15 @@ public sealed class BigDecimalSchema(ShapeId id, IEnumerable<Trait>? traits = nu
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitBigDecimal(this);
     }
+
+    public override void Write<TSerializer>(
+        int member,
+        decimal value,
+        ref TSerializer serializer
+    ) => serializer.WriteBigDecimal(member, value);
+
+    public override decimal Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadBigDecimal();
 }
 
 public sealed class StringSchema(ShapeId id, IEnumerable<Trait>? traits = null)
@@ -244,6 +343,21 @@ public sealed class StringSchema(ShapeId id, IEnumerable<Trait>? traits = null)
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitString(this);
     }
+
+    public override void Write<TSerializer>(int member, string value, ref TSerializer serializer)
+    {
+        if (value is null)
+        {
+            serializer.WriteNull(member);
+        }
+        else
+        {
+            serializer.WriteString(member, value);
+        }
+    }
+
+    public override string Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadString();
 }
 
 public sealed class BlobSchema(ShapeId id, IEnumerable<Trait>? traits = null)
@@ -254,6 +368,21 @@ public sealed class BlobSchema(ShapeId id, IEnumerable<Trait>? traits = null)
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitBlob(this);
     }
+
+    public override void Write<TSerializer>(int member, byte[] value, ref TSerializer serializer)
+    {
+        if (value is null)
+        {
+            serializer.WriteNull(member);
+        }
+        else
+        {
+            serializer.WriteBlob(member, value);
+        }
+    }
+
+    public override byte[] Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadBlob();
 }
 
 public sealed class StreamingBlobSchema(ShapeId id, IEnumerable<Trait>? traits = null)
@@ -264,6 +393,21 @@ public sealed class StreamingBlobSchema(ShapeId id, IEnumerable<Trait>? traits =
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitStreamingBlob(this);
     }
+
+    public override void Write<TSerializer>(int member, Stream value, ref TSerializer serializer)
+    {
+        if (value is null)
+        {
+            serializer.WriteNull(member);
+        }
+        else
+        {
+            serializer.WriteStream(member, value);
+        }
+    }
+
+    public override Stream Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadStream();
 }
 
 public sealed class TimestampSchema(ShapeId id, IEnumerable<Trait>? traits = null)
@@ -274,6 +418,15 @@ public sealed class TimestampSchema(ShapeId id, IEnumerable<Trait>? traits = nul
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitTimestamp(this);
     }
+
+    public override void Write<TSerializer>(
+        int member,
+        DateTimeOffset value,
+        ref TSerializer serializer
+    ) => serializer.WriteTimestamp(member, value);
+
+    public override DateTimeOffset Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadTimestamp();
 }
 
 public sealed class DocumentSchema(ShapeId id, IEnumerable<Trait>? traits = null)
@@ -284,6 +437,15 @@ public sealed class DocumentSchema(ShapeId id, IEnumerable<Trait>? traits = null
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitDocument(this);
     }
+
+    public override void Write<TSerializer>(
+        int member,
+        Document value,
+        ref TSerializer serializer
+    ) => serializer.WriteDocument(member, value);
+
+    public override Document Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadDocument();
 }
 
 public interface IMemberSchema
@@ -373,9 +535,22 @@ internal interface IMemberValueSource<in TContainer>
         where TWriter : struct, IStructMemberWriter;
 }
 
+/// <summary>Moves one member's value between a container and a shape serializer.</summary>
+internal interface IMemberSerialization<in TContainer, in TBuilder>
+{
+    void Serialize<TSerializer>(int index, TContainer container, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer;
+
+    void Deserialize<TDeserializer>(TBuilder builder, ref TDeserializer deserializer)
+        where TDeserializer : struct, IShapeDeserializer;
+}
+
 public interface IStructSchema
 {
     IMemberSchema? GetMember(string name);
+
+    /// <summary>The members in declaration order; a member's position is its index.</summary>
+    IReadOnlyList<IMemberSchema> Members { get; }
 }
 
 public interface IStructSchema<T> : IStructSchema
@@ -395,6 +570,10 @@ public interface IStructSchema<T> : IStructSchema
     void VisitMembers(IMemberVisitor<T> visitor);
 
     T BuildEmpty();
+
+    /// <summary>Writes each member of <paramref name="value"/> under its index.</summary>
+    void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer;
 }
 
 /// <summary>
@@ -413,6 +592,14 @@ public interface IStructSchema<T, TBuilder> : IStructSchema<T>
     T Build(TBuilder builder);
 
     void VisitMembers(IMemberVisitor<T, TBuilder> visitor);
+
+    /// <summary>Reads member <paramref name="index"/> into <paramref name="builder"/>.</summary>
+    void DeserializeMember<TDeserializer>(
+        TBuilder builder,
+        int index,
+        ref TDeserializer deserializer
+    )
+        where TDeserializer : struct, IShapeDeserializer;
 }
 
 public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBuilder>
@@ -441,11 +628,49 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
 
     public IStructValueSerializer<T> ValueSerializer { get; }
 
+    public IReadOnlyList<IMemberSchema> Members => members;
+
     public IMemberSchema? GetMember(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
         return membersByName.TryGetValue(name, out var member) ? member : null;
     }
+
+    public override void Write<TSerializer>(int member, T value, ref TSerializer serializer)
+    {
+        if (value is null)
+        {
+            serializer.WriteNull(member);
+        }
+        else
+        {
+            serializer.WriteStruct(member, value, this);
+        }
+    }
+
+    public override T Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadStruct(this);
+
+    public void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer
+    {
+        for (var index = 0; index < members.Length; index++)
+        {
+            ((IMemberSerialization<T, TBuilder>)members[index]).Serialize(
+                index,
+                value,
+                ref serializer
+            );
+        }
+    }
+
+    public void DeserializeMember<TDeserializer>(
+        TBuilder builder,
+        int index,
+        ref TDeserializer deserializer
+    )
+        where TDeserializer : struct, IShapeDeserializer =>
+        ((IMemberSerialization<T, TBuilder>)members[index]).Deserialize(builder, ref deserializer);
 
     public TBuilder CreateTypedBuilder() => createBuilder();
 
@@ -526,6 +751,27 @@ public sealed class UnitSchema : Schema<SmithyUnit>, IStructSchema<SmithyUnit, S
 
     public IMemberSchema? GetMember(string name) => null;
 
+    public IReadOnlyList<IMemberSchema> Members => [];
+
+    public override void Write<TSerializer>(
+        int member,
+        SmithyUnit value,
+        ref TSerializer serializer
+    ) => serializer.WriteStruct(member, value, this);
+
+    public override SmithyUnit Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadStruct(this);
+
+    public void SerializeMembers<TSerializer>(SmithyUnit value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer { }
+
+    public void DeserializeMember<TDeserializer>(
+        SmithyUnit builder,
+        int index,
+        ref TDeserializer deserializer
+    )
+        where TDeserializer : struct, IShapeDeserializer { }
+
     public void VisitMembers(IMemberVisitor<SmithyUnit> visitor) { }
 
     public void VisitMembers(IMemberVisitor<SmithyUnit, SmithyUnit> visitor) { }
@@ -578,6 +824,21 @@ public sealed class NullableSchema<T> : Schema<T?>, INullableSchema
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitNullable(this);
     }
+
+    public override void Write<TSerializer>(int member, T? value, ref TSerializer serializer)
+    {
+        if (value is { } present)
+        {
+            TypedTarget.Write(member, present, ref serializer);
+        }
+        else
+        {
+            serializer.WriteNull(member);
+        }
+    }
+
+    public override T? Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.TryReadNull() ? null : TypedTarget.Read(ref deserializer);
 }
 
 public interface IStringEnumSchema
@@ -642,6 +903,21 @@ public sealed class StringEnumSchema<T> : Schema<T>, IStringEnumSchema
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitStringEnum(this);
     }
+
+    public override void Write<TSerializer>(int member, T value, ref TSerializer serializer)
+    {
+        if (value is null)
+        {
+            serializer.WriteNull(member);
+        }
+        else
+        {
+            serializer.WriteStringEnum(member, value.Value);
+        }
+    }
+
+    public override T Read<TDeserializer>(ref TDeserializer deserializer) =>
+        T.FromValue(deserializer.ReadStringEnum());
 }
 
 public sealed class IntEnumSchema<T> : Schema<T>
@@ -673,6 +949,12 @@ public sealed class IntEnumSchema<T> : Schema<T>
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitIntEnum(this);
     }
+
+    public override void Write<TSerializer>(int member, T value, ref TSerializer serializer) =>
+        serializer.WriteIntEnum(member, GetIntegerValue(value));
+
+    public override T Read<TDeserializer>(ref TDeserializer deserializer) =>
+        Create(deserializer.ReadIntEnum());
 }
 
 public interface IEventStreamSchema
@@ -698,6 +980,25 @@ public sealed class EventStreamSchema<TEvent> : Schema<IAsyncEnumerable<TEvent>>
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitEventStream(this);
     }
+
+    public override void Write<TSerializer>(
+        int member,
+        IAsyncEnumerable<TEvent> value,
+        ref TSerializer serializer
+    )
+    {
+        if (value is null)
+        {
+            serializer.WriteNull(member);
+        }
+        else
+        {
+            serializer.WriteEventStream(member, value, TypedEventSchema);
+        }
+    }
+
+    public override IAsyncEnumerable<TEvent> Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadEventStream(TypedEventSchema);
 }
 
 public interface IListSchema
@@ -714,6 +1015,10 @@ public interface IListSchema<TCollection, TElement> : IListSchema
     Schema<TElement> ElementSchema { get; }
 
     IEnumerable<TElement> GetElements(TCollection value);
+
+    /// <summary>Writes each element of <paramref name="value"/> as member 0.</summary>
+    void SerializeElements<TSerializer>(TCollection value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer;
 }
 
 public interface IListSchema<TCollection, TElement, TBuilder> : IListSchema<TCollection, TElement>
@@ -723,6 +1028,10 @@ public interface IListSchema<TCollection, TElement, TBuilder> : IListSchema<TCol
     void Add(TBuilder builder, TElement value);
 
     TCollection Build(TBuilder builder);
+
+    /// <summary>Reads one element and adds it to <paramref name="builder"/>.</summary>
+    void DeserializeElement<TDeserializer>(TBuilder builder, ref TDeserializer deserializer)
+        where TDeserializer : struct, IShapeDeserializer;
 }
 
 public interface IMapSchema
@@ -735,6 +1044,8 @@ public interface IMapSchema
     /// </summary>
     IMemberSchema KeyMember { get; }
 
+    IMemberSchema ValueMember { get; }
+
     Schema Value { get; }
 }
 
@@ -745,6 +1056,10 @@ public interface IMapSchema<TDictionary, TValue> : IMapSchema
     Schema<TValue> ValueSchema { get; }
 
     IEnumerable<KeyValuePair<string, TValue>> GetEntries(TDictionary value);
+
+    /// <summary>Writes each entry of <paramref name="value"/>: its key as member 0, then its value as member 1.</summary>
+    void SerializeEntries<TSerializer>(TDictionary value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer;
 }
 
 public interface IMapSchema<TDictionary, TValue, TBuilder> : IMapSchema<TDictionary, TValue>
@@ -754,6 +1069,14 @@ public interface IMapSchema<TDictionary, TValue, TBuilder> : IMapSchema<TDiction
     void Add(TBuilder builder, string key, TValue value);
 
     TDictionary Build(TBuilder builder);
+
+    /// <summary>Reads the value of the entry named <paramref name="key"/> into <paramref name="builder"/>.</summary>
+    void DeserializeEntry<TDeserializer>(
+        TBuilder builder,
+        string key,
+        ref TDeserializer deserializer
+    )
+        where TDeserializer : struct, IShapeDeserializer;
 }
 
 public interface IUnionCaseSchema
@@ -786,18 +1109,37 @@ public interface IUnionCaseVisitor<TUnion>
 internal interface IUnionCaseSchema<TUnion>
 {
     void Accept(IUnionCaseVisitor<TUnion> visitor);
+
+    bool TrySerialize<TSerializer>(int index, TUnion value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer;
+
+    TUnion Deserialize<TDeserializer>(ref TDeserializer deserializer)
+        where TDeserializer : struct, IShapeDeserializer;
 }
 
 public interface IUnionSchema
 {
+    ShapeId Id { get; }
+
     IReadOnlyList<IUnionCaseSchema> Cases { get; }
 
     IUnionCaseSchema? GetCase(string name);
+
+    /// <summary>The index of the case named <paramref name="name"/>, or -1.</summary>
+    int IndexOf(string name);
 }
 
 public interface IUnionSchema<T> : IUnionSchema
 {
     void VisitCases(IUnionCaseVisitor<T> visitor);
+
+    /// <summary>Writes the case <paramref name="value"/> holds under the case's index.</summary>
+    void SerializeCase<TSerializer>(T value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer;
+
+    /// <summary>Reads case <paramref name="index"/> and returns the union holding it.</summary>
+    T DeserializeCase<TDeserializer>(int index, ref TDeserializer deserializer)
+        where TDeserializer : struct, IShapeDeserializer;
 }
 
 public sealed class CollectionMemberSchema<TValue> : ITypedTargetMemberSchema<TValue>
@@ -942,6 +1284,38 @@ public sealed class CollectionSchema<TCollection, TElement, TBuilder>
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitList(this);
     }
+
+    public override void Write<TSerializer>(
+        int member,
+        TCollection value,
+        ref TSerializer serializer
+    )
+    {
+        if (value is null)
+        {
+            serializer.WriteNull(member);
+        }
+        else
+        {
+            serializer.WriteList(member, value, this);
+        }
+    }
+
+    public override TCollection Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadList(this);
+
+    public void SerializeElements<TSerializer>(TCollection value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer
+    {
+        foreach (var element in getElements(value))
+        {
+            ElementSchema.Write(0, element, ref serializer);
+        }
+    }
+
+    public void DeserializeElement<TDeserializer>(TBuilder builder, ref TDeserializer deserializer)
+        where TDeserializer : struct, IShapeDeserializer =>
+        add(builder, ElementSchema.Read(ref deserializer));
 }
 
 public sealed class MapSchema<TDictionary, TValue, TBuilder>
@@ -990,6 +1364,8 @@ public sealed class MapSchema<TDictionary, TValue, TBuilder>
 
     public ITypedTargetMemberSchema<TValue> TypedValueMember { get; }
 
+    public IMemberSchema ValueMember => TypedValueMember;
+
     public Schema<TValue> ValueSchema { get; }
 
     public Schema Value => ValueSchema;
@@ -1008,6 +1384,43 @@ public sealed class MapSchema<TDictionary, TValue, TBuilder>
         ArgumentNullException.ThrowIfNull(visitor);
         return visitor.VisitMap(this);
     }
+
+    public override void Write<TSerializer>(
+        int member,
+        TDictionary value,
+        ref TSerializer serializer
+    )
+    {
+        if (value is null)
+        {
+            serializer.WriteNull(member);
+        }
+        else
+        {
+            serializer.WriteMap(member, value, this);
+        }
+    }
+
+    public override TDictionary Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadMap(this);
+
+    public void SerializeEntries<TSerializer>(TDictionary value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer
+    {
+        foreach (var (key, entry) in getEntries(value))
+        {
+            serializer.WriteString(0, key);
+            ValueSchema.Write(1, entry, ref serializer);
+        }
+    }
+
+    public void DeserializeEntry<TDeserializer>(
+        TBuilder builder,
+        string key,
+        ref TDeserializer deserializer
+    )
+        where TDeserializer : struct, IShapeDeserializer =>
+        add(builder, key, ValueSchema.Read(ref deserializer));
 }
 
 public sealed class UnionCaseSchema<TUnion, TValue>
@@ -1065,6 +1478,22 @@ public sealed class UnionCaseSchema<TUnion, TValue>
     public TUnion Create(TValue value) => create(value);
 
     public void Accept(IUnionCaseVisitor<TUnion> visitor) => visitor.Visit(this);
+
+    public bool TrySerialize<TSerializer>(int index, TUnion value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer
+    {
+        if (!matches(value))
+        {
+            return false;
+        }
+
+        TargetSchema.Write(index, get(value), ref serializer);
+        return true;
+    }
+
+    public TUnion Deserialize<TDeserializer>(ref TDeserializer deserializer)
+        where TDeserializer : struct, IShapeDeserializer =>
+        create(TargetSchema.Read(ref deserializer));
 }
 
 public sealed class UnionSchema<T> : Schema<T>, IUnionSchema<T>
@@ -1100,6 +1529,53 @@ public sealed class UnionSchema<T> : Schema<T>, IUnionSchema<T>
         }
     }
 
+    public int IndexOf(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        for (var index = 0; index < cases.Count; index++)
+        {
+            if (string.Equals(cases[index].Name, name, StringComparison.Ordinal))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    public override void Write<TSerializer>(int member, T value, ref TSerializer serializer)
+    {
+        if (value is null)
+        {
+            serializer.WriteNull(member);
+        }
+        else
+        {
+            serializer.WriteUnion(member, value, this);
+        }
+    }
+
+    public override T Read<TDeserializer>(ref TDeserializer deserializer) =>
+        deserializer.ReadUnion(this);
+
+    public void SerializeCase<TSerializer>(T value, ref TSerializer serializer)
+        where TSerializer : struct, IShapeSerializer
+    {
+        for (var index = 0; index < cases.Count; index++)
+        {
+            if (((IUnionCaseSchema<T>)cases[index]).TrySerialize(index, value, ref serializer))
+            {
+                return;
+            }
+        }
+
+        throw new InvalidOperationException($"No union case matched '{typeof(T).Name}'.");
+    }
+
+    public T DeserializeCase<TDeserializer>(int index, ref TDeserializer deserializer)
+        where TDeserializer : struct, IShapeDeserializer =>
+        ((IUnionCaseSchema<T>)cases[index]).Deserialize(ref deserializer);
+
     public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)
     {
         ArgumentNullException.ThrowIfNull(visitor);
@@ -1123,7 +1599,8 @@ public sealed class UnionSchema<T> : Schema<T>, IUnionSchema<T>
 public sealed class MemberSchema<TContainer, TBuilder, TValue>
     : Schema<TValue>,
         IMemberSchema<TContainer, TBuilder, TValue>,
-        IMemberValueSource<TContainer>
+        IMemberValueSource<TContainer>,
+        IMemberSerialization<TContainer, TBuilder>
 {
     private readonly Func<TContainer, TValue> get;
     private readonly Action<TBuilder, TValue> set;
@@ -1172,6 +1649,23 @@ public sealed class MemberSchema<TContainer, TBuilder, TValue>
     ) => writer.WriteMember(index, get(container));
 
     public void Set(TBuilder builder, TValue value) => set(builder, value);
+
+    void IMemberSerialization<TContainer, TBuilder>.Serialize<TSerializer>(
+        int index,
+        TContainer container,
+        ref TSerializer serializer
+    ) => TypedTarget.Write(index, get(container), ref serializer);
+
+    void IMemberSerialization<TContainer, TBuilder>.Deserialize<TDeserializer>(
+        TBuilder builder,
+        ref TDeserializer deserializer
+    ) => set(builder, TypedTarget.Read(ref deserializer));
+
+    public override void Write<TSerializer>(int member, TValue value, ref TSerializer serializer) =>
+        TypedTarget.Write(member, value, ref serializer);
+
+    public override TValue Read<TDeserializer>(ref TDeserializer deserializer) =>
+        TypedTarget.Read(ref deserializer);
 
     public void SetValue(TBuilder builder, TValue value) => set(builder, value);
 
