@@ -52,7 +52,7 @@ public abstract class Schema
         Document value,
         ref TSerializer serializer
     )
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 }
 
 public abstract class Schema<T> : Schema
@@ -69,11 +69,11 @@ public abstract class Schema<T> : Schema
     /// <see cref="MemberIndex.Root"/>.
     /// </summary>
     public abstract void Write<TSerializer>(int member, T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 
     /// <summary>Reads the value <paramref name="deserializer"/> is positioned on.</summary>
     public abstract T Read<TDeserializer>(ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 
     public override void WriteDocumentValue<TSerializer>(
         int member,
@@ -539,10 +539,10 @@ internal interface IMemberValueSource<in TContainer>
 internal interface IMemberSerialization<in TContainer, in TBuilder>
 {
     void Serialize<TSerializer>(int index, TContainer container, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 
     void Deserialize<TDeserializer>(TBuilder builder, ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 
 public interface IStructSchema
@@ -573,7 +573,7 @@ public interface IStructSchema<T> : IStructSchema
 
     /// <summary>Writes each member of <paramref name="value"/> under its index.</summary>
     void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 }
 
 /// <summary>
@@ -599,7 +599,7 @@ public interface IStructSchema<T, TBuilder> : IStructSchema<T>
         int index,
         ref TDeserializer deserializer
     )
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 
 public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBuilder>
@@ -652,7 +652,7 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
         deserializer.ReadStruct(this);
 
     public void SerializeMembers<TSerializer>(T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer
+        where TSerializer : struct, IShapeSerializer, allows ref struct
     {
         for (var index = 0; index < members.Length; index++)
         {
@@ -669,7 +669,7 @@ public sealed class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBui
         int index,
         ref TDeserializer deserializer
     )
-        where TDeserializer : struct, IShapeDeserializer =>
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct =>
         ((IMemberSerialization<T, TBuilder>)members[index]).Deserialize(builder, ref deserializer);
 
     public TBuilder CreateTypedBuilder() => createBuilder();
@@ -763,14 +763,14 @@ public sealed class UnitSchema : Schema<SmithyUnit>, IStructSchema<SmithyUnit, S
         deserializer.ReadStruct(this);
 
     public void SerializeMembers<TSerializer>(SmithyUnit value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer { }
+        where TSerializer : struct, IShapeSerializer, allows ref struct { }
 
     public void DeserializeMember<TDeserializer>(
         SmithyUnit builder,
         int index,
         ref TDeserializer deserializer
     )
-        where TDeserializer : struct, IShapeDeserializer { }
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct { }
 
     public void VisitMembers(IMemberVisitor<SmithyUnit> visitor) { }
 
@@ -1020,7 +1020,7 @@ public interface IListSchema<TCollection, TElement> : IListSchema
 
     /// <summary>Writes each element of <paramref name="value"/> as member 0.</summary>
     void SerializeElements<TSerializer>(TCollection value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 }
 
 public interface IListSchema<TCollection, TElement, TBuilder> : IListSchema<TCollection, TElement>
@@ -1033,7 +1033,7 @@ public interface IListSchema<TCollection, TElement, TBuilder> : IListSchema<TCol
 
     /// <summary>Reads one element and adds it to <paramref name="builder"/>.</summary>
     void DeserializeElement<TDeserializer>(TBuilder builder, ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 
 public interface IMapSchema
@@ -1061,7 +1061,7 @@ public interface IMapSchema<TDictionary, TValue> : IMapSchema
 
     /// <summary>Writes each entry of <paramref name="value"/>: its key as member 0, then its value as member 1.</summary>
     void SerializeEntries<TSerializer>(TDictionary value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 }
 
 public interface IMapSchema<TDictionary, TValue, TBuilder> : IMapSchema<TDictionary, TValue>
@@ -1078,7 +1078,7 @@ public interface IMapSchema<TDictionary, TValue, TBuilder> : IMapSchema<TDiction
         string key,
         ref TDeserializer deserializer
     )
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 
 public interface IUnionCaseSchema
@@ -1113,10 +1113,10 @@ internal interface IUnionCaseSchema<TUnion>
     void Accept(IUnionCaseVisitor<TUnion> visitor);
 
     bool TrySerialize<TSerializer>(int index, TUnion value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 
     TUnion Deserialize<TDeserializer>(ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 
 public interface IUnionSchema
@@ -1137,11 +1137,11 @@ public interface IUnionSchema<T> : IUnionSchema
 
     /// <summary>Writes the case <paramref name="value"/> holds under the case's index.</summary>
     void SerializeCase<TSerializer>(T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 
     /// <summary>Reads case <paramref name="index"/> and returns the union holding it.</summary>
     T DeserializeCase<TDeserializer>(int index, ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 
 public sealed class CollectionMemberSchema<TValue> : ITypedTargetMemberSchema<TValue>
@@ -1307,7 +1307,7 @@ public sealed class CollectionSchema<TCollection, TElement, TBuilder>
         deserializer.ReadList(this);
 
     public void SerializeElements<TSerializer>(TCollection value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer
+        where TSerializer : struct, IShapeSerializer, allows ref struct
     {
         // Indexed when possible: foreach over an IEnumerable boxes the collection's enumerator,
         // an allocation per list written.
@@ -1329,7 +1329,7 @@ public sealed class CollectionSchema<TCollection, TElement, TBuilder>
     }
 
     public void DeserializeElement<TDeserializer>(TBuilder builder, ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer =>
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct =>
         add(builder, ElementSchema.Read(ref deserializer));
 }
 
@@ -1420,7 +1420,7 @@ public sealed class MapSchema<TDictionary, TValue, TBuilder>
         deserializer.ReadMap(this);
 
     public void SerializeEntries<TSerializer>(TDictionary value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer
+        where TSerializer : struct, IShapeSerializer, allows ref struct
     {
         foreach (var (key, entry) in getEntries(value))
         {
@@ -1434,7 +1434,7 @@ public sealed class MapSchema<TDictionary, TValue, TBuilder>
         string key,
         ref TDeserializer deserializer
     )
-        where TDeserializer : struct, IShapeDeserializer =>
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct =>
         add(builder, key, ValueSchema.Read(ref deserializer));
 }
 
@@ -1495,7 +1495,7 @@ public sealed class UnionCaseSchema<TUnion, TValue>
     public void Accept(IUnionCaseVisitor<TUnion> visitor) => visitor.Visit(this);
 
     public bool TrySerialize<TSerializer>(int index, TUnion value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer
+        where TSerializer : struct, IShapeSerializer, allows ref struct
     {
         if (!matches(value))
         {
@@ -1507,7 +1507,7 @@ public sealed class UnionCaseSchema<TUnion, TValue>
     }
 
     public TUnion Deserialize<TDeserializer>(ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer =>
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct =>
         create(TargetSchema.Read(ref deserializer));
 }
 
@@ -1574,7 +1574,7 @@ public sealed class UnionSchema<T> : Schema<T>, IUnionSchema<T>
         deserializer.ReadUnion(this);
 
     public void SerializeCase<TSerializer>(T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer
+        where TSerializer : struct, IShapeSerializer, allows ref struct
     {
         for (var index = 0; index < cases.Count; index++)
         {
@@ -1588,7 +1588,7 @@ public sealed class UnionSchema<T> : Schema<T>, IUnionSchema<T>
     }
 
     public T DeserializeCase<TDeserializer>(int index, ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer =>
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct =>
         ((IUnionCaseSchema<T>)cases[index]).Deserialize(ref deserializer);
 
     public override TResult Accept<TResult>(ISchemaVisitor<TResult> visitor)

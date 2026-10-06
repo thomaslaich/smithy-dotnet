@@ -91,10 +91,10 @@ public abstract class Schema
 public abstract class Schema<T> : Schema
 {
     public abstract void Serialize<TSerializer>(T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer;
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
 
     public abstract T Deserialize<TDeserializer>(ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer;
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 ```
 
@@ -283,6 +283,10 @@ null, or skip it because it is outside the projection being written.
 The serializer and deserializer are `struct` type arguments, so the JIT
 compiles the generated methods once per implementation with every call bound
 directly: no interface dispatch and no casts per value.
+
+They may also be `ref struct`s, so an implementation can hold a span or a
+`Utf8JsonReader` directly; they are always passed by `ref`, never copied or
+boxed.
 
 Collections and unions use the same calls. A list element is member 0 of the
 list, a map key and value are members 0 and 1, and a union writes its one case
