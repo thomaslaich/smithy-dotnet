@@ -122,9 +122,7 @@ public sealed class HttpClientTransport : IHttpTransport
 
             // Longer than declared: keep reading rather than truncate.
             var next = new byte[1];
-            if (
-                await stream.ReadAsync(next, cancellationToken).ConfigureAwait(false) == 0
-            )
+            if (await stream.ReadAsync(next, cancellationToken).ConfigureAwait(false) == 0)
             {
                 return body;
             }

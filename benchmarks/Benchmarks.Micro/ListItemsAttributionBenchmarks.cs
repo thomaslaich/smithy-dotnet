@@ -36,7 +36,10 @@ public class ListItemsAttributionBenchmarks : IDisposable
         await using (var server = await BenchStacks.StartNSmithyAsync())
         {
             using var capturing = new ResponseCapturingHandler(server.CreateHandler());
-            await using var probe = BenchClientFactory.Create(BenchClientFactory.NSmithy, capturing);
+            await using var probe = BenchClientFactory.Create(
+                BenchClientFactory.NSmithy,
+                capturing
+            );
             await probe.ListItemsAsync(Count);
             canned = capturing.Captured!;
         }

@@ -78,7 +78,9 @@ public sealed class HttpClientTransportTests
         {
             var content = new StreamContent(new MemoryStream(body));
             content.Headers.ContentLength = declaredLength;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+            return Task.FromResult(
+                new HttpResponseMessage(HttpStatusCode.OK) { Content = content }
+            );
         }
     }
 
