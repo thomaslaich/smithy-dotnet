@@ -4,62 +4,50 @@ using NSmithy.Core.Serde;
 namespace NSmithy.Codecs.Xml;
 
 /// <summary>What the XML codec needs to know about one member: built once, read per value.</summary>
-internal sealed class XmlMemberPlan
+internal sealed class XmlMemberPlan(
+    string name,
+    string elementName,
+    bool isRequired,
+    Schema target,
+    IReadOnlyDictionary<ShapeId, Trait> memberTraits,
+    XmlPlans plans
+)
 {
     private static readonly ShapeId XmlAttributeTrait = new("smithy.api", "xmlAttribute");
     private static readonly ShapeId XmlFlattenedTrait = new("smithy.api", "xmlFlattened");
     private static readonly ShapeId XmlNamespaceTrait = new("smithy.api", "xmlNamespace");
     private static readonly ShapeId TimestampFormatTrait = new("smithy.api", "timestampFormat");
 
-    public XmlMemberPlan(
-        string name,
-        string elementName,
-        bool isRequired,
-        Schema target,
-        IReadOnlyDictionary<ShapeId, Trait> memberTraits,
-        XmlPlans plans
-    )
-    {
-        Name = name;
-        ElementName = elementName;
-        IsRequired = isRequired;
-        Target = target;
-        IsAttribute = memberTraits.ContainsKey(XmlAttributeTrait);
-        IsFlattened = memberTraits.ContainsKey(XmlFlattenedTrait);
-        Namespace = XmlTraits.GetXmlNamespace(target.Resolved, memberTraits);
-        TimestampFormat =
-            (
-                memberTraits.TryGetValue(TimestampFormatTrait, out var format)
-                    ? format
-                    : target.Resolved.GetTrait(TimestampFormatTrait)
-            )?.Value.AsString() ?? "date-time";
-        Shape = plans.ForTarget(target);
-    }
-
     /// <summary>The member's name in the model, used in error messages.</summary>
-    public string Name { get; }
+    public string Name { get; } = name;
 
     /// <summary>The element (or attribute) name: <c>@xmlName</c>, or the member's own name.</summary>
-    public string ElementName { get; }
+    public string ElementName { get; } = elementName;
 
-    public bool IsRequired { get; }
+    public bool IsRequired { get; } = isRequired;
 
-    public Schema Target { get; }
+    public Schema Target { get; } = target;
 
-    public bool IsAttribute { get; }
+    public bool IsAttribute { get; } = memberTraits.ContainsKey(XmlAttributeTrait);
 
     /// <summary>
     /// Whether a list or map member repeats its items directly in the enclosing element rather
     /// than inside an element of its own.
     /// </summary>
-    public bool IsFlattened { get; }
+    public bool IsFlattened { get; } = memberTraits.ContainsKey(XmlFlattenedTrait);
 
-    public XmlNamespace? Namespace { get; }
+    public XmlNamespace? Namespace { get; } =
+        XmlTraits.GetXmlNamespace(target.Resolved, memberTraits);
 
-    public string TimestampFormat { get; }
+    public string TimestampFormat { get; } =
+        (
+            memberTraits.TryGetValue(TimestampFormatTrait, out var format)
+                ? format
+                : target.Resolved.GetTrait(TimestampFormatTrait)
+        )?.Value.AsString() ?? "date-time";
 
     /// <summary>The plan of the member's target when it is an aggregate.</summary>
-    public XmlShapePlan? Shape { get; }
+    public XmlShapePlan? Shape { get; } = plans.ForTarget(target);
 }
 
 /// <summary>The XML codec's plan for one aggregate shape, indexed by member position.</summary>

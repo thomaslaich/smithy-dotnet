@@ -70,19 +70,10 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
                 writer.WriteTextString(container.Members[member].Name);
                 return true;
             case ShapeKind.Union:
-                writer.WriteStartMap(1);
                 writer.WriteTextString(container.Members[member].Name);
                 return true;
             default:
                 return true;
-        }
-    }
-
-    private void End()
-    {
-        if (container?.Kind == ShapeKind.Union)
-        {
-            writer.WriteEndMap();
         }
     }
 
@@ -106,7 +97,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteNull();
-            End();
         }
     }
 
@@ -115,7 +105,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteBoolean(value);
-            End();
         }
     }
 
@@ -128,7 +117,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteInt32(value);
-            End();
         }
     }
 
@@ -137,7 +125,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteInt64(value);
-            End();
         }
     }
 
@@ -146,7 +133,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteSingle(value);
-            End();
         }
     }
 
@@ -155,7 +141,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteDouble(value);
-            End();
         }
     }
 
@@ -164,7 +149,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             CborWire.WriteBigInteger(writer, value);
-            End();
         }
     }
 
@@ -173,7 +157,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             CborWire.WriteBigDecimal(writer, value);
-            End();
         }
     }
 
@@ -182,7 +165,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteTextString(value);
-            End();
         }
     }
 
@@ -191,7 +173,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteByteString(value);
-            End();
         }
     }
 
@@ -200,7 +181,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             CborWire.WriteTimestamp(writer, value);
-            End();
         }
     }
 
@@ -254,7 +234,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         );
         schema.SerializeMembers(value, ref nested);
         writer.WriteEndMap();
-        End();
     }
 
     public void WriteList<TCollection, TElement>(
@@ -274,7 +253,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         var nested = new CborShapeSerializer(writer, entry.Shape!, true);
         schema.SerializeElements(value, ref nested);
         writer.WriteEndArray();
-        End();
     }
 
     public void WriteMap<TDictionary, TValue>(
@@ -293,7 +271,6 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         var nested = new CborShapeSerializer(writer, entry.Shape!, true);
         schema.SerializeEntries(value, ref nested);
         writer.WriteEndMap();
-        End();
     }
 
     public void WriteUnion<T>(int member, T value, UnionSchema<T> schema)
@@ -304,8 +281,10 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
             return;
         }
 
+        // A union is a map holding its one case: the case's name, then its value.
+        writer.WriteStartMap(1);
         var nested = new CborShapeSerializer(writer, entry.Shape!, true);
         schema.SerializeCase(value, ref nested);
-        End();
+        writer.WriteEndMap();
     }
 }

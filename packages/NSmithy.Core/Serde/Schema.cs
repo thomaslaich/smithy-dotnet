@@ -384,7 +384,7 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
         this.members = [.. members.Select(member => member.BindTo(id))];
         membersByName = this.members.ToDictionary(
             member => member.Name,
-            member => (MemberSchema)member,
+            member => member,
             StringComparer.Ordinal
         );
     }
@@ -994,7 +994,7 @@ public abstract class UnionSchema<T> : Schema<T>, IUnionSchema
 
         casesByName = this.cases.ToDictionary(
             @case => @case.Name,
-            @case => (MemberSchema)@case,
+            @case => @case,
             StringComparer.Ordinal
         );
     }

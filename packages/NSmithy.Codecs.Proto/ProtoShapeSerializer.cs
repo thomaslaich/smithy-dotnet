@@ -35,8 +35,9 @@ internal struct ProtoShapeSerializer : IShapeSerializer
     private readonly Context context;
     private readonly int fieldNumber;
 
-    // The length prefix of the map entry a key opened, closed by the value that follows.
-    private int entryPrefix;
+    // The length prefix of the map entry the last key opened, or -1 when no entry is open. An
+    // entry is closed by the next key, or by the map once its last entry is written.
+    private int entryPrefix = -1;
 
     public ProtoShapeSerializer(ProtoWriter writer, ProtoMemberPlan root)
     {
@@ -83,12 +84,12 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         }
     }
 
-    /// <summary>Closes a map entry once its value is written.</summary>
-    private readonly void End()
+    private void CloseEntry()
     {
-        if (context == Context.Map)
+        if (entryPrefix >= 0)
         {
             writer.EndLengthDelimited(entryPrefix);
+            entryPrefix = -1;
         }
     }
 
@@ -102,7 +103,6 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         var prefix = writer.BeginLengthDelimited();
         writeValue(writer);
         writer.EndLengthDelimited(prefix);
-        End();
     }
 
     public readonly bool WritesDefault(int member) => false;
@@ -118,7 +118,6 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         }
 
         // Proto has no null: an absent value is an absent field.
-        End();
     }
 
     public void WriteBoolean(int member, bool value)
@@ -131,7 +130,6 @@ internal struct ProtoShapeSerializer : IShapeSerializer
 
         Tag(member, WireType.Varint);
         writer.WriteVarint(value ? 1UL : 0UL);
-        End();
     }
 
     public void WriteByte(int member, sbyte value) => WriteInteger(member, value, ShapeKind.Byte);
@@ -156,7 +154,6 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         var plan = Entry(member);
         Tag(member, plan.WireType);
         ProtoWire.WriteInteger(writer, plan.Encoding, value);
-        End();
     }
 
     public void WriteFloat(int member, float value)
@@ -171,7 +168,6 @@ internal struct ProtoShapeSerializer : IShapeSerializer
 
         Tag(member, WireType.I32);
         writer.WriteFixed32(BitConverter.SingleToUInt32Bits(value));
-        End();
     }
 
     public void WriteDouble(int member, double value)
@@ -184,7 +180,6 @@ internal struct ProtoShapeSerializer : IShapeSerializer
 
         Tag(member, WireType.I64);
         writer.WriteFixed64(BitConverter.DoubleToUInt64Bits(value));
-        End();
     }
 
     public void WriteBigInteger(int member, BigInteger value) =>
@@ -195,9 +190,10 @@ internal struct ProtoShapeSerializer : IShapeSerializer
 
     public void WriteString(int member, string value)
     {
-        // A map's key is member 0: it opens the entry the value that follows closes.
+        // A map's key is member 0: it opens an entry, which holds the key and the value after it.
         if (context == Context.Map && member == 0)
         {
+            CloseEntry();
             writer.WriteTag(fieldNumber, WireType.Len);
             entryPrefix = writer.BeginLengthDelimited();
             writer.WriteTag(1, WireType.Len);
@@ -218,14 +214,12 @@ internal struct ProtoShapeSerializer : IShapeSerializer
     {
         Tag(member, WireType.Len);
         writer.WriteLengthDelimitedUtf8(value);
-        End();
     }
 
     public void WriteBlob(int member, byte[] value)
     {
         Tag(member, WireType.Len);
         writer.WriteLengthDelimited(value);
-        End();
     }
 
     public void WriteTimestamp(int member, DateTimeOffset value)
@@ -234,7 +228,6 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         var prefix = writer.BeginLengthDelimited();
         ProtoWire.EncodeTimestamp(writer, value);
         writer.EndLengthDelimited(prefix);
-        End();
     }
 
     public void WriteDocument(int member, Document value)
@@ -243,7 +236,6 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         var prefix = writer.BeginLengthDelimited();
         ProtoWire.EncodeDocumentValue(writer, value);
         writer.EndLengthDelimited(prefix);
-        End();
     }
 
     // A string enum is a proto enum whose ordinals follow the model's declaration order; an
@@ -255,14 +247,12 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         writer.WriteVarint(
             (ulong)(long)(ordinals.TryGetValue(value, out var ordinal) ? ordinal : 0)
         );
-        End();
     }
 
     public void WriteIntEnum(int member, int value)
     {
         Tag(member, WireType.Varint);
         writer.WriteVarint((ulong)(long)value);
-        End();
     }
 
     public readonly void WriteStream(int member, Stream value) =>
@@ -289,7 +279,6 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         var nested = new ProtoShapeSerializer(writer, plan.Shape!, Context.Message);
         schema.SerializeMembers(value, ref nested);
         writer.EndLengthDelimited(prefix);
-        End();
     }
 
     public void WriteUnion<T>(int member, T value, UnionSchema<T> schema)
@@ -308,7 +297,6 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         var nested = new ProtoShapeSerializer(writer, plan.Shape!, Context.Message);
         schema.SerializeCase(value, ref nested);
         writer.EndLengthDelimited(prefix);
-        End();
     }
 
     public void WriteList<TCollection, TElement>(
@@ -356,5 +344,6 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         var plan = Entry(member);
         var entries = new ProtoShapeSerializer(writer, plan.Shape!, Context.Map, plan.FieldNumber);
         schema.SerializeEntries(value, ref entries);
+        entries.CloseEntry();
     }
 }

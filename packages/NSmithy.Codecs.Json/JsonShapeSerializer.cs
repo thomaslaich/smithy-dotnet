@@ -93,9 +93,8 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
                 writer.WritePropertyName(entry.EncodedName);
                 return true;
             case ShapeKind.Union:
-                // A closed union is {"case": value}; a discriminated union that is not a
-                // structure case is {"type": "case", "value": value}.
-                writer.WriteStartObject();
+                // Inside the object the union opens: the case's name, or for a discriminated
+                // union the discriminator and then the case's value.
                 if (container.Discriminator is { } discriminator)
                 {
                     writer.WriteString(discriminator, container.Members[member].WireName);
@@ -109,14 +108,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
                 return true;
             default:
                 return true;
-        }
-    }
-
-    private void End()
-    {
-        if (container?.Kind == ShapeKind.Union)
-        {
-            writer.WriteEndObject();
         }
     }
 
@@ -145,7 +136,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteNullValue();
-            End();
         }
     }
 
@@ -154,7 +144,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteBooleanValue(value);
-            End();
         }
     }
 
@@ -163,7 +152,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteNumberValue(value);
-            End();
         }
     }
 
@@ -172,7 +160,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteNumberValue(value);
-            End();
         }
     }
 
@@ -181,7 +168,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteNumberValue(value);
-            End();
         }
     }
 
@@ -190,7 +176,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteNumberValue(value);
-            End();
         }
     }
 
@@ -199,7 +184,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             JsonWire.WriteFloat(writer, value);
-            End();
         }
     }
 
@@ -208,7 +192,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             JsonWire.WriteDouble(writer, value);
-            End();
         }
     }
 
@@ -217,7 +200,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteRawValue(value.ToString(CultureInfo.InvariantCulture), true);
-            End();
         }
     }
 
@@ -226,7 +208,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteNumberValue(value);
-            End();
         }
     }
 
@@ -242,7 +223,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteStringValue(value);
-            End();
         }
     }
 
@@ -251,7 +231,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             writer.WriteBase64StringValue(value);
-            End();
         }
     }
 
@@ -261,7 +240,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             TimestampFormat.Write(writer, value, format);
-            End();
         }
     }
 
@@ -277,7 +255,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         if (Begin(member))
         {
             DocumentJsonWriter.Write(writer, value);
-            End();
         }
     }
 
@@ -340,7 +317,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         );
         schema.SerializeMembers(value, ref nested);
         writer.WriteEndObject();
-        End();
     }
 
     public void WriteList<TCollection, TElement>(
@@ -359,7 +335,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         var nested = new JsonShapeSerializer(writer, entry.Shape!, true);
         schema.SerializeElements(value, ref nested);
         writer.WriteEndArray();
-        End();
     }
 
     public void WriteMap<TDictionary, TValue>(
@@ -378,7 +353,6 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         var nested = new JsonShapeSerializer(writer, entry.Shape!, true);
         schema.SerializeEntries(value, ref nested);
         writer.WriteEndObject();
-        End();
     }
 
     public void WriteUnion<T>(int member, T value, UnionSchema<T> schema)
@@ -389,10 +363,28 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
             return;
         }
 
-        // The union writes its own wrapping object, or none for an open union's unknown case, so
-        // it gets a serializer positioned on the union rather than on its case.
-        var nested = new JsonShapeSerializer(writer, entry.Shape!, true);
+        // A closed union is {"case": value}, and a discriminated union {"type": "case", "value":
+        // value}. Two cases write no wrapping object: a discriminated union's structure case is
+        // the structure itself, tagged with the case name, and an open union's unknown case is
+        // the union value as it arrived.
+        var union = entry.Shape!;
+        var index = schema.CaseOf(value);
+        var wrapped =
+            index != union.UnknownCase
+            && !(
+                union.Discriminator is not null
+                && union.Members[index].Shape?.Kind == ShapeKind.Structure
+            );
+        if (wrapped)
+        {
+            writer.WriteStartObject();
+        }
+
+        var nested = new JsonShapeSerializer(writer, union, true);
         schema.SerializeCase(value, ref nested);
-        End();
+        if (wrapped)
+        {
+            writer.WriteEndObject();
+        }
     }
 }
