@@ -66,7 +66,11 @@ internal sealed class ProtoMemberPlan
 /// <summary>The Proto codec's plan for one aggregate shape, indexed by member position.</summary>
 internal sealed class ProtoShapePlan(ShapeKind kind, bool sparse)
 {
+    // Field numbers are usually small and dense, so a table indexed by number resolves a field in
+    // one array read; the dictionary covers numbers too large for the table.
+    private const int MaxTableFieldNumber = 256;
     private Dictionary<int, (int Member, int Case)> fields = [];
+    private (int Member, int Case)[] fieldTable = [];
 
     public ShapeKind Kind { get; } = kind;
 
@@ -101,11 +105,30 @@ internal sealed class ProtoShapePlan(ShapeKind kind, bool sparse)
                 AddField(member.FieldNumber, index, -1);
             }
         }
+
+        var largest = fields.Count == 0 ? 0 : fields.Keys.Max();
+        fieldTable = new (int Member, int Case)[Math.Min(largest, MaxTableFieldNumber) + 1];
+        Array.Fill(fieldTable, (-1, -1));
+        foreach (var (number, field) in fields)
+        {
+            if (number <= MaxTableFieldNumber)
+            {
+                fieldTable[number] = field;
+            }
+        }
     }
 
     /// <summary>The member, and for an inlined union the case, a field number belongs to.</summary>
-    public bool TryGetField(int fieldNumber, out (int Member, int Case) field) =>
-        fields.TryGetValue(fieldNumber, out field);
+    public bool TryGetField(int fieldNumber, out (int Member, int Case) field)
+    {
+        if ((uint)fieldNumber < (uint)fieldTable.Length)
+        {
+            field = fieldTable[fieldNumber];
+            return field.Member >= 0;
+        }
+
+        return fields.TryGetValue(fieldNumber, out field);
+    }
 
     private void AddField(int fieldNumber, int member, int @case)
     {

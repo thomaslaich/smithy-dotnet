@@ -154,56 +154,61 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
         Span<bool> collectionsRead =
             members.Length <= 256 ? stackalloc bool[members.Length] : new bool[members.Length];
 
-        var reader = new ProtoReader(payload.AsSpan(message.Start, message.Length));
-        while (!reader.End)
+        // One handler for the whole message rather than one per field: a try region inside the loop
+        // would keep the JIT from optimizing the loop body.
+        ProtoMemberPlan? reading = null;
+        try
         {
-            var tagStart = reader.Position;
-            var (number, wireType) = reader.ReadTag();
-            if (!plan.TryGetField(number, out var field))
+            var reader = new ProtoReader(payload.AsSpan(message.Start, message.Length));
+            while (!reader.End)
             {
-                reader.SkipField(wireType);
-                continue;
-            }
-
-            var member = members[field.Member];
-            if (member.Kind is ShapeKind.List or ShapeKind.Set or ShapeKind.Map)
-            {
-                if (!collectionsRead[field.Member])
+                var tagStart = reader.Position;
+                var (number, wireType) = reader.ReadTag();
+                if (!plan.TryGetField(number, out var field))
                 {
-                    collectionsRead[field.Member] = true;
-                    var all = new ProtoShapeDeserializer(
-                        payload,
-                        member,
-                        number,
-                        new ProtoOccurrence(
-                            message.Start + tagStart,
-                            message.Length - tagStart,
-                            WireType.Len
-                        )
-                    );
-                    schema.DeserializeMember(builder, field.Member, ref all);
+                    reader.SkipField(wireType);
+                    continue;
                 }
 
-                reader.SkipField(wireType);
-                continue;
-            }
+                var member = members[field.Member];
+                if (member.Kind is ShapeKind.List or ShapeKind.Set or ShapeKind.Map)
+                {
+                    if (!collectionsRead[field.Member])
+                    {
+                        collectionsRead[field.Member] = true;
+                        var all = new ProtoShapeDeserializer(
+                            payload,
+                            member,
+                            number,
+                            new ProtoOccurrence(
+                                message.Start + tagStart,
+                                message.Length - tagStart,
+                                WireType.Len
+                            )
+                        );
+                        schema.DeserializeMember(builder, field.Member, ref all);
+                    }
 
-            var (start, length) = reader.ReadValueRange(wireType);
-            var nested = new ProtoShapeDeserializer(
-                payload,
-                new ProtoOccurrence(message.Start + start, length, wireType),
-                member,
-                field.Case
-            );
-            try
-            {
+                    reader.SkipField(wireType);
+                    continue;
+                }
+
+                var (start, length) = reader.ReadValueRange(wireType);
+                var nested = new ProtoShapeDeserializer(
+                    payload,
+                    new ProtoOccurrence(message.Start + start, length, wireType),
+                    member,
+                    field.Case
+                );
+                reading = member;
                 schema.DeserializeMember(builder, field.Member, ref nested);
+                reading = null;
             }
-            catch (MissingRequiredMemberException exception)
-            {
-                exception.PrependPathToken(member.Name);
-                throw;
-            }
+        }
+        catch (MissingRequiredMemberException exception) when (reading is not null)
+        {
+            exception.PrependPathToken(reading.Name);
+            throw;
         }
 
         // An absent repeated or map field is an empty collection, not an absent one.
