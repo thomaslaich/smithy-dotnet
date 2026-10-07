@@ -199,7 +199,7 @@ internal sealed class QueryPlans(QueryProtocolKind kind)
         return members;
     }
 
-    private string MemberName(IMemberSchema member)
+    private string MemberName(MemberSchema member)
     {
         if (kind == QueryProtocolKind.AwsQuery)
         {

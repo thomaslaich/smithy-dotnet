@@ -130,7 +130,7 @@ internal sealed class CborPlans
                         isRequired: true,
                         @case.Target,
                         id =>
-                            @case.Traits.TryGetValue(id, out var trait)
+                            @case.MemberTraits.TryGetValue(id, out var trait)
                                 ? trait
                                 : @case.Target.Resolved.GetTrait(id),
                         this
@@ -142,6 +142,6 @@ internal sealed class CborPlans
         return plan;
     }
 
-    private CborMemberPlan Member(IMemberSchema member) =>
+    private CborMemberPlan Member(MemberSchema member) =>
         new(member.Name, member.IsRequired, member.Target, member.GetTrait, this);
 }

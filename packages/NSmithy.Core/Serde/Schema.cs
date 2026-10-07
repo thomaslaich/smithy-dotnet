@@ -40,7 +40,6 @@ public abstract class Schema
         Traits.TryGetValue(id, out var trait) ? trait : null;
 
     public virtual bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
-
 }
 
 public abstract class Schema<T> : Schema
@@ -62,7 +61,6 @@ public abstract class Schema<T> : Schema
     /// <summary>Reads the value <paramref name="deserializer"/> is positioned on.</summary>
     public abstract T Read<TDeserializer>(ref TDeserializer deserializer)
         where TDeserializer : struct, IShapeDeserializer, allows ref struct;
-
 }
 
 public sealed class LazySchema<T> : Schema<T>
@@ -278,31 +276,12 @@ public sealed class DocumentSchema(ShapeId id, IEnumerable<Trait>? traits = null
         deserializer.ReadDocument();
 }
 
-public interface IMemberSchema
-{
-    ShapeId Id { get; }
-
-    string Name { get; }
-
-    IReadOnlyDictionary<ShapeId, Trait> MemberTraits { get; }
-
-    Schema Target { get; }
-
-    bool IsRequired { get; }
-
-    /// <summary>The effective trait: one on the member wins over the same trait on its target.</summary>
-    Trait? GetTrait(ShapeId id) =>
-        MemberTraits.TryGetValue(id, out var trait) ? trait : Target.GetTrait(id);
-
-    bool HasTrait(ShapeId id) => GetTrait(id) is not null;
-}
-
 /// <summary>
-/// A member of a structure, list, or map: its name, the shape it targets, and the traits declared
-/// on it. A member's position in its container is its index on the wire; the container gives the
-/// member its id.
+/// A member of a structure, union, list, or map: its name, the shape it targets, and the traits
+/// declared on it. A member's position in its container is its index on the wire; the container
+/// gives the member its id. A union's members are its cases.
 /// </summary>
-public sealed class MemberSchema : IMemberSchema
+public sealed class MemberSchema
 {
     private ShapeId? id;
 
@@ -332,6 +311,12 @@ public sealed class MemberSchema : IMemberSchema
 
     public bool IsRequired { get; }
 
+    /// <summary>The effective trait: one on the member wins over the same trait on its target.</summary>
+    public Trait? GetTrait(ShapeId id) =>
+        MemberTraits.TryGetValue(id, out var trait) ? trait : Target.GetTrait(id);
+
+    public bool HasTrait(ShapeId id) => GetTrait(id) is not null;
+
     internal MemberSchema BindTo(ShapeId container)
     {
         if (id is not null)
@@ -346,10 +331,10 @@ public sealed class MemberSchema : IMemberSchema
 
 public interface IStructSchema
 {
-    IMemberSchema? GetMember(string name);
+    MemberSchema? GetMember(string name);
 
     /// <summary>The members in declaration order; a member's position is its index.</summary>
-    IReadOnlyList<IMemberSchema> Members { get; }
+    IReadOnlyList<MemberSchema> Members { get; }
 
     /// <summary>Writes a value of this structure with no member set, as member <paramref name="member"/>.</summary>
     void WriteEmpty<TSerializer>(int member, ref TSerializer serializer)
@@ -401,7 +386,7 @@ public interface IStructSchema<T, TBuilder> : IStructSchema<T>
 public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBuilder>
 {
     private readonly MemberSchema[] members;
-    private readonly Dictionary<string, IMemberSchema> membersByName;
+    private readonly Dictionary<string, MemberSchema> membersByName;
 
     protected StructSchema(
         ShapeId id,
@@ -414,14 +399,14 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TB
         this.members = [.. members.Select(member => member.BindTo(id))];
         membersByName = this.members.ToDictionary(
             member => member.Name,
-            member => (IMemberSchema)member,
+            member => (MemberSchema)member,
             StringComparer.Ordinal
         );
     }
 
-    public IReadOnlyList<IMemberSchema> Members => members;
+    public IReadOnlyList<MemberSchema> Members => members;
 
-    public IMemberSchema? GetMember(string name)
+    public MemberSchema? GetMember(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
         return membersByName.TryGetValue(name, out var member) ? member : null;
@@ -474,9 +459,9 @@ public sealed class UnitSchema : Schema<SmithyUnit>, IStructSchema<SmithyUnit, S
     internal UnitSchema()
         : base(new ShapeId("smithy.api", "Unit"), ShapeKind.Structure) { }
 
-    public IMemberSchema? GetMember(string name) => null;
+    public MemberSchema? GetMember(string name) => null;
 
-    public IReadOnlyList<IMemberSchema> Members => [];
+    public IReadOnlyList<MemberSchema> Members => [];
 
     public override void Write<TSerializer>(
         int member,
@@ -723,7 +708,7 @@ public sealed class EventStreamSchema<TEvent> : Schema<IAsyncEnumerable<TEvent>>
 
 public interface IListSchema
 {
-    IMemberSchema ElementMember { get; }
+    MemberSchema ElementMember { get; }
 
     Schema Element { get; }
 }
@@ -760,9 +745,9 @@ public interface IMapSchema
     /// allowed, and an enum shape says exactly that. Keeping the shape rather than flattening it to
     /// <see cref="Schemas.String"/> is what lets a server hold a key to it.
     /// </summary>
-    IMemberSchema KeyMember { get; }
+    MemberSchema KeyMember { get; }
 
-    IMemberSchema ValueMember { get; }
+    MemberSchema ValueMember { get; }
 
     Schema Value { get; }
 }
@@ -795,24 +780,13 @@ public interface IMapSchema<TDictionary, TValue, TBuilder> : IMapSchema<TDiction
         where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 }
 
-public interface IUnionCaseSchema
-{
-    ShapeId Id { get; }
-
-    string Name { get; }
-
-    IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
-
-    Schema Target { get; }
-}
-
 public interface IUnionSchema
 {
     ShapeId Id { get; }
 
-    IReadOnlyList<IUnionCaseSchema> Cases { get; }
+    IReadOnlyList<MemberSchema> Cases { get; }
 
-    IUnionCaseSchema? GetCase(string name);
+    MemberSchema? GetCase(string name);
 
     /// <summary>The index of the case named <paramref name="name"/>, or -1.</summary>
     int IndexOf(string name);
@@ -859,7 +833,7 @@ public abstract class ListSchema<TCollection, TElement, TBuilder>
 
     // An element is always present when the collection holds it; there is no absent case for a
     // consumer to check.
-    public IMemberSchema ElementMember { get; }
+    public MemberSchema ElementMember { get; }
 
     public Schema<TElement> ElementSchema { get; }
 
@@ -985,9 +959,9 @@ public abstract class MapSchema<TDictionary, TValue, TBuilder>
         ValueSchema = value;
     }
 
-    public IMemberSchema KeyMember { get; }
+    public MemberSchema KeyMember { get; }
 
-    public IMemberSchema ValueMember { get; }
+    public MemberSchema ValueMember { get; }
 
     public Schema<TValue> ValueSchema { get; }
 
@@ -1078,55 +1052,17 @@ internal sealed class DelegateMapSchema<TDictionary, TValue, TBuilder>(
 }
 
 /// <summary>
-/// A case of a union: its name, the shape it holds, and the traits declared on it. The union gives
-/// the case its id.
-/// </summary>
-public sealed class UnionCaseSchema : IUnionCaseSchema
-{
-    private ShapeId? id;
-
-    public UnionCaseSchema(string name, Schema target, IEnumerable<Trait>? traits = null)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentNullException.ThrowIfNull(target);
-        Name = name;
-        Target = target;
-        Traits = Trait.Index(traits);
-    }
-
-    public ShapeId Id =>
-        id ?? throw new InvalidOperationException($"Union case '{Name}' belongs to no union.");
-
-    public string Name { get; }
-
-    public IReadOnlyDictionary<ShapeId, Trait> Traits { get; }
-
-    public Schema Target { get; }
-
-    internal UnionCaseSchema BindTo(ShapeId union)
-    {
-        if (id is not null)
-        {
-            throw new InvalidOperationException($"Union case '{Name}' already belongs to '{id}'.");
-        }
-
-        id = union.WithMember(Name);
-        return this;
-    }
-}
-
-/// <summary>
 /// A union. Code generation derives one class per union, which tells the cases apart and reads and
 /// writes the value each holds; this base carries what every union has in common.
 /// </summary>
 public abstract class UnionSchema<T> : Schema<T>, IUnionSchema<T>
 {
-    private readonly UnionCaseSchema[] cases;
-    private readonly Dictionary<string, IUnionCaseSchema> casesByName;
+    private readonly MemberSchema[] cases;
+    private readonly Dictionary<string, MemberSchema> casesByName;
 
     protected UnionSchema(
         ShapeId id,
-        IEnumerable<UnionCaseSchema> cases,
+        IEnumerable<MemberSchema> cases,
         IEnumerable<Trait>? traits = null
     )
         : base(id, ShapeKind.Union, traits)
@@ -1140,14 +1076,14 @@ public abstract class UnionSchema<T> : Schema<T>, IUnionSchema<T>
 
         casesByName = this.cases.ToDictionary(
             @case => @case.Name,
-            @case => (IUnionCaseSchema)@case,
+            @case => (MemberSchema)@case,
             StringComparer.Ordinal
         );
     }
 
-    public IReadOnlyList<IUnionCaseSchema> Cases => cases;
+    public IReadOnlyList<MemberSchema> Cases => cases;
 
-    public IUnionCaseSchema? GetCase(string name)
+    public MemberSchema? GetCase(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
         return casesByName.TryGetValue(name, out var @case) ? @case : null;
@@ -1201,9 +1137,9 @@ public abstract class UnionSchema<T> : Schema<T>, IUnionSchema<T>
 /// </summary>
 public sealed class StructProjection<T, TBuilder>
 {
-    private readonly Dictionary<string, IMemberSchema> membersByName;
+    private readonly Dictionary<string, MemberSchema> membersByName;
 
-    internal StructProjection(IStructSchema<T, TBuilder> source, Func<IMemberSchema, bool> include)
+    internal StructProjection(IStructSchema<T, TBuilder> source, Func<MemberSchema, bool> include)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(include);
@@ -1215,7 +1151,7 @@ public sealed class StructProjection<T, TBuilder>
 
     public IStructSchema<T, TBuilder> Source { get; }
 
-    public IMemberSchema? GetMember(string name)
+    public MemberSchema? GetMember(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
         return membersByName.TryGetValue(name, out var member) ? member : null;
@@ -1675,7 +1611,7 @@ public static class Schemas
     /// <summary>The members of <paramref name="source"/> for which <paramref name="include"/> holds.</summary>
     public static StructProjection<T, TBuilder> Project<T, TBuilder>(
         IStructSchema<T, TBuilder> source,
-        Func<IMemberSchema, bool> include
+        Func<MemberSchema, bool> include
     ) => new(source, include);
 
     /// <summary>The members of <paramref name="source"/> named in <paramref name="memberNames"/>.</summary>

@@ -211,20 +211,20 @@ A member is the association between a container shape and a target shape, and
 it is the one place member-level traits live:
 
 ```csharp
-public interface IMemberSchema
+public sealed class MemberSchema
 {
-    ShapeId Id { get; }
-    string Name { get; }
-    Schema Target { get; }
-    bool IsRequired { get; }
+    public ShapeId Id { get; }
+    public string Name { get; }
+    public Schema Target { get; }
+    public bool IsRequired { get; }
 
     /// Traits declared on the member itself.
-    IReadOnlyDictionary<ShapeId, Trait> MemberTraits { get; }
+    public IReadOnlyDictionary<ShapeId, Trait> MemberTraits { get; }
 
     /// Effective trait resolution per the Smithy spec: the member's
     /// declaration supersedes the target shape's. The only place
     /// precedence is implemented.
-    Trait? GetTrait(ShapeId id);
+    public Trait? GetTrait(ShapeId id);
 }
 ```
 

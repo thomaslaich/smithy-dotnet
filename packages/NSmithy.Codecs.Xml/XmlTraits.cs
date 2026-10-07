@@ -19,15 +19,15 @@ internal static class XmlTraits
             ? trait.Value.AsString()
             : null;
 
-    public static string? GetXmlName(IMemberSchema schema) =>
+    public static string? GetXmlName(MemberSchema schema) =>
         schema.MemberTraits.TryGetValue(XmlNameId, out var trait) && trait.HasValue
             ? trait.Value.AsString()
             : null;
 
-    public static bool IsXmlAttribute(IMemberSchema schema) =>
+    public static bool IsXmlAttribute(MemberSchema schema) =>
         schema.MemberTraits.ContainsKey(XmlAttributeId);
 
-    public static bool IsXmlFlattened(IMemberSchema schema) =>
+    public static bool IsXmlFlattened(MemberSchema schema) =>
         schema.MemberTraits.ContainsKey(XmlFlattenedId);
 
     public static XmlNamespace? GetXmlNamespace(Schema schema) =>

@@ -26,10 +26,10 @@ internal static class XmlWire
     internal static string MapKeyName(IMapSchema schema) =>
         XmlTraits.GetXmlName(schema.KeyMember) ?? "key";
 
-    internal static string MapValueName(IMemberSchema valueMember) =>
+    internal static string MapValueName(MemberSchema valueMember) =>
         XmlTraits.GetXmlName(valueMember) ?? "value";
 
-    internal static string ElementName(IMemberSchema member) =>
+    internal static string ElementName(MemberSchema member) =>
         XmlTraits.GetXmlName(member) ?? member.Name;
 
     internal static XName ChildElementName(XElement parent, string localName)

@@ -51,9 +51,9 @@ public sealed class CodecFactoryTests
         Assert.Equal(value, codec.DeserializeText(xml));
     }
 
-    private static IMemberSchema TimestampMember() =>
+    private static MemberSchema TimestampMember() =>
         Assert.IsAssignableFrom<IStructSchema>(TimestampPayloadSchema.Schema).GetMember("value")!;
 
-    private static Schema<DateTimeOffset?> TimestampTarget(IMemberSchema member) =>
+    private static Schema<DateTimeOffset?> TimestampTarget(MemberSchema member) =>
         Assert.IsAssignableFrom<Schema<DateTimeOffset?>>(member.Target);
 }

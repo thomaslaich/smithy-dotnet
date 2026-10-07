@@ -175,7 +175,7 @@ internal sealed class JsonPlans(bool honorJsonNameTrait)
 
             for (var index = 0; index < unionSchema.Cases.Count; index++)
             {
-                if (unionSchema.Cases[index].Traits.ContainsKey(AlloyJsonUnknownTrait))
+                if (unionSchema.Cases[index].MemberTraits.ContainsKey(AlloyJsonUnknownTrait))
                 {
                     plan.UnknownCase = index;
                 }
@@ -185,7 +185,7 @@ internal sealed class JsonPlans(bool honorJsonNameTrait)
         return plan;
     }
 
-    private JsonMemberPlan Member(IMemberSchema member) =>
+    private JsonMemberPlan Member(MemberSchema member) =>
         new(
             member.Name,
             WireName(member.MemberTraits, member.Name),
@@ -195,14 +195,14 @@ internal sealed class JsonPlans(bool honorJsonNameTrait)
             this
         );
 
-    private JsonMemberPlan Case(IUnionCaseSchema @case) =>
+    private JsonMemberPlan Case(MemberSchema @case) =>
         new(
             @case.Name,
-            WireName(@case.Traits, @case.Name),
+            WireName(@case.MemberTraits, @case.Name),
             isRequired: true,
             @case.Target,
             id =>
-                @case.Traits.TryGetValue(id, out var trait)
+                @case.MemberTraits.TryGetValue(id, out var trait)
                     ? trait
                     : @case.Target.Resolved.GetTrait(id),
             this

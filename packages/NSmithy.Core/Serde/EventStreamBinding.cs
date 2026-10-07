@@ -25,7 +25,7 @@ public sealed class EventStreamBinding<TShape, TBuilder, TEvent>
 
     public IStructSchema<TShape, TBuilder> Structure { get; }
 
-    public IMemberSchema Member => Structure.Members[index];
+    public MemberSchema Member => Structure.Members[index];
 
     public Schema<TEvent> EventSchema { get; }
 

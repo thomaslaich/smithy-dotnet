@@ -98,7 +98,7 @@ internal sealed class HttpMemberPlan
 
     public required HttpBinding Binding { get; init; }
 
-    public required IMemberSchema Member { get; init; }
+    public required MemberSchema Member { get; init; }
 
     /// <summary>The member's target with any nullable wrapper removed.</summary>
     public required Schema Target { get; init; }

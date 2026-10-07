@@ -44,7 +44,7 @@ internal sealed class RestStructBinding<T, TBuilder>
     public required HashSet<string> BoundQueryNames { get; init; }
 
     /// <summary>The <c>@httpPayload</c> member, whose target decides the message's media type.</summary>
-    public IMemberSchema? PayloadMember => Payload?.Member;
+    public MemberSchema? PayloadMember => Payload?.Member;
 
     public int MemberCount => Plans.Length;
 
@@ -246,7 +246,7 @@ internal sealed class RestStructBinding<T, TBuilder>
 
     private static HttpMemberPlan Classify(
         int index,
-        IMemberSchema member,
+        MemberSchema member,
         HttpBindingSide side,
         string uriTemplate,
         IRestBodyCodecFactory codecFactory,
@@ -363,7 +363,7 @@ internal sealed class RestStructBinding<T, TBuilder>
     /// An <c>@httpPrefixHeaders</c> or <c>@httpQueryParams</c> member targets a map, whose values
     /// are the scalars written as text; the member's own traits do not reach them.
     /// </summary>
-    private static HttpTextFormat MapValueFormat(IMemberSchema member, Schema target) =>
+    private static HttpTextFormat MapValueFormat(MemberSchema member, Schema target) =>
         target is IMapSchema map
             ? HttpTextFormat.For(map.Value, memberTraits: null)
             : throw new InvalidOperationException(
@@ -376,7 +376,7 @@ internal sealed class RestStructBinding<T, TBuilder>
     /// </summary>
     private static HttpMemberPlan PayloadPlan(
         int index,
-        IMemberSchema member,
+        MemberSchema member,
         Schema target,
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads,

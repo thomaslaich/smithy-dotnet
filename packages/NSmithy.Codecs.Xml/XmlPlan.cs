@@ -165,7 +165,7 @@ internal sealed class XmlPlans
                     @case.Name,
                     isRequired: true,
                     @case.Target,
-                    @case.Traits,
+                    @case.MemberTraits,
                     this
                 )),
             ],
@@ -174,7 +174,7 @@ internal sealed class XmlPlans
         return plan;
     }
 
-    private XmlMemberPlan Member(IMemberSchema member, string fallbackName) =>
+    private XmlMemberPlan Member(MemberSchema member, string fallbackName) =>
         new(
             member.Name,
             member.MemberTraits.TryGetValue(XmlNameTrait, out var name) && name.HasValue

@@ -217,9 +217,9 @@ internal sealed class ProtoPlans
                         (@case, index) =>
                             new ProtoMemberPlan(
                                 @case.Name,
-                                ProtoWire.FieldNumber(@case.Id, @case.Traits, index),
+                                ProtoWire.FieldNumber(@case.Id, @case.MemberTraits, index),
                                 @case.Target,
-                                @case.Traits,
+                                @case.MemberTraits,
                                 this
                             )
                     ),

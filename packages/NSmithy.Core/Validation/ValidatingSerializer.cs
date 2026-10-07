@@ -147,7 +147,7 @@ internal sealed class ValidatorPlans
                         @case.Name,
                         isRequired: false,
                         @case.Target,
-                        EdgeConstraints.From(@case.Traits, @case.Id, @case.Target)
+                        EdgeConstraints.From(@case.MemberTraits, @case.Id, @case.Target)
                     )
                 ),
             ],
@@ -161,7 +161,7 @@ internal sealed class ValidatorPlans
     /// A map key is a string whatever it targets: its own traits constrain the string, while an
     /// enum target closes the set of strings allowed.
     /// </summary>
-    private static ValidatorMemberPlan MapKey(IMemberSchema key)
+    private static ValidatorMemberPlan MapKey(MemberSchema key)
     {
         var target = Unwrap(key.Target);
         var plan = new ValidatorMemberPlan
@@ -176,7 +176,7 @@ internal sealed class ValidatorPlans
         return plan;
     }
 
-    private ValidatorMemberPlan MapValue(IMemberSchema value) =>
+    private ValidatorMemberPlan MapValue(MemberSchema value) =>
         Edge(
             value.Name,
             isRequired: false,

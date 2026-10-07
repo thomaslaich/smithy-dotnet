@@ -42,11 +42,11 @@ internal static class JsonWire
         return false;
     }
 
-    private static IUnionCaseSchema? GetJsonUnknownCase(IUnionSchema schema) =>
+    private static MemberSchema? GetJsonUnknownCase(IUnionSchema schema) =>
         schema.Cases.FirstOrDefault(IsJsonUnknownCase);
 
-    internal static bool IsJsonUnknownCase(IUnionCaseSchema @case) =>
-        @case.Traits.ContainsKey(AlloyJsonUnknownTrait);
+    internal static bool IsJsonUnknownCase(MemberSchema @case) =>
+        @case.MemberTraits.ContainsKey(AlloyJsonUnknownTrait);
 
     internal static void WriteFloat(Utf8JsonWriter writer, float value)
     {

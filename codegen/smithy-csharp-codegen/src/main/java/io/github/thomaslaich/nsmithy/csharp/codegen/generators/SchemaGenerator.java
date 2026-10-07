@@ -565,7 +565,7 @@ public final class SchemaGenerator {
                       "new($L, Target$L$L),",
                       CSharpNaming.formatString(member.getMemberName()),
                       index,
-                      "null".equals(traits) ? "" : ", " + traits);
+                      "null".equals(traits) ? "" : ", traits: " + traits);
                 }
               }));
       writer.putContext(
