@@ -129,7 +129,10 @@ public class XmlSerializationBenchmarks
     public byte[] Serialize() => Codec.Serialize(value);
 }
 
-/// <summary>Generated-style protobuf structure serialization with canonical field indexes.</summary>
+/// <summary>
+/// Protobuf structure serialization with canonical field indexes, through a schema written the way
+/// the generator writes one.
+/// </summary>
 [MemoryDiagnoser]
 public class ProtoSerializationBenchmarks
 {
@@ -183,8 +186,8 @@ public class ProtoSerializationBenchmarks
             ref TSerializer serializer
         )
         {
-            Schemas.String.Write(0, value.Name, ref serializer);
-            Schemas.Integer.Write(1, value.Count, ref serializer);
+            serializer.WriteString(0, value.Name);
+            serializer.WriteInteger(1, value.Count);
         }
 
         public override void DeserializeMember<TDeserializer>(
@@ -196,10 +199,10 @@ public class ProtoSerializationBenchmarks
             switch (index)
             {
                 case 0:
-                    builder.Name = Schemas.String.Read(ref deserializer);
+                    builder.Name = deserializer.ReadString();
                     break;
                 case 1:
-                    builder.Count = Schemas.Integer.Read(ref deserializer);
+                    builder.Count = deserializer.ReadInteger();
                     break;
             }
         }

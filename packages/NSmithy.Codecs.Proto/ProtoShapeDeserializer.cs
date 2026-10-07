@@ -19,7 +19,10 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
     private readonly byte[] payload;
     private readonly ProtoOccurrence value;
     private readonly ProtoMemberPlan entry;
-    private readonly IReadOnlyList<ProtoOccurrence>? occurrences;
+
+    // The field number a repeated or map field is read under, scanned for across the range of the
+    // enclosing message in `value`; 0 when this reads one value.
+    private readonly int repeatedField;
 
     // The case an inlined oneof's field belongs to, or -1.
     private readonly int @case;
@@ -45,12 +48,14 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
     private ProtoShapeDeserializer(
         byte[] payload,
         ProtoMemberPlan entry,
-        IReadOnlyList<ProtoOccurrence> occurrences
+        int repeatedField,
+        ProtoOccurrence range
     )
     {
         this.payload = payload;
         this.entry = entry;
-        this.occurrences = occurrences;
+        this.repeatedField = repeatedField;
+        value = range;
         @case = -1;
     }
 
@@ -132,9 +137,10 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
     }
 
     /// <summary>
-    /// Reads a message's fields into <paramref name="builder"/>. Every occurrence of a repeated or
-    /// map field is collected first, so the field is read once with all of them; for any other
-    /// field the last occurrence wins.
+    /// Reads a message's fields into <paramref name="builder"/> in one pass. A field that occurs
+    /// more than once is read each time, so the last occurrence wins. A repeated or map field is
+    /// read once, at its first occurrence, by a deserializer that scans the rest of the message for
+    /// all of them, since protobuf lets other fields come between.
     /// </summary>
     private static void ReadMessage<T, TBuilder>(
         byte[] payload,
@@ -145,12 +151,13 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
     )
     {
         var members = plan.Members;
-        var singles = new (ProtoOccurrence Value, int Case)?[members.Length];
-        List<ProtoOccurrence>?[]? repeated = null;
+        Span<bool> collectionsRead =
+            members.Length <= 256 ? stackalloc bool[members.Length] : new bool[members.Length];
 
         var reader = new ProtoReader(payload.AsSpan(message.Start, message.Length));
         while (!reader.End)
         {
+            var tagStart = reader.Position;
             var (number, wireType) = reader.ReadTag();
             if (!plan.TryGetField(number, out var field))
             {
@@ -158,48 +165,63 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
                 continue;
             }
 
-            var (start, length) = reader.ReadValueRange(wireType);
-            var occurrence = new ProtoOccurrence(message.Start + start, length, wireType);
-            if (members[field.Member].Kind is ShapeKind.List or ShapeKind.Set or ShapeKind.Map)
-            {
-                repeated ??= new List<ProtoOccurrence>?[members.Length];
-                (repeated[field.Member] ??= []).Add(occurrence);
-            }
-            else
-            {
-                singles[field.Member] = (occurrence, field.Case);
-            }
-        }
-
-        for (var index = 0; index < members.Length; index++)
-        {
-            var member = members[index];
+            var member = members[field.Member];
             if (member.Kind is ShapeKind.List or ShapeKind.Set or ShapeKind.Map)
             {
-                // An absent repeated or map field is an empty collection, not an absent one.
-                var all = new ProtoShapeDeserializer(
-                    payload,
-                    member,
-                    (IReadOnlyList<ProtoOccurrence>?)repeated?[index] ?? []
-                );
-                schema.DeserializeMember(builder, index, ref all);
+                if (!collectionsRead[field.Member])
+                {
+                    collectionsRead[field.Member] = true;
+                    var all = new ProtoShapeDeserializer(
+                        payload,
+                        member,
+                        number,
+                        new ProtoOccurrence(
+                            message.Start + tagStart,
+                            message.Length - tagStart,
+                            WireType.Len
+                        )
+                    );
+                    schema.DeserializeMember(builder, field.Member, ref all);
+                }
+
+                reader.SkipField(wireType);
                 continue;
             }
 
-            if (singles[index] is not { } single)
-            {
-                continue;
-            }
-
-            var nested = new ProtoShapeDeserializer(payload, single.Value, member, single.Case);
+            var (start, length) = reader.ReadValueRange(wireType);
+            var nested = new ProtoShapeDeserializer(
+                payload,
+                new ProtoOccurrence(message.Start + start, length, wireType),
+                member,
+                field.Case
+            );
             try
             {
-                schema.DeserializeMember(builder, index, ref nested);
+                schema.DeserializeMember(builder, field.Member, ref nested);
             }
             catch (MissingRequiredMemberException exception)
             {
                 exception.PrependPathToken(member.Name);
                 throw;
+            }
+        }
+
+        // An absent repeated or map field is an empty collection, not an absent one.
+        for (var index = 0; index < members.Length; index++)
+        {
+            var member = members[index];
+            if (
+                member.Kind is ShapeKind.List or ShapeKind.Set or ShapeKind.Map
+                && !collectionsRead[index]
+            )
+            {
+                var none = new ProtoShapeDeserializer(
+                    payload,
+                    member,
+                    member.FieldNumber,
+                    new ProtoOccurrence(message.Start + message.Length, 0, WireType.Len)
+                );
+                schema.DeserializeMember(builder, index, ref none);
             }
         }
     }
@@ -211,8 +233,22 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
         var plan = entry.Shape!;
         var element = plan.Members[0];
         var builder = schema.CreateTypedBuilder();
-        foreach (var occurrence in occurrences ?? [])
+        var fields = new ProtoReader(payload.AsSpan(value.Start, value.Length));
+        while (!fields.End)
         {
+            var (fieldNumber, fieldWireType) = fields.ReadTag();
+            if (fieldNumber != repeatedField)
+            {
+                fields.SkipField(fieldWireType);
+                continue;
+            }
+
+            var (fieldStart, fieldLength) = fields.ReadValueRange(fieldWireType);
+            var occurrence = new ProtoOccurrence(
+                value.Start + fieldStart,
+                fieldLength,
+                fieldWireType
+            );
             // A packable element may arrive packed in one length-delimited field or one per field.
             if (occurrence.WireType == WireType.Len && plan.Packed)
             {
@@ -245,8 +281,22 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
         var plan = entry.Shape!;
         var valuePlan = plan.Members[1];
         var builder = schema.CreateTypedBuilder();
-        foreach (var occurrence in occurrences ?? [])
+        var fields = new ProtoReader(payload.AsSpan(value.Start, value.Length));
+        while (!fields.End)
         {
+            var (fieldNumber, fieldWireType) = fields.ReadTag();
+            if (fieldNumber != repeatedField)
+            {
+                fields.SkipField(fieldWireType);
+                continue;
+            }
+
+            var (fieldStart, fieldLength) = fields.ReadValueRange(fieldWireType);
+            var occurrence = new ProtoOccurrence(
+                value.Start + fieldStart,
+                fieldLength,
+                fieldWireType
+            );
             var key = string.Empty;
             ProtoOccurrence? entryValue = null;
             var reader = new ProtoReader(payload.AsSpan(occurrence.Start, occurrence.Length));

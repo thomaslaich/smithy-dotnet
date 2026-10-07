@@ -97,34 +97,34 @@ internal struct ProtoShapeSerializer : IShapeSerializer
     private readonly bool IsSparseValue(int member) =>
         context == Context.Map && member == 1 && container!.Sparse;
 
-    private readonly void WriteSparseValue(Action<ProtoWriter> writeValue)
+    // Generic rather than a callback: a lambda capturing the value would allocate its closure on
+    // every call of the enclosing write method, sparse or not.
+    private readonly void WriteSparseValue<TValue>(Schema<TValue> schema, TValue? value)
     {
         writer.WriteTag(2, WireType.Len);
         var prefix = writer.BeginLengthDelimited();
-        writeValue(writer);
+        ProtoWire.EncodeScalarValueMessage(writer, schema, value);
         writer.EndLengthDelimited(prefix);
     }
 
     public readonly bool WritesDefault(int member) => false;
 
-    public void WriteNull(int member)
+    public readonly void WriteNull(int member)
     {
         if (IsSparseValue(member))
         {
-            WriteSparseValue(static w =>
-                ProtoWire.EncodeScalarValueMessage<string>(w, Schemas.String, null)
-            );
+            WriteSparseValue(Schemas.String, null);
             return;
         }
 
         // Proto has no null: an absent value is an absent field.
     }
 
-    public void WriteBoolean(int member, bool value)
+    public readonly void WriteBoolean(int member, bool value)
     {
         if (IsSparseValue(member))
         {
-            WriteSparseValue(w => ProtoWire.EncodeScalarValueMessage(w, Schemas.Boolean, value));
+            WriteSparseValue(Schemas.Boolean, value);
             return;
         }
 
@@ -132,22 +132,23 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         writer.WriteVarint(value ? 1UL : 0UL);
     }
 
-    public void WriteByte(int member, sbyte value) => WriteInteger(member, value, ShapeKind.Byte);
+    public readonly void WriteByte(int member, sbyte value) =>
+        WriteInteger(member, value, ShapeKind.Byte);
 
-    public void WriteShort(int member, short value) => WriteInteger(member, value, ShapeKind.Short);
+    public readonly void WriteShort(int member, short value) =>
+        WriteInteger(member, value, ShapeKind.Short);
 
-    public void WriteInteger(int member, int value) =>
+    public readonly void WriteInteger(int member, int value) =>
         WriteInteger(member, value, ShapeKind.Integer);
 
-    public void WriteLong(int member, long value) => WriteInteger(member, value, ShapeKind.Long);
+    public readonly void WriteLong(int member, long value) =>
+        WriteInteger(member, value, ShapeKind.Long);
 
-    private void WriteInteger(int member, long value, ShapeKind kind)
+    private readonly void WriteInteger(int member, long value, ShapeKind kind)
     {
         if (IsSparseValue(member))
         {
-            WriteSparseValue(w =>
-                ProtoWire.EncodeScalarValueMessage(w, Schemas.Double, (double)value)
-            );
+            WriteSparseValue(Schemas.Double, (double)value);
             return;
         }
 
@@ -156,13 +157,11 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         ProtoWire.WriteInteger(writer, plan.Encoding, value);
     }
 
-    public void WriteFloat(int member, float value)
+    public readonly void WriteFloat(int member, float value)
     {
         if (IsSparseValue(member))
         {
-            WriteSparseValue(w =>
-                ProtoWire.EncodeScalarValueMessage(w, Schemas.Double, (double)value)
-            );
+            WriteSparseValue(Schemas.Double, (double)value);
             return;
         }
 
@@ -170,11 +169,11 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         writer.WriteFixed32(BitConverter.SingleToUInt32Bits(value));
     }
 
-    public void WriteDouble(int member, double value)
+    public readonly void WriteDouble(int member, double value)
     {
         if (IsSparseValue(member))
         {
-            WriteSparseValue(w => ProtoWire.EncodeScalarValueMessage(w, Schemas.Double, value));
+            WriteSparseValue(Schemas.Double, value);
             return;
         }
 
@@ -203,7 +202,7 @@ internal struct ProtoShapeSerializer : IShapeSerializer
 
         if (IsSparseValue(member))
         {
-            WriteSparseValue(w => ProtoWire.EncodeScalarValueMessage(w, Schemas.String, value));
+            WriteSparseValue(Schemas.String, value);
             return;
         }
 
@@ -216,13 +215,13 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         writer.WriteLengthDelimitedUtf8(value);
     }
 
-    public void WriteBlob(int member, byte[] value)
+    public readonly void WriteBlob(int member, byte[] value)
     {
         Tag(member, WireType.Len);
         writer.WriteLengthDelimited(value);
     }
 
-    public void WriteTimestamp(int member, DateTimeOffset value)
+    public readonly void WriteTimestamp(int member, DateTimeOffset value)
     {
         Tag(member, WireType.Len);
         var prefix = writer.BeginLengthDelimited();
@@ -230,7 +229,7 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         writer.EndLengthDelimited(prefix);
     }
 
-    public void WriteDocument(int member, Document value)
+    public readonly void WriteDocument(int member, Document value)
     {
         Tag(member, WireType.Len);
         var prefix = writer.BeginLengthDelimited();
@@ -240,7 +239,7 @@ internal struct ProtoShapeSerializer : IShapeSerializer
 
     // A string enum is a proto enum whose ordinals follow the model's declaration order; an
     // unknown value is the proto UNSPECIFIED = 0.
-    public void WriteStringEnum(int member, string value)
+    public readonly void WriteStringEnum(int member, string value)
     {
         var ordinals = Entry(member).EnumOrdinals!;
         Tag(member, WireType.Varint);
@@ -249,7 +248,7 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         );
     }
 
-    public void WriteIntEnum(int member, int value)
+    public readonly void WriteIntEnum(int member, int value)
     {
         Tag(member, WireType.Varint);
         writer.WriteVarint((ulong)(long)value);
@@ -264,7 +263,7 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         Schema<TEvent> eventSchema
     ) => throw new NotSupportedException("Proto codec does not support event stream schemas.");
 
-    public void WriteStruct<T>(int member, T value, IStructSchema<T> schema)
+    public readonly void WriteStruct<T>(int member, T value, IStructSchema<T> schema)
     {
         var plan = Entry(member);
         if (context == Context.Root)
@@ -281,7 +280,7 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         writer.EndLengthDelimited(prefix);
     }
 
-    public void WriteUnion<T>(int member, T value, UnionSchema<T> schema)
+    public readonly void WriteUnion<T>(int member, T value, UnionSchema<T> schema)
     {
         var plan = Entry(member);
         // The top-level message, or an inlined oneof, is its case's field in this message.
@@ -299,7 +298,7 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         writer.EndLengthDelimited(prefix);
     }
 
-    public void WriteList<TCollection, TElement>(
+    public readonly void WriteList<TCollection, TElement>(
         int member,
         TCollection value,
         IListSchema<TCollection, TElement> schema
@@ -335,7 +334,7 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         }
     }
 
-    public void WriteMap<TDictionary, TValue>(
+    public readonly void WriteMap<TDictionary, TValue>(
         int member,
         TDictionary value,
         IMapSchema<TDictionary, TValue> schema
