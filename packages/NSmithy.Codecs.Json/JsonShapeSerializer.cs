@@ -381,7 +381,7 @@ internal struct JsonShapeSerializer : IShapeSerializer
         End();
     }
 
-    public void WriteUnion<T>(int member, T value, IUnionSchema<T> schema)
+    public void WriteUnion<T>(int member, T value, UnionSchema<T> schema)
     {
         var entry = Entry(member);
         if (!Begin(member))

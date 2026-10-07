@@ -61,7 +61,7 @@ internal readonly struct XmlShapeDeserializer(
     public IAsyncEnumerable<TEvent> ReadEventStream<TEvent>(Schema<TEvent> eventSchema) =>
         throw new NotSupportedException("XML codec does not support event stream schemas.");
 
-    public T ReadStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
+    public T ReadStruct<T, TBuilder>(StructSchema<T, TBuilder> schema)
     {
         if (element is null)
         {
@@ -80,7 +80,7 @@ internal readonly struct XmlShapeDeserializer(
     internal static void ReadMembers<T, TBuilder>(
         XElement element,
         XmlShapePlan plan,
-        IStructSchema<T, TBuilder> schema,
+        StructSchema<T, TBuilder> schema,
         TBuilder builder
     )
     {
@@ -152,7 +152,7 @@ internal readonly struct XmlShapeDeserializer(
     }
 
     public TCollection ReadList<TCollection, TElement, TBuilder>(
-        IListSchema<TCollection, TElement, TBuilder> schema
+        ListSchema<TCollection, TElement, TBuilder> schema
     )
     {
         var plan = entry.Shape!;
@@ -172,7 +172,7 @@ internal readonly struct XmlShapeDeserializer(
     }
 
     public TDictionary ReadMap<TDictionary, TValue, TBuilder>(
-        IMapSchema<TDictionary, TValue, TBuilder> schema
+        MapSchema<TDictionary, TValue, TBuilder> schema
     )
     {
         var plan = entry.Shape!;
@@ -202,7 +202,7 @@ internal readonly struct XmlShapeDeserializer(
         return schema.Build(builder);
     }
 
-    public T ReadUnion<T>(IUnionSchema<T> schema)
+    public T ReadUnion<T>(UnionSchema<T> schema)
     {
         var child =
             element?.Elements().FirstOrDefault()

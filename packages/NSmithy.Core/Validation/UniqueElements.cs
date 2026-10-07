@@ -89,7 +89,7 @@ internal struct UniqueElements : IShapeSerializer
         IMapSchema<TDictionary, TValue> schema
     ) => Add(c => c.WriteMap(member, value, schema));
 
-    public void WriteUnion<T>(int member, T value, IUnionSchema<T> schema) =>
+    public void WriteUnion<T>(int member, T value, UnionSchema<T> schema) =>
         Add(c => c.WriteUnion(member, value, schema));
 }
 
@@ -236,7 +236,7 @@ internal struct CanonicalSerializer(StringBuilder key) : IShapeSerializer
         key.Append(')');
     }
 
-    public readonly void WriteUnion<T>(int member, T value, IUnionSchema<T> schema)
+    public readonly void WriteUnion<T>(int member, T value, UnionSchema<T> schema)
     {
         Begin(member, '<');
         var nested = new CanonicalSerializer(key);

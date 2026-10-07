@@ -124,7 +124,7 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
     public IAsyncEnumerable<TEvent> ReadEventStream<TEvent>(Schema<TEvent> eventSchema) =>
         throw new NotSupportedException("Proto codec does not support event stream schemas.");
 
-    public T ReadStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
+    public T ReadStruct<T, TBuilder>(StructSchema<T, TBuilder> schema)
     {
         var builder = schema.CreateTypedBuilder();
         ReadMessage(payload, value, entry.Shape!, schema, builder);
@@ -140,7 +140,7 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
         byte[] payload,
         ProtoOccurrence message,
         ProtoShapePlan plan,
-        IStructSchema<T, TBuilder> schema,
+        StructSchema<T, TBuilder> schema,
         TBuilder builder
     )
     {
@@ -205,7 +205,7 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
     }
 
     public TCollection ReadList<TCollection, TElement, TBuilder>(
-        IListSchema<TCollection, TElement, TBuilder> schema
+        ListSchema<TCollection, TElement, TBuilder> schema
     )
     {
         var plan = entry.Shape!;
@@ -239,7 +239,7 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
     }
 
     public TDictionary ReadMap<TDictionary, TValue, TBuilder>(
-        IMapSchema<TDictionary, TValue, TBuilder> schema
+        MapSchema<TDictionary, TValue, TBuilder> schema
     )
     {
         var plan = entry.Shape!;
@@ -293,7 +293,7 @@ internal readonly struct ProtoShapeDeserializer : IShapeDeserializer
         return schema.Build(builder);
     }
 
-    public T ReadUnion<T>(IUnionSchema<T> schema)
+    public T ReadUnion<T>(UnionSchema<T> schema)
     {
         var plan = entry.Shape!;
         // An inlined oneof's field was found among the enclosing message's fields.

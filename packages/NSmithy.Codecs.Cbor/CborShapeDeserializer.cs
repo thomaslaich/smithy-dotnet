@@ -79,7 +79,7 @@ internal readonly struct CborShapeDeserializer(CborReader reader, CborMemberPlan
     public IAsyncEnumerable<TEvent> ReadEventStream<TEvent>(Schema<TEvent> eventSchema) =>
         throw new NotSupportedException("CBOR codec does not support event stream schemas.");
 
-    public T ReadStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
+    public T ReadStruct<T, TBuilder>(StructSchema<T, TBuilder> schema)
     {
         if (reader.PeekState() == CborReaderState.Null)
         {
@@ -105,7 +105,7 @@ internal readonly struct CborShapeDeserializer(CborReader reader, CborMemberPlan
     internal static void ReadMembers<T, TBuilder>(
         CborReader reader,
         CborShapePlan plan,
-        IStructSchema<T, TBuilder> schema,
+        StructSchema<T, TBuilder> schema,
         TBuilder builder
     )
     {
@@ -162,7 +162,7 @@ internal readonly struct CborShapeDeserializer(CborReader reader, CborMemberPlan
     }
 
     public TCollection ReadList<TCollection, TElement, TBuilder>(
-        IListSchema<TCollection, TElement, TBuilder> schema
+        ListSchema<TCollection, TElement, TBuilder> schema
     )
     {
         if (reader.PeekState() != CborReaderState.StartArray)
@@ -211,7 +211,7 @@ internal readonly struct CborShapeDeserializer(CborReader reader, CborMemberPlan
     }
 
     public TDictionary ReadMap<TDictionary, TValue, TBuilder>(
-        IMapSchema<TDictionary, TValue, TBuilder> schema
+        MapSchema<TDictionary, TValue, TBuilder> schema
     )
     {
         if (reader.PeekState() != CborReaderState.StartMap)
@@ -254,7 +254,7 @@ internal readonly struct CborShapeDeserializer(CborReader reader, CborMemberPlan
         return schema.Build(builder);
     }
 
-    public T ReadUnion<T>(IUnionSchema<T> schema)
+    public T ReadUnion<T>(UnionSchema<T> schema)
     {
         if (reader.PeekState() != CborReaderState.StartMap)
         {

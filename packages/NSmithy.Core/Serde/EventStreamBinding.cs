@@ -13,7 +13,7 @@ public sealed class EventStreamBinding<TShape, TBuilder, TEvent>
     private readonly int index;
 
     internal EventStreamBinding(
-        IStructSchema<TShape, TBuilder> structure,
+        StructSchema<TShape, TBuilder> structure,
         int index,
         Schema<TEvent> eventSchema
     )
@@ -23,7 +23,7 @@ public sealed class EventStreamBinding<TShape, TBuilder, TEvent>
         EventSchema = eventSchema;
     }
 
-    public IStructSchema<TShape, TBuilder> Structure { get; }
+    public StructSchema<TShape, TBuilder> Structure { get; }
 
     public MemberSchema Member => Structure.Members[index];
 
@@ -138,14 +138,14 @@ public static class EventStreamBinding
         IEventStreamBindingVisitor<TShape, TResult> visitor
     ) : IStructSchemaVisitor<TShape, TResult>
     {
-        public TResult Visit<TBuilder>(IStructSchema<TShape, TBuilder> structure) =>
+        public TResult Visit<TBuilder>(StructSchema<TShape, TBuilder> structure) =>
             ((IEventStreamSchema)structure.Members[index].Target.Resolved).Accept(
                 new StreamBinder<TShape, TBuilder, TResult>(structure, index, visitor)
             );
     }
 
     private sealed class StreamBinder<TShape, TBuilder, TResult>(
-        IStructSchema<TShape, TBuilder> structure,
+        StructSchema<TShape, TBuilder> structure,
         int index,
         IEventStreamBindingVisitor<TShape, TResult> visitor
     ) : IEventStreamSchemaVisitor<TResult>
@@ -224,7 +224,7 @@ internal struct EventCapture<TEvent>(int index) : IShapeSerializer
         IMapSchema<TDictionary, TValue> schema
     ) { }
 
-    public readonly void WriteUnion<T>(int member, T value, IUnionSchema<T> schema) { }
+    public readonly void WriteUnion<T>(int member, T value, UnionSchema<T> schema) { }
 }
 
 /// <summary>Supplies an event stream to the member that reads one.</summary>
@@ -267,17 +267,17 @@ internal readonly struct EventSource<TEvent>(IAsyncEnumerable<TEvent> events) : 
 
     public Stream ReadStream() => throw NotAStream();
 
-    public T ReadStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema) => throw NotAStream();
+    public T ReadStruct<T, TBuilder>(StructSchema<T, TBuilder> schema) => throw NotAStream();
 
     public TCollection ReadList<TCollection, TElement, TBuilder>(
-        IListSchema<TCollection, TElement, TBuilder> schema
+        ListSchema<TCollection, TElement, TBuilder> schema
     ) => throw NotAStream();
 
     public TDictionary ReadMap<TDictionary, TValue, TBuilder>(
-        IMapSchema<TDictionary, TValue, TBuilder> schema
+        MapSchema<TDictionary, TValue, TBuilder> schema
     ) => throw NotAStream();
 
-    public T ReadUnion<T>(IUnionSchema<T> schema) => throw NotAStream();
+    public T ReadUnion<T>(UnionSchema<T> schema) => throw NotAStream();
 
     private static InvalidOperationException NotAStream() =>
         new("The bound member does not target an event stream.");

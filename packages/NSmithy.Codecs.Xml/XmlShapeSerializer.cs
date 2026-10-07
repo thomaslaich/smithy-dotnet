@@ -321,7 +321,7 @@ internal struct XmlShapeSerializer : IShapeSerializer
         End(target);
     }
 
-    public void WriteUnion<T>(int member, T value, IUnionSchema<T> schema)
+    public void WriteUnion<T>(int member, T value, UnionSchema<T> schema)
     {
         var plan = Entry(member);
         if (Begin(member) is not { } target)

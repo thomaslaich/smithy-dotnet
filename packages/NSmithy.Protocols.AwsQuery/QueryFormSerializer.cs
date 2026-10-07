@@ -434,7 +434,7 @@ internal struct QueryFormShapeSerializer : IShapeSerializer
         schema.SerializeEntries(value, ref entries);
     }
 
-    public void WriteUnion<T>(int member, T value, IUnionSchema<T> schema) =>
+    public void WriteUnion<T>(int member, T value, UnionSchema<T> schema) =>
         throw Unsupported(member);
 
     private NotSupportedException Unsupported(int member)

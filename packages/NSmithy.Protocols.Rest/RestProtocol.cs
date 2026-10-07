@@ -363,7 +363,7 @@ public static class RestProtocol
     ) : IStructSchemaVisitor<TError, Func<SmithyHttpClientResponse, TError>>
     {
         public Func<SmithyHttpClientResponse, TError> Visit<TBuilder>(
-            IStructSchema<TError, TBuilder> schema
+            StructSchema<TError, TBuilder> schema
         )
         {
             var bound = RestStructBinding<TError, TBuilder>.Compile(
@@ -458,13 +458,12 @@ public static class RestProtocol
         string errorTypeHeader
     ) : IStructSchemaVisitor<TError, RestErrorSerializer<TError>>
     {
-        public RestErrorSerializer<TError> Visit<TBuilder>(
-            IStructSchema<TError, TBuilder> schema
-        ) => CompileStructuredError(schema, codecFactory, rawStringPayloads, errorTypeHeader);
+        public RestErrorSerializer<TError> Visit<TBuilder>(StructSchema<TError, TBuilder> schema) =>
+            CompileStructuredError(schema, codecFactory, rawStringPayloads, errorTypeHeader);
     }
 
     private static RestErrorSerializer<TError> CompileStructuredError<TError, TBuilder>(
-        IStructSchema<TError, TBuilder> schema,
+        StructSchema<TError, TBuilder> schema,
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads,
         string errorTypeHeader

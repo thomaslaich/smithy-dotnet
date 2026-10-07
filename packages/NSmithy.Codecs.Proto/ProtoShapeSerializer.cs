@@ -292,7 +292,7 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         End();
     }
 
-    public void WriteUnion<T>(int member, T value, IUnionSchema<T> schema)
+    public void WriteUnion<T>(int member, T value, UnionSchema<T> schema)
     {
         var plan = Entry(member);
         // The top-level message, or an inlined oneof, is its case's field in this message.

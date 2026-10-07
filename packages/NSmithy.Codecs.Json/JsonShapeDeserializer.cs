@@ -85,7 +85,7 @@ internal struct JsonShapeDeserializer(JsonElement current, JsonMemberPlan entry,
     public readonly IAsyncEnumerable<TEvent> ReadEventStream<TEvent>(Schema<TEvent> eventSchema) =>
         throw new NotSupportedException("JSON codec does not support event stream schemas.");
 
-    public readonly T ReadStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
+    public readonly T ReadStruct<T, TBuilder>(StructSchema<T, TBuilder> schema)
     {
         var builder = schema.CreateTypedBuilder();
         ReadMembers(current, entry.Shape!, schema, builder, mode, projection: false);
@@ -99,7 +99,7 @@ internal struct JsonShapeDeserializer(JsonElement current, JsonMemberPlan entry,
     internal static void ReadMembers<T, TBuilder>(
         JsonElement value,
         JsonShapePlan plan,
-        IStructSchema<T, TBuilder> schema,
+        StructSchema<T, TBuilder> schema,
         TBuilder builder,
         WireReadMode mode,
         bool projection
@@ -164,7 +164,7 @@ internal struct JsonShapeDeserializer(JsonElement current, JsonMemberPlan entry,
     }
 
     public readonly TCollection ReadList<TCollection, TElement, TBuilder>(
-        IListSchema<TCollection, TElement, TBuilder> schema
+        ListSchema<TCollection, TElement, TBuilder> schema
     )
     {
         if (current.ValueKind != JsonValueKind.Array)
@@ -210,7 +210,7 @@ internal struct JsonShapeDeserializer(JsonElement current, JsonMemberPlan entry,
     }
 
     public readonly TDictionary ReadMap<TDictionary, TValue, TBuilder>(
-        IMapSchema<TDictionary, TValue, TBuilder> schema
+        MapSchema<TDictionary, TValue, TBuilder> schema
     )
     {
         if (current.ValueKind != JsonValueKind.Object)
@@ -251,7 +251,7 @@ internal struct JsonShapeDeserializer(JsonElement current, JsonMemberPlan entry,
         return schema.Build(builder);
     }
 
-    public readonly T ReadUnion<T>(IUnionSchema<T> schema)
+    public readonly T ReadUnion<T>(UnionSchema<T> schema)
     {
         if (current.ValueKind != JsonValueKind.Object)
         {
@@ -264,7 +264,7 @@ internal struct JsonShapeDeserializer(JsonElement current, JsonMemberPlan entry,
             : ReadSingleCase(schema, plan);
     }
 
-    private readonly T ReadSingleCase<T>(IUnionSchema<T> schema, JsonShapePlan plan)
+    private readonly T ReadSingleCase<T>(UnionSchema<T> schema, JsonShapePlan plan)
     {
         JsonProperty? found = null;
         var count = 0;
@@ -301,7 +301,7 @@ internal struct JsonShapeDeserializer(JsonElement current, JsonMemberPlan entry,
     }
 
     private readonly T ReadDiscriminated<T>(
-        IUnionSchema<T> schema,
+        UnionSchema<T> schema,
         JsonShapePlan plan,
         string discriminator
     )
@@ -351,7 +351,7 @@ internal struct JsonShapeDeserializer(JsonElement current, JsonMemberPlan entry,
     }
 
     // An open union's unknown case holds the whole value as a document.
-    private readonly T ReadUnknown<T>(IUnionSchema<T> schema, JsonShapePlan plan)
+    private readonly T ReadUnknown<T>(UnionSchema<T> schema, JsonShapePlan plan)
     {
         var nested = new JsonShapeDeserializer(current, plan.Members[plan.UnknownCase], mode);
         return schema.DeserializeCase(plan.UnknownCase, ref nested);

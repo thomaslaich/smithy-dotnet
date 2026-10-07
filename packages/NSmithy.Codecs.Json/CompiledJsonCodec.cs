@@ -82,7 +82,7 @@ internal static class JsonBody
 
 internal sealed class CompiledJsonProjectionCodec<T, TBuilder> : IProjectionCodec<T, TBuilder>
 {
-    private readonly IStructSchema<T, TBuilder> source;
+    private readonly StructSchema<T, TBuilder> source;
     private readonly JsonShapePlan plan;
     private readonly bool materializeTopLevelDefaults;
     private readonly WireReadMode readMode;

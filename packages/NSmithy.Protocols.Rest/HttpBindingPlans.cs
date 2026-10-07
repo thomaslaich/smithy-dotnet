@@ -145,7 +145,7 @@ internal sealed class HttpMemberPlan
     public Func<TEvent, string> EventTypeOf<TEvent>(Schema<TEvent> eventSchema) =>
         (Func<TEvent, string>)(
             caseName ??= Schemas.CompileCaseName(
-                eventSchema.Resolved as IUnionSchema<TEvent>
+                eventSchema.Resolved as UnionSchema<TEvent>
                     ?? throw new InvalidOperationException(
                         "REST event stream payloads must target a union schema."
                     )

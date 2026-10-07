@@ -5,7 +5,7 @@ namespace NSmithy.Codecs.Cbor;
 
 internal sealed class CompiledCborProjectionCodec<T, TBuilder> : IProjectionCodec<T, TBuilder>
 {
-    private readonly IStructSchema<T, TBuilder> source;
+    private readonly StructSchema<T, TBuilder> source;
     private readonly CborShapePlan plan;
     private readonly bool materializeTopLevelDefaults;
 

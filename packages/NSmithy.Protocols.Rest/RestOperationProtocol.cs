@@ -106,7 +106,7 @@ public sealed class RestServiceProtocol(
     ) : IStructSchemaVisitor<TInput, IOperationProtocol<TInput, TOutput>>
     {
         public IOperationProtocol<TInput, TOutput> Visit<TInputBuilder>(
-            IStructSchema<TInput, TInputBuilder> inputSchema
+            StructSchema<TInput, TInputBuilder> inputSchema
         ) =>
             outputSchema.Accept(
                 new OutputSchemaCompiler<TInput, TOutput, TInputBuilder>(
@@ -126,7 +126,7 @@ public sealed class RestServiceProtocol(
 
     private sealed class OutputSchemaCompiler<TInput, TOutput, TInputBuilder>(
         OperationSchema<TInput, TOutput> operation,
-        IStructSchema<TInput, TInputBuilder> inputSchema,
+        StructSchema<TInput, TInputBuilder> inputSchema,
         IReadOnlyList<IOperationErrorSchema> modeledErrors,
         IRestBodyCodecFactory codecFactory,
         Func<SmithyHttpClientResponse, string?> errorDiscriminator,
@@ -138,7 +138,7 @@ public sealed class RestServiceProtocol(
     ) : IStructSchemaVisitor<TOutput, IOperationProtocol<TInput, TOutput>>
     {
         public IOperationProtocol<TInput, TOutput> Visit<TOutputBuilder>(
-            IStructSchema<TOutput, TOutputBuilder> outputSchema
+            StructSchema<TOutput, TOutputBuilder> outputSchema
         ) =>
             CreateOperation(
                 operation,
@@ -162,8 +162,8 @@ public sealed class RestServiceProtocol(
         TOutputBuilder
     > CreateOperation<TInput, TOutput, TInputBuilder, TOutputBuilder>(
         OperationSchema<TInput, TOutput> operation,
-        IStructSchema<TInput, TInputBuilder> inputSchema,
-        IStructSchema<TOutput, TOutputBuilder> outputSchema,
+        StructSchema<TInput, TInputBuilder> inputSchema,
+        StructSchema<TOutput, TOutputBuilder> outputSchema,
         IReadOnlyList<IOperationErrorSchema> modeledErrors,
         IRestBodyCodecFactory codecFactory,
         Func<SmithyHttpClientResponse, string?> errorDiscriminator,

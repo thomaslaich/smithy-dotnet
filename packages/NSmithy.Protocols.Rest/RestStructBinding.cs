@@ -22,7 +22,7 @@ internal sealed class RestStructBinding<T, TBuilder>
 {
     private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
 
-    public required IStructSchema<T, TBuilder> Schema { get; init; }
+    public required StructSchema<T, TBuilder> Schema { get; init; }
 
     /// <summary>Every member's plan, indexed by the member's position.</summary>
     public required HttpMemberPlan[] Plans { get; init; }
@@ -192,7 +192,7 @@ internal sealed class RestStructBinding<T, TBuilder>
 
     /// <param name="uriTemplate">The operation's <c>@http(uri)</c>, which decides greedy labels.</param>
     internal static RestStructBinding<T, TBuilder> Compile(
-        IStructSchema<T, TBuilder> schema,
+        StructSchema<T, TBuilder> schema,
         HttpBindingSide side,
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads,
@@ -802,7 +802,7 @@ internal readonly struct HttpBindingSerializer(HttpMemberPlan[] plans, HttpMessa
         }
     }
 
-    public void WriteUnion<TValue>(int member, TValue value, IUnionSchema<TValue> schema)
+    public void WriteUnion<TValue>(int member, TValue value, UnionSchema<TValue> schema)
     {
         var plan = plans[member];
         if (plan.Binding == HttpBinding.Payload)
@@ -885,18 +885,18 @@ internal readonly struct HttpPayloadDeserializer(
             plan.CodecFactory.ContentType
         );
 
-    public TValue ReadStruct<TValue, TBuilder>(IStructSchema<TValue, TBuilder> schema) =>
+    public TValue ReadStruct<TValue, TBuilder>(StructSchema<TValue, TBuilder> schema) =>
         plan.CodecFor((Schema<TValue>)schema).Deserialize(content);
 
     public TCollection ReadList<TCollection, TElement, TBuilder>(
-        IListSchema<TCollection, TElement, TBuilder> schema
+        ListSchema<TCollection, TElement, TBuilder> schema
     ) => plan.CodecFor((Schema<TCollection>)schema).Deserialize(content);
 
     public TDictionary ReadMap<TDictionary, TValue, TBuilder>(
-        IMapSchema<TDictionary, TValue, TBuilder> schema
+        MapSchema<TDictionary, TValue, TBuilder> schema
     ) => plan.CodecFor((Schema<TDictionary>)schema).Deserialize(content);
 
-    public TValue ReadUnion<TValue>(IUnionSchema<TValue> schema) =>
+    public TValue ReadUnion<TValue>(UnionSchema<TValue> schema) =>
         plan.CodecFor((Schema<TValue>)schema).Deserialize(content);
 
     private NotSupportedException Unsupported() =>

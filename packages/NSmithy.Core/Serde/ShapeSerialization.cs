@@ -81,7 +81,7 @@ public interface IShapeSerializer
         IMapSchema<TDictionary, TValue> schema
     );
 
-    void WriteUnion<T>(int member, T value, IUnionSchema<T> schema);
+    void WriteUnion<T>(int member, T value, UnionSchema<T> schema);
 }
 
 /// <summary>
@@ -128,15 +128,15 @@ public interface IShapeDeserializer
 
     IAsyncEnumerable<TEvent> ReadEventStream<TEvent>(Schema<TEvent> eventSchema);
 
-    T ReadStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema);
+    T ReadStruct<T, TBuilder>(StructSchema<T, TBuilder> schema);
 
     TCollection ReadList<TCollection, TElement, TBuilder>(
-        IListSchema<TCollection, TElement, TBuilder> schema
+        ListSchema<TCollection, TElement, TBuilder> schema
     );
 
     TDictionary ReadMap<TDictionary, TValue, TBuilder>(
-        IMapSchema<TDictionary, TValue, TBuilder> schema
+        MapSchema<TDictionary, TValue, TBuilder> schema
     );
 
-    T ReadUnion<T>(IUnionSchema<T> schema);
+    T ReadUnion<T>(UnionSchema<T> schema);
 }

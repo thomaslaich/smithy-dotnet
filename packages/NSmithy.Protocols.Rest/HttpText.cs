@@ -125,7 +125,7 @@ internal struct HttpTextSerializer : IShapeSerializer
         schema.SerializeEntries(value, ref mapEntries);
     }
 
-    public readonly void WriteUnion<T>(int member, T value, IUnionSchema<T> schema) =>
+    public readonly void WriteUnion<T>(int member, T value, UnionSchema<T> schema) =>
         throw Unsupported("union");
 
     private static NotSupportedException Unsupported(string kind) =>
@@ -256,11 +256,11 @@ internal readonly struct HttpTextDeserializer : IShapeDeserializer
     public IAsyncEnumerable<TEvent> ReadEventStream<TEvent>(Schema<TEvent> eventSchema) =>
         throw Unsupported("union");
 
-    public T ReadStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema) =>
+    public T ReadStruct<T, TBuilder>(StructSchema<T, TBuilder> schema) =>
         throw Unsupported("structure");
 
     public TCollection ReadList<TCollection, TElement, TBuilder>(
-        IListSchema<TCollection, TElement, TBuilder> schema
+        ListSchema<TCollection, TElement, TBuilder> schema
     )
     {
         var builder = schema.CreateTypedBuilder();
@@ -275,7 +275,7 @@ internal readonly struct HttpTextDeserializer : IShapeDeserializer
     }
 
     public TDictionary ReadMap<TDictionary, TValue, TBuilder>(
-        IMapSchema<TDictionary, TValue, TBuilder> schema
+        MapSchema<TDictionary, TValue, TBuilder> schema
     )
     {
         var builder = schema.CreateTypedBuilder();
@@ -288,7 +288,7 @@ internal readonly struct HttpTextDeserializer : IShapeDeserializer
         return schema.Build(builder);
     }
 
-    public T ReadUnion<T>(IUnionSchema<T> schema) => throw Unsupported("union");
+    public T ReadUnion<T>(UnionSchema<T> schema) => throw Unsupported("union");
 
     private T Parse<T>(ShapeKind kind, Func<string, T> parse)
     {

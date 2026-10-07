@@ -272,7 +272,7 @@ public sealed class RpcV2CborProtocol : IProtocol
 
     private static Func<TEvent, string> CompileEventType<TEvent>(Schema<TEvent> eventSchema) =>
         Schemas.CompileCaseName(
-            eventSchema.Resolved as IUnionSchema<TEvent>
+            eventSchema.Resolved as UnionSchema<TEvent>
                 ?? throw new InvalidOperationException(
                     "rpcv2Cbor event streams must target a union schema."
                 )

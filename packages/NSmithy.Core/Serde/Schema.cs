@@ -361,29 +361,14 @@ public interface IStructSchema<T> : IStructSchema
 /// </summary>
 public interface IStructSchemaVisitor<T, out TResult>
 {
-    TResult Visit<TBuilder>(IStructSchema<T, TBuilder> schema);
-}
-
-public interface IStructSchema<T, TBuilder> : IStructSchema<T>
-{
-    TBuilder CreateTypedBuilder();
-
-    T Build(TBuilder builder);
-
-    /// <summary>Reads member <paramref name="index"/> into <paramref name="builder"/>.</summary>
-    void DeserializeMember<TDeserializer>(
-        TBuilder builder,
-        int index,
-        ref TDeserializer deserializer
-    )
-        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
+    TResult Visit<TBuilder>(StructSchema<T, TBuilder> schema);
 }
 
 /// <summary>
 /// A structure. Code generation derives one class per structure, which reads and writes the
 /// structure's properties directly; this base carries what every structure has in common.
 /// </summary>
-public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TBuilder>
+public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T>
 {
     private readonly MemberSchema[] members;
     private readonly Dictionary<string, MemberSchema> membersByName;
@@ -454,49 +439,26 @@ public abstract class StructSchema<T, TBuilder> : Schema<T>, IStructSchema<T, TB
     }
 }
 
-public sealed class UnitSchema : Schema<SmithyUnit>, IStructSchema<SmithyUnit, SmithyUnit>
+/// <summary><c>smithy.api#Unit</c>: a structure with no members, and one value.</summary>
+public sealed class UnitSchema : StructSchema<SmithyUnit, SmithyUnit>
 {
     internal UnitSchema()
-        : base(new ShapeId("smithy.api", "Unit"), ShapeKind.Structure) { }
+        : base(new ShapeId("smithy.api", "Unit"), []) { }
 
-    public MemberSchema? GetMember(string name) => null;
+    public override SmithyUnit CreateTypedBuilder() => SmithyUnit.Value;
 
-    public IReadOnlyList<MemberSchema> Members => [];
+    public override SmithyUnit Build(SmithyUnit builder) => SmithyUnit.Value;
 
-    public override void Write<TSerializer>(
-        int member,
+    public override void SerializeMembers<TSerializer>(
         SmithyUnit value,
         ref TSerializer serializer
-    ) => serializer.WriteStruct(member, value, this);
+    ) { }
 
-    public override SmithyUnit Read<TDeserializer>(ref TDeserializer deserializer) =>
-        deserializer.ReadStruct(this);
-
-    public void SerializeMembers<TSerializer>(SmithyUnit value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct { }
-
-    public void DeserializeMember<TDeserializer>(
+    public override void DeserializeMember<TDeserializer>(
         SmithyUnit builder,
         int index,
         ref TDeserializer deserializer
-    )
-        where TDeserializer : struct, IShapeDeserializer, allows ref struct { }
-
-    public SmithyUnit CreateTypedBuilder() => SmithyUnit.Value;
-
-    public SmithyUnit Build(SmithyUnit builder) => SmithyUnit.Value;
-
-    public SmithyUnit BuildEmpty() => SmithyUnit.Value;
-
-    public void WriteEmpty<TSerializer>(int member, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct =>
-        Write(member, SmithyUnit.Value, ref serializer);
-
-    public TResult Accept<TResult>(IStructSchemaVisitor<SmithyUnit, TResult> visitor)
-    {
-        ArgumentNullException.ThrowIfNull(visitor);
-        return visitor.Visit(this);
-    }
+    ) { }
 }
 
 public interface INullableSchema
@@ -724,19 +686,6 @@ public interface IListSchema<TCollection, TElement> : IListSchema
         where TSerializer : struct, IShapeSerializer, allows ref struct;
 }
 
-public interface IListSchema<TCollection, TElement, TBuilder> : IListSchema<TCollection, TElement>
-{
-    TBuilder CreateTypedBuilder();
-
-    void Add(TBuilder builder, TElement value);
-
-    TCollection Build(TBuilder builder);
-
-    /// <summary>Reads one element and adds it to <paramref name="builder"/>.</summary>
-    void DeserializeElement<TDeserializer>(TBuilder builder, ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
-}
-
 public interface IMapSchema
 {
     /// <summary>
@@ -763,23 +712,6 @@ public interface IMapSchema<TDictionary, TValue> : IMapSchema
         where TSerializer : struct, IShapeSerializer, allows ref struct;
 }
 
-public interface IMapSchema<TDictionary, TValue, TBuilder> : IMapSchema<TDictionary, TValue>
-{
-    TBuilder CreateTypedBuilder();
-
-    void Add(TBuilder builder, string key, TValue value);
-
-    TDictionary Build(TBuilder builder);
-
-    /// <summary>Reads the value of the entry named <paramref name="key"/> into <paramref name="builder"/>.</summary>
-    void DeserializeEntry<TDeserializer>(
-        TBuilder builder,
-        string key,
-        ref TDeserializer deserializer
-    )
-        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
-}
-
 public interface IUnionSchema
 {
     ShapeId Id { get; }
@@ -792,20 +724,6 @@ public interface IUnionSchema
     int IndexOf(string name);
 }
 
-public interface IUnionSchema<T> : IUnionSchema
-{
-    /// <summary>The index of the case <paramref name="value"/> holds.</summary>
-    int CaseOf(T value);
-
-    /// <summary>Writes the case <paramref name="value"/> holds under the case's index.</summary>
-    void SerializeCase<TSerializer>(T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct;
-
-    /// <summary>Reads case <paramref name="index"/> and returns the union holding it.</summary>
-    T DeserializeCase<TDeserializer>(int index, ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
-}
-
 /// <summary>
 /// A list or set. The C# collection is whatever the model's consumer wants it to be. Code
 /// generation derives one class per list, which reads and writes the elements directly; this base
@@ -813,7 +731,7 @@ public interface IUnionSchema<T> : IUnionSchema
 /// </summary>
 public abstract class ListSchema<TCollection, TElement, TBuilder>
     : Schema<TCollection>,
-        IListSchema<TCollection, TElement, TBuilder>
+        IListSchema<TCollection, TElement>
 {
     protected ListSchema(
         ShapeId id,
@@ -936,7 +854,7 @@ internal sealed class DelegateListSchema<TCollection, TElement, TBuilder>(
 /// </summary>
 public abstract class MapSchema<TDictionary, TValue, TBuilder>
     : Schema<TDictionary>,
-        IMapSchema<TDictionary, TValue, TBuilder>
+        IMapSchema<TDictionary, TValue>
 {
     protected MapSchema(
         ShapeId id,
@@ -1055,7 +973,7 @@ internal sealed class DelegateMapSchema<TDictionary, TValue, TBuilder>(
 /// A union. Code generation derives one class per union, which tells the cases apart and reads and
 /// writes the value each holds; this base carries what every union has in common.
 /// </summary>
-public abstract class UnionSchema<T> : Schema<T>, IUnionSchema<T>
+public abstract class UnionSchema<T> : Schema<T>, IUnionSchema
 {
     private readonly MemberSchema[] cases;
     private readonly Dictionary<string, MemberSchema> casesByName;
@@ -1139,7 +1057,7 @@ public sealed class StructProjection<T, TBuilder>
 {
     private readonly Dictionary<string, MemberSchema> membersByName;
 
-    internal StructProjection(IStructSchema<T, TBuilder> source, Func<MemberSchema, bool> include)
+    internal StructProjection(StructSchema<T, TBuilder> source, Func<MemberSchema, bool> include)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(include);
@@ -1149,7 +1067,7 @@ public sealed class StructProjection<T, TBuilder>
             .ToDictionary(member => member.Name, StringComparer.Ordinal);
     }
 
-    public IStructSchema<T, TBuilder> Source { get; }
+    public StructSchema<T, TBuilder> Source { get; }
 
     public MemberSchema? GetMember(string name)
     {
@@ -1610,13 +1528,13 @@ public static class Schemas
 
     /// <summary>The members of <paramref name="source"/> for which <paramref name="include"/> holds.</summary>
     public static StructProjection<T, TBuilder> Project<T, TBuilder>(
-        IStructSchema<T, TBuilder> source,
+        StructSchema<T, TBuilder> source,
         Func<MemberSchema, bool> include
     ) => new(source, include);
 
     /// <summary>The members of <paramref name="source"/> named in <paramref name="memberNames"/>.</summary>
     public static StructProjection<T, TBuilder> Project<T, TBuilder>(
-        IStructSchema<T, TBuilder> source,
+        StructSchema<T, TBuilder> source,
         IReadOnlySet<string> memberNames
     )
     {
@@ -1628,7 +1546,7 @@ public static class Schemas
     /// Compiles the function that names the case a union value holds, e.g. for an event stream's
     /// <c>:event-type</c>.
     /// </summary>
-    public static Func<TUnion, string> CompileCaseName<TUnion>(IUnionSchema<TUnion> schema)
+    public static Func<TUnion, string> CompileCaseName<TUnion>(UnionSchema<TUnion> schema)
     {
         ArgumentNullException.ThrowIfNull(schema);
         var names = schema.Cases.Select(@case => @case.Name).ToArray();

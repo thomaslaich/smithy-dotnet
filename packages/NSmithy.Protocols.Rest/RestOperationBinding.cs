@@ -57,8 +57,8 @@ public sealed class RestOperationBinding<TInput, TOutput, TInputBuilder, TOutput
 
     internal static RestOperationBinding<TInput, TOutput, TInputBuilder, TOutputBuilder> CreateFrom(
         OperationSchema<TInput, TOutput> operation,
-        IStructSchema<TInput, TInputBuilder> inputSchema,
-        IStructSchema<TOutput, TOutputBuilder> outputSchema,
+        StructSchema<TInput, TInputBuilder> inputSchema,
+        StructSchema<TOutput, TOutputBuilder> outputSchema,
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads,
         bool requiresDeclaredContentType
@@ -217,8 +217,8 @@ public static class RestOperationBinding
         TOutputBuilder
     >(
         OperationSchema<TInput, TOutput> operation,
-        IStructSchema<TInput, TInputBuilder> inputSchema,
-        IStructSchema<TOutput, TOutputBuilder> outputSchema,
+        StructSchema<TInput, TInputBuilder> inputSchema,
+        StructSchema<TOutput, TOutputBuilder> outputSchema,
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads,
         bool requiresDeclaredContentType = true

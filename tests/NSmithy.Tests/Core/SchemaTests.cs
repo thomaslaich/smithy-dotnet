@@ -66,7 +66,7 @@ public sealed class SchemaTests
     public void StructProjectionSnapshotsSelectedMembers()
     {
         var schema =
-            (IStructSchema<VisitorInput, VisitorInputSchema.Builder>)VisitorInputSchema.Schema;
+            (StructSchema<VisitorInput, VisitorInputSchema.Builder>)VisitorInputSchema.Schema;
         var selected = new HashSet<string>(StringComparer.Ordinal) { "name" };
         var projection = Schemas.Project(schema, selected);
 
@@ -118,7 +118,7 @@ public sealed class SchemaTests
 
     private sealed class BuilderTypeVisitor : IStructSchemaVisitor<VisitorInput, Type>
     {
-        public Type Visit<TBuilder>(IStructSchema<VisitorInput, TBuilder> schema) =>
+        public Type Visit<TBuilder>(StructSchema<VisitorInput, TBuilder> schema) =>
             typeof(TBuilder);
     }
 
