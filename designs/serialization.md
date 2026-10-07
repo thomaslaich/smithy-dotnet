@@ -287,24 +287,40 @@ parsing stay centralized while the core model remains open-ended.
 
 Presence is a property of the *member position*, never of the target shape:
 
-- `required` is member metadata (`Member.IsRequired`).
-- Modeled defaults are member traits. Generated builders start defaulted
-  members at their default; a codec writing a default reads it from the trait.
+- `required` is member metadata (`IMemberSchema.IsRequired`).
+- Modeled defaults are generated code. `CreateTypedBuilder` starts each
+  defaulted member at its default, so an absent member keeps it, and each call
+  builds new values, so no two objects share a mutable default. A
+  `@clientOptional` member gets none: its default belongs to the server.
 - `@sparse` is metadata on the list or map schema, declaring that the
   collection holds nullable elements or values.
 
 Nullability lives in the generated code, not in the schema: an optional
-`Integer` member is an `int?` property, and the generated call passes it to
-`WriteInt(int index, int? value)`. The serializer decides what a null means
-for the member from its plan: omit it, write its default, or write an explicit
-null in a sparse collection.
+`Integer` member is an `int?` property, and generated code writes it only when
+it has a value. An absent value is either the member's default or a null:
+
+```csharp
+if (value.Elevation is { } elevation)
+    serializer.WriteFloat(2, elevation);
+else if (serializer.WritesDefault(2))
+    serializer.WriteFloat(2, 0f);
+else
+    serializer.WriteNull(2);
+```
+
+Whether a message carries defaults depends on the message, not the shape: a
+client's request body leaves unset top-level defaults out, so the service
+applies its own, while a response and every nested structure write them.
+`WritesDefault` asks the serializer, whose plan knows which message it is
+writing. `WriteNull` then lets the serializer omit the member, or write an
+explicit null where the format has one.
 
 ## Serializing Values
 
 Every call names a member of the shape being serialized by its index and passes
 the value at its static type. One call carries both, so the serializer decides
-in one place whether to write the member, write its default, write an explicit
-null, or skip it because it is outside the projection being written.
+in one place whether to write the member, write an explicit null, or skip it
+because it is outside the projection being written.
 
 The serializer and deserializer are `struct` type arguments, so the JIT
 compiles the generated methods once per implementation with every call bound
@@ -360,7 +376,7 @@ switches tables without a lookup, and a recursive shape links back to its own
 table.
 
 - A JSON plan holds each member's pre-encoded property name (honoring
-  `@jsonName`), timestamp format, and default.
+  `@jsonName`) and timestamp format.
 - An XML plan holds element and attribute names, flattening, and namespaces.
 - A protobuf plan holds field numbers and packing, and inlines a union's cases
   into the enclosing message.

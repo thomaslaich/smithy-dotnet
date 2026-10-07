@@ -154,15 +154,11 @@ internal struct JsonShapeDeserializer(JsonElement current, JsonMemberPlan entry,
             }
 
             var member = members[index];
+            // An absent member keeps the value its builder started with: its modeled default, or
+            // none.
             if (member.IsRequired)
             {
                 throw new MissingRequiredMemberException(member.WireName);
-            }
-
-            if (member.Default is { } defaultValue)
-            {
-                var deserializer = new DocumentDeserializer(defaultValue);
-                schema.DeserializeMember(builder, index, ref deserializer);
             }
         }
     }

@@ -27,6 +27,8 @@ internal struct UniqueElements : IShapeSerializer
         }
     }
 
+    public readonly bool WritesDefault(int member) => false;
+
     public void WriteNull(int member) => Add(c => c.WriteNull(member));
 
     public void WriteBoolean(int member, bool value) => Add(c => c.WriteBoolean(member, value));
@@ -122,6 +124,8 @@ internal struct CanonicalSerializer(StringBuilder key) : IShapeSerializer
 
     private readonly void Number(int member, char tag, IFormattable value, string? format = null) =>
         Begin(member, tag).Append(value.ToString(format, CultureInfo.InvariantCulture)).Append(';');
+
+    public readonly bool WritesDefault(int member) => false;
 
     public readonly void WriteNull(int member) => Begin(member, 'n').Append(';');
 

@@ -6,6 +6,9 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.SymbolProperties;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -28,6 +31,7 @@ import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.shapes.UnionShape;
+import software.amazon.smithy.model.traits.DefaultTrait;
 import software.amazon.smithy.model.traits.EnumValueTrait;
 import software.amazon.smithy.model.traits.ErrorTrait;
 import software.amazon.smithy.model.traits.InternalTrait;
@@ -192,6 +196,7 @@ public final class SchemaGenerator {
       writer.putContext(
           "targets", writer.consumer(w -> writeStructureTargets(w, context, members)));
       boolean isError = shape.hasTrait(ErrorTrait.class);
+      writer.putContext("builderDefaults", builderDefaults(writer, context, members));
       writer.putContext(
           "writes",
           writer.consumer(
@@ -206,6 +211,7 @@ public final class SchemaGenerator {
                       "value." + CSharpNaming.propertyName(member.getMemberName()),
                       "value" + index,
                       propertyMayBeNull(context, member, isError),
+                      defaultLiteral(w, context, member),
                       "Target" + index);
                 }
               }));
@@ -263,7 +269,7 @@ public final class SchemaGenerator {
               {
                   ${targets:C|}
 
-                  public override Builder CreateTypedBuilder() => new();
+                  public override Builder CreateTypedBuilder() => new()${builderDefaults:L};
 
                   public override ${type:T} Build(Builder builder) =>
                       new ${type:T}(${constructorArguments:L});
@@ -334,6 +340,7 @@ public final class SchemaGenerator {
                       "elements[index]",
                       "element",
                       isReference || sparse,
+                      null,
                       "Target0")));
       writer.putContext(
           "read", readValue(writer, context, member, "element", sparse && !isReference, "Target0"));
@@ -437,6 +444,7 @@ public final class SchemaGenerator {
                       "entry.Value",
                       "entryValue",
                       isReference || sparse,
+                      null,
                       "Target0")));
       writer.putContext(
           "read",
@@ -606,6 +614,7 @@ public final class SchemaGenerator {
                       "@case.Value",
                       "value" + index,
                       ShapeSupport.isReferenceType(context.model(), member),
+                      null,
                       "Target" + index);
                   w.write("break;");
                   w.dedent();
@@ -763,9 +772,121 @@ public final class SchemaGenerator {
   }
 
   /**
+   * The object initializer that starts a builder at its members' modeled defaults, so a member the
+   * input leaves out keeps its default. Each call builds new values, so no two deserialized objects
+   * share a mutable default.
+   */
+  private static String builderDefaults(
+      CSharpWriter writer, GenerationContext context, List<MemberShape> members) {
+    List<String> assignments = new ArrayList<>();
+    for (MemberShape member : members) {
+      String literal = defaultLiteral(writer, context, member);
+      if (literal != null) {
+        assignments.add(CSharpNaming.propertyName(member.getMemberName()) + " = " + literal);
+      }
+    }
+    return assignments.isEmpty() ? "" : " { " + String.join(", ", assignments) + " }";
+  }
+
+  /**
+   * The C# expression for a member's modeled default, or null when it has none. A
+   * {@code @clientOptional} member has none here: its default belongs to the server, which a client
+   * must not assume.
+   */
+  private static String defaultLiteral(
+      CSharpWriter writer, GenerationContext context, MemberShape member) {
+    if (!ShapeSupport.hasDefault(member) || ShapeSupport.hasClientOptional(member)) {
+      return null;
+    }
+    Node node = member.expectTrait(DefaultTrait.class).toNode();
+    if (node.isNullNode()) {
+      return null;
+    }
+    Model model = context.model();
+    Shape target = model.expectShape(member.getTarget());
+    if (ShapeSupport.isStreamingBlobMember(model, member)) {
+      return writer.typeName(RuntimeTypes.STREAM) + ".Null";
+    }
+    String type = writer.typeName(context.symbolProvider().toSymbol(target));
+    return switch (target.getType()) {
+      case BOOLEAN -> String.valueOf(node.expectBooleanNode().getValue());
+      case BYTE -> "(sbyte)" + number(node);
+      case SHORT -> "(short)" + number(node);
+      case INTEGER -> number(node);
+      case LONG -> number(node) + "L";
+      case FLOAT -> number(node) + "f";
+      case DOUBLE -> number(node) + "d";
+      case BIG_DECIMAL -> number(node) + "m";
+      case BIG_INTEGER ->
+          "global::System.Numerics.BigInteger.Parse("
+              + CSharpNaming.formatString(number(node))
+              + ", global::System.Globalization.CultureInfo.InvariantCulture)";
+      case STRING -> CSharpNaming.formatString(node.expectStringNode().getValue());
+      case ENUM ->
+          type
+              + ".FromValue("
+              + CSharpNaming.formatString(node.expectStringNode().getValue())
+              + ")";
+      case INT_ENUM -> "(" + type + ")" + number(node);
+      case BLOB -> {
+        String base64 = node.expectStringNode().getValue();
+        yield base64.isEmpty()
+            ? "[]"
+            : "global::System.Convert.FromBase64String(" + CSharpNaming.formatString(base64) + ")";
+      }
+      case TIMESTAMP -> timestampLiteral(node);
+      case DOCUMENT -> documentExpr(writer, node);
+      case LIST, SET -> type + ".FromOwnedList([])";
+      case MAP -> {
+        MapShape map = target.asMapShape().orElseThrow();
+        Shape valueTarget = model.expectShape(map.getValue().getTarget());
+        String valueType =
+            writer.typeName(context.symbolProvider().toSymbol(valueTarget))
+                + (ShapeSupport.isSparse(map) ? "?" : "");
+        yield type
+            + ".FromOwnedDictionary(new "
+            + writer.typeName(RuntimeTypes.DICTIONARY)
+            + "<string, "
+            + valueType
+            + ">("
+            + writer.typeName(RuntimeTypes.STRING_COMPARER)
+            + ".Ordinal))";
+      }
+      default -> null;
+    };
+  }
+
+  private static String number(Node node) {
+    return new BigDecimal(node.expectNumberNode().getValue().toString())
+        .stripTrailingZeros()
+        .toPlainString();
+  }
+
+  /** A timestamp default is epoch seconds, possibly fractional, or a date-time string. */
+  private static String timestampLiteral(Node node) {
+    BigDecimal seconds =
+        node.isNumberNode()
+            ? new BigDecimal(node.expectNumberNode().getValue().toString())
+            : epochSeconds(node.expectStringNode().getValue());
+    if (seconds.stripTrailingZeros().scale() <= 0) {
+      return "global::System.DateTimeOffset.FromUnixTimeSeconds(" + seconds.toBigInteger() + "L)";
+    }
+    return "global::System.DateTimeOffset.UnixEpoch.AddTicks("
+        + seconds.movePointRight(7).longValue()
+        + "L)";
+  }
+
+  private static BigDecimal epochSeconds(String dateTime) {
+    Instant instant = OffsetDateTime.parse(dateTime).toInstant();
+    return BigDecimal.valueOf(instant.getEpochSecond())
+        .add(BigDecimal.valueOf(instant.getNano(), 9));
+  }
+
+  /**
    * Writes the value {@code value} as member {@code index}, calling the serializer directly for the
    * member's kind so no schema sits between the generated code and the serializer. A value that may
-   * be null is checked first and written as an explicit null. A kind with no direct call goes
+   * be null is checked first: it is written as its modeled default {@code defaultValue} when the
+   * serializer writes defaults, and as an explicit null otherwise. A kind with no direct call goes
    * through its target schema, {@code fallback}.
    */
   private static void writeValue(
@@ -776,12 +897,35 @@ public final class SchemaGenerator {
       String value,
       String local,
       boolean mayBeNull,
+      String defaultValue,
       String fallback) {
     String call = writeCall(writer, context, member, index, mayBeNull ? local : value);
     if (call == null) {
       writer.write("$L.Write($L, $L, ref serializer);", fallback, index, value);
     } else if (!mayBeNull) {
       writer.write("$L", call);
+    } else if (defaultValue != null) {
+      writer.write(
+          """
+          if ($L is { } $L)
+          {
+              $L
+          }
+          else if (serializer.WritesDefault($L))
+          {
+              $L
+          }
+          else
+          {
+              serializer.WriteNull($L);
+          }\
+          """,
+          value,
+          local,
+          call,
+          index,
+          writeCall(writer, context, member, index, defaultValue),
+          index);
     } else {
       writer.write(
           """

@@ -41,16 +41,6 @@ public abstract class Schema
 
     public virtual bool HasTrait(ShapeId id) => Traits.ContainsKey(id);
 
-    /// <summary>
-    /// Writes <paramref name="value"/>, the Smithy document form of a value of this shape such as a
-    /// modeled <c>@default</c>, as member <paramref name="member"/> of the shape being serialized.
-    /// </summary>
-    public abstract void WriteDocumentValue<TSerializer>(
-        int member,
-        Document value,
-        ref TSerializer serializer
-    )
-        where TSerializer : struct, IShapeSerializer, allows ref struct;
 }
 
 public abstract class Schema<T> : Schema
@@ -73,15 +63,6 @@ public abstract class Schema<T> : Schema
     public abstract T Read<TDeserializer>(ref TDeserializer deserializer)
         where TDeserializer : struct, IShapeDeserializer, allows ref struct;
 
-    public override void WriteDocumentValue<TSerializer>(
-        int member,
-        Document value,
-        ref TSerializer serializer
-    )
-    {
-        var deserializer = new DocumentDeserializer(value);
-        Write(member, Read(ref deserializer), ref serializer);
-    }
 }
 
 public sealed class LazySchema<T> : Schema<T>

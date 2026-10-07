@@ -166,6 +166,8 @@ internal struct EventCapture<TEvent>(int index) : IShapeSerializer
 {
     public IAsyncEnumerable<TEvent>? Events { get; private set; }
 
+    public readonly bool WritesDefault(int member) => false;
+
     public readonly void WriteNull(int member) { }
 
     public readonly void WriteBoolean(int member, bool value) { }

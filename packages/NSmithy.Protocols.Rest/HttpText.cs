@@ -35,6 +35,8 @@ internal struct HttpTextSerializer : IShapeSerializer
 
     private readonly void Add(string text) => (keys ? entries![^1].Value : texts).Add(text);
 
+    public readonly bool WritesDefault(int member) => false;
+
     public readonly void WriteNull(int member) { }
 
     public readonly void WriteBoolean(int member, bool value) => Add(value ? "true" : "false");

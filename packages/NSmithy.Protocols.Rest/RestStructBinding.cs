@@ -139,8 +139,7 @@ internal sealed class RestStructBinding<T, TBuilder>
     }
 
     /// <summary>
-    /// Reads the <c>@httpPayload</c> member from the body. An empty body leaves the member unset,
-    /// or set to its modeled default, except that an event stream is always present.
+    /// Reads the <c>@httpPayload</c> member from the body. An event stream is always present.
     /// </summary>
     public void ReadPayload(TBuilder builder, byte[]? content, Stream? streamingContent)
     {
@@ -170,22 +169,10 @@ internal sealed class RestStructBinding<T, TBuilder>
             return;
         }
 
+        // An empty body keeps the value the builder started with: the payload's modeled default,
+        // or none.
         if (content is null or { Length: 0 })
         {
-            if (plan.PayloadKind == PayloadKind.StreamingBlob)
-            {
-                if (plan.Default is not null)
-                {
-                    var empty = new HttpPayloadDeserializer(plan, [], Stream.Null);
-                    Schema.DeserializeMember(builder, plan.Index, ref empty);
-                }
-            }
-            else if (plan.Default is { } defaultValue)
-            {
-                var deserializer = new DocumentDeserializer(defaultValue);
-                Schema.DeserializeMember(builder, plan.Index, ref deserializer);
-            }
-
             return;
         }
 
@@ -519,6 +506,8 @@ internal readonly struct HttpBindingSerializer(HttpMemberPlan[] plans, HttpMessa
                 ? texts.Select(HttpValueText.QuoteHeaderListElement)
                 : texts
         );
+
+    public readonly bool WritesDefault(int member) => false;
 
     public void WriteNull(int member)
     {

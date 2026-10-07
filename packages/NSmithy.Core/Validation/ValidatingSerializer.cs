@@ -245,6 +245,8 @@ internal struct ValidatingSerializer : IShapeSerializer
             _ => new ValuePath(node, container.Members[member].Name),
         };
 
+    public readonly bool WritesDefault(int member) => false;
+
     public void WriteNull(int member)
     {
         if (container?.Kind == ShapeKind.Structure)

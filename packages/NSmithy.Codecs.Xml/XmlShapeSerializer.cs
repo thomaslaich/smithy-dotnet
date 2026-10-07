@@ -129,6 +129,12 @@ internal struct XmlShapeSerializer : IShapeSerializer
         }
     }
 
+    public readonly bool WritesDefault(int member) =>
+        materializeDefaults
+        && container?.Kind == ShapeKind.Structure
+        && container.IsIncluded(member)
+        && !container.Members[member].IsRequired;
+
     public void WriteNull(int member)
     {
         if (container?.Kind == ShapeKind.Structure)
@@ -136,15 +142,6 @@ internal struct XmlShapeSerializer : IShapeSerializer
             var plan = container.Members[member];
             if (!plan.IsRequired)
             {
-                if (
-                    materializeDefaults
-                    && plan.Default is { } value
-                    && container.IsIncluded(member)
-                )
-                {
-                    plan.Target.WriteDocumentValue(member, value, ref this);
-                }
-
                 return;
             }
         }

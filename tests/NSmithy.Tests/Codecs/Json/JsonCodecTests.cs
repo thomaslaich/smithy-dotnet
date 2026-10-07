@@ -293,14 +293,42 @@ public sealed class JsonCodecTests
     [InlineData("{\"count\":null}")]
     public void ProjectionReaderAgreesOnDefaultedMembers(string json)
     {
-        var schema = (IStructSchema<Defaulted, DefaultedSchema.Builder>)DefaultedSchema.Schema;
+        var schema = DefaultedSchema.Schema;
         var codec = JsonCodecFactory.Default.FromProjection(Schemas.Project(schema, _ => true));
 
-        // Sentinel, so a member the codec never touched is distinguishable from one
-        // it set to the modelled default of 7.
-        var builder = new DefaultedSchema.Builder { Count = -1 };
+        var builder = schema.CreateTypedBuilder();
         codec.ReadInto(System.Text.Encoding.UTF8.GetBytes(json), builder);
 
         Assert.Equal(7, builder.Count);
+    }
+
+    [Fact]
+    public void DefaultedCollectionsAreNotSharedBetweenValues()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(DefaultedSchema.Schema);
+
+        var first = codec.DeserializeText("{}");
+        var second = codec.DeserializeText("{}");
+
+        Assert.Empty(first.Labels!.Values);
+        Assert.NotSame(first.Labels, second.Labels);
+    }
+
+    // A response writes a member's default when its value is absent; a request body leaves it
+    // out, so the receiver applies its own.
+    [Theory]
+    [InlineData(true, "{\"count\":7,\"labels\":[]}")]
+    [InlineData(false, "{}")]
+    public void AbsentDefaultedMemberIsWrittenOnlyWhenDefaultsAreMaterialized(
+        bool materialize,
+        string expected
+    )
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(
+            DefaultedSchema.Schema,
+            new CodecFactoryOptions { MaterializeTopLevelDefaults = materialize }
+        );
+
+        Assert.Equal(expected, codec.SerializeText(new Defaulted()));
     }
 }

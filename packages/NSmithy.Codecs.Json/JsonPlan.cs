@@ -8,9 +8,6 @@ namespace NSmithy.Codecs.Json;
 /// <summary>What the JSON codec needs to know about one member: built once, read per value.</summary>
 internal sealed class JsonMemberPlan
 {
-    private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
-    private static readonly ShapeId ClientOptionalTrait = new("smithy.api", "clientOptional");
-
     public JsonMemberPlan(
         string name,
         string wireName,
@@ -27,7 +24,6 @@ internal sealed class JsonMemberPlan
         IsRequired = isRequired;
         Target = target;
         TimestampFormat = Json.TimestampFormat.Resolve(getTrait);
-        Default = ResolveDefault(getTrait);
         Shape = plans.ForTarget(target);
     }
 
@@ -46,22 +42,8 @@ internal sealed class JsonMemberPlan
 
     public string TimestampFormat { get; }
 
-    /// <summary>
-    /// The modeled <c>@default</c>, or null when the member has none. A member marked
-    /// <c>@clientOptional</c> has none here, so a client never fabricates a value the server did
-    /// not send.
-    /// </summary>
-    public Document? Default { get; }
-
     /// <summary>The plan of the member's target when it is an aggregate.</summary>
     public JsonShapePlan? Shape { get; }
-
-    private static Document? ResolveDefault(Func<ShapeId, Trait?> getTrait) =>
-        getTrait(ClientOptionalTrait) is null
-        && getTrait(DefaultTrait) is { } trait
-        && trait.Value.Kind != DocumentKind.Null
-            ? trait.Value
-            : null;
 }
 
 /// <summary>The JSON codec's plan for one aggregate shape, indexed by member position.</summary>

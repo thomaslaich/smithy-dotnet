@@ -297,6 +297,8 @@ internal struct QueryFormShapeSerializer : IShapeSerializer
         }
     }
 
+    public readonly bool WritesDefault(int member) => false;
+
     public void WriteNull(int member)
     {
         // A null element still has a position in its list.

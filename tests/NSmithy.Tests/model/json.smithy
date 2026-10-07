@@ -137,6 +137,11 @@ structure WorkItem {
 
 structure Defaulted {
     count: Integer = 7
+    labels: DefaultedLabels = []
+}
+
+list DefaultedLabels {
+    member: String
 }
 
 structure TreeNode {

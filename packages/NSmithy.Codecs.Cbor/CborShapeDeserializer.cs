@@ -152,15 +152,11 @@ internal readonly struct CborShapeDeserializer(CborReader reader, CborMemberPlan
             }
 
             var member = members[index];
+            // An absent member keeps the value its builder started with: its modeled default, or
+            // none.
             if (member.IsRequired)
             {
                 throw new MissingRequiredMemberException(member.Name);
-            }
-
-            if (member.Default is { } defaultValue)
-            {
-                var deserializer = new DocumentDeserializer(defaultValue);
-                schema.DeserializeMember(builder, index, ref deserializer);
             }
         }
     }

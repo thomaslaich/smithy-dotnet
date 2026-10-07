@@ -105,6 +105,8 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         End();
     }
 
+    public readonly bool WritesDefault(int member) => false;
+
     public void WriteNull(int member)
     {
         if (IsSparseValue(member))

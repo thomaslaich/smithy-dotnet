@@ -6,9 +6,6 @@ namespace NSmithy.Codecs.Cbor;
 /// <summary>What the CBOR codec needs to know about one member: built once, read per value.</summary>
 internal sealed class CborMemberPlan
 {
-    private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
-    private static readonly ShapeId ClientOptionalTrait = new("smithy.api", "clientOptional");
-
     public CborMemberPlan(
         string name,
         bool isRequired,
@@ -20,12 +17,6 @@ internal sealed class CborMemberPlan
         Name = name;
         IsRequired = isRequired;
         Target = target;
-        Default =
-            getTrait(ClientOptionalTrait) is null
-            && getTrait(DefaultTrait) is { } trait
-            && trait.Value.Kind != DocumentKind.Null
-                ? trait.Value
-                : null;
         Shape = plans.ForTarget(target);
     }
 
@@ -34,9 +25,6 @@ internal sealed class CborMemberPlan
     public bool IsRequired { get; }
 
     public Schema Target { get; }
-
-    /// <summary>The modeled <c>@default</c>, or null when it has none or is <c>@clientOptional</c>.</summary>
-    public Document? Default { get; }
 
     /// <summary>The plan of the member's target when it is an aggregate.</summary>
     public CborShapePlan? Shape { get; }

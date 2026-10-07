@@ -6,8 +6,6 @@ namespace NSmithy.Codecs.Xml;
 /// <summary>What the XML codec needs to know about one member: built once, read per value.</summary>
 internal sealed class XmlMemberPlan
 {
-    private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
-    private static readonly ShapeId ClientOptionalTrait = new("smithy.api", "clientOptional");
     private static readonly ShapeId XmlAttributeTrait = new("smithy.api", "xmlAttribute");
     private static readonly ShapeId XmlFlattenedTrait = new("smithy.api", "xmlFlattened");
     private static readonly ShapeId XmlNamespaceTrait = new("smithy.api", "xmlNamespace");
@@ -35,12 +33,6 @@ internal sealed class XmlMemberPlan
                     ? format
                     : target.Resolved.GetTrait(TimestampFormatTrait)
             )?.Value.AsString() ?? "date-time";
-        Default =
-            !memberTraits.ContainsKey(ClientOptionalTrait)
-            && memberTraits.TryGetValue(DefaultTrait, out var defaultTrait)
-            && defaultTrait.HasValue
-                ? defaultTrait.Value
-                : null;
         Shape = plans.ForTarget(target);
     }
 
@@ -65,9 +57,6 @@ internal sealed class XmlMemberPlan
     public XmlNamespace? Namespace { get; }
 
     public string TimestampFormat { get; }
-
-    /// <summary>The modeled <c>@default</c>, or null when it has none or is <c>@clientOptional</c>.</summary>
-    public Document? Default { get; }
 
     /// <summary>The plan of the member's target when it is an aggregate.</summary>
     public XmlShapePlan? Shape { get; }

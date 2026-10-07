@@ -120,6 +120,12 @@ internal struct JsonShapeSerializer : IShapeSerializer
         }
     }
 
+    public readonly bool WritesDefault(int member) =>
+        materializeDefaults
+        && container?.Kind == ShapeKind.Structure
+        && container.IsIncluded(member)
+        && !container.Members[member].IsRequired;
+
     public void WriteNull(int member)
     {
         if (container?.Kind == ShapeKind.Structure)
@@ -127,15 +133,6 @@ internal struct JsonShapeSerializer : IShapeSerializer
             var entry = container.Members[member];
             if (!entry.IsRequired)
             {
-                if (
-                    materializeDefaults
-                    && entry.Default is { } value
-                    && container.IsIncluded(member)
-                )
-                {
-                    entry.Target.WriteDocumentValue(member, value, ref this);
-                }
-
                 return;
             }
         }

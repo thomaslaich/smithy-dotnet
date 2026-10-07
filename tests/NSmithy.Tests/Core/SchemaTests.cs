@@ -97,22 +97,6 @@ public sealed class SchemaTests
     }
 
     [Fact]
-    public void DefaultsReadFromDocumentsDoNotAlias()
-    {
-        var schema = Schemas.List(new ShapeId("example", "Names"), Schemas.String);
-        var document = Document.From([Document.From("Ada")]);
-
-        var firstReader = new DocumentDeserializer(document);
-        var first = schema.Read(ref firstReader);
-        var secondReader = new DocumentDeserializer(document);
-        var second = schema.Read(ref secondReader);
-
-        Assert.NotSame(first, second);
-        Assert.Equal(["Ada"], first);
-        Assert.Equal(["Ada"], second);
-    }
-
-    [Fact]
     public void NullableSchemaDistinguishesTypedAndUntypedTargets()
     {
         var nullable = Assert.IsType<NullableSchema<int>>(Schemas.Nullable(Schemas.Integer));
