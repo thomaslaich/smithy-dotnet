@@ -469,19 +469,19 @@ internal readonly struct HttpBindingSerializer(HttpMemberPlan[] plans, HttpMessa
             case HttpBinding.Query:
                 foreach (var text in texts)
                 {
-                    parts.Query.Add(new(plan.Name, text));
+                    parts.AddQuery(plan.Name, text);
                 }
 
                 break;
             case HttpBinding.Header:
-                parts.Headers.Add(new(plan, plan.IsList ? JoinHeader(plan, texts) : texts[0]));
+                parts.AddHeader(plan, plan.IsList ? JoinHeader(plan, texts) : texts[0]);
                 break;
             case HttpBinding.QueryParams:
                 foreach (var entry in parts.Entries)
                 {
                     foreach (var text in entry.Value)
                     {
-                        parts.QueryParams.Add(new(entry.Key, text));
+                        parts.AddQueryParam(entry.Key, text);
                     }
                 }
 
@@ -491,7 +491,7 @@ internal readonly struct HttpBindingSerializer(HttpMemberPlan[] plans, HttpMessa
                 {
                     if (entry.Value.Count > 0)
                     {
-                        parts.PrefixHeaders.Add(new(plan.Name + entry.Key, entry.Value[0]));
+                        parts.AddPrefixHeader(plan.Name + entry.Key, entry.Value[0]);
                     }
                 }
 

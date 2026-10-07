@@ -170,24 +170,40 @@ internal sealed class HttpMemberPlan
 /// </summary>
 internal sealed class HttpMessageParts(HttpUriBuilder? uri)
 {
+    // Most messages bind few of these, and many bind none, so each list is created by its first
+    // entry: a response that is only a status and a body allocates no list at all.
+    private List<string>? texts;
+    private List<KeyValuePair<string, List<string>>>? entries;
+
     public HttpUriBuilder? Uri { get; } = uri;
 
-    public List<KeyValuePair<string, string>> Query { get; } = [];
+    public List<KeyValuePair<string, string>>? Query { get; private set; }
 
-    public List<KeyValuePair<string, string>> QueryParams { get; } = [];
+    public List<KeyValuePair<string, string>>? QueryParams { get; private set; }
 
-    public List<KeyValuePair<HttpMemberPlan, string>> Headers { get; } = [];
+    public List<KeyValuePair<HttpMemberPlan, string>>? Headers { get; private set; }
 
-    public List<KeyValuePair<string, string>> PrefixHeaders { get; } = [];
+    public List<KeyValuePair<string, string>>? PrefixHeaders { get; private set; }
 
     public int? StatusCode { get; set; }
 
     public RestBody Payload { get; set; } = RestBody.None;
 
     // Scratch space for the text forms of the member being written.
-    internal List<string> Texts { get; } = [];
+    internal List<string> Texts => texts ??= [];
 
-    internal List<KeyValuePair<string, List<string>>> Entries { get; } = [];
+    internal List<KeyValuePair<string, List<string>>> Entries => entries ??= [];
+
+    public void AddQuery(string name, string value) => (Query ??= []).Add(new(name, value));
+
+    public void AddQueryParam(string name, string value) =>
+        (QueryParams ??= []).Add(new(name, value));
+
+    public void AddHeader(HttpMemberPlan header, string value) =>
+        (Headers ??= []).Add(new(header, value));
+
+    public void AddPrefixHeader(string name, string value) =>
+        (PrefixHeaders ??= []).Add(new(name, value));
 }
 
 internal static class HttpBindingPlans

@@ -3,23 +3,16 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Cbor;
 
-internal sealed class CompiledCborProjectionCodec<T, TBuilder> : IProjectionCodec<T, TBuilder>
+internal sealed class CompiledCborProjectionCodec<T, TBuilder>(
+    StructProjection<T, TBuilder> projection,
+    bool materializeTopLevelDefaults
+) : IProjectionCodec<T, TBuilder>
 {
-    private readonly StructSchema<T, TBuilder> source;
-    private readonly CborShapePlan plan;
-    private readonly bool materializeTopLevelDefaults;
-
-    public CompiledCborProjectionCodec(
-        StructProjection<T, TBuilder> projection,
-        bool materializeTopLevelDefaults
-    )
-    {
-        source = projection.Source;
-        this.materializeTopLevelDefaults = materializeTopLevelDefaults;
-        plan = new CborPlans()
-            .ForTarget((Schema)projection.Source)!
-            .Project(name => projection.GetMember(name) is not null);
-    }
+    private readonly StructSchema<T, TBuilder> source = projection.Source;
+    private readonly CborShapePlan plan = new CborPlans()
+        .ForTarget(projection.Source)!
+        .Project(name => projection.GetMember(name) is not null);
+    private readonly bool materializeTopLevelDefaults = materializeTopLevelDefaults;
 
     public byte[] Serialize(T value)
     {

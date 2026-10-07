@@ -73,18 +73,24 @@ public static class RestProtocol
         var parts = new HttpMessageParts(uri);
         bound.Write(input, parts);
 
-        foreach (var query in parts.Query)
+        if (parts.Query is { } queries)
         {
-            uri.AppendQuery(query.Key, query.Value);
+            foreach (var query in queries)
+            {
+                uri.AppendQuery(query.Key, query.Value);
+            }
         }
 
         // Explicitly bound @httpQuery members take precedence over entries in an @httpQueryParams
         // map.
-        foreach (var query in parts.QueryParams)
+        if (parts.QueryParams is { } queryParameters)
         {
-            if (!bound.BoundQueryNames.Contains(query.Key))
+            foreach (var query in queryParameters)
             {
-                uri.AppendQuery(query.Key, query.Value);
+                if (!bound.BoundQueryNames.Contains(query.Key))
+                {
+                    uri.AppendQuery(query.Key, query.Value);
+                }
             }
         }
 
@@ -92,25 +98,31 @@ public static class RestProtocol
         request.Headers["Accept"] = [binding.AcceptType];
         request.ExpectStreamingResponse = binding.OutputHasStreamingPayload;
 
-        foreach (var (header, value) in parts.Headers)
+        if (parts.Headers is { } boundHeaders)
         {
-            switch (header.Slot)
+            foreach (var (header, value) in boundHeaders)
             {
-                case HeaderSlot.ContentType:
-                    request.ContentType = value;
-                    break;
-                case HeaderSlot.ContentHeaders:
-                    request.ContentHeaders[header.Name] = [value];
-                    break;
-                default:
-                    request.Headers[header.Name] = [value];
-                    break;
+                switch (header.Slot)
+                {
+                    case HeaderSlot.ContentType:
+                        request.ContentType = value;
+                        break;
+                    case HeaderSlot.ContentHeaders:
+                        request.ContentHeaders[header.Name] = [value];
+                        break;
+                    default:
+                        request.Headers[header.Name] = [value];
+                        break;
+                }
             }
         }
 
-        foreach (var (name, value) in parts.PrefixHeaders)
+        if (parts.PrefixHeaders is { } boundPrefixHeaders)
         {
-            request.Headers.TryAdd(name, [value]);
+            foreach (var (name, value) in boundPrefixHeaders)
+            {
+                request.Headers.TryAdd(name, [value]);
+            }
         }
 
         if (bound.Payload is not null)
@@ -276,14 +288,20 @@ public static class RestProtocol
     {
         var parts = new HttpMessageParts(uri: null);
         bound.Write(value, parts);
-        foreach (var (header, text) in parts.Headers)
+        if (parts.Headers is { } boundHeaders)
         {
-            headers[header.Name] = [text];
+            foreach (var (header, text) in boundHeaders)
+            {
+                headers[header.Name] = [text];
+            }
         }
 
-        foreach (var (name, text) in parts.PrefixHeaders)
+        if (parts.PrefixHeaders is { } boundPrefixHeaders)
         {
-            headers.TryAdd(name, [text]);
+            foreach (var (name, text) in boundPrefixHeaders)
+            {
+                headers.TryAdd(name, [text]);
+            }
         }
 
         return parts;
