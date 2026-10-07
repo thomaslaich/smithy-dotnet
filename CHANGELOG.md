@@ -11,6 +11,42 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: generated schema classes and shape serializers.** Each structure, union,
+  list, and map schema is now a generated class deriving from `StructSchema`,
+  `UnionSchema`, `ListSchema`, or `MapSchema`, in its own `Person.Schema.g.cs` file
+  beside `Person.g.cs`. Operation schemas live in `GetPerson.Schema.g.cs`. Generated code
+  reads and writes each member with one direct call on an `IShapeSerializer` or
+  `IShapeDeserializer`. Codecs, the validator, HTTP bindings, and AWS Query forms
+  consume values through those interfaces. Regenerate models with the matching codegen
+  version when upgrading runtime packages. (#227)
+- **BREAKING: removed schema visitors and fluent builders.** Removed `ISchemaVisitor`,
+  `PartialSchemaVisitor`, `IMemberVisitor`, `IUnionCaseVisitor`, the typed member
+  interfaces (`IMemberSchema`, `ITypedTargetMemberSchema<TValue>`,
+  `IBuilderMemberSchema`), `IStructValueSerializer`, `DocumentDeserializer`,
+  `Schemas.Structure`, and `Schemas.Union`. A hand-written schema derives from the
+  schema base classes; see the hand-written schemas in `NSmithy.Core` for examples.
+  Members and union cases are `MemberSchema`. A custom value consumer implements
+  `IShapeSerializer`. `ICodecFactory.FromMember` takes the target schema and the
+  member's traits. (#227)
+- **Typed defaults.** Modeled `@default` values are generated into each builder and
+  each serializer, so no codec reads defaults from traits at runtime. XML and protobuf
+  reads now fill defaults for absent members, as JSON and CBOR reads already did.
+  (#227)
+- **Faster serialization and request handling.** The generated code calls the
+  serializer directly. Server round trips with request bodies are up to 29% faster
+  with up to 36% less allocation, XML serialization is up to 25% faster, JSON
+  serialization about 5% faster, and CBOR serialization allocates up to 31% less.
+  See the benchmark results in `benchmarks/results/`. (#227)
+
+### Fixed
+
+- **Stale generated files.** A shape the model no longer produces, such as a renamed
+  shape, no longer leaves its old generated file behind to collide with the new one.
+  A Smithy CLI run that succeeds without producing any of the previously generated
+  files now fails the build with `NSMITHYGEN`. (#227)
+
 ## [0.10.1]
 
 Maintenance release with updated runtime and tooling dependencies, refreshed
