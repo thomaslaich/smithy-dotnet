@@ -95,7 +95,7 @@ internal readonly struct ValuePath(PathNode? container, string? name = null, int
 }
 
 /// <summary>
-/// Validates a value by serializing it into a <see cref="ValidatingSerializer"/>, whose plan checks
+/// Validates a value by serializing it into a <see cref="ShapeValidator"/>, whose plan checks
 /// each member's constraints as the value is written.
 /// </summary>
 internal sealed class SchemaValidator<T>(Schema<T> schema, ValidatorMemberPlan root)
@@ -113,7 +113,7 @@ internal sealed class SchemaValidator<T>(Schema<T> schema, ValidatorMemberPlan r
     public IReadOnlyList<SmithyValidationError> GetErrors(T value)
     {
         List<SmithyValidationError> errors = [];
-        var serializer = new ValidatingSerializer(root, errors);
+        var serializer = new ShapeValidator(root, errors);
         schema.Write(MemberIndex.Root, value, ref serializer);
         return new ReadOnlyCollection<SmithyValidationError>(errors);
     }

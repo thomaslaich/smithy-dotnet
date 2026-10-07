@@ -8,7 +8,7 @@ namespace NSmithy.Core.Validation;
 /// positioned on that aggregate's plan and path; an aggregate whose plan needs nothing is not
 /// descended into at all.
 /// </summary>
-internal struct ValidatingSerializer : IShapeSerializer
+internal struct ShapeValidator : IShapeSerializer
 {
     // decimal cannot hold the whole double, float or BigInteger range. Magnitudes beyond it are
     // clamped rather than converted, so an out-of-range value compares as out of range instead of
@@ -25,13 +25,13 @@ internal struct ValidatingSerializer : IShapeSerializer
     private int index;
     private string? key;
 
-    public ValidatingSerializer(ValidatorMemberPlan root, List<SmithyValidationError> errors)
+    public ShapeValidator(ValidatorMemberPlan root, List<SmithyValidationError> errors)
     {
         this.root = root;
         this.errors = errors;
     }
 
-    private ValidatingSerializer(
+    private ShapeValidator(
         ValidatorShapePlan container,
         PathNode node,
         List<SmithyValidationError> errors
@@ -212,7 +212,7 @@ internal struct ValidatingSerializer : IShapeSerializer
         var valuePath = PathOf(member);
         if (entry.Shape is { Needs: true } plan)
         {
-            var nested = new ValidatingSerializer(plan, valuePath.ToNode(), errors);
+            var nested = new ShapeValidator(plan, valuePath.ToNode(), errors);
             schema.SerializeMembers(value, ref nested);
         }
     }
@@ -252,7 +252,7 @@ internal struct ValidatingSerializer : IShapeSerializer
 
         if (entry.Shape is { Needs: true } plan)
         {
-            var nested = new ValidatingSerializer(plan, valuePath.ToNode(), errors);
+            var nested = new ShapeValidator(plan, valuePath.ToNode(), errors);
             schema.SerializeElements(value, ref nested);
         }
     }
@@ -274,7 +274,7 @@ internal struct ValidatingSerializer : IShapeSerializer
 
         if (entry.Shape is { Needs: true } plan)
         {
-            var nested = new ValidatingSerializer(plan, valuePath.ToNode(), errors);
+            var nested = new ShapeValidator(plan, valuePath.ToNode(), errors);
             schema.SerializeEntries(value, ref nested);
         }
     }
@@ -285,7 +285,7 @@ internal struct ValidatingSerializer : IShapeSerializer
         var valuePath = PathOf(member);
         if (entry.Shape is { Needs: true } plan)
         {
-            var nested = new ValidatingSerializer(plan, valuePath.ToNode(), errors);
+            var nested = new ShapeValidator(plan, valuePath.ToNode(), errors);
             schema.SerializeCase(value, ref nested);
         }
     }
