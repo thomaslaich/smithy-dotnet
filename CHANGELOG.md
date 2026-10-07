@@ -36,9 +36,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   (#227)
 - **Faster serialization and request handling.** The generated code calls the
   serializer directly. Server round trips with request bodies are up to 29% faster
-  with up to 36% less allocation, XML serialization is up to 25% faster, JSON
-  serialization about 5% faster, and CBOR serialization allocates up to 31% less.
-  See the benchmark results in `benchmarks/results/`. (#227)
+  with up to 36% less allocation, XML serialization is up to 25% faster, protobuf
+  serialization up to 11% faster with up to 35% less allocation, CBOR serialization
+  allocates up to 31% less, and JSON serialization is about 5% faster. JSON and
+  protobuf deserialization and gRPC round trips perform as before. See the benchmark
+  results in `benchmarks/results/`. (#227)
 
 ### Fixed
 
