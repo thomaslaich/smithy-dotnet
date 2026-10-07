@@ -91,8 +91,8 @@ final class ErrorGeneratorTest {
         generated.contains(
             ": StructSchema<global::Example.Example.Weather.ValidationError, Builder>("),
         generated);
-    assertTrue(generated.contains("value.Message, ref serializer);"), generated);
-    assertTrue(generated.contains("builder.Message = Target"), generated);
+    assertTrue(generated.contains("serializer.WriteString("), generated);
+    assertTrue(generated.contains("builder.Message = deserializer.ReadString();"), generated);
   }
 
   private String renderError(String shapeId) throws Exception {

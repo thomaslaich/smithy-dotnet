@@ -58,7 +58,9 @@ final class TypeNameGeneratorTest {
     new StructureGenerator(context, writer, shape).run();
     SchemaGenerator.writeStructureSchema(writer, context, shape, List.copyOf(shape.members()));
     String generated = writer.toString();
-    assertTrue(generated.contains("Schema<DeleteBookInput> Schema"), generated);
+    assertTrue(generated.contains("StructSchema<DeleteBookInput, Builder> Schema"), generated);
+    assertTrue(
+        generated.contains("serializer.WriteStruct(0, value0, BookSchema.Schema);"), generated);
     assertTrue(generated.contains("Book? Item"), generated);
     assertTrue(generated.contains("BookSchema.Schema!"), generated);
     assertTrue(generated.contains("global::Example.Other.Book? Other"), generated);

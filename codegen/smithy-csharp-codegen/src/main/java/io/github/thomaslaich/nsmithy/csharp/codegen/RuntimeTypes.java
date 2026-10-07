@@ -37,6 +37,7 @@ public final class RuntimeTypes {
   public static final Symbol I_READ_ONLY_DICTIONARY =
       type("System.Collections.Generic.IReadOnlyDictionary");
   public static final Symbol I_READ_ONLY_LIST = type("System.Collections.Generic.IReadOnlyList");
+  public static final Symbol KEY_VALUE_PAIR = type("System.Collections.Generic.KeyValuePair");
   public static final Symbol LIST = type("System.Collections.Generic.List");
   public static final Symbol MEMORY_STREAM = type("System.IO.MemoryStream");
   public static final Symbol NOT_SUPPORTED_EXCEPTION = type("System.NotSupportedException");
@@ -51,6 +52,9 @@ public final class RuntimeTypes {
   public static final Symbol DOCUMENT = type("NSmithy.Core.Document");
   public static final Symbol I_SMITHY_RETRYABLE_ERROR = type("NSmithy.Core.ISmithyRetryableError");
   public static final Symbol I_STRING_ENUM_VALUE = type("NSmithy.Core.Serde.IStringEnumValue");
+  public static final Symbol LIST_SCHEMA = type("NSmithy.Core.Serde.ListSchema");
+  public static final Symbol MAP_SCHEMA = type("NSmithy.Core.Serde.MapSchema");
+  public static final Symbol SHAPE_KIND = type("NSmithy.Core.ShapeKind");
   public static final Symbol STRUCT_SCHEMA = type("NSmithy.Core.Serde.StructSchema");
   public static final Symbol UNION_SCHEMA = type("NSmithy.Core.Serde.UnionSchema");
   public static final Symbol MISSING_REQUIRED_MEMBER_EXCEPTION =

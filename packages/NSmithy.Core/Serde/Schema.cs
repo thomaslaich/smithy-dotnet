@@ -852,45 +852,28 @@ public interface IUnionSchema<T> : IUnionSchema
 }
 
 /// <summary>
-/// A list or set. The C# collection is whatever the model's consumer wants it to be; the schema
-/// carries the four operations a codec needs to read one and enumerate one.
+/// A list or set. The C# collection is whatever the model's consumer wants it to be. Code
+/// generation derives one class per list, which reads and writes the elements directly; this base
+/// carries what every list has in common.
 /// </summary>
-public sealed class CollectionSchema<TCollection, TElement, TBuilder>
+public abstract class ListSchema<TCollection, TElement, TBuilder>
     : Schema<TCollection>,
         IListSchema<TCollection, TElement, TBuilder>
 {
-    private readonly Func<TCollection, IEnumerable<TElement>> getElements;
-    private readonly Func<TBuilder> createBuilder;
-    private readonly Action<TBuilder, TElement> add;
-    private readonly Func<TBuilder, TCollection> build;
-
-    internal CollectionSchema(
+    protected ListSchema(
         ShapeId id,
         ShapeKind kind,
         Schema<TElement> element,
-        Func<TCollection, IEnumerable<TElement>> getElements,
-        Func<TBuilder> createBuilder,
-        Action<TBuilder, TElement> add,
-        Func<TBuilder, TCollection> build,
         IEnumerable<Trait>? traits = null,
         IEnumerable<Trait>? elementTraits = null
     )
         : base(id, kind, traits)
     {
         ArgumentNullException.ThrowIfNull(element);
-        ArgumentNullException.ThrowIfNull(getElements);
-        ArgumentNullException.ThrowIfNull(createBuilder);
-        ArgumentNullException.ThrowIfNull(add);
-        ArgumentNullException.ThrowIfNull(build);
-
         ElementSchema = element;
         ElementMember = new MemberSchema("member", element, isRequired: true, elementTraits).BindTo(
             id
         );
-        this.getElements = getElements;
-        this.createBuilder = createBuilder;
-        this.add = add;
-        this.build = build;
     }
 
     // An element is always present when the collection holds it; there is no absent case for a
@@ -901,13 +884,13 @@ public sealed class CollectionSchema<TCollection, TElement, TBuilder>
 
     public Schema Element => ElementSchema;
 
-    public IEnumerable<TElement> GetElements(TCollection value) => getElements(value);
+    public abstract IEnumerable<TElement> GetElements(TCollection value);
 
-    public TBuilder CreateTypedBuilder() => createBuilder();
+    public abstract TBuilder CreateTypedBuilder();
 
-    public void Add(TBuilder builder, TElement value) => add(builder, value);
+    public abstract void Add(TBuilder builder, TElement value);
 
-    public TCollection Build(TBuilder builder) => build(builder);
+    public abstract TCollection Build(TBuilder builder);
 
     public override void Write<TSerializer>(
         int member,
@@ -928,8 +911,44 @@ public sealed class CollectionSchema<TCollection, TElement, TBuilder>
     public override TCollection Read<TDeserializer>(ref TDeserializer deserializer) =>
         deserializer.ReadList(this);
 
-    public void SerializeElements<TSerializer>(TCollection value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct
+    public abstract void SerializeElements<TSerializer>(
+        TCollection value,
+        ref TSerializer serializer
+    )
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
+
+    public abstract void DeserializeElement<TDeserializer>(
+        TBuilder builder,
+        ref TDeserializer deserializer
+    )
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
+}
+
+/// <summary>A list whose elements go through its element schema, as a hand-written schema builds one.</summary>
+internal sealed class DelegateListSchema<TCollection, TElement, TBuilder>(
+    ShapeId id,
+    ShapeKind kind,
+    Schema<TElement> element,
+    Func<TCollection, IEnumerable<TElement>> getElements,
+    Func<TBuilder> createBuilder,
+    Action<TBuilder, TElement> add,
+    Func<TBuilder, TCollection> build,
+    IEnumerable<Trait>? traits = null,
+    IEnumerable<Trait>? elementTraits = null
+) : ListSchema<TCollection, TElement, TBuilder>(id, kind, element, traits, elementTraits)
+{
+    public override IEnumerable<TElement> GetElements(TCollection value) => getElements(value);
+
+    public override TBuilder CreateTypedBuilder() => createBuilder();
+
+    public override void Add(TBuilder builder, TElement value) => add(builder, value);
+
+    public override TCollection Build(TBuilder builder) => build(builder);
+
+    public override void SerializeElements<TSerializer>(
+        TCollection value,
+        ref TSerializer serializer
+    )
     {
         // Indexed when possible: foreach over an IEnumerable boxes the collection's enumerator,
         // an allocation per list written.
@@ -950,27 +969,23 @@ public sealed class CollectionSchema<TCollection, TElement, TBuilder>
         }
     }
 
-    public void DeserializeElement<TDeserializer>(TBuilder builder, ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer, allows ref struct =>
-        add(builder, ElementSchema.Read(ref deserializer));
+    public override void DeserializeElement<TDeserializer>(
+        TBuilder builder,
+        ref TDeserializer deserializer
+    ) => add(builder, ElementSchema.Read(ref deserializer));
 }
 
-public sealed class MapSchema<TDictionary, TValue, TBuilder>
+/// <summary>
+/// A map. Code generation derives one class per map, which reads and writes the entries directly;
+/// this base carries what every map has in common.
+/// </summary>
+public abstract class MapSchema<TDictionary, TValue, TBuilder>
     : Schema<TDictionary>,
         IMapSchema<TDictionary, TValue, TBuilder>
 {
-    private readonly Func<TDictionary, IEnumerable<KeyValuePair<string, TValue>>> getEntries;
-    private readonly Func<TBuilder> createBuilder;
-    private readonly Action<TBuilder, string, TValue> add;
-    private readonly Func<TBuilder, TDictionary> build;
-
-    internal MapSchema(
+    protected MapSchema(
         ShapeId id,
         Schema<TValue> value,
-        Func<TDictionary, IEnumerable<KeyValuePair<string, TValue>>> getEntries,
-        Func<TBuilder> createBuilder,
-        Action<TBuilder, string, TValue> add,
-        Func<TBuilder, TDictionary> build,
         IEnumerable<Trait>? traits = null,
         IEnumerable<Trait>? keyTraits = null,
         IEnumerable<Trait>? valueTraits = null,
@@ -979,11 +994,6 @@ public sealed class MapSchema<TDictionary, TValue, TBuilder>
         : base(id, ShapeKind.Map, traits)
     {
         ArgumentNullException.ThrowIfNull(value);
-        ArgumentNullException.ThrowIfNull(getEntries);
-        ArgumentNullException.ThrowIfNull(createBuilder);
-        ArgumentNullException.ThrowIfNull(add);
-        ArgumentNullException.ThrowIfNull(build);
-
         KeyMember = new MemberSchema(
             "key",
             key ?? Schemas.String,
@@ -992,10 +1002,6 @@ public sealed class MapSchema<TDictionary, TValue, TBuilder>
         ).BindTo(id);
         ValueMember = new MemberSchema("value", value, isRequired: true, valueTraits).BindTo(id);
         ValueSchema = value;
-        this.getEntries = getEntries;
-        this.createBuilder = createBuilder;
-        this.add = add;
-        this.build = build;
     }
 
     public IMemberSchema KeyMember { get; }
@@ -1006,14 +1012,13 @@ public sealed class MapSchema<TDictionary, TValue, TBuilder>
 
     public Schema Value => ValueSchema;
 
-    public IEnumerable<KeyValuePair<string, TValue>> GetEntries(TDictionary value) =>
-        getEntries(value);
+    public abstract IEnumerable<KeyValuePair<string, TValue>> GetEntries(TDictionary value);
 
-    public TBuilder CreateTypedBuilder() => createBuilder();
+    public abstract TBuilder CreateTypedBuilder();
 
-    public void Add(TBuilder builder, string key, TValue value) => add(builder, key, value);
+    public abstract void Add(TBuilder builder, string key, TValue value);
 
-    public TDictionary Build(TBuilder builder) => build(builder);
+    public abstract TDictionary Build(TBuilder builder);
 
     public override void Write<TSerializer>(
         int member,
@@ -1034,8 +1039,48 @@ public sealed class MapSchema<TDictionary, TValue, TBuilder>
     public override TDictionary Read<TDeserializer>(ref TDeserializer deserializer) =>
         deserializer.ReadMap(this);
 
-    public void SerializeEntries<TSerializer>(TDictionary value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct
+    public abstract void SerializeEntries<TSerializer>(
+        TDictionary value,
+        ref TSerializer serializer
+    )
+        where TSerializer : struct, IShapeSerializer, allows ref struct;
+
+    public abstract void DeserializeEntry<TDeserializer>(
+        TBuilder builder,
+        string key,
+        ref TDeserializer deserializer
+    )
+        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
+}
+
+/// <summary>A map whose values go through its value schema, as a hand-written schema builds one.</summary>
+internal sealed class DelegateMapSchema<TDictionary, TValue, TBuilder>(
+    ShapeId id,
+    Schema<TValue> value,
+    Func<TDictionary, IEnumerable<KeyValuePair<string, TValue>>> getEntries,
+    Func<TBuilder> createBuilder,
+    Action<TBuilder, string, TValue> add,
+    Func<TBuilder, TDictionary> build,
+    IEnumerable<Trait>? traits = null,
+    IEnumerable<Trait>? keyTraits = null,
+    IEnumerable<Trait>? valueTraits = null,
+    Schema? key = null
+) : MapSchema<TDictionary, TValue, TBuilder>(id, value, traits, keyTraits, valueTraits, key)
+{
+    public override IEnumerable<KeyValuePair<string, TValue>> GetEntries(TDictionary value) =>
+        getEntries(value);
+
+    public override TBuilder CreateTypedBuilder() => createBuilder();
+
+    public override void Add(TBuilder builder, string key, TValue value) =>
+        add(builder, key, value);
+
+    public override TDictionary Build(TBuilder builder) => build(builder);
+
+    public override void SerializeEntries<TSerializer>(
+        TDictionary value,
+        ref TSerializer serializer
+    )
     {
         foreach (var (key, entry) in getEntries(value))
         {
@@ -1044,13 +1089,11 @@ public sealed class MapSchema<TDictionary, TValue, TBuilder>
         }
     }
 
-    public void DeserializeEntry<TDeserializer>(
+    public override void DeserializeEntry<TDeserializer>(
         TBuilder builder,
         string key,
         ref TDeserializer deserializer
-    )
-        where TDeserializer : struct, IShapeDeserializer, allows ref struct =>
-        add(builder, key, ValueSchema.Read(ref deserializer));
+    ) => add(builder, key, ValueSchema.Read(ref deserializer));
 }
 
 /// <summary>
@@ -1476,17 +1519,13 @@ public static class Schemas
         where T : struct, Enum => new(id, values, traits);
 
     /// <summary>A list read as <see cref="IReadOnlyList{T}"/>; the form a hand-written schema wants.</summary>
-    public static CollectionSchema<
-        IReadOnlyList<TElement>,
-        TElement,
-        List<TElement>
-    > List<TElement>(
+    public static ListSchema<IReadOnlyList<TElement>, TElement, List<TElement>> List<TElement>(
         ShapeId id,
         Schema<TElement> element,
         IEnumerable<Trait>? traits = null,
         IEnumerable<Trait>? elementTraits = null
     ) =>
-        new(
+        new DelegateListSchema<IReadOnlyList<TElement>, TElement, List<TElement>>(
             id,
             ShapeKind.List,
             element,
@@ -1498,11 +1537,7 @@ public static class Schemas
             elementTraits
         );
 
-    public static CollectionSchema<TCollection, TElement, TBuilder> List<
-        TCollection,
-        TElement,
-        TBuilder
-    >(
+    public static ListSchema<TCollection, TElement, TBuilder> List<TCollection, TElement, TBuilder>(
         ShapeId id,
         Schema<TElement> element,
         Func<TCollection, IEnumerable<TElement>> getElements,
@@ -1512,7 +1547,7 @@ public static class Schemas
         IEnumerable<Trait>? traits = null,
         IEnumerable<Trait>? elementTraits = null
     ) =>
-        new(
+        new DelegateListSchema<TCollection, TElement, TBuilder>(
             id,
             ShapeKind.List,
             element,
@@ -1524,17 +1559,13 @@ public static class Schemas
             elementTraits
         );
 
-    public static CollectionSchema<
-        IReadOnlySet<TElement>,
-        TElement,
-        HashSet<TElement>
-    > Set<TElement>(
+    public static ListSchema<IReadOnlySet<TElement>, TElement, HashSet<TElement>> Set<TElement>(
         ShapeId id,
         Schema<TElement> element,
         IEnumerable<Trait>? traits = null,
         IEnumerable<Trait>? elementTraits = null
     ) =>
-        new(
+        new DelegateListSchema<IReadOnlySet<TElement>, TElement, HashSet<TElement>>(
             id,
             ShapeKind.Set,
             element,
@@ -1546,11 +1577,7 @@ public static class Schemas
             elementTraits
         );
 
-    public static CollectionSchema<TCollection, TElement, TBuilder> Set<
-        TCollection,
-        TElement,
-        TBuilder
-    >(
+    public static ListSchema<TCollection, TElement, TBuilder> Set<TCollection, TElement, TBuilder>(
         ShapeId id,
         Schema<TElement> element,
         Func<TCollection, IEnumerable<TElement>> getElements,
@@ -1560,7 +1587,7 @@ public static class Schemas
         IEnumerable<Trait>? traits = null,
         IEnumerable<Trait>? elementTraits = null
     ) =>
-        new(
+        new DelegateListSchema<TCollection, TElement, TBuilder>(
             id,
             ShapeKind.Set,
             element,
@@ -1589,7 +1616,11 @@ public static class Schemas
         IEnumerable<Trait>? valueTraits = null,
         Schema? key = null
     ) =>
-        new(
+        new DelegateMapSchema<
+            IReadOnlyDictionary<string, TValue>,
+            TValue,
+            Dictionary<string, TValue>
+        >(
             id,
             value,
             static value => value,
@@ -1613,7 +1644,19 @@ public static class Schemas
         IEnumerable<Trait>? keyTraits = null,
         IEnumerable<Trait>? valueTraits = null,
         Schema? key = null
-    ) => new(id, value, getEntries, createBuilder, add, build, traits, keyTraits, valueTraits, key);
+    ) =>
+        new DelegateMapSchema<TDictionary, TValue, TBuilder>(
+            id,
+            value,
+            getEntries,
+            createBuilder,
+            add,
+            build,
+            traits,
+            keyTraits,
+            valueTraits,
+            key
+        );
 
     public static OperationSchema<TInput, TOutput> Operation<TInput, TOutput>(
         ShapeId id,
