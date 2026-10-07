@@ -10,7 +10,7 @@ namespace NSmithy.Codecs.Json;
 /// Writes JSON for one aggregate, or for the top-level value. A nested aggregate gets its own
 /// serializer positioned on that aggregate's plan.
 /// </summary>
-internal struct JsonShapeSerializer : IShapeSerializer
+internal readonly struct JsonShapeSerializer : IShapeSerializer
 {
     private readonly Utf8JsonWriter writer;
     private readonly JsonShapePlan? container;
@@ -62,14 +62,14 @@ internal struct JsonShapeSerializer : IShapeSerializer
         writer.WriteEndObject();
     }
 
-    private readonly JsonMemberPlan Entry(int member) =>
+    private JsonMemberPlan Entry(int member) =>
         member == MemberIndex.Root ? root! : container!.Members[member];
 
     /// <summary>
     /// Positions the writer for a value of <paramref name="member"/>: its property name inside a
     /// structure, its wrapping object inside a closed union. False means the member is not written.
     /// </summary>
-    private readonly bool Begin(int member)
+    private bool Begin(int member)
     {
         if (container is null)
         {
@@ -112,7 +112,7 @@ internal struct JsonShapeSerializer : IShapeSerializer
         }
     }
 
-    private readonly void End()
+    private void End()
     {
         if (container?.Kind == ShapeKind.Union)
         {
@@ -120,7 +120,7 @@ internal struct JsonShapeSerializer : IShapeSerializer
         }
     }
 
-    public readonly bool WritesDefault(int member) =>
+    public bool WritesDefault(int member) =>
         materializeDefaults
         && container?.Kind == ShapeKind.Structure
         && container.IsIncluded(member)
@@ -287,7 +287,7 @@ internal struct JsonShapeSerializer : IShapeSerializer
 
     // A member a projection excludes is skipped like any other; only one that would be written is
     // a stream this codec cannot encode.
-    public readonly void WriteStream(int member, Stream value)
+    public void WriteStream(int member, Stream value)
     {
         if (!IsExcluded(member))
         {
@@ -295,7 +295,7 @@ internal struct JsonShapeSerializer : IShapeSerializer
         }
     }
 
-    public readonly void WriteEventStream<TEvent>(
+    public void WriteEventStream<TEvent>(
         int member,
         IAsyncEnumerable<TEvent> events,
         Schema<TEvent> eventSchema
@@ -307,7 +307,7 @@ internal struct JsonShapeSerializer : IShapeSerializer
         }
     }
 
-    private readonly bool IsExcluded(int member) =>
+    private bool IsExcluded(int member) =>
         container?.Kind == ShapeKind.Structure && !container.IsIncluded(member);
 
     public void WriteStruct<T>(int member, T value, IStructSchema<T> schema)

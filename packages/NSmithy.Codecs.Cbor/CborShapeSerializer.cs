@@ -9,7 +9,7 @@ namespace NSmithy.Codecs.Cbor;
 /// Writes CBOR for one aggregate, or for the top-level value. A nested aggregate gets its own
 /// serializer positioned on that aggregate's plan.
 /// </summary>
-internal struct CborShapeSerializer : IShapeSerializer
+internal readonly struct CborShapeSerializer : IShapeSerializer
 {
     private readonly CborWriter writer;
     private readonly CborShapePlan? container;
@@ -50,14 +50,14 @@ internal struct CborShapeSerializer : IShapeSerializer
         schema.SerializeMembers(value, ref serializer);
     }
 
-    private readonly CborMemberPlan Entry(int member) =>
+    private CborMemberPlan Entry(int member) =>
         member == MemberIndex.Root ? root! : container!.Members[member];
 
     /// <summary>
     /// Positions the writer for a value of <paramref name="member"/>: its key inside a structure,
     /// its single-entry map inside a union. False means the member is not written.
     /// </summary>
-    private readonly bool Begin(int member)
+    private bool Begin(int member)
     {
         switch (container?.Kind)
         {
@@ -78,7 +78,7 @@ internal struct CborShapeSerializer : IShapeSerializer
         }
     }
 
-    private readonly void End()
+    private void End()
     {
         if (container?.Kind == ShapeKind.Union)
         {
@@ -86,7 +86,7 @@ internal struct CborShapeSerializer : IShapeSerializer
         }
     }
 
-    public readonly bool WritesDefault(int member) =>
+    public bool WritesDefault(int member) =>
         materializeDefaults
         && container?.Kind == ShapeKind.Structure
         && container.IsIncluded(member)
@@ -204,7 +204,7 @@ internal struct CborShapeSerializer : IShapeSerializer
         }
     }
 
-    public readonly void WriteDocument(int member, Document value) =>
+    public void WriteDocument(int member, Document value) =>
         throw new NotSupportedException("Smithy Document values are not supported by rpcv2Cbor.");
 
     public void WriteStringEnum(int member, string value) => WriteString(member, value);
@@ -213,7 +213,7 @@ internal struct CborShapeSerializer : IShapeSerializer
 
     // A member a projection excludes is skipped like any other; only one that would be written is
     // a stream this codec cannot encode.
-    public readonly void WriteStream(int member, Stream value)
+    public void WriteStream(int member, Stream value)
     {
         if (!IsExcluded(member))
         {
@@ -221,7 +221,7 @@ internal struct CborShapeSerializer : IShapeSerializer
         }
     }
 
-    public readonly void WriteEventStream<TEvent>(
+    public void WriteEventStream<TEvent>(
         int member,
         IAsyncEnumerable<TEvent> events,
         Schema<TEvent> eventSchema
@@ -233,7 +233,7 @@ internal struct CborShapeSerializer : IShapeSerializer
         }
     }
 
-    private readonly bool IsExcluded(int member) =>
+    private bool IsExcluded(int member) =>
         container?.Kind == ShapeKind.Structure && !container.IsIncluded(member);
 
     public void WriteStruct<T>(int member, T value, IStructSchema<T> schema)

@@ -98,7 +98,7 @@ internal struct UniqueElements : IShapeSerializer
 /// equal: every scalar is tagged and length-prefixed where it could be ambiguous, and a map's
 /// entries are sorted so insertion order does not matter.
 /// </summary>
-internal struct CanonicalSerializer(StringBuilder key) : IShapeSerializer
+internal readonly struct CanonicalSerializer(StringBuilder key) : IShapeSerializer
 {
     // Where each entry of the map being written begins, so the entries can be sorted afterwards.
     private readonly List<int>? entryStarts;
@@ -109,47 +109,46 @@ internal struct CanonicalSerializer(StringBuilder key) : IShapeSerializer
         this.entryStarts = entryStarts;
     }
 
-    private readonly StringBuilder Begin(int member, char tag) =>
+    private StringBuilder Begin(int member, char tag) =>
         key.Append('#')
             .Append(member.ToString(CultureInfo.InvariantCulture))
             .Append('=')
             .Append(tag);
 
-    private readonly void Text(int member, char tag, string value) =>
+    private void Text(int member, char tag, string value) =>
         Begin(member, tag)
             .Append(value.Length.ToString(CultureInfo.InvariantCulture))
             .Append(':')
             .Append(value)
             .Append(';');
 
-    private readonly void Number(int member, char tag, IFormattable value, string? format = null) =>
+    private void Number(int member, char tag, IFormattable value, string? format = null) =>
         Begin(member, tag).Append(value.ToString(format, CultureInfo.InvariantCulture)).Append(';');
 
-    public readonly bool WritesDefault(int member) => false;
+    public bool WritesDefault(int member) => false;
 
-    public readonly void WriteNull(int member) => Begin(member, 'n').Append(';');
+    public void WriteNull(int member) => Begin(member, 'n').Append(';');
 
-    public readonly void WriteBoolean(int member, bool value) =>
+    public void WriteBoolean(int member, bool value) =>
         Begin(member, 'b').Append(value ? '1' : '0').Append(';');
 
-    public readonly void WriteByte(int member, sbyte value) => Number(member, 'i', value);
+    public void WriteByte(int member, sbyte value) => Number(member, 'i', value);
 
-    public readonly void WriteShort(int member, short value) => Number(member, 'i', value);
+    public void WriteShort(int member, short value) => Number(member, 'i', value);
 
-    public readonly void WriteInteger(int member, int value) => Number(member, 'i', value);
+    public void WriteInteger(int member, int value) => Number(member, 'i', value);
 
-    public readonly void WriteLong(int member, long value) => Number(member, 'i', value);
+    public void WriteLong(int member, long value) => Number(member, 'i', value);
 
-    public readonly void WriteFloat(int member, float value) => Number(member, 'f', value, "R");
+    public void WriteFloat(int member, float value) => Number(member, 'f', value, "R");
 
-    public readonly void WriteDouble(int member, double value) => Number(member, 'f', value, "R");
+    public void WriteDouble(int member, double value) => Number(member, 'f', value, "R");
 
-    public readonly void WriteBigInteger(int member, BigInteger value) =>
-        Number(member, 'i', value);
+    public void WriteBigInteger(int member, BigInteger value) => Number(member, 'i', value);
 
-    public readonly void WriteBigDecimal(int member, decimal value) => Number(member, 'm', value);
+    public void WriteBigDecimal(int member, decimal value) => Number(member, 'm', value);
 
-    public readonly void WriteString(int member, string value)
+    public void WriteString(int member, string value)
     {
         // A map entry begins with its key.
         if (entryStarts is not null && member == 0)
@@ -160,33 +159,33 @@ internal struct CanonicalSerializer(StringBuilder key) : IShapeSerializer
         Text(member, 's', value);
     }
 
-    public readonly void WriteBlob(int member, byte[] value) =>
+    public void WriteBlob(int member, byte[] value) =>
         Text(member, 'x', Convert.ToBase64String(value));
 
-    public readonly void WriteTimestamp(int member, DateTimeOffset value) =>
+    public void WriteTimestamp(int member, DateTimeOffset value) =>
         Number(member, 't', value.UtcTicks);
 
-    public readonly void WriteDocument(int member, Document value)
+    public void WriteDocument(int member, Document value)
     {
         Begin(member, 'j');
         AppendDocument(key, value);
         key.Append(';');
     }
 
-    public readonly void WriteStringEnum(int member, string value) => Text(member, 'e', value);
+    public void WriteStringEnum(int member, string value) => Text(member, 'e', value);
 
-    public readonly void WriteIntEnum(int member, int value) => Number(member, 'e', value);
+    public void WriteIntEnum(int member, int value) => Number(member, 'e', value);
 
-    public readonly void WriteStream(int member, Stream value) =>
+    public void WriteStream(int member, Stream value) =>
         throw new NotSupportedException("A streaming blob has no value to compare.");
 
-    public readonly void WriteEventStream<TEvent>(
+    public void WriteEventStream<TEvent>(
         int member,
         IAsyncEnumerable<TEvent> events,
         Schema<TEvent> eventSchema
     ) => throw new NotSupportedException("An event stream has no value to compare.");
 
-    public readonly void WriteStruct<T>(int member, T value, IStructSchema<T> schema)
+    public void WriteStruct<T>(int member, T value, IStructSchema<T> schema)
     {
         Begin(member, '{');
         var nested = new CanonicalSerializer(key);
@@ -194,7 +193,7 @@ internal struct CanonicalSerializer(StringBuilder key) : IShapeSerializer
         key.Append('}');
     }
 
-    public readonly void WriteList<TCollection, TElement>(
+    public void WriteList<TCollection, TElement>(
         int member,
         TCollection value,
         IListSchema<TCollection, TElement> schema
@@ -206,7 +205,7 @@ internal struct CanonicalSerializer(StringBuilder key) : IShapeSerializer
         key.Append(']');
     }
 
-    public readonly void WriteMap<TDictionary, TValue>(
+    public void WriteMap<TDictionary, TValue>(
         int member,
         TDictionary value,
         IMapSchema<TDictionary, TValue> schema
@@ -236,7 +235,7 @@ internal struct CanonicalSerializer(StringBuilder key) : IShapeSerializer
         key.Append(')');
     }
 
-    public readonly void WriteUnion<T>(int member, T value, UnionSchema<T> schema)
+    public void WriteUnion<T>(int member, T value, UnionSchema<T> schema)
     {
         Begin(member, '<');
         var nested = new CanonicalSerializer(key);

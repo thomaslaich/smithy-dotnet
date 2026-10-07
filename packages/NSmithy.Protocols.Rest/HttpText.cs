@@ -11,7 +11,7 @@ namespace NSmithy.Protocols.Rest;
 /// per list element, and one key with its values per map entry. Null elements and values are not
 /// written.
 /// </summary>
-internal struct HttpTextSerializer : IShapeSerializer
+internal readonly struct HttpTextSerializer : IShapeSerializer
 {
     private readonly HttpTextFormat format;
     private readonly List<string> texts;
@@ -33,39 +33,37 @@ internal struct HttpTextSerializer : IShapeSerializer
         this.keys = keys;
     }
 
-    private readonly void Add(string text) => (keys ? entries![^1].Value : texts).Add(text);
+    private void Add(string text) => (keys ? entries![^1].Value : texts).Add(text);
 
-    public readonly bool WritesDefault(int member) => false;
+    public bool WritesDefault(int member) => false;
 
-    public readonly void WriteNull(int member) { }
+    public void WriteNull(int member) { }
 
-    public readonly void WriteBoolean(int member, bool value) => Add(value ? "true" : "false");
+    public void WriteBoolean(int member, bool value) => Add(value ? "true" : "false");
 
-    public readonly void WriteByte(int member, sbyte value) =>
+    public void WriteByte(int member, sbyte value) =>
         Add(value.ToString(CultureInfo.InvariantCulture));
 
-    public readonly void WriteShort(int member, short value) =>
+    public void WriteShort(int member, short value) =>
         Add(value.ToString(CultureInfo.InvariantCulture));
 
-    public readonly void WriteInteger(int member, int value) =>
+    public void WriteInteger(int member, int value) =>
         Add(value.ToString(CultureInfo.InvariantCulture));
 
-    public readonly void WriteLong(int member, long value) =>
+    public void WriteLong(int member, long value) =>
         Add(value.ToString(CultureInfo.InvariantCulture));
 
-    public readonly void WriteFloat(int member, float value) =>
-        Add(HttpValueText.FormatFloat(value));
+    public void WriteFloat(int member, float value) => Add(HttpValueText.FormatFloat(value));
 
-    public readonly void WriteDouble(int member, double value) =>
-        Add(HttpValueText.FormatDouble(value));
+    public void WriteDouble(int member, double value) => Add(HttpValueText.FormatDouble(value));
 
-    public readonly void WriteBigInteger(int member, BigInteger value) =>
+    public void WriteBigInteger(int member, BigInteger value) =>
         Add(value.ToString(CultureInfo.InvariantCulture));
 
-    public readonly void WriteBigDecimal(int member, decimal value) =>
+    public void WriteBigDecimal(int member, decimal value) =>
         Add(value.ToString(CultureInfo.InvariantCulture));
 
-    public readonly void WriteString(int member, string value)
+    public void WriteString(int member, string value)
     {
         if (keys && member == 0)
         {
@@ -77,30 +75,30 @@ internal struct HttpTextSerializer : IShapeSerializer
         Add(format.Base64Strings ? Convert.ToBase64String(Encoding.UTF8.GetBytes(value)) : value);
     }
 
-    public readonly void WriteBlob(int member, byte[] value) => Add(Convert.ToBase64String(value));
+    public void WriteBlob(int member, byte[] value) => Add(Convert.ToBase64String(value));
 
-    public readonly void WriteTimestamp(int member, DateTimeOffset value) =>
+    public void WriteTimestamp(int member, DateTimeOffset value) =>
         Add(HttpValueText.FormatTimestamp(format.TimestampFormat, value));
 
-    public readonly void WriteDocument(int member, Document value) => throw Unsupported("document");
+    public void WriteDocument(int member, Document value) => throw Unsupported("document");
 
-    public readonly void WriteStringEnum(int member, string value) => Add(value);
+    public void WriteStringEnum(int member, string value) => Add(value);
 
-    public readonly void WriteIntEnum(int member, int value) =>
+    public void WriteIntEnum(int member, int value) =>
         Add(value.ToString(CultureInfo.InvariantCulture));
 
-    public readonly void WriteStream(int member, Stream value) => throw Unsupported("blob");
+    public void WriteStream(int member, Stream value) => throw Unsupported("blob");
 
-    public readonly void WriteEventStream<TEvent>(
+    public void WriteEventStream<TEvent>(
         int member,
         IAsyncEnumerable<TEvent> events,
         Schema<TEvent> eventSchema
     ) => throw Unsupported("union");
 
-    public readonly void WriteStruct<T>(int member, T value, IStructSchema<T> schema) =>
+    public void WriteStruct<T>(int member, T value, IStructSchema<T> schema) =>
         throw Unsupported("structure");
 
-    public readonly void WriteList<TCollection, TElement>(
+    public void WriteList<TCollection, TElement>(
         int member,
         TCollection value,
         IListSchema<TCollection, TElement> schema
@@ -110,7 +108,7 @@ internal struct HttpTextSerializer : IShapeSerializer
         schema.SerializeElements(value, ref elements);
     }
 
-    public readonly void WriteMap<TDictionary, TValue>(
+    public void WriteMap<TDictionary, TValue>(
         int member,
         TDictionary value,
         IMapSchema<TDictionary, TValue> schema
@@ -125,7 +123,7 @@ internal struct HttpTextSerializer : IShapeSerializer
         schema.SerializeEntries(value, ref mapEntries);
     }
 
-    public readonly void WriteUnion<T>(int member, T value, UnionSchema<T> schema) =>
+    public void WriteUnion<T>(int member, T value, UnionSchema<T> schema) =>
         throw Unsupported("union");
 
     private static NotSupportedException Unsupported(string kind) =>
