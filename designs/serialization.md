@@ -287,7 +287,7 @@ parsing stay centralized while the core model remains open-ended.
 
 Presence is a property of the *member position*, never of the target shape:
 
-- `required` is member metadata (`IMemberSchema.IsRequired`).
+- `required` is member metadata (`MemberSchema.IsRequired`).
 - Modeled defaults are generated code. `CreateTypedBuilder` starts each
   defaulted member at its default, so an absent member keeps it, and each call
   builds new values, so no two objects share a mutable default. A
