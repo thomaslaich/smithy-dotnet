@@ -470,14 +470,14 @@
     <PropertyGroup>
       <_SmithyCliBuildOutput>$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\'))</_SmithyCliBuildOutput>
     </PropertyGroup>
-    <!-- The CLI writes over the previous output without removing it, so a file the model no longer
-         produces (a renamed shape, or a new NSmithy version laying files out differently) would
-         still be compiled next to its replacement. Every build starts from what the model produces
-         now. -->
+    <!-- What the previous run produced, and when this one starts: see the stale-output cleanup
+         after the CLI. -->
     <ItemGroup>
       <_SmithyPreviousOutput Include="$(SmithyAllProjectionsGlob);$(SmithyAllProtosGlob)" />
     </ItemGroup>
-    <Delete Files="@(_SmithyPreviousOutput)" />
+    <PropertyGroup>
+      <_SmithyGenerationStart>$([System.DateTime]::Now.Ticks)</_SmithyGenerationStart>
+    </PropertyGroup>
     <Exec
       Command="&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)"
       EnvironmentVariables="$(_SmithyMavenEnv)"
@@ -492,6 +492,28 @@
       Code="NSMITHYCLI"
       Text="NSmithy: Smithy CLI failed with exit code $(_SmithyCliExitCode). Command: &quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)"
       Condition="'$(_SmithyCliExitCode)' != '0'"
+    />
+
+    <!-- The CLI writes over the previous output without removing it, so a file the model no longer
+         produces (a renamed shape, or a new NSmithy version laying files out differently) would
+         still be compiled next to its replacement. The CLI rewrites every file it produces, so a
+         file older than this run is one it no longer produces. Removing them only after the CLI
+         has finished means a failed run never leaves the project without its generated code. -->
+    <ItemGroup>
+      <_SmithyCurrentOutput Include="$(SmithyAllProjectionsGlob);$(SmithyAllProtosGlob)" />
+      <_SmithyStaleOutput
+        Include="@(_SmithyCurrentOutput)"
+        Condition="'%(FullPath)' != '' and $([System.IO.File]::GetLastWriteTime('%(FullPath)').Ticks) &lt; $(_SmithyGenerationStart)"
+      />
+    </ItemGroup>
+    <Delete Files="@(_SmithyStaleOutput)" />
+    <ItemGroup>
+      <_SmithyGeneratedOutput Include="$(SmithyAllProjectionsGlob);$(SmithyAllProtosGlob)" />
+    </ItemGroup>
+    <Error
+      Code="NSMITHYGEN"
+      Text="NSmithy: the Smithy CLI succeeded but produced no generated files, where the previous run produced @(_SmithyPreviousOutput->Count()). Command: &quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)"
+      Condition="'@(_SmithyPreviousOutput)' != '' and '@(_SmithyGeneratedOutput)' == ''"
     />
     <Touch Files="$(SmithyStampFile)" AlwaysCreate="true" />
 
