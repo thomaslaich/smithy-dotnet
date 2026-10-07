@@ -6,44 +6,32 @@ using NSmithy.Core.Serde;
 namespace NSmithy.Codecs.Json;
 
 /// <summary>What the JSON codec needs to know about one member: built once, read per value.</summary>
-internal sealed class JsonMemberPlan
+internal sealed class JsonMemberPlan(
+    string name,
+    string wireName,
+    bool isRequired,
+    Schema target,
+    Func<ShapeId, Trait?> getTrait,
+    JsonPlans plans
+)
 {
-    public JsonMemberPlan(
-        string name,
-        string wireName,
-        bool isRequired,
-        Schema target,
-        Func<ShapeId, Trait?> getTrait,
-        JsonPlans plans
-    )
-    {
-        Name = name;
-        WireName = wireName;
-        EncodedName = JsonEncodedText.Encode(wireName);
-        Utf8Name = Encoding.UTF8.GetBytes(wireName);
-        IsRequired = isRequired;
-        Target = target;
-        TimestampFormat = Json.TimestampFormat.Resolve(getTrait);
-        Shape = plans.ForTarget(target);
-    }
-
     /// <summary>The member's name in the model, used in error paths.</summary>
-    public string Name { get; }
+    public string Name { get; } = name;
 
-    public string WireName { get; }
+    public string WireName { get; } = wireName;
 
-    public JsonEncodedText EncodedName { get; }
+    public JsonEncodedText EncodedName { get; } = JsonEncodedText.Encode(wireName);
 
-    public byte[] Utf8Name { get; }
+    public byte[] Utf8Name { get; } = Encoding.UTF8.GetBytes(wireName);
 
-    public bool IsRequired { get; }
+    public bool IsRequired { get; } = isRequired;
 
-    public Schema Target { get; }
+    public Schema Target { get; } = target;
 
-    public string TimestampFormat { get; }
+    public string TimestampFormat { get; } = Json.TimestampFormat.Resolve(getTrait);
 
     /// <summary>The plan of the member's target when it is an aggregate.</summary>
-    public JsonShapePlan? Shape { get; }
+    public JsonShapePlan? Shape { get; } = plans.ForTarget(target);
 }
 
 /// <summary>The JSON codec's plan for one aggregate shape, indexed by member position.</summary>
@@ -201,10 +189,7 @@ internal sealed class JsonPlans(bool honorJsonNameTrait)
             WireName(@case.MemberTraits, @case.Name),
             isRequired: true,
             @case.Target,
-            id =>
-                @case.MemberTraits.TryGetValue(id, out var trait)
-                    ? trait
-                    : @case.Target.Resolved.GetTrait(id),
+            @case.GetTrait,
             this
         );
 

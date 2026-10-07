@@ -4,30 +4,16 @@ using NSmithy.Core.Serde;
 namespace NSmithy.Codecs.Cbor;
 
 /// <summary>What the CBOR codec needs to know about one member: built once, read per value.</summary>
-internal sealed class CborMemberPlan
+internal sealed class CborMemberPlan(string name, bool isRequired, Schema target, CborPlans plans)
 {
-    public CborMemberPlan(
-        string name,
-        bool isRequired,
-        Schema target,
-        Func<ShapeId, Trait?> getTrait,
-        CborPlans plans
-    )
-    {
-        Name = name;
-        IsRequired = isRequired;
-        Target = target;
-        Shape = plans.ForTarget(target);
-    }
+    public string Name { get; } = name;
 
-    public string Name { get; }
+    public bool IsRequired { get; } = isRequired;
 
-    public bool IsRequired { get; }
-
-    public Schema Target { get; }
+    public Schema Target { get; } = target;
 
     /// <summary>The plan of the member's target when it is an aggregate.</summary>
-    public CborShapePlan? Shape { get; }
+    public CborShapePlan? Shape { get; } = plans.ForTarget(target);
 }
 
 /// <summary>The CBOR codec's plan for one aggregate shape, indexed by member position.</summary>
@@ -82,7 +68,7 @@ internal sealed class CborPlans
 
     /// <summary>The plan for a top-level value, which is no member of anything.</summary>
     public CborMemberPlan ForRoot(Schema schema) =>
-        new(schema.Id.Name, isRequired: true, schema, schema.Resolved.GetTrait, this);
+        new(schema.Id.Name, isRequired: true, schema, this);
 
     /// <summary>The plan for a member's target, or null when the target is a simple shape.</summary>
     public CborShapePlan? ForTarget(Schema target)
@@ -129,10 +115,6 @@ internal sealed class CborPlans
                         @case.Name,
                         isRequired: true,
                         @case.Target,
-                        id =>
-                            @case.MemberTraits.TryGetValue(id, out var trait)
-                                ? trait
-                                : @case.Target.Resolved.GetTrait(id),
                         this
                     )),
                 ],
@@ -143,5 +125,5 @@ internal sealed class CborPlans
     }
 
     private CborMemberPlan Member(MemberSchema member) =>
-        new(member.Name, member.IsRequired, member.Target, member.GetTrait, this);
+        new(member.Name, member.IsRequired, member.Target, this);
 }
