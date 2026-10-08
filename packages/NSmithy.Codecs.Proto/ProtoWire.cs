@@ -25,15 +25,10 @@ internal enum WireType : byte
 /// A minimal append-only protobuf encoder backed by a pooled buffer. Nested messages reserve their
 /// length prefix in this buffer and backpatch it when complete.
 /// </summary>
-internal sealed class ProtoWriter : IDisposable
+internal sealed class ProtoWriter(int initialCapacity = 64) : IDisposable
 {
-    private byte[] buffer;
+    private byte[] buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 64));
     private int length;
-
-    public ProtoWriter(int initialCapacity = 64)
-    {
-        buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 64));
-    }
 
     public int Length => length;
 
