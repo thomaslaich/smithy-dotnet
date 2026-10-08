@@ -38,7 +38,6 @@ public sealed class SmithyCliDiagnosticsTests
             Assert.NotEqual(0, result.ExitCode);
             Assert.Contains($"{model}(3,1): Smithy error Model.UnresolvedTrait:", result.Output);
             Assert.Contains("Unable to resolve trait `aws.protocols#rpcv2Cbor`.", result.Output);
-            Assert.Contains("3| @aws.protocols#rpcv2Cbor", result.Output);
             Assert.DoesNotContain("NSMITHYCLI", result.Output);
         }
         finally

@@ -11,6 +11,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="NSmithy.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!--
       MSBuild.* are compile-time only. Do NOT bundle them alongside the task DLL:
       MSBuild's MSBuildLoadContext routes them to the host process's default ALC via its

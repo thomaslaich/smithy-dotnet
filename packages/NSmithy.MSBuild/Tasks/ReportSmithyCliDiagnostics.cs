@@ -1,27 +1,31 @@
+using System.Text.RegularExpressions;
 using Microsoft.Build.Framework;
 using MsBuildTask = Microsoft.Build.Utilities.Task;
 
 namespace NSmithy.Contracts;
 
 /// <summary>
-/// Turns the output of a failed <c>smithy build</c> into MSBuild errors. Smithy validation
-/// events at ERROR or DANGER severity become errors carrying the event id, source location and
-/// source excerpt, so they show up in every logger (including the terminal logger, which hides plain build
-/// messages) and in IDE error lists. Failures that produce no such event are reported as a
-/// single error that includes the tail of the CLI output.
+/// Reports a failed <c>smithy build</c> as MSBuild errors. Validation events at ERROR or DANGER
+/// severity (read from <c>smithy validate --format csv</c>) become errors carrying the event id
+/// and source location, so they show up in every logger (including the terminal logger, which
+/// hides plain build messages) and in IDE error lists. Failures without such events, such as a
+/// plugin exception, are reported as a single error that includes the tail of the build output.
 /// </summary>
-public sealed class ReportSmithyCliDiagnostics : MsBuildTask
+public sealed partial class ReportSmithyCliDiagnostics : MsBuildTask
 {
     private const int MaxFallbackLines = 20;
 
-    /// <summary>Lines the Smithy CLI wrote to stdout and stderr.</summary>
-    public ITaskItem[] Output { get; set; } = [];
+    /// <summary>The CSV written by <c>smithy validate --format csv</c>; may not exist.</summary>
+    public string? ValidationEventsFile { get; set; }
 
-    /// <summary>Exit code of the Smithy CLI.</summary>
+    /// <summary>Lines <c>smithy build</c> wrote to stdout and stderr.</summary>
+    public ITaskItem[] BuildOutput { get; set; } = [];
+
+    /// <summary>Exit code of <c>smithy build</c>.</summary>
     [Required]
     public int ExitCode { get; set; }
 
-    /// <summary>The command that was run, included in the fallback error.</summary>
+    /// <summary>The build command that was run, included in the fallback error.</summary>
     [Required]
     public string Command { get; set; } = "";
 
@@ -31,11 +35,7 @@ public sealed class ReportSmithyCliDiagnostics : MsBuildTask
 
     public override bool Execute()
     {
-        var lines = Output.Select(item => item.ItemSpec).ToList();
-        var errors = SmithyCliOutput
-            .Parse(lines)
-            .Where(e => e.Severity is "ERROR" or "DANGER")
-            .ToList();
+        var errors = ReadValidationEvents().Where(e => e.Severity is "ERROR" or "DANGER").ToList();
 
         foreach (var error in errors)
         {
@@ -54,9 +54,9 @@ public sealed class ReportSmithyCliDiagnostics : MsBuildTask
 
         if (errors.Count == 0)
         {
-            var tail = lines
-                .Select(SmithyCliOutput.StripAnsi)
-                .Where(l => !string.IsNullOrWhiteSpace(l))
+            var tail = BuildOutput
+                .Select(item => AnsiPattern().Replace(item.ItemSpec, ""))
+                .Where(line => !string.IsNullOrWhiteSpace(line))
                 .TakeLast(MaxFallbackLines);
             Log.LogError(
                 subcategory: null,
@@ -76,13 +76,21 @@ public sealed class ReportSmithyCliDiagnostics : MsBuildTask
         return false;
     }
 
+    private IReadOnlyList<SmithyValidationEvent> ReadValidationEvents()
+    {
+        if (string.IsNullOrEmpty(ValidationEventsFile) || !File.Exists(ValidationEventsFile))
+            return [];
+        return SmithyValidationEvents.ParseCsv(File.ReadAllText(ValidationEventsFile));
+    }
+
     private static string FormatMessage(SmithyValidationEvent error)
     {
-        var message =
-            error.File is null && error.Shape is not null
-                ? $"{error.Message} (shape: {error.Shape})"
-                : error.Message;
-        return error.Frame is null ? message : $"{message}\n{error.Frame}";
+        var message = error.Message;
+        if (error.File is null && error.Shape is not null)
+            message += $" (shape: {error.Shape})";
+        if (error.Hint is not null)
+            message += $" Hint: {error.Hint}";
+        return message;
     }
 
     private string? ResolvePath(string? path)
@@ -92,4 +100,7 @@ public sealed class ReportSmithyCliDiagnostics : MsBuildTask
             return path;
         return Path.GetFullPath(Path.Combine(WorkingDirectory, path));
     }
+
+    [GeneratedRegex(@"\x1B\[[0-9;?]*[A-Za-z]")]
+    private static partial Regex AnsiPattern();
 }
