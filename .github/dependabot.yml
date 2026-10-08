@@ -24,7 +24,7 @@ updates:
       - dependency-name: NSmithy.*
       # Pinned to the MSBuild of the oldest supported SDK; newer versions target newer .NET.
       - dependency-name: Microsoft.Build.*
-        update-types: [version-update:semver-major, version-update:semver-minor]
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
     groups:
       nuget:
         patterns: ['*']
