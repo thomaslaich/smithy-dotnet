@@ -1,3 +1,5 @@
+# NSmithy
+
 [![CI](https://github.com/thomaslaich/smithy-dotnet/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/thomaslaich/smithy-dotnet/actions/workflows/ci.yml)
 [![Docs](https://github.com/thomaslaich/smithy-dotnet/actions/workflows/docs.yml/badge.svg?branch=main)](https://thomaslaich.github.io/smithy-dotnet/)
 [![NuGet](https://img.shields.io/nuget/v/NSmithy.Client)](https://www.nuget.org/packages/NSmithy.Client)
@@ -7,11 +9,9 @@
 
 > **Preview:** NSmithy is in preview; expect some API changes before 1.0.
 
-# NSmithy
-
 **[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Examples](examples/README.md)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
 
-Smithy toolkit for .NET.
+NSmithy brings [Smithy](https://smithy.io) code generation to .NET. It generates typed clients, ASP.NET Core server stubs, and model types from a Smithy model as part of `dotnet build`.
 
 ## Development
 
