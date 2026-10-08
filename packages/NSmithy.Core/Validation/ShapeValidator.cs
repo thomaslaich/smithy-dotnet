@@ -42,10 +42,9 @@ internal struct ShapeValidator : IShapeSerializer
         this.errors = errors;
     }
 
+    // A list's elements are its member 0, so they index like any other member.
     private readonly ValidatorMemberPlan Entry(int member) =>
-        container is null ? root!
-        : container.Kind is ShapeKind.List or ShapeKind.Set ? container.Members[0]
-        : container.Members[member];
+        member == MemberIndex.Root ? root! : container!.Members[member];
 
     /// <summary>The path of the value <paramref name="member"/> is written as, advancing a list's index.</summary>
     private ValuePath PathOf(int member) =>

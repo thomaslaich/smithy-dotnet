@@ -59,13 +59,9 @@ internal struct ProtoShapeSerializer : IShapeSerializer
         this.fieldNumber = fieldNumber;
     }
 
+    // A list's elements are its member 0, so they index like any other member.
     private readonly ProtoMemberPlan Entry(int member) =>
-        context switch
-        {
-            Context.Root => root!,
-            Context.Packed or Context.Repeated => container!.Members[0],
-            _ => container!.Members[member],
-        };
+        member == MemberIndex.Root ? root! : container!.Members[member];
 
     /// <summary>Writes the tag that precedes a value of <paramref name="member"/>, if it has one.</summary>
     private readonly void Tag(int member, WireType wireType)
