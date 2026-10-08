@@ -49,14 +49,38 @@
        the DLL lives in tasks/net10.0/ one level up.
        ================================================================ -->
 
+  <PropertyGroup>
+    <_NSmithyTasksAssembly>$(MSBuildThisFileDirectory)..\tasks\net10.0\NSmithy.MSBuild.dll</_NSmithyTasksAssembly>
+    <!-- In-repo consumers import Targets/ directly and reference NSmithy.MSBuild as a project,
+         so the tasks come from its build output. They run out of process so a reused MSBuild
+         node does not keep that freshly built DLL loaded. -->
+    <_NSmithyTasksFromProject Condition="!Exists('$(_NSmithyTasksAssembly)')"
+      >true</_NSmithyTasksFromProject
+    >
+    <_NSmithyTasksAssembly Condition="'$(_NSmithyTasksFromProject)' == 'true'"
+      >$(MSBuildThisFileDirectory)..\bin\$(Configuration)\net10.0\NSmithy.MSBuild.dll</_NSmithyTasksAssembly
+    >
+    <_NSmithyTaskFactory Condition="'$(_NSmithyTasksFromProject)' == 'true'"
+      >TaskHostFactory</_NSmithyTaskFactory
+    >
+  </PropertyGroup>
+
   <UsingTask
     TaskName="CreateSmithyJar"
-    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\net10.0\NSmithy.MSBuild.dll"
+    AssemblyFile="$(_NSmithyTasksAssembly)"
+    TaskFactory="$(_NSmithyTaskFactory)"
   />
 
   <UsingTask
     TaskName="SynthesizeSmithyBuildFile"
-    AssemblyFile="$(MSBuildThisFileDirectory)..\tasks\net10.0\NSmithy.MSBuild.dll"
+    AssemblyFile="$(_NSmithyTasksAssembly)"
+    TaskFactory="$(_NSmithyTaskFactory)"
+  />
+
+  <UsingTask
+    TaskName="ReportSmithyCliDiagnostics"
+    AssemblyFile="$(_NSmithyTasksAssembly)"
+    TaskFactory="$(_NSmithyTaskFactory)"
   />
 
   <!-- ================================================================
@@ -469,6 +493,9 @@
     </PropertyGroup>
     <PropertyGroup>
       <_SmithyCliBuildOutput>$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\'))</_SmithyCliBuildOutput>
+      <_SmithyCliCommand>&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)</_SmithyCliCommand>
+      <!-- A redirected JVM writes in the platform encoding unless told otherwise. -->
+      <_SmithyCliEnv>$(_SmithyMavenEnv);SMITHY_OPTS=$(SMITHY_OPTS) -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8</_SmithyCliEnv>
     </PropertyGroup>
     <!-- What the previous run produced, and when this one starts: see the stale-output cleanup
          after the CLI. -->
@@ -479,19 +506,53 @@
       <_SmithyGenerationStart>$([System.DateTime]::Now.Ticks)</_SmithyGenerationStart>
     </PropertyGroup>
     <Exec
-      Command="&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)"
-      EnvironmentVariables="$(_SmithyMavenEnv)"
+      Command="$(_SmithyCliCommand)"
+      EnvironmentVariables="$(_SmithyCliEnv)"
       IgnoreExitCode="true"
+      ConsoleToMSBuild="true"
+      StdOutEncoding="utf-8"
+      StdErrEncoding="utf-8"
       StandardOutputImportance="High"
       StandardErrorImportance="High"
       WorkingDirectory="$(MSBuildProjectDirectory)"
     >
       <Output TaskParameter="ExitCode" PropertyName="_SmithyCliExitCode" />
+      <Output TaskParameter="ConsoleOutput" ItemName="_SmithyCliOutput" />
     </Exec>
+
+    <!-- The terminal logger hides the CLI's output, so re-report a failure as MSBuild errors.
+         `smithy build` has no machine-readable output, so validate the same model again as
+         CSV to get the events with their locations. The tasks assembly targets
+         .NET, so .NET Framework MSBuild (Visual Studio) gets the plain error instead. -->
+    <PropertyGroup Condition="'$(_SmithyCliExitCode)' != '0'">
+      <_SmithyValidationEventsFile>$([System.IO.Path]::GetFullPath('$(SmithyBuildOutputPath)validation-events.csv'))</_SmithyValidationEventsFile>
+    </PropertyGroup>
+    <Delete
+      Files="$(_SmithyValidationEventsFile)"
+      Condition="'$(_SmithyCliExitCode)' != '0' and '$(MSBuildRuntimeType)' == 'Core'"
+    />
+    <Exec
+      Command="&quot;$(SmithyCliPath)&quot; validate --format csv --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs) &gt; &quot;$(_SmithyValidationEventsFile)&quot;"
+      EnvironmentVariables="$(_SmithyCliEnv)"
+      IgnoreExitCode="true"
+      IgnoreStandardErrorWarningFormat="true"
+      StandardOutputImportance="Low"
+      StandardErrorImportance="Low"
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+      Condition="'$(_SmithyCliExitCode)' != '0' and '$(MSBuildRuntimeType)' == 'Core'"
+    />
+    <ReportSmithyCliDiagnostics
+      ValidationEventsFile="$(_SmithyValidationEventsFile)"
+      BuildOutput="@(_SmithyCliOutput)"
+      ExitCode="$(_SmithyCliExitCode)"
+      Command="$(_SmithyCliCommand)"
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+      Condition="'$(_SmithyCliExitCode)' != '0' and '$(MSBuildRuntimeType)' == 'Core'"
+    />
     <Error
       Code="NSMITHYCLI"
-      Text="NSmithy: Smithy CLI failed with exit code $(_SmithyCliExitCode). Command: &quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)"
-      Condition="'$(_SmithyCliExitCode)' != '0'"
+      Text="NSmithy: Smithy CLI failed with exit code $(_SmithyCliExitCode). See the build output for details. Command: $(_SmithyCliCommand)"
+      Condition="'$(_SmithyCliExitCode)' != '0' and '$(MSBuildRuntimeType)' != 'Core'"
     />
 
     <!-- The CLI writes over the previous output without removing it, so a file the model no longer

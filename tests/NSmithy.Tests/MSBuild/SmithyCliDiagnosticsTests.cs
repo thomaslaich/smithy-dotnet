@@ -1,12 +1,54 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace NSmithy.Tests.MSBuild;
 
 public sealed class SmithyCliDiagnosticsTests
 {
     [Fact]
-    public async Task GenerateSmithyCodeSurfacesSmithyCliDiagnostics()
+    public async Task GenerateSmithyCodeReportsCliFailureOutput()
+    {
+        var result = await GenerateSmithyCodeAsync("--definitely-not-a-smithy-flag");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("error NSMITHYCLI:", result.Output);
+        Assert.Contains("NSmithy: Smithy CLI failed with exit code 1.", result.Output);
+        Assert.Contains("Unexpected CLI argument: --definitely-not-a-smithy-flag", result.Output);
+    }
+
+    [Fact]
+    public async Task GenerateSmithyCodeReportsValidationErrorsWithLocation()
+    {
+        var model = Path.Combine(Path.GetTempPath(), $"nsmithy-invalid-{Guid.NewGuid():N}.smithy");
+        await File.WriteAllTextAsync(
+            model,
+            """
+            $version: "2"
+            namespace nsmithy.invalid
+            @aws.protocols#rpcv2Cbor
+            structure Invalid {}
+            """
+        );
+
+        try
+        {
+            var result = await GenerateSmithyCodeAsync($"\"{model}\"");
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains($"{model}(3,1): Smithy error Model.UnresolvedTrait:", result.Output);
+            Assert.Contains("Unable to resolve trait `aws.protocols#rpcv2Cbor`.", result.Output);
+            Assert.DoesNotContain("NSMITHYCLI", result.Output);
+        }
+        finally
+        {
+            File.Delete(model);
+        }
+    }
+
+    // Forces the terminal logger, which (unlike the console logger) hides the CLI's own output,
+    // so only what NSmithy reports as errors is visible.
+    private static Task<ProcessResult> GenerateSmithyCodeAsync(string smithyExtraArgs)
     {
         var repoRoot = FindRepoRoot();
         var projectPath = Path.Combine(
@@ -21,7 +63,7 @@ public sealed class SmithyCliDiagnosticsTests
             $"nsmithy-cli-diagnostics-{Guid.NewGuid():N}.stamp"
         );
 
-        var result = await RunDotnetBuildAsync(
+        return RunDotnetBuildAsync(
             repoRoot,
             [
                 "build",
@@ -29,16 +71,12 @@ public sealed class SmithyCliDiagnosticsTests
                 "--configuration",
                 "Release",
                 "--no-restore",
+                "-tl:on",
                 "/t:GenerateSmithyCode",
                 $"/p:SmithyStampFile={stampFile}",
-                "/p:SmithyExtraArgs=--definitely-not-a-smithy-flag",
+                $"/p:SmithyExtraArgs={smithyExtraArgs}",
             ]
         );
-
-        Assert.NotEqual(0, result.ExitCode);
-        Assert.Contains("Unexpected CLI argument: --definitely-not-a-smithy-flag", result.Output);
-        Assert.Contains("error NSMITHYCLI:", result.Output);
-        Assert.Contains("NSmithy: Smithy CLI failed with exit code 1.", result.Output);
     }
 
     private static async Task<ProcessResult> RunDotnetBuildAsync(
@@ -80,7 +118,8 @@ public sealed class SmithyCliDiagnosticsTests
         process.BeginErrorReadLine();
         await process.WaitForExitAsync();
 
-        return new ProcessResult(process.ExitCode, output.ToString());
+        var plain = Regex.Replace(output.ToString(), @"\x1B\[[0-9;?]*[A-Za-z]", "");
+        return new ProcessResult(process.ExitCode, plain);
     }
 
     private static string FindRepoRoot()
