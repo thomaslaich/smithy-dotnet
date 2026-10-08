@@ -9,6 +9,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.IntEnumGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ListGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.MapGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.OperationSchemaGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.generators.SchemaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ServerGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ServiceSchemaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StringEnumGenerator;
@@ -17,7 +18,11 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.UnionGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
+import java.util.List;
+import java.util.function.Consumer;
 import software.amazon.smithy.codegen.core.CodegenException;
+import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.codegen.core.directed.CreateContextDirective;
 import software.amazon.smithy.codegen.core.directed.CreateSymbolProviderDirective;
@@ -34,6 +39,7 @@ import software.amazon.smithy.codegen.core.directed.GenerateServiceDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateStructureDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateUnionDirective;
 import software.amazon.smithy.model.shapes.EnumShape;
+import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
 @SmithyUnstableApi
@@ -154,6 +160,15 @@ final class DirectedCSharpCodegen
         .useShapeWriter(
             directive.shape(),
             writer -> new StructureGenerator(directive.context(), writer, directive.shape()).run());
+    writeSchema(
+        directive.context(),
+        directive.shape(),
+        writer ->
+            SchemaGenerator.writeStructureSchema(
+                writer,
+                directive.context(),
+                directive.shape(),
+                List.copyOf(directive.shape().members())));
   }
 
   @Override
@@ -168,6 +183,15 @@ final class DirectedCSharpCodegen
         .useShapeWriter(
             directive.shape(),
             writer -> new ErrorGenerator(directive.context(), writer, directive.shape()).run());
+    writeSchema(
+        directive.context(),
+        directive.shape(),
+        writer ->
+            SchemaGenerator.writeStructureSchema(
+                writer,
+                directive.context(),
+                directive.shape(),
+                ShapeSupport.sortedMembers(directive.shape())));
   }
 
   @Override
@@ -178,6 +202,15 @@ final class DirectedCSharpCodegen
         .useShapeWriter(
             directive.shape(),
             writer -> new UnionGenerator(directive.context(), writer, directive.shape()).run());
+    writeSchema(
+        directive.context(),
+        directive.shape(),
+        writer ->
+            SchemaGenerator.writeUnionSchema(
+                writer,
+                directive.context(),
+                directive.shape(),
+                ShapeSupport.sortedMembers(directive.shape())));
   }
 
   @Override
@@ -188,6 +221,10 @@ final class DirectedCSharpCodegen
         .useShapeWriter(
             directive.shape(),
             writer -> new ListGenerator(directive.context(), writer, directive.shape()).run());
+    writeSchema(
+        directive.context(),
+        directive.shape(),
+        writer -> SchemaGenerator.writeListSchema(writer, directive.context(), directive.shape()));
   }
 
   @Override
@@ -198,6 +235,10 @@ final class DirectedCSharpCodegen
         .useShapeWriter(
             directive.shape(),
             writer -> new MapGenerator(directive.context(), writer, directive.shape()).run());
+    writeSchema(
+        directive.context(),
+        directive.shape(),
+        writer -> SchemaGenerator.writeMapSchema(writer, directive.context(), directive.shape()));
   }
 
   @Override
@@ -217,6 +258,10 @@ final class DirectedCSharpCodegen
         .context()
         .writerDelegator()
         .useShapeWriter(enumShape, writer -> new StringEnumGenerator(writer, enumShape).run());
+    writeSchema(
+        directive.context(),
+        enumShape,
+        writer -> SchemaGenerator.writeSimpleSchema(writer, enumShape));
   }
 
   @Override
@@ -228,15 +273,40 @@ final class DirectedCSharpCodegen
         .useShapeWriter(
             directive.shape(),
             writer -> new IntEnumGenerator(writer, directive.shape().asIntEnumShape().get()).run());
+    writeSchema(
+        directive.context(),
+        directive.shape(),
+        writer ->
+            SchemaGenerator.writeIntEnumSchema(
+                writer, directive.shape().asIntEnumShape().orElseThrow()));
   }
 
   @Override
   public void generateOperation(GenerateOperationDirective<GenerationContext, CSharpSettings> d) {
-    d.context()
+    // An operation has no C# type of its own, only a schema.
+    writeSchema(
+        d.context(),
+        d.shape(),
+        writer -> new OperationSchemaGenerator(d.context(), writer, d.shape()).run());
+  }
+
+  /**
+   * Writes a shape's schema to a file beside the shape's type: {@code Person.g.cs} holds the type a
+   * consumer uses, {@code Person.Schema.g.cs} the schema the runtime serializes it with.
+   */
+  private static void writeSchema(
+      GenerationContext context, Shape shape, Consumer<CSharpWriter> body) {
+    Symbol symbol = context.symbolProvider().toSymbol(shape);
+    String file = symbol.getDefinitionFile().replaceFirst("\\.g\\.cs$", ".Schema.g.cs");
+    context
         .writerDelegator()
-        .useShapeWriter(
-            d.shape(),
-            writer -> new OperationSchemaGenerator(d.context(), writer, d.shape()).run());
+        .useFileWriter(
+            file,
+            symbol.getNamespace(),
+            writer -> {
+              writer.reserveMemberNames(shape);
+              body.accept(writer);
+            });
   }
 
   @Override

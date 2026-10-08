@@ -42,8 +42,6 @@ public final class ErrorGenerator implements Runnable {
     Model model = context.model();
     String typeName = CSharpNaming.typeName(shape.getId().getName());
     Optional<MemberShape> messageMember = ShapeSupport.errorMessageMember(model, shape);
-    List<MemberShape> members = ShapeSupport.sortedMembers(shape);
-
     Optional<RetryableTrait> retryable = shape.getTrait(RetryableTrait.class);
     writer.pushState();
     try {
@@ -86,8 +84,6 @@ public final class ErrorGenerator implements Runnable {
     } finally {
       writer.popState();
     }
-    writer.write("");
-    SchemaGenerator.writeStructureSchema(writer, context, shape, members);
   }
 
   private void writeConstructor(String typeName, MemberShape messageMember) {

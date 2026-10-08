@@ -321,14 +321,9 @@ call.
 
 ## Streaming
 
-Event streams and streaming blob payloads follow the streaming design. They are
-not special cases outside the client lifecycle:
-
-- event-stream operations use event-stream protocol bindings and
-  `IAsyncEnumerable<TEvent>`
-- streaming blobs use unary protocol bindings with a streaming HTTP body
-  abstraction
-- retries, auth, checksums, and telemetry flow through the same context and
-  interceptor model
+Event-stream and streaming-blob operations go through the same operation
+protocols, runtime, and interceptor model as unary operations. Event streams
+surface as `IAsyncEnumerable<TEvent>` members and streaming blobs as `Stream`
+members.
 
 See [streaming.md](streaming.md) for the dedicated streaming architecture.

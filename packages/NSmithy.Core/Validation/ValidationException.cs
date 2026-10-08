@@ -68,30 +68,51 @@ public static class ValidationExceptionFieldSchema
         public string? Message { get; set; }
     }
 
-    public static Schema<ValidationExceptionField> Schema { get; } =
-        Schemas
-            .Structure<ValidationExceptionField, Builder>(
-                ShapeId.Parse("smithy.framework#ValidationExceptionField")
-            )
-            .Required(
-                "path",
-                static value => value.Path,
-                static (builder, value) => builder.Path = value,
-                Schemas.NullableReference(Schemas.String)
-            )
-            .Required(
-                "message",
-                static value => value.Message,
-                static (builder, value) => builder.Message = value,
-                Schemas.NullableReference(Schemas.String)
-            )
-            .Build(
-                static () => new Builder(),
-                static builder => new ValidationExceptionField(
-                    builder.Path ?? throw new MissingRequiredMemberException("path"),
-                    builder.Message ?? throw new MissingRequiredMemberException("message")
-                )
+    public static Schema<ValidationExceptionField> Schema { get; } = new StructureSchema();
+
+    private sealed class StructureSchema()
+        : StructSchema<ValidationExceptionField, Builder>(
+            ShapeId.Parse("smithy.framework#ValidationExceptionField"),
+            [new("path", Target0, isRequired: true), new("message", Target1, isRequired: true)]
+        )
+    {
+        private static readonly Schema<string?> Target0 = Schemas.NullableReference(Schemas.String);
+        private static readonly Schema<string?> Target1 = Schemas.NullableReference(Schemas.String);
+
+        public override Builder CreateTypedBuilder() => new();
+
+        public override ValidationExceptionField Build(Builder builder) =>
+            new(
+                builder.Path ?? throw new MissingRequiredMemberException("path"),
+                builder.Message ?? throw new MissingRequiredMemberException("message")
             );
+
+        public override void SerializeMembers<TSerializer>(
+            ValidationExceptionField value,
+            ref TSerializer serializer
+        )
+        {
+            Target0.Write(0, value.Path, ref serializer);
+            Target1.Write(1, value.Message, ref serializer);
+        }
+
+        public override void DeserializeMember<TDeserializer>(
+            Builder builder,
+            int index,
+            ref TDeserializer deserializer
+        )
+        {
+            switch (index)
+            {
+                case 0:
+                    builder.Path = Target0.Read(ref deserializer);
+                    break;
+                case 1:
+                    builder.Message = Target1.Read(ref deserializer);
+                    break;
+            }
+        }
+    }
 }
 
 public static class ValidationExceptionSchema
@@ -105,33 +126,55 @@ public static class ValidationExceptionSchema
         public IReadOnlyList<ValidationExceptionField>? FieldList { get; set; }
     }
 
-    public static Schema<ValidationException> Schema { get; } =
-        Schemas
-            .Structure<ValidationException, Builder>(
-                Id,
-                [new Trait(ShapeId.Parse("smithy.api#error"), Document.From("client"))]
-            )
-            .Required(
-                "message",
-                static value => value.Message,
-                static (builder, value) => builder.Message = value,
-                Schemas.NullableReference(Schemas.String)
-            )
-            .Optional(
-                "fieldList",
-                static value => value.FieldList,
-                static (builder, value) => builder.FieldList = value,
-                Schemas.NullableReference(
-                    Schemas.List(
-                        ShapeId.Parse("smithy.framework#ValidationExceptionFieldList"),
-                        ValidationExceptionFieldSchema.Schema
-                    )
+    public static Schema<ValidationException> Schema { get; } = new StructureSchema();
+
+    private sealed class StructureSchema()
+        : StructSchema<ValidationException, Builder>(
+            ValidationExceptionSchema.Id,
+            [new("message", Target0, isRequired: true), new("fieldList", Target1)],
+            [new Trait(ShapeId.Parse("smithy.api#error"), Document.From("client"))]
+        )
+    {
+        private static readonly Schema<string?> Target0 = Schemas.NullableReference(Schemas.String);
+        private static readonly Schema<IReadOnlyList<ValidationExceptionField>?> Target1 =
+            Schemas.NullableReference(
+                Schemas.List(
+                    ShapeId.Parse("smithy.framework#ValidationExceptionFieldList"),
+                    ValidationExceptionFieldSchema.Schema
                 )
-            )
-            .Build(
-                static () => new Builder(),
-                static builder => new ValidationException(builder.Message, builder.FieldList)
             );
+
+        public override Builder CreateTypedBuilder() => new();
+
+        public override ValidationException Build(Builder builder) =>
+            new(builder.Message, builder.FieldList);
+
+        public override void SerializeMembers<TSerializer>(
+            ValidationException value,
+            ref TSerializer serializer
+        )
+        {
+            Target0.Write(0, value.Message, ref serializer);
+            Target1.Write(1, value.FieldList, ref serializer);
+        }
+
+        public override void DeserializeMember<TDeserializer>(
+            Builder builder,
+            int index,
+            ref TDeserializer deserializer
+        )
+        {
+            switch (index)
+            {
+                case 0:
+                    builder.Message = Target0.Read(ref deserializer);
+                    break;
+                case 1:
+                    builder.FieldList = Target1.Read(ref deserializer);
+                    break;
+            }
+        }
+    }
 
     /// <summary>
     /// The operation-error registration appended to every <see cref="OperationSchema{TInput,

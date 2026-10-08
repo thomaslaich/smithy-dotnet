@@ -381,48 +381,9 @@ app.MapGroup("")
 
 ## Streaming Type Naming
 
-Request and response streaming are independent axes — a request may stream while
-its response is unary, and vice versa — so the transport types are named for
-what actually streams, not bundled under a single "duplex" name.
-
-A streaming request body is a variant of the body union:
-
-```csharp
-public abstract record SmithyHttpBody
-{
-    public static SmithyHttpBody Empty { get; }
-    public sealed record Bytes(byte[] Content) : SmithyHttpBody;
-    public sealed record Streaming(System.IO.Stream Content, long? ContentLength = null) : SmithyHttpBody;
-    public sealed record EventStreaming(IAsyncEnumerable<ReadOnlyMemory<byte>> Content) : SmithyHttpBody;
-}
-```
-
-Every client request is a `SmithyHttpRequest`; the body says whether it streams:
-
-- output-stream request = `SmithyHttpRequest { Body = Bytes }` — a unary request.
-- input-stream and duplex request = `SmithyHttpRequest { Body = EventStreaming }`.
-
-The response is a single `SmithyHttpClientResponse`. The client transport requires the
-runtime to state whether the response body should be buffered or streamed:
-
-```csharp
-public interface IHttpTransport
-{
-    Task<SmithyHttpClientResponse> SendAsync(
-        SmithyHttpRequest request,
-        SmithyHttpClientResponseMode responseMode,
-        CancellationToken cancellationToken = default);
-}
-```
-
-In `Buffer` mode, `SmithyHttpClientResponse.Body` is `Bytes` or `Empty`, and trailers
-are available through `Trailer` because the body has already been read. In
-`Stream` mode, `Body` is `SmithyHttpBody.Streaming`, `Trailer` resolves HTTP
-trailing headers once the body is read to end, and disposing the stream releases
-the connection. Every client streaming half has a uniform signature: a
-`SmithyHttpRequest` in, a `SmithyHttpClientResponse` out. The deserialize method's
-return type (`TOutput` versus `IAsyncEnumerable<TOutputEvent>`) reflects the
-payload shape.
+The request and response body types are shared with the client and named for
+what actually streams; see
+[streaming.md](streaming.md#framing-and-the-streaming-transport).
 
 ## Non-goals
 

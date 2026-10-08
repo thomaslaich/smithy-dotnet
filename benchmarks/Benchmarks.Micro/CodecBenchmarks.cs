@@ -129,33 +129,16 @@ public class XmlSerializationBenchmarks
     public byte[] Serialize() => Codec.Serialize(value);
 }
 
-/// <summary>Generated-style protobuf structure serialization with canonical field indexes.</summary>
+/// <summary>
+/// Protobuf structure serialization with canonical field indexes, through a schema written the way
+/// the generator writes one.
+/// </summary>
 [MemoryDiagnoser]
 public class ProtoSerializationBenchmarks
 {
     private static readonly ShapeId ProtoIndex = ShapeId.Parse("alloy.proto#protoIndex");
 
-    private static readonly Schema<ProtoValue> ValueSchema = Schemas
-        .Structure<ProtoValue, ProtoValueBuilder>(ShapeId.Parse("bench#ProtoValue"))
-        .Required(
-            "name",
-            value => value.Name,
-            (builder, value) => builder.Name = value,
-            Schemas.String,
-            [new Trait(ProtoIndex, Document.From(1))]
-        )
-        .Required(
-            "count",
-            value => value.Count,
-            (builder, value) => builder.Count = value,
-            Schemas.Integer,
-            [new Trait(ProtoIndex, Document.From(2))]
-        )
-        .Build(
-            static () => new ProtoValueBuilder(),
-            static builder => new ProtoValue(builder.Name!, builder.Count),
-            new ProtoValueSerializer()
-        );
+    private static readonly Schema<ProtoValue> ValueSchema = new ProtoValueSchema();
 
     private static readonly ICodec<ProtoValue> Codec = ProtoCodecFactory.Default.FromSchema(
         ValueSchema
@@ -174,13 +157,54 @@ public class ProtoSerializationBenchmarks
         public int Count { get; set; }
     }
 
-    public sealed class ProtoValueSerializer : IStructValueSerializer<ProtoValue>
+    private sealed class ProtoValueSchema()
+        : StructSchema<ProtoValue, ProtoValueBuilder>(
+            ShapeId.Parse("bench#ProtoValue"),
+            [
+                new(
+                    "name",
+                    Schemas.String,
+                    isRequired: true,
+                    [new Trait(ProtoIndex, Document.From(1))]
+                ),
+                new(
+                    "count",
+                    Schemas.Integer,
+                    isRequired: true,
+                    [new Trait(ProtoIndex, Document.From(2))]
+                ),
+            ]
+        )
     {
-        public void WriteMembers<TWriter>(ProtoValue value, ref TWriter writer)
-            where TWriter : struct, IStructMemberWriter
+        public override ProtoValueBuilder CreateTypedBuilder() => new();
+
+        public override ProtoValue Build(ProtoValueBuilder builder) =>
+            new(builder.Name!, builder.Count);
+
+        public override void SerializeMembers<TSerializer>(
+            ProtoValue value,
+            ref TSerializer serializer
+        )
         {
-            writer.WriteMember(0, value.Name);
-            writer.WriteMember(1, value.Count);
+            serializer.WriteString(0, value.Name);
+            serializer.WriteInteger(1, value.Count);
+        }
+
+        public override void DeserializeMember<TDeserializer>(
+            ProtoValueBuilder builder,
+            int index,
+            ref TDeserializer deserializer
+        )
+        {
+            switch (index)
+            {
+                case 0:
+                    builder.Name = deserializer.ReadString();
+                    break;
+                case 1:
+                    builder.Count = deserializer.ReadInteger();
+                    break;
+            }
         }
     }
 }
@@ -200,8 +224,9 @@ public class SerializationExecutionBenchmarks : IDisposable
     private static readonly JsonEncodedText CategoryName = JsonEncodedText.Encode("category");
     private static readonly JsonEncodedText TagsName = JsonEncodedText.Encode("tags");
 
-    private static readonly IJsonValueWriter<ListItemsOutput> SchemaWriter =
-        JsonWriterCompiler.Compile(ListItemsOutputSchema.Schema);
+    private static readonly JsonMemberPlan SchemaPlan = new JsonPlans(
+        honorJsonNameTrait: true
+    ).ForRoot(ListItemsOutputSchema.Schema, traits: null);
 
     private readonly ArrayBufferWriter<byte> destination = new();
     private Utf8JsonWriter writer = null!;
@@ -280,7 +305,8 @@ public class SerializationExecutionBenchmarks : IDisposable
     public int Schema()
     {
         ResetWriter();
-        SchemaWriter.Write(writer, smithyList);
+        var serializer = new JsonShapeSerializer(writer, SchemaPlan, materializeDefaults: true);
+        ListItemsOutputSchema.Schema.Write(MemberIndex.Root, smithyList, ref serializer);
         writer.Flush();
         return destination.WrittenCount;
     }

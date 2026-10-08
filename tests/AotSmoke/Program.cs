@@ -5,44 +5,7 @@ using NSmithy.Protocols.RestJson;
 using NSmithy.Server;
 using NSmithy.Server.Mcp;
 
-var inputSchema = Schemas
-    .Structure<AotInput, AotInputBuilder>(new ShapeId("example", "AotInput"))
-    .Required(
-        "userId",
-        static input => input.UserId,
-        static (builder, value) => builder.UserId = value,
-        Schemas.String,
-        traits: [RestTraits.HttpLabelTrait]
-    )
-    .Optional(
-        "requestToken",
-        static input => input.RequestToken!,
-        static (builder, value) => builder.RequestToken = value,
-        Schemas.String,
-        traits: [RestTraits.HttpHeaderTrait("X-Request-Token")]
-    )
-    .Required(
-        "pageSize",
-        static input => input.PageSize,
-        static (builder, value) => builder.PageSize = value,
-        Schemas.Integer,
-        traits: [RestTraits.HttpQueryTrait("pageSize")]
-    )
-    .Required(
-        "displayName",
-        static input => input.DisplayName,
-        static (builder, value) => builder.DisplayName = value,
-        Schemas.String
-    )
-    .Build(
-        static () => new AotInputBuilder(),
-        static builder => new AotInput(
-            builder.UserId!,
-            builder.RequestToken,
-            builder.PageSize,
-            builder.DisplayName!
-        )
-    );
+var inputSchema = new AotInputSchema();
 var operation = Schemas.Operation(
     new ShapeId("example", "UpdateUser"),
     inputSchema,
@@ -119,4 +82,65 @@ internal sealed class AotInputBuilder
     public int PageSize { get; set; }
 
     public string? DisplayName { get; set; }
+}
+
+internal sealed class AotInputSchema()
+    : StructSchema<AotInput, AotInputBuilder>(
+        new ShapeId("example", "AotInput"),
+        [
+            new("userId", Schemas.String, isRequired: true, [RestTraits.HttpLabelTrait]),
+            new(
+                "requestToken",
+                Schemas.String,
+                traits: [RestTraits.HttpHeaderTrait("X-Request-Token")]
+            ),
+            new(
+                "pageSize",
+                Schemas.Integer,
+                isRequired: true,
+                [RestTraits.HttpQueryTrait("pageSize")]
+            ),
+            new("displayName", Schemas.String, isRequired: true),
+        ]
+    )
+{
+    private static readonly Schema<string?> OptionalString = Schemas.NullableReference(
+        Schemas.String
+    );
+
+    public override AotInputBuilder CreateTypedBuilder() => new();
+
+    public override AotInput Build(AotInputBuilder builder) =>
+        new(builder.UserId!, builder.RequestToken, builder.PageSize, builder.DisplayName!);
+
+    public override void SerializeMembers<TSerializer>(AotInput value, ref TSerializer serializer)
+    {
+        Schemas.String.Write(0, value.UserId, ref serializer);
+        OptionalString.Write(1, value.RequestToken, ref serializer);
+        Schemas.Integer.Write(2, value.PageSize, ref serializer);
+        Schemas.String.Write(3, value.DisplayName, ref serializer);
+    }
+
+    public override void DeserializeMember<TDeserializer>(
+        AotInputBuilder builder,
+        int index,
+        ref TDeserializer deserializer
+    )
+    {
+        switch (index)
+        {
+            case 0:
+                builder.UserId = Schemas.String.Read(ref deserializer);
+                break;
+            case 1:
+                builder.RequestToken = OptionalString.Read(ref deserializer);
+                break;
+            case 2:
+                builder.PageSize = Schemas.Integer.Read(ref deserializer);
+                break;
+            case 3:
+                builder.DisplayName = Schemas.String.Read(ref deserializer);
+                break;
+        }
+    }
 }

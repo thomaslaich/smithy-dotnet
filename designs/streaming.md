@@ -1,131 +1,96 @@
-# Streaming Design
+# Streaming
 
-Target architecture for Smithy `@streaming` operations in generated C# clients,
-servers, protocols, and transports.
-
-## Goal
+How Smithy `@streaming` operations map to generated C# clients, servers,
+protocols, and transports.
 
 Smithy uses one trait, `@streaming`, for two different runtime shapes:
 
-- **Event streams** — a streaming member targets a union. The wire is a sequence
-  of logical messages. Generated .NET surfaces use `IAsyncEnumerable<TEvent>`.
-- **Streaming payload blobs** — a streaming member targets a blob. The wire is
-  one continuous body. Generated .NET surfaces use `Stream`.
+- **Event streams.** A streaming member targets a union. The wire is a sequence
+  of logical messages, and generated C# uses `IAsyncEnumerable<TEvent>`.
+- **Streaming blobs.** A streaming member targets a blob. The wire is one
+  continuous body, and generated C# uses `Stream`.
 
-These shapes should share model detection and cancellation conventions, but they
-should not share one operation protocol interface. Event streams are framed and
-serialized per event. Blob streams are HTTP body streams with content length,
-range, checksum, retry, and signing concerns.
+The two share model detection and cancellation conventions but not framing.
+Event streams are serialized per event; a streaming blob is an HTTP body with
+content-length, checksum, retry, and signing concerns.
 
 ## Model Mapping
 
 An operation is an event-stream operation when its input or output shape has a
-streaming member whose target is a union. The streaming member's target becomes
-the generated event type.
+streaming member targeting a union; the union becomes the generated event type.
+It is a blob-streaming operation when the streaming member targets a blob; the
+member becomes `Stream`.
 
-An operation is a blob-streaming operation when its input or output shape has a
-streaming member whose target is a blob. The streaming member becomes `Stream`
-in generated C#.
-
-Operations can still have non-streaming members around the streaming member.
-Those members remain part of the generated input/output structure and bind using
-the protocol's normal rules.
+Non-streaming members around the streaming member remain part of the generated
+input or output structure.
 
 ## Event Streams
 
-Event-stream operations are bound through the same `IServiceProtocol` operation
-factories as unary operations. Each receives the modeled input/output schemas,
-detects event-stream members from those schemas, and returns the same operation
-protocol interface for every operation shape:
+Event-stream operations bind through the same `IServiceProtocol` factories as
+unary operations, and one operation protocol covers unary, client-streaming,
+server-streaming, and duplex. Direction is a property of the modeled shapes: an
+input stream is an `IAsyncEnumerable<TEvent>` member on `TInput`, an output
+stream is one on `TOutput`, and a duplex operation has both. A protocol resolves
+each direction into framing delegates when it binds the operation.
+
+The event-stream member is serialized like any other member: the generated
+code calls `WriteEventStream(index, value.Events, ChatEventSchema.Schema)` and
+`ReadEventStream(ChatEventSchema.Schema)`. A protocol's binding serializer
+handles that call by framing each event through the event union's own
+`Serialize`, and handles every other member as an initial member. A body codec
+rejects an event-stream member when it builds its plan. A structure has at most
+one event-stream member.
+
+Generated operations keep the unary signature whatever the direction:
 
 ```csharp
-public interface IServiceProtocol
-{
-    IClientOperationProtocol<TInput, TOutput> ForClientOperation<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation);
-
-    IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation);
-}
+Task<ChatOutput> ChatAsync(ChatInput input, CancellationToken cancellationToken = default);
 ```
 
-Streaming is a property of how a body is framed, not of which operation protocol
-serves it: a protocol resolves each direction into framing delegates at bind
-time, so one operation protocol covers unary, client-streaming,
-server-streaming, and duplex.
+The operation returns once the response headers and any initial members are
+available. Events are enumerated lazily: the `IAsyncEnumerable<TEvent>` member
+owns the live request or response body.
 
-The protocol interface is async-capable even when a particular protocol path can
-complete synchronously:
+### Event Semantics
 
-```csharp
-public interface IClientOperationProtocol<TInput, TOutput>
-{
-    SmithyHttpRequest SerializeRequest(
-        TInput input,
-        CancellationToken cancellationToken = default);
+Each event is one member of the event union.
 
-    ValueTask<TOutput> DeserializeResponseAsync(
-        SmithyHttpClientResponse response,
-        CancellationToken cancellationToken = default);
-}
-```
-
-Stream direction is a property of the modeled shapes, not a separate protocol
-type: input streams have an `IAsyncEnumerable<TEvent>` member on `TInput`,
-output streams have one on `TOutput`, and duplex streams have both.
-
-### Generated API
-
-Server streaming:
-
-```csharp
-Task<WatchRoomOutput> WatchRoomAsync(
-    WatchRoomInput input,
-    CancellationToken cancellationToken = default);
-```
-
-Client streaming:
-
-```csharp
-Task<UploadTranscriptOutput> UploadTranscriptAsync(
-    UploadTranscriptInput input,
-    CancellationToken cancellationToken = default);
-```
-
-Bidirectional streaming:
-
-```csharp
-Task<ChatOutput> ChatAsync(
-    ChatInput input,
-    CancellationToken cancellationToken = default);
-```
-
-The operation returns once the response headers and modeled initial data are
-available. Event sequence enumeration is still lazy: the `IAsyncEnumerable<TEvent>`
-member owns the live response/request body stream.
+- **Framing.** REST and rpcv2Cbor frame each event as a
+  `vnd.amazon.eventstream` message. `:event-type` names the union member,
+  `:content-type` carries the body codec's media type, and the payload is the
+  member encoded by that codec. gRPC sends each event as one length-prefixed
+  protobuf message of the union.
+- **Initial members.** REST binds the non-stream members through its normal
+  HTTP bindings, with the event stream as the `@httpPayload`. rpcv2Cbor sends
+  them as an `initial-request` or `initial-response` event ahead of the stream,
+  and omits that event when there are none. gRPC rejects an event-stream shape
+  with any other members.
+- **Termination.** An `error` message (`:error-code`, `:error-message`) or an
+  `exception` message (`:exception-type`) ends the stream, and enumeration
+  throws. A gRPC server that fails mid-stream ends it with `grpc-status`
+  INTERNAL, and the client throws when the final `grpc-status` is missing or
+  non-zero.
+- **Unknown events.** gRPC skips an event whose union case it does not
+  recognize. JSON and CBOR protocols reject an unknown union member.
+- **Validation.** The server validates the initial members like a unary input.
+  Events are not validated.
 
 ### Framing and the Streaming Transport
 
-The protocol owns all wire framing; there is no shared frame type at the
-transport boundary. Client halves emit fully framed request bodies and deframe
-raw response streams themselves; server halves deframe the raw request body and
-emit framed response chunks:
+The protocol owns all wire framing; no frame type crosses the transport
+boundary. Client halves emit fully framed request bodies and deframe raw
+response streams; server halves deframe the raw request body and emit framed
+response chunks. `NSmithy.EventStream` provides `vnd.amazon.eventstream`
+message encoding with CRC validation, plus the shared event semantics above in
+`EventStreamEvents`. gRPC owns its 5-byte message prefix and the `grpc-status`
+trailer.
 
-- gRPC owns the 5-byte message prefix and validates the `grpc-status` HTTP/2
-  trailer after the response stream ends.
-- AWS event stream protocols own `vnd.amazon.eventstream` message framing,
-  typed per-message headers, and CRC validation.
-- Other event-stream protocols can provide their own frame encoding without
-  changing generated client signatures.
-
-The request and response streaming axes are independent, so the transport types
-are named for what actually streams. A streaming request body is a variant of
-the `SmithyHttpBody` union, `EventStreaming` (`IAsyncEnumerable<ReadOnlyMemory<byte>>`,
-each chunk written and flushed as one unit), so every client request is a
-`SmithyHttpRequest`: output-stream requests carry a `Bytes` body (unary),
-	input-stream and duplex requests carry an `EventStreaming` body. The response is
-	a single `SmithyHttpClientResponse`; the runtime asks the transport for either a
-	buffered body or a live body:
+Request and response streaming are independent, so the transport types are
+named for what actually streams. A streaming request carries a
+`SmithyHttpBody.EventStreaming` body (`IAsyncEnumerable<ReadOnlyMemory<byte>>`,
+each chunk written and flushed as one unit); every other request carries
+`Bytes`. The response is always one `SmithyHttpClientResponse`, and the runtime
+tells the transport whether to buffer it:
 
 ```csharp
 public interface IHttpTransport
@@ -137,24 +102,21 @@ public interface IHttpTransport
 }
 ```
 
-In `Buffer` mode, `SmithyHttpClientResponse.Body` is `Bytes` or `Empty`, and trailers
-are available through `Trailer` because the body has already been read. In
-`Stream` mode, `Body` is `SmithyHttpBody.Streaming`, `Trailer` resolves HTTP
-trailing headers once the stream is read to its end, and disposing the stream
-releases the connection. The same `HttpClient`-backed transport serves unary,
+In `Buffer` mode, `Body` is `Bytes` or `Empty`, and `Trailer` is available
+immediately. In `Stream` mode, `Body` is `SmithyHttpBody.Streaming`, `Trailer`
+resolves once the stream has been read to its end, and disposing the stream
+releases the connection. One `HttpClient`-backed transport serves unary,
 blob-streaming, and event-streaming protocols.
-The server side of this architecture — a shared `SmithyServerRuntime` and a
-protocol-neutral host adapter — is covered in
-[server-architecture.md](server-architecture.md).
 
-## Streaming Blob Payloads
+The server side, a shared `SmithyServerRuntime` and a protocol-neutral host
+adapter, is covered in [server-architecture.md](server-architecture.md).
 
-Streaming blob payloads belong to the unary operation path. A `GetObject`-style
-operation is still one request and one response; only the payload member is a
-stream.
+## Streaming Blobs
 
-The HTTP model represents the body as an explicit abstraction rather than
-parallel nullable byte and stream properties:
+A streaming blob belongs to the unary operation path: a `GetObject`-style
+operation is one request and one response, and only the payload member is a
+stream. The HTTP body is a closed union rather than parallel nullable byte and
+stream properties:
 
 ```csharp
 public abstract record SmithyHttpBody
@@ -163,103 +125,70 @@ public abstract record SmithyHttpBody
 
     public sealed record Bytes(byte[] Content) : SmithyHttpBody;
 
-    public sealed record Streaming(
-        System.IO.Stream Content,
-        long? ContentLength = null
-    ) : SmithyHttpBody;
+    public sealed record Streaming(Stream Content, long? ContentLength = null)
+        : SmithyHttpBody;
+
+    public sealed record EventStreaming(IAsyncEnumerable<ReadOnlyMemory<byte>> Content)
+        : SmithyHttpBody;
 }
 ```
 
-`SmithyHttpRequest` and `SmithyHttpClientResponse` carry a non-nullable
-`SmithyHttpBody` that defaults to `SmithyHttpBody.Empty`. Protocols that buffer
-payloads use `SmithyHttpBody.Bytes`; protocols that bind a streaming blob payload
-use `SmithyHttpBody.Streaming`.
+`SmithyHttpRequest` and `SmithyHttpClientResponse` carry a non-nullable body
+that defaults to `Empty`. A protocol binding a streaming blob uses `Streaming`.
 
-### Generated API
-
-Generated model types expose streaming blob members as `Stream`:
+Generated model types expose the member as `Stream`, and the other members keep
+their normal header, label, and query bindings:
 
 ```csharp
-public sealed record PutObjectInput(
-    string Bucket,
-    string Key,
-    Stream Body);
+public sealed record PutObjectInput(string Bucket, string Key, Stream Body);
 
-public sealed record GetObjectOutput(
-    Stream Body,
-    string? ContentType);
+public sealed record GetObjectOutput(Stream Body, string? ContentType);
 ```
-
-The containing input/output structure remains the operation's typed surface, so
-headers, labels, query members, and metadata keep their normal bindings.
 
 ### Ownership
 
-Request streams are owned by the caller. Generated clients read them but do not
-dispose them.
+Whoever creates a stream owns it, unless it is handed over:
 
-Response streams are owned by the response object returned to the caller. The
-generated output type should make disposal clear, either by implementing
-`IDisposable`/`IAsyncDisposable` when it owns a stream member or by wrapping the
-stream in an explicit response body type that owns disposal.
+- **Client request.** The caller owns the stream. The transport sends it from
+  its current position and leaves it open, so the caller can rewind and resend
+  it.
+- **Client response.** The stream is handed to the caller, who owns it;
+  disposing it releases the connection.
+- **Server request.** The host owns the stream, which is valid only while the
+  handler runs.
+- **Server response.** The handler hands its stream to the runtime, which
+  disposes it once the body is written.
 
-## Protocol Responsibilities
+A streaming request body cannot be replayed, so an operation with one gets
+exactly one attempt regardless of the retry strategy.
 
-Generated clients should not branch on protocol-specific streaming behavior.
-They should bind operation schemas once, then call the selected operation
-protocol.
+## Responsibilities
 
-Protocols own:
+Generated clients bind operation schemas once and call the selected operation
+protocol; they never branch on protocol-specific streaming behavior.
 
-- request URI/method/header binding
-- payload binding
-- event-frame wire encoding
-- response/error discrimination
-- trailer handling
-- content length and transfer encoding
-- checksum and signing hooks required by their wire format
+Protocols own request URI, method, and header binding; payload binding; event
+framing; response and error discrimination; trailer handling; and content
+length and transfer encoding.
 
-The shared runtime owns:
-
-- transport-neutral request/response shapes
-- cancellation propagation
-- async enumeration helpers
-- stream/body ownership conventions
-
-## Auth, Checksums, Retries, And Telemetry
-
-Streaming bodies affect cross-cutting client behavior:
-
-- Payload signing may require buffered hashes, `UNSIGNED-PAYLOAD`, or chunked
-  streaming signatures.
-- Checksums may need incremental calculation instead of buffering.
-- Retries are safe only when a request stream can be replayed or the caller opts
-  into a replay strategy.
-- Telemetry should measure both operation latency and stream duration.
-
-These concerns should attach to the client lifecycle through interceptors and
-typed execution context, not ad hoc protocol hooks.
+The shared runtime owns the transport-neutral request and response types,
+cancellation propagation, the response buffering mode, and stream ownership.
 
 ## Package Boundaries
 
-`NSmithy.Http` contains protocol-neutral concepts:
-
-- unary request/response body abstraction
-- event-stream request/response frame abstraction
-- event-stream protocol interfaces
-- transport abstractions
-
-Protocol packages own wire details:
-
-- gRPC frame prefix, HTTP/2 status/trailers, and protobuf event payloads
-- REST payload binding and streamed HTTP bodies
-- future AWS event-stream message framing
+- `NSmithy.Core`: event-stream schemas and the `WriteEventStream` and
+  `ReadEventStream` serializer calls.
+- `NSmithy.EventStream`: `vnd.amazon.eventstream` message framing and the
+  shared Smithy event semantics.
+- `NSmithy.Http`: the body union, the transport, and the protocol interfaces.
+- Protocol packages: everything wire-specific, such as gRPC's frame prefix and
+  trailers, REST payload binding, and rpcv2Cbor's initial messages.
 
 ## Non-goals
 
-- Do not route streaming blobs through event-stream interfaces.
-- Do not expose gRPC-specific types in generated client or server signatures.
-- Do not require `Grpc.Net`, `Grpc.Tools`, or protocol-specific generated code
-  for native NSmithy streaming.
-- Do not commit to AWS SDK-level streaming SigV4 behavior until the auth stack
-  has a proper identity/signer split.
+- Streaming blobs never go through event-stream framing.
+- Generated client and server signatures expose no gRPC-specific types.
+- Native streaming requires no `Grpc.Net`, `Grpc.Tools`, or protocol-specific
+  generated code.
+- SigV4 signs buffered payloads only. Chunked streaming signatures are out of
+  scope, so a streaming request body cannot be header-signed.

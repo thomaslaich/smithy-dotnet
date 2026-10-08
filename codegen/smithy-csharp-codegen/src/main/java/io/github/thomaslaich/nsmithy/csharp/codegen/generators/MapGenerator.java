@@ -80,7 +80,5 @@ public final class MapGenerator implements Runnable {
     } finally {
       writer.popState();
     }
-    writer.write("");
-    SchemaGenerator.writeMapSchema(writer, context, shape);
   }
 }

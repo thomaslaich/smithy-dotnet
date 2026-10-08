@@ -6,9 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import software.amazon.smithy.build.FileManifest;
@@ -31,11 +33,11 @@ final class TypeNameGeneratorTest {
           item: Book
           other: example.other#Book
           helper: Builder
-          serializer: ValueSerializer
+          serializer: GeneratedSchema
       }
       structure Book {}
       structure Builder {}
-      structure ValueSerializer {}
+      structure GeneratedSchema {}
       structure T {}
       union Choice {
           book: Book
@@ -49,22 +51,24 @@ final class TypeNameGeneratorTest {
     var writer =
         new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
             .apply("test.g.cs", "Example.Library");
-    new StructureGenerator(
-            context,
-            writer,
-            context
-                .model()
-                .expectShape(ShapeId.from("example.library#DeleteBookInput"), StructureShape.class))
-        .run();
+    var shape =
+        context
+            .model()
+            .expectShape(ShapeId.from("example.library#DeleteBookInput"), StructureShape.class);
+    new StructureGenerator(context, writer, shape).run();
+    SchemaGenerator.writeStructureSchema(writer, context, shape, List.copyOf(shape.members()));
     String generated = writer.toString();
-    assertTrue(generated.contains("Schema<DeleteBookInput> Schema"), generated);
+    assertTrue(generated.contains("StructSchema<DeleteBookInput, Builder> Schema"), generated);
+    assertTrue(
+        generated.contains("serializer.WriteStruct(0, value0, BookSchema.Schema);"), generated);
     assertTrue(generated.contains("Book? Item"), generated);
     assertTrue(generated.contains("BookSchema.Schema!"), generated);
     assertTrue(generated.contains("global::Example.Other.Book? Other"), generated);
     assertTrue(generated.contains("global::Example.Other.BookSchema.Schema!"), generated);
     assertTrue(generated.contains("global::Example.Library.Builder? Helper"), generated);
     assertTrue(
-        generated.contains("global::Example.Library.ValueSerializer? Serializer"), generated);
+        generated.contains("global::Example.Library.GeneratedSchema? Serializer"), generated);
+    assertTrue(generated.contains("private sealed class GeneratedSchema()"), generated);
     assertTrue(
         generated.contains("/// Example.Library.DeleteBookInput stays qualified in documentation."),
         generated);
@@ -79,15 +83,15 @@ final class TypeNameGeneratorTest {
     var writer =
         new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
             .apply("test.g.cs", "Example.Library");
-    new UnionGenerator(
-            context,
-            writer,
-            context.model().expectShape(ShapeId.from("example.library#Choice"), UnionShape.class))
-        .run();
+    var shape =
+        context.model().expectShape(ShapeId.from("example.library#Choice"), UnionShape.class);
+    new UnionGenerator(context, writer, shape).run();
+    SchemaGenerator.writeUnionSchema(writer, context, shape, ShapeSupport.sortedMembers(shape));
     String generated = writer.toString();
     assertTrue(generated.contains("public Book(global::Example.Library.Book value)"), generated);
     assertTrue(generated.contains("Func<global::Example.Library.T, T>"), generated);
     assertTrue(generated.contains("Schema<Choice> Schema"), generated);
+    assertTrue(generated.contains("case Choice.Book @case:"), generated);
   }
 
   private GenerationContext context() {

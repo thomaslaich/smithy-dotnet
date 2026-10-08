@@ -53,14 +53,20 @@ public sealed class RpcV2CborProtocol : IProtocol
             var inputValidator = validateInput ? SmithyValidator.FromSchema(operation.Input) : null;
 
             // Each direction is chosen independently; the four call shapes are their cross product.
-            var inputEvent = FindEventStreamEventSchema(operation.Input);
-            var outputEvent = FindEventStreamEventSchema(operation.Output);
-            RequestStrategy<TInput> request = inputEvent is null
-                ? UnaryRequestStrategy(operation.Input)
-                : CompileStreamingRequestStrategy(operation.Input, inputEvent);
-            ResponseStrategy<TOutput> response = outputEvent is null
-                ? UnaryResponseStrategy(operation.Output)
-                : CompileStreamingResponseStrategy(operation.Output, outputEvent);
+            var request = EventStreamBinding.TryBind(
+                operation.Input,
+                new StreamingRequestCompiler<TInput>(),
+                out var streamingRequest
+            )
+                ? streamingRequest
+                : UnaryRequestStrategy(operation.Input);
+            var response = EventStreamBinding.TryBind(
+                operation.Output,
+                new StreamingResponseCompiler<TOutput>(),
+                out var streamingResponse
+            )
+                ? streamingResponse
+                : UnaryResponseStrategy(operation.Output);
 
             return new OperationProtocol<TInput, TOutput>(
                 service,
@@ -73,69 +79,20 @@ public sealed class RpcV2CborProtocol : IProtocol
         }
     }
 
-    private static RequestStrategy<TInput> CompileStreamingRequestStrategy<TInput>(
-        Schema<TInput> inputSchema,
-        Schema eventSchema
-    ) =>
-        (
-            inputSchema.Resolved as IStructSchema<TInput>
-            ?? throw new InvalidOperationException(
-                $"rpcv2Cbor event stream shape '{inputSchema.Id}' must use a structure shape."
-            )
-        ).Accept(new StreamingRequestStructCompiler<TInput>(eventSchema));
-
-    private sealed class StreamingRequestStructCompiler<TInput>(Schema eventSchema)
-        : IStructSchemaVisitor<TInput, RequestStrategy<TInput>>
+    private sealed class StreamingRequestCompiler<TInput>
+        : IEventStreamBindingVisitor<TInput, RequestStrategy<TInput>>
     {
-        public RequestStrategy<TInput> Visit<TBuilder>(
-            IStructSchema<TInput, TBuilder> inputSchema
-        ) => eventSchema.Accept(new StreamingRequestEventCompiler<TInput, TBuilder>(inputSchema));
+        public RequestStrategy<TInput> Visit<TBuilder, TEvent>(
+            EventStreamBinding<TInput, TBuilder, TEvent> binding
+        ) => StreamingRequestStrategy(binding);
     }
 
-    private sealed class StreamingRequestEventCompiler<TInput, TBuilder>(
-        IStructSchema<TInput, TBuilder> inputSchema
-    ) : PartialSchemaVisitor<RequestStrategy<TInput>>
+    private sealed class StreamingResponseCompiler<TOutput>
+        : IEventStreamBindingVisitor<TOutput, ResponseStrategy<TOutput>>
     {
-        public override RequestStrategy<TInput> VisitUnion<TEvent>(IUnionSchema<TEvent> schema) =>
-            StreamingRequestStrategy(inputSchema, (Schema<TEvent>)schema);
-
-        protected override RequestStrategy<TInput> VisitDefault(Schema schema) =>
-            throw new InvalidOperationException(
-                $"rpcv2Cbor event streams must target a union schema; found '{schema.Id}'."
-            );
-    }
-
-    private static ResponseStrategy<TOutput> CompileStreamingResponseStrategy<TOutput>(
-        Schema<TOutput> outputSchema,
-        Schema eventSchema
-    ) =>
-        (
-            outputSchema.Resolved as IStructSchema<TOutput>
-            ?? throw new InvalidOperationException(
-                $"rpcv2Cbor event stream shape '{outputSchema.Id}' must use a structure shape."
-            )
-        ).Accept(new StreamingResponseStructCompiler<TOutput>(eventSchema));
-
-    private sealed class StreamingResponseStructCompiler<TOutput>(Schema eventSchema)
-        : IStructSchemaVisitor<TOutput, ResponseStrategy<TOutput>>
-    {
-        public ResponseStrategy<TOutput> Visit<TBuilder>(
-            IStructSchema<TOutput, TBuilder> outputSchema
-        ) =>
-            eventSchema.Accept(new StreamingResponseEventCompiler<TOutput, TBuilder>(outputSchema));
-    }
-
-    private sealed class StreamingResponseEventCompiler<TOutput, TBuilder>(
-        IStructSchema<TOutput, TBuilder> outputSchema
-    ) : PartialSchemaVisitor<ResponseStrategy<TOutput>>
-    {
-        public override ResponseStrategy<TOutput> VisitUnion<TEvent>(IUnionSchema<TEvent> schema) =>
-            StreamingResponseStrategy(outputSchema, (Schema<TEvent>)schema);
-
-        protected override ResponseStrategy<TOutput> VisitDefault(Schema schema) =>
-            throw new InvalidOperationException(
-                $"rpcv2Cbor event streams must target a union schema; found '{schema.Id}'."
-            );
+        public ResponseStrategy<TOutput> Visit<TBuilder, TEvent>(
+            EventStreamBinding<TOutput, TBuilder, TEvent> binding
+        ) => StreamingResponseStrategy(binding);
     }
 
     /// <summary>
@@ -181,7 +138,7 @@ public sealed class RpcV2CborProtocol : IProtocol
             },
             (request, _) =>
             {
-                var content = BodyBytes(request.Body);
+                var content = request.Body.BufferedContent;
                 return content.Length == 0
                     ? default
                     : ValueTask.FromResult(codec.Deserialize(content));
@@ -190,16 +147,14 @@ public sealed class RpcV2CborProtocol : IProtocol
         );
     }
 
-    private static RequestStrategy<TInput> StreamingRequestStrategy<
-        TInput,
-        TInputEvent,
-        TInputBuilder
-    >(IStructSchema<TInput, TInputBuilder> inputSchema, Schema<TInputEvent> eventSchema)
+    private static RequestStrategy<TInput> StreamingRequestStrategy<TInput, TBuilder, TEvent>(
+        EventStreamBinding<TInput, TBuilder, TEvent> stream
+    )
     {
-        var codec = CodecFactory.FromSchema(eventSchema);
-        var eventTypeOf = CompileEventType(eventSchema);
-        var binding = EventStreamShapeBinding<TInput, TInputEvent, TInputBuilder>.Create(
-            inputSchema,
+        var codec = CodecFactory.FromSchema(stream.EventSchema);
+        var eventTypeOf = CompileEventType(stream.EventSchema);
+        var binding = new EventStreamShapeBinding<TInput, TEvent, TBuilder>(
+            stream,
             materializeTopLevelDefaults: false
         );
         return new RequestStrategy<TInput>(
@@ -220,7 +175,7 @@ public sealed class RpcV2CborProtocol : IProtocol
             },
             (request, cancellationToken) =>
                 ReadShapeAsync(
-                    RequestStream(request),
+                    request.Body.OpenRead(),
                     disposeBody: false,
                     binding,
                     codec,
@@ -264,7 +219,7 @@ public sealed class RpcV2CborProtocol : IProtocol
                 EnsureResponse(response);
                 if (readsNoValue)
                 {
-                    DisposeResponseBody(response);
+                    response.Body.DisposeStream();
                     return ValueTask.FromResult((TOutput)(object)SmithyUnit.Value);
                 }
 
@@ -274,16 +229,14 @@ public sealed class RpcV2CborProtocol : IProtocol
         );
     }
 
-    private static ResponseStrategy<TOutput> StreamingResponseStrategy<
-        TOutput,
-        TOutputEvent,
-        TOutputBuilder
-    >(IStructSchema<TOutput, TOutputBuilder> outputSchema, Schema<TOutputEvent> eventSchema)
+    private static ResponseStrategy<TOutput> StreamingResponseStrategy<TOutput, TBuilder, TEvent>(
+        EventStreamBinding<TOutput, TBuilder, TEvent> stream
+    )
     {
-        var codec = CodecFactory.FromSchema(eventSchema);
-        var eventTypeOf = CompileEventType(eventSchema);
-        var binding = EventStreamShapeBinding<TOutput, TOutputEvent, TOutputBuilder>.Create(
-            outputSchema,
+        var codec = CodecFactory.FromSchema(stream.EventSchema);
+        var eventTypeOf = CompileEventType(stream.EventSchema);
+        var binding = new EventStreamShapeBinding<TOutput, TEvent, TBuilder>(
+            stream,
             materializeTopLevelDefaults: true
         );
         return new ResponseStrategy<TOutput>(
@@ -305,7 +258,7 @@ public sealed class RpcV2CborProtocol : IProtocol
             {
                 EnsureEventStreamResponse(response);
                 return ReadShapeAsync(
-                    ResponseStream(response),
+                    response.Body.OpenRead(),
                     disposeBody: true,
                     binding,
                     codec,
@@ -319,7 +272,7 @@ public sealed class RpcV2CborProtocol : IProtocol
 
     private static Func<TEvent, string> CompileEventType<TEvent>(Schema<TEvent> eventSchema) =>
         Schemas.CompileCaseName(
-            eventSchema.Resolved as IUnionSchema<TEvent>
+            eventSchema.Resolved as UnionSchema<TEvent>
                 ?? throw new InvalidOperationException(
                     "rpcv2Cbor event streams must target a union schema."
                 )
@@ -339,11 +292,11 @@ public sealed class RpcV2CborProtocol : IProtocol
 
         private readonly ModeledErrorSerializer serverErrors = ModeledErrorSerializer.Compile(
             operation.Errors,
-            error => error.Accept(ServerErrorCompiler.Instance)
+            ErrorWriter.Instance
         );
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
-            CompileErrors(operation.Errors);
+            HttpOperationError.Compile(operation.Errors, ErrorReader);
 
         public ISmithyValidator<TInput>? InputValidator { get; } = inputValidator;
 
@@ -430,7 +383,7 @@ public sealed class RpcV2CborProtocol : IProtocol
     }
 
     private static SmithyHttpServerResponse SerializeError<TError>(
-        ICborMemberWriter<TError>[] memberWriters,
+        CborMembersWriter<TError> memberWriters,
         TError error,
         string errorShapeId,
         int statusCode
@@ -451,11 +404,9 @@ public sealed class RpcV2CborProtocol : IProtocol
     /// </summary>
     /// <remarks>
     /// <see cref="SerializeError"/> compiles on every call, so it is the ad-hoc entry point; the
-    /// server path holds the result of this per error instead. Compiling per response also discarded
-    /// the <c>SchemaCompilationCache</c> that the fresh <c>CborWriterCompiler</c> carries, so a
-    /// shape referenced twice was compiled twice, every time.
+    /// server path holds the result of this per error instead.
     /// </remarks>
-    internal static ICborMemberWriter<TError>[] CompileErrorMemberWriters<TError>(
+    internal static CborMembersWriter<TError> CompileErrorMemberWriters<TError>(
         Schema<TError> errorSchema
     )
     {
@@ -468,16 +419,11 @@ public sealed class RpcV2CborProtocol : IProtocol
             );
         }
 
-        var visitor = new CborMemberWriterCompiler<TError>(
-            new CborWriterCompiler(),
-            materializeDefaults: true
-        );
-        structSchema.VisitMembers(visitor);
-        return visitor.Writers;
+        return new CborMembersWriter<TError>(structSchema);
     }
 
     private static byte[] SerializeErrorBody<TError>(
-        ICborMemberWriter<TError>[] memberWriters,
+        CborMembersWriter<TError> memberWriters,
         TError error,
         string errorShapeId
     )
@@ -486,11 +432,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         writer.WriteStartMap(null);
         writer.WriteTextString("__type");
         writer.WriteTextString(errorShapeId);
-        foreach (var memberWriter in memberWriters)
-        {
-            memberWriter.Write(writer, error);
-        }
-
+        memberWriters.Write(writer, error);
         writer.WriteEndMap();
         return writer.Encode();
     }
@@ -509,55 +451,25 @@ public sealed class RpcV2CborProtocol : IProtocol
             )
         );
 
-    private static (Type, Func<Exception, SmithyHttpServerResponse>) CompileServerError<TError>(
-        OperationErrorSchema<TError> error
-    )
-        where TError : Exception
+    private static readonly CodecErrorReader ErrorReader = new(
+        CodecFactory,
+        response => RequiredBody(response.Content)
+    );
+
+    private sealed class ErrorWriter : IErrorWriterCompiler
     {
-        // Compiled here rather than inside the returned closure. This previously rebuilt a
-        // CborWriterCompiler and recompiled the error shape's entire writer tree per response.
-        var memberWriters = CompileErrorMemberWriters(error.Schema);
-        var errorShapeId = error.Id.ToString();
-        var statusCode = error.HttpStatusCode;
+        public static ErrorWriter Instance { get; } = new();
 
-        return (
-            typeof(TError),
-            exception => SerializeError(memberWriters, (TError)exception, errorShapeId, statusCode)
-        );
-    }
-
-    private sealed class ServerErrorCompiler
-        : IOperationErrorSchemaVisitor<(Type, Func<Exception, SmithyHttpServerResponse>)>
-    {
-        public static ServerErrorCompiler Instance { get; } = new();
-
-        public (Type, Func<Exception, SmithyHttpServerResponse>) Visit<TError>(
+        public Func<TError, SmithyHttpServerResponse> Compile<TError>(
             OperationErrorSchema<TError> schema
         )
-            where TError : Exception => CompileServerError(schema);
-    }
-
-    private static HttpOperationError[] CompileErrors(
-        IReadOnlyList<IOperationErrorSchema> errors
-    ) => errors.Select(error => error.Accept(ErrorCompiler.Instance)).ToArray();
-
-    private sealed class ErrorCompiler : IOperationErrorSchemaVisitor<HttpOperationError>
-    {
-        public static ErrorCompiler Instance { get; } = new();
-
-        public HttpOperationError Visit<TError>(OperationErrorSchema<TError> schema)
-            where TError : Exception => CompileError(schema);
-    }
-
-    private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
-        where TError : Exception
-    {
-        var codec = CodecFactory.FromSchema(error.Schema);
-        return new HttpOperationError(
-            error.Id,
-            error.HttpStatusCode,
-            response => DeserializeRequiredBody(codec, response.Content)
-        );
+            where TError : Exception
+        {
+            var memberWriters = CompileErrorMemberWriters(schema.Schema);
+            var errorShapeId = schema.Id.ToString();
+            var statusCode = schema.HttpStatusCode;
+            return value => SerializeError(memberWriters, value, errorShapeId, statusCode);
+        }
     }
 
     private static SmithyHttpServerResponse BufferedResponse(
@@ -607,118 +519,35 @@ public sealed class RpcV2CborProtocol : IProtocol
         OperationSchema<TInput, TOutput> operation
     ) => $"/service/{service.Id.Name}/operation/{operation.Id.Name}";
 
-    private static async IAsyncEnumerable<ReadOnlyMemory<byte>> FrameEventsAsync<T>(
-        IAsyncEnumerable<T> events,
-        ICodec<T> codec,
-        Func<T, string> eventTypeOf,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    /// <summary>
+    /// An event-stream shape as rpcv2Cbor frames it: the stream's members other than the events
+    /// travel in an initial message ahead of them.
+    /// </summary>
+    private sealed class EventStreamShapeBinding<TShape, TEvent, TBuilder>(
+        EventStreamBinding<TShape, TBuilder, TEvent> stream,
+        bool materializeTopLevelDefaults
     )
     {
-        await foreach (
-            var value in events.WithCancellation(cancellationToken).ConfigureAwait(false)
-        )
-        {
-            yield return CreateEventStreamMessage(eventTypeOf(value), codec.Serialize(value))
-                .Encode();
-        }
-    }
-
-    private sealed class EventStreamShapeBinding<TShape, TEvent, TBuilder>
-    {
-        private EventStreamShapeBinding(
-            IStructSchema<TShape, TBuilder> structure,
-            IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>> streamMember,
-            IProjectionCodec<TShape, TBuilder> initialCodec,
-            bool hasInitialMembers
-        )
-        {
-            Structure = structure;
-            StreamMember = streamMember;
-            InitialCodec = initialCodec;
-            HasInitialMembers = hasInitialMembers;
-        }
-
-        public IStructSchema<TShape, TBuilder> Structure { get; }
-
-        public IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>> StreamMember { get; }
-
-        public IProjectionCodec<TShape, TBuilder> InitialCodec { get; }
-
-        public bool HasInitialMembers { get; }
-
-        public static EventStreamShapeBinding<TShape, TEvent, TBuilder> Create(
-            IStructSchema<TShape, TBuilder> structure,
-            bool materializeTopLevelDefaults
-        )
-        {
-            var visitor = new EventStreamMemberVisitor<TShape, TBuilder, TEvent>();
-            structure.VisitMembers(visitor);
-            var streamMember =
-                visitor.Member
-                ?? throw new InvalidOperationException(
-                    "rpcv2Cbor initial event streams require one event stream member."
-                );
-            return new EventStreamShapeBinding<TShape, TEvent, TBuilder>(
-                structure,
-                streamMember,
-                CodecFactory.FromProjection(
-                    Schemas.Project(structure, member => !ReferenceEquals(member, streamMember)),
-                    new CodecFactoryOptions
-                    {
-                        MaterializeTopLevelDefaults = materializeTopLevelDefaults,
-                    }
-                ),
-                visitor.MemberCount > 1
-            );
-        }
-
-        public IAsyncEnumerable<TEvent> GetEvents(TShape shape) =>
-            StreamMember.GetValue(shape)
-            ?? throw new InvalidOperationException(
-                $"Event stream member '{StreamMember.Name}' was null."
+        public IProjectionCodec<TShape, TBuilder> InitialCodec { get; } =
+            CodecFactory.FromProjection(
+                stream.InitialMembers,
+                new CodecFactoryOptions
+                {
+                    MaterializeTopLevelDefaults = materializeTopLevelDefaults,
+                }
             );
 
-        public TShape Build(byte[] initialPayload, IAsyncEnumerable<TEvent> events)
-        {
-            var builder = Structure.CreateTypedBuilder();
-            if (initialPayload.Length > 0)
-            {
-                InitialCodec.ReadInto(initialPayload, builder);
-            }
+        public bool HasInitialMembers => stream.HasInitialMembers;
 
-            StreamMember.SetValue(builder, events);
-            return Structure.Build(builder);
-        }
-    }
+        public IAsyncEnumerable<TEvent> GetEvents(TShape shape) => stream.GetEvents(shape);
 
-    private sealed class EventStreamMemberVisitor<TShape, TBuilder, TEvent>
-        : IMemberVisitor<TShape, TBuilder>
-    {
-        public IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>>? Member
-        {
-            get;
-            private set;
-        }
-
-        public int MemberCount { get; private set; }
-
-        public void Visit<TValue>(IMemberSchema<TShape, TBuilder, TValue> member)
-        {
-            MemberCount++;
-            if (member.Target is not EventStreamSchema<TEvent>)
-            {
-                return;
-            }
-
-            if (Member is not null)
-            {
-                throw new InvalidOperationException(
-                    "rpcv2Cbor initial event streams require one event stream member."
-                );
-            }
-
-            Member = (IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>>)(object)member;
-        }
+        public TShape Build(byte[] initialPayload, IAsyncEnumerable<TEvent> events) =>
+            stream.Build(
+                events,
+                initialPayload.Length > 0
+                    ? builder => InitialCodec.ReadInto(initialPayload, builder)
+                    : null
+            );
     }
 
     private static async IAsyncEnumerable<ReadOnlyMemory<byte>> FrameShapeAsync<
@@ -736,18 +565,18 @@ public sealed class RpcV2CborProtocol : IProtocol
     {
         if (binding.HasInitialMembers)
         {
-            yield return CreateEventStreamMessage(
-                    initialEventType,
-                    binding.InitialCodec.Serialize(shape)
-                )
+            yield return EventStreamEvents
+                .Create(initialEventType, binding.InitialCodec.Serialize(shape), ContentType)
                 .Encode();
         }
 
         await foreach (
-            var chunk in FrameEventsAsync(
+            var chunk in EventStreamEvents
+                .EncodeAsync(
                     binding.GetEvents(shape),
-                    eventCodec,
                     eventTypeOf,
+                    eventCodec.Serialize,
+                    ContentType,
                     cancellationToken
                 )
                 .ConfigureAwait(false)
@@ -756,22 +585,6 @@ public sealed class RpcV2CborProtocol : IProtocol
             yield return chunk;
         }
     }
-
-    private static EventStreamMessage CreateEventStreamMessage(
-        string eventType,
-        ReadOnlyMemory<byte> payload
-    ) =>
-        new(
-            new Dictionary<string, EventStreamHeaderValue>
-            {
-                [EventStreamHeaders.MessageType] = new EventStreamHeaderValue.Text(
-                    EventStreamHeaders.EventMessageType
-                ),
-                [EventStreamHeaders.EventType] = new EventStreamHeaderValue.Text(eventType),
-                [EventStreamHeaders.ContentType] = new EventStreamHeaderValue.Text(ContentType),
-            },
-            payload
-        );
 
     private static async ValueTask<TShape> ReadShapeAsync<TShape, TEvent, TBuilder>(
         Stream body,
@@ -794,12 +607,11 @@ public sealed class RpcV2CborProtocol : IProtocol
             if (await enumerator.MoveNextAsync().ConfigureAwait(false))
             {
                 var first = enumerator.Current;
-                EnsureEventMessage(first);
+                EventStreamEvents.EnsureEvent(first);
                 var eventType = first.StringHeader(EventStreamHeaders.EventType);
                 if (string.Equals(eventType, initialEventType, StringComparison.Ordinal))
                 {
-                    EnsureCborPayload(first);
-                    initialPayload = first.Payload;
+                    initialPayload = EventStreamEvents.ReadPayload(first, ContentType);
                 }
                 else
                 {
@@ -881,7 +693,7 @@ public sealed class RpcV2CborProtocol : IProtocol
         CancellationToken cancellationToken
     )
     {
-        var body = ResponseStream(response);
+        var body = response.Body.OpenRead();
         await using (body.ConfigureAwait(false))
         {
             using var stream = new MemoryStream();
@@ -891,103 +703,8 @@ public sealed class RpcV2CborProtocol : IProtocol
         }
     }
 
-    private static T? DeserializeEventMessage<T>(ICodec<T> codec, EventStreamMessage message)
-    {
-        EnsureEventMessage(message);
-        EnsureCborPayload(message);
-        return codec.Deserialize(message.Payload.ToArray());
-    }
-
-    private static void EnsureEventMessage(EventStreamMessage message)
-    {
-        var messageType = message.StringHeader(EventStreamHeaders.MessageType);
-        if (
-            !string.Equals(
-                messageType,
-                EventStreamHeaders.EventMessageType,
-                StringComparison.Ordinal
-            )
-        )
-        {
-            ThrowEventStreamException(message);
-        }
-    }
-
-    private static void EnsureCborPayload(EventStreamMessage message)
-    {
-        var contentType = message.StringHeader(EventStreamHeaders.ContentType);
-        if (
-            contentType is not null
-            && !string.Equals(contentType, ContentType, StringComparison.OrdinalIgnoreCase)
-        )
-        {
-            throw new InvalidDataException(
-                $"Expected rpcv2Cbor event payload content type '{ContentType}' but received '{contentType}'."
-            );
-        }
-    }
-
-    private static void ThrowEventStreamException(EventStreamMessage message)
-    {
-        var messageType = message.StringHeader(EventStreamHeaders.MessageType);
-        if (
-            string.Equals(
-                messageType,
-                EventStreamHeaders.ErrorMessageType,
-                StringComparison.Ordinal
-            )
-        )
-        {
-            var code = message.StringHeader(EventStreamHeaders.ErrorCode) ?? "UnknownError";
-            var text = message.StringHeader(EventStreamHeaders.ErrorMessage);
-            throw new InvalidOperationException(
-                string.IsNullOrEmpty(text) ? code : $"{code}: {text}"
-            );
-        }
-
-        if (
-            string.Equals(
-                messageType,
-                EventStreamHeaders.ExceptionMessageType,
-                StringComparison.Ordinal
-            )
-        )
-        {
-            var type = message.StringHeader(EventStreamHeaders.ExceptionType) ?? "UnknownException";
-            throw new InvalidOperationException($"rpcv2Cbor event stream exception: {type}.");
-        }
-
-        throw new InvalidDataException(
-            $"Unknown rpcv2Cbor event stream message type '{messageType ?? "<missing>"}'."
-        );
-    }
-
-    private static Stream RequestStream(SmithyHttpRequest request) =>
-        request.Body switch
-        {
-            SmithyHttpBody.Streaming streaming => streaming.Content,
-            SmithyHttpBody.Bytes bytes => new MemoryStream(bytes.Content, writable: false),
-            _ => Stream.Null,
-        };
-
-    private static Stream ResponseStream(SmithyHttpClientResponse response) =>
-        response.Body switch
-        {
-            SmithyHttpBody.Streaming streaming => streaming.Content,
-            SmithyHttpBody.Bytes bytes => new MemoryStream(bytes.Content, writable: false),
-            _ => Stream.Null,
-        };
-
-    private static void DisposeResponseBody(SmithyHttpClientResponse response)
-    {
-        if (response.Body is SmithyHttpBody.Streaming streaming)
-        {
-            streaming.Content.Dispose();
-        }
-    }
-
-    private static byte[] BodyBytes(SmithyHttpBody body) =>
-        body is SmithyHttpBody.Bytes bytes ? bytes.Content : [];
+    private static T? DeserializeEventMessage<T>(ICodec<T> codec, EventStreamMessage message) =>
+        codec.Deserialize(EventStreamEvents.ReadPayload(message, ContentType).ToArray());
 
     private static void EnsureEventStreamResponse(SmithyHttpClientResponse response)
     {
@@ -997,7 +714,7 @@ public sealed class RpcV2CborProtocol : IProtocol
             return;
         }
 
-        DisposeResponseBody(response);
+        response.Body.DisposeStream();
         throw new InvalidOperationException(
             $"Expected a rpcv2Cbor event stream response but received HTTP {(int)response.StatusCode}."
         );
@@ -1012,48 +729,10 @@ public sealed class RpcV2CborProtocol : IProtocol
     private static bool IsUnit<T>(Schema schema) =>
         typeof(T) == typeof(SmithyUnit) || Schemas.IsSyntheticUnit(schema);
 
-    private static Schema? FindEventStreamEventSchema<T>(Schema<T> schema)
-    {
-        if (schema.Resolved is not IStructSchema<T> structure)
-        {
-            return null;
-        }
-
-        var visitor = new EventStreamSchemaVisitor<T>();
-        structure.VisitMembers(visitor);
-        return visitor.EventSchema;
-    }
-
-    private sealed class EventStreamSchemaVisitor<T> : IMemberVisitor<T>
-    {
-        public Schema? EventSchema { get; private set; }
-
-        public void Visit<TValue>(IMemberSchema<T, TValue> member)
-        {
-            if (member.Target is not IEventStreamSchema eventStream)
-            {
-                return;
-            }
-
-            if (EventSchema is not null)
-            {
-                throw new InvalidOperationException("Operation shape has multiple event streams.");
-            }
-
-            EventSchema = eventStream.EventSchema;
-        }
-    }
-
-    private static T DeserializeRequiredBody<T>(ICodec<T> codec, byte[] content)
-    {
-        ArgumentNullException.ThrowIfNull(codec);
-        if (content.Length == 0)
-        {
-            throw new InvalidOperationException("Response body is required but was empty.");
-        }
-
-        return codec.Deserialize(content);
-    }
+    private static byte[] RequiredBody(byte[] content) =>
+        content.Length == 0
+            ? throw new InvalidOperationException("Response body is required but was empty.")
+            : content;
 
     public static bool HasResponse(SmithyHttpClientResponse response)
     {

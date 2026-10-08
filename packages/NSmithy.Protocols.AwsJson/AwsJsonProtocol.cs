@@ -74,7 +74,7 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             requestCodec = CodecFactory.FromSchema(operation.Input);
             responseCodec = CodecFactory.FromSchema(operation.Output);
             requestTransform = SmithyRequestModifiers.Compile(operation);
-            HttpErrors = CompileErrors(operation.Errors);
+            HttpErrors = HttpOperationError.Compile(operation.Errors, ErrorReader.Instance);
         }
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; }
@@ -147,38 +147,33 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
             schema.Resolved is IStructSchema<TOutput> structSchema
                 ? structSchema.BuildEmpty()
                 : default!;
+    }
 
-        private static HttpOperationError[] CompileErrors(
-            IReadOnlyList<IOperationErrorSchema> errors
-        ) => errors.Select(error => error.Accept(ErrorCompiler.Instance)).ToArray();
+    /// <summary>
+    /// Reads a modeled error from its JSON body. An empty body still identifies the error through
+    /// its discriminator, and yields an instance with no members.
+    /// </summary>
+    private sealed class ErrorReader : IErrorReaderCompiler
+    {
+        public static ErrorReader Instance { get; } = new();
 
-        private sealed class ErrorCompiler : IOperationErrorSchemaVisitor<HttpOperationError>
-        {
-            public static ErrorCompiler Instance { get; } = new();
-
-            public HttpOperationError Visit<TError>(OperationErrorSchema<TError> error)
-                where TError : Exception => CompileError(error);
-        }
-
-        private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
+        public Func<SmithyHttpClientResponse, TError> Compile<TError>(
+            OperationErrorSchema<TError> schema
+        )
             where TError : Exception
         {
             // An empty body still identifies the error through its discriminator, and yields an
             // instance with no members.
             var structure =
-                error.Schema.Resolved as IStructSchema<TError>
+                schema.Schema.Resolved as IStructSchema<TError>
                 ?? throw new InvalidOperationException(
-                    $"Error schema '{error.Schema.Id}' must be a structure schema."
+                    $"Error schema '{schema.Schema.Id}' must be a structure schema."
                 );
-            var codec = CodecFactory.FromSchema(error.Schema);
-            return new HttpOperationError(
-                error.Id,
-                error.HttpStatusCode,
-                response =>
-                    response.Content.Length == 0
-                        ? structure.BuildEmpty()
-                        : codec.Deserialize(response.Content)
-            );
+            var codec = CodecFactory.FromSchema(schema.Schema);
+            return response =>
+                response.Content.Length == 0
+                    ? structure.BuildEmpty()
+                    : codec.Deserialize(response.Content);
         }
     }
 

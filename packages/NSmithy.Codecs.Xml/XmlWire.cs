@@ -8,46 +8,6 @@ namespace NSmithy.Codecs.Xml;
 
 internal static class XmlWire
 {
-    private static readonly ShapeId DefaultTrait = new("smithy.api", "default");
-
-    /// <summary>
-    /// Resolves a member's modelled default once, at compile time; see the equivalent on
-    /// <c>JsonWire</c> for why only the write path may share the resolved instance.
-    /// </summary>
-    internal static (bool Present, T? Value) ResolveDefault<T>(
-        Schema<T> schema,
-        IReadOnlyDictionary<ShapeId, Trait> traits,
-        bool materialize
-    ) =>
-        materialize && TryCreateDefaultValue(schema, traits, out var value)
-            ? (true, value)
-            : (false, default);
-
-    internal static bool TryCreateDefaultValue<T>(
-        Schema<T> schema,
-        IReadOnlyDictionary<ShapeId, Trait> traits,
-        out T? value
-    )
-    {
-        if (CompileDefault(schema, traits) is { } create)
-        {
-            value = create();
-            return true;
-        }
-
-        value = default;
-        return false;
-    }
-
-    /// <summary>The member's <c>@default</c> as a factory, or null when it has none.</summary>
-    internal static Func<T>? CompileDefault<T>(
-        Schema<T> schema,
-        IReadOnlyDictionary<ShapeId, Trait> traits
-    ) =>
-        DefaultValues.TryCompile(schema, traits, honorClientOptional: true, out var create)
-            ? create
-            : null;
-
     // Element lookups match on local name only: AWS restXml responses carry a default
     // xmlns on the root (via @xmlNamespace) that all descendants inherit, whereas the
     // schema's element names are unqualified. Namespace-sensitive XName matching would
@@ -66,10 +26,10 @@ internal static class XmlWire
     internal static string MapKeyName(IMapSchema schema) =>
         XmlTraits.GetXmlName(schema.KeyMember) ?? "key";
 
-    internal static string MapValueName(IMemberSchema valueMember) =>
+    internal static string MapValueName(MemberSchema valueMember) =>
         XmlTraits.GetXmlName(valueMember) ?? "value";
 
-    internal static string ElementName(IMemberSchema member) =>
+    internal static string ElementName(MemberSchema member) =>
         XmlTraits.GetXmlName(member) ?? member.Name;
 
     internal static XName ChildElementName(XElement parent, string localName)

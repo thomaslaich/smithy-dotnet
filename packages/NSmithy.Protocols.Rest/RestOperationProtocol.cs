@@ -106,7 +106,7 @@ public sealed class RestServiceProtocol(
     ) : IStructSchemaVisitor<TInput, IOperationProtocol<TInput, TOutput>>
     {
         public IOperationProtocol<TInput, TOutput> Visit<TInputBuilder>(
-            IStructSchema<TInput, TInputBuilder> inputSchema
+            StructSchema<TInput, TInputBuilder> inputSchema
         ) =>
             outputSchema.Accept(
                 new OutputSchemaCompiler<TInput, TOutput, TInputBuilder>(
@@ -126,7 +126,7 @@ public sealed class RestServiceProtocol(
 
     private sealed class OutputSchemaCompiler<TInput, TOutput, TInputBuilder>(
         OperationSchema<TInput, TOutput> operation,
-        IStructSchema<TInput, TInputBuilder> inputSchema,
+        StructSchema<TInput, TInputBuilder> inputSchema,
         IReadOnlyList<IOperationErrorSchema> modeledErrors,
         IRestBodyCodecFactory codecFactory,
         Func<SmithyHttpClientResponse, string?> errorDiscriminator,
@@ -138,7 +138,7 @@ public sealed class RestServiceProtocol(
     ) : IStructSchemaVisitor<TOutput, IOperationProtocol<TInput, TOutput>>
     {
         public IOperationProtocol<TInput, TOutput> Visit<TOutputBuilder>(
-            IStructSchema<TOutput, TOutputBuilder> outputSchema
+            StructSchema<TOutput, TOutputBuilder> outputSchema
         ) =>
             CreateOperation(
                 operation,
@@ -162,8 +162,8 @@ public sealed class RestServiceProtocol(
         TOutputBuilder
     > CreateOperation<TInput, TOutput, TInputBuilder, TOutputBuilder>(
         OperationSchema<TInput, TOutput> operation,
-        IStructSchema<TInput, TInputBuilder> inputSchema,
-        IStructSchema<TOutput, TOutputBuilder> outputSchema,
+        StructSchema<TInput, TInputBuilder> inputSchema,
+        StructSchema<TOutput, TOutputBuilder> outputSchema,
         IReadOnlyList<IOperationErrorSchema> modeledErrors,
         IRestBodyCodecFactory codecFactory,
         Func<SmithyHttpClientResponse, string?> errorDiscriminator,
@@ -214,28 +214,35 @@ public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutpu
         RestProtocol.CompileErrorDeserializers(modeledErrors, codecFactory, rawStringPayloads);
 
     // restXml has no error discriminator header and does not serialize modeled errors server-side;
-    // an empty matcher leaves such exceptions to propagate (surfaced as a 500 by the host).
+    // with no compiled errors, such exceptions propagate (surfaced as a 500 by the host).
     private readonly ModeledErrorSerializer serverErrors = errorTypeHeader is null
-        ? ModeledErrorSerializer.Compile([], _ => throw new InvalidOperationException())
+        ? ModeledErrorSerializer.None
         : ModeledErrorSerializer.Compile(
             modeledErrors,
-            error =>
-                error.Accept(
-                    new ServerErrorCompiler(codecFactory, rawStringPayloads, errorTypeHeader)
-                )
+            new ErrorWriter(codecFactory, rawStringPayloads, errorTypeHeader)
         );
 
-    private sealed class ServerErrorCompiler(
+    private sealed class ErrorWriter(
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads,
         string errorTypeHeader
-    ) : IOperationErrorSchemaVisitor<(Type, Func<Exception, SmithyHttpServerResponse>)>
+    ) : IErrorWriterCompiler
     {
-        public (Type, Func<Exception, SmithyHttpServerResponse>) Visit<TError>(
-            OperationErrorSchema<TError> error
+        public Func<TError, SmithyHttpServerResponse> Compile<TError>(
+            OperationErrorSchema<TError> schema
         )
-            where TError : Exception =>
-            CompileServerError(error, codecFactory, rawStringPayloads, errorTypeHeader);
+            where TError : Exception
+        {
+            var serialize = RestProtocol.CompileErrorSerializer(
+                schema.Schema,
+                codecFactory,
+                rawStringPayloads,
+                errorTypeHeader
+            );
+            var errorShapeId = schema.Id.ToString();
+            var statusCode = schema.HttpStatusCode;
+            return value => serialize(value, errorShapeId, statusCode);
+        }
     }
 
     public SmithyHttpRequest SerializeRequest(
@@ -310,31 +317,5 @@ public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutpu
         }
 
         return serverErrors.TrySerialize(exception, out response);
-    }
-
-    private static (Type, Func<Exception, SmithyHttpServerResponse>) CompileServerError<TError>(
-        OperationErrorSchema<TError> error,
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads,
-        string errorTypeHeader
-    )
-        where TError : Exception
-    {
-        // Compiled here, where the rest of the operation's wire work is compiled, rather than inside
-        // the returned closure. This previously called SerializeError per response, which re-derived
-        // the shape's header/body member split and recompiled the projected body codec every time.
-        var serialize = RestProtocol.CompileErrorSerializer(
-            error.Schema,
-            codecFactory,
-            rawStringPayloads,
-            errorTypeHeader
-        );
-        var errorShapeId = error.Id.ToString();
-        var statusCode = error.HttpStatusCode;
-
-        return (
-            typeof(TError),
-            exception => serialize((TError)exception, errorShapeId, statusCode)
-        );
     }
 }

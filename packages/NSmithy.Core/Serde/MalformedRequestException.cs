@@ -59,25 +59,41 @@ public static class MalformedRequestSchema
         public string? Message { get; set; }
     }
 
-    public static Schema<MalformedRequestException> Schema { get; } =
-        Schemas
-            .Structure<MalformedRequestException, Builder>(
-                Id,
-                [new Trait(ShapeId.Parse("smithy.api#error"), Document.From("client"))]
-            )
-            .Required(
-                "message",
-                static value => value.Message,
-                static (builder, value) => builder.Message = value,
-                Schemas.NullableReference(Schemas.String)
-            )
-            .Build(
-                static () => new Builder(),
-                static builder =>
-                    MalformedRequestException.Serialization(
-                        builder.Message ?? throw new MissingRequiredMemberException("message")
-                    )
+    public static Schema<MalformedRequestException> Schema { get; } = new StructureSchema();
+
+    private sealed class StructureSchema()
+        : StructSchema<MalformedRequestException, Builder>(
+            MalformedRequestSchema.Id,
+            [new("message", Target0, isRequired: true)],
+            [new Trait(ShapeId.Parse("smithy.api#error"), Document.From("client"))]
+        )
+    {
+        private static readonly Schema<string?> Target0 = Schemas.NullableReference(Schemas.String);
+
+        public override Builder CreateTypedBuilder() => new();
+
+        public override MalformedRequestException Build(Builder builder) =>
+            MalformedRequestException.Serialization(
+                builder.Message ?? throw new MissingRequiredMemberException("message")
             );
+
+        public override void SerializeMembers<TSerializer>(
+            MalformedRequestException value,
+            ref TSerializer serializer
+        ) => Target0.Write(0, value.Message, ref serializer);
+
+        public override void DeserializeMember<TDeserializer>(
+            Builder builder,
+            int index,
+            ref TDeserializer deserializer
+        )
+        {
+            if (index == 0)
+            {
+                builder.Message = Target0.Read(ref deserializer);
+            }
+        }
+    }
 
     /// <summary>
     /// The wire name a protocol puts in its error discriminator, and the status that goes with it.

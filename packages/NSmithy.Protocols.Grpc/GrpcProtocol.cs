@@ -120,18 +120,17 @@ public sealed class GrpcProtocol : IProtocol
                 new SmithyHttpBody.Bytes(GrpcMessageFraming.Frame(codec.Serialize(input))),
             (request, _) =>
                 ValueTask.FromResult(
-                    codec.Deserialize(GrpcMessageFraming.ReadSingle(BodyBytes(request.Body)))
+                    codec.Deserialize(GrpcMessageFraming.ReadSingle(request.Body.BufferedContent))
                 )
         );
     }
 
-    private static RequestStrategy<TInput> StreamingRequest<TInput, TInputEvent>(
-        Schema<TInput> inputSchema,
-        Schema<TInputEvent> eventSchema
+    private static RequestStrategy<TInput> StreamingRequest<TInput, TBuilder, TEvent>(
+        EventStreamBinding<TInput, TBuilder, TEvent> binding
     )
     {
-        var codec = CodecFactory.FromSchema(eventSchema);
-        var binding = EventStreamShapeBinding<TInput, TInputEvent>.Create(inputSchema);
+        EnsureNoInitialMembers(binding.HasInitialMembers);
+        var codec = CodecFactory.FromSchema(binding.EventSchema);
         return new RequestStrategy<TInput>(
             (input, cancellationToken) =>
             {
@@ -143,7 +142,7 @@ public sealed class GrpcProtocol : IProtocol
             (request, cancellationToken) =>
                 ValueTask.FromResult(
                     binding.Build(
-                        ReadRequestEventsAsync(RequestStream(request), codec, cancellationToken)
+                        ReadRequestEventsAsync(request.Body.OpenRead(), codec, cancellationToken)
                     )
                 )
         );
@@ -151,45 +150,21 @@ public sealed class GrpcProtocol : IProtocol
 
     private static RequestStrategy<TInput>? CompileStreamingRequest<TInput>(
         Schema<TInput> inputSchema
-    )
+    ) =>
+        EventStreamBinding.TryBind(
+            inputSchema,
+            new StreamingRequestCompiler<TInput>(),
+            out var strategy
+        )
+            ? strategy
+            : null;
+
+    private sealed class StreamingRequestCompiler<TInput>
+        : IEventStreamBindingVisitor<TInput, RequestStrategy<TInput>>
     {
-        if (inputSchema.Resolved is not IStructSchema<TInput> structure)
-        {
-            return null;
-        }
-
-        var visitor = new StreamingRequestMemberVisitor<TInput>(inputSchema);
-        structure.VisitMembers(visitor);
-        return visitor.Strategy;
-    }
-
-    private sealed class StreamingRequestMemberVisitor<TInput>(Schema<TInput> inputSchema)
-        : IMemberVisitor<TInput>
-    {
-        public RequestStrategy<TInput>? Strategy { get; private set; }
-
-        public void Visit<TValue>(IMemberSchema<TInput, TValue> member)
-        {
-            if (member.Target is not IEventStreamSchema)
-            {
-                return;
-            }
-
-            if (Strategy is not null)
-            {
-                throw new InvalidOperationException("Operation shape has multiple event streams.");
-            }
-
-            Strategy = member.Target.Accept(new StreamingRequestCompiler<TInput>(inputSchema));
-        }
-    }
-
-    private sealed class StreamingRequestCompiler<TInput>(Schema<TInput> inputSchema)
-        : PartialSchemaVisitor<RequestStrategy<TInput>>
-    {
-        public override RequestStrategy<TInput> VisitEventStream<TEvent>(
-            EventStreamSchema<TEvent> schema
-        ) => StreamingRequest(inputSchema, schema.TypedEventSchema);
+        public RequestStrategy<TInput> Visit<TBuilder, TEvent>(
+            EventStreamBinding<TInput, TBuilder, TEvent> binding
+        ) => StreamingRequest(binding);
     }
 
     private static ResponseStrategy<TOutput> UnaryResponse<TOutput>(Schema<TOutput> outputSchema)
@@ -200,7 +175,7 @@ public sealed class GrpcProtocol : IProtocol
                 (_, _) => UnaryGrpcResponse(GrpcMessageFraming.Frame([]), OkTrailers),
                 (response, _) =>
                 {
-                    DisposeResponseBody(response);
+                    response.Body.DisposeStream();
                     return ValueTask.FromResult((TOutput)(object)SmithyUnit.Value);
                 },
                 IsStreaming: false
@@ -219,13 +194,12 @@ public sealed class GrpcProtocol : IProtocol
         );
     }
 
-    private static ResponseStrategy<TOutput> StreamingResponse<TOutput, TOutputEvent>(
-        Schema<TOutput> outputSchema,
-        Schema<TOutputEvent> eventSchema
+    private static ResponseStrategy<TOutput> StreamingResponse<TOutput, TBuilder, TEvent>(
+        EventStreamBinding<TOutput, TBuilder, TEvent> binding
     )
     {
-        var codec = CodecFactory.FromSchema(eventSchema);
-        var binding = EventStreamShapeBinding<TOutput, TOutputEvent>.Create(outputSchema);
+        EnsureNoInitialMembers(binding.HasInitialMembers);
+        var codec = CodecFactory.FromSchema(binding.EventSchema);
         return new ResponseStrategy<TOutput>(
             (output, cancellationToken) =>
             {
@@ -245,45 +219,31 @@ public sealed class GrpcProtocol : IProtocol
 
     private static ResponseStrategy<TOutput>? CompileStreamingResponse<TOutput>(
         Schema<TOutput> outputSchema
-    )
-    {
-        if (outputSchema.Resolved is not IStructSchema<TOutput> structure)
-        {
-            return null;
-        }
+    ) =>
+        EventStreamBinding.TryBind(
+            outputSchema,
+            new StreamingResponseCompiler<TOutput>(),
+            out var strategy
+        )
+            ? strategy
+            : null;
 
-        var visitor = new StreamingResponseMemberVisitor<TOutput>(outputSchema);
-        structure.VisitMembers(visitor);
-        return visitor.Strategy;
+    private sealed class StreamingResponseCompiler<TOutput>
+        : IEventStreamBindingVisitor<TOutput, ResponseStrategy<TOutput>>
+    {
+        public ResponseStrategy<TOutput> Visit<TBuilder, TEvent>(
+            EventStreamBinding<TOutput, TBuilder, TEvent> binding
+        ) => StreamingResponse(binding);
     }
 
-    private sealed class StreamingResponseMemberVisitor<TOutput>(Schema<TOutput> outputSchema)
-        : IMemberVisitor<TOutput>
+    private static void EnsureNoInitialMembers(bool hasInitialMembers)
     {
-        public ResponseStrategy<TOutput>? Strategy { get; private set; }
-
-        public void Visit<TValue>(IMemberSchema<TOutput, TValue> member)
+        if (hasInitialMembers)
         {
-            if (member.Target is not IEventStreamSchema)
-            {
-                return;
-            }
-
-            if (Strategy is not null)
-            {
-                throw new InvalidOperationException("Operation shape has multiple event streams.");
-            }
-
-            Strategy = member.Target.Accept(new StreamingResponseCompiler<TOutput>(outputSchema));
+            throw new NotSupportedException(
+                "gRPC event streaming with non-streaming initial members is not supported."
+            );
         }
-    }
-
-    private sealed class StreamingResponseCompiler<TOutput>(Schema<TOutput> outputSchema)
-        : PartialSchemaVisitor<ResponseStrategy<TOutput>>
-    {
-        public override ResponseStrategy<TOutput> VisitEventStream<TEvent>(
-            EventStreamSchema<TEvent> schema
-        ) => StreamingResponse(outputSchema, schema.TypedEventSchema);
     }
 
     private sealed class OperationProtocol<TInput, TOutput>(
@@ -300,11 +260,11 @@ public sealed class GrpcProtocol : IProtocol
 
         private readonly ModeledErrorSerializer serverErrors = ModeledErrorSerializer.Compile(
             operation.Errors,
-            error => error.Accept(ServerErrorCompiler.Instance)
+            ErrorWriter.Instance
         );
 
         public IReadOnlyList<HttpOperationError> HttpErrors { get; } =
-            CompileErrors(operation.Errors);
+            HttpOperationError.Compile(operation.Errors, ErrorReader);
 
         public ISmithyValidator<TInput>? InputValidator { get; } = inputValidator;
 
@@ -379,227 +339,39 @@ public sealed class GrpcProtocol : IProtocol
         return IsErrorResponse(response) ? response.Trailer?.Invoke(ErrorShapeHeader) : null;
     }
 
-    private static (Type, Func<Exception, SmithyHttpServerResponse>) CompileServerError<TError>(
-        OperationErrorSchema<TError> error
-    )
-        where TError : Exception =>
-        (
-            typeof(TError),
-            exception =>
-                SerializeGrpcError(
-                    error.Schema,
-                    (TError)exception,
-                    error.Id.ToString(),
-                    error.HttpStatusCode
-                )
-        );
+    private static readonly CodecErrorReader ErrorReader = new(
+        CodecFactory,
+        response => GrpcMessageFraming.ReadSingle(response.Content)
+    );
 
-    private sealed class ServerErrorCompiler
-        : IOperationErrorSchemaVisitor<(Type, Func<Exception, SmithyHttpServerResponse>)>
+    /// <summary>
+    /// Writes a modeled error as a framed message whose trailers carry the mapped
+    /// <c>grpc-status</c> and the error's shape id.
+    /// </summary>
+    private sealed class ErrorWriter : IErrorWriterCompiler
     {
-        public static ServerErrorCompiler Instance { get; } = new();
+        public static ErrorWriter Instance { get; } = new();
 
-        public (Type, Func<Exception, SmithyHttpServerResponse>) Visit<TError>(
+        public Func<TError, SmithyHttpServerResponse> Compile<TError>(
             OperationErrorSchema<TError> schema
         )
-            where TError : Exception => CompileServerError(schema);
-    }
-
-    private static SmithyHttpServerResponse SerializeGrpcError<TError>(
-        Schema<TError> errorSchema,
-        TError value,
-        string errorShapeId,
-        int statusCode
-    )
-    {
-        var status = GrpcStatusMapping.FromHttpStatus(statusCode);
-        var body = GrpcMessageFraming.Frame(CodecFactory.FromSchema(errorSchema).Serialize(value));
-        return UnaryGrpcResponse(
-            body,
-            _ =>
-                [
-                    new(GrpcStatusHeader, ((int)status).ToString(CultureInfo.InvariantCulture)),
-                    new(GrpcMessageHeader, errorShapeId),
-                    new(ErrorShapeHeader, errorShapeId),
-                ]
-        );
-    }
-
-    private static HttpOperationError[] CompileErrors(
-        IReadOnlyList<IOperationErrorSchema> errors
-    ) => errors.Select(error => error.Accept(ErrorCompiler.Instance)).ToArray();
-
-    private sealed class ErrorCompiler : IOperationErrorSchemaVisitor<HttpOperationError>
-    {
-        public static ErrorCompiler Instance { get; } = new();
-
-        public HttpOperationError Visit<TError>(OperationErrorSchema<TError> schema)
-            where TError : Exception => CompileError(schema);
-    }
-
-    private static HttpOperationError CompileError<TError>(OperationErrorSchema<TError> error)
-        where TError : Exception
-    {
-        var codec = CodecFactory.FromSchema(error.Schema);
-        return new HttpOperationError(
-            error.Id,
-            error.HttpStatusCode,
-            response =>
-            {
-                var payload = GrpcMessageFraming.ReadSingle(response.Content);
-                return codec.Deserialize(payload);
-            }
-        );
-    }
-
-    private abstract class EventStreamShapeBinding<TShape, TEvent>
-    {
-        public static EventStreamShapeBinding<TShape, TEvent> Create(Schema<TShape> schema)
+            where TError : Exception
         {
-            ArgumentNullException.ThrowIfNull(schema);
-            var resolved = schema.Resolved;
-            var unwrapped = resolved is INullableSchema nullable
-                ? nullable.Target.Resolved
-                : resolved;
-            return (EventStreamShapeBinding<TShape, TEvent>)unwrapped.Accept(new Visitor());
-        }
-
-        public abstract IAsyncEnumerable<TEvent> GetEvents(TShape shape);
-
-        public abstract TShape Build(IAsyncEnumerable<TEvent> events);
-
-        private sealed class Visitor : ISchemaVisitor<object>
-        {
-            public object VisitBoolean(Schema<bool> schema) => Unsupported();
-
-            public object VisitByte(Schema<sbyte> schema) => Unsupported();
-
-            public object VisitShort(Schema<short> schema) => Unsupported();
-
-            public object VisitInteger(Schema<int> schema) => Unsupported();
-
-            public object VisitLong(Schema<long> schema) => Unsupported();
-
-            public object VisitFloat(Schema<float> schema) => Unsupported();
-
-            public object VisitDouble(Schema<double> schema) => Unsupported();
-
-            public object VisitBigInteger(Schema<System.Numerics.BigInteger> schema) =>
-                Unsupported();
-
-            public object VisitBigDecimal(Schema<decimal> schema) => Unsupported();
-
-            public object VisitString(Schema<string> schema) => Unsupported();
-
-            public object VisitBlob(Schema<byte[]> schema) => Unsupported();
-
-            public object VisitTimestamp(Schema<DateTimeOffset> schema) => Unsupported();
-
-            public object VisitDocument(Schema<Document> schema) => Unsupported();
-
-            public object VisitNullable<T>(NullableSchema<T> schema)
-                where T : struct => Unsupported();
-
-            public object VisitStreamingBlob(Schema<Stream> schema) => Unsupported();
-
-            public object VisitEventStream<TEventValue>(EventStreamSchema<TEventValue> schema) =>
-                Unsupported();
-
-            public object VisitList<TCollection, TElement, TBuilder>(
-                IListSchema<TCollection, TElement, TBuilder> schema
-            ) => Unsupported();
-
-            public object VisitMap<TDictionary, TValue, TBuilder>(
-                IMapSchema<TDictionary, TValue, TBuilder> schema
-            ) => Unsupported();
-
-            public object VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema)
-            {
-                if (!typeof(T).IsAssignableTo(typeof(TShape)))
-                {
-                    return Unsupported();
-                }
-
-                var typed = (IStructSchema<TShape, TBuilder>)(object)schema;
-                var visitor = new EventStreamMemberVisitor<TShape, TBuilder, TEvent>();
-                typed.VisitMembers(visitor);
-                if (visitor.MemberCount != 1)
-                {
-                    throw new NotSupportedException(
-                        "gRPC event streaming with non-streaming initial members is not supported."
-                    );
-                }
-
-                return new TypedEventStreamShapeBinding<TShape, TEvent, TBuilder>(
-                    typed,
-                    visitor.Member
-                        ?? throw new InvalidOperationException(
-                            "gRPC event streams require one event stream member."
-                        )
-                );
-            }
-
-            public object VisitUnion<T>(IUnionSchema<T> schema) => Unsupported();
-
-            public object VisitStringEnum<T>(StringEnumSchema<T> schema)
-                where T : IStringEnumValue<T> => Unsupported();
-
-            public object VisitIntEnum<T>(IntEnumSchema<T> schema)
-                where T : struct, Enum => Unsupported();
-
-            private static object Unsupported() =>
-                throw new InvalidOperationException(
-                    "gRPC event streams must use a structure shape."
-                );
-        }
-    }
-
-    private sealed class TypedEventStreamShapeBinding<TShape, TEvent, TBuilder>(
-        IStructSchema<TShape, TBuilder> structure,
-        IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>> streamMember
-    ) : EventStreamShapeBinding<TShape, TEvent>
-    {
-        public override IAsyncEnumerable<TEvent> GetEvents(TShape shape) =>
-            streamMember.GetValue(shape)
-            ?? throw new InvalidOperationException(
-                $"Event stream member '{streamMember.Name}' was null."
-            );
-
-        public override TShape Build(IAsyncEnumerable<TEvent> events)
-        {
-            var builder = structure.CreateTypedBuilder();
-            streamMember.SetValue(builder, events);
-            return structure.Build(builder);
-        }
-    }
-
-    private sealed class EventStreamMemberVisitor<TShape, TBuilder, TEvent>
-        : IMemberVisitor<TShape, TBuilder>
-    {
-        public IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>>? Member
-        {
-            get;
-            private set;
-        }
-
-        public int MemberCount { get; private set; }
-
-        public void Visit<TValue>(IMemberSchema<TShape, TBuilder, TValue> member)
-        {
-            MemberCount++;
-            if (member.Target is not EventStreamSchema<TEvent>)
-            {
-                return;
-            }
-
-            if (Member is not null)
-            {
-                throw new InvalidOperationException(
-                    "gRPC event streams require one event stream member."
-                );
-            }
-
-            Member = (IMemberSchema<TShape, TBuilder, IAsyncEnumerable<TEvent>>)(object)member;
+            var codec = CodecFactory.FromSchema(schema.Schema);
+            var errorShapeId = schema.Id.ToString();
+            IReadOnlyList<KeyValuePair<string, string>> trailers =
+            [
+                new(
+                    GrpcStatusHeader,
+                    ((int)GrpcStatusMapping.FromHttpStatus(schema.HttpStatusCode)).ToString(
+                        CultureInfo.InvariantCulture
+                    )
+                ),
+                new(GrpcMessageHeader, errorShapeId),
+                new(ErrorShapeHeader, errorShapeId),
+            ];
+            return value =>
+                UnaryGrpcResponse(GrpcMessageFraming.Frame(codec.Serialize(value)), _ => trailers);
         }
     }
 
@@ -652,14 +424,6 @@ public sealed class GrpcProtocol : IProtocol
                 new(GrpcMessageHeader, error.Message),
             ];
 
-    private static Stream RequestStream(SmithyHttpRequest request) =>
-        request.Body switch
-        {
-            SmithyHttpBody.Streaming streaming => streaming.Content,
-            SmithyHttpBody.Bytes bytes => new MemoryStream(bytes.Content, writable: false),
-            _ => Stream.Null,
-        };
-
     // ---------------- shared wire helpers ----------------
 
     private static bool IsErrorResponse(SmithyHttpClientResponse response)
@@ -687,7 +451,7 @@ public sealed class GrpcProtocol : IProtocol
 
         // Transport-level failure (a 404, a 500 page, an HTTP/1.1 downgrade, ...). Release the
         // connection eagerly; the informative error comes from the captured status/headers.
-        DisposeResponseBody(response);
+        response.Body.DisposeStream();
         var message =
             response.Headers.TryGetValue(GrpcMessageHeader, out var values) && values.Count > 0
                 ? values[0]
@@ -781,7 +545,7 @@ public sealed class GrpcProtocol : IProtocol
         [EnumeratorCancellation] CancellationToken cancellationToken = default
     )
     {
-        var body = ResponseStream(response);
+        var body = response.Body.OpenRead();
         await using (body.ConfigureAwait(false))
         {
             await foreach (
@@ -807,7 +571,7 @@ public sealed class GrpcProtocol : IProtocol
         CancellationToken cancellationToken
     )
     {
-        var body = ResponseStream(response);
+        var body = response.Body.OpenRead();
         await using (body.ConfigureAwait(false))
         {
             await foreach (
@@ -826,22 +590,6 @@ public sealed class GrpcProtocol : IProtocol
     private static bool IsGrpcContentType(SmithyHttpClientResponse response) =>
         IsGrpcContentType(response.ContentHeaders);
 
-    private static Stream ResponseStream(SmithyHttpClientResponse response) =>
-        response.Body switch
-        {
-            SmithyHttpBody.Streaming streaming => streaming.Content,
-            SmithyHttpBody.Bytes bytes => new MemoryStream(bytes.Content, writable: false),
-            _ => Stream.Null,
-        };
-
-    private static void DisposeResponseBody(SmithyHttpClientResponse response)
-    {
-        if (response.Body is SmithyHttpBody.Streaming streaming)
-        {
-            streaming.Content.Dispose();
-        }
-    }
-
     private static bool IsGrpcContentType(
         IReadOnlyDictionary<string, IReadOnlyList<string>> contentHeaders
     ) =>
@@ -849,9 +597,6 @@ public sealed class GrpcProtocol : IProtocol
         && contentType.Any(value =>
             value.StartsWith("application/grpc", StringComparison.OrdinalIgnoreCase)
         );
-
-    private static byte[] BodyBytes(SmithyHttpBody body) =>
-        body is SmithyHttpBody.Bytes bytes ? bytes.Content : [];
 
     private static bool IsUnit<T>(Schema schema) =>
         typeof(T) == typeof(SmithyUnit) || Schemas.IsSyntheticUnit(schema);

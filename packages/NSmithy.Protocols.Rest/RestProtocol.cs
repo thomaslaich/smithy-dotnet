@@ -70,48 +70,64 @@ public static class RestProtocol
         var bound = binding.Input;
 
         var uri = new HttpUriBuilder(binding.UriTemplate);
-        foreach (var label in bound.LabelWriters)
+        var parts = new HttpMessageParts(uri);
+        bound.Write(input, parts);
+
+        if (parts.Query is { } queries)
         {
-            label.Write(uri, input);
+            foreach (var query in queries)
+            {
+                uri.AppendQuery(query.Key, query.Value);
+            }
         }
 
-        foreach (var query in bound.QueryWriters)
+        // Explicitly bound @httpQuery members take precedence over entries in an @httpQueryParams
+        // map.
+        if (parts.QueryParams is { } queryParameters)
         {
-            query.Write(uri, input);
+            foreach (var query in queryParameters)
+            {
+                if (!bound.BoundQueryNames.Contains(query.Key))
+                {
+                    uri.AppendQuery(query.Key, query.Value);
+                }
+            }
         }
-
-        bound.QueryParamsWriter?.Write(uri, input, bound.BoundQueryNames);
 
         var request = new SmithyHttpRequest(binding.HttpMethod, uri.ToString());
         request.Headers["Accept"] = [binding.AcceptType];
         request.ExpectStreamingResponse = binding.OutputHasStreamingPayload;
 
-        foreach (var header in bound.HeaderWriters)
+        if (parts.Headers is { } boundHeaders)
         {
-            if (header.Format(input) is not { } value)
+            foreach (var (header, value) in boundHeaders)
             {
-                continue;
-            }
-
-            switch (header.Slot)
-            {
-                case HeaderSlot.ContentType:
-                    request.ContentType = value;
-                    break;
-                case HeaderSlot.ContentHeaders:
-                    request.ContentHeaders[header.Name] = [value];
-                    break;
-                default:
-                    request.Headers[header.Name] = [value];
-                    break;
+                switch (header.Slot)
+                {
+                    case HeaderSlot.ContentType:
+                        request.ContentType = value;
+                        break;
+                    case HeaderSlot.ContentHeaders:
+                        request.ContentHeaders[header.Name] = [value];
+                        break;
+                    default:
+                        request.Headers[header.Name] = [value];
+                        break;
+                }
             }
         }
 
-        bound.PrefixHeaderWriter?.Write(request.Headers, input);
-
-        if (bound.PayloadWriter is { } writePayload)
+        if (parts.PrefixHeaders is { } boundPrefixHeaders)
         {
-            var body = writePayload(input);
+            foreach (var (name, value) in boundPrefixHeaders)
+            {
+                request.Headers.TryAdd(name, [value]);
+            }
+        }
+
+        if (bound.Payload is not null)
+        {
+            var body = parts.Payload;
             if (body.HasContent)
             {
                 request.Body = ToHttpBody(body);
@@ -153,23 +169,23 @@ public static class RestProtocol
         // place its absence is still observable: once the builder is finalized a missing value-type
         // member has already defaulted, and neither the finalizer nor the validator can tell it from
         // a value the caller actually sent.
-        foreach (var label in bound.LabelReaders)
+        foreach (var label in bound.Labels)
         {
-            if (labels.TryGetValue(label.Name, out var value))
+            if (labels.TryGetValue(label.MemberName, out var value))
             {
-                label.Read(builder, value);
+                bound.ReadText(builder, label, value);
             }
             else if (label.IsRequired)
             {
-                throw new MissingRequiredMemberException(label.Name);
+                throw new MissingRequiredMemberException(label.MemberName);
             }
         }
 
-        foreach (var header in bound.HeaderReaders)
+        foreach (var header in bound.Headers)
         {
             if (TryGetFirstHeader(request.Headers, header.Name, out var value))
             {
-                header.Read(builder, value);
+                bound.ReadHeader(builder, header, value);
             }
             else if (header.IsRequired)
             {
@@ -177,13 +193,13 @@ public static class RestProtocol
             }
         }
 
-        bound.PrefixHeaderReader?.Read(builder, request.Headers);
+        bound.ReadPrefixHeaders(builder, request.Headers);
 
-        foreach (var parameter in bound.QueryReaders)
+        foreach (var parameter in bound.Queries)
         {
             if (query.TryGetValue(parameter.Name, out var values) && values.Count > 0)
             {
-                parameter.Read(builder, values);
+                bound.ReadQuery(builder, parameter, values);
             }
             else if (parameter.IsRequired)
             {
@@ -194,11 +210,15 @@ public static class RestProtocol
         // On clients, explicitly bound @httpQuery members take precedence over entries in an
         // @httpQueryParams map. On servers the map represents the request as received and must
         // include every query parameter, including names that are also explicitly bound.
-        bound.QueryParamsReader?.Read(builder, query);
+        bound.ReadQueryParams(builder, query);
 
-        if (bound.PayloadReader is { } readPayload)
+        if (bound.Payload is not null)
         {
-            readPayload(BodyBytesOrNull(request.Body), BodyStreamOrNull(request.Body), builder);
+            bound.ReadPayload(
+                builder,
+                BodyBytesOrNull(request.Body),
+                BodyStreamOrNull(request.Body)
+            );
         }
         else if (
             bound.BodyCodec is { } codec
@@ -224,16 +244,16 @@ public static class RestProtocol
         var headers = new Dictionary<string, IReadOnlyList<string>>(
             StringComparer.OrdinalIgnoreCase
         );
-        var statusCode = bound.StatusCodeWriter?.Get(output) ?? binding.SuccessStatusCode;
-        WriteHeaders(bound, output, headers);
+        var parts = WriteHeaders(bound, output, headers);
+        var statusCode = parts.StatusCode ?? binding.SuccessStatusCode;
 
         var contentHeaders = new Dictionary<string, IReadOnlyList<string>>(
             StringComparer.OrdinalIgnoreCase
         );
         SmithyHttpBody responseBody = SmithyHttpBody.Empty;
-        if (bound.PayloadWriter is { } writePayload)
+        if (bound.Payload is not null)
         {
-            var body = writePayload(output);
+            var body = parts.Payload;
             responseBody = ToHttpBody(body);
             if (body.ContentType is not null)
             {
@@ -259,21 +279,32 @@ public static class RestProtocol
         return ReadResponse(binding.Output, response, prepareBody: null);
     }
 
-    private static void WriteHeaders<T, TBuilder>(
+    /// <summary>Writes a response's bound members, and its headers into <paramref name="headers"/>.</summary>
+    private static HttpMessageParts WriteHeaders<T, TBuilder>(
         RestStructBinding<T, TBuilder> bound,
         T value,
         Dictionary<string, IReadOnlyList<string>> headers
     )
     {
-        foreach (var header in bound.HeaderWriters)
+        var parts = new HttpMessageParts(uri: null);
+        bound.Write(value, parts);
+        if (parts.Headers is { } boundHeaders)
         {
-            if (header.Format(value) is { } text)
+            foreach (var (header, text) in boundHeaders)
             {
                 headers[header.Name] = [text];
             }
         }
 
-        bound.PrefixHeaderWriter?.Write(headers, value);
+        if (parts.PrefixHeaders is { } boundPrefixHeaders)
+        {
+            foreach (var (name, text) in boundPrefixHeaders)
+            {
+                headers.TryAdd(name, [text]);
+            }
+        }
+
+        return parts;
     }
 
     private static T ReadResponse<T, TBuilder>(
@@ -283,23 +314,27 @@ public static class RestProtocol
     )
     {
         var builder = bound.Schema.CreateTypedBuilder();
-        bound.StatusCodeReader?.Read(builder, (int)response.StatusCode);
-        foreach (var header in bound.HeaderReaders)
+        bound.ReadStatusCode(builder, (int)response.StatusCode);
+        foreach (var header in bound.Headers)
         {
             if (
                 TryGetFirstHeader(response.Headers, header.Name, out var value)
                 || TryGetFirstHeader(response.ContentHeaders, header.Name, out value)
             )
             {
-                header.Read(builder, value);
+                bound.ReadHeader(builder, header, value);
             }
         }
 
-        bound.PrefixHeaderReader?.Read(builder, response.Headers);
+        bound.ReadPrefixHeaders(builder, response.Headers);
 
-        if (bound.PayloadReader is { } readPayload)
+        if (bound.Payload is not null)
         {
-            readPayload(BodyBytesOrNull(response.Body), BodyStreamOrNull(response.Body), builder);
+            bound.ReadPayload(
+                builder,
+                BodyBytesOrNull(response.Body),
+                BodyStreamOrNull(response.Body)
+            );
         }
         else if (bound.BodyCodec is { } codec && response.Content.Length > 0)
         {
@@ -318,80 +353,54 @@ public static class RestProtocol
         bool rawStringPayloads
     )
     {
-        ArgumentNullException.ThrowIfNull(errors);
         ArgumentNullException.ThrowIfNull(codecFactory);
-        var compiler = new ErrorDeserializerCompiler(codecFactory, rawStringPayloads);
-        return errors.Select(error => error.Accept(compiler)).ToArray();
+        return HttpOperationError.Compile(errors, new ErrorReader(codecFactory, rawStringPayloads));
     }
 
-    private sealed class ErrorDeserializerCompiler(
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads
-    ) : IOperationErrorSchemaVisitor<HttpOperationError>
+    /// <summary>
+    /// Reads a modeled error the way a response is read: header and payload bindings first, then
+    /// the remaining members from the body.
+    /// </summary>
+    private sealed class ErrorReader(IRestBodyCodecFactory codecFactory, bool rawStringPayloads)
+        : IErrorReaderCompiler
     {
-        public HttpOperationError Visit<TError>(OperationErrorSchema<TError> error)
+        public Func<SmithyHttpClientResponse, TError> Compile<TError>(
+            OperationErrorSchema<TError> schema
+        )
             where TError : Exception =>
-            CompileErrorDeserializer(error, codecFactory, rawStringPayloads);
+            schema.Schema.Resolved is IStructSchema<TError> structure
+                ? structure.Accept(new ErrorStructReader<TError>(codecFactory, rawStringPayloads))
+                : throw new InvalidOperationException(
+                    $"Error schema '{schema.Schema.Id}' must be a structure schema."
+                );
     }
 
-    private static HttpOperationError CompileErrorDeserializer<TError>(
-        OperationErrorSchema<TError> error,
+    private sealed class ErrorStructReader<TError>(
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads
-    )
-        where TError : Exception
+    ) : IStructSchemaVisitor<TError, Func<SmithyHttpClientResponse, TError>>
     {
-        if (error.Schema.Resolved is not IStructSchema<TError> schema)
+        public Func<SmithyHttpClientResponse, TError> Visit<TBuilder>(
+            StructSchema<TError, TBuilder> schema
+        )
         {
-            throw new InvalidOperationException(
-                $"Error schema '{error.Schema.Id}' must be a structure schema."
-            );
-        }
-
-        return schema.Accept(
-            new ErrorStructDeserializerCompiler<TError>(error, codecFactory, rawStringPayloads)
-        );
-    }
-
-    private sealed class ErrorStructDeserializerCompiler<TError>(
-        OperationErrorSchema<TError> error,
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads
-    ) : IStructSchemaVisitor<TError, HttpOperationError>
-        where TError : Exception
-    {
-        public HttpOperationError Visit<TBuilder>(IStructSchema<TError, TBuilder> schema) =>
-            CompileErrorDeserializer(error, schema, codecFactory, rawStringPayloads);
-    }
-
-    private static HttpOperationError CompileErrorDeserializer<TError, TBuilder>(
-        OperationErrorSchema<TError> error,
-        IStructSchema<TError, TBuilder> schema,
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads
-    )
-        where TError : Exception
-    {
-        var bound = RestStructBinding<TError, TBuilder>.Compile(
-            schema,
-            HttpBindingSide.Response,
-            codecFactory,
-            rawStringPayloads,
-            emptyStructOnNullPayload: false
-        );
-        if (bound.PayloadMember is null && bound.BodyMemberNames.Count > 0)
-        {
-            bound.BodyCodec = bound.CompileBodyCodec(
+            var bound = RestStructBinding<TError, TBuilder>.Compile(
+                schema,
+                HttpBindingSide.Response,
                 codecFactory,
-                new CodecFactoryOptions { MaterializeTopLevelDefaults = true }
+                rawStringPayloads,
+                emptyStructOnNullPayload: false
             );
-        }
+            if (bound.PayloadMember is null && bound.BodyMemberNames.Count > 0)
+            {
+                bound.BodyCodec = bound.CompileBodyCodec(
+                    codecFactory,
+                    new CodecFactoryOptions { MaterializeTopLevelDefaults = true }
+                );
+            }
 
-        return new HttpOperationError(
-            error.Id,
-            error.HttpStatusCode,
-            response => ReadResponse(bound, response, codecFactory.PrepareErrorBody)
-        );
+            return response => ReadResponse(bound, response, codecFactory.PrepareErrorBody);
+        }
     }
 
     /// <summary>
@@ -467,13 +476,12 @@ public static class RestProtocol
         string errorTypeHeader
     ) : IStructSchemaVisitor<TError, RestErrorSerializer<TError>>
     {
-        public RestErrorSerializer<TError> Visit<TBuilder>(
-            IStructSchema<TError, TBuilder> schema
-        ) => CompileStructuredError(schema, codecFactory, rawStringPayloads, errorTypeHeader);
+        public RestErrorSerializer<TError> Visit<TBuilder>(StructSchema<TError, TBuilder> schema) =>
+            CompileStructuredError(schema, codecFactory, rawStringPayloads, errorTypeHeader);
     }
 
     private static RestErrorSerializer<TError> CompileStructuredError<TError, TBuilder>(
-        IStructSchema<TError, TBuilder> schema,
+        StructSchema<TError, TBuilder> schema,
         IRestBodyCodecFactory codecFactory,
         bool rawStringPayloads,
         string errorTypeHeader
@@ -487,22 +495,15 @@ public static class RestProtocol
             emptyStructOnNullPayload: false
         );
 
-        // The body writer is where the bulk of the per-response cost was: without this the projected
-        // schema was rebuilt and a whole codec recompiled for every error served.
-        Func<TError, RestBody> writeBody;
-        if (bound.PayloadWriter is { } writePayload)
-        {
-            writeBody = writePayload;
-        }
-        else
-        {
-            var codec = bound.CompileBodyCodec(
+        // The body codec is compiled here, once: without that the projected schema was rebuilt and a
+        // whole codec recompiled for every error served.
+        var codec = bound.Payload is null
+            ? bound.CompileBodyCodec(
                 codecFactory,
                 new CodecFactoryOptions { MaterializeTopLevelDefaults = true }
-            );
-            var contentType = codecFactory.ContentType;
-            writeBody = value => new RestBody(codec.Serialize(value), contentType);
-        }
+            )
+            : null;
+        var contentType = codecFactory.ContentType;
 
         return (value, errorShapeId, statusCode) =>
         {
@@ -512,12 +513,14 @@ public static class RestProtocol
             {
                 [errorTypeHeader] = [LocalName(errorShapeId)],
             };
-            WriteHeaders(bound, value, headers);
+            var parts = WriteHeaders(bound, value, headers);
 
             var contentHeaders = new Dictionary<string, IReadOnlyList<string>>(
                 StringComparer.OrdinalIgnoreCase
             );
-            var body = writeBody(value);
+            var body = codec is null
+                ? parts.Payload
+                : new RestBody(codec.Serialize(value), contentType);
             if (body.ContentType is not null)
             {
                 contentHeaders["Content-Type"] = [body.ContentType];
@@ -617,27 +620,6 @@ public static class RestProtocol
     private static Stream? BodyStreamOrNull(SmithyHttpBody body) =>
         body is SmithyHttpBody.Streaming stream ? stream.Content : null;
 
-    internal static async IAsyncEnumerable<ReadOnlyMemory<byte>> FrameEventsAsync<TEvent>(
-        IAsyncEnumerable<TEvent> events,
-        ICodec<TEvent> codec,
-        Func<TEvent, string> eventTypeOf,
-        string payloadContentType,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default
-    )
-    {
-        await foreach (
-            var value in events.WithCancellation(cancellationToken).ConfigureAwait(false)
-        )
-        {
-            yield return CreateEventStreamMessage(
-                    eventTypeOf(value),
-                    codec.Serialize(value),
-                    payloadContentType
-                )
-                .Encode();
-        }
-    }
-
     internal static async IAsyncEnumerable<TEvent> ReadEventsAsync<TEvent>(
         Stream stream,
         ICodec<TEvent> codec,
@@ -654,109 +636,15 @@ public static class RestProtocol
                     .ConfigureAwait(false)
             )
             {
-                var value = DeserializeEventMessage(codec, message, payloadContentType);
+                var value = codec.Deserialize(
+                    EventStreamEvents.ReadPayload(message, payloadContentType).ToArray()
+                );
                 if (value is not null)
                 {
                     yield return value;
                 }
             }
         }
-    }
-
-    private static EventStreamMessage CreateEventStreamMessage(
-        string eventType,
-        ReadOnlyMemory<byte> payload,
-        string payloadContentType
-    ) =>
-        new(
-            new Dictionary<string, EventStreamHeaderValue>
-            {
-                [EventStreamHeaders.MessageType] = new EventStreamHeaderValue.Text(
-                    EventStreamHeaders.EventMessageType
-                ),
-                [EventStreamHeaders.EventType] = new EventStreamHeaderValue.Text(eventType),
-                [EventStreamHeaders.ContentType] = new EventStreamHeaderValue.Text(
-                    payloadContentType
-                ),
-            },
-            payload
-        );
-
-    private static TEvent? DeserializeEventMessage<TEvent>(
-        ICodec<TEvent> codec,
-        EventStreamMessage message,
-        string payloadContentType
-    )
-    {
-        EnsureEventMessage(message);
-        EnsureEventPayload(message, payloadContentType);
-        return codec.Deserialize(message.Payload.ToArray());
-    }
-
-    private static void EnsureEventMessage(EventStreamMessage message)
-    {
-        var messageType = message.StringHeader(EventStreamHeaders.MessageType);
-        if (
-            string.Equals(
-                messageType,
-                EventStreamHeaders.EventMessageType,
-                StringComparison.Ordinal
-            )
-        )
-        {
-            return;
-        }
-
-        ThrowEventStreamException(message);
-    }
-
-    private static void EnsureEventPayload(EventStreamMessage message, string payloadContentType)
-    {
-        var contentType = message.StringHeader(EventStreamHeaders.ContentType);
-        if (
-            contentType is not null
-            && !contentType.StartsWith(payloadContentType, StringComparison.OrdinalIgnoreCase)
-        )
-        {
-            throw new InvalidDataException(
-                $"Expected REST event payload content type '{payloadContentType}' but received '{contentType}'."
-            );
-        }
-    }
-
-    private static void ThrowEventStreamException(EventStreamMessage message)
-    {
-        var messageType = message.StringHeader(EventStreamHeaders.MessageType);
-        if (
-            string.Equals(
-                messageType,
-                EventStreamHeaders.ErrorMessageType,
-                StringComparison.Ordinal
-            )
-        )
-        {
-            var code = message.StringHeader(EventStreamHeaders.ErrorCode) ?? "UnknownError";
-            var text = message.StringHeader(EventStreamHeaders.ErrorMessage);
-            throw new InvalidOperationException(
-                string.IsNullOrEmpty(text) ? code : $"{code}: {text}"
-            );
-        }
-
-        if (
-            string.Equals(
-                messageType,
-                EventStreamHeaders.ExceptionMessageType,
-                StringComparison.Ordinal
-            )
-        )
-        {
-            var type = message.StringHeader(EventStreamHeaders.ExceptionType) ?? "UnknownException";
-            throw new InvalidOperationException($"REST event stream exception: {type}.");
-        }
-
-        throw new InvalidDataException(
-            $"Unknown REST event stream message type '{messageType ?? "<missing>"}'."
-        );
     }
 
     private static string LocalName(string shapeId)

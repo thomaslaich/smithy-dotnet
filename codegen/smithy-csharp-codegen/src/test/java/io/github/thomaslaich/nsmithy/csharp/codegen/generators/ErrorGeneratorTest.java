@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.nio.file.Files;
@@ -88,11 +89,10 @@ final class ErrorGeneratorTest {
 
     assertTrue(
         generated.contains(
-            "private sealed class ValueSerializer :"
-                + " IStructValueSerializer<global::Example.Example.Weather.ValidationError>"),
+            ": StructSchema<global::Example.Example.Weather.ValidationError, Builder>("),
         generated);
-    assertTrue(generated.contains("writer.WriteMember<string?>(0, value.Message);"), generated);
-    assertTrue(generated.contains("new ValueSerializer())"), generated);
+    assertTrue(generated.contains("serializer.WriteString("), generated);
+    assertTrue(generated.contains("builder.Message = deserializer.ReadString();"), generated);
   }
 
   private String renderError(String shapeId) throws Exception {
@@ -120,6 +120,7 @@ final class ErrorGeneratorTest {
     var shape = model.expectShape(ShapeId.from(shapeId), StructureShape.class);
 
     new ErrorGenerator(context, writer, shape).run();
+    SchemaGenerator.writeStructureSchema(writer, context, shape, ShapeSupport.sortedMembers(shape));
 
     return writer.toString();
   }

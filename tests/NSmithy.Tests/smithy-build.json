@@ -1,0 +1,124 @@
+{
+  "version": "1.0",
+  "sources": [
+    "model"
+  ],
+  "maven": {
+    "repositories": [
+      {
+        "url": "https://repo.maven.apache.org/maven2/"
+      }
+    ],
+    "dependencies": [
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
+      "software.amazon.smithy:smithy-aws-traits:1.73.0",
+      "com.disneystreaming.alloy:alloy-core:0.3.40"
+    ]
+  },
+  "projections": {
+    "core": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.core#Fixtures",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "json": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.json#Fixtures",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "cbor": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.cbor#Fixtures",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "xml": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.xml#Fixtures",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "proto": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.proto#Fixtures",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "validation": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.validation#Fixtures",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "rest": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.rest#Fixtures",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "grpc": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.grpc#Fixtures",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "rpcv2cbor": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.rpcv2cbor#Fixtures",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "awsjson": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.awsjson#Fixtures",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "awsquery": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.awsquery#Fixtures",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "server": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.server#Fixtures",
+          "baseNamespace": ""
+        }
+      }
+    },
+    "mcp": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.mcp#Fixtures",
+          "baseNamespace": ""
+        }
+      }
+    }
+  }
+}

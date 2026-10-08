@@ -25,15 +25,10 @@ internal enum WireType : byte
 /// A minimal append-only protobuf encoder backed by a pooled buffer. Nested messages reserve their
 /// length prefix in this buffer and backpatch it when complete.
 /// </summary>
-internal sealed class ProtoWriter : IDisposable
+internal sealed class ProtoWriter(int initialCapacity = 64) : IDisposable
 {
-    private byte[] buffer;
+    private byte[] buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 64));
     private int length;
-
-    public ProtoWriter(int initialCapacity = 64)
-    {
-        buffer = ArrayPool<byte>.Shared.Rent(Math.Max(initialCapacity, 64));
-    }
 
     public int Length => length;
 
@@ -238,6 +233,27 @@ internal ref struct ProtoReader(ReadOnlySpan<byte> buffer)
     private int position;
 
     public readonly bool End => position >= buffer.Length;
+
+    public readonly int Position => position;
+
+    /// <summary>
+    /// Skips one field value and returns where its content lies: a length-delimited field's
+    /// payload without its length prefix, or the raw bytes of any other wire type.
+    /// </summary>
+    public (int Start, int Length) ReadValueRange(WireType wireType)
+    {
+        if (wireType == WireType.Len)
+        {
+            var length = (int)ReadVarint();
+            var start = position;
+            Take(length);
+            return (start, length);
+        }
+
+        var valueStart = position;
+        SkipField(wireType);
+        return (valueStart, position - valueStart);
+    }
 
     public ulong ReadVarint()
     {

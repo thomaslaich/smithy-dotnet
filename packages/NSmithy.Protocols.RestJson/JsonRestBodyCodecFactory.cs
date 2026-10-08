@@ -30,9 +30,10 @@ internal sealed class JsonRestBodyCodecFactory(WireReadMode readMode) : IRestBod
         codecFactory.FromSchema(schema, options);
 
     public ICodec<T> FromMember<T>(
-        ITypedTargetMemberSchema<T> member,
+        Schema<T> target,
+        IReadOnlyDictionary<ShapeId, Trait> memberTraits,
         CodecFactoryOptions? options = null
-    ) => codecFactory.FromMember(member, options);
+    ) => codecFactory.FromMember(target, memberTraits, options);
 
     public IProjectionCodec<T, TBuilder> FromProjection<T, TBuilder>(
         StructProjection<T, TBuilder> projection,

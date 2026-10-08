@@ -54,8 +54,6 @@ public final class StringEnumGenerator implements Runnable {
     } finally {
       writer.popState();
     }
-    writer.write("");
-    SchemaGenerator.writeSimpleSchema(writer, shape);
   }
 
   private void writeVariants(String typeName) {

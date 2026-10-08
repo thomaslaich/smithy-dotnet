@@ -1,132 +1,15 @@
 using NSmithy.Codecs.Cbor;
-using NSmithy.Core;
-using NSmithy.Core.Serde;
 using NSmithy.EventStream;
 using NSmithy.Http;
 using NSmithy.Protocols.RpcV2Cbor;
+using Nsmithy.Tests.Rpcv2cbor;
 
 namespace NSmithy.Tests.Protocols.RpcV2Cbor;
 
 public sealed class RpcV2CborStreamingProtocolTests
 {
-    public sealed record Echo(string Message);
-
-    public abstract record ChatEvent
-    {
-        private ChatEvent() { }
-
-        public sealed record Message(Echo Value) : ChatEvent;
-    }
-
-    public sealed class EchoBuilder
-    {
-        public string? Message { get; set; }
-    }
-
-    public sealed class EnvelopeBuilder
-    {
-        public string? Name { get; set; }
-
-        public IAsyncEnumerable<ChatEvent>? Events { get; set; }
-    }
-
     private static IServiceProtocol BuildServiceProtocol() =>
-        new RpcV2CborProtocol().ForService(
-            Schemas.Service(ShapeId.Parse("example.greeter#Greeter"))
-        );
-
-    private static Schema<Echo> EchoSchema(string name) =>
-        Schemas
-            .Structure<Echo, EchoBuilder>(ShapeId.Parse($"example.greeter#{name}"))
-            .Required("message", x => x.Message, (b, v) => b.Message = v, Schemas.String)
-            .Build(() => new EchoBuilder(), b => new Echo(b.Message!));
-
-    private static Schema<ChatEvent> ChatEventSchema(string name) =>
-        Schemas
-            .Union<ChatEvent>(ShapeId.Parse($"example.greeter#{name}"))
-            .Case(
-                "message",
-                static value => value is ChatEvent.Message,
-                static value => ((ChatEvent.Message)value).Value,
-                static value => new ChatEvent.Message(value!),
-                EchoSchema($"{name}Message")
-            )
-            .Build();
-
-    private static Schema<EnvelopeBuilder> StreamEnvelopeSchema(string name) =>
-        Schemas
-            .Structure<EnvelopeBuilder, EnvelopeBuilder>(ShapeId.Parse($"example.greeter#{name}"))
-            .Required(
-                "events",
-                x => x.Events!,
-                (b, v) => b.Events = v,
-                Schemas.EventStream(ChatEventSchema("Events"))
-            )
-            .Build(() => new EnvelopeBuilder(), b => b);
-
-    private static Schema<EnvelopeBuilder> InitialEnvelopeSchema(string name) =>
-        Schemas
-            .Structure<EnvelopeBuilder, EnvelopeBuilder>(ShapeId.Parse($"example.greeter#{name}"))
-            .Required("name", x => x.Name!, (b, v) => b.Name = v, Schemas.String)
-            .Required(
-                "events",
-                x => x.Events!,
-                (b, v) => b.Events = v,
-                Schemas.EventStream(ChatEventSchema("Events"))
-            )
-            .Build(() => new EnvelopeBuilder(), b => b);
-
-    private static OperationSchema<Echo, EnvelopeBuilder> OutputOperation(string name) =>
-        Schemas.Operation(
-            ShapeId.Parse($"example.greeter#{name}"),
-            EchoSchema($"{name}Input"),
-            StreamEnvelopeSchema($"{name}Output")
-        );
-
-    private static OperationSchema<EnvelopeBuilder, Echo> InputOperation(string name) =>
-        Schemas.Operation(
-            ShapeId.Parse($"example.greeter#{name}"),
-            StreamEnvelopeSchema($"{name}Input"),
-            EchoSchema($"{name}Output")
-        );
-
-    private static OperationSchema<EnvelopeBuilder, Echo> InputOperationWithInitial(string name) =>
-        Schemas.Operation(
-            ShapeId.Parse($"example.greeter#{name}"),
-            InitialEnvelopeSchema($"{name}Input"),
-            EchoSchema($"{name}Output")
-        );
-
-    private static OperationSchema<EnvelopeBuilder, EnvelopeBuilder> DuplexOperation(string name) =>
-        Schemas.Operation(
-            ShapeId.Parse($"example.greeter#{name}"),
-            StreamEnvelopeSchema($"{name}Input"),
-            StreamEnvelopeSchema($"{name}Output")
-        );
-
-    private static Trait Length(int min, int max) =>
-        new(
-            ShapeId.Parse("smithy.api#length"),
-            Document.From(
-                new Dictionary<string, Document>(StringComparer.Ordinal)
-                {
-                    ["min"] = Document.From(min),
-                    ["max"] = Document.From(max),
-                }
-            )
-        );
-
-    private static Schema<EnvelopeBuilder> ConstrainedEnvelopeSchema(string name) =>
-        Schemas
-            .Structure<EnvelopeBuilder, EnvelopeBuilder>(ShapeId.Parse($"example.greeter#{name}"))
-            .Required("name", x => x.Name!, (b, v) => b.Name = v, Schemas.String, [Length(2, 10)])
-            .Required(
-                "events",
-                x => x.Events!,
-                (b, v) => b.Events = v,
-                Schemas.EventStream(ChatEventSchema("Events"))
-            )
-            .Build(() => new EnvelopeBuilder(), b => b);
+        new RpcV2CborProtocol().ForService(FixturesSchema.Schema);
 
     private static async IAsyncEnumerable<ChatEvent> NoEvents()
     {
@@ -142,20 +25,11 @@ public sealed class RpcV2CborStreamingProtocolTests
     [Fact]
     public void InputEventStreamValidatesTheInitialRequest()
     {
-        var protocol = BuildServiceProtocol()
-            .ForServerOperation(
-                Schemas.Operation(
-                    ShapeId.Parse("example.greeter#Talk"),
-                    ConstrainedEnvelopeSchema("TalkInput"),
-                    EchoSchema("TalkOutput")
-                )
-            );
+        var protocol = BuildServiceProtocol().ForServerOperation(TalkSchema.Schema);
 
         Assert.NotNull(protocol.InputValidator);
         var error = Assert.Single(
-            protocol.InputValidator.GetErrors(
-                new EnvelopeBuilder { Name = "x", Events = NoEvents() }
-            )
+            protocol.InputValidator.GetErrors(new TalkInput(Events: NoEvents(), Name: "x"))
         );
         Assert.Equal("/name", error.Path);
     }
@@ -163,41 +37,25 @@ public sealed class RpcV2CborStreamingProtocolTests
     [Fact]
     public void DuplexEventStreamValidatesTheInitialRequest()
     {
-        var protocol = BuildServiceProtocol()
-            .ForServerOperation(
-                Schemas.Operation(
-                    ShapeId.Parse("example.greeter#Converse"),
-                    ConstrainedEnvelopeSchema("ConverseInput"),
-                    StreamEnvelopeSchema("ConverseOutput")
-                )
-            );
+        var protocol = BuildServiceProtocol().ForServerOperation(ConverseSchema.Schema);
 
         Assert.NotNull(protocol.InputValidator);
         var error = Assert.Single(
-            protocol.InputValidator.GetErrors(
-                new EnvelopeBuilder { Name = "x", Events = NoEvents() }
-            )
+            protocol.InputValidator.GetErrors(new ConverseInput(Events: NoEvents(), Name: "x"))
         );
         Assert.Equal("/name", error.Path);
     }
-
-    private static OperationSchema<Echo, EnvelopeBuilder> OutputOperationWithInitial(string name) =>
-        Schemas.Operation(
-            ShapeId.Parse($"example.greeter#{name}"),
-            EchoSchema($"{name}Input"),
-            InitialEnvelopeSchema($"{name}Output")
-        );
 
     [Fact]
     public async Task ServerStreamingSerializesUnaryRequestAndReadsCborEventStream()
     {
         var protocol = BuildServiceProtocol()
-            .ForOutputEventStreamOperation(OutputOperation("Watch"), ChatEventSchema("WatchEvent"));
+            .ForOutputEventStreamOperation(WatchSchema.Schema, ChatEventSchema.Schema);
 
-        var request = protocol.SerializeRequest(new Echo("start"));
+        var request = protocol.SerializeRequest(new WatchInput("start"));
 
         Assert.Equal(HttpMethod.Post, request.Method);
-        Assert.Equal("/service/Greeter/operation/Watch", request.RequestUri);
+        Assert.Equal("/service/Fixtures/operation/Watch", request.RequestUri);
         Assert.Equal("application/cbor", request.ContentType);
         Assert.Equal(["application/vnd.amazon.eventstream"], request.Headers["Accept"]);
         // The response is a live event stream, so the runtime must read it in Stream mode.
@@ -205,7 +63,7 @@ public sealed class RpcV2CborStreamingProtocolTests
 
         var response = await ToClientResponseAsync(
             protocol.SerializeResponse(
-                new EnvelopeBuilder { Events = ToAsync([new ChatEvent.Message(new Echo("one"))]) }
+                new WatchOutput(ToAsync([new ChatEvent.Message(new Echo("one"))]))
             )
         );
 
@@ -219,13 +77,13 @@ public sealed class RpcV2CborStreamingProtocolTests
     public async Task ClientStreamingSerializesEventStreamRequest()
     {
         var protocol = BuildServiceProtocol()
-            .ForInputEventStreamOperation(InputOperation("Upload"), ChatEventSchema("UploadEvent"));
+            .ForInputEventStreamOperation(UploadSchema.Schema, ChatEventSchema.Schema);
 
         var request = protocol.SerializeRequest(
-            new EnvelopeBuilder { Events = ToAsync([new ChatEvent.Message(new Echo("one"))]) }
+            new UploadInput(ToAsync([new ChatEvent.Message(new Echo("one"))]))
         );
 
-        Assert.Equal("/service/Greeter/operation/Upload", request.RequestUri);
+        Assert.Equal("/service/Fixtures/operation/Upload", request.RequestUri);
         Assert.Equal("application/vnd.amazon.eventstream", request.ContentType);
         Assert.Equal(["application/cbor"], request.Headers["Accept"]);
         // Client streaming has a unary response, so it stays in Buffer mode.
@@ -238,7 +96,7 @@ public sealed class RpcV2CborStreamingProtocolTests
         Assert.Equal("application/cbor", message.StringHeader(":content-type"));
 
         var value = CborCodecFactory
-            .Default.FromSchema(ChatEventSchema("UploadEvent"))
+            .Default.FromSchema(ChatEventSchema.Schema)
             .Deserialize(message.Payload.ToArray());
         var chat = Assert.IsType<ChatEvent.Message>(value);
         Assert.Equal(new Echo("one"), chat.Value);
@@ -249,13 +107,13 @@ public sealed class RpcV2CborStreamingProtocolTests
     {
         var protocol = BuildServiceProtocol()
             .ForDuplexEventStreamOperation(
-                DuplexOperation("Chat"),
-                ChatEventSchema("ChatInputEvent"),
-                ChatEventSchema("ChatOutputEvent")
+                ChatSchema.Schema,
+                ChatEventSchema.Schema,
+                ChatEventSchema.Schema
             );
 
         var request = protocol.SerializeRequest(
-            new EnvelopeBuilder { Events = ToAsync([new ChatEvent.Message(new Echo("in"))]) }
+            new ChatInput(ToAsync([new ChatEvent.Message(new Echo("in"))]))
         );
 
         Assert.Equal("application/vnd.amazon.eventstream", request.ContentType);
@@ -266,7 +124,7 @@ public sealed class RpcV2CborStreamingProtocolTests
 
         var response = await ToClientResponseAsync(
             protocol.SerializeResponse(
-                new EnvelopeBuilder { Events = ToAsync([new ChatEvent.Message(new Echo("out"))]) }
+                new ChatOutput(ToAsync([new ChatEvent.Message(new Echo("out"))]))
             )
         );
 
@@ -280,18 +138,14 @@ public sealed class RpcV2CborStreamingProtocolTests
     public async Task ServerStreamingRoundTripsInitialResponseMembers()
     {
         var protocol = BuildServiceProtocol()
-            .ForOutputEventStreamOperation(
-                OutputOperationWithInitial("WatchWithInitial"),
-                ChatEventSchema("WatchEvent")
-            );
+            .ForOutputEventStreamOperation(WatchWithInitialSchema.Schema, ChatEventSchema.Schema);
 
         var response = await ToClientResponseAsync(
             protocol.SerializeResponse(
-                new EnvelopeBuilder
-                {
-                    Name = "ready",
-                    Events = ToAsync([new ChatEvent.Message(new Echo("one"))]),
-                }
+                new WatchWithInitialOutput(
+                    Events: ToAsync([new ChatEvent.Message(new Echo("one"))]),
+                    Name: "ready"
+                )
             )
         );
 
@@ -312,15 +166,13 @@ public sealed class RpcV2CborStreamingProtocolTests
     [Fact]
     public async Task ClientStreamingRoundTripsInitialRequestMembersAndEvents()
     {
-        var protocol = BuildServiceProtocol()
-            .ForOperation(InputOperationWithInitial("UploadWithInitial"));
+        var protocol = BuildServiceProtocol().ForOperation(UploadWithInitialSchema.Schema);
 
         var request = protocol.SerializeRequest(
-            new EnvelopeBuilder
-            {
-                Name = "ready",
-                Events = ToAsync([new ChatEvent.Message(new Echo("one"))]),
-            }
+            new UploadWithInitialInput(
+                Events: ToAsync([new ChatEvent.Message(new Echo("one"))]),
+                Name: "ready"
+            )
         );
 
         var input = await protocol.DeserializeRequestAsync(await ToServerRequestAsync(request));
@@ -339,18 +191,16 @@ public sealed class RpcV2CborStreamingProtocolTests
     [Fact]
     public async Task ClientStreamingEmitsTheInitialRequestBeforeTheEvents()
     {
-        var protocol = BuildServiceProtocol()
-            .ForOperation(InputOperationWithInitial("UploadOrdering"));
+        var protocol = BuildServiceProtocol().ForOperation(UploadWithInitialSchema.Schema);
 
         var request = protocol.SerializeRequest(
-            new EnvelopeBuilder
-            {
-                Name = "ready",
-                Events = ToAsync([
+            new UploadWithInitialInput(
+                Events: ToAsync([
                     new ChatEvent.Message(new Echo("one")),
                     new ChatEvent.Message(new Echo("two")),
                 ]),
-            }
+                Name: "ready"
+            )
         );
 
         var messages = await ReadMessagesAsync(await BodyBytesAsync(request.Body));
@@ -368,10 +218,10 @@ public sealed class RpcV2CborStreamingProtocolTests
     [Fact]
     public async Task ClientStreamingWithoutInitialMembersEmitsOnlyEvents()
     {
-        var protocol = BuildServiceProtocol().ForOperation(InputOperation("UploadBare"));
+        var protocol = BuildServiceProtocol().ForOperation(UploadSchema.Schema);
 
         var request = protocol.SerializeRequest(
-            new EnvelopeBuilder { Events = ToAsync([new ChatEvent.Message(new Echo("one"))]) }
+            new UploadInput(ToAsync([new ChatEvent.Message(new Echo("one"))]))
         );
 
         var messages = await ReadMessagesAsync(await BodyBytesAsync(request.Body));
@@ -382,17 +232,16 @@ public sealed class RpcV2CborStreamingProtocolTests
     [Fact]
     public async Task ClientStreamingPreservesEventOrder()
     {
-        var protocol = BuildServiceProtocol().ForOperation(InputOperation("UploadOrdered"));
+        var protocol = BuildServiceProtocol().ForOperation(UploadSchema.Schema);
 
         var request = protocol.SerializeRequest(
-            new EnvelopeBuilder
-            {
-                Events = ToAsync([
+            new UploadInput(
+                ToAsync([
                     new ChatEvent.Message(new Echo("one")),
                     new ChatEvent.Message(new Echo("two")),
                     new ChatEvent.Message(new Echo("three")),
-                ]),
-            }
+                ])
+            )
         );
 
         var input = await protocol.DeserializeRequestAsync(await ToServerRequestAsync(request));
@@ -406,11 +255,9 @@ public sealed class RpcV2CborStreamingProtocolTests
     [Fact]
     public async Task ClientStreamingRoundTripsAnEmptyEventStream()
     {
-        var protocol = BuildServiceProtocol().ForOperation(InputOperation("UploadEmpty"));
+        var protocol = BuildServiceProtocol().ForOperation(UploadSchema.Schema);
 
-        var request = protocol.SerializeRequest(
-            new EnvelopeBuilder { Events = ToAsync(Array.Empty<ChatEvent>()) }
-        );
+        var request = protocol.SerializeRequest(new UploadInput(ToAsync(Array.Empty<ChatEvent>())));
 
         var input = await protocol.DeserializeRequestAsync(await ToServerRequestAsync(request));
 
@@ -420,10 +267,10 @@ public sealed class RpcV2CborStreamingProtocolTests
     [Fact]
     public async Task BidirectionalStreamingRoundTripsTheRequestToTheServer()
     {
-        var protocol = BuildServiceProtocol().ForOperation(DuplexOperation("ChatServerSide"));
+        var protocol = BuildServiceProtocol().ForOperation(ChatSchema.Schema);
 
         var request = protocol.SerializeRequest(
-            new EnvelopeBuilder { Events = ToAsync([new ChatEvent.Message(new Echo("in"))]) }
+            new ChatInput(ToAsync([new ChatEvent.Message(new Echo("in"))]))
         );
 
         var input = await protocol.DeserializeRequestAsync(await ToServerRequestAsync(request));

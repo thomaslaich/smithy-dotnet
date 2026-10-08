@@ -76,8 +76,7 @@ internal sealed class SmithyMcpTool : McpServerTool
             );
         var inputSchema = ParseSchema(jsonSchemas.Input, schema.Id, requireObject: true);
         var outputSchema = ParseSchema(jsonSchemas.Output, schema.Id, requireObject: false);
-        inputCodec = BoxedJsonCodec.Compile(schema.Input);
-        outputCodec = BoxedJsonCodec.Compile(schema.Output);
+        (inputCodec, outputCodec) = schema.Accept(BoxedJsonCodec.Compiler.Instance);
 
         var readOnly = schema.HasTrait(ReadonlyTrait);
         ProtocolTool = new Tool
@@ -207,72 +206,15 @@ internal interface IBoxedJsonCodec
 
 internal static class BoxedJsonCodec
 {
-    public static IBoxedJsonCodec Compile(Schema schema)
-    {
-        ArgumentNullException.ThrowIfNull(schema);
-        return schema.Accept(Compiler.Instance);
-    }
-
-    private sealed class Compiler : ISchemaVisitor<IBoxedJsonCodec>
+    /// <summary>Compiles the codecs for an operation's input and output.</summary>
+    public sealed class Compiler
+        : IOperationSchemaVisitor<(IBoxedJsonCodec Input, IBoxedJsonCodec Output)>
     {
         public static Compiler Instance { get; } = new();
 
-        public IBoxedJsonCodec VisitBoolean(Schema<bool> schema) => Create(schema);
-
-        public IBoxedJsonCodec VisitByte(Schema<sbyte> schema) => Create(schema);
-
-        public IBoxedJsonCodec VisitShort(Schema<short> schema) => Create(schema);
-
-        public IBoxedJsonCodec VisitInteger(Schema<int> schema) => Create(schema);
-
-        public IBoxedJsonCodec VisitLong(Schema<long> schema) => Create(schema);
-
-        public IBoxedJsonCodec VisitFloat(Schema<float> schema) => Create(schema);
-
-        public IBoxedJsonCodec VisitDouble(Schema<double> schema) => Create(schema);
-
-        public IBoxedJsonCodec VisitBigInteger(Schema<System.Numerics.BigInteger> schema) =>
-            Create(schema);
-
-        public IBoxedJsonCodec VisitBigDecimal(Schema<decimal> schema) => Create(schema);
-
-        public IBoxedJsonCodec VisitString(Schema<string> schema) => Create(schema);
-
-        public IBoxedJsonCodec VisitBlob(Schema<byte[]> schema) => Create(schema);
-
-        public IBoxedJsonCodec VisitStreamingBlob(Schema<Stream> schema) =>
-            throw new McpStreamingNotSupportedException(schema.Id);
-
-        public IBoxedJsonCodec VisitTimestamp(Schema<DateTimeOffset> schema) => Create(schema);
-
-        public IBoxedJsonCodec VisitDocument(Schema<Document> schema) => Create(schema);
-
-        public IBoxedJsonCodec VisitNullable<T>(NullableSchema<T> schema)
-            where T : struct => Create(schema);
-
-        public IBoxedJsonCodec VisitEventStream<TEvent>(EventStreamSchema<TEvent> schema) =>
-            throw new McpStreamingNotSupportedException(schema.Id);
-
-        public IBoxedJsonCodec VisitList<TCollection, TElement, TBuilder>(
-            IListSchema<TCollection, TElement, TBuilder> schema
-        ) => Create((Schema<TCollection>)schema);
-
-        public IBoxedJsonCodec VisitMap<TDictionary, TValue, TBuilder>(
-            IMapSchema<TDictionary, TValue, TBuilder> schema
-        ) => Create((Schema<TDictionary>)schema);
-
-        public IBoxedJsonCodec VisitStruct<T, TBuilder>(IStructSchema<T, TBuilder> schema) =>
-            Create((Schema<T>)schema);
-
-        public IBoxedJsonCodec VisitUnion<T>(IUnionSchema<T> schema) => Create((Schema<T>)schema);
-
-        public IBoxedJsonCodec VisitStringEnum<T>(StringEnumSchema<T> schema)
-            where T : IStringEnumValue<T> => Create(schema);
-
-        public IBoxedJsonCodec VisitIntEnum<T>(IntEnumSchema<T> schema)
-            where T : struct, Enum => Create(schema);
-
-        private static JsonCodec<T> Create<T>(Schema<T> schema) => new(schema);
+        public (IBoxedJsonCodec Input, IBoxedJsonCodec Output) Visit<TInput, TOutput>(
+            OperationSchema<TInput, TOutput> schema
+        ) => (new JsonCodec<TInput>(schema.Input), new JsonCodec<TOutput>(schema.Output));
     }
 
     private sealed class JsonCodec<T>(Schema<T> schema) : IBoxedJsonCodec
