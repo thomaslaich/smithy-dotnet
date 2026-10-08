@@ -15,8 +15,8 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 This release generates a schema class and a shape serializer for every shape, which
 makes serialization faster and removes the schema visitor and builder APIs. It also
-reports Smithy validation errors as MSBuild errors and fixes stream ownership and
-empty awsJson errors. Regenerate models with the matching codegen version when
+reports Smithy validation errors as MSBuild errors, describes integer shapes as
+OpenAPI integers, and fixes stream ownership and empty awsJson errors. Regenerate models with the matching codegen version when
 upgrading, and review the breaking changes below if you use low-level runtime APIs.
 
 ### Changed
@@ -69,6 +69,9 @@ upgrading, and review the breaking changes below if you use low-level runtime AP
 - **Empty awsJson errors.** An awsJson error response with an empty body is built
   from the error's schema. It previously threw `MissingMethodException` for
   generated errors with members. (#229)
+- **Integer types in generated OpenAPI.** With `SmithyOpenApiProtocol` set, Byte,
+  Short, Integer, and Long members are described as OpenAPI `integer`, with `int32`
+  and `int64` formats for Integer and Long, instead of an untyped `number`. (#235)
 
 - **Stale generated files.** A shape the model no longer produces, such as a renamed
   shape, no longer leaves its old generated file behind to collide with the new one.
