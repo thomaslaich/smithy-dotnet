@@ -70,7 +70,8 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
 
     /// <summary>
     /// When non-empty, injects the smithy-openapi Maven dep and openapi plugin entry
-    /// using this value as the protocol (e.g. aws.protocols#restJson1).
+    /// using this value as the protocol (e.g. aws.protocols#restJson1). Integer shapes are
+    /// written as OpenAPI <c>integer</c> rather than <c>number</c>.
     /// </summary>
     public string OpenApiProtocol { get; set; } = "";
 
@@ -256,6 +257,7 @@ public sealed class SynthesizeSmithyBuildFile : MsBuildTask
             writer.WriteStartObject();
             writer.WriteString("service", Service);
             writer.WriteString("protocol", OpenApiProtocol);
+            writer.WriteBoolean("useIntegerType", true);
             writer.WriteEndObject();
         }
 
