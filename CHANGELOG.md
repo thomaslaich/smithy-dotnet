@@ -16,8 +16,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 This release generates a schema class and a shape serializer for every shape, which
 makes serialization faster and removes the schema visitor and builder APIs. It also
 reports Smithy validation errors as MSBuild errors, describes integer shapes as
-OpenAPI integers, and fixes stream ownership and empty awsJson errors. Regenerate models with the matching codegen version when
-upgrading, and review the breaking changes below if you use low-level runtime APIs.
+OpenAPI integers, and fixes stream ownership and empty awsJson errors. Regenerate
+models with the matching codegen version when upgrading, and review the breaking
+changes below if you use low-level runtime APIs.
 
 ### Changed
 
