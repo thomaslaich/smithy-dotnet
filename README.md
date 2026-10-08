@@ -9,6 +9,8 @@
 
 > **Preview:** NSmithy is in preview; expect some API changes before 1.0.
 
+---
+
 **[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Examples](examples/README.md)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
 
 NSmithy brings [Smithy](https://smithy.io) code generation to .NET. It generates typed clients, ASP.NET Core server stubs, and model types from a Smithy model as part of `dotnet build`.
