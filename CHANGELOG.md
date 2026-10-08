@@ -11,6 +11,14 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.11.0]
+
+This release generates a schema class and a shape serializer for every shape, which
+makes serialization faster and removes the schema visitor and builder APIs. It also
+reports Smithy validation errors as MSBuild errors and fixes stream ownership and
+empty awsJson errors. Regenerate models with the matching codegen version when
+upgrading, and review the breaking changes below if you use low-level runtime APIs.
+
 ### Changed
 
 - **BREAKING: generated schema classes and shape serializers.** Each structure, union,
@@ -41,13 +49,36 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   allocates up to 31% less, and JSON serialization is about 5% faster. JSON and
   protobuf deserialization and gRPC round trips perform as before. See the benchmark
   results in `benchmarks/results/`. (#227)
+- **Less allocation reading client responses.** With a declared `Content-Length`,
+  `HttpClientTransport` reads a buffered response into one array of that size
+  instead of copying it out of a growing stream. Large list responses allocate
+  about 18% less. (#228)
+- **Updated build dependencies.** The MSBuild tasks are compiled against MSBuild
+  18.0.2, the version in the oldest supported .NET 10 SDK, which removes the
+  unsupported target framework warning. Scalar is updated. (#231)
 
 ### Fixed
+
+- **Smithy errors in the build output.** When the Smithy CLI fails, each validation
+  error is reported as an MSBuild error with its event id and file location, so it
+  appears with the terminal logger and in IDE error lists. Other CLI failures report
+  the end of the CLI output. (#230)
+- **Request stream ownership.** `HttpClientTransport` no longer disposes a request
+  stream the caller passed in, so callers can rewind and resend it. The REST server
+  disposes a stream returned by a handler once the response body is written. (#229)
+- **Empty awsJson errors.** An awsJson error response with an empty body is built
+  from the error's schema. It previously threw `MissingMethodException` for
+  generated errors with members. (#229)
 
 - **Stale generated files.** A shape the model no longer produces, such as a renamed
   shape, no longer leaves its old generated file behind to collide with the new one.
   A Smithy CLI run that succeeds without producing any of the previously generated
   files now fails the build with `NSMITHYGEN`. (#227)
+
+### Packages
+
+All packages are prepared for publication at `0.11.0`. Codegen JARs and NuGet
+packages must use the same release version.
 
 ## [0.10.1]
 
@@ -405,7 +436,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.8.1...v0.9.0
