@@ -11,6 +11,23 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **The Smithy CLI ships per platform.** `NSmithy.MSBuild` no longer bundles the
+  Smithy CLI and Java runtime for all five platforms. They ship as
+  `NSmithy.SmithyCli.<rid>` packages versioned by the Smithy CLI they contain,
+  and the first build that generates code restores only the one for the build
+  machine. The download drops from about
+  157 MB to about 3 MB plus 28 to 33 MB for the CLI package. Setting
+  `SmithyCliPath` skips the CLI package entirely. Private feeds that mirror
+  nuget.org need the new packages for each build platform.
+
+### Fixed
+
+- **`SmithyCliPath` on a read-only path.** NSmithy no longer runs `chmod` on a
+  user-supplied Smithy CLI, which failed for read-only installs such as the Nix
+  store.
+
 ## [0.11.0]
 
 This release generates a schema class and a shape serializer for every shape, which

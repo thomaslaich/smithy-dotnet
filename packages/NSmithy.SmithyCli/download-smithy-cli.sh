@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Downloads and extracts the Smithy CLI for all supported platforms into
-# tools/smithy-cli/{platform}/. The CLI is a self-contained distribution that
+# cli/{platform}/. The CLI is a self-contained distribution that
 # bundles its own JRE, so no separate Java installation is needed when the
 # bundled binary is used.
 #
-# Run this script before packing NSmithy.MSBuild to ensure the bundled
-# binaries are up-to-date.
+# Run this script before packing the NSmithy.SmithyCli.<rid> packages to ensure
+# the bundled binaries are up-to-date.
 #
-# Usage: bash tools/download-smithy-cli.sh
+# Usage: bash packages/NSmithy.SmithyCli/download-smithy-cli.sh
 set -euo pipefail
 
 SMITHY_VERSION="1.73.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLI_DIR="$SCRIPT_DIR/smithy-cli"
+CLI_DIR="$SCRIPT_DIR/cli"
 BASE_URL="https://github.com/smithy-lang/smithy/releases/download/${SMITHY_VERSION}"
 
 # SHA256 hashes for smithy-cli-{platform}.zip — update when bumping SMITHY_VERSION.

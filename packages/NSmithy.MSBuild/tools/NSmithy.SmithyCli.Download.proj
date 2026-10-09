@@ -1,0 +1,37 @@
+<Project>
+  <!--
+    Restores the NSmithy.SmithyCli.<rid> package for the build host into the global packages
+    folder. NSmithy.MSBuild.targets runs the Restore target of this project on the first
+    code-generation build, passing the package id and version plus the consuming project's
+    NuGet settings (config directory, packages folder) and an intermediate path under its obj/.
+
+    NuGet cannot select a package by host platform, and a package's own props/targets are not
+    visible to the restore that downloads it, so this is a separate restore instead of a
+    PackageReference or PackageDownload in the consuming project.
+
+    The project lives in the NuGet cache, so it must not pick up Directory.* files from there.
+  -->
+  <PropertyGroup>
+    <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
+    <ImportDirectoryBuildTargets>false</ImportDirectoryBuildTargets>
+    <ImportDirectoryPackagesProps>false</ImportDirectoryPackagesProps>
+  </PropertyGroup>
+
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageDownload
+      Include="$(NSmithySmithyCliPackageId)"
+      Version="[$(NSmithySmithyCliPackageVersion)]"
+    />
+  </ItemGroup>
+
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
+</Project>

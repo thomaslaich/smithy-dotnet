@@ -56,8 +56,13 @@ pack:
     cd codegen && gradle bundleMavenRepo ${VERSION:+-Pversion=$VERSION}
     find packages/NSmithy.MSBuild/tools/maven-repo -mindepth 1 -not -name .gitignore -delete
     cp -R codegen/build/maven-bundle/. packages/NSmithy.MSBuild/tools/maven-repo/
-    bash packages/NSmithy.MSBuild/tools/download-smithy-cli.sh
+    bash packages/NSmithy.SmithyCli/download-smithy-cli.sh
     dotnet pack NSmithy.slnx --configuration Release --no-build --output artifacts/packages ${VERSION:+-p:Version=$VERSION}
+    # One Smithy CLI package per host platform, versioned by the Smithy CLI rather than $VERSION;
+    # NSmithy.MSBuild restores only the build host's.
+    for rid in osx-arm64 osx-x64 linux-arm64 linux-x64 win-x64; do \
+        dotnet pack packages/NSmithy.SmithyCli/NSmithy.SmithyCli.csproj --configuration Release --output artifacts/packages -p:SmithyCliRid=$rid; \
+    done
 
 # Build the examples against the freshly packed packages, the way a consumer does.
 refresh-examples:

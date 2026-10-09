@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Packs the Smithy CLI for one host platform as NSmithy.SmithyCli.<rid>. Pack once per RID:
+
+      dotnet pack packages/NSmithy.SmithyCli -p:SmithyCliRid=osx-arm64
+
+    NSmithy.MSBuild does not reference these packages. On the first code-generation build it
+    restores the one matching the build host (see NSmithy.SmithyCli.Download.proj), so a
+    consumer downloads a single platform instead of all of them.
+
+    The package version is the Smithy CLI version (SMITHY_VERSION in download-smithy-cli.sh),
+    not the NSmithy version, so a new NSmithy release reuses the CLI package already in the
+    NuGet cache. Republishing the same CLI needs a fourth version part (e.g. 1.73.0.1).
+  -->
+  <PropertyGroup>
+    <SmithyCliPlatform Condition="'$(SmithyCliRid)' == 'osx-arm64'"
+      >darwin-aarch64</SmithyCliPlatform
+    >
+    <SmithyCliPlatform Condition="'$(SmithyCliRid)' == 'osx-x64'">darwin-x86_64</SmithyCliPlatform>
+    <SmithyCliPlatform Condition="'$(SmithyCliRid)' == 'linux-arm64'"
+      >linux-aarch64</SmithyCliPlatform
+    >
+    <SmithyCliPlatform Condition="'$(SmithyCliRid)' == 'linux-x64'">linux-x86_64</SmithyCliPlatform>
+    <SmithyCliPlatform Condition="'$(SmithyCliRid)' == 'win-x64'">windows-x64</SmithyCliPlatform>
+    <SmithyCliLauncher Condition="'$(SmithyCliRid)' == 'win-x64'">bin/smithy.bat</SmithyCliLauncher>
+    <SmithyCliLauncher Condition="'$(SmithyCliLauncher)' == ''">bin/smithy</SmithyCliLauncher>
+
+    <SmithyCliVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)download-smithy-cli.sh')), 'SMITHY_VERSION="([^"]+)"').Groups[1].Value)</SmithyCliVersion>
+    <Version>$(SmithyCliVersion)</Version>
+    <PackageId>NSmithy.SmithyCli.$(SmithyCliRid)</PackageId>
+    <Description>The Smithy CLI with its Java runtime for $(SmithyCliRid). Restored by NSmithy.MSBuild for the build host; not meant to be referenced directly.</Description>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None
+      Include="cli/$(SmithyCliPlatform)/**/*"
+      Pack="true"
+      PackagePath="tools/smithy-cli/"
+      Condition="'$(SmithyCliPlatform)' != ''"
+    />
+  </ItemGroup>
+
+  <Target Name="_NSmithyValidateSmithyCli" BeforeTargets="Pack">
+    <Error
+      Text="NSmithy: set SmithyCliRid to one of osx-arm64, osx-x64, linux-arm64, linux-x64, win-x64."
+      Condition="'$(SmithyCliPlatform)' == ''"
+    />
+    <Error
+      Text="NSmithy: cli/$(SmithyCliPlatform)/$(SmithyCliLauncher) is missing. Run `bash packages/NSmithy.SmithyCli/download-smithy-cli.sh` before packing."
+      Condition="!Exists('cli/$(SmithyCliPlatform)/$(SmithyCliLauncher)')"
+    />
+  </Target>
+</Project>

@@ -45,12 +45,15 @@ that interprets it, and traits that change the C# representation, such as
 
 The `NSmithy.MSBuild` NuGet package contains:
 
-- The Smithy CLI and its bundled Java runtime.
 - NSmithy's C# and Protobuf code-generation plugins.
 - The Smithy OpenAPI and documentation plugins, plus the trait libraries used
   by NSmithy.
 - Their transitive Java dependencies, stored as JARs and POMs in a local Maven
   repository inside the package.
+
+The Smithy CLI and its Java runtime ship separately, one NuGet package per
+platform (`NSmithy.SmithyCli.<rid>`). The first build that generates code
+restores the package for the build machine, using the project's NuGet sources.
 
 Consumers do not install Java, the Smithy CLI, or these plugins separately.
 The package version fixes their versions. During generation, MSBuild points the
@@ -65,7 +68,7 @@ Generation runs in three steps:
 
 1. MSBuild collects model inputs, including contracts project references, and
    prepares the Smithy build configuration.
-2. The bundled CLI assembles and validates the model, applies configured
+2. The Smithy CLI assembles and validates the model, applies configured
    projections, and runs the enabled plugins.
 3. MSBuild includes the generated `.g.cs` files under `obj/` in C# compilation.
 

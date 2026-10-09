@@ -1,0 +1,4 @@
+# Downloaded Smithy CLI binaries; run ../download-smithy-cli.sh to populate.
+# These files are packed into the NSmithy.SmithyCli.<rid> packages but not committed to git.
+*
+!.gitignore
