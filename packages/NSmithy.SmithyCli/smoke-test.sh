@@ -80,4 +80,46 @@ if ! compgen -G "$SRC/contracts/obj/*/*/Smithy/NSmithy.Generated.stamp" > /dev/n
   echo "smoke-test: the build did not run Smithy code generation" >&2
   exit 1
 fi
+# Exercise the packed dotnet tool against a mixed solution and a fresh per-project cache.
+# This must restore through the package's target, including the multi-targeting outer build.
+mkdir -p "$SRC/tool-contracts" "$SRC/ordinary"
+cp "$PROJECT" "$SRC/tool-contracts/"
+cp "$SRC/contracts/smithy-build.json" "$SRC/tool-contracts/"
+cp -R "$SRC/contracts/model" "$SRC/tool-contracts/"
+TOOL_PROJECT="$SRC/tool-contracts/$(basename "$PROJECT")"
+cat > "$SRC/ordinary/Ordinary.csproj" <<'XML'
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+XML
+cat > "$SRC/Mixed.slnx" <<'XML'
+<Solution>
+  <Project Path="ordinary/Ordinary.csproj" />
+  <Folder Name="/Contracts/">
+    <Project Path="tool-contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj" />
+  </Folder>
+</Solution>
+XML
+restore_sources "$PACKAGES;https://api.nuget.org/v3/index.json"
+dotnet restore "$SRC/Mixed.slnx" --verbosity quiet
+dotnet tool install dotnet-nsmithy --tool-path "$WORK/tool" --version 0.0.0-SNAPSHOT \
+  --add-source "$PACKAGES" --configfile "$SRC/NuGet.config" --no-cache
+
+echo "smoke-test: dotnet nsmithy install mixed solution"
+"$WORK/tool/dotnet-nsmithy" install --solution "$SRC/Mixed.slnx"
+if ! compgen -G "$SRC/tool-contracts/obj/packages/nsmithy.smithycli.*/*/tools/smithy-cli/bin/smithy*" > /dev/null; then
+  echo "smoke-test: the dotnet tool did not restore the Smithy CLI package" >&2
+  exit 1
+fi
+
+restore_sources "$WORK/empty-feed"
+# A second prefetch, including the single-project entry point, must work from cache.
+"$WORK/tool/dotnet-nsmithy" install --project "$TOOL_PROJECT"
+dotnet build "$TOOL_PROJECT" --no-restore --verbosity minimal -nologo
+if ! compgen -G "$SRC/tool-contracts/obj/*/*/Smithy/NSmithy.Generated.stamp" > /dev/null; then
+  echo "smoke-test: the tool-prefetched CLI did not run Smithy code generation" >&2
+  exit 1
+fi
 echo "smoke-test: ok"

@@ -32,6 +32,7 @@
     <Project Path="tests/AotSmoke/NSmithy.AotSmoke.csproj" />
     <Project Path="tests/Fakes/Fakes.Tests.csproj" />
     <Project Path="tests/NSmithy.Tests/NSmithy.Tests.csproj" />
+    <Project Path="tests/NSmithy.Cli.Tests/NSmithy.Cli.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Conformance/">
     <Project Path="tests/Conformance/AwsQuery/AwsQuery.Conformance.csproj" />

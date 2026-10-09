@@ -89,19 +89,46 @@ the package for the build machine from the project's NuGet sources into the
 global packages folder. Later builds, including offline ones, reuse it. A private
 feed that mirrors nuget.org must also provide the package for each build platform.
 
-`dotnet restore` alone does not fetch the CLI package. Pipelines that restore with
-network access and then build without it fetch it in the restore step with the
-`RestoreSmithyCli` target:
+### Prefetch for CI and offline builds
+
+`dotnet build` installs the CLI automatically when needed. For pipelines that
+restore with network access and then build offline, the optional `dotnet-nsmithy`
+tool can prefetch the CLI packages for an entire XML solution:
 
 ```sh
-dotnet restore
-dotnet msbuild -t:RestoreSmithyCli
-dotnet build --no-restore
+dotnet tool install --global dotnet-nsmithy
+dotnet restore MySolution.slnx
+dotnet nsmithy install --solution MySolution.slnx
+dotnet build MySolution.slnx --no-restore
 ```
 
-Only projects that generate code fetch the package. Run the target on a solution
-only if every project in it references NSmithy; otherwise run it on the projects
-that generate code.
+If the tool is already installed, update it with
+`dotnet tool update --global dotnet-nsmithy`.
+For a single project, use `dotnet nsmithy install --project MyService.csproj`.
+With no option, the command selects the single `.slnx` in the current directory,
+or the single `.csproj` when no XML solution is present. Multiple candidates
+require an explicit selection. Legacy `.sln` files are not parsed by the tool.
+
+The tool resolves nested C# project paths relative to the solution and calls each
+project's `RestoreSmithyCli` target. It skips projects without that target and
+fails if a participating project's restore fails. The project's restored NSmithy
+package selects the CLI version and uses its NuGet sources and package folder;
+the dotnet tool does not select a version or download archives separately.
+Projects using the same CLI version and package folder reuse the cached package.
+Keep the package folders available to the later offline build.
+
+You can also prefetch without installing the dotnet tool:
+
+```sh
+dotnet restore MyService.csproj
+dotnet msbuild MyService.csproj -t:RestoreSmithyCli
+dotnet build MyService.csproj --no-restore
+```
+
+`dotnet restore` alone does not fetch the CLI package. Only projects that generate
+code fetch it. The tool handles mixed solutions; when invoking the MSBuild target
+directly on a solution, every project must provide the target, so otherwise select
+individual projects. Both workflows support multi-targeted projects.
 
 NSmithy.MSBuild bundles the NSmithy Smithy codegen plugins plus the common
 Smithy and alloy trait/doc/openapi dependencies used by the templates and
