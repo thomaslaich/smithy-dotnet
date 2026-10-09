@@ -1,34 +1,62 @@
+using System.Diagnostics;
 using System.Xml.Linq;
 
 namespace DotnetNsmithy.Commands;
 
 internal static class InstallInput
 {
+    internal static bool IsSolution(string path) =>
+        Path.GetExtension(path).ToLowerInvariant() is ".sln" or ".slnx";
+
     internal static string Discover(string directory)
     {
-        var solutions = Directory.GetFiles(directory, "*.slnx");
+        // "*.sln" also matches ".slnx" on Windows, so filter by the exact extension.
+        var solutions = Directory.GetFiles(directory, "*.sln*").Where(IsSolution).ToArray();
         if (solutions.Length == 1)
             return solutions[0];
         var projects = Directory.GetFiles(directory, "*.csproj");
         if (solutions.Length == 0 && projects.Length == 1)
             return projects[0];
         throw new InvalidOperationException(
-            "Specify --solution <solution.slnx> or --project <project.csproj>. Otherwise the current directory must contain one .slnx, or one .csproj and no .slnx. Run dotnet restore first."
+            "Specify --solution <solution> or --project <project.csproj>. Otherwise the current directory must contain one .sln or .slnx, or one .csproj and no solution."
         );
     }
 
-    internal static XDocument CreateSolutionDriver(string solution)
+    // `dotnet sln list` reads both .sln and .slnx. Its header is localized, so keep only the
+    // lines naming a C# project; paths are relative to the solution.
+    internal static async Task<string[]> ListSolutionProjectsAsync(
+        string solution,
+        CancellationToken cancellationToken
+    )
     {
-        var document = XDocument.Load(solution);
-        if (document.Root?.Name != "Solution")
-            throw new InvalidDataException("Expected a .slnx file with a Solution root element.");
-        var directory = Path.GetDirectoryName(Path.GetFullPath(solution))!;
-        var projects = document
-            .Root.Descendants("Project")
-            .Select(project => (string?)project.Attribute("Path"))
-            .Where(path => path?.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) == true)
+        var start = new ProcessStartInfo("dotnet")
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        start.ArgumentList.Add("sln");
+        start.ArgumentList.Add(solution);
+        start.ArgumentList.Add("list");
+        using var process = Process.Start(start)!;
+        var output = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var error = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+        if (process.ExitCode != 0)
+            throw new InvalidDataException(
+                $"Could not list the projects of {solution}: {(await error).Trim()}"
+            );
+        return ParseSolutionProjects(await output, Path.GetDirectoryName(solution)!);
+    }
+
+    internal static string[] ParseSolutionProjects(string listOutput, string solutionDirectory)
+    {
+        var projects = listOutput
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
             .Select(path =>
-                Path.GetFullPath(path!.Replace('\\', Path.DirectorySeparatorChar), directory)
+                Path.GetFullPath(path.Replace('\\', Path.DirectorySeparatorChar), solutionDirectory)
             )
             .Distinct(
                 OperatingSystem.IsWindows()
@@ -38,7 +66,13 @@ internal static class InstallInput
             .ToArray();
         if (projects.Length == 0)
             throw new InvalidDataException("The solution contains no C# projects.");
-        foreach (var project in projects)
+        return projects;
+    }
+
+    internal static XDocument CreateSolutionDriver(IEnumerable<string> projects)
+    {
+        var paths = projects.ToArray();
+        foreach (var project in paths)
             if (!File.Exists(project))
                 throw new FileNotFoundException(
                     $"Solution project does not exist: {project}",
@@ -53,7 +87,7 @@ internal static class InstallInput
                 new XElement(
                     "Target",
                     new XAttribute("Name", "Install"),
-                    projects.Select(project => new XElement(
+                    paths.Select(project => new XElement(
                         "MSBuild",
                         new XAttribute("Projects", Escape(project)),
                         new XAttribute("Targets", "RestoreSmithyCli"),

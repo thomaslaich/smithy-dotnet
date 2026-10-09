@@ -13,11 +13,10 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
-- **Optional CLI prefetch command.** `dotnet nsmithy install --solution MySolution.slnx`
-  restores the CLI packages needed by participating C# projects, skipping ordinary
-  projects. Use `--project MyService.csproj` for one project. It calls the existing
-  `RestoreSmithyCli` target with each project's NuGet settings, so normal builds
-  still acquire the CLI automatically and offline pipelines can prefetch it.
+- **Optional CLI prefetch command.** `dotnet nsmithy install --solution MySolution.sln`
+  restores the CLI packages for the projects of a `.sln` or `.slnx` solution that
+  use NSmithy, so pipelines can build offline afterwards. Use
+  `--project MyService.csproj` for one project; arguments after `--` go to MSBuild.
 
 ### Changed
 

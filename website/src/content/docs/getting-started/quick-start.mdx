@@ -14,11 +14,6 @@ Install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 NSmithy restores the Smithy CLI (including a Java runtime) for your platform from
 NuGet, so no separate Java or Smithy CLI installation is required.
 
-For CI or offline builds, you can prefetch the CLI with the optional
-`dotnet nsmithy install --solution MySolution.slnx` command after restoring.
-See [CLI prefetch](/smithy-dotnet/reference/msbuild/#prefetch-for-ci-and-offline-builds)
-for tool installation and single-project alternatives.
-
 <Aside>
 The server step uses `--with-docs` to generate Sphinx HTML documentation. This
 requires Python 3.11+ on your PATH. Omit `--with-docs` if you only want to run

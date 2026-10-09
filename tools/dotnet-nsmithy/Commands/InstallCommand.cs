@@ -1,7 +1,6 @@
 using System.CommandLine;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Xml;
 
 namespace DotnetNsmithy.Commands;
 
@@ -9,27 +8,55 @@ internal static class InstallCommand
 {
     public static Command Create()
     {
-        var inputOption = new Option<FileInfo?>("--project", "-p", "--solution", "-s")
+        // No short aliases: -p would read like the MSBuild property switch passed after --.
+        var projectOption = new Option<FileInfo?>("--project")
         {
             Description =
-                "Project or .slnx solution whose restored NSmithy packages select the CLI versions. Defaults to the single .slnx, otherwise the single .csproj in the current directory.",
+                "Project whose restored NSmithy package selects the CLI version. Without --project or --solution, the single solution, otherwise the single .csproj, in the current directory.",
+        };
+        var solutionOption = new Option<FileInfo?>("--solution")
+        {
+            Description =
+                "Solution (.sln or .slnx) whose C# projects restore their CLI packages. Projects without NSmithy are skipped.",
+        };
+        var msbuildArguments = new Argument<string[]>("msbuild-arguments")
+        {
+            Description = "Arguments after -- are passed to dotnet msbuild, e.g. -- -p:Name=Value.",
+            Arity = ArgumentArity.ZeroOrMore,
         };
         var command = new Command(
             "install",
-            "Restore host-specific Smithy CLI packages for a project or .slnx solution."
+            "Restore host-specific Smithy CLI packages for a project or solution."
         )
         {
-            Options = { inputOption },
+            Options = { projectOption, solutionOption },
+            Arguments = { msbuildArguments },
         };
+        command.Validators.Add(result =>
+        {
+            var project = result.GetValue(projectOption);
+            var solution = result.GetValue(solutionOption);
+            if (project is not null && solution is not null)
+                result.AddError("Specify either --project or --solution, not both.");
+            else if (project is not null && InstallInput.IsSolution(project.FullName))
+                result.AddError("--project expects a project file; use --solution for solutions.");
+            else if (solution is not null && !InstallInput.IsSolution(solution.FullName))
+                result.AddError("--solution expects a .sln or .slnx file.");
+        });
         command.SetAction(
             (parseResult, cancellationToken) =>
-                ExecuteAsync(parseResult.GetValue(inputOption), cancellationToken)
+                ExecuteAsync(
+                    parseResult.GetValue(projectOption) ?? parseResult.GetValue(solutionOption),
+                    parseResult.GetValue(msbuildArguments) ?? [],
+                    cancellationToken
+                )
         );
         return command;
     }
 
     private static async Task<int> ExecuteAsync(
         FileInfo? input,
+        string[] msbuildArguments,
         CancellationToken cancellationToken
     )
     {
@@ -40,14 +67,17 @@ internal static class InstallCommand
             if (!File.Exists(project))
                 throw new FileNotFoundException($"Project or solution does not exist: {project}");
             var workingDirectory = Path.GetDirectoryName(Path.GetFullPath(project))!;
-            if (Path.GetExtension(project).Equals(".slnx", StringComparison.OrdinalIgnoreCase))
+            if (InstallInput.IsSolution(project))
             {
-                var document = InstallInput.CreateSolutionDriver(project);
+                var projects = await InstallInput.ListSolutionProjectsAsync(
+                    project,
+                    cancellationToken
+                );
                 driver = Path.Combine(
                     Path.GetTempPath(),
                     $"nsmithy-install-{Guid.NewGuid():N}.proj"
                 );
-                document.Save(driver);
+                InstallInput.CreateSolutionDriver(projects).Save(driver);
                 project = driver;
             }
             // Delegate to each restored package: a global tool must not pick its own CLI version.
@@ -60,6 +90,8 @@ internal static class InstallCommand
             start.ArgumentList.Add(project);
             start.ArgumentList.Add(driver is null ? "-t:RestoreSmithyCli" : "-t:Install");
             start.ArgumentList.Add("-nologo");
+            foreach (var argument in msbuildArguments)
+                start.ArgumentList.Add(argument);
             using var process = Process.Start(start)!;
             try
             {
@@ -78,7 +110,6 @@ internal static class InstallCommand
                     is IOException
                         or InvalidDataException
                         or InvalidOperationException
-                        or XmlException
                         or UnauthorizedAccessException
                         or Win32Exception
             )

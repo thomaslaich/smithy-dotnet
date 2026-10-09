@@ -104,8 +104,9 @@ cat > "$SRC/Mixed.slnx" <<'XML'
 XML
 restore_sources "$PACKAGES;https://api.nuget.org/v3/index.json"
 dotnet restore "$SRC/Mixed.slnx" --verbosity quiet
-dotnet tool install dotnet-nsmithy --tool-path "$WORK/tool" --version 0.0.0-SNAPSHOT \
-  --add-source "$PACKAGES" --configfile "$SRC/NuGet.config" --no-cache
+# A private packages folder: a SNAPSHOT tool cached globally by an earlier run would shadow this pack.
+NUGET_PACKAGES="$WORK/tool-packages" dotnet tool install dotnet-nsmithy --tool-path "$WORK/tool" \
+  --version 0.0.0-SNAPSHOT --add-source "$PACKAGES" --configfile "$SRC/NuGet.config" --no-cache
 
 echo "smoke-test: dotnet nsmithy install mixed solution"
 "$WORK/tool/dotnet-nsmithy" install --solution "$SRC/Mixed.slnx"
