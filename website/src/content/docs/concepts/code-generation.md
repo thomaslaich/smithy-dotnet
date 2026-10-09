@@ -53,7 +53,7 @@ The `NSmithy.MSBuild` NuGet package contains:
   repository inside the package.
 
 The Smithy CLI and its Java runtime are downloaded separately for the host by
-`dotnet msbuild <project.csproj> -t:InstallSmithyCli`. The package version pins
+`dotnet nsmithy install --solution <solution.slnx>` (or `--project <project.csproj>`). The package version pins
 the CLI and plugin versions. During generation, MSBuild points the
 CLI at the bundled repository and an isolated Maven cache, so the bundled tools
 resolve from local files rather than remote repositories. Model dependencies

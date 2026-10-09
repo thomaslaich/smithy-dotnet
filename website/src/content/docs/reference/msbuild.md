@@ -82,24 +82,25 @@ with separate configurations.
 
 ## Smithy CLI
 
-Install the Smithy CLI explicitly after restoring your project, before its first build:
+Install the dotnet tool once, then restore and provision a solution before its
+first build:
+
+```shell
+dotnet tool install --global dotnet-nsmithy
+dotnet restore MySolution.slnx
+dotnet nsmithy install --solution MySolution.slnx
+dotnet build MySolution.slnx --no-restore
+```
+
+For a single project, use `dotnet nsmithy install --project MyService.csproj`
+after `dotnet restore MyService.csproj`. If the tool is already installed,
+`dotnet tool update --global dotnet-nsmithy` updates it to the latest release.
+
+You can also install for one project without the dotnet tool:
 
 ```shell
 dotnet restore MyService.csproj
 dotnet msbuild MyService.csproj -t:InstallSmithyCli
-dotnet build MyService.csproj --no-restore
-```
-
-If you have the `dotnet-nsmithy` tool installed, the equivalent command is
-`dotnet nsmithy install --project MyService.csproj`. Install the tool with
-`dotnet tool install --global dotnet-nsmithy`.
-
-You can also provision every NSmithy project in an XML solution:
-
-```shell
-dotnet restore MySolution.slnx
-dotnet nsmithy install --solution MySolution.slnx
-dotnet build MySolution.slnx --no-restore
 ```
 
 The tool resolves C# project paths relative to the solution, including projects

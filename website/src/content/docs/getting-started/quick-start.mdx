@@ -20,10 +20,11 @@ requires Python 3.11+ on your PATH. Omit `--with-docs` if you only want to run
 the service.
 </Aside>
 
-Install the NSmithy project templates (one-time):
+Install the NSmithy project templates and dotnet tool (one-time):
 
 ```shell
 dotnet new install NSmithy.Templates
+dotnet tool install --global dotnet-nsmithy
 ```
 
 ## Create the projects
@@ -38,8 +39,6 @@ dotnet new install NSmithy.Templates
    dotnet new sln -n HelloWorld
    dotnet new nsmithy-contracts -n HelloWorld.Contracts
    dotnet sln add HelloWorld.Contracts
-   dotnet restore HelloWorld.Contracts
-   dotnet msbuild HelloWorld.Contracts/HelloWorld.Contracts.csproj -t:InstallSmithyCli
    ```
 
    <FileTree>
@@ -59,7 +58,21 @@ dotnet new install NSmithy.Templates
    dotnet sln add HelloWorld.Server
    ```
 
-3. **Run the server.** It listens on `http://localhost:5000`.
+3. **Install the build dependencies and run the server.** Restore the solution,
+   then install its pinned Smithy CLI and Java runtime for this machine:
+
+   ```shell
+   dotnet restore HelloWorld.slnx
+   dotnet nsmithy install --solution HelloWorld.slnx
+   ```
+
+   The CLI is cached across projects. Re-run the install command after updating
+   NSmithy; it downloads only when the required CLI version changes. For a single
+   project, use `dotnet nsmithy install --project HelloWorld.Contracts/HelloWorld.Contracts.csproj`.
+   The [MSBuild reference](/smithy-dotnet/reference/msbuild/#smithy-cli) covers
+   offline builds, mirrors, and installation without the dotnet tool.
+
+   Start the server. It listens on `http://localhost:5000`.
 
    ```shell
    dotnet run --project HelloWorld.Server

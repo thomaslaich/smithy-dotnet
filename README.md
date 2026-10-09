@@ -15,9 +15,9 @@
 
 NSmithy brings [Smithy](https://smithy.io) code generation to .NET. It generates typed clients, ASP.NET Core server stubs, and model types from a Smithy model as part of `dotnet build`.
 
-Before the first build, restore your project and run
-`dotnet msbuild <project.csproj> -t:InstallSmithyCli` to install its pinned Smithy
-CLI and Java runtime. See the [quick start](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/).
+Before the first build, install the `dotnet-nsmithy` tool, restore your solution,
+and run `dotnet nsmithy install --solution <solution.slnx>` to install its pinned
+Smithy CLI and Java runtime. See the [quick start](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/).
 
 ## Development
 

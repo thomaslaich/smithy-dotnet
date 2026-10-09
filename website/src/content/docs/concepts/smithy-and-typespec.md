@@ -91,8 +91,8 @@ not change what the model describes.
 ## The toolchain
 
 `NSmithy.MSBuild` bundles the generation plugins in the NuGet package. After
-restoring, `dotnet msbuild <project.csproj> -t:InstallSmithyCli` installs the pinned
-Smithy CLI and its Java runtime for the host. Generation runs inside `dotnet build`.
+restoring, `dotnet nsmithy install --solution <solution.slnx>` installs the pinned
+Smithy CLI and its Java runtime for the host using the `dotnet-nsmithy` tool. Generation runs inside `dotnet build`.
 [Code generation](/smithy-dotnet/concepts/code-generation/) describes the bundle.
 Models are shared as Maven JARs, which every Smithy toolchain can consume; see
 [Distributing contracts](/smithy-dotnet/guides/distributing-contracts/).
