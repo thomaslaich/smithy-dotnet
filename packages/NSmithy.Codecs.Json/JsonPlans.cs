@@ -28,7 +28,11 @@ internal sealed class JsonMemberPlan(
 
     public Schema Target { get; } = target;
 
-    public string TimestampFormat { get; } = Json.TimestampFormat.Resolve(getTrait);
+    public string TimestampFormat { get; } =
+        plans.HonorTimestampFormatTrait ? Json.TimestampFormat.Resolve(getTrait) : "epoch-seconds";
+
+    /// <summary>Whether a <c>bigInteger</c> or <c>bigDecimal</c> value is a JSON string.</summary>
+    public bool BigNumbersAsStrings { get; } = plans.BigNumbersAsStrings;
 
     /// <summary>The plan of the member's target when it is an aggregate.</summary>
     public JsonShapePlan? Shape { get; } = plans.ForTarget(target);
@@ -93,8 +97,16 @@ internal sealed class JsonShapePlan(ShapeKind kind, bool sparse)
 }
 
 /// <summary>Builds and memoizes plans for one codec configuration.</summary>
-internal sealed class JsonPlans(bool honorJsonNameTrait)
+internal sealed class JsonPlans(
+    bool honorJsonNameTrait,
+    bool honorTimestampFormatTrait = true,
+    bool bigNumbersAsStrings = false
+)
 {
+    public bool HonorTimestampFormatTrait { get; } = honorTimestampFormatTrait;
+
+    public bool BigNumbersAsStrings { get; } = bigNumbersAsStrings;
+
     private static readonly ShapeId SparseTrait = new("smithy.api", "sparse");
     private static readonly ShapeId JsonNameTrait = new("smithy.api", "jsonName");
     private static readonly ShapeId AlloyDiscriminatedTrait = new("alloy", "discriminated");

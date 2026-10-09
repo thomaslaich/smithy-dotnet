@@ -13,7 +13,7 @@ AWS JSON, AWS Query, EC2 Query, and REST XML generate clients only.
 gRPC is experimental and requires protobuf field indices in the model.
 
 Streaming support depends on the protocol and shape. `restJson1` includes streaming
-blobs and event streams; RPC v2 CBOR and gRPC include event streams. Consult the
+blobs and event streams; RPC v2 CBOR, RPC v2 JSON, and gRPC include event streams. Consult the
 individual [protocol pages](/smithy-dotnet/protocols/overview/) for supported
 directions, payloads, and restrictions.
 

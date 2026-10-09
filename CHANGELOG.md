@@ -11,6 +11,19 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- `smithy.protocols#rpcv2Json` client and server support in the new
+  `NSmithy.Protocols.RpcV2Json` package, including event streams. It shares a new
+  `NSmithy.Protocols.RpcV2` base with `NSmithy.Protocols.RpcV2Cbor`.
+- `JsonCodecFactory` options `honorTimestampFormatTrait` and `bigNumbersAsStrings`.
+
+### Fixed
+
+- RPC v2 servers reject requests that carry an `X-Amz-Target` or `X-Amzn-Target`
+  header, as the specification requires.
+- Generated code compiles for `bigInteger` trait values outside the `long` range.
+
 ## [0.11.0]
 
 This release generates a schema class and a shape serializer for every shape, which

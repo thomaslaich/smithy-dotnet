@@ -1323,8 +1323,8 @@ public final class SchemaGenerator {
               + CSharpNaming.formatString(node.expectStringNode().getValue())
               + ")";
       case NUMBER ->
-          (writer.typeName(RuntimeTypes.DOCUMENT) + ".From((decimal)")
-              + node.expectNumberNode().getValue()
+          (writer.typeName(RuntimeTypes.DOCUMENT) + ".From(")
+              + ShapeSupport.decimalLiteral(node.expectNumberNode().getValue())
               + ")";
       case ARRAY -> arrayDocumentExpr(writer, node.expectArrayNode());
       case OBJECT -> objectDocumentExpr(writer, node.expectObjectNode());

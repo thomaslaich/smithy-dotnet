@@ -57,9 +57,21 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         }
 
         writer.WriteStartObject();
+        WriteMembers(writer, plan, materializeDefaults, schema, value);
+        writer.WriteEndObject();
+    }
+
+    /// <summary>Writes the members of <paramref name="value"/> into an object the caller has opened.</summary>
+    internal static void WriteMembers<T>(
+        Utf8JsonWriter writer,
+        JsonShapePlan plan,
+        bool materializeDefaults,
+        IStructSchema<T> schema,
+        T value
+    )
+    {
         var serializer = new JsonShapeSerializer(writer, plan, materializeDefaults);
         schema.SerializeMembers(value, ref serializer);
-        writer.WriteEndObject();
     }
 
     private JsonMemberPlan Entry(int member) =>
@@ -197,17 +209,34 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
 
     public void WriteBigInteger(int member, BigInteger value)
     {
+        var asString = Entry(member).BigNumbersAsStrings;
         if (Begin(member))
         {
-            writer.WriteRawValue(value.ToString(CultureInfo.InvariantCulture), true);
+            var text = value.ToString(CultureInfo.InvariantCulture);
+            if (asString)
+            {
+                writer.WriteStringValue(text);
+            }
+            else
+            {
+                writer.WriteRawValue(text, true);
+            }
         }
     }
 
     public void WriteBigDecimal(int member, decimal value)
     {
+        var asString = Entry(member).BigNumbersAsStrings;
         if (Begin(member))
         {
-            writer.WriteNumberValue(value);
+            if (asString)
+            {
+                writer.WriteStringValue(value.ToString(CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                writer.WriteNumberValue(value);
+            }
         }
     }
 

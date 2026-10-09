@@ -17,6 +17,7 @@ public final class TraitIds {
   public static final ShapeId REST_JSON_1 = ShapeId.from("aws.protocols#restJson1");
   public static final ShapeId REST_XML = ShapeId.from("aws.protocols#restXml");
   public static final ShapeId RPC_V2_CBOR = ShapeId.from("smithy.protocols#rpcv2Cbor");
+  public static final ShapeId RPC_V2_JSON = ShapeId.from("smithy.protocols#rpcv2Json");
   public static final ShapeId MEDIA_TYPE = ShapeId.from("smithy.api#mediaType");
   public static final ShapeId REQUEST_COMPRESSION = ShapeId.from("smithy.api#requestCompression");
   public static final ShapeId HTTP_CHECKSUM_REQUIRED =
