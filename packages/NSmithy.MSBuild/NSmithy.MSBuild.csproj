@@ -33,6 +33,12 @@
       Pack="true"
       PackagePath="tools/NSmithy.SmithyCli.Download.proj"
     />
+    <!-- RestoreSmithyCli for the outer build of multi-targeted direct consumers. -->
+    <None
+      Include="Targets/NSmithy.MSBuild.MultiTargeting.targets"
+      Pack="true"
+      PackagePath="buildMultiTargeting/NSmithy.MSBuild.targets"
+    />
 
     <!--
       Bundled Maven repo — populated by `gradle :bundleMavenRepo` (run from `just pack`).

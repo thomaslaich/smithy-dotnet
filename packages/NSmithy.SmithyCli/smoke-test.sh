@@ -34,8 +34,13 @@ mkdir -p "$SRC" "$WORK/empty-feed"
 cp -R "$REPO/examples/simplerestjson/contracts" "$SRC/contracts"
 rm -rf "$SRC/contracts/obj" "$SRC/contracts/bin"
 PROJECT="$SRC/contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj"
+# Multi-targeted, so RestoreSmithyCli also goes through the outer build (buildMultiTargeting/).
+sed -i.bak 's|<TargetFramework>net10.0</TargetFramework>|<TargetFrameworks>net10.0;net9.0</TargetFrameworks>|' "$PROJECT"
+rm "$PROJECT.bak"
+grep -q '<TargetFrameworks>' "$PROJECT"
 
-# NuGet.config offers nothing; the packages are only reachable through the project's RestoreSources.
+# NuGet.config offers nothing; the packages are only reachable through the project's RestoreSources
+# (nuget.org for the net9.0 reference pack).
 cat > "$SRC/NuGet.config" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -55,7 +60,7 @@ restore_sources() {
 XML
 }
 
-restore_sources "$PACKAGES"
+restore_sources "$PACKAGES;https://api.nuget.org/v3/index.json"
 echo "smoke-test: restore"
 dotnet restore "$PROJECT" --verbosity quiet
 

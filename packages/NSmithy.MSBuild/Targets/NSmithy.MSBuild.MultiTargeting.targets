@@ -1,0 +1,17 @@
+<Project>
+  <!--
+    The outer build of a multi-targeted project imports only buildMultiTargeting/, while
+    RestoreSmithyCli lives in the per-framework buildTransitive/ targets. Run it in each inner
+    build; once the first has restored the CLI package, the others are no-ops.
+  -->
+  <Target Name="RestoreSmithyCli">
+    <ItemGroup>
+      <_SmithyCliTargetFramework Include="$(TargetFrameworks)" />
+    </ItemGroup>
+    <MSBuild
+      Projects="$(MSBuildProjectFullPath)"
+      Targets="RestoreSmithyCli"
+      Properties="TargetFramework=%(_SmithyCliTargetFramework.Identity)"
+    />
+  </Target>
+</Project>
