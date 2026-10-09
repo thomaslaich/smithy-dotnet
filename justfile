@@ -84,7 +84,11 @@ smoke-templates:
     # codegen rename breaks `dotnet new` while everything else stays green.
     bash templates/smoke-test.sh
 
-ci: check-format build test aot-smoke pack refresh-examples smoke-templates
+# Restore the Smithy CLI package against the packed packages, as a consumer does.
+smoke-cli-restore:
+    bash packages/NSmithy.SmithyCli/smoke-test.sh
+
+ci: check-format build test aot-smoke pack refresh-examples smoke-templates smoke-cli-restore
 
 # The examples pin the fixed `0.0.0-SNAPSHOT` dev version permanently, while a release build packs
 # release-versioned packages, so NuGet resolves a version other than the pinned one and NU1603

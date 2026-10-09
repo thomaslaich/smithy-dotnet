@@ -17,10 +17,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   Smithy CLI and Java runtime for all five platforms. They ship as
   `NSmithy.SmithyCli.<rid>` packages versioned by the Smithy CLI they contain,
   and the first build that generates code restores only the one for the build
-  machine. The download drops from about
-  157 MB to about 3 MB plus 28 to 33 MB for the CLI package. Setting
-  `SmithyCliPath` skips the CLI package entirely. Private feeds that mirror
-  nuget.org need the new packages for each build platform.
+  machine from the project's NuGet sources. The download drops from about
+  157 MB to about 3 MB plus 28 to 33 MB for the CLI package. Pipelines that
+  build without network access fetch it beforehand with
+  `dotnet msbuild -t:RestoreSmithyCli`. Setting `SmithyCliPath` skips the CLI
+  package entirely. Private feeds that mirror nuget.org need the new packages for
+  each build platform.
 
 ### Fixed
 

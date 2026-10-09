@@ -440,16 +440,29 @@
     Runs from GenerateSmithyCode's DependsOnTargets, so projects that only pick up these targets
     transitively and have no model never download it. A no-op once the package is extracted.
 
-    The nested restore uses the consuming project's NuGet config and packages folder, inherits
-    global properties such as RestoreSources, and keeps its own files under obj/. Its failures
-    (e.g. NU1101) are downgraded so the error below can name the way out.
+    The nested restore uses the sources, packages folder, fallback folders and config files that
+    NuGet resolved for the consuming project (_GetRestoreSettings), so sources set in the project,
+    in Directory.Build.props, in NuGet.config or on the command line all apply. It keeps its own
+    files under obj/. Its failures (e.g. NU1101) are followed by the error below, which names
+    the way out.
   -->
   <Target
     Name="_SmithyRestoreCliPackage"
     Condition="'$(_SmithyCliFromPackage)' == 'true' and !Exists('$(SmithyCliPath)')"
+    DependsOnTargets="_GetRestoreProjectStyle;_GetRestoreSettings"
   >
     <PropertyGroup>
       <_SmithyCliRestoreObj>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(BaseIntermediateOutputPath)', 'nsmithy-smithycli'))</_SmithyCliRestoreObj>
+      <!-- Escaped because the lists contain ';', which separates the MSBuild task's Properties. -->
+      <_SmithyCliRestoreProperties>NSmithySmithyCliPackageId=$(_SmithyCliPackageId);NSmithySmithyCliPackageVersion=$(_SmithyCliPackageVersion);RestoreRootConfigDirectory=$(MSBuildProjectDirectory);BaseIntermediateOutputPath=$(_SmithyCliRestoreObj);MSBuildProjectExtensionsPath=$(_SmithyCliRestoreObj)</_SmithyCliRestoreProperties>
+      <_SmithyCliRestoreProperties>$(_SmithyCliRestoreProperties);RestoreSources=$([MSBuild]::Escape('$(_OutputSources)'))</_SmithyCliRestoreProperties>
+      <_SmithyCliRestoreProperties>$(_SmithyCliRestoreProperties);RestorePackagesPath=$([MSBuild]::Escape('$(_OutputPackagesPath)'))</_SmithyCliRestoreProperties>
+      <_SmithyCliRestoreProperties Condition="'$(_OutputFallbackFolders)' != ''"
+        >$(_SmithyCliRestoreProperties);RestoreFallbackFolders=$([MSBuild]::Escape('$(_OutputFallbackFolders)'))</_SmithyCliRestoreProperties
+      >
+      <_SmithyCliRestoreProperties Condition="'$(RestoreConfigFile)' != ''"
+        >$(_SmithyCliRestoreProperties);RestoreConfigFile=$([MSBuild]::Escape($([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(RestoreConfigFile)'))))</_SmithyCliRestoreProperties
+      >
     </PropertyGroup>
     <Message
       Importance="high"
@@ -458,7 +471,7 @@
     <MSBuild
       Projects="$(MSBuildThisFileDirectory)../tools/NSmithy.SmithyCli.Download.proj"
       Targets="Restore"
-      Properties="NSmithySmithyCliPackageId=$(_SmithyCliPackageId);NSmithySmithyCliPackageVersion=$(_SmithyCliPackageVersion);RestorePackagesPath=$(NuGetPackageRoot);RestoreRootConfigDirectory=$(MSBuildProjectDirectory);BaseIntermediateOutputPath=$(_SmithyCliRestoreObj);MSBuildProjectExtensionsPath=$(_SmithyCliRestoreObj)"
+      Properties="$(_SmithyCliRestoreProperties)"
       RemoveProperties="TargetFramework;TargetFrameworks;RuntimeIdentifier;RuntimeIdentifiers;SelfContained;RestoreLockedMode;RestorePackagesWithLockFile;NuGetLockFilePath"
       ContinueOnError="true"
     />
@@ -467,6 +480,24 @@
       Text="NSmithy: could not restore $(_SmithyCliPackageId) $(_SmithyCliPackageVersion), which provides the Smithy CLI for this platform. Check that a configured NuGet source provides it, or set SmithyCliPath to an installed Smithy CLI."
     />
   </Target>
+
+  <!--
+    Fetch the Smithy CLI package without building, for pipelines that restore with network
+    access and build without it: run `dotnet msbuild -t:RestoreSmithyCli` after `dotnet restore`,
+    and later builds that skip restore find the CLI in the packages folder.
+
+    Only projects that generate code fetch it: those with a smithy-build.json, or with contracts
+    references that one is synthesized from.
+  -->
+  <Target
+    Name="RestoreSmithyCli"
+    DependsOnTargets="_CollectSmithyItemsFromProjectReferences;_SmithyRestoreCliPackageIfGenerating"
+  />
+  <Target
+    Name="_SmithyRestoreCliPackageIfGenerating"
+    Condition="Exists('$(SmithyBuildFile)') or '@(SmithySource)' != ''"
+    DependsOnTargets="_SmithyRestoreCliPackage"
+  />
 
   <!--
     Ensure the packaged Smithy CLI launcher is executable on Unix.

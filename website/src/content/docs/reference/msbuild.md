@@ -90,7 +90,18 @@ global packages folder. Later builds, including offline ones, reuse it. A privat
 feed that mirrors nuget.org must also provide the package for each build platform.
 
 `dotnet restore` alone does not fetch the CLI package. Pipelines that restore with
-network access and then build without it should set `SmithyCliPath`.
+network access and then build without it fetch it in the restore step with the
+`RestoreSmithyCli` target:
+
+```sh
+dotnet restore
+dotnet msbuild -t:RestoreSmithyCli
+dotnet build --no-restore
+```
+
+Only projects that generate code fetch the package. Run the target on a solution
+only if every project in it references NSmithy; otherwise run it on the projects
+that generate code.
 
 NSmithy.MSBuild bundles the NSmithy Smithy codegen plugins plus the common
 Smithy and alloy trait/doc/openapi dependencies used by the templates and
@@ -99,8 +110,7 @@ mirrored into the package; they remain the consuming project's responsibility
 and may require access to the configured Maven repositories.
 
 Set `SmithyCliPath` to use an installed Smithy CLI instead, for example on an
-unsupported platform, in such a pipeline, or when testing against a different
-CLI version. NSmithy
+unsupported platform or when testing against a different CLI version. NSmithy
 then does not download the CLI package:
 
 ```xml title="MyService.csproj"
