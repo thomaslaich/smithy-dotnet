@@ -5,7 +5,8 @@ description: What NSmithy generates from a Smithy model, and how generation runs
 
 NSmithy turns an assembled Smithy model into C# types, client and server APIs,
 and runtime schemas. Generation is part of `dotnet build`; there is no separate
-command and nothing to install beyond the NuGet package.
+generation command. Install the CLI once after restoring the project, as shown
+in the [MSBuild reference](/smithy-dotnet/reference/msbuild/#smithy-cli).
 
 ## What the model becomes
 
@@ -45,15 +46,15 @@ that interprets it, and traits that change the C# representation, such as
 
 The `NSmithy.MSBuild` NuGet package contains:
 
-- The Smithy CLI and its bundled Java runtime.
 - NSmithy's C# and Protobuf code-generation plugins.
 - The Smithy OpenAPI and documentation plugins, plus the trait libraries used
   by NSmithy.
 - Their transitive Java dependencies, stored as JARs and POMs in a local Maven
   repository inside the package.
 
-Consumers do not install Java, the Smithy CLI, or these plugins separately.
-The package version fixes their versions. During generation, MSBuild points the
+The Smithy CLI and its Java runtime are downloaded separately for the host by
+`dotnet msbuild <project.csproj> -t:InstallSmithyCli`. The package version pins
+the CLI and plugin versions. During generation, MSBuild points the
 CLI at the bundled repository and an isolated Maven cache, so the bundled tools
 resolve from local files rather than remote repositories. Model dependencies
 declared by the project are resolved separately, and optional Sphinx HTML
@@ -65,7 +66,7 @@ Generation runs in three steps:
 
 1. MSBuild collects model inputs, including contracts project references, and
    prepares the Smithy build configuration.
-2. The bundled CLI assembles and validates the model, applies configured
+2. The installed CLI assembles and validates the model, applies configured
    projections, and runs the enabled plugins.
 3. MSBuild includes the generated `.g.cs` files under `obj/` in C# compilation.
 

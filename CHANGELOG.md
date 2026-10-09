@@ -11,6 +11,17 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **Explicit Smithy CLI installation.** `NSmithy.MSBuild` no longer bundles the
+  CLI and Java runtime for all platforms. After restoring, run
+  `dotnet msbuild <project.csproj> -t:InstallSmithyCli` (or
+  `dotnet nsmithy install --project <project.csproj>`) to download the host's
+  archive into a shared, versioned cache. The project's NSmithy package pins and
+  verifies the archive checksum. Normal builds do not download the CLI;
+  provision the cache before offline builds. `SmithyCliPath` skips installation
+  and user-supplied executables are no longer chmodded.
+
 ## [0.11.0]
 
 This release generates a schema class and a shape serializer for every shape, which

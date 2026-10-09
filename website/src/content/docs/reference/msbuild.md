@@ -32,7 +32,9 @@ MSBuild properties and model sources. See [Code generation](/smithy-dotnet/conce
 | `SmithyBuildOutputPath` | `$(IntermediateOutputPath)Smithy/` | Root directory for all Smithy build output. |
 | `SmithyStampFile` | `$(SmithyBuildOutputPath)NSmithy.Generated.stamp` | Incremental build stamp file. Smithy codegen is skipped when inputs have not changed since this file was last written. |
 | `SmithyEmitGeneratedFiles` | `false` | Show generated `.g.cs` files in IDE project views when `true`. |
-| `SmithyCliPath` | bundled CLI | Smithy CLI executable. Set this to override the bundled executable. |
+| `SmithyCliPath` | installed CLI cache | Use an existing executable; skips NSmithy installation and is never modified. |
+| `SmithyCliCachePath` | user application-data directory + `NSmithy/smithy-cli` | Shared CLI cache. Also configurable with `NSMITHY_CLI_CACHE`. |
+| `SmithyCliDownloadBaseUrl` | Smithy GitHub releases | Archive mirror base URL, also configurable with `NSMITHY_CLI_DOWNLOAD_BASE_URL`. |
 
 ### Documentation
 
@@ -80,10 +82,42 @@ with separate configurations.
 
 ## Smithy CLI
 
-NSmithy bundles the Smithy CLI inside `NSmithy.MSBuild` and
-selects the correct platform binary automatically. No separate installation is
-required. The bundle is self-contained and includes a JRE, so Java does not
-need to be installed either.
+Install the Smithy CLI explicitly after restoring your project, before its first build:
+
+```shell
+dotnet restore MyService.csproj
+dotnet msbuild MyService.csproj -t:InstallSmithyCli
+dotnet build MyService.csproj --no-restore
+```
+
+If you have the `dotnet-nsmithy` tool installed, the equivalent command is
+`dotnet nsmithy install --project MyService.csproj`. Without `--project`, it uses
+the single `.csproj` in the current directory. Install the tool with
+`dotnet tool install --global dotnet-nsmithy`.
+
+The project's restored `NSmithy.MSBuild` package pins the CLI version and SHA-256
+checksums. The installer downloads only the host's official Smithy release archive,
+including its Java runtime; a separate Java installation is unnecessary. Supported
+hosts are macOS and Linux on x64/arm64, and Windows x64 (also used on Windows arm64).
+
+Installations are shared between projects by CLI version and platform. Re-running
+the command reuses a completed installation without network access. Run it again
+after an NSmithy upgrade: it downloads only if the required CLI has changed.
+Concurrent installers share a lock, and an interrupted or invalid download is not
+published as a usable installation.
+
+Neither NuGet restore nor normal builds download the CLI. A missing installation
+reports the setup command. For CI or offline builds, run restore and installation
+in the network-enabled stage and preserve the CLI cache for the build stage.
+The default cache is under the user's local application-data directory
+(`~/.local/share` on Linux). Set `SmithyCliCachePath` or `NSMITHY_CLI_CACHE` to use
+another location, with the same setting during installation and builds.
+
+For an internal mirror, set `SmithyCliDownloadBaseUrl` or
+`NSMITHY_CLI_DOWNLOAD_BASE_URL`. The installer requests
+`<base>/<version>/smithy-cli-<platform>.zip` and still verifies the pinned checksum.
+Standard .NET HTTP proxy settings apply. NuGet feed configuration does not control
+these archive downloads.
 
 NSmithy.MSBuild also bundles the NSmithy Smithy codegen plugins plus the common
 Smithy and alloy trait/doc/openapi dependencies used by the templates and
@@ -91,8 +125,8 @@ examples. Additional Maven dependencies declared in `smithy-build.json` are not
 mirrored into the package; they remain the consuming project's responsibility
 and may require access to the configured Maven repositories.
 
-Set `SmithyCliPath` to override the bundled binary with a specific executable,
-for example when testing against a different CLI version:
+Set `SmithyCliPath` to use an existing executable instead. Both installation and
+builds honor this override, including executables on read-only paths:
 
 ```xml title="MyService.csproj"
 <PropertyGroup>

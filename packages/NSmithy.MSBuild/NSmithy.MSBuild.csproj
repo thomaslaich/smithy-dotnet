@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="NSmithy.Tests" />
+    <InternalsVisibleTo Include="NSmithy.Cli.Tests" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,43 +25,10 @@
     <PackageReference Include="Microsoft.Build.Framework" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" PrivateAssets="all" />
 
-    <!--
-      Bundled Smithy CLI — populated by tools/download-smithy-cli.sh.
-      Each platform's full self-contained distribution (launcher + bundled JRE)
-      is extracted into tools/smithy-cli/{platform}/ and packed here.
-      The targets file locates it via $(MSBuildThisFileDirectory)../tools/smithy-cli/.
-      Condition="Exists(...)" keeps packing idempotent when a platform is missing
-      (e.g. CI before the download script has run).
-    -->
     <None
-      Include="tools/smithy-cli/darwin-aarch64/**/*"
+      Include="Targets/NSmithy.MSBuild.MultiTargeting.targets"
       Pack="true"
-      PackagePath="tools/smithy-cli/darwin-aarch64/"
-      Condition="Exists('tools/smithy-cli/darwin-aarch64/bin/smithy')"
-    />
-    <None
-      Include="tools/smithy-cli/darwin-x86_64/**/*"
-      Pack="true"
-      PackagePath="tools/smithy-cli/darwin-x86_64/"
-      Condition="Exists('tools/smithy-cli/darwin-x86_64/bin/smithy')"
-    />
-    <None
-      Include="tools/smithy-cli/linux-aarch64/**/*"
-      Pack="true"
-      PackagePath="tools/smithy-cli/linux-aarch64/"
-      Condition="Exists('tools/smithy-cli/linux-aarch64/bin/smithy')"
-    />
-    <None
-      Include="tools/smithy-cli/linux-x86_64/**/*"
-      Pack="true"
-      PackagePath="tools/smithy-cli/linux-x86_64/"
-      Condition="Exists('tools/smithy-cli/linux-x86_64/bin/smithy')"
-    />
-    <None
-      Include="tools/smithy-cli/windows-x64/**/*"
-      Pack="true"
-      PackagePath="tools/smithy-cli/windows-x64/"
-      Condition="Exists('tools/smithy-cli/windows-x64/bin/smithy.bat')"
+      PackagePath="buildMultiTargeting/NSmithy.MSBuild.targets"
     />
 
     <!--
@@ -68,7 +36,7 @@
       The codegen plugin + first-party trait packages + their runtime closure, in Maven
       layout (JARs and POMs). The targets file points `smithy build` at it via
       SMITHY_MAVEN_REPOS so codegen resolves from local files instead of the network.
-      Platform-independent, so bundled once (unlike the per-platform CLI).
+      The CLI is installed separately with InstallSmithyCli.
     -->
     <None
       Include="tools/maven-repo/**/*"

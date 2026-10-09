@@ -64,7 +64,7 @@ localize() {
 
 failed=()
 build() { # build <label> <project-dir>
-  if dotnet build "$2" --verbosity quiet --nologo > "$WORK/$1.log" 2>&1; then
+  if { dotnet restore "$2" --verbosity quiet && dotnet msbuild "$2"/*.csproj -t:InstallSmithyCli -verbosity:quiet && dotnet build "$2" --no-restore --verbosity quiet --nologo; } > "$WORK/$1.log" 2>&1; then
     echo "  PASS  $1"
   else
     echo "  FAIL  $1"

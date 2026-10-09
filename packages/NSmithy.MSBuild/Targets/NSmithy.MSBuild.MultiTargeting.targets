@@ -1,0 +1,14 @@
+<Project>
+  <!-- NuGet imports this in the outer build, before a TargetFramework has been selected.
+       Run installation through an inner build so its restored package pins the CLI. -->
+  <Target Name="InstallSmithyCli">
+    <PropertyGroup>
+      <_SmithyInstallTargetFramework>$(TargetFrameworks.Split(';')[0])</_SmithyInstallTargetFramework>
+    </PropertyGroup>
+    <MSBuild
+      Projects="$(MSBuildProjectFullPath)"
+      Targets="InstallSmithyCli"
+      Properties="TargetFramework=$(_SmithyInstallTargetFramework)"
+    />
+  </Target>
+</Project>

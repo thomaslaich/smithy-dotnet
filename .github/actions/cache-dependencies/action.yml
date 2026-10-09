@@ -27,10 +27,8 @@ runs:
         key: ${{ runner.os }}-${{ runner.arch }}-gradle-deps-v1-${{ hashFiles('devenv.lock', '**/*.gradle.kts', '**/gradle.properties') }}
         restore-keys: |
           ${{ runner.os }}-${{ runner.arch }}-gradle-deps-v1-
-    - name: Cache bundled Smithy CLI
+    - name: Cache installed Smithy CLI
       uses: actions/cache@v5
       with:
-        path: packages/NSmithy.MSBuild/tools/smithy-cli
-        # The downloader skips existing launchers, so never restore a cache
-        # made with a different CLI version or checksum set.
-        key: ${{ runner.os }}-${{ runner.arch }}-smithy-cli-v1-${{ hashFiles('packages/NSmithy.MSBuild/tools/download-smithy-cli.sh') }}
+        path: ~/.local/share/NSmithy/smithy-cli
+        key: ${{ runner.os }}-${{ runner.arch }}-smithy-cli-install-v1-${{ hashFiles('packages/NSmithy.MSBuild/Tasks/SmithyCliInstallation.cs') }}
