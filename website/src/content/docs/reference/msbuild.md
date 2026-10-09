@@ -91,9 +91,27 @@ dotnet build MyService.csproj --no-restore
 ```
 
 If you have the `dotnet-nsmithy` tool installed, the equivalent command is
-`dotnet nsmithy install --project MyService.csproj`. Without `--project`, it uses
-the single `.csproj` in the current directory. Install the tool with
+`dotnet nsmithy install --project MyService.csproj`. Install the tool with
 `dotnet tool install --global dotnet-nsmithy`.
+
+You can also provision every NSmithy project in an XML solution:
+
+```shell
+dotnet restore MySolution.slnx
+dotnet nsmithy install --solution MySolution.slnx
+dotnet build MySolution.slnx --no-restore
+```
+
+The tool resolves C# project paths relative to the solution, including projects
+in solution folders. It skips projects without the NSmithy install target and
+runs each participating project's pinned installer. Projects requiring the same
+CLI version reuse the cache; different versions are installed side by side.
+An installation failure makes the command fail. Legacy `.sln` files are not parsed;
+use `.slnx` or select individual projects.
+
+With no argument, the tool selects the single `.slnx` in the current directory,
+or the single `.csproj` if there are no XML solutions. Multiple candidates require
+an explicit `--solution` or `--project`.
 
 The project's restored `NSmithy.MSBuild` package pins the CLI version and SHA-256
 checksums. The installer downloads only the host's official Smithy release archive,

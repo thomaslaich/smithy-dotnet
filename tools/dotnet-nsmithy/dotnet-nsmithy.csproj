@@ -9,5 +9,6 @@
 
   <ItemGroup>
     <PackageReference Include="System.CommandLine" />
+    <InternalsVisibleTo Include="NSmithy.Cli.Tests" />
   </ItemGroup>
 </Project>

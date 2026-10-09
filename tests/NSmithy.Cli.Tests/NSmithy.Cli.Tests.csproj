@@ -9,6 +9,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <ProjectReference Include="../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+    <ProjectReference Include="../../tools/dotnet-nsmithy/dotnet-nsmithy.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
 </Project>

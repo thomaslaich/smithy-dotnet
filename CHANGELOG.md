@@ -17,7 +17,8 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   CLI and Java runtime for all platforms. After restoring, run
   `dotnet msbuild <project.csproj> -t:InstallSmithyCli` (or
   `dotnet nsmithy install --project <project.csproj>`) to download the host's
-  archive into a shared, versioned cache. The project's NSmithy package pins and
+  archive into a shared, versioned cache. `dotnet nsmithy install --solution
+  <solution.slnx>` provisions all participating C# projects in a solution. The project's NSmithy package pins and
   verifies the archive checksum. Normal builds do not download the CLI;
   provision the cache before offline builds. `SmithyCliPath` skips installation
   and user-supplied executables are no longer chmodded.
