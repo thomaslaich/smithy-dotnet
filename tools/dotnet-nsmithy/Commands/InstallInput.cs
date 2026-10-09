@@ -29,9 +29,12 @@ internal static class InstallInput
         CancellationToken cancellationToken
     )
     {
+        solution = Path.GetFullPath(solution);
         var start = new ProcessStartInfo("dotnet")
         {
             UseShellExecute = false,
+            // Select the solution's SDK via global.json, just as the MSBuild invocation does.
+            WorkingDirectory = Path.GetDirectoryName(solution)!,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };

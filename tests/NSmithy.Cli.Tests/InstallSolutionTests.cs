@@ -6,6 +6,37 @@ namespace NSmithy.Cli.Tests;
 public sealed class InstallSolutionTests
 {
     [Theory]
+    [InlineData(".sln")]
+    [InlineData(".slnx")]
+    public async Task SolutionListingHonorsSolutionsGlobalJson(string format)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"nsmithy sdk {Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            // An unavailable SDK makes selection observable without requiring multiple installed SDKs.
+            File.WriteAllText(
+                Path.Combine(directory, "global.json"),
+                """{"sdk":{"version":"99.0.100","rollForward":"disable"}}"""
+            );
+            var solution = Path.Combine(directory, "Applications" + format);
+            if (format == ".slnx")
+                WriteSlnx(solution);
+            else
+                WriteSln(solution);
+
+            var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+                InstallInput.ListSolutionProjectsAsync(solution, CancellationToken.None)
+            );
+            Assert.Contains("99.0.100", exception.Message);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Theory]
     [InlineData(".slnx", false)]
     [InlineData(".slnx", true)]
     [InlineData(".sln", false)]
