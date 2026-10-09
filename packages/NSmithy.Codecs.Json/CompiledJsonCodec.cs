@@ -20,7 +20,7 @@ internal sealed class CompiledJsonCodec<T> : ICodec<T>
         Schema<T> schema,
         bool materializeTopLevelDefaults,
         WireReadMode readMode,
-        bool honorJsonNameTrait,
+        JsonPlans plans,
         IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null,
         KeyValuePair<string, string>? discriminator = null
     )
@@ -28,7 +28,7 @@ internal sealed class CompiledJsonCodec<T> : ICodec<T>
         this.schema = schema;
         this.materializeTopLevelDefaults = materializeTopLevelDefaults;
         this.readMode = readMode;
-        root = new JsonPlans(honorJsonNameTrait).ForRoot(schema, memberTraits, discriminator);
+        root = plans.ForRoot(schema, memberTraits, discriminator);
     }
 
     public byte[] Serialize(T value)
@@ -94,13 +94,13 @@ internal sealed class CompiledJsonProjectionCodec<T, TBuilder> : IProjectionCode
         StructProjection<T, TBuilder> projection,
         bool materializeTopLevelDefaults,
         WireReadMode readMode,
-        bool honorJsonNameTrait
+        JsonPlans plans
     )
     {
         source = projection.Source;
         this.materializeTopLevelDefaults = materializeTopLevelDefaults;
         this.readMode = readMode;
-        plan = new JsonPlans(honorJsonNameTrait)
+        plan = plans
             .ForTarget((Schema)projection.Source)!
             .Project(name => projection.GetMember(name) is not null);
     }

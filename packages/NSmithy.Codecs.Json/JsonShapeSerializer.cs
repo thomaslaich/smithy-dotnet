@@ -197,17 +197,34 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
 
     public void WriteBigInteger(int member, BigInteger value)
     {
+        var asString = Entry(member).BigNumbersAsStrings;
         if (Begin(member))
         {
-            writer.WriteRawValue(value.ToString(CultureInfo.InvariantCulture), true);
+            var text = value.ToString(CultureInfo.InvariantCulture);
+            if (asString)
+            {
+                writer.WriteStringValue(text);
+            }
+            else
+            {
+                writer.WriteRawValue(text, true);
+            }
         }
     }
 
     public void WriteBigDecimal(int member, decimal value)
     {
+        var asString = Entry(member).BigNumbersAsStrings;
         if (Begin(member))
         {
-            writer.WriteNumberValue(value);
+            if (asString)
+            {
+                writer.WriteStringValue(value.ToString(CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                writer.WriteNumberValue(value);
+            }
         }
     }
 

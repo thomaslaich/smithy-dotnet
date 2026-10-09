@@ -129,6 +129,7 @@ export default defineConfig({
 						{ label: 'Overview', slug: 'protocols/overview' },
 						{ label: 'REST JSON', slug: 'protocols/rest-json', badge: { text: 'Stable', variant: 'success' } },
 						{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor', badge: { text: 'Stable', variant: 'success' } },
+						{ label: 'RPC v2 JSON', slug: 'protocols/rpc-v2-json', badge: { text: 'Preview', variant: 'note' } },
 						{
 							label: 'AWS protocols',
 							items: [

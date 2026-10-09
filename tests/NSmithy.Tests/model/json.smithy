@@ -26,6 +26,7 @@ operation UseShapes {
         choice: Choice
         order: Order
         requiredPerson: RequiredPerson
+        arbitraryPrecision: ArbitraryPrecision
     }
 }
 
@@ -95,6 +96,14 @@ structure TimestampRecord {
     @required
     @timestampFormat("date-time")
     created: Timestamp
+}
+
+structure ArbitraryPrecision {
+    @required
+    integer: BigInteger
+
+    @required
+    decimal: BigDecimal
 }
 
 structure Address {
