@@ -56,7 +56,6 @@ pack:
     cd codegen && gradle bundleMavenRepo ${VERSION:+-Pversion=$VERSION}
     find packages/NSmithy.MSBuild/tools/maven-repo -mindepth 1 -not -name .gitignore -delete
     cp -R codegen/build/maven-bundle/. packages/NSmithy.MSBuild/tools/maven-repo/
-    bash packages/NSmithy.MSBuild/tools/download-smithy-cli.sh
     dotnet pack NSmithy.slnx --configuration Release --no-build --output artifacts/packages ${VERSION:+-p:Version=$VERSION}
 
 # Build the examples against the freshly packed packages, the way a consumer does.
@@ -65,6 +64,7 @@ refresh-examples:
     # NuGet and MSBuild rather than project references, which is a path nothing else covers.
     find examples -type d -name obj -prune -exec rm -rf {} +
     dotnet restore examples/examples.slnx --no-cache --force
+    dotnet msbuild examples/simplerestjson/contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj -t:InstallSmithyCli
     # gRPC examples need two build passes: the first generates the .proto file via the
     # smithy build, the second picks it up via the static <Protobuf> glob and compiles
     # it with Grpc.Tools. (MSBuild evaluates Protobuf_Compile's item condition at

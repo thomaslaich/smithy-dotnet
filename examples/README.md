@@ -36,7 +36,8 @@ just pack
 just refresh-examples
 ```
 
-`just refresh-examples` handles the two build passes required by the gRPC
+`just refresh-examples` installs the pinned Smithy CLI for the host, then handles
+the two build passes required by the gRPC
 examples: the first generates `.proto` files and the second compiles them.
 
 Each example's README explains how to run it.

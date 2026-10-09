@@ -16,7 +16,7 @@ The build itself is **polyglot**:
 - The code generator is **Java/Gradle** (`codegen/`), packaged as a Smithy
   `SmithyBuildPlugin` JAR.
 - The runtime, MSBuild integration, and tests are **C#/.NET 10** (`NSmithy.slnx`).
-- `NSmithy.MSBuild` invokes the bundled Smithy CLI during `dotnet build`, which
+- `NSmithy.MSBuild` invokes the explicitly installed Smithy CLI during `dotnet build`, which
   loads the codegen JAR to emit C#.
 
 ## Common commands
