@@ -13,6 +13,7 @@ between a contract and its wire representation, see
 | --- | --- | --- |
 | [`restJson1`](../rest-json/) | Client and server | General REST APIs, broad tooling support, streaming, and AWS-compatible behavior |
 | [`rpcv2Cbor`](../rpc-v2-cbor/) | Client and server | Compact binary RPC with CBOR and event streaming |
+| [`rpcv2Json`](../rpc-v2-json/) | Client and server | Smithy RPC with JSON bodies and event streaming |
 | [`awsJson1_1`](../aws-json/) | Client | Existing AWS JSON RPC services |
 | [`awsJson1_0`](../aws-json/) | Client | Existing AWS JSON 1.0 services |
 | [`awsQuery`](../aws-query/) | Client | Existing AWS Query services |
@@ -22,7 +23,8 @@ between a contract and its wire representation, see
 | [`grpc`](../grpc/) | Client and server | Standard gRPC and protobuf interoperability |
 
 For most new HTTP APIs, start with `restJson1`. Use `rpcv2Cbor` for compact
-binary Smithy RPC between compatible peers. Use gRPC when standard protobuf and
+binary Smithy RPC between compatible peers, or `rpcv2Json` for the same RPC
+model with readable JSON bodies. Use gRPC when standard protobuf and
 gRPC interoperability matter. The AWS Query, AWS JSON, and restXml protocols
 are primarily for existing AWS services and emulators.
 

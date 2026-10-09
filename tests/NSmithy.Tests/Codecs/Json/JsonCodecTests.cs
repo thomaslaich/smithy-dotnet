@@ -77,6 +77,78 @@ public sealed class JsonCodecTests
     }
 
     [Fact]
+    public void JsonCodecCanIgnoreTimestampFormatTrait()
+    {
+        var codec = new JsonCodecFactory(honorTimestampFormatTrait: false).FromSchema(
+            TimestampRecordSchema.Schema
+        );
+
+        var json = codec.SerializeText(
+            new TimestampRecord(DateTimeOffset.FromUnixTimeSeconds(946845296))
+        );
+        var decoded = codec.DeserializeText("{\"created\":946845296.5}");
+
+        Assert.Equal("{\"created\":946845296}", json);
+        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(946845296500), decoded.Created);
+    }
+
+    [Fact]
+    public void JsonCodecWritesBigNumbersAsNumbersByDefault()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(ArbitraryPrecisionSchema.Schema);
+
+        var json = codec.SerializeText(
+            new ArbitraryPrecision(
+                Integer: System.Numerics.BigInteger.Parse("9223372036854775808"),
+                Decimal: 0.100000000000000000000001m
+            )
+        );
+
+        Assert.Equal(
+            "{\"integer\":9223372036854775808,\"decimal\":0.100000000000000000000001}",
+            json
+        );
+    }
+
+    [Fact]
+    public void JsonCodecCanCarryBigNumbersAsStrings()
+    {
+        var codec = new JsonCodecFactory(bigNumbersAsStrings: true).FromSchema(
+            ArbitraryPrecisionSchema.Schema
+        );
+        var value = new ArbitraryPrecision(
+            Integer: System.Numerics.BigInteger.Parse("-9223372036854775809"),
+            Decimal: 100000000000000000000001.0m
+        );
+
+        var json = codec.SerializeText(value);
+        var decoded = codec.DeserializeText(
+            "{\"integer\":\"-9223372036854775809\",\"decimal\":\"1.00000000000000000000001E+23\"}"
+        );
+
+        Assert.Equal(
+            "{\"integer\":\"-9223372036854775809\",\"decimal\":\"100000000000000000000001.0\"}",
+            json
+        );
+        Assert.Equal(value, decoded);
+    }
+
+    [Fact]
+    public void JsonCodecRejectsBigNumberStringsThatAreNotNumbers()
+    {
+        var codec = new JsonCodecFactory(bigNumbersAsStrings: true).FromSchema(
+            ArbitraryPrecisionSchema.Schema
+        );
+
+        Assert.Throws<MalformedRequestException>(() =>
+            codec.DeserializeText("{\"integer\":\"4.2\",\"decimal\":\"1\"}")
+        );
+        Assert.Throws<MalformedRequestException>(() =>
+            codec.DeserializeText("{\"integer\":42,\"decimal\":\"1\"}")
+        );
+    }
+
+    [Fact]
     public void JsonCodecOmitsNullOptionalMember()
     {
         var codec = JsonCodecFactory.Default.FromSchema(ProfileSchema.Schema);

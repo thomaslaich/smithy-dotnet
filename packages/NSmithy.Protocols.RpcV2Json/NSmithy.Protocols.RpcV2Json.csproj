@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
-    <ProjectReference Include="../NSmithy.Codecs.Cbor/NSmithy.Codecs.Cbor.csproj" />
+    <ProjectReference Include="../NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <ProjectReference Include="../NSmithy.Http/NSmithy.Http.csproj" />
     <ProjectReference Include="../NSmithy.Protocols.RpcV2/NSmithy.Protocols.RpcV2.csproj" />
   </ItemGroup>

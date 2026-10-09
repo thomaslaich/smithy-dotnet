@@ -85,6 +85,15 @@ public final class ShapeSupport {
     return literalForShape(writer, model, sp, target, node, typeName);
   }
 
+  /**
+   * A C# {@code decimal} literal for a model number. A cast such as {@code
+   * (decimal)-9223372036854775809} does not compile, since C# reads the operand as a {@code ulong}
+   * before negating it; an {@code m}-suffixed literal is a single constant.
+   */
+  public static String decimalLiteral(Number value) {
+    return new java.math.BigDecimal(value.toString()).toPlainString() + "m";
+  }
+
   public static String documentLiteral(
       CSharpWriter writer, software.amazon.smithy.model.node.Node node) {
     if (node.isNullNode()) return writer.typeName(RuntimeTypes.DOCUMENT) + ".Null";
@@ -99,8 +108,8 @@ public final class ShapeSupport {
     }
     if (node.isNumberNode()) {
       return writer.typeName(RuntimeTypes.DOCUMENT)
-          + ".From((decimal)"
-          + node.expectNumberNode().getValue()
+          + ".From("
+          + decimalLiteral(node.expectNumberNode().getValue())
           + ")";
     }
     if (node.isArrayNode()) {

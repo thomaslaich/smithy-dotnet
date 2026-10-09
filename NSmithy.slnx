@@ -13,7 +13,9 @@
     <Project Path="packages/NSmithy.Protocols.Rest/NSmithy.Protocols.Rest.csproj" />
     <Project Path="packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
     <Project Path="packages/NSmithy.Protocols.RestXml/NSmithy.Protocols.RestXml.csproj" />
+    <Project Path="packages/NSmithy.Protocols.RpcV2/NSmithy.Protocols.RpcV2.csproj" />
     <Project Path="packages/NSmithy.Protocols.RpcV2Cbor/NSmithy.Protocols.RpcV2Cbor.csproj" />
+    <Project Path="packages/NSmithy.Protocols.RpcV2Json/NSmithy.Protocols.RpcV2Json.csproj" />
     <Project Path="packages/NSmithy.Protocols.Grpc/NSmithy.Protocols.Grpc.csproj" />
     <Project Path="packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
     <Project Path="packages/NSmithy.Server/NSmithy.Server.csproj" />
@@ -40,6 +42,7 @@
     <Project Path="tests/Conformance/RestJson1/RestJson1.Conformance.csproj" />
     <Project Path="tests/Conformance/RestXml/RestXml.Conformance.csproj" />
     <Project Path="tests/Conformance/RpcV2Cbor/RpcV2Cbor.Conformance.csproj" />
+    <Project Path="tests/Conformance/RpcV2Json/RpcV2Json.Conformance.csproj" />
     <Project Path="tests/Conformance/SimpleRestJson/SimpleRestJson.Conformance.csproj" />
   </Folder>
 </Solution>

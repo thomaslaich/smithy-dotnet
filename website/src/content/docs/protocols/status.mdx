@@ -20,6 +20,7 @@ test totals.
 | [`ec2Query`](../aws-ec2-query/) | <Badge text="Preview" variant="note" /> | Requests 30/30 (100%)<br />Responses 29/29 (100%) | Client only |
 | [`restXml`](../rest-xml/) | <Badge text="Preview" variant="note" /> | Requests 109/109 (100%)<br />Responses 84/84 (100%) | Client only |
 | [`rpcv2Cbor`](../rpc-v2-cbor/) | <Badge text="Stable" variant="success" /> | Requests 29/29 (100%)<br />Responses 43/43 (100%) | Requests 37/37 (100%)<br />Responses 27/27 (100%) |
+| [`rpcv2Json`](../rpc-v2-json/) | <Badge text="Preview" variant="note" /> | Requests 34/34 (100%)<br />Responses 39/39 (100%) | Requests 35/35 (100%)<br />Responses 33/33 (100%) |
 | [`simpleRestJson`](../rest-json/) | <Badge text="Preview" variant="note" /> | Requests 23/23 (100%)<br />Responses 20/20 (100%) | Requests 23/23 (100%)<br />Responses 20/20 (100%) |
 | [`grpc`](../grpc/) | <Badge text="Experimental" variant="danger" /> | End-to-end examples | End-to-end examples |
 
@@ -53,6 +54,9 @@ count as official conformance.
   surfaces.
 - rpcv2Cbor passes every applicable official request and response case on both
   generated surfaces.
+- rpcv2Json passes every applicable official request and response case on both
+  generated surfaces. The official suite has no event-stream cases; JSON event
+  streams are covered by unit tests.
 - AWS Query, EC2 Query, and restXml pass every applicable official client
   request and response case.
 - AWS JSON 1.1 passes every applicable official client request and response case.

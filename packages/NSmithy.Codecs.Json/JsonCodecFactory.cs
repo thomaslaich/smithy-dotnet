@@ -4,9 +4,19 @@ using NSmithy.Core.Serde;
 namespace NSmithy.Codecs.Json;
 
 /// <summary>Creates JSON codecs using one consistent wire read mode and member-name policy.</summary>
+/// <param name="readMode">How strictly values are checked against their shapes when read.</param>
+/// <param name="honorJsonNameTrait">Whether <c>@jsonName</c> renames a member on the wire.</param>
+/// <param name="honorTimestampFormatTrait">
+/// Whether <c>@timestampFormat</c> overrides the <c>epoch-seconds</c> default.
+/// </param>
+/// <param name="bigNumbersAsStrings">
+/// Whether <c>bigInteger</c> and <c>bigDecimal</c> values travel as JSON strings rather than numbers.
+/// </param>
 public sealed class JsonCodecFactory(
     WireReadMode readMode = WireReadMode.Lenient,
-    bool honorJsonNameTrait = true
+    bool honorJsonNameTrait = true,
+    bool honorTimestampFormatTrait = true,
+    bool bigNumbersAsStrings = false
 ) : IProjectionCodecFactory
 {
     public static JsonCodecFactory Default { get; } = new();
@@ -21,7 +31,7 @@ public sealed class JsonCodecFactory(
             schema,
             resolved.MaterializeTopLevelDefaults,
             readMode,
-            honorJsonNameTrait
+            CreatePlans()
         );
     }
 
@@ -37,7 +47,7 @@ public sealed class JsonCodecFactory(
             target,
             resolved.MaterializeTopLevelDefaults,
             readMode,
-            honorJsonNameTrait,
+            CreatePlans(),
             memberTraits
         );
     }
@@ -53,7 +63,10 @@ public sealed class JsonCodecFactory(
             projection,
             resolved.MaterializeTopLevelDefaults,
             readMode,
-            honorJsonNameTrait
+            CreatePlans()
         );
     }
+
+    internal JsonPlans CreatePlans() =>
+        new(honorJsonNameTrait, honorTimestampFormatTrait, bigNumbersAsStrings);
 }

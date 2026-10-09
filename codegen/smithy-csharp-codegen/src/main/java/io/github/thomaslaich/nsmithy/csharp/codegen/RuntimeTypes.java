@@ -114,6 +114,8 @@ public final class RuntimeTypes {
   public static final Symbol REST_XML_PROTOCOL = type("NSmithy.Protocols.RestXml.RestXmlProtocol");
   public static final Symbol RPC_V2_CBOR_PROTOCOL =
       type("NSmithy.Protocols.RpcV2Cbor.RpcV2CborProtocol");
+  public static final Symbol RPC_V2_JSON_PROTOCOL =
+      type("NSmithy.Protocols.RpcV2Json.RpcV2JsonProtocol");
   public static final Symbol SIMPLE_REST_JSON_PROTOCOL =
       type("NSmithy.Protocols.RestJson.SimpleRestJsonProtocol");
 

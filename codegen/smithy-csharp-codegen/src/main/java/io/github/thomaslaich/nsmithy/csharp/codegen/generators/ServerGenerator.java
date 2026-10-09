@@ -137,6 +137,7 @@ public final class ServerGenerator implements Runnable {
         .filter(
             kind ->
                 kind == Kind.RPC_V2_CBOR
+                    || kind == Kind.RPC_V2_JSON
                     || kind == Kind.SIMPLE_REST_JSON
                     || kind == Kind.REST_JSON_1
                     || kind == Kind.GRPC)
@@ -666,7 +667,7 @@ public final class ServerGenerator implements Runnable {
         return;
       }
 
-      // rpcv2Cbor and gRPC use structured POST routes derived from the shape ids.
+      // RPC v2 and gRPC use structured POST routes derived from the shape ids.
       String uri =
           kind == Kind.GRPC
               ? "/"
@@ -853,6 +854,7 @@ public final class ServerGenerator implements Runnable {
   private static String mapSuffix(Kind kind) {
     return switch (kind) {
       case RPC_V2_CBOR -> "RpcV2Cbor";
+      case RPC_V2_JSON -> "RpcV2Json";
       case SIMPLE_REST_JSON -> "SimpleRestJson";
       case REST_JSON_1 -> "RestJson1";
       case GRPC -> "Grpc";
