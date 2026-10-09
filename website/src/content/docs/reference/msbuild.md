@@ -32,7 +32,7 @@ MSBuild properties and model sources. See [Code generation](/smithy-dotnet/conce
 | `SmithyBuildOutputPath` | `$(IntermediateOutputPath)Smithy/` | Root directory for all Smithy build output. |
 | `SmithyStampFile` | `$(SmithyBuildOutputPath)NSmithy.Generated.stamp` | Incremental build stamp file. Smithy codegen is skipped when inputs have not changed since this file was last written. |
 | `SmithyEmitGeneratedFiles` | `false` | Show generated `.g.cs` files in IDE project views when `true`. |
-| `SmithyCliPath` | bundled CLI | Smithy CLI executable. Set this to override the bundled executable. |
+| `SmithyCliPath` | CLI from `NSmithy.SmithyCli.<rid>` | Smithy CLI executable. Set this to use an installed CLI instead; the CLI package is then not downloaded. |
 
 ### Documentation
 
@@ -80,19 +80,51 @@ with separate configurations.
 
 ## Smithy CLI
 
-NSmithy bundles the Smithy CLI inside `NSmithy.MSBuild` and
-selects the correct platform binary automatically. No separate installation is
-required. The bundle is self-contained and includes a JRE, so Java does not
-need to be installed either.
+The Smithy CLI ships as one NuGet package per platform: `NSmithy.SmithyCli.osx-arm64`,
+`osx-x64`, `linux-arm64`, `linux-x64`, and `win-x64`. Each contains the CLI and a
+trimmed Java runtime, so neither Java nor the Smithy CLI needs to be installed.
+The package version is the Smithy CLI version, so NSmithy upgrades that keep the
+same CLI reuse the cached package. The first build that generates code restores
+the package for the build machine from the project's NuGet sources into the
+global packages folder. Later builds, including offline ones, reuse it. A private
+feed that mirrors nuget.org must also provide the package for each build platform.
 
-NSmithy.MSBuild also bundles the NSmithy Smithy codegen plugins plus the common
+### Prefetch for CI and offline builds
+
+`dotnet build` fetches the CLI when needed, but `dotnet restore` alone does not.
+For pipelines that restore with network access and then build offline, prefetch
+the CLI with the optional `dotnet-nsmithy` tool:
+
+```sh
+dotnet tool install --global dotnet-nsmithy
+dotnet restore MySolution.sln
+dotnet nsmithy install --solution MySolution.sln
+dotnet build MySolution.sln --no-restore
+```
+
+The command accepts `.sln` and `.slnx` solutions and skips projects that do not use
+NSmithy. Use `--project MyService.csproj` for a single project. Without either
+option, it picks the single solution in the current directory, or the single
+`.csproj` when there is no solution. Arguments after `--` are passed to MSBuild,
+for example `dotnet nsmithy install --solution MySolution.sln -- -p:Configuration=Release`.
+Each project's NSmithy package selects the CLI version and its NuGet sources, so
+the tool version does not matter.
+
+Without the tool, run the MSBuild target on each project that generates code:
+
+```sh
+dotnet msbuild MyService.csproj -t:RestoreSmithyCli
+```
+
+NSmithy.MSBuild bundles the NSmithy Smithy codegen plugins plus the common
 Smithy and alloy trait/doc/openapi dependencies used by the templates and
 examples. Additional Maven dependencies declared in `smithy-build.json` are not
 mirrored into the package; they remain the consuming project's responsibility
 and may require access to the configured Maven repositories.
 
-Set `SmithyCliPath` to override the bundled binary with a specific executable,
-for example when testing against a different CLI version:
+Set `SmithyCliPath` to use an installed Smithy CLI instead, for example on an
+unsupported platform or when testing against a different CLI version. NSmithy
+then does not download the CLI package:
 
 ```xml title="MyService.csproj"
 <PropertyGroup>

@@ -25,42 +25,19 @@
     <PackageReference Include="Microsoft.Build.Utilities.Core" PrivateAssets="all" />
 
     <!--
-      Bundled Smithy CLI — populated by tools/download-smithy-cli.sh.
-      Each platform's full self-contained distribution (launcher + bundled JRE)
-      is extracted into tools/smithy-cli/{platform}/ and packed here.
-      The targets file locates it via $(MSBuildThisFileDirectory)../tools/smithy-cli/.
-      Condition="Exists(...)" keeps packing idempotent when a platform is missing
-      (e.g. CI before the download script has run).
+      The Smithy CLI is not bundled: it ships per platform as NSmithy.SmithyCli.<rid>, and the
+      targets restore the build host's package through this project on first use.
     -->
     <None
-      Include="tools/smithy-cli/darwin-aarch64/**/*"
+      Include="tools/NSmithy.SmithyCli.Download.proj"
       Pack="true"
-      PackagePath="tools/smithy-cli/darwin-aarch64/"
-      Condition="Exists('tools/smithy-cli/darwin-aarch64/bin/smithy')"
+      PackagePath="tools/NSmithy.SmithyCli.Download.proj"
     />
+    <!-- RestoreSmithyCli for the outer build of multi-targeted direct consumers. -->
     <None
-      Include="tools/smithy-cli/darwin-x86_64/**/*"
+      Include="Targets/NSmithy.MSBuild.MultiTargeting.targets"
       Pack="true"
-      PackagePath="tools/smithy-cli/darwin-x86_64/"
-      Condition="Exists('tools/smithy-cli/darwin-x86_64/bin/smithy')"
-    />
-    <None
-      Include="tools/smithy-cli/linux-aarch64/**/*"
-      Pack="true"
-      PackagePath="tools/smithy-cli/linux-aarch64/"
-      Condition="Exists('tools/smithy-cli/linux-aarch64/bin/smithy')"
-    />
-    <None
-      Include="tools/smithy-cli/linux-x86_64/**/*"
-      Pack="true"
-      PackagePath="tools/smithy-cli/linux-x86_64/"
-      Condition="Exists('tools/smithy-cli/linux-x86_64/bin/smithy')"
-    />
-    <None
-      Include="tools/smithy-cli/windows-x64/**/*"
-      Pack="true"
-      PackagePath="tools/smithy-cli/windows-x64/"
-      Condition="Exists('tools/smithy-cli/windows-x64/bin/smithy.bat')"
+      PackagePath="buildMultiTargeting/NSmithy.MSBuild.targets"
     />
 
     <!--
@@ -68,7 +45,7 @@
       The codegen plugin + first-party trait packages + their runtime closure, in Maven
       layout (JARs and POMs). The targets file points `smithy build` at it via
       SMITHY_MAVEN_REPOS so codegen resolves from local files instead of the network.
-      Platform-independent, so bundled once (unlike the per-platform CLI).
+      Platform-independent, so bundled here (unlike the per-platform CLI packages).
     -->
     <None
       Include="tools/maven-repo/**/*"
@@ -131,6 +108,15 @@
   </UsingTask>
 
   <Target Name="_NSmithyPackVersionedBuildFiles">
+    <!-- The targets restore NSmithy.SmithyCli.<rid> at the Smithy CLI version, which
+         download-smithy-cli.sh sets for the packages it fills. -->
+    <PropertyGroup>
+      <_NSmithySmithyCliVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../NSmithy.SmithyCli/download-smithy-cli.sh')), 'SMITHY_VERSION="([^"]+)"').Groups[1].Value)</_NSmithySmithyCliVersion>
+    </PropertyGroup>
+    <Error
+      Condition="!$([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/Targets/NSmithy.MSBuild.targets').Contains('&lt;_SmithyCliPackageVersion&gt;$(_NSmithySmithyCliVersion)&lt;/_SmithyCliPackageVersion&gt;'))"
+      Text="NSmithy: _SmithyCliPackageVersion in Targets/NSmithy.MSBuild.targets must equal SMITHY_VERSION ($(_NSmithySmithyCliVersion)) in packages/NSmithy.SmithyCli/download-smithy-cli.sh; bump both together."
+    />
     <PropertyGroup>
       <_NSmithyPackObjDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'nupkg'))</_NSmithyPackObjDir>
     </PropertyGroup>

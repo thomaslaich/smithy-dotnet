@@ -4,10 +4,11 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>dotnet-nsmithy</ToolCommandName>
     <RollForward>Major</RollForward>
-    <Description>NSmithy CLI — publish Maven JARs produced by 'dotnet pack' to a Maven registry.</Description>
+    <Description>NSmithy CLI — install build dependencies and publish Maven artifacts.</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="System.CommandLine" />
+    <InternalsVisibleTo Include="NSmithy.Cli.Tests" />
   </ItemGroup>
 </Project>

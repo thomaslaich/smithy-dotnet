@@ -251,13 +251,14 @@
   </ItemGroup>
 
   <!-- ================================================================
-       Bundled Smithy CLI — select the platform-specific binary that was
-       packed into tools/smithy-cli/{platform}/ at NuGet pack time.
+       Smithy CLI: one self-contained distribution (launcher + JRE) per
+       host platform, shipped as the NSmithy.SmithyCli.<rid> package and
+       restored for the build host on first use (_SmithyRestoreCliPackage).
 
-       $(SmithyCliPath) may be set by the user to override entirely.
-       When not set, we detect OS + architecture, point at the bundled
-       binary, and fall back to "smithy" on PATH if the binary is absent
-       (e.g. package was packed without running download-smithy-cli.sh).
+       $(SmithyCliPath) may be set by the user to override entirely; the
+       package is then never downloaded. In-repo builds (tasks from the
+       project, not the package) and unsupported hosts fall back to
+       "smithy" on PATH.
        ================================================================ -->
 
   <!-- Detect OS and CPU architecture -->
@@ -267,41 +268,46 @@
     <_SmithyArchStr>$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)</_SmithyArchStr>
   </PropertyGroup>
 
-  <!-- Map OS + arch to the Smithy CLI release platform identifier -->
+  <!-- Map OS + arch to the RID of the NSmithy.SmithyCli package. Smithy ships no Windows
+       arm64 build, so Windows always uses x64 (emulated on arm64). -->
   <PropertyGroup Condition="'$(_SmithyIsMacOS)' == 'True' and '$(_SmithyArchStr)' == 'Arm64'">
-    <_SmithyCliPlatform>darwin-aarch64</_SmithyCliPlatform>
+    <_SmithyCliRid>osx-arm64</_SmithyCliRid>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(_SmithyIsMacOS)' == 'True' and '$(_SmithyArchStr)' != 'Arm64'">
-    <_SmithyCliPlatform>darwin-x86_64</_SmithyCliPlatform>
+  <PropertyGroup Condition="'$(_SmithyIsMacOS)' == 'True' and '$(_SmithyArchStr)' == 'X64'">
+    <_SmithyCliRid>osx-x64</_SmithyCliRid>
   </PropertyGroup>
   <PropertyGroup Condition="'$(_SmithyIsWindows)' == 'True'">
-    <_SmithyCliPlatform>windows-x64</_SmithyCliPlatform>
+    <_SmithyCliRid>win-x64</_SmithyCliRid>
   </PropertyGroup>
   <PropertyGroup Condition="'$(_SmithyIsMacOS)' != 'True' and '$(_SmithyIsWindows)' != 'True' and '$(_SmithyArchStr)' == 'Arm64'">
-    <_SmithyCliPlatform>linux-aarch64</_SmithyCliPlatform>
+    <_SmithyCliRid>linux-arm64</_SmithyCliRid>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(_SmithyIsMacOS)' != 'True' and '$(_SmithyIsWindows)' != 'True' and '$(_SmithyArchStr)' != 'Arm64'">
-    <_SmithyCliPlatform>linux-x86_64</_SmithyCliPlatform>
+  <PropertyGroup Condition="'$(_SmithyIsMacOS)' != 'True' and '$(_SmithyIsWindows)' != 'True' and '$(_SmithyArchStr)' == 'X64'">
+    <_SmithyCliRid>linux-x64</_SmithyCliRid>
   </PropertyGroup>
 
-  <!-- Build the path to the bundled binary -->
+  <!-- Where NuGet extracts the host's package. The CLI packages are versioned by the Smithy
+       CLI they contain; NSmithy.MSBuild.csproj checks this against download-smithy-cli.sh. -->
   <PropertyGroup>
-    <_SmithyBundledCliRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/smithy-cli'))</_SmithyBundledCliRoot>
-    <!-- The CLI is a self-contained distribution; launcher lives under bin/ -->
-    <_SmithyBundledCliPath Condition="'$(_SmithyIsWindows)' == 'True'"
-      >$(_SmithyBundledCliRoot)/windows-x64/bin/smithy.bat</_SmithyBundledCliPath
+    <_SmithyCliPackageVersion>1.73.0</_SmithyCliPackageVersion>
+    <_SmithyCliPackageId>NSmithy.SmithyCli.$(_SmithyCliRid)</_SmithyCliPackageId>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(_NSmithyTasksFromProject)' != 'true' and '$(_SmithyCliRid)' != '' and '$(NuGetPackageRoot)' != ''">
+    <_SmithyCliPackageRoot>$([MSBuild]::NormalizeDirectory('$(NuGetPackageRoot)', '$(_SmithyCliPackageId.ToLowerInvariant())', '$(_SmithyCliPackageVersion.ToLowerInvariant())'))</_SmithyCliPackageRoot>
+    <_SmithyPackagedCliPath Condition="'$(_SmithyIsWindows)' == 'True'"
+      >$(_SmithyCliPackageRoot)tools/smithy-cli/bin/smithy.bat</_SmithyPackagedCliPath
     >
-    <_SmithyBundledCliPath
-      Condition="'$(_SmithyIsWindows)' != 'True' and '$(_SmithyCliPlatform)' != ''"
-      >$(_SmithyBundledCliRoot)/$(_SmithyCliPlatform)/bin/smithy</_SmithyBundledCliPath
+    <_SmithyPackagedCliPath Condition="'$(_SmithyIsWindows)' != 'True'"
+      >$(_SmithyCliPackageRoot)tools/smithy-cli/bin/smithy</_SmithyPackagedCliPath
     >
   </PropertyGroup>
 
-  <!-- Use bundled CLI when SmithyCliPath is not set and the binary exists -->
-  <PropertyGroup Condition="'$(SmithyCliPath)' == '' and '$(_SmithyBundledCliPath)' != '' and Exists('$(_SmithyBundledCliPath)')">
-    <SmithyCliPath>$(_SmithyBundledCliPath)</SmithyCliPath>
+  <!-- Use the packaged CLI when SmithyCliPath is not set; it may not be restored yet -->
+  <PropertyGroup Condition="'$(SmithyCliPath)' == '' and '$(_SmithyPackagedCliPath)' != ''">
+    <SmithyCliPath>$(_SmithyPackagedCliPath)</SmithyCliPath>
+    <_SmithyCliFromPackage>true</_SmithyCliFromPackage>
   </PropertyGroup>
-  <!-- Fall back to smithy on PATH (pre-bundling behaviour) -->
+  <!-- Fall back to smithy on PATH -->
   <PropertyGroup Condition="'$(SmithyCliPath)' == ''">
     <SmithyCliPath>smithy</SmithyCliPath>
   </PropertyGroup>
@@ -430,14 +436,79 @@
   </Target>
 
   <!--
-    Ensure the bundled Smithy CLI binary is executable on Unix.
+    Restore the host's NSmithy.SmithyCli.<rid> package the first time a project generates code.
+    Runs from GenerateSmithyCode's DependsOnTargets, so projects that only pick up these targets
+    transitively and have no model never download it. A no-op once the package is extracted.
+
+    The nested restore uses the sources, packages folder, fallback folders and config files that
+    NuGet resolved for the consuming project (_GetRestoreSettings), so sources set in the project,
+    in Directory.Build.props, in NuGet.config or on the command line all apply. It keeps its own
+    files under obj/. Its failures (e.g. NU1101) are followed by the error below, which names
+    the way out.
+  -->
+  <Target
+    Name="_SmithyRestoreCliPackage"
+    Condition="'$(_SmithyCliFromPackage)' == 'true' and !Exists('$(SmithyCliPath)')"
+    DependsOnTargets="_GetRestoreProjectStyle;_GetRestoreSettings"
+  >
+    <PropertyGroup>
+      <_SmithyCliRestoreObj>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(BaseIntermediateOutputPath)', 'nsmithy-smithycli'))</_SmithyCliRestoreObj>
+      <!-- Escaped because the lists contain ';', which separates the MSBuild task's Properties. -->
+      <_SmithyCliRestoreProperties>NSmithySmithyCliPackageId=$(_SmithyCliPackageId);NSmithySmithyCliPackageVersion=$(_SmithyCliPackageVersion);RestoreRootConfigDirectory=$(MSBuildProjectDirectory);BaseIntermediateOutputPath=$(_SmithyCliRestoreObj);MSBuildProjectExtensionsPath=$(_SmithyCliRestoreObj)</_SmithyCliRestoreProperties>
+      <_SmithyCliRestoreProperties>$(_SmithyCliRestoreProperties);RestoreSources=$([MSBuild]::Escape('$(_OutputSources)'))</_SmithyCliRestoreProperties>
+      <_SmithyCliRestoreProperties>$(_SmithyCliRestoreProperties);RestorePackagesPath=$([MSBuild]::Escape('$(_OutputPackagesPath)'))</_SmithyCliRestoreProperties>
+      <_SmithyCliRestoreProperties Condition="'$(_OutputFallbackFolders)' != ''"
+        >$(_SmithyCliRestoreProperties);RestoreFallbackFolders=$([MSBuild]::Escape('$(_OutputFallbackFolders)'))</_SmithyCliRestoreProperties
+      >
+      <_SmithyCliRestoreProperties Condition="'$(RestoreConfigFile)' != ''"
+        >$(_SmithyCliRestoreProperties);RestoreConfigFile=$([MSBuild]::Escape($([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(RestoreConfigFile)'))))</_SmithyCliRestoreProperties
+      >
+    </PropertyGroup>
+    <Message
+      Importance="high"
+      Text="NSmithy: restoring $(_SmithyCliPackageId) $(_SmithyCliPackageVersion) (Smithy CLI for this platform)"
+    />
+    <MSBuild
+      Projects="$(MSBuildThisFileDirectory)../tools/NSmithy.SmithyCli.Download.proj"
+      Targets="Restore"
+      Properties="$(_SmithyCliRestoreProperties)"
+      RemoveProperties="TargetFramework;TargetFrameworks;RuntimeIdentifier;RuntimeIdentifiers;SelfContained;RestoreLockedMode;RestorePackagesWithLockFile;NuGetLockFilePath"
+      ContinueOnError="true"
+    />
+    <Error
+      Condition="!Exists('$(SmithyCliPath)')"
+      Text="NSmithy: could not restore $(_SmithyCliPackageId) $(_SmithyCliPackageVersion), which provides the Smithy CLI for this platform. Check that a configured NuGet source provides it, or set SmithyCliPath to an installed Smithy CLI."
+    />
+  </Target>
+
+  <!--
+    Fetch the Smithy CLI package without building, for pipelines that restore with network
+    access and build without it: run `dotnet msbuild -t:RestoreSmithyCli` after `dotnet restore`,
+    and later builds that skip restore find the CLI in the packages folder.
+
+    Only projects that generate code fetch it: those with a smithy-build.json, or with contracts
+    references that one is synthesized from.
+  -->
+  <Target
+    Name="RestoreSmithyCli"
+    DependsOnTargets="_CollectSmithyItemsFromProjectReferences;_SmithyRestoreCliPackageIfGenerating"
+  />
+  <Target
+    Name="_SmithyRestoreCliPackageIfGenerating"
+    Condition="Exists('$(SmithyBuildFile)') or '@(SmithySource)' != ''"
+    DependsOnTargets="_SmithyRestoreCliPackage"
+  />
+
+  <!--
+    Ensure the packaged Smithy CLI launcher is executable on Unix.
     NuGet does not preserve file permissions, so we chmod +x on first use.
     This is a no-op if the bit is already set, so it's safe to run every build.
+    A user-supplied SmithyCliPath is left alone: it may live on a read-only path.
   -->
   <Target
     Name="_EnsureSmithyCliExecutable"
     BeforeTargets="GenerateSmithyCode"
-    Condition="'$(_SmithyIsWindows)' != 'True' and '$(SmithyCliPath)' != 'smithy' and Exists('$(SmithyCliPath)')"
+    Condition="'$(_SmithyIsWindows)' != 'True' and '$(_SmithyCliFromPackage)' == 'true' and Exists('$(SmithyCliPath)')"
   >
     <Exec Command="chmod +x &quot;$(SmithyCliPath)&quot;" />
   </Target>
@@ -476,6 +547,7 @@
   <Target
     Name="GenerateSmithyCode"
     BeforeTargets="CoreCompile"
+    DependsOnTargets="_SmithyRestoreCliPackage"
     Condition="Exists('$(SmithyBuildFile)')"
     Inputs="@(_SmithyGeneratorInput);@(SmithySource);@(SmithyContractsBuildFile)"
     Outputs="$(SmithyStampFile)"
