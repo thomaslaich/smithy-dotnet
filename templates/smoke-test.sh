@@ -99,18 +99,24 @@ for protocol in restJson1 simpleRestJson rpcv2Cbor grpc; do
   build "$protocol-server-standalone" "$solo/Hello.Server"
 done
 
-# A Smithy CLI the user installs: no NSmithy.SmithyCli reference, smithy from PATH.
-echo "== --smithy-cli path =="
-ext="$SRC/smithy-cli-path"
-mkdir -p "$ext"
-cp "$SRC/NuGet.config" "$ext/"
-dotnet new nsmithy-server -o "$ext/Hello.Server" -n Hello.Server --smithy-cli path > /dev/null
-localize "$ext"
-if grep -q 'NSmithy.SmithyCli' "$ext/Hello.Server/Hello.Server.csproj"; then
-  echo "  FAIL  server-smithy-cli-path: NSmithy.SmithyCli is referenced"
-  failed+=("server-smithy-cli-path")
+# The default scaffolds above run smithy from PATH. --smithy-cli package references
+# NSmithy.SmithyCli instead, so it builds with smithy taken off PATH.
+echo "== --smithy-cli package =="
+pkg="$SRC/smithy-cli-package"
+mkdir -p "$pkg"
+cp "$SRC/NuGet.config" "$pkg/"
+dotnet new nsmithy-server -o "$pkg/Hello.Server" -n Hello.Server --smithy-cli package > /dev/null
+localize "$pkg"
+NO_SMITHY_PATH=""
+IFS=: read -ra path_entries <<< "$PATH"
+for entry in "${path_entries[@]}"; do
+  [[ -x "$entry/smithy" ]] || NO_SMITHY_PATH="$NO_SMITHY_PATH${NO_SMITHY_PATH:+:}$entry"
+done
+if ! grep -q 'NSmithy.SmithyCli' "$pkg/Hello.Server/Hello.Server.csproj"; then
+  echo "  FAIL  server-smithy-cli-package: NSmithy.SmithyCli is not referenced"
+  failed+=("server-smithy-cli-package")
 else
-  build "server-smithy-cli-path" "$ext/Hello.Server"
+  PATH="$NO_SMITHY_PATH" build "server-smithy-cli-package" "$pkg/Hello.Server"
 fi
 
 if (( ${#failed[@]} > 0 )); then

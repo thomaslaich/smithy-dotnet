@@ -11,18 +11,19 @@ is a good place to learn the IDL before continuing.
 ## Prerequisites
 
 Install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
-Code generation runs the Smithy CLI, which the projects either get from NuGet or
-find on your `PATH`. The choice applies to every step on this page.
+Code generation runs the Smithy CLI, which the projects either find on your
+`PATH` or get from NuGet. The choice applies to every step on this page.
 
 <Tabs syncKey="smithy-cli">
-  <TabItem label="Smithy CLI from NuGet">
-    The templates reference `NSmithy.SmithyCli`, which provides the Smithy CLI
-    and its Java runtime. Nothing else needs to be installed.
-  </TabItem>
   <TabItem label="Smithy CLI on PATH">
     Install Smithy CLI 1.73.0 or later so that `smithy` is on your `PATH`, with
     Homebrew, Scoop, pixi, or the official installer. See
     [Installing the Smithy CLI](/smithy-dotnet/reference/smithy-cli/#installing-the-smithy-cli).
+  </TabItem>
+  <TabItem label="Smithy CLI from NuGet">
+    The commands below pass `--smithy-cli package`, so the projects reference
+    `NSmithy.SmithyCli`, which provides the Smithy CLI and its Java runtime.
+    Nothing else needs to be installed.
   </TabItem>
 </Tabs>
 
@@ -45,7 +46,7 @@ consumes the published contracts instead; see
    client reference it and generate their own C# types during the build.
 
    <Tabs syncKey="smithy-cli">
-     <TabItem label="Smithy CLI from NuGet">
+     <TabItem label="Smithy CLI on PATH">
        ```shell
        mkdir HelloWorld && cd HelloWorld
        dotnet new sln -n HelloWorld
@@ -53,11 +54,11 @@ consumes the published contracts instead; see
        dotnet sln add HelloWorld.Contracts
        ```
      </TabItem>
-     <TabItem label="Smithy CLI on PATH">
+     <TabItem label="Smithy CLI from NuGet">
        ```shell
        mkdir HelloWorld && cd HelloWorld
        dotnet new sln -n HelloWorld
-       dotnet new nsmithy-contracts -n HelloWorld.Contracts --smithy-cli path
+       dotnet new nsmithy-contracts -n HelloWorld.Contracts --smithy-cli package
        dotnet sln add HelloWorld.Contracts
        ```
      </TabItem>
@@ -75,17 +76,17 @@ consumes the published contracts instead; see
    contracts project.
 
    <Tabs syncKey="smithy-cli">
-     <TabItem label="Smithy CLI from NuGet">
+     <TabItem label="Smithy CLI on PATH">
        ```shell
        dotnet new nsmithy-server -n HelloWorld.Server \
          --contracts-project HelloWorld.Contracts
        dotnet sln add HelloWorld.Server
        ```
      </TabItem>
-     <TabItem label="Smithy CLI on PATH">
+     <TabItem label="Smithy CLI from NuGet">
        ```shell
        dotnet new nsmithy-server -n HelloWorld.Server \
-         --contracts-project HelloWorld.Contracts --smithy-cli path
+         --contracts-project HelloWorld.Contracts --smithy-cli package
        dotnet sln add HelloWorld.Server
        ```
      </TabItem>
@@ -111,17 +112,17 @@ consumes the published contracts instead; see
    terminal, from the solution directory:
 
    <Tabs syncKey="smithy-cli">
-     <TabItem label="Smithy CLI from NuGet">
+     <TabItem label="Smithy CLI on PATH">
        ```shell
        dotnet new nsmithy-client -n HelloWorld.Client \
          --contracts-project HelloWorld.Contracts
        dotnet sln add HelloWorld.Client
        ```
      </TabItem>
-     <TabItem label="Smithy CLI on PATH">
+     <TabItem label="Smithy CLI from NuGet">
        ```shell
        dotnet new nsmithy-client -n HelloWorld.Client \
-         --contracts-project HelloWorld.Contracts --smithy-cli path
+         --contracts-project HelloWorld.Contracts --smithy-cli package
        dotnet sln add HelloWorld.Client
        ```
      </TabItem>
@@ -270,8 +271,8 @@ All three templates accept `--protocol` and `--smithy-cli`. Use the same
 
 | Value | Smithy CLI |
 | --- | --- |
-| `package` | The `NSmithy.SmithyCli` package (default) |
-| `path` | `smithy` on `PATH`, or `SmithyCliPath`. See [Smithy CLI](/smithy-dotnet/reference/smithy-cli/). |
+| `path` | `smithy` on `PATH`, or `SmithyCliPath` (default). See [Smithy CLI](/smithy-dotnet/reference/smithy-cli/). |
+| `package` | The `NSmithy.SmithyCli` package |
 
 `--contracts-project` makes the server or client reference a contracts project
 in the same solution. Without it, the server owns its model, and the client

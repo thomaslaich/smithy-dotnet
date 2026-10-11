@@ -9,10 +9,10 @@ Code generation runs the [Smithy CLI](https://smithy.io/2.0/guides/smithy-cli/in
 There are two ways to provide it:
 
 - **From NuGet.** Reference the [`NSmithy.SmithyCli` package](#the-nsmithysmithycli-package),
-  which contains the CLI and its Java runtime. Nothing needs to be installed,
-  and the NSmithy templates do this by default.
+  which contains the CLI and its Java runtime. Nothing needs to be installed.
+  The NSmithy templates add it with `--smithy-cli package`.
 - **Your own.** [Install the Smithy CLI](#installing-the-smithy-cli) yourself
-  and leave the package out.
+  and leave the package out. This is what the NSmithy templates do by default.
 
 NSmithy looks for the CLI in this order:
 
@@ -30,9 +30,14 @@ Linux on x64 and arm64, and Windows on x64. Nothing else needs to be installed. 
 package version is the Smithy version, so upgrading NSmithy reuses the package
 already in the NuGet cache.
 
-The NSmithy templates add it to every project they create, unless you pass
-`--smithy-cli path`. To add it yourself, reference it in each project that
-generates code:
+The NSmithy templates add it to every project they create when you pass
+`--smithy-cli package`:
+
+```shell
+dotnet new nsmithy-server -n HelloWorld.Server --smithy-cli package
+```
+
+To add it yourself, reference it in each project that generates code:
 
 ```xml title="MyService.Server.csproj"
 <ItemGroup>
@@ -59,12 +64,7 @@ nuget.org need to include it.
 
 Leave out `NSmithy.SmithyCli` to use a Smithy CLI you install yourself, for
 example from a package manager, a dev container, or a Nix environment. NSmithy
-then runs `smithy` from `PATH`. The templates leave it out with
-`--smithy-cli path`:
-
-```shell
-dotnet new nsmithy-server -n HelloWorld.Server --smithy-cli path
-```
+then runs `smithy` from `PATH`. The NSmithy templates leave it out by default.
 
 ### Installing the Smithy CLI
 

@@ -76,10 +76,10 @@
       "type": "parameter",
       "datatype": "choice",
       "choices": [
-        { "choice": "package", "description": "Reference NSmithy.SmithyCli, which provides the Smithy CLI and its Java runtime" },
-        { "choice": "path",    "description": "Use a Smithy CLI you install yourself: smithy on PATH, or SmithyCliPath" }
+        { "choice": "path",    "description": "Use a Smithy CLI you install yourself: smithy on PATH, or SmithyCliPath" },
+        { "choice": "package", "description": "Reference NSmithy.SmithyCli, which provides the Smithy CLI and its Java runtime" }
       ],
-      "defaultValue": "package",
+      "defaultValue": "path",
       "description": "Where code generation gets the Smithy CLI"
     },
     "UseSmithyCliPackage": { "type": "computed", "value": "(SmithyCli == \"package\")" },

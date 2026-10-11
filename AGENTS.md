@@ -8,8 +8,8 @@ Human-facing docs live at <https://thomaslaich.github.io/smithy-dotnet/> and in
 
 NSmithy turns a [Smithy](https://smithy.io) model into idiomatic C# at build
 time — typed clients, ASP.NET Core minimal-API server stubs, and shared model
-types, generated as part of `dotnet build`. No separate codegen step and no JRE
-required by consumers.
+types, generated as part of `dotnet build`. No separate codegen step; consumers
+need no JRE when they reference the optional `NSmithy.SmithyCli` package.
 
 The build itself is **polyglot**:
 
