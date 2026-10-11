@@ -48,6 +48,14 @@ See [Smithy CLI](/smithy-dotnet/reference/smithy-cli/).
 | `SmithyVersion` | Smithy version NSmithy is built against. The Smithy CLI must have this version, and `software.amazon.smithy` Maven dependencies should use it. Default: `1.73.0`. |
 | `SmithyCliVersionCheck` | Fail the build when the Smithy CLI's version differs from `SmithyVersion`. Default: `true`. |
 
+### Maven dependencies
+
+See [Maven dependencies](/smithy-dotnet/reference/maven-dependencies/).
+
+| Property | Description |
+| --- | --- |
+| `SmithyUseBundledMavenRepo` | Resolve NSmithy's plugins and the bundled trait packages from the Maven repository inside `NSmithy.MSBuild`. Set to `false` to resolve everything from Maven repositories, as the plain Smithy CLI does. Default: `true`. |
+
 ### Documentation
 
 | Property | Description |
@@ -87,16 +95,9 @@ automatically. NuGet packages require explicit `SmithySource` and
 See [Distributing contracts](/smithy-dotnet/guides/distributing-contracts/)
 for both configurations.
 
-Declare Maven dependencies in `smithy-build.json` under `maven.dependencies`.
+Declare Maven dependencies in `smithy-build.json` under `maven.dependencies`;
+see [Maven dependencies](/smithy-dotnet/reference/maven-dependencies/) for
+where they resolve from.
 There is no `SmithyMavenDependency` MSBuild item. Build-file synthesis reads one
 contract build configuration; use an explicit build file when combining models
 with separate configurations.
-
-## Bundled Maven repository
-
-`NSmithy.MSBuild` bundles the NSmithy Smithy codegen plugins plus the common
-Smithy and alloy trait/doc/openapi dependencies used by the templates and
-examples, and points the Smithy CLI at them, so generation resolves them from
-local files. Additional Maven dependencies declared in `smithy-build.json` are
-not mirrored into the package; they remain the consuming project's
-responsibility and may require access to the configured Maven repositories.

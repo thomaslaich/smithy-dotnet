@@ -314,11 +314,17 @@
        Bundled Maven repo (populated by `gradle :bundleMavenRepo`, packed into
        tools/maven-repo/). When present, codegen resolves the plugin + first-party
        trait packages from it via SMITHY_MAVEN_REPOS against an isolated cache —
-       Smithy's own offline mechanism. Absent (e.g. falling back to `smithy` on PATH
-       in-repo), resolution uses the config's maven block as before.
+       Smithy's own offline mechanism. With SMITHY_MAVEN_REPOS set, the CLI no longer
+       assumes Maven Central, so other dependencies resolve only from repositories the
+       build file lists. Absent, or with SmithyUseBundledMavenRepo=false, resolution
+       uses the build file's maven block alone (Maven Central by default) and the
+       user's Maven cache.
        ================================================================ -->
   <PropertyGroup>
-    <_SmithyBundledMavenRepo>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/maven-repo'))</_SmithyBundledMavenRepo>
+    <SmithyUseBundledMavenRepo Condition="'$(SmithyUseBundledMavenRepo)' == ''">true</SmithyUseBundledMavenRepo>
+    <_SmithyBundledMavenRepo Condition="'$(SmithyUseBundledMavenRepo)' == 'true'"
+      >$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/maven-repo'))</_SmithyBundledMavenRepo
+    >
   </PropertyGroup>
 
   <PropertyGroup>
@@ -520,7 +526,10 @@
          holds jars (the dir itself is committed just to carry a .gitignore); otherwise
          leave the CLI's default (network) resolution in place. -->
     <ItemGroup>
-      <_SmithyBundleJar Include="$(_SmithyBundledMavenRepo)/**/*.jar" />
+      <_SmithyBundleJar
+        Include="$(_SmithyBundledMavenRepo)/**/*.jar"
+        Condition="'$(_SmithyBundledMavenRepo)' != ''"
+      />
     </ItemGroup>
     <PropertyGroup Condition="'@(_SmithyBundleJar)' != ''">
       <_SmithyMavenEnv>SMITHY_MAVEN_REPOS=$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri);SMITHY_MAVEN_CACHE=$([System.IO.Path]::GetFullPath('$(_SmithyMavenCachePath)'))</_SmithyMavenEnv>

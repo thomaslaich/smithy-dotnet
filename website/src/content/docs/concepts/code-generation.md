@@ -56,8 +56,9 @@ Two NuGet packages provide the tools generation needs:
 Consumers do not install Java or these plugins separately. During generation,
 MSBuild points the CLI at the bundled repository and an isolated Maven cache, so
 the bundled plugins resolve from local files rather than remote repositories.
-Model dependencies declared by the project are resolved separately, and
-optional Sphinx HTML generation requires Python.
+Model dependencies declared by the project are resolved separately; see
+[Maven dependencies](/smithy-dotnet/reference/maven-dependencies/). Optional
+Sphinx HTML generation requires Python.
 
 ## The build
 

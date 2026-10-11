@@ -66,7 +66,7 @@ for entry in "${path_entries[@]}"; do
   [[ -x "$entry/smithy" ]] || NO_SMITHY_PATH="$NO_SMITHY_PATH${NO_SMITHY_PATH:+:}$entry"
 done
 
-# project <name> <with-package>
+# project <name> <with-package> [maven-dependency]
 project() {
   local dir="$WORK/$1"
   mkdir -p "$dir/model"
@@ -86,10 +86,14 @@ project() {
 </Project>
 XML
   # Contracts-style: the CLI validates the model and builds it, which is all this test needs.
+  local maven=""
+  if [[ -n "${3:-}" ]]; then
+    maven=", \"maven\": { \"dependencies\": [\"$3\"] }"
+  fi
   cat > "$dir/smithy-build.json" <<JSON
 {
   "version": "1.0",
-  "sources": ["model"]
+  "sources": ["model"]$maven
 }
 JSON
   cat > "$dir/model/smoke.smithy" <<'SMITHY'
@@ -139,6 +143,8 @@ expect() {
 
 with_package="$(project with-package yes)"
 without_package="$(project without-package no)"
+# A dependency NSmithy.MSBuild does not bundle.
+unbundled="$(project unbundled yes software.amazon.smithy:smithy-waiters:$SMITHY_VERSION)"
 
 echo "== Smithy CLI resolution =="
 # The package wins over PATH, and its CLI is the one that runs.
@@ -156,6 +162,13 @@ echo "== Own smithy-build.json =="
 # Synthesis-only properties have no effect next to an explicit build file, so they warn.
 expect ignored-property "$with_package" success "warning NSMITHYIGNORED" "$PATH" \
   -p:SmithyGenerateFakes=true
+
+echo "== Maven resolution =="
+# With the bundled repo, the CLI does not assume Maven Central: an unbundled dependency needs a
+# repository in the build file. Without it, the build file's maven block (Maven Central) applies.
+expect unbundled-dependency "$unbundled" NSMITHYCLI "" "$PATH"
+expect unbundled-dependency-without-bundled-repo "$unbundled" success "" "$PATH" \
+  -p:SmithyUseBundledMavenRepo=false
 
 if ((${#failed[@]})); then
   echo "smoke-test: ${#failed[@]} failed: ${failed[*]}" >&2
