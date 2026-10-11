@@ -82,13 +82,9 @@ for protocol in restJson1 simpleRestJson rpcv2Cbor grpc; do
   cp "$SRC/NuGet.config" "$qs/"
   dotnet new nsmithy-contracts -o "$qs/Hello.Contracts" -n Hello.Contracts --protocol "$protocol" > /dev/null
   dotnet new nsmithy-server -o "$qs/Hello.Server" -n Hello.Server --protocol "$protocol" \
-    --contracts Hello.Contracts --with-docs > /dev/null
-  dotnet new nsmithy-client -o "$qs/Hello.Client" -n Hello.Client --protocol "$protocol" > /dev/null
-  # What the quick start tells users to do for local development: drop the Maven contracts
-  # reference so NSmithy synthesizes a build from the sibling contracts project instead.
-  rm -f "$qs/Hello.Client/smithy-build.json"
-  dotnet add "$qs/Hello.Client/Hello.Client.csproj" reference \
-    "$qs/Hello.Contracts/Hello.Contracts.csproj" > /dev/null
+    --contracts-project Hello.Contracts --with-docs > /dev/null
+  dotnet new nsmithy-client -o "$qs/Hello.Client" -n Hello.Client --protocol "$protocol" \
+    --contracts-project Hello.Contracts > /dev/null
   localize "$qs"
   build "$protocol-contracts" "$qs/Hello.Contracts"
   build "$protocol-server" "$qs/Hello.Server"

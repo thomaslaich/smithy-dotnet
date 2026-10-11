@@ -3,7 +3,7 @@ title: Quick start
 description: Scaffold a contracts project, a server, and a client with NSmithy templates.
 ---
 
-import { Aside, FileTree, LinkCard, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+import { FileTree, LinkCard, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
 If you are new to Smithy, the [official Smithy quickstart](https://smithy.io/2.0/quickstart.html)
 is a good place to learn the IDL before continuing.
@@ -26,12 +26,6 @@ find on your `PATH`. The choice applies to every step on this page.
   </TabItem>
 </Tabs>
 
-<Aside>
-The server step uses `--with-docs` to generate Sphinx HTML documentation. This
-requires Python 3.11+ on your PATH. Omit `--with-docs` if you only want to run
-the service.
-</Aside>
-
 Install the NSmithy project templates (one-time):
 
 ```shell
@@ -39,6 +33,11 @@ dotnet new install NSmithy.Templates
 ```
 
 ## Create the projects
+
+This walkthrough keeps the contracts, the server, and the client in one
+solution, with project references between them. A client in another repository
+consumes the published contracts instead; see
+[Distributing contracts](/smithy-dotnet/guides/distributing-contracts/).
 
 <Steps>
 
@@ -72,25 +71,29 @@ dotnet new install NSmithy.Templates
        - **service.smithy** starter restJson1 `HelloService` model
    </FileTree>
 
-2. **Create the server.** `--contracts` adds a `ProjectReference` to the
-   contracts project. `--with-docs` enables the Smithy docs and OpenAPI
-   endpoints.
+2. **Create the server.** `--contracts-project` adds a `ProjectReference` to the
+   contracts project.
 
    <Tabs syncKey="smithy-cli">
      <TabItem label="Smithy CLI from NuGet">
        ```shell
-       dotnet new nsmithy-server -n HelloWorld.Server --contracts HelloWorld.Contracts --with-docs
+       dotnet new nsmithy-server -n HelloWorld.Server \
+         --contracts-project HelloWorld.Contracts
        dotnet sln add HelloWorld.Server
        ```
      </TabItem>
      <TabItem label="Smithy CLI on PATH">
        ```shell
-       dotnet new nsmithy-server -n HelloWorld.Server --contracts HelloWorld.Contracts --with-docs \
-         --smithy-cli path
+       dotnet new nsmithy-server -n HelloWorld.Server \
+         --contracts-project HelloWorld.Contracts --smithy-cli path
        dotnet sln add HelloWorld.Server
        ```
      </TabItem>
    </Tabs>
+
+   Add `--with-docs` to also serve generated reference docs at `/docs` and an
+   interactive OpenAPI explorer at `/openapi`. It requires Python 3.11+ on your
+   `PATH`; see [Endpoint documentation](/smithy-dotnet/guides/endpoint-documentation/).
 
 3. **Run the server.** It listens on `http://localhost:5000`.
 
@@ -103,48 +106,28 @@ dotnet new install NSmithy.Templates
    # {"message":"Hello, world!"}
    ```
 
-   With `--with-docs`, two documentation UIs are also available:
-
-   - **`/docs`**: Smithy-generated reference docs for your model.
-   - **`/openapi`**: interactive Scalar UI backed by a generated `openapi.json`.
-
-   See [Endpoint Documentation](/smithy-dotnet/guides/endpoint-documentation/) for details.
-
-4. **Create the client.** In another terminal, from the solution directory:
+4. **Create the client.** `--contracts-project` adds a `ProjectReference` to the
+   contracts project, from which the client generates its types. In another
+   terminal, from the solution directory:
 
    <Tabs syncKey="smithy-cli">
      <TabItem label="Smithy CLI from NuGet">
        ```shell
-       dotnet new nsmithy-client -n HelloWorld.Client
+       dotnet new nsmithy-client -n HelloWorld.Client \
+         --contracts-project HelloWorld.Contracts
        dotnet sln add HelloWorld.Client
        ```
      </TabItem>
      <TabItem label="Smithy CLI on PATH">
        ```shell
-       dotnet new nsmithy-client -n HelloWorld.Client --smithy-cli path
+       dotnet new nsmithy-client -n HelloWorld.Client \
+         --contracts-project HelloWorld.Contracts --smithy-cli path
        dotnet sln add HelloWorld.Client
        ```
      </TabItem>
    </Tabs>
 
-5. **Point the client at the contracts project.** The template includes a
-   `smithy-build.json` with a placeholder Maven dependency. Delete it: when no
-   `smithy-build.json` exists at the project root, NSmithy synthesizes one from
-   the contracts `ProjectReference`.
-
-   ```shell
-   rm HelloWorld.Client/smithy-build.json
-   ```
-
-   Then add the reference:
-
-   ```xml title="HelloWorld.Client/HelloWorld.Client.csproj"
-   <ItemGroup>
-     <ProjectReference Include="../HelloWorld.Contracts/HelloWorld.Contracts.csproj" />
-   </ItemGroup>
-   ```
-
-6. **Run the client** with the server still running:
+5. **Run the client** with the server still running:
 
    ```shell
    dotnet run --project HelloWorld.Client
@@ -171,9 +154,9 @@ The solution now looks like this:
     - [Program.cs](#the-generated-client) calls the generated client
 </FileTree>
 
-When you're ready to distribute, see
-[Distributing Contracts](/smithy-dotnet/guides/distributing-contracts/) to
-publish the contracts JAR and switch back to a Maven reference.
+When you're ready to share the contracts with clients in other repositories, see
+[Distributing contracts](/smithy-dotnet/guides/distributing-contracts/) to
+publish them as a NuGet package or Maven JAR.
 
 ## Walk through the code
 
@@ -225,7 +208,7 @@ public interface IHelloServiceHandler
 {
     Task<SayHelloOutput> SayHelloAsync(
         SayHelloInput input,
-        CancellationToken ct = default);
+        CancellationToken cancellationToken = default);
 }
 ```
 
@@ -271,8 +254,8 @@ same Smithy model. The client handles serialization and HTTP communication.
 
 ## Template options
 
-All three templates accept `--protocol` and `--smithy-cli`. Use the same values
-for all three projects.
+All three templates accept `--protocol` and `--smithy-cli`. Use the same
+`--protocol` for all three projects.
 
 `--protocol`:
 
@@ -289,6 +272,11 @@ for all three projects.
 | --- | --- |
 | `package` | The `NSmithy.SmithyCli` package (default) |
 | `path` | `smithy` on `PATH`, or `SmithyCliPath`. See [Smithy CLI](/smithy-dotnet/reference/smithy-cli/). |
+
+`--contracts-project` makes the server or client reference a contracts project
+in the same solution. Without it, the server owns its model, and the client
+references the published contracts as chosen by `--contracts-package` (`maven`,
+the default, or `nuget`).
 
 Additional options:
 

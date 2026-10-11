@@ -24,16 +24,16 @@
       "defaultValue": "restJson1",
       "description": "The Smithy protocol the service uses"
     },
-    "Contracts": {
+    "ContractsProject": {
       "type": "parameter",
       "datatype": "string",
       "defaultValue": "",
       "replaces": "ContractsName",
       "description": "Name of the sibling contracts project to reference (e.g. HelloWorld.Contracts). Omit to own the model directly."
     },
-    "WithContracts": {
+    "WithContractsProject": {
       "type": "computed",
-      "value": "(Contracts != \"\")"
+      "value": "(ContractsProject != \"\")"
     },
     "WithDocs": {
       "type": "parameter",
@@ -64,7 +64,7 @@
       "target": "./",
       "modifiers": [
         {
-          "condition": "(WithContracts)",
+          "condition": "(WithContractsProject)",
           "exclude": ["model/**", "smithy-build.json"]
         }
       ]

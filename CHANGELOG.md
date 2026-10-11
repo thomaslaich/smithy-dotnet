@@ -13,6 +13,10 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **BREAKING: template contracts options renamed.** The server template's
+  `--contracts <project>` is now `--contracts-project <project>`, matching the
+  client's new option, and the client template's `--contracts maven|nuget` is now
+  `--contracts-package maven|nuget`.
 - **BREAKING: the Smithy CLI ships as its own package.** `NSmithy.MSBuild` no longer
   bundles the Smithy CLI and its Java runtime, which drops it from about 157 MB to
   about 3 MB. Add `<PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />`
@@ -30,6 +34,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `SmithyCliVersionCheck` (`exact`, `minimum`, or `none`) overrides the default.
 - **`dotnet nsmithy smithy`.** Runs the Smithy CLI a project's build uses, with the
   same Maven setup, e.g. `dotnet nsmithy smithy -- validate`.
+- **`--contracts-project` client template option.** References a contracts project
+  in the same solution, so the client generates its types from it without a
+  `smithy-build.json`, as the server template already could.
 - **`--smithy-cli path` template option.** The templates reference
   `NSmithy.SmithyCli` by default; with `--smithy-cli path` they leave it out and use
   the Smithy CLI on `PATH`.
