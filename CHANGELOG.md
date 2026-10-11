@@ -31,10 +31,6 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   and every other Maven dependency from Maven repositories, as the plain Smithy CLI
   does, instead of from the repository bundled in `NSmithy.MSBuild`. See
   [Maven dependencies](https://thomaslaich.github.io/smithy-dotnet/reference/maven-dependencies/).
-- **Warning for ignored properties.** `SmithyBaseNamespace`,
-  `SmithyGenerateDependencyInjection`, and `SmithyGenerateFakes` only shape the
-  synthesized `smithy-build.json`. Next to a project's own file they now warn with
-  `NSMITHYIGNORED` and name the `csharp-codegen` plugin setting to use instead.
 
 ### Fixed
 

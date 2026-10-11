@@ -16,8 +16,7 @@ runs it as is. See [Code generation](/smithy-dotnet/concepts/code-generation/).
 
 Properties marked **Synthesized only** feed the synthesized file and have no
 effect next to your own `smithy-build.json`; set the named `csharp-codegen`
-plugin setting there instead. NSmithy warns with `NSMITHYIGNORED` when one of
-them would change the generated code. All other properties apply in both cases.
+plugin setting there instead. All other properties apply in both cases.
 
 ## Properties
 
