@@ -1,12 +1,20 @@
 ---
 title: Smithy CLI
-description: How NSmithy finds the Smithy CLI, and how to provide your own.
+description: Get the Smithy CLI from NuGet or provide your own, and how NSmithy checks its version.
 ---
 
 import { TabItem, Tabs } from '@astrojs/starlight/components';
 
 Code generation runs the [Smithy CLI](https://smithy.io/2.0/guides/smithy-cli/index.html).
-NSmithy looks for it in this order:
+There are two ways to provide it:
+
+- **From NuGet.** Reference the [`NSmithy.SmithyCli` package](#the-nsmithysmithycli-package),
+  which contains the CLI and its Java runtime. Nothing needs to be installed,
+  and the NSmithy templates do this by default.
+- **Your own.** [Install the Smithy CLI](#installing-the-smithy-cli) yourself
+  and leave the package out.
+
+NSmithy looks for the CLI in this order:
 
 1. `SmithyCliPath`, when set.
 2. The `NSmithy.SmithyCli` package, when the project references it.
@@ -60,8 +68,8 @@ dotnet new nsmithy-server -n HelloWorld.Server --smithy-cli path
 
 ### Installing the Smithy CLI
 
-Install Smithy CLI `SmithyVersion` (1.73.0) or later so that `smithy` is on
-`PATH`:
+Skip this with `NSmithy.SmithyCli`, which provides the CLI. Otherwise, install
+Smithy CLI `SmithyVersion` (1.73.0) or later so that `smithy` is on `PATH`:
 
 <Tabs syncKey="smithy-cli-install">
   <TabItem label="Homebrew">
