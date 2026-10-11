@@ -2,7 +2,8 @@
 #
 # Builds a small NSmithy project against the packed packages once per way of providing the
 # Smithy CLI: the NSmithy.SmithyCli package, smithy on PATH, SmithyCliPath, and the version check
-# failing, turned off, and finding no CLI at all.
+# failing, turned off, and finding no CLI at all. Also checks the warning for synthesis-only
+# properties set next to a project's own smithy-build.json.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -150,6 +151,11 @@ expect cli-path-over-package "$with_package" NSMITHYCLIVERSION "" "$PATH" \
 expect version-mismatch "$without_package" NSMITHYCLIVERSION "" "$NO_SMITHY_PATH" \
   -p:SmithyCliPath="$WORK/old-cli/smithy"
 expect missing "$without_package" NSMITHYCLIMISSING "" "$NO_SMITHY_PATH"
+
+echo "== Own smithy-build.json =="
+# Synthesis-only properties have no effect next to an explicit build file, so they warn.
+expect ignored-property "$with_package" success "warning NSMITHYIGNORED" "$PATH" \
+  -p:SmithyGenerateFakes=true
 
 if ((${#failed[@]})); then
   echo "smoke-test: ${#failed[@]} failed: ${failed[*]}" >&2

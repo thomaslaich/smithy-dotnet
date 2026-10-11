@@ -380,6 +380,35 @@
   </Target>
 
   <!--
+    With a project's own smithy-build.json, the properties below only feed synthesis and have no
+    effect. Warn instead of ignoring them silently. SmithyService is left out: projects commonly
+    set it for the case where they generate from a contracts reference instead.
+    Checked against the user's SmithyBuildFile before _PrepareSmithyBuildFile can replace it with
+    the synthesized one.
+  -->
+  <Target
+    Name="_SmithyWarnIgnoredSynthesisProperties"
+    BeforeTargets="_PrepareSmithyBuildFile;GenerateSmithyCode"
+    Condition="Exists('$(SmithyBuildFile)') and '$(_SmithySynthesizedBuildFile)' == ''"
+  >
+    <Warning
+      Code="NSMITHYIGNORED"
+      Condition="'$(SmithyBaseNamespace)' != ''"
+      Text="NSmithy: SmithyBaseNamespace has no effect because the project has its own smithy-build.json. Set &quot;baseNamespace&quot; in its csharp-codegen plugin settings instead."
+    />
+    <Warning
+      Code="NSMITHYIGNORED"
+      Condition="'$(SmithyGenerateDependencyInjection)' == 'true'"
+      Text="NSmithy: SmithyGenerateDependencyInjection has no effect because the project has its own smithy-build.json. Set &quot;generateDependencyInjection&quot;: true in its csharp-codegen plugin settings instead."
+    />
+    <Warning
+      Code="NSMITHYIGNORED"
+      Condition="'$(SmithyGenerateFakes)' == 'true'"
+      Text="NSmithy: SmithyGenerateFakes has no effect because the project has its own smithy-build.json. Set &quot;generateFakes&quot;: true in its csharp-codegen plugin settings instead."
+    />
+  </Target>
+
+  <!--
     Synthesize a smithy-build.json when none exists on disk but SmithySource items
     are present (collected from a contracts ProjectReference).
     Reads the contracts smithy-build.json, patches sources to absolute paths, and

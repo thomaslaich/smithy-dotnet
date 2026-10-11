@@ -10,9 +10,14 @@ with the .NET toolchain.
 
 ## Configuration sources
 
-When a project supplies `smithy-build.json`, configure generator options in its
-`csharp-codegen` plugin settings. Without one, NSmithy synthesizes the file from
-MSBuild properties and model sources. See [Code generation](/smithy-dotnet/concepts/code-generation/).
+Without a `smithy-build.json` at the project root, NSmithy synthesizes one under
+`obj/` from MSBuild properties and the contracts reference. With one, NSmithy
+runs it as is. See [Code generation](/smithy-dotnet/concepts/code-generation/).
+
+Properties marked **Synthesized only** feed the synthesized file and have no
+effect next to your own `smithy-build.json`; set the named `csharp-codegen`
+plugin setting there instead. NSmithy warns with `NSMITHYIGNORED` when one of
+them would change the generated code. All other properties apply in both cases.
 
 ## Properties
 
@@ -20,12 +25,12 @@ MSBuild properties and model sources. See [Code generation](/smithy-dotnet/conce
 
 | Property | Description |
 | --- | --- |
-| `SmithyService` | Smithy shape ID of the service to generate (e.g. `example.hello#HelloService`). Required when synthesizing a `smithy-build.json` from a contracts reference. |
-| `SmithyBaseNamespace` | Prefix prepended to generated C# namespaces. For example, `Acme` maps `example.library` to `Acme.Example.Library`. It does not filter model shapes. |
-| `SmithyGenerateServer` | Emit server stub types. Set to `false` in client-only projects. Default: `true`. |
-| `SmithyGenerateClient` | Emit client types. Set to `false` in server-only projects. Default: `true`. |
-| `SmithyGenerateDependencyInjection` | Generate the `Add{Service}Client` IHttpClientFactory extension (flows into `smithy-build.json` as the `csharp-codegen` `generateDependencyInjection` setting). Requires referencing `Microsoft.Extensions.Http` (or the `Microsoft.AspNetCore.App` shared framework). See [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/). Default: `false`. |
-| `SmithyGenerateFakes` | Generate fake clients and handlers from modeled examples or deterministic placeholders. See [Fake handlers](/smithy-dotnet/servers/fake-handlers/) for response selection. Default: `false`. |
+| `SmithyService` | Smithy shape ID of the service to generate (e.g. `example.hello#HelloService`). Required when synthesizing a `smithy-build.json` from a contracts reference. **Synthesized only:** `service`. |
+| `SmithyBaseNamespace` | Prefix prepended to generated C# namespaces. For example, `Acme` maps `example.library` to `Acme.Example.Library`. It does not filter model shapes. **Synthesized only:** `baseNamespace`. |
+| `SmithyGenerateServer` | Emit server stub types. Set to `false` in client-only projects. With your own `smithy-build.json`, it selects whether the generated server files are compiled. Default: `true`. |
+| `SmithyGenerateClient` | Emit client types. Set to `false` in server-only projects. With your own `smithy-build.json`, it selects whether the generated client files are compiled. Default: `true`. |
+| `SmithyGenerateDependencyInjection` | Generate the `Add{Service}Client` IHttpClientFactory extension. Requires referencing `Microsoft.Extensions.Http` (or the `Microsoft.AspNetCore.App` shared framework). See [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/). Default: `false`. **Synthesized only:** `generateDependencyInjection`. |
+| `SmithyGenerateFakes` | Generate fake clients and handlers from modeled examples or deterministic placeholders. See [Fake handlers](/smithy-dotnet/servers/fake-handlers/) for response selection. Default: `false`. **Synthesized only:** `generateFakes`. |
 | `SmithyBuildFile` | Path to the Smithy build configuration file. When absent, NSmithy can synthesize one under `obj/` from `SmithySource` and `SmithyContractsBuildFile` items. Default: `$(MSBuildProjectDirectory)/smithy-build.json`. |
 | `SmithyProjection` | Smithy build projection to use. Default: `source`. |
 | `SmithyPlugin` | Smithy build plugin name. Default: `csharp-codegen`. |
@@ -47,8 +52,8 @@ See [Smithy CLI](/smithy-dotnet/reference/smithy-cli/).
 
 | Property | Description |
 | --- | --- |
-| `SmithyGenerateDocs` | Generate Sphinx HTML documentation. Requires Python 3.11+. Default: `false`. |
-| `SmithyOpenApiProtocol` | Protocol shape ID for OpenAPI generation. |
+| `SmithyGenerateDocs` | Generate Sphinx HTML documentation and copy it to `wwwroot/docs/`. Requires Python 3.11+. With your own `smithy-build.json`, add the `docgen` plugin there; the property still copies the output. Default: `false`. |
+| `SmithyOpenApiProtocol` | Protocol shape ID for OpenAPI generation; the output is copied to `wwwroot/openapi.json`. With your own `smithy-build.json`, add the `openapi` plugin there; the property still copies the output. |
 
 See [Endpoint documentation](/smithy-dotnet/guides/endpoint-documentation/) for setup.
 

@@ -15,8 +15,8 @@ Before generating, NSmithy checks that the CLI's version equals `SmithyVersion`
 
 ## The NSmithy.SmithyCli package
 
-`NSmithy.SmithyCli` contains the Smithy CLI with its Java runtime for macOS,
-Linux, and Windows on x64 and arm64. Nothing else needs to be installed. The
+`NSmithy.SmithyCli` contains the Smithy CLI with its Java runtime for macOS and
+Linux on x64 and arm64, and Windows on x64. Nothing else needs to be installed. The
 package version is the Smithy version, so upgrading NSmithy reuses the package
 already in the NuGet cache.
 
