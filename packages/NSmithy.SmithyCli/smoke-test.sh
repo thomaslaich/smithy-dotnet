@@ -2,7 +2,7 @@
 #
 # Builds a small NSmithy project against the packed packages once per way of providing the
 # Smithy CLI: the NSmithy.SmithyCli package, smithy on PATH, SmithyCliPath, and the version check
-# failing, turned off, and finding no CLI at all. Also checks where Maven dependencies
+# with older and newer CLIs, turned off, and finding no CLI at all. Also checks where Maven dependencies
 # resolve from, with and without the bundled repository.
 set -euo pipefail
 
@@ -50,14 +50,18 @@ cat > "$WORK/NuGet.config" <<XML
 </configuration>
 XML
 
-# A CLI that reports another version and otherwise runs the real one.
-mkdir -p "$WORK/old-cli"
-cat > "$WORK/old-cli/smithy" <<SH
+# CLIs that report another version and otherwise run the real one.
+fake_cli() { # fake_cli <dir> <version>
+  mkdir -p "$WORK/$1"
+  cat > "$WORK/$1/smithy" <<SH
 #!/usr/bin/env bash
-if [[ "\${1:-}" == "--version" ]]; then echo "1.71.0"; exit 0; fi
+if [[ "\${1:-}" == "--version" ]]; then echo "$2"; exit 0; fi
 exec "$REAL_SMITHY" "\$@"
 SH
-chmod +x "$WORK/old-cli/smithy"
+  chmod +x "$WORK/$1/smithy"
+}
+fake_cli old-cli 1.71.0
+fake_cli new-cli 99.0.0
 
 # PATH without any smithy, for the missing-CLI case.
 NO_SMITHY_PATH=""
@@ -151,12 +155,17 @@ echo "== Smithy CLI resolution =="
 expect package "$with_package" success "nsmithy.smithycli/$SMITHY_VERSION" "$PATH"
 expect path "$without_package" success "" "$PATH"
 expect cli-path "$without_package" success "$WORK/old-cli/smithy" "$NO_SMITHY_PATH" \
-  -p:SmithyCliPath="$WORK/old-cli/smithy" -p:SmithyCliVersionCheck=false
+  -p:SmithyCliPath="$WORK/old-cli/smithy" -p:SmithyCliVersionCheck=none
 expect cli-path-over-package "$with_package" NSMITHYCLIVERSION "" "$PATH" \
   -p:SmithyCliPath="$WORK/old-cli/smithy"
 expect version-mismatch "$without_package" NSMITHYCLIVERSION "" "$NO_SMITHY_PATH" \
   -p:SmithyCliPath="$WORK/old-cli/smithy"
 expect missing "$without_package" NSMITHYCLIMISSING "" "$NO_SMITHY_PATH"
+# A newer CLI satisfies the default minimum check but not an exact one.
+expect newer-cli "$without_package" success "" "$NO_SMITHY_PATH" \
+  -p:SmithyCliPath="$WORK/new-cli/smithy"
+expect newer-cli-exact "$without_package" NSMITHYCLIVERSION "" "$NO_SMITHY_PATH" \
+  -p:SmithyCliPath="$WORK/new-cli/smithy" -p:SmithyCliVersionCheck=exact
 
 echo "== Maven resolution =="
 # With the bundled repo, the CLI does not assume Maven Central: an unbundled dependency needs a

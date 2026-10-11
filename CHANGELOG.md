@@ -25,8 +25,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 ### Added
 
 - **Smithy CLI version check.** Code generation fails with `NSMITHYCLIVERSION` when
-  the Smithy CLI's version differs from `SmithyVersion`, and with `NSMITHYCLIMISSING`
-  when no CLI can be run. Set `SmithyCliVersionCheck` to `false` to skip the check.
+  the Smithy CLI is older than `SmithyVersion`, and with `NSMITHYCLIMISSING` when no
+  CLI can be run. Set `SmithyCliVersionCheck` to `exact` to require that version, or
+  to `none` to skip the check.
+- **`--smithy-cli path` template option.** The templates reference
+  `NSmithy.SmithyCli` by default; with `--smithy-cli path` they leave it out and use
+  the Smithy CLI on `PATH`.
 - **`SmithyUseBundledMavenRepo`.** Set it to `false` to resolve NSmithy's plugins
   and every other Maven dependency from Maven repositories, as the plain Smithy CLI
   does, instead of from the repository bundled in `NSmithy.MSBuild`. See

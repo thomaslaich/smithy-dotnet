@@ -3,7 +3,7 @@ title: Quick start
 description: Scaffold a contracts project, a server, and a client with NSmithy templates.
 ---
 
-import { Aside, FileTree, LinkCard, Steps } from '@astrojs/starlight/components';
+import { Aside, FileTree, LinkCard, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
 If you are new to Smithy, the [official Smithy quickstart](https://smithy.io/2.0/quickstart.html)
 is a good place to learn the IDL before continuing.
@@ -11,9 +11,20 @@ is a good place to learn the IDL before continuing.
 ## Prerequisites
 
 Install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
-The templates reference `NSmithy.SmithyCli`, which provides the Smithy CLI and
-its Java runtime, so no separate Java or Smithy CLI installation is required.
-To use a Smithy CLI you install yourself, see [Smithy CLI](/smithy-dotnet/reference/smithy-cli/).
+Code generation runs the Smithy CLI, which the projects either get from NuGet or
+find on your `PATH`. The choice applies to every step on this page.
+
+<Tabs syncKey="smithy-cli">
+  <TabItem label="Smithy CLI from NuGet">
+    The templates reference `NSmithy.SmithyCli`, which provides the Smithy CLI
+    and its Java runtime. Nothing else needs to be installed.
+  </TabItem>
+  <TabItem label="Smithy CLI on PATH">
+    Install Smithy CLI 1.73.0 or later so that `smithy` is on your `PATH`, with
+    Homebrew, Scoop, pixi, or the official installer. See
+    [Installing the Smithy CLI](/smithy-dotnet/reference/smithy-cli/#installing-the-smithy-cli).
+  </TabItem>
+</Tabs>
 
 <Aside>
 The server step uses `--with-docs` to generate Sphinx HTML documentation. This
@@ -34,12 +45,24 @@ dotnet new install NSmithy.Templates
 1. **Create the contracts project.** It owns the Smithy model. The server and
    client reference it and generate their own C# types during the build.
 
-   ```shell
-   mkdir HelloWorld && cd HelloWorld
-   dotnet new sln -n HelloWorld
-   dotnet new nsmithy-contracts -n HelloWorld.Contracts
-   dotnet sln add HelloWorld.Contracts
-   ```
+   <Tabs syncKey="smithy-cli">
+     <TabItem label="Smithy CLI from NuGet">
+       ```shell
+       mkdir HelloWorld && cd HelloWorld
+       dotnet new sln -n HelloWorld
+       dotnet new nsmithy-contracts -n HelloWorld.Contracts
+       dotnet sln add HelloWorld.Contracts
+       ```
+     </TabItem>
+     <TabItem label="Smithy CLI on PATH">
+       ```shell
+       mkdir HelloWorld && cd HelloWorld
+       dotnet new sln -n HelloWorld
+       dotnet new nsmithy-contracts -n HelloWorld.Contracts --smithy-cli path
+       dotnet sln add HelloWorld.Contracts
+       ```
+     </TabItem>
+   </Tabs>
 
    <FileTree>
    - HelloWorld.Contracts/
@@ -53,10 +76,21 @@ dotnet new install NSmithy.Templates
    contracts project. `--with-docs` enables the Smithy docs and OpenAPI
    endpoints.
 
-   ```shell
-   dotnet new nsmithy-server -n HelloWorld.Server --contracts HelloWorld.Contracts --with-docs
-   dotnet sln add HelloWorld.Server
-   ```
+   <Tabs syncKey="smithy-cli">
+     <TabItem label="Smithy CLI from NuGet">
+       ```shell
+       dotnet new nsmithy-server -n HelloWorld.Server --contracts HelloWorld.Contracts --with-docs
+       dotnet sln add HelloWorld.Server
+       ```
+     </TabItem>
+     <TabItem label="Smithy CLI on PATH">
+       ```shell
+       dotnet new nsmithy-server -n HelloWorld.Server --contracts HelloWorld.Contracts --with-docs \
+         --smithy-cli path
+       dotnet sln add HelloWorld.Server
+       ```
+     </TabItem>
+   </Tabs>
 
 3. **Run the server.** It listens on `http://localhost:5000`.
 
@@ -78,10 +112,20 @@ dotnet new install NSmithy.Templates
 
 4. **Create the client.** In another terminal, from the solution directory:
 
-   ```shell
-   dotnet new nsmithy-client -n HelloWorld.Client
-   dotnet sln add HelloWorld.Client
-   ```
+   <Tabs syncKey="smithy-cli">
+     <TabItem label="Smithy CLI from NuGet">
+       ```shell
+       dotnet new nsmithy-client -n HelloWorld.Client
+       dotnet sln add HelloWorld.Client
+       ```
+     </TabItem>
+     <TabItem label="Smithy CLI on PATH">
+       ```shell
+       dotnet new nsmithy-client -n HelloWorld.Client --smithy-cli path
+       dotnet sln add HelloWorld.Client
+       ```
+     </TabItem>
+   </Tabs>
 
 5. **Point the client at the contracts project.** The template includes a
    `smithy-build.json` with a placeholder Maven dependency. Delete it: when no
@@ -227,7 +271,10 @@ same Smithy model. The client handles serialization and HTTP communication.
 
 ## Template options
 
-All three templates accept `--protocol`. Use the same value for all three projects:
+All three templates accept `--protocol` and `--smithy-cli`. Use the same values
+for all three projects.
+
+`--protocol`:
 
 | Value | Protocol |
 | --- | --- |
@@ -235,6 +282,13 @@ All three templates accept `--protocol`. Use the same value for all three projec
 | `simpleRestJson` | `alloy#simpleRestJson` |
 | `rpcv2Cbor` | `smithy.protocols#rpcv2Cbor` |
 | `grpc` | `alloy.proto#grpc` (experimental) |
+
+`--smithy-cli`:
+
+| Value | Smithy CLI |
+| --- | --- |
+| `package` | The `NSmithy.SmithyCli` package (default) |
+| `path` | `smithy` on `PATH`, or `SmithyCliPath`. See [Smithy CLI](/smithy-dotnet/reference/smithy-cli/). |
 
 Additional options:
 

@@ -259,12 +259,13 @@
             the build host's distribution from it.
          3. smithy on PATH.
 
-       GenerateSmithyCode checks that the CLI's version equals $(SmithyVersion)
-       unless SmithyCliVersionCheck is false.
+       GenerateSmithyCode checks the CLI's version against $(SmithyVersion):
+       SmithyCliVersionCheck is minimum (at least that version, the default),
+       exact, or none.
        ================================================================ -->
 
   <PropertyGroup>
-    <SmithyCliVersionCheck Condition="'$(SmithyCliVersionCheck)' == ''">true</SmithyCliVersionCheck>
+    <SmithyCliVersionCheck Condition="'$(SmithyCliVersionCheck)' == ''">minimum</SmithyCliVersionCheck>
   </PropertyGroup>
 
   <!-- Detect OS and CPU architecture -->
@@ -513,9 +514,17 @@
     </PropertyGroup>
     <!-- Check the CLI before running it. Here rather than in a target of its own, so that only
          builds that regenerate pay for starting an external CLI just to ask its version. -->
+    <Error
+      Code="NSMITHYCLIVERSION"
+      Condition="'$(SmithyCliVersionCheck)' != 'minimum' and '$(SmithyCliVersionCheck)' != 'exact' and '$(SmithyCliVersionCheck)' != 'none'"
+      Text="NSmithy: SmithyCliVersionCheck is '$(SmithyCliVersionCheck)'; use minimum, exact, or none."
+    />
+    <PropertyGroup>
+      <_SmithyCheckCliVersion Condition="'$(SmithyCliVersionCheck)' != 'none'">true</_SmithyCheckCliVersion>
+    </PropertyGroup>
     <Exec
       Command="&quot;$(SmithyCliPath)&quot; --version"
-      Condition="'$(SmithyCliVersionCheck)' == 'true' and '$(_SmithyCliFromPackage)' != 'true'"
+      Condition="'$(_SmithyCheckCliVersion)' == 'true' and '$(_SmithyCliFromPackage)' != 'true'"
       ConsoleToMSBuild="true"
       IgnoreExitCode="true"
       IgnoreStandardErrorWarningFormat="true"
@@ -526,25 +535,37 @@
       <Output TaskParameter="ExitCode" PropertyName="_SmithyCliVersionExitCode" />
       <Output TaskParameter="ConsoleOutput" PropertyName="_SmithyCliVersionOutput" />
     </Exec>
+    <Error
+      Code="NSMITHYCLIMISSING"
+      Condition="'$(_SmithyCheckCliVersion)' == 'true' and '$(_SmithyCliFromPackage)' != 'true' and '$(_SmithyCliVersionExitCode)' != '0'"
+      Text="NSmithy: could not run the Smithy CLI ($(SmithyCliPath)). Reference the NSmithy.SmithyCli package ($(SmithyVersion)), set SmithyCliPath to a Smithy CLI $(SmithyVersion) or later, or put one on PATH."
+    />
     <!-- ConsoleOutput joins the lines with ';'; take the line that is a version, past any JVM
-         warnings. -->
-    <PropertyGroup Condition="'$(SmithyCliVersionCheck)' == 'true'">
+         warnings. Versions compare by their major.minor.patch core. -->
+    <PropertyGroup Condition="'$(_SmithyCheckCliVersion)' == 'true'">
       <_SmithyCliVersion Condition="'$(_SmithyCliFromPackage)' == 'true'"
         >$(NSmithySmithyCliVersion)</_SmithyCliVersion
       >
       <_SmithyCliVersion Condition="'$(_SmithyCliFromPackage)' != 'true'"
         >$([System.Text.RegularExpressions.Regex]::Match('$(_SmithyCliVersionOutput)', '(?:^|;)(\d+\.\d+\.\d+[^;\s]*)').Groups[1].Value)</_SmithyCliVersion
       >
+      <_SmithyCliVersionCore>$([System.Text.RegularExpressions.Regex]::Match('$(_SmithyCliVersion)', '^\d+\.\d+\.\d+').Value)</_SmithyCliVersionCore>
+      <_SmithyVersionCore>$([System.Text.RegularExpressions.Regex]::Match('$(SmithyVersion)', '^\d+\.\d+\.\d+').Value)</_SmithyVersionCore>
     </PropertyGroup>
     <Error
-      Code="NSMITHYCLIMISSING"
-      Condition="'$(SmithyCliVersionCheck)' == 'true' and '$(_SmithyCliFromPackage)' != 'true' and '$(_SmithyCliVersionExitCode)' != '0'"
-      Text="NSmithy: could not run the Smithy CLI ($(SmithyCliPath)). Reference the NSmithy.SmithyCli package ($(SmithyVersion)), set SmithyCliPath to a Smithy CLI $(SmithyVersion), or put one on PATH."
+      Code="NSMITHYCLIVERSION"
+      Condition="'$(_SmithyCheckCliVersion)' == 'true' and ('$(_SmithyCliVersionCore)' == '' or '$(_SmithyVersionCore)' == '')"
+      Text="NSmithy: could not read the version of the Smithy CLI ($(SmithyCliPath)), or SmithyVersion ($(SmithyVersion)) is not a version. Set SmithyCliVersionCheck to none to skip this check."
     />
     <Error
       Code="NSMITHYCLIVERSION"
-      Condition="'$(SmithyCliVersionCheck)' == 'true' and '$(_SmithyCliVersion)' != '$(SmithyVersion)'"
-      Text="NSmithy: Smithy CLI $(_SmithyCliVersion) ($(SmithyCliPath)) does not match SmithyVersion ($(SmithyVersion)). Use Smithy CLI $(SmithyVersion), or set SmithyCliVersionCheck to false to skip this check."
+      Condition="'$(SmithyCliVersionCheck)' == 'minimum' and '$(_SmithyCliVersionCore)' != '' and '$(_SmithyVersionCore)' != '' and $([MSBuild]::VersionLessThan('$(_SmithyCliVersionCore)', '$(_SmithyVersionCore)'))"
+      Text="NSmithy: Smithy CLI $(_SmithyCliVersion) ($(SmithyCliPath)) is older than SmithyVersion ($(SmithyVersion)). Use Smithy CLI $(SmithyVersion) or later, or set SmithyCliVersionCheck to none to skip this check."
+    />
+    <Error
+      Code="NSMITHYCLIVERSION"
+      Condition="'$(SmithyCliVersionCheck)' == 'exact' and '$(_SmithyCliVersionCore)' != '' and '$(_SmithyVersionCore)' != '' and !$([MSBuild]::VersionEquals('$(_SmithyCliVersionCore)', '$(_SmithyVersionCore)'))"
+      Text="NSmithy: Smithy CLI $(_SmithyCliVersion) ($(SmithyCliPath)) does not match SmithyVersion ($(SmithyVersion)), and SmithyCliVersionCheck is exact. Use Smithy CLI $(SmithyVersion), or set SmithyCliVersionCheck to minimum or none."
     />
 
     <!-- What the previous run produced, and when this one starts: see the stale-output cleanup
