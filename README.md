@@ -13,9 +13,9 @@
 
 **[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Examples](examples/README.md)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
 
-NSmithy generates C# for .NET from [Smithy](https://smithy.io) models. Smithy is the interface definition language AWS uses for its SDKs: a model describes a service's operations, data types, and errors once, independent of programming language and protocol.
+NSmithy generates C# for .NET from [Smithy](https://smithy.io) models. Smithy is the interface definition language AWS uses for its SDKs: a model describes a service's operations, data types, and errors once, independent of programming language and protocol. Smithy has code generators for Java, TypeScript, Go, Rust, Python, Kotlin, and Scala, so a .NET service and clients in those languages can share one model.
 
-From one model, NSmithy generates typed clients, ASP.NET Core server stubs, and model types during `dotnet build`, with no separate codegen step. It supports restJson1, rpcv2Cbor, gRPC, and the AWS protocols; see [protocol status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/).
+NSmithy generates typed clients, ASP.NET Core server stubs, and model types from a Smithy model during `dotnet build`, with no separate codegen step. A client and a server generated from the same model agree on routes, serialization, and errors. It supports restJson1, rpcv2Cbor, gRPC, and the AWS protocols; see [protocol status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/).
 
 ## Quick start
 
