@@ -13,29 +13,29 @@
 
 **[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Examples](examples/README.md)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
 
-NSmithy brings [Smithy](https://smithy.io) code generation to .NET. It generates typed clients, ASP.NET Core server stubs, and model types from a Smithy model as part of `dotnet build`.
+NSmithy is [Smithy](https://smithy.io) code generation for .NET and C#. It generates typed clients, ASP.NET Core server stubs, and model types from a Smithy model as part of `dotnet build`, with no separate codegen step.
 
-## Development
+## Quick start
 
-The recommended way to work on this repo is with [Nix](https://nixos.org/) and [devenv](https://devenv.sh/).
+With the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and the [Smithy CLI](https://thomaslaich.github.io/smithy-dotnet/reference/smithy-cli/) installed:
 
-1. **Install Nix** (recommended: [Determinate Nix](https://determinate.systems/nix/)) and [devenv](https://devenv.sh/).
-2. **Optionally install [direnv](https://direnv.net/)** to activate the dev environment automatically when entering the directory (`direnv allow`). Without it, run `devenv shell` manually.
-3. **Use the `just` recipes** to build, test, and package:
+```bash
+dotnet new install NSmithy.Templates
+dotnet new nsmithy-contracts -n HelloWorld.Contracts
+dotnet new nsmithy-server -n HelloWorld.Server --contracts-project HelloWorld.Contracts
+dotnet run --project HelloWorld.Server
+```
 
-   ```bash
-   just          # list all available recipes
-   just build    # build the codegen JAR and .NET solution
-   just test     # run the test suite
-   just fmt      # format all code
-   just docs     # start the documentation dev server
-   just ci       # run the full CI pipeline locally
-   ```
+Pass `--smithy-cli-package` to the templates to get the Smithy CLI from NuGet instead. The [quick start](https://thomaslaich.github.io/smithy-dotnet/getting-started/quick-start/) adds a client and walks through the generated code.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development environment and build recipes.
 
 ## Related Projects
 
-- **[Smithy](https://smithy.io)**: The IDL and protocol framework NSmithy is built on.
-- **[smithy4s](https://disneystreaming.github.io/smithy4s/)**: Scala codegen from Smithy models and the main inspiration for NSmithy.
-- **[alloy](https://github.com/disneystreaming/alloy)**: Smithy extensions used by NSmithy for `simpleRestJson` and gRPC.
-- **[smithy-go](https://github.com/smithy-lang/smithy-go)** / **[smithy-typescript](https://github.com/smithy-lang/smithy-typescript)**: Official Smithy codegen plugins for Go and TypeScript.
-- **[TypeSpec](https://typespec.io)**: Microsoft's alternative API description language, with first-party .NET emitters.
+- [Smithy](https://smithy.io), the IDL NSmithy is built on.
+- [smithy4s](https://disneystreaming.github.io/smithy4s/), the main inspiration for NSmithy.
+- [alloy](https://github.com/disneystreaming/alloy), used for `simpleRestJson` and gRPC.
+- [smithy-go](https://github.com/smithy-lang/smithy-go) and [smithy-typescript](https://github.com/smithy-lang/smithy-typescript).
+- [TypeSpec](https://typespec.io), Microsoft's alternative with first-party .NET emitters.
