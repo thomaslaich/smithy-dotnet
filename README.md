@@ -13,11 +13,13 @@
 
 **[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Examples](examples/README.md)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
 
-NSmithy is [Smithy](https://smithy.io) code generation for .NET and C#. It generates typed clients, ASP.NET Core server stubs, and model types from a Smithy model as part of `dotnet build`, with no separate codegen step.
+NSmithy generates C# for .NET from [Smithy](https://smithy.io) models. Smithy is the interface definition language AWS uses for its SDKs: a model describes a service's operations, data types, and errors once, independent of programming language and protocol.
+
+From one model, NSmithy generates typed clients, ASP.NET Core server stubs, and model types during `dotnet build`, with no separate codegen step. It supports restJson1, rpcv2Cbor, gRPC, and the AWS protocols; see [protocol status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/).
 
 ## Quick start
 
-With the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and the [Smithy CLI](https://thomaslaich.github.io/smithy-dotnet/reference/smithy-cli/) installed:
+With the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and the [Smithy CLI](https://thomaslaich.github.io/smithy-dotnet/reference/smithy-cli/#installing-the-smithy-cli) installed:
 
 ```bash
 dotnet new install NSmithy.Templates
@@ -37,5 +39,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development environment and build
 - [Smithy](https://smithy.io), the IDL NSmithy is built on.
 - [smithy4s](https://disneystreaming.github.io/smithy4s/), the main inspiration for NSmithy.
 - [alloy](https://github.com/disneystreaming/alloy), used for `simpleRestJson` and gRPC.
-- [smithy-go](https://github.com/smithy-lang/smithy-go) and [smithy-typescript](https://github.com/smithy-lang/smithy-typescript).
+- [smithy-go](https://github.com/smithy-lang/smithy-go) and [smithy-typescript](https://github.com/smithy-lang/smithy-typescript), the official generators for Go and TypeScript.
 - [TypeSpec](https://typespec.io), Microsoft's alternative with first-party .NET emitters.
