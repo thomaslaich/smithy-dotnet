@@ -82,7 +82,7 @@ for protocol in restJson1 simpleRestJson rpcv2Cbor grpc; do
   cp "$SRC/NuGet.config" "$qs/"
   dotnet new nsmithy-contracts -o "$qs/Hello.Contracts" -n Hello.Contracts --protocol "$protocol" > /dev/null
   dotnet new nsmithy-server -o "$qs/Hello.Server" -n Hello.Server --protocol "$protocol" \
-    --contracts Hello.Contracts --with-docs > /dev/null
+    --contracts-project Hello.Contracts --with-docs > /dev/null
   dotnet new nsmithy-client -o "$qs/Hello.Client" -n Hello.Client --protocol "$protocol" \
     --contracts-project Hello.Contracts > /dev/null
   localize "$qs"

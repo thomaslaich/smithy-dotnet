@@ -26,7 +26,7 @@
     <PackageReference Include="NSmithy.Codecs.Cbor" Version="NSMITHY_VERSION" />
     <PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="NSMITHY_VERSION" />
     <!--#endif-->
-    <!--#if (WithContracts)-->
+    <!--#if (WithContractsProject)-->
     <!-- Codegen runs off the contracts project, which brings NSmithy.MSBuild with it. -->
     <ProjectReference Include="../ContractsName/ContractsName.csproj" />
     <!--#else-->

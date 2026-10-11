@@ -71,19 +71,21 @@ consumes the published contracts instead; see
        - **service.smithy** starter restJson1 `HelloService` model
    </FileTree>
 
-2. **Create the server.** `--contracts` adds a `ProjectReference` to the
+2. **Create the server.** `--contracts-project` adds a `ProjectReference` to the
    contracts project.
 
    <Tabs syncKey="smithy-cli">
      <TabItem label="Smithy CLI from NuGet">
        ```shell
-       dotnet new nsmithy-server -n HelloWorld.Server --contracts HelloWorld.Contracts
+       dotnet new nsmithy-server -n HelloWorld.Server \
+         --contracts-project HelloWorld.Contracts
        dotnet sln add HelloWorld.Server
        ```
      </TabItem>
      <TabItem label="Smithy CLI on PATH">
        ```shell
-       dotnet new nsmithy-server -n HelloWorld.Server --contracts HelloWorld.Contracts --smithy-cli path
+       dotnet new nsmithy-server -n HelloWorld.Server \
+         --contracts-project HelloWorld.Contracts --smithy-cli path
        dotnet sln add HelloWorld.Server
        ```
      </TabItem>
@@ -271,9 +273,10 @@ All three templates accept `--protocol` and `--smithy-cli`. Use the same
 | `package` | The `NSmithy.SmithyCli` package (default) |
 | `path` | `smithy` on `PATH`, or `SmithyCliPath`. See [Smithy CLI](/smithy-dotnet/reference/smithy-cli/). |
 
-The server's `--contracts` and the client's `--contracts-project` reference a
-contracts project in the same solution. Without them, the server owns its model
-and the client references a contracts package.
+`--contracts-project` makes the server or client reference a contracts project
+in the same solution. Without it, the server owns its model, and the client
+references the published contracts as chosen by `--contracts-package` (`maven`,
+the default, or `nuget`).
 
 Additional options:
 
