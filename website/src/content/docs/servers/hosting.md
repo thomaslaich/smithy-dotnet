@@ -3,6 +3,9 @@ title: Hosting multiple protocols
 description: Expose one service over several protocols from a single handler set, and the listener/port rules that decide what can share a port.
 ---
 
+Reference the protocol package for every generated server protocol alongside
+`NSmithy.Server.AspNetCore`; see [Server packages](/smithy-dotnet/servers/#reference-the-protocol-package).
+
 A service can declare more than one protocol trait. When it does, codegen emits
 a `Map{Service}` extension with a generated `{Service}Protocols` flags enum.
 Each selected protocol resolves the registered operation handlers. Their method

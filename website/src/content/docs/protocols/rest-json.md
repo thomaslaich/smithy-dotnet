@@ -156,7 +156,7 @@ Add the model package for the selected protocol to `smithy-build.json`:
 | Surface | Packages |
 | --- | --- |
 | Client | `NSmithy.Client`, `NSmithy.Codecs.Json`, `NSmithy.Protocols.RestJson` |
-| Server | `NSmithy.Server.AspNetCore` |
+| Server | `NSmithy.Server.AspNetCore`, `NSmithy.Protocols.RestJson` |
 
 The server package includes the REST JSON protocol and JSON codec transitively.
 

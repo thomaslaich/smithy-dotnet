@@ -11,6 +11,18 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: the ASP.NET Core host is protocol-agnostic.**
+  `NSmithy.Server.AspNetCore` no longer depends on `NSmithy.Codecs.Json`,
+  `NSmithy.Protocols.RestJson`, or `NSmithy.Protocols.Grpc`. Existing REST/JSON
+  servers must add `NSmithy.Protocols.RestJson`; gRPC servers must add
+  `NSmithy.Protocols.Grpc`, using the same NSmithy version as the host. Servers
+  generating multiple protocols need each corresponding protocol package.
+  `NSmithy.Protocols.RpcV2Cbor` remains required for CBOR servers. The server
+  template and examples now reference their protocol packages explicitly, so
+  servers no longer acquire unrelated protocols and codecs through the host.
+
 ## [0.12.0]
 
 This release moves the Smithy CLI out of `NSmithy.MSBuild` and makes one effective
