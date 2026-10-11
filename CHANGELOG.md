@@ -11,8 +11,29 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.12.0]
+
+This release moves the Smithy CLI out of `NSmithy.MSBuild` and makes one effective
+`smithy-build.json` the way NSmithy configures every build. `NSmithy.MSBuild` drops
+from about 157 MB to about 3 MB; the CLI now comes from the new `NSmithy.SmithyCli`
+package or from your own installation, and code generation checks its version.
+When upgrading, reference `NSmithy.SmithyCli` or install Smithy CLI 1.73.0 or later,
+move `SmithyBaseNamespace`, `SmithyGenerateDependencyInjection`, and
+`SmithyGenerateFakes` into `smithy-build.json` as `csharp-codegen` settings, and
+remove `service` and NSmithy's plugin artifacts from the `smithy-build.json` of
+projects that set `SmithyService`. Templates now use the Smithy CLI on `PATH` unless
+you pass `--smithy-cli-package`.
+
 ### Changed
 
+- **BREAKING: the Smithy CLI ships as its own package.** `NSmithy.MSBuild` no longer
+  bundles the Smithy CLI and its Java runtime, which drops it from about 157 MB to
+  about 3 MB. Add `<PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />`
+  to each project that generates code, or once in `Directory.Build.props`. The
+  package is versioned by the Smithy CLI it contains, so NSmithy upgrades reuse the
+  copy in the NuGet cache. Without it, NSmithy runs `SmithyCliPath` or `smithy` on
+  `PATH`, so a CLI from pixi, Nix, or Homebrew works without downloading the
+  package. See [Smithy CLI](https://thomaslaich.github.io/smithy-dotnet/reference/smithy-cli/).
 - **BREAKING: one effective `smithy-build.json`.** NSmithy now always merges the
   project's own `smithy-build.json` (if any), the referenced contracts, and the
   plugin settings from properties into one build file under `obj/`. Properties say
@@ -29,14 +50,6 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `--contracts <project>` is now `--contracts-project <project>`, matching the
   client's new option, and the client template's `--contracts maven|nuget` is now
   `--contracts-package maven|nuget`.
-- **BREAKING: the Smithy CLI ships as its own package.** `NSmithy.MSBuild` no longer
-  bundles the Smithy CLI and its Java runtime, which drops it from about 157 MB to
-  about 3 MB. Add `<PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />`
-  to each project that generates code, or once in `Directory.Build.props`. The
-  package is versioned by the Smithy CLI it contains, so NSmithy upgrades reuse the
-  copy in the NuGet cache. Without it, NSmithy runs `SmithyCliPath` or `smithy` on
-  `PATH`, so a CLI from pixi, Nix, or Homebrew works without downloading the
-  package. See [Smithy CLI](https://thomaslaich.github.io/smithy-dotnet/reference/smithy-cli/).
 
 ### Added
 
@@ -492,7 +505,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.9.0...v0.10.0
