@@ -74,7 +74,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
         {
             var root = ReadProjectBuildFile();
             var dependencies = new DependencySet();
-            var repositories = new List<string>();
+            var repositories = new List<JsonObject>();
 
             CollectMaven(root, ProjectBuildFileName, dependencies, repositories);
             AddContracts(root, dependencies, repositories);
@@ -139,7 +139,7 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
         JsonObject buildFile,
         string origin,
         DependencySet dependencies,
-        List<string> repositories
+        List<JsonObject> repositories
     )
     {
         if (buildFile["maven"] is not JsonObject maven)
@@ -148,16 +148,22 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
             foreach (var dep in deps)
                 if (dep?.GetValue<string>() is { } coordinate)
                     dependencies.Add(coordinate, origin);
+        // Whole repository objects, so id, httpCredentials, proxyHost, and proxyCredentials
+        // survive; the first entry for a URL wins.
         if (maven["repositories"] is JsonArray repos)
             foreach (var repo in repos)
-                if (repo?["url"]?.GetValue<string>() is { } url && !repositories.Contains(url))
-                    repositories.Add(url);
+                if (
+                    repo is JsonObject repository
+                    && repository["url"]?.GetValue<string>() is { } url
+                    && !repositories.Exists(known => known["url"]?.GetValue<string>() == url)
+                )
+                    repositories.Add(repository.DeepClone().AsObject());
     }
 
     private void AddContracts(
         JsonObject root,
         DependencySet dependencies,
-        List<string> repositories
+        List<JsonObject> repositories
     )
     {
         foreach (var item in ContractsBuildFiles)
@@ -218,14 +224,13 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
 
         foreach (var plugin in EnabledPlugins())
         {
-            // The file's settings for the plugin: top-level, overridden by the projection's.
-            var settings = new JsonObject();
-            if (topLevel?[plugin.Plugin] is JsonObject top)
-                foreach (var (key, value) in top)
-                    settings[key] = value?.DeepClone();
-            if (projectionPlugins[plugin.Plugin] is JsonObject inProjection)
-                foreach (var (key, value) in inProjection)
-                    settings[key] = value?.DeepClone();
+            // The settings Smithy would use for the projection: its own when it defines the
+            // plugin, which replace the top-level ones entirely, or else the top-level ones. The
+            // top-level entry stays for the other projections that inherit it.
+            var settings = (projectionPlugins[plugin.Plugin] ?? topLevel?[plugin.Plugin])
+                is JsonObject inherited
+                ? inherited.DeepClone().AsObject()
+                : new JsonObject();
 
             foreach (var (key, value) in plugin.Owned)
             {
@@ -246,15 +251,13 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
             if (
                 plugin.Plugin == ProtoPlugin
                 && !settings.ContainsKey("baseNamespace")
-                && CSharpBaseNamespace(topLevel, projectionPlugins) is { } baseNamespace
+                && projectionPlugins[CSharpPlugin]?["baseNamespace"]?.GetValue<string>()
+                    is { } baseNamespace
             )
                 settings["baseNamespace"] = baseNamespace;
 
             projectionPlugins[plugin.Plugin] = settings;
-            topLevel?.Remove(plugin.Plugin);
         }
-        if (topLevel is { Count: 0 })
-            root.Remove("plugins");
         return !Log.HasLoggedErrors;
     }
 
@@ -310,13 +313,6 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
             _ => plugin.Property,
         };
 
-    private static string? CSharpBaseNamespace(
-        JsonObject? topLevel,
-        JsonObject projectionPlugins
-    ) =>
-        projectionPlugins[CSharpPlugin]?["baseNamespace"]?.GetValue<string>()
-        ?? topLevel?[CSharpPlugin]?["baseNamespace"]?.GetValue<string>();
-
     private JsonObject? ProjectionPlugins(JsonObject root)
     {
         var projections = root["projections"] as JsonObject;
@@ -371,16 +367,16 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
     private static void WriteMaven(
         JsonObject root,
         DependencySet dependencies,
-        List<string> repositories
+        List<JsonObject> repositories
     )
     {
         var maven = root["maven"] as JsonObject ?? [];
         root["maven"] = maven;
         if (repositories.Count == 0)
-            repositories.Add(MavenCentral);
+            repositories.Add(new JsonObject { ["url"] = MavenCentral });
         var repos = new JsonArray();
-        foreach (var url in repositories)
-            repos.Add(new JsonObject { ["url"] = url });
+        foreach (var repository in repositories)
+            repos.Add(repository);
         maven["repositories"] = repos;
         var deps = new JsonArray();
         foreach (var coordinate in dependencies.Coordinates)

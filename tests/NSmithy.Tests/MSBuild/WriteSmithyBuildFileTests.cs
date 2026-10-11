@@ -72,10 +72,7 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
               // Comments are allowed.
               "version": "1.0",
               "sources": ["model"],
-              "plugins": { "csharp-codegen": { "generateFakes": true } },
-              "projections": {
-                "source": { "plugins": { "csharp-codegen": { "baseNamespace": "Acme" } } }
-              }
+              "plugins": { "csharp-codegen": { "generateFakes": true, "baseNamespace": "Acme" } }
             }
             """
         );
@@ -92,7 +89,137 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
         Assert.Equal("example#Service", csharp["service"]!.GetValue<string>());
         Assert.True(csharp["generateFakes"]!.GetValue<bool>());
         Assert.Equal("Acme", csharp["baseNamespace"]!.GetValue<string>());
-        Assert.Null(file["plugins"]);
+    }
+
+    // Smithy applies top-level plugins to every projection, so other projections keep inheriting
+    // the top-level entry that the selected projection's settings are based on.
+    [Fact]
+    public void TopLevelPluginStaysForOtherProjections()
+    {
+        var project = WriteFile(
+            "smithy-build.json",
+            """
+            {
+              "version": "1.0",
+              "plugins": { "csharp-codegen": { "baseNamespace": "Acme" } },
+              "projections": { "public": { "transforms": [] } }
+            }
+            """
+        );
+
+        var (file, errors) = Write(task =>
+        {
+            task.ProjectBuildFile = project;
+            task.Service = "example#Service";
+        });
+
+        Assert.Empty(errors);
+        var topLevel = file["plugins"]!["csharp-codegen"]!.AsObject();
+        Assert.Equal("Acme", topLevel["baseNamespace"]!.GetValue<string>());
+        Assert.Null(topLevel["service"]);
+        Assert.Null(file["projections"]!["public"]!["plugins"]);
+        var source = Plugin(file, "source", "csharp-codegen");
+        Assert.Equal("Acme", source["baseNamespace"]!.GetValue<string>());
+        Assert.Equal("example#Service", source["service"]!.GetValue<string>());
+    }
+
+    // A projection that defines a plugin replaces the top-level one entirely; Smithy does not
+    // merge them, so neither does the effective file.
+    [Fact]
+    public void ProjectionPluginReplacesTopLevelOne()
+    {
+        var project = WriteFile(
+            "smithy-build.json",
+            """
+            {
+              "version": "1.0",
+              "plugins": { "csharp-codegen": { "generateFakes": true } },
+              "projections": {
+                "source": { "plugins": { "csharp-codegen": { "baseNamespace": "Acme" } } },
+                "other": { "plugins": { "csharp-codegen": { "service": "other#Service" } } }
+              }
+            }
+            """
+        );
+
+        var (file, errors) = Write(task =>
+        {
+            task.ProjectBuildFile = project;
+            task.Service = "example#Service";
+        });
+
+        Assert.Empty(errors);
+        var source = Plugin(file, "source", "csharp-codegen");
+        Assert.Equal("Acme", source["baseNamespace"]!.GetValue<string>());
+        Assert.Equal("example#Service", source["service"]!.GetValue<string>());
+        Assert.Null(source["generateFakes"]);
+        Assert.True(file["plugins"]!["csharp-codegen"]!["generateFakes"]!.GetValue<bool>());
+        var other = Plugin(file, "other", "csharp-codegen");
+        Assert.Equal("other#Service", other["service"]!.GetValue<string>());
+        Assert.Single(other);
+    }
+
+    [Fact]
+    public void RepositorySettingsAreKept()
+    {
+        var project = WriteFile(
+            "smithy-build.json",
+            """
+            {
+              "version": "1.0",
+              "maven": {
+                "repositories": [
+                  {
+                    "id": "internal",
+                    "url": "https://maven.example/releases",
+                    "httpCredentials": "${MAVEN_USER}:${MAVEN_PASSWORD}",
+                    "proxyHost": "http://proxy.example:8080",
+                    "proxyCredentials": "${PROXY_USER}:${PROXY_PASSWORD}"
+                  }
+                ]
+              }
+            }
+            """
+        );
+        var contract = WriteFile(
+            "contracts/smithy-build.json",
+            """
+            {
+              "version": "1.0",
+              "maven": {
+                "repositories": [
+                  { "url": "https://maven.example/releases", "httpCredentials": "other:other" },
+                  { "id": "contracts", "url": "https://contracts.example/maven", "httpCredentials": "${TOKEN}:" }
+                ]
+              }
+            }
+            """
+        );
+
+        var (file, errors) = Write(task =>
+        {
+            task.ProjectBuildFile = project;
+            task.ContractsBuildFiles = [new TaskItem(contract)];
+        });
+
+        Assert.Empty(errors);
+        var repositories = file["maven"]!["repositories"]!.AsArray();
+        Assert.Equal(2, repositories.Count);
+        var internalRepository = repositories[0]!.AsObject();
+        Assert.Equal("internal", internalRepository["id"]!.GetValue<string>());
+        Assert.Equal(
+            "${MAVEN_USER}:${MAVEN_PASSWORD}",
+            internalRepository["httpCredentials"]!.GetValue<string>()
+        );
+        Assert.Equal(
+            "http://proxy.example:8080",
+            internalRepository["proxyHost"]!.GetValue<string>()
+        );
+        Assert.Equal(
+            "${PROXY_USER}:${PROXY_PASSWORD}",
+            internalRepository["proxyCredentials"]!.GetValue<string>()
+        );
+        Assert.Equal("${TOKEN}:", repositories[1]!["httpCredentials"]!.GetValue<string>());
     }
 
     [Fact]

@@ -53,6 +53,8 @@ It is assembled in this order:
    project build file's directory.
 2. **Contracts.** Each contract build file contributes its Maven dependencies,
    repositories, and suppressions; its plugins are not carried over.
+   Repositories keep all their settings, credentials and proxies included; the
+   first entry for a URL wins.
    `SmithySource` items are added to `sources` as absolute paths.
 3. **Repositories.** When neither the project nor a contract lists a Maven
    repository, Maven Central is listed, as the plain Smithy CLI assumes it. The
@@ -90,10 +92,12 @@ Some keys have defaults that apply only when the file does not set them:
 `proto-codegen` takes `baseNamespace` from `csharp-codegen` and suffixes C#
 namespaces with `Grpc`.
 
-The settings are written into `projections.<SmithyProjection>.plugins`,
-merged with the plugin's settings from that projection and from the file's
-top-level `plugins`. A projection other than `source` must exist in the
-project build file.
+The settings are written into `projections.<SmithyProjection>.plugins`, added
+to the settings Smithy would use for that projection: the projection's own
+when it defines the plugin, which replace top-level ones entirely, or else the
+file's top-level `plugins` entry. The top-level entry stays as written, so
+other projections keep inheriting it. A projection other than `source` must
+exist in the project build file.
 
 `SmithyService` is the switch for code generation from properties. A project
 without it adds no plugins from properties. Such a project either only builds
