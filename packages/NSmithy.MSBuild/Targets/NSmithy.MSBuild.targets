@@ -260,13 +260,10 @@
          3. smithy on PATH.
 
        GenerateSmithyCode checks the CLI's version against $(SmithyVersion):
-       SmithyCliVersionCheck is minimum (at least that version, the default),
-       exact, or none.
+       SmithyCliVersionCheck is exact, minimum (at least that version), or none.
+       It defaults to exact for the package, which NSmithy pairs with one Smithy
+       version, and to minimum for a CLI the user provides.
        ================================================================ -->
-
-  <PropertyGroup>
-    <SmithyCliVersionCheck Condition="'$(SmithyCliVersionCheck)' == ''">minimum</SmithyCliVersionCheck>
-  </PropertyGroup>
 
   <!-- Detect OS and CPU architecture -->
   <PropertyGroup>
@@ -309,6 +306,11 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(SmithyCliPath)' == ''">
     <SmithyCliPath>smithy</SmithyCliPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(SmithyCliVersionCheck)' == ''">
+    <SmithyCliVersionCheck Condition="'$(_SmithyCliFromPackage)' == 'true'">exact</SmithyCliVersionCheck>
+    <SmithyCliVersionCheck Condition="'$(_SmithyCliFromPackage)' != 'true'">minimum</SmithyCliVersionCheck>
   </PropertyGroup>
 
   <!-- ================================================================
@@ -470,6 +472,16 @@
     <_SmithyMavenCacheStamp>$(SmithyBuildOutputPath)NSmithy.MavenCache.stamp</_SmithyMavenCacheStamp>
   </PropertyGroup>
 
+  <!-- The environment the Smithy CLI runs with: the bundled Maven repo and its isolated cache,
+       when the repo holds the codegen plugin (in-repo, the directory exists before it is staged).
+       Evaluated here rather than in GenerateSmithyCode so that `dotnet nsmithy smithy` can read it
+       with -getProperty and run the CLI exactly as the build does. -->
+  <PropertyGroup
+    Condition="'$(_SmithyBundledMavenRepo)' != '' and Exists('$(_SmithyBundledMavenRepo)/io/github/thomaslaich/nsmithy/smithy-csharp-codegen')"
+  >
+    <NSmithySmithyCliEnvironment>SMITHY_MAVEN_REPOS=$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri);SMITHY_MAVEN_CACHE=$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(_SmithyMavenCachePath)'))</NSmithySmithyCliEnvironment>
+  </PropertyGroup>
+
   <Target
     Name="_SmithyRefreshMavenCache"
     BeforeTargets="GenerateSmithyCode"
@@ -493,24 +505,11 @@
     Outputs="$(SmithyStampFile)"
   >
     <MakeDir Directories="$(SmithyBuildOutputPath)" />
-    <!-- Point the CLI at the bundled Maven repo with an isolated cache so codegen
-         resolves the plugin + traits from local files. Only when the repo actually
-         holds jars (the dir itself is committed just to carry a .gitignore); otherwise
-         leave the CLI's default (network) resolution in place. -->
-    <ItemGroup>
-      <_SmithyBundleJar
-        Include="$(_SmithyBundledMavenRepo)/**/*.jar"
-        Condition="'$(_SmithyBundledMavenRepo)' != ''"
-      />
-    </ItemGroup>
-    <PropertyGroup Condition="'@(_SmithyBundleJar)' != ''">
-      <_SmithyMavenEnv>SMITHY_MAVEN_REPOS=$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri);SMITHY_MAVEN_CACHE=$([System.IO.Path]::GetFullPath('$(_SmithyMavenCachePath)'))</_SmithyMavenEnv>
-    </PropertyGroup>
     <PropertyGroup>
       <_SmithyCliBuildOutput>$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\'))</_SmithyCliBuildOutput>
       <_SmithyCliCommand>&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)</_SmithyCliCommand>
       <!-- A redirected JVM writes in the platform encoding unless told otherwise. -->
-      <_SmithyCliEnv>$(_SmithyMavenEnv);SMITHY_OPTS=$(SMITHY_OPTS) -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8</_SmithyCliEnv>
+      <_SmithyCliEnv>$(NSmithySmithyCliEnvironment);SMITHY_OPTS=$(SMITHY_OPTS) -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8</_SmithyCliEnv>
     </PropertyGroup>
     <!-- Check the CLI before running it. Here rather than in a target of its own, so that only
          builds that regenerate pay for starting an external CLI just to ask its version. -->
@@ -565,7 +564,7 @@
     <Error
       Code="NSMITHYCLIVERSION"
       Condition="'$(SmithyCliVersionCheck)' == 'exact' and '$(_SmithyCliVersionCore)' != '' and '$(_SmithyVersionCore)' != '' and !$([MSBuild]::VersionEquals('$(_SmithyCliVersionCore)', '$(_SmithyVersionCore)'))"
-      Text="NSmithy: Smithy CLI $(_SmithyCliVersion) ($(SmithyCliPath)) does not match SmithyVersion ($(SmithyVersion)), and SmithyCliVersionCheck is exact. Use Smithy CLI $(SmithyVersion), or set SmithyCliVersionCheck to minimum or none."
+      Text="NSmithy: Smithy CLI $(_SmithyCliVersion) ($(SmithyCliPath)) does not match SmithyVersion ($(SmithyVersion)), and SmithyCliVersionCheck is exact. Use Smithy CLI $(SmithyVersion) (for the package, reference NSmithy.SmithyCli $(SmithyVersion)), or set SmithyCliVersionCheck to minimum or none."
     />
 
     <!-- What the previous run produced, and when this one starts: see the stale-output cleanup

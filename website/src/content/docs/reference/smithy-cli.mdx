@@ -20,8 +20,8 @@ NSmithy looks for the CLI in this order:
 2. The `NSmithy.SmithyCli` package, when the project references it.
 3. `smithy` on `PATH`.
 
-Before generating, NSmithy checks that the CLI is at least `SmithyVersion`
-(currently `1.73.0`).
+Before generating, NSmithy checks the CLI's version against `SmithyVersion`
+(currently `1.73.0`); see [Version check](#version-check).
 
 ## The NSmithy.SmithyCli package
 
@@ -133,6 +133,22 @@ dotnet build -p:SmithyCliPath=/opt/smithy/bin/smithy
 NSmithy runs a CLI it did not provide as is and never changes its file
 permissions, so it can live on a read-only path such as the Nix store.
 
+## Running the Smithy CLI
+
+The [`dotnet-nsmithy`](https://www.nuget.org/packages/dotnet-nsmithy) tool runs
+the Smithy CLI a project's build uses, with the same Maven setup, so commands
+such as `validate`, `format`, `diff`, and `ast` work without installing the
+CLI when it comes from `NSmithy.SmithyCli`:
+
+```shell
+dotnet tool install --global dotnet-nsmithy
+dotnet nsmithy smithy -- validate
+```
+
+It restores the project in the current directory, or the one passed with
+`--project`, and runs the CLI from the current directory. Arguments after `--`
+go to the Smithy CLI.
+
 ## Version check
 
 The generator plugins are built against one Smithy version, `SmithyVersion`.
@@ -141,9 +157,13 @@ Before generating, NSmithy checks the CLI's version against it according to
 
 | Value | Passes when |
 | --- | --- |
-| `minimum` (default) | The CLI is `SmithyVersion` or later. |
-| `exact` | The CLI is exactly `SmithyVersion`. |
+| `exact` | The CLI is exactly `SmithyVersion`. Default for `NSmithy.SmithyCli`. |
+| `minimum` | The CLI is `SmithyVersion` or later. Default for a CLI you provide. |
 | `none` | Always; no check. |
+
+`NSmithy.SmithyCli` must match because each NSmithy release pairs with one
+Smithy version: when you upgrade NSmithy, upgrade the package to its
+`SmithyVersion`. A CLI you install yourself only has to be new enough.
 
 For a CLI from `PATH` or `SmithyCliPath`, NSmithy runs `smithy --version`, and
 only on builds that regenerate code. A failed check stops the build:

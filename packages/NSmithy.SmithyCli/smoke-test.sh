@@ -11,7 +11,7 @@ PACKAGES="$REPO/artifacts/packages"
 LOCAL="0.0.0-SNAPSHOT"
 SMITHY_VERSION="$(sed -n 's/^SMITHY_VERSION="\(.*\)"$/\1/p' "$REPO/packages/NSmithy.SmithyCli/download-smithy-cli.sh")"
 
-for package in "NSmithy.MSBuild.$LOCAL" "NSmithy.SmithyCli.$SMITHY_VERSION"; do
+for package in "NSmithy.MSBuild.$LOCAL" "NSmithy.SmithyCli.$SMITHY_VERSION" "dotnet-nsmithy.$LOCAL"; do
   if [[ ! -f "$PACKAGES/$package.nupkg" ]]; then
     echo "smoke-test: $PACKAGES/$package.nupkg not found; run \`just pack\` first." >&2
     exit 1
@@ -166,6 +166,12 @@ expect newer-cli "$without_package" success "" "$NO_SMITHY_PATH" \
   -p:SmithyCliPath="$WORK/new-cli/smithy"
 expect newer-cli-exact "$without_package" NSMITHYCLIVERSION "" "$NO_SMITHY_PATH" \
   -p:SmithyCliPath="$WORK/new-cli/smithy" -p:SmithyCliVersionCheck=exact
+# The package must match exactly unless the project relaxes the check: an older SmithyVersion
+# stands in for a package that is newer than the NSmithy release.
+expect package-newer "$with_package" NSMITHYCLIVERSION "" "$NO_SMITHY_PATH" \
+  -p:SmithyVersion=1.72.0
+expect package-newer-minimum "$with_package" success "" "$NO_SMITHY_PATH" \
+  -p:SmithyVersion=1.72.0 -p:SmithyCliVersionCheck=minimum
 
 echo "== Maven resolution =="
 # With the bundled repo, the CLI does not assume Maven Central: an unbundled dependency needs a
@@ -173,6 +179,25 @@ echo "== Maven resolution =="
 expect unbundled-dependency "$unbundled" NSMITHYCLI "" "$PATH"
 expect unbundled-dependency-without-bundled-repo "$unbundled" success "" "$PATH" \
   -p:SmithyUseBundledMavenRepo=false
+
+echo "== dotnet nsmithy smithy =="
+# The tool runs the CLI the project resolves, so with smithy off PATH only the package can answer.
+(cd "$WORK" && dotnet tool install dotnet-nsmithy --tool-path "$WORK/tools" --version "$LOCAL" \
+  --add-source "$PACKAGES" > "$WORK/tool-install.log" 2>&1)
+# tool <name> <dir> <expected output pattern> <PATH> <args...>
+tool() {
+  local name="$1" dir="$2" pattern="$3" path="$4"
+  shift 4
+  if (cd "$dir" && PATH="$path" "$WORK/tools/dotnet-nsmithy" smithy -- "$@") > "$WORK/$name.log" 2>&1 \
+    && grep -q -- "$pattern" "$WORK/$name.log"; then
+    pass "$name"
+  else
+    fail "$name" "expected '$pattern'"
+  fi
+}
+tool tool-package-version "$with_package" "^$SMITHY_VERSION" "$NO_SMITHY_PATH" --version
+tool tool-package-validate "$with_package" "" "$NO_SMITHY_PATH" validate
+tool tool-path-version "$without_package" "^$SMITHY_VERSION" "$PATH" --version
 
 if ((${#failed[@]})); then
   echo "smoke-test: ${#failed[@]} failed: ${failed[*]}" >&2
