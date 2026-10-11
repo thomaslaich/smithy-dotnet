@@ -52,8 +52,8 @@ subprojects {
         // Error Prone 2.50 requires javac to retain type annotations on JDK 21.
         options.compilerArgs.add("-XDaddTypeAnnotationsToSymbol=true")
         // Target Java 21 bytecode — the toolchain above, and what the JRE 25
-        // bundled with the Smithy CLI since 1.73.0 loads. Consumers pointing
-        // SmithyCliPath at an own install need a CLI at least that new.
+        // bundled with the Smithy CLI since 1.73.0 loads. NSmithy.MSBuild requires a
+        // CLI of exactly SmithyVersion unless SmithyCliVersionCheck is off.
         options.release.set(21)
 
         options.errorprone {

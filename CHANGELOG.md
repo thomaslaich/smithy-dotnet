@@ -11,6 +11,29 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: the Smithy CLI ships as its own package.** `NSmithy.MSBuild` no longer
+  bundles the Smithy CLI and its Java runtime, which drops it from about 157 MB to
+  about 3 MB. Add `<PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />`
+  to each project that generates code, or once in `Directory.Build.props`. The
+  package is versioned by the Smithy CLI it contains, so NSmithy upgrades reuse the
+  copy in the NuGet cache. Without it, NSmithy runs `SmithyCliPath` or `smithy` on
+  `PATH`, so a CLI from pixi, Nix, or Homebrew works without downloading the
+  package. See [Smithy CLI](https://thomaslaich.github.io/smithy-dotnet/reference/smithy-cli/).
+
+### Added
+
+- **Smithy CLI version check.** Code generation fails with `NSMITHYCLIVERSION` when
+  the Smithy CLI's version differs from `SmithyVersion`, and with `NSMITHYCLIMISSING`
+  when no CLI can be run. Set `SmithyCliVersionCheck` to `false` to skip the check.
+
+### Fixed
+
+- **`SmithyCliPath` on a read-only path.** NSmithy no longer runs `chmod` on a
+  user-supplied Smithy CLI, which failed for read-only installs such as the Nix
+  store.
+
 ## [0.11.0]
 
 This release generates a schema class and a shape serializer for every shape, which

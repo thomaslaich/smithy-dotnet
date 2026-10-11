@@ -15,6 +15,7 @@
     <PackageReference Include="NSmithy.Client" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Codecs.Json" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.0.0-SNAPSHOT" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
     <ProjectReference Include="../contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj" />
   </ItemGroup>
 </Project>

@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" />
+    <!-- The Smithy CLI that code generation runs. Leave it out to use your own (SmithyCliPath or PATH). -->
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
   </ItemGroup>
 
 

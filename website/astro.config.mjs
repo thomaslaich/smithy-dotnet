@@ -147,6 +147,7 @@ export default defineConfig({
 					label: 'Reference',
 					items: [
 						{ label: 'MSBuild', slug: 'reference/msbuild' },
+						{ label: 'Smithy CLI', slug: 'reference/smithy-cli' },
 						{ label: 'Distributing contracts', slug: 'guides/distributing-contracts' },
 						{ label: 'Known limitations', slug: 'reference/known-limitations' },
 						{ label: 'Changelog', slug: 'reference/changelog' },

@@ -14,6 +14,8 @@
     <PackageReference Include="NSmithy.Core" Version="NSMITHY_VERSION" />
     <PackageReference Include="NSmithy.Http" Version="NSMITHY_VERSION" />
     <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" PrivateAssets="all" />
+    <!-- The Smithy CLI that code generation runs. Leave it out to use your own (SmithyCliPath or PATH). -->
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
     <!-- Runtime packages for the protocol the contracts model declares. -->
     <!--#if (IsGrpc)-->
     <!-- Native gRPC: no Grpc.Net.Client / Google.Protobuf / protoc needed. -->
@@ -30,5 +32,4 @@
     <PackageReference Include="MyService.Contracts" Version="1.0.0" />
     <!--#endif-->
   </ItemGroup>
-
 </Project>

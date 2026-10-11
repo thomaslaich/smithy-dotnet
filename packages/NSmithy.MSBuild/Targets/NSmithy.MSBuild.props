@@ -9,8 +9,9 @@
       Example: <SmithyCSharpCodegenVersion>1.0.0</SmithyCSharpCodegenVersion>
     -->
     <!--
-      Smithy CLI version bundled in this package. software.amazon.smithy:* Maven
-      artifacts in your contracts smithy-build.json should use this version.
+      Smithy version NSmithy is built against. Code generation requires a Smithy CLI of
+      exactly this version (see SmithyCliVersionCheck), and software.amazon.smithy:* Maven
+      artifacts in your contracts smithy-build.json should use it too.
     -->
     <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.73.0</SmithyVersion>
     <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''">0.0.0-SNAPSHOT</SmithyCSharpCodegenVersion>

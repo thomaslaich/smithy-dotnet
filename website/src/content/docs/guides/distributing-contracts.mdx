@@ -132,6 +132,7 @@ server and client projects.
 
    <ItemGroup>
      <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" PrivateAssets="all" />
+     <PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
      <PackageReference Include="MyService.Contracts" Version="1.0.0" GeneratePathProperty="true" />
      <SmithySource Include="$(PkgMyService_Contracts)/build/smithy/**/*.smithy" />
      <SmithyContractsBuildFile Include="$(PkgMyService_Contracts)/build/smithy-build.json" />

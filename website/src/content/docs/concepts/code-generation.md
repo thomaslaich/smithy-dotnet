@@ -5,7 +5,7 @@ description: What NSmithy generates from a Smithy model, and how generation runs
 
 NSmithy turns an assembled Smithy model into C# types, client and server APIs,
 and runtime schemas. Generation is part of `dotnet build`; there is no separate
-command and nothing to install beyond the NuGet package.
+command and nothing to install beyond NuGet packages.
 
 ## What the model becomes
 
@@ -41,23 +41,23 @@ implement it: a new constraint, protocol, or client feature needs a component
 that interprets it, and traits that change the C# representation, such as
 `@required`, need generator support.
 
-## The bundled toolchain
+## The toolchain
 
-The `NSmithy.MSBuild` NuGet package contains:
+Two NuGet packages provide the tools generation needs:
 
-- The Smithy CLI and its bundled Java runtime.
-- NSmithy's C# and Protobuf code-generation plugins.
-- The Smithy OpenAPI and documentation plugins, plus the trait libraries used
-  by NSmithy.
-- Their transitive Java dependencies, stored as JARs and POMs in a local Maven
-  repository inside the package.
+- `NSmithy.MSBuild` contains the MSBuild integration, NSmithy's C# and Protobuf
+  code-generation plugins, the Smithy OpenAPI and documentation plugins, the
+  trait libraries used by NSmithy, and their transitive Java dependencies,
+  stored as JARs and POMs in a local Maven repository inside the package.
+- `NSmithy.SmithyCli` contains the Smithy CLI with its Java runtime. It is
+  versioned by the Smithy version and is optional: a Smithy CLI installed some
+  other way works too. See [Smithy CLI](/smithy-dotnet/reference/smithy-cli/).
 
-Consumers do not install Java, the Smithy CLI, or these plugins separately.
-The package version fixes their versions. During generation, MSBuild points the
-CLI at the bundled repository and an isolated Maven cache, so the bundled tools
-resolve from local files rather than remote repositories. Model dependencies
-declared by the project are resolved separately, and optional Sphinx HTML
-generation requires Python.
+Consumers do not install Java or these plugins separately. During generation,
+MSBuild points the CLI at the bundled repository and an isolated Maven cache, so
+the bundled plugins resolve from local files rather than remote repositories.
+Model dependencies declared by the project are resolved separately, and
+optional Sphinx HTML generation requires Python.
 
 ## The build
 
@@ -65,7 +65,7 @@ Generation runs in three steps:
 
 1. MSBuild collects model inputs, including contracts project references, and
    prepares the Smithy build configuration.
-2. The bundled CLI assembles and validates the model, applies configured
+2. The Smithy CLI assembles and validates the model, applies configured
    projections, and runs the enabled plugins.
 3. MSBuild includes the generated `.g.cs` files under `obj/` in C# compilation.
 
