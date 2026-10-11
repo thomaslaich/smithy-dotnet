@@ -30,7 +30,7 @@
     <PackageReference Include="NSmithy.Protocols.RestJson" Version="NSMITHY_VERSION" />
     <!--#endif-->
     <!--#if (WithContractsProject)-->
-    <!-- NSmithy synthesizes the build from the contracts project's model. -->
+    <!-- NSmithy generates the client from the contracts project's model. -->
     <ProjectReference Include="../ContractsProjectName/ContractsProjectName.csproj" />
     <!--#elif (IsNuget)-->
     <!-- Replace with your actual contracts package name and version -->

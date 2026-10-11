@@ -40,6 +40,5 @@ need a repository listed in `smithy-build.json`; see
 [Maven dependencies](/smithy-dotnet/reference/maven-dependencies/).
 
 NuGet contract packages require explicit model and build-file imports. A package
-reference alone does not trigger generation. Build-file synthesis accepts one
-contract configuration. See [Distributing contracts](/smithy-dotnet/guides/distributing-contracts/)
+reference alone does not trigger generation. See [Distributing contracts](/smithy-dotnet/guides/distributing-contracts/)
 for the supported setup.

@@ -9,6 +9,7 @@ tradeoffs.
 | Document | Area |
 | --- | --- |
 | [codegen-architecture.md](codegen-architecture.md) | Java plugin + MSBuild integration pipeline |
+| [build-configuration.md](build-configuration.md) | How `smithy-build.json` and MSBuild properties combine into the effective build |
 | [shapes.md](shapes.md) | Smithy shape → C# type mapping |
 | [serialization.md](serialization.md) | Schema algebra, compiled codecs, protocol binding, and constraint validation |
 | [http-interfaces.md](http-interfaces.md) | HTTP transport abstractions |

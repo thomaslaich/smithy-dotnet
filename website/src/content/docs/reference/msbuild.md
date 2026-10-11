@@ -10,13 +10,19 @@ with the .NET toolchain.
 
 ## Configuration sources
 
-Without a `smithy-build.json` at the project root, NSmithy synthesizes one under
-`obj/` from MSBuild properties and the contracts reference. With one, NSmithy
-runs it as is. See [Code generation](/smithy-dotnet/concepts/code-generation/).
+On every build, NSmithy writes an effective `smithy-build.json` to `obj/` and
+runs the Smithy CLI on it. It combines:
 
-Properties marked **Synthesized only** feed the synthesized file and have no
-effect next to your own `smithy-build.json`; set the named `csharp-codegen`
-plugin setting there instead. All other properties apply in both cases.
+- the project's own `smithy-build.json`, or an empty one when there is none;
+- the model sources, Maven dependencies, repositories, and suppressions of
+  referenced contracts;
+- the plugin settings from the properties below.
+
+The properties say what the project builds: the service, and whether it gets
+the client, the server, docs, OpenAPI, or a `.proto` file. `smithy-build.json`
+sets every other plugin setting, such as the
+[`csharp-codegen` settings](#csharp-codegen-settings). A setting given both
+ways fails the build. When no Maven repository is listed, Maven Central is.
 
 ## Properties
 
@@ -24,18 +30,37 @@ plugin setting there instead. All other properties apply in both cases.
 
 | Property | Description |
 | --- | --- |
-| `SmithyService` | Smithy shape ID of the service to generate (e.g. `example.hello#HelloService`). Required when synthesizing a `smithy-build.json` from a contracts reference. **Synthesized only:** `service`. |
-| `SmithyBaseNamespace` | Prefix prepended to generated C# namespaces. For example, `Acme` maps `example.library` to `Acme.Example.Library`. It does not filter model shapes. **Synthesized only:** `baseNamespace`. |
-| `SmithyGenerateServer` | Emit server stub types. Set to `false` in client-only projects. With your own `smithy-build.json`, it selects whether the generated server files are compiled. Default: `true`. |
-| `SmithyGenerateClient` | Emit client types. Set to `false` in server-only projects. With your own `smithy-build.json`, it selects whether the generated client files are compiled. Default: `true`. |
-| `SmithyGenerateDependencyInjection` | Generate the `Add{Service}Client` IHttpClientFactory extension. Requires referencing `Microsoft.Extensions.Http` (or the `Microsoft.AspNetCore.App` shared framework). See [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/). Default: `false`. **Synthesized only:** `generateDependencyInjection`. |
-| `SmithyGenerateFakes` | Generate fake clients and handlers from modeled examples or deterministic placeholders. See [Fake handlers](/smithy-dotnet/servers/fake-handlers/) for response selection. Default: `false`. **Synthesized only:** `generateFakes`. |
-| `SmithyBuildFile` | Path to the Smithy build configuration file. When absent, NSmithy can synthesize one under `obj/` from `SmithySource` and `SmithyContractsBuildFile` items. Default: `$(MSBuildProjectDirectory)/smithy-build.json`. |
-| `SmithyProjection` | Smithy build projection to use. Default: `source`. |
+| `SmithyService` | Smithy shape ID of the service to generate (e.g. `example.hello#HelloService`). Turns on code generation from properties and sets `service` for each plugin NSmithy adds. Without it, configure NSmithy's plugins in `smithy-build.json`, for example one `csharp-codegen` per projection. |
+| `SmithyGenerateServer` | Emit server stub types. Set to `false` in client-only projects; this sets `generateServer` to `false` and leaves generated server files out of compilation. Default: `true`. |
+| `SmithyGenerateClient` | Emit client types. Set to `false` in server-only projects; this sets `generateClient` to `false` and leaves generated client files out of compilation. Default: `true`. |
+| `SmithyBuildFile` | Path to the project's own Smithy build file, which NSmithy merges into the effective one. Optional. Default: `$(MSBuildProjectDirectory)/smithy-build.json`. |
+| `SmithyProjection` | Projection that receives the plugin settings from properties, and whose docs and OpenAPI output is copied to `wwwroot/`. A projection other than `source` must exist in `smithy-build.json`. Default: `source`. |
 | `SmithyPlugin` | Smithy build plugin name. Default: `csharp-codegen`. |
 | `SmithyBuildOutputPath` | Root directory for all Smithy build output. Default: `$(IntermediateOutputPath)Smithy/`. |
 | `SmithyStampFile` | Incremental build stamp file. Smithy codegen is skipped when inputs have not changed since this file was last written. Default: `$(SmithyBuildOutputPath)NSmithy.Generated.stamp`. |
 | `SmithyEmitGeneratedFiles` | Show generated `.g.cs` files in IDE project views when `true`. Default: `false`. |
+
+### csharp-codegen settings
+
+Set these in `smithy-build.json`, under `plugins` or a projection's `plugins`:
+
+| Setting | Description |
+| --- | --- |
+| `baseNamespace` | Prefix prepended to generated C# namespaces. For example, `Acme` maps `example.library` to `Acme.Example.Library`. It does not filter model shapes. |
+| `generateDependencyInjection` | Generate the `Add{Service}Client` IHttpClientFactory extension. Requires referencing `Microsoft.Extensions.Http` (or the `Microsoft.AspNetCore.App` shared framework). See [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/). |
+| `generateFakes` | Generate fake clients and handlers from modeled examples or deterministic placeholders. See [Fake handlers](/smithy-dotnet/servers/fake-handlers/). |
+
+A project that generates from a contracts reference and has no
+`smithy-build.json` adds one with only these settings:
+
+```json title="smithy-build.json"
+{
+  "version": "1.0",
+  "plugins": {
+    "csharp-codegen": { "generateFakes": true, "baseNamespace": "Acme" }
+  }
+}
+```
 
 ### Smithy CLI
 
@@ -83,8 +108,8 @@ See [Endpoint documentation](/smithy-dotnet/guides/endpoint-documentation/) for 
 
 | Item | Description |
 | --- | --- |
-| `SmithySource` | `.smithy` files to include in the synthesized `smithy-build.json`. Populated automatically from a `ProjectReference` to a project with `SmithyPublish=true`, or added manually for advanced cases. |
-| `SmithyContractsBuildFile` | Contract build configuration used when synthesizing a consumer build file. Collected automatically from a contracts project reference; set explicitly for packaged models. |
+| `SmithySource` | `.smithy` files added to the sources of the effective `smithy-build.json`. Populated automatically from a `ProjectReference` to a project with `SmithyPublish=true`, or added manually for advanced cases. |
+| `SmithyContractsBuildFile` | Contract build configuration whose Maven dependencies, repositories, and suppressions are merged into the effective `smithy-build.json`. Collected automatically from a contracts project reference; set explicitly for packaged models. |
 
 ## Contract inputs
 
@@ -96,7 +121,6 @@ for both configurations.
 
 Declare Maven dependencies in `smithy-build.json` under `maven.dependencies`;
 see [Maven dependencies](/smithy-dotnet/reference/maven-dependencies/) for
-where they resolve from.
-There is no `SmithyMavenDependency` MSBuild item. Build-file synthesis reads one
-contract build configuration; use an explicit build file when combining models
-with separate configurations.
+where they resolve from. There is no `SmithyMavenDependency` MSBuild item. The
+build files of all referenced contracts are merged, and the same artifact at two
+versions fails the build.

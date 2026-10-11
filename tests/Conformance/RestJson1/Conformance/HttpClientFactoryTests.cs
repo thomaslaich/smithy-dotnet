@@ -127,7 +127,7 @@ public sealed class HttpClientFactoryTests
         Assert.StartsWith("https://example.test/", handler.Captured!.RequestUri.ToString());
     }
 
-    // The generated opt-in extension (SmithyGenerateDependencyInjection=true) — a turnkey
+    // The generated opt-in extension (generateDependencyInjection in smithy-build.json) — a turnkey
     // AddRestJsonClient(endpoint) registration.
     [Fact]
     public async Task GeneratedAddClientExtensionRegistersTypedClient()

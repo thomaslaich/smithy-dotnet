@@ -13,6 +13,18 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **BREAKING: one effective `smithy-build.json`.** NSmithy now always merges the
+  project's own `smithy-build.json` (if any), the referenced contracts, and the
+  plugin settings from properties into one build file under `obj/`. Properties say
+  what a project builds (`SmithyService`, `SmithyGenerateClient`,
+  `SmithyGenerateServer`, `SmithyGenerateDocs`, `SmithyOpenApiProtocol`,
+  `SmithyGrpc`); every other plugin setting goes in `smithy-build.json`, and a
+  setting given both ways fails the build (`NSMITHYPLUGIN`). `SmithyBaseNamespace`,
+  `SmithyGenerateDependencyInjection`, and `SmithyGenerateFakes` are removed: set
+  `baseNamespace`, `generateDependencyInjection`, and `generateFakes` on the
+  `csharp-codegen` plugin instead. A project that sets `SmithyService` must no
+  longer set `service` in its `smithy-build.json`, and NSmithy adds its plugin
+  artifacts itself. Maven Central is listed when no repository is.
 - **BREAKING: template contracts options renamed.** The server template's
   `--contracts <project>` is now `--contracts-project <project>`, matching the
   client's new option, and the client template's `--contracts maven|nuget` is now

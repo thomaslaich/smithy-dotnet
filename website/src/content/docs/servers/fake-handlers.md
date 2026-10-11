@@ -3,15 +3,18 @@ title: Fake handlers
 description: Boot a working server from a contract with no handler implementation. Canned responses from @examples, placeholders everywhere else.
 ---
 
-With `SmithyGenerateFakes` enabled, codegen emits a `Fake{Service}Handler`
-implementing the full service handler interface. A working server without
-writing a handler:
+With `generateFakes` set on the `csharp-codegen` plugin, codegen emits a
+`Fake{Service}Handler` implementing the full service handler interface. Set it
+in the server project's `smithy-build.json`, next to its `.csproj`:
 
-```xml title="MyService.Server.csproj"
-<PropertyGroup>
-  <SmithyGenerateFakes>true</SmithyGenerateFakes>
-</PropertyGroup>
+```json title="smithy-build.json"
+{
+  "version": "1.0",
+  "plugins": { "csharp-codegen": { "generateFakes": true } }
+}
 ```
+
+A working server without writing a handler:
 
 ```csharp title="Program.cs"
 var builder = WebApplication.CreateBuilder(args);
@@ -26,10 +29,8 @@ Every operation responds on every protocol the service declares. Input
 validation still runs in front of the fake: invalid requests are rejected
 with the same `ValidationException` responses a real handler gets.
 
-Projects with an explicit `smithy-build.json` set `"generateFakes": true` on
-the `csharp-codegen` plugin instead. The fake handler is generated with the
-server surface (`SmithyGenerateServer`, on by default); the same setting also
-generates a [fake client](/smithy-dotnet/guides/client-configuration/fake-clients/)
+The fake handler is generated with the server surface (`SmithyGenerateServer`,
+on by default); the same setting also generates a [fake client](/smithy-dotnet/guides/client-configuration/fake-clients/)
 with the client surface.
 
 ## Where the responses come from

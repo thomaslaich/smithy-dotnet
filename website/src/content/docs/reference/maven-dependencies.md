@@ -20,24 +20,24 @@ During generation NSmithy points the CLI at this repository and at a Maven
 cache under `obj/`, so these artifacts resolve from local files at the versions
 the NSmithy release fixes.
 
-With the bundled repository in place, the CLI does not fall back to Maven
-Central. A dependency the repository does not contain fails to resolve unless
-`smithy-build.json` lists a repository that has it:
+Other dependencies resolve from the repositories `smithy-build.json` lists,
+after the bundled repository. When neither the project nor a referenced
+contract lists one, NSmithy lists Maven Central, as the plain Smithy CLI
+assumes it:
 
 ```json title="smithy-build.json"
 {
   "version": "1.0",
   "sources": ["model"],
   "maven": {
-    "dependencies": ["software.amazon.smithy:smithy-waiters:1.73.0"],
-    "repositories": [{ "url": "https://repo.maven.apache.org/maven2" }]
+    "dependencies": ["software.amazon.smithy:smithy-waiters:1.73.0"]
   }
 }
 ```
 
-The bundled repository is searched first, so bundled artifacts still resolve
-locally. NSmithy sets `SMITHY_MAVEN_REPOS` for the CLI, which replaces a value
-set in your environment.
+Listing any repository, such as an internal mirror, replaces Maven Central.
+NSmithy points the CLI at the bundled repository through `SMITHY_MAVEN_REPOS`,
+which replaces a value set in your environment.
 
 ## Offline builds
 
@@ -47,7 +47,7 @@ dependencies only, and with `NSmithy.SmithyCli` or a local Smithy CLI, every
 build after `dotnet restore` runs offline.
 
 To keep other dependencies offline, list a repository you control, such as an
-internal mirror or a `file://` directory, instead of Maven Central.
+internal mirror or a `file://` directory; Maven Central is then not used.
 
 ## Resolving from Maven repositories
 

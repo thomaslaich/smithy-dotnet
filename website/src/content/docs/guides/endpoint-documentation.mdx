@@ -53,8 +53,10 @@ Set the MSBuild properties you need in your server `.csproj`:
 </PropertyGroup>
 ```
 
-Both properties are disabled by default. Sphinx generation requires Python 3.11+
-on the build host.
+Both properties are disabled by default and take the service from
+`SmithyService`. Sphinx generation requires Python 3.11+ on the build host.
+Further `docgen` or `openapi` plugin settings go in the project's
+`smithy-build.json`.
 
 :::note[Protocol support for OpenAPI]
 `SmithyOpenApiProtocol` requires a registered Smithy OpenAPI protocol converter.

@@ -174,9 +174,9 @@ expect package-newer-minimum "$with_package" success "" "$NO_SMITHY_PATH" \
   -p:SmithyVersion=1.72.0 -p:SmithyCliVersionCheck=minimum
 
 echo "== Maven resolution =="
-# With the bundled repo, the CLI does not assume Maven Central: an unbundled dependency needs a
-# repository in the build file. Without it, the build file's maven block (Maven Central) applies.
-expect unbundled-dependency "$unbundled" NSMITHYCLI "" "$PATH"
+# The effective build file lists Maven Central when no repository is listed, so an unbundled
+# dependency resolves after the bundled repo, and without it.
+expect unbundled-dependency "$unbundled" success "" "$PATH"
 expect unbundled-dependency-without-bundled-repo "$unbundled" success "" "$PATH" \
   -p:SmithyUseBundledMavenRepo=false
 

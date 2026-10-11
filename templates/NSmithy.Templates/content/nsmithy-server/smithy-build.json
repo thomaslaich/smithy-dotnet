@@ -4,18 +4,12 @@
   "maven": {
     "dependencies": [
       //#if (IsRestJson1)
-      "software.amazon.smithy:smithy-aws-traits:1.73.0",
+      "software.amazon.smithy:smithy-aws-traits:1.73.0"
       //#elseif (IsRpcv2Cbor)
-      "software.amazon.smithy:smithy-protocol-traits:1.73.0",
+      "software.amazon.smithy:smithy-protocol-traits:1.73.0"
       //#elseif (IsSimpleRestJson || IsGrpc)
-      "com.disneystreaming.alloy:alloy-core:0.3.40",
+      "com.disneystreaming.alloy:alloy-core:0.3.40"
       //#endif
-      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:NSMITHY_VERSION"
     ]
-  },
-  "plugins": {
-    "csharp-codegen": {
-      "service": "example.hello#HelloService"
-    }
   }
 }

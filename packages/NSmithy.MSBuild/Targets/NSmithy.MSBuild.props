@@ -3,9 +3,9 @@
     <!-- Default location of smithy model files. Override in your .csproj if needed. -->
     <SmithySources Condition="'$(SmithySources)' == ''">$(MSBuildProjectDirectory)/model</SmithySources>
     <!--
-      Version of the smithy-csharp-codegen Maven artifact injected into the synthesized
-      smithy-build.json for server/client projects. Override if you need to pin to a
-      specific version.
+      Version of NSmithy's plugin artifacts (smithy-csharp-codegen, smithy-proto-codegen)
+      added to the effective smithy-build.json. Override if you need to pin to a specific
+      version.
       Example: <SmithyCSharpCodegenVersion>1.0.0</SmithyCSharpCodegenVersion>
     -->
     <!--
@@ -16,14 +16,15 @@
     <SmithyVersion Condition="'$(SmithyVersion)' == ''">1.73.0</SmithyVersion>
     <SmithyCSharpCodegenVersion Condition="'$(SmithyCSharpCodegenVersion)' == ''">0.0.0-SNAPSHOT</SmithyCSharpCodegenVersion>
     <!--
-      Set to 'true' to inject the smithy-docgen plugin into the synthesized smithy-build.json
-      and copy the generated HTML docs to wwwroot/docs/.
+      Set to 'true' to add the smithy-docgen plugin to the effective smithy-build.json; the
+      generated HTML docs are copied to wwwroot/docs/. Requires SmithyService.
       Example: <SmithyGenerateDocs>true</SmithyGenerateDocs>
     -->
     <SmithyGenerateDocs Condition="'$(SmithyGenerateDocs)' == ''">false</SmithyGenerateDocs>
     <!--
-      Set to an HTTP protocol shape ID to inject the smithy-openapi plugin into the
-      synthesized smithy-build.json and copy the generated openapi.json to wwwroot/.
+      Set to an HTTP protocol shape ID to add the smithy-openapi plugin to the effective
+      smithy-build.json; the generated openapi.json is copied to wwwroot/. Requires
+      SmithyService.
       Leave empty (the default) to skip OpenAPI generation.
       Example: <SmithyOpenApiProtocol>aws.protocols#restJson1</SmithyOpenApiProtocol>
     -->
