@@ -17,7 +17,7 @@
       "target": "./",
       "modifiers": [
         {
-          "condition": "(!IsMaven)",
+          "condition": "(!IsMaven || WithContractsProject)",
           "exclude": ["smithy-build.json"]
         }
       ]
@@ -64,6 +64,14 @@
       "defaultValue": "maven",
       "description": "How to reference the contracts package"
     },
+    "ContractsProject": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "",
+      "replaces": "ContractsProjectName",
+      "description": "Name of a contracts project in the same solution to reference instead of a package (e.g. HelloWorld.Contracts)."
+    },
+    "WithContractsProject": { "type": "computed", "value": "(ContractsProject != \"\")" },
     "SmithyCli": {
       "type": "parameter",
       "datatype": "choice",

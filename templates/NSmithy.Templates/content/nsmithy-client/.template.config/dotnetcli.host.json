@@ -3,6 +3,7 @@
   "symbolInfo": {
     "Protocol":  { "longName": "protocol" },
     "SmithyCli":  { "longName": "smithy-cli" },
-    "Contracts": { "longName": "contracts" }
+    "Contracts": { "longName": "contracts" },
+    "ContractsProject": { "longName": "contracts-project" }
   }
 }

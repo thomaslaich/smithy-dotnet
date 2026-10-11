@@ -30,6 +30,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `SmithyCliVersionCheck` (`exact`, `minimum`, or `none`) overrides the default.
 - **`dotnet nsmithy smithy`.** Runs the Smithy CLI a project's build uses, with the
   same Maven setup, e.g. `dotnet nsmithy smithy -- validate`.
+- **`--contracts-project` client template option.** References a contracts project
+  in the same solution, so the client generates its types from it without a
+  `smithy-build.json`, the way the server's `--contracts` does.
 - **`--smithy-cli path` template option.** The templates reference
   `NSmithy.SmithyCli` by default; with `--smithy-cli path` they leave it out and use
   the Smithy CLI on `PATH`.
