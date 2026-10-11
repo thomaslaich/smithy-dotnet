@@ -309,8 +309,12 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(SmithyCliVersionCheck)' == ''">
-    <SmithyCliVersionCheck Condition="'$(_SmithyCliFromPackage)' == 'true'">exact</SmithyCliVersionCheck>
-    <SmithyCliVersionCheck Condition="'$(_SmithyCliFromPackage)' != 'true'">minimum</SmithyCliVersionCheck>
+    <SmithyCliVersionCheck Condition="'$(_SmithyCliFromPackage)' == 'true'"
+      >exact</SmithyCliVersionCheck
+    >
+    <SmithyCliVersionCheck Condition="'$(_SmithyCliFromPackage)' != 'true'"
+      >minimum</SmithyCliVersionCheck
+    >
   </PropertyGroup>
 
   <!-- ================================================================
@@ -324,7 +328,9 @@
        user's Maven cache.
        ================================================================ -->
   <PropertyGroup>
-    <SmithyUseBundledMavenRepo Condition="'$(SmithyUseBundledMavenRepo)' == ''">true</SmithyUseBundledMavenRepo>
+    <SmithyUseBundledMavenRepo Condition="'$(SmithyUseBundledMavenRepo)' == ''"
+      >true</SmithyUseBundledMavenRepo
+    >
     <_SmithyBundledMavenRepo Condition="'$(SmithyUseBundledMavenRepo)' == 'true'"
       >$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/maven-repo'))</_SmithyBundledMavenRepo
     >
@@ -476,9 +482,7 @@
        when the repo holds the codegen plugin (in-repo, the directory exists before it is staged).
        Evaluated here rather than in GenerateSmithyCode so that `dotnet nsmithy smithy` can read it
        with -getProperty and run the CLI exactly as the build does. -->
-  <PropertyGroup
-    Condition="'$(_SmithyBundledMavenRepo)' != '' and Exists('$(_SmithyBundledMavenRepo)/io/github/thomaslaich/nsmithy/smithy-csharp-codegen')"
-  >
+  <PropertyGroup Condition="'$(_SmithyBundledMavenRepo)' != '' and Exists('$(_SmithyBundledMavenRepo)/io/github/thomaslaich/nsmithy/smithy-csharp-codegen')">
     <NSmithySmithyCliEnvironment>SMITHY_MAVEN_REPOS=$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri);SMITHY_MAVEN_CACHE=$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(_SmithyMavenCachePath)'))</NSmithySmithyCliEnvironment>
   </PropertyGroup>
 
@@ -519,7 +523,9 @@
       Text="NSmithy: SmithyCliVersionCheck is '$(SmithyCliVersionCheck)'; use minimum, exact, or none."
     />
     <PropertyGroup>
-      <_SmithyCheckCliVersion Condition="'$(SmithyCliVersionCheck)' != 'none'">true</_SmithyCheckCliVersion>
+      <_SmithyCheckCliVersion Condition="'$(SmithyCliVersionCheck)' != 'none'"
+        >true</_SmithyCheckCliVersion
+      >
     </PropertyGroup>
     <Exec
       Command="&quot;$(SmithyCliPath)&quot; --version"
