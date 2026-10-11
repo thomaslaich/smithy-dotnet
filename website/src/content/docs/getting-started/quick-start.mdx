@@ -21,7 +21,7 @@ Code generation runs the Smithy CLI, which the projects either find on your
     [Installing the Smithy CLI](/smithy-dotnet/reference/smithy-cli/#installing-the-smithy-cli).
   </TabItem>
   <TabItem label="Smithy CLI from NuGet">
-    The commands below pass `--smithy-cli package`, so the projects reference
+    The commands below pass `--smithy-cli-package`, so the projects reference
     `NSmithy.SmithyCli`, which provides the Smithy CLI and its Java runtime.
     Nothing else needs to be installed.
   </TabItem>
@@ -58,7 +58,7 @@ consumes the published contracts instead; see
        ```shell
        mkdir HelloWorld && cd HelloWorld
        dotnet new sln -n HelloWorld
-       dotnet new nsmithy-contracts -n HelloWorld.Contracts --smithy-cli package
+       dotnet new nsmithy-contracts -n HelloWorld.Contracts --smithy-cli-package
        dotnet sln add HelloWorld.Contracts
        ```
      </TabItem>
@@ -86,7 +86,7 @@ consumes the published contracts instead; see
      <TabItem label="Smithy CLI from NuGet">
        ```shell
        dotnet new nsmithy-server -n HelloWorld.Server \
-         --contracts-project HelloWorld.Contracts --smithy-cli package
+         --contracts-project HelloWorld.Contracts --smithy-cli-package
        dotnet sln add HelloWorld.Server
        ```
      </TabItem>
@@ -122,7 +122,7 @@ consumes the published contracts instead; see
      <TabItem label="Smithy CLI from NuGet">
        ```shell
        dotnet new nsmithy-client -n HelloWorld.Client \
-         --contracts-project HelloWorld.Contracts --smithy-cli package
+         --contracts-project HelloWorld.Contracts --smithy-cli-package
        dotnet sln add HelloWorld.Client
        ```
      </TabItem>
@@ -255,10 +255,8 @@ same Smithy model. The client handles serialization and HTTP communication.
 
 ## Template options
 
-All three templates accept `--protocol` and `--smithy-cli`. Use the same
-`--protocol` for all three projects.
-
-`--protocol`:
+All three templates accept `--protocol`; use the same value for all three
+projects:
 
 | Value | Protocol |
 | --- | --- |
@@ -267,12 +265,9 @@ All three templates accept `--protocol` and `--smithy-cli`. Use the same
 | `rpcv2Cbor` | `smithy.protocols#rpcv2Cbor` |
 | `grpc` | `alloy.proto#grpc` (experimental) |
 
-`--smithy-cli`:
-
-| Value | Smithy CLI |
-| --- | --- |
-| `path` | `smithy` on `PATH`, or `SmithyCliPath` (default). See [Smithy CLI](/smithy-dotnet/reference/smithy-cli/). |
-| `package` | The `NSmithy.SmithyCli` package |
+By default the projects run the Smithy CLI on `PATH`. `--smithy-cli-package`
+makes them reference the `NSmithy.SmithyCli` package instead; see
+[Smithy CLI](/smithy-dotnet/reference/smithy-cli/).
 
 `--contracts-project` makes the server or client reference a contracts project
 in the same solution. Without it, the server owns its model, and the client

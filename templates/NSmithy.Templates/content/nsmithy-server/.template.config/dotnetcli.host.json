@@ -2,7 +2,7 @@
   "$schema": "http://json.schemastore.org/dotnetcli.host",
   "symbolInfo": {
     "Protocol":   { "longName": "protocol" },
-    "SmithyCli":  { "longName": "smithy-cli" },
+    "UseSmithyCliPackage": { "longName": "smithy-cli-package" },
     "ContractsProject":  { "longName": "contracts-project" },
     "WithDocs":   { "longName": "with-docs" }
   }

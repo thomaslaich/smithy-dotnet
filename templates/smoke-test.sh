@@ -99,13 +99,13 @@ for protocol in restJson1 simpleRestJson rpcv2Cbor grpc; do
   build "$protocol-server-standalone" "$solo/Hello.Server"
 done
 
-# The default scaffolds above run smithy from PATH. --smithy-cli package references
+# The default scaffolds above run smithy from PATH. --smithy-cli-package references
 # NSmithy.SmithyCli instead, so it builds with smithy taken off PATH.
-echo "== --smithy-cli package =="
+echo "== --smithy-cli-package =="
 pkg="$SRC/smithy-cli-package"
 mkdir -p "$pkg"
 cp "$SRC/NuGet.config" "$pkg/"
-dotnet new nsmithy-server -o "$pkg/Hello.Server" -n Hello.Server --smithy-cli package > /dev/null
+dotnet new nsmithy-server -o "$pkg/Hello.Server" -n Hello.Server --smithy-cli-package > /dev/null
 localize "$pkg"
 NO_SMITHY_PATH=""
 IFS=: read -ra path_entries <<< "$PATH"

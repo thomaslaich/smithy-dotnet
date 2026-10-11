@@ -37,8 +37,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **`--contracts-project` client template option.** References a contracts project
   in the same solution, so the client generates its types from it without a
   `smithy-build.json`, as the server template already could.
-- **`--smithy-cli` template option.** By default the templates use the Smithy CLI
-  on `PATH`; with `--smithy-cli package` they reference `NSmithy.SmithyCli` instead.
+- **`--smithy-cli-package` template option.** By default the templates use the
+  Smithy CLI on `PATH`; with `--smithy-cli-package` they reference
+  `NSmithy.SmithyCli` instead.
 - **`SmithyUseBundledMavenRepo`.** Set it to `false` to resolve NSmithy's plugins
   and every other Maven dependency from Maven repositories, as the plain Smithy CLI
   does, instead of from the repository bundled in `NSmithy.MSBuild`. See

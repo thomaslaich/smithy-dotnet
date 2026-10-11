@@ -10,7 +10,7 @@ There are two ways to provide it:
 
 - **From NuGet.** Reference the [`NSmithy.SmithyCli` package](#the-nsmithysmithycli-package),
   which contains the CLI and its Java runtime. Nothing needs to be installed.
-  The NSmithy templates add it with `--smithy-cli package`.
+  The NSmithy templates add it with `--smithy-cli-package`.
 - **Your own.** [Install the Smithy CLI](#installing-the-smithy-cli) yourself
   and leave the package out. This is what the NSmithy templates do by default.
 
@@ -31,10 +31,10 @@ package version is the Smithy version, so upgrading NSmithy reuses the package
 already in the NuGet cache.
 
 The NSmithy templates add it to every project they create when you pass
-`--smithy-cli package`:
+`--smithy-cli-package`:
 
 ```shell
-dotnet new nsmithy-server -n HelloWorld.Server --smithy-cli package
+dotnet new nsmithy-server -n HelloWorld.Server --smithy-cli-package
 ```
 
 To add it yourself, reference it in each project that generates code:
