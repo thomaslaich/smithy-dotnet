@@ -23,8 +23,8 @@ The two sides of the architecture are:
 ## Goals
 
 - Give consumers a `dotnet build`-first experience: no separate codegen step.
-- Bundle required tooling: consumers should not need to install a Java runtime or
-  `smithy-cli` separately.
+- Ship required tooling as NuGet packages: consumers should not need to install a
+  Java runtime or `smithy-cli` separately, but can provide their own Smithy CLI.
 - Reuse Smithy's model front end for IDL parsing, assembly, validation, and
   trait resolution — do not reimplement these in .NET.
 - Keep the generated code idiomatic C#: it should look like it was written by

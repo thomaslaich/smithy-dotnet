@@ -11,6 +11,46 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: template contracts options renamed.** The server template's
+  `--contracts <project>` is now `--contracts-project <project>`, matching the
+  client's new option, and the client template's `--contracts maven|nuget` is now
+  `--contracts-package maven|nuget`.
+- **BREAKING: the Smithy CLI ships as its own package.** `NSmithy.MSBuild` no longer
+  bundles the Smithy CLI and its Java runtime, which drops it from about 157 MB to
+  about 3 MB. Add `<PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />`
+  to each project that generates code, or once in `Directory.Build.props`. The
+  package is versioned by the Smithy CLI it contains, so NSmithy upgrades reuse the
+  copy in the NuGet cache. Without it, NSmithy runs `SmithyCliPath` or `smithy` on
+  `PATH`, so a CLI from pixi, Nix, or Homebrew works without downloading the
+  package. See [Smithy CLI](https://thomaslaich.github.io/smithy-dotnet/reference/smithy-cli/).
+
+### Added
+
+- **Smithy CLI version check.** Code generation fails with `NSMITHYCLIVERSION` when
+  `NSmithy.SmithyCli` differs from `SmithyVersion` or a Smithy CLI you provide is
+  older than it, and with `NSMITHYCLIMISSING` when no CLI can be run.
+  `SmithyCliVersionCheck` (`exact`, `minimum`, or `none`) overrides the default.
+- **`dotnet nsmithy smithy`.** Runs the Smithy CLI a project's build uses, with the
+  same Maven setup, e.g. `dotnet nsmithy smithy -- validate`.
+- **`--contracts-project` client template option.** References a contracts project
+  in the same solution, so the client generates its types from it without a
+  `smithy-build.json`, as the server template already could.
+- **`--smithy-cli-package` template option.** By default the templates use the
+  Smithy CLI on `PATH`; with `--smithy-cli-package` they reference
+  `NSmithy.SmithyCli` instead.
+- **`SmithyUseBundledMavenRepo`.** Set it to `false` to resolve NSmithy's plugins
+  and every other Maven dependency from Maven repositories, as the plain Smithy CLI
+  does, instead of from the repository bundled in `NSmithy.MSBuild`. See
+  [Maven dependencies](https://thomaslaich.github.io/smithy-dotnet/reference/maven-dependencies/).
+
+### Fixed
+
+- **`SmithyCliPath` on a read-only path.** NSmithy no longer runs `chmod` on a
+  user-supplied Smithy CLI, which failed for read-only installs such as the Nix
+  store.
+
 ## [0.11.0]
 
 This release generates a schema class and a shape serializer for every shape, which

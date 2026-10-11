@@ -36,7 +36,8 @@ body bindings. This does not cover every codec and protocol combination.
 ## Model dependencies
 
 Common Smithy and alloy dependencies are bundled. Additional Maven artifacts
-must be available through the project's configured repositories.
+need a repository listed in `smithy-build.json`; see
+[Maven dependencies](/smithy-dotnet/reference/maven-dependencies/).
 
 NuGet contract packages require explicit model and build-file imports. A package
 reference alone does not trigger generation. Build-file synthesis accepts one

@@ -1,0 +1,10 @@
+<Project>
+  <!--
+    Tells NSmithy.MSBuild where this package's Smithy CLI distributions are and which
+    version they are. The version is filled in when the package is packed.
+  -->
+  <PropertyGroup>
+    <NSmithySmithyCliVersion>SMITHY_CLI_VERSION</NSmithySmithyCliVersion>
+    <NSmithySmithyCliDirectory>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/smithy-cli'))</NSmithySmithyCliDirectory>
+  </PropertyGroup>
+</Project>

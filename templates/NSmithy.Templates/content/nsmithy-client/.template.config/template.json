@@ -17,7 +17,7 @@
       "target": "./",
       "modifiers": [
         {
-          "condition": "(!IsMaven)",
+          "condition": "(!IsMaven || WithContractsProject)",
           "exclude": ["smithy-build.json"]
         }
       ]
@@ -54,7 +54,7 @@
       "defaultValue": "restJson1",
       "description": "The Smithy protocol the service uses"
     },
-    "Contracts": {
+    "ContractsPackage": {
       "type": "parameter",
       "datatype": "choice",
       "choices": [
@@ -62,13 +62,27 @@
         { "choice": "nuget", "description": "Reference contracts via a NuGet package" }
       ],
       "defaultValue": "maven",
-      "description": "How to reference the contracts package"
+      "description": "How to reference the published contracts when no --contracts-project is given"
+    },
+    "ContractsProject": {
+      "type": "parameter",
+      "datatype": "string",
+      "defaultValue": "",
+      "replaces": "ContractsProjectName",
+      "description": "Name of a contracts project in the same solution to reference instead of a package (e.g. HelloWorld.Contracts)."
+    },
+    "WithContractsProject": { "type": "computed", "value": "(ContractsProject != \"\")" },
+    "UseSmithyCliPackage": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "Reference NSmithy.SmithyCli, which provides the Smithy CLI and its Java runtime, instead of using the Smithy CLI on PATH"
     },
     "IsRestJson1":    { "type": "computed", "value": "(Protocol == \"restJson1\")" },
     "IsSimpleRestJson":{ "type": "computed", "value": "(Protocol == \"simpleRestJson\")" },
     "IsRpcv2Cbor":    { "type": "computed", "value": "(Protocol == \"rpcv2Cbor\")" },
     "IsGrpc":         { "type": "computed", "value": "(Protocol == \"grpc\")" },
-    "IsMaven":        { "type": "computed", "value": "(Contracts == \"maven\")" },
-    "IsNuget":        { "type": "computed", "value": "(Contracts == \"nuget\")" }
+    "IsMaven":        { "type": "computed", "value": "(ContractsPackage == \"maven\")" },
+    "IsNuget":        { "type": "computed", "value": "(ContractsPackage == \"nuget\")" }
   }
 }

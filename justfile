@@ -56,7 +56,7 @@ pack:
     cd codegen && gradle bundleMavenRepo ${VERSION:+-Pversion=$VERSION}
     find packages/NSmithy.MSBuild/tools/maven-repo -mindepth 1 -not -name .gitignore -delete
     cp -R codegen/build/maven-bundle/. packages/NSmithy.MSBuild/tools/maven-repo/
-    bash packages/NSmithy.MSBuild/tools/download-smithy-cli.sh
+    bash packages/NSmithy.SmithyCli/download-smithy-cli.sh
     dotnet pack NSmithy.slnx --configuration Release --no-build --output artifacts/packages ${VERSION:+-p:Version=$VERSION}
 
 # Build the examples against the freshly packed packages, the way a consumer does.
@@ -79,7 +79,11 @@ smoke-templates:
     # codegen rename breaks `dotnet new` while everything else stays green.
     bash templates/smoke-test.sh
 
-ci: check-format build test aot-smoke pack refresh-examples smoke-templates
+# Build against the packed packages once per way of providing the Smithy CLI.
+smoke-smithy-cli:
+    bash packages/NSmithy.SmithyCli/smoke-test.sh
+
+ci: check-format build test aot-smoke pack refresh-examples smoke-templates smoke-smithy-cli
 
 # The examples pin the fixed `0.0.0-SNAPSHOT` dev version permanently, while a release build packs
 # release-versioned packages, so NuGet resolves a version other than the pinned one and NU1603

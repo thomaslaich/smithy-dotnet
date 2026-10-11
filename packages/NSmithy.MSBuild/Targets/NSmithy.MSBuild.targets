@@ -251,13 +251,18 @@
   </ItemGroup>
 
   <!-- ================================================================
-       Bundled Smithy CLI — select the platform-specific binary that was
-       packed into tools/smithy-cli/{platform}/ at NuGet pack time.
+       Smithy CLI, in order of precedence:
 
-       $(SmithyCliPath) may be set by the user to override entirely.
-       When not set, we detect OS + architecture, point at the bundled
-       binary, and fall back to "smithy" on PATH if the binary is absent
-       (e.g. package was packed without running download-smithy-cli.sh).
+         1. $(SmithyCliPath), set by the user.
+         2. The NSmithy.SmithyCli package, when the project references it: its props
+            set NSmithySmithyCliDirectory and NSmithySmithyCliVersion, and we pick
+            the build host's distribution from it.
+         3. smithy on PATH.
+
+       GenerateSmithyCode checks the CLI's version against $(SmithyVersion):
+       SmithyCliVersionCheck is exact, minimum (at least that version), or none.
+       It defaults to exact for the package, which NSmithy pairs with one Smithy
+       version, and to minimum for a CLI the user provides.
        ================================================================ -->
 
   <!-- Detect OS and CPU architecture -->
@@ -267,11 +272,12 @@
     <_SmithyArchStr>$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)</_SmithyArchStr>
   </PropertyGroup>
 
-  <!-- Map OS + arch to the Smithy CLI release platform identifier -->
+  <!-- Map OS + arch to the Smithy CLI release platform identifier. Smithy ships no Windows
+       arm64 build, so Windows always uses x64 (emulated on arm64). -->
   <PropertyGroup Condition="'$(_SmithyIsMacOS)' == 'True' and '$(_SmithyArchStr)' == 'Arm64'">
     <_SmithyCliPlatform>darwin-aarch64</_SmithyCliPlatform>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(_SmithyIsMacOS)' == 'True' and '$(_SmithyArchStr)' != 'Arm64'">
+  <PropertyGroup Condition="'$(_SmithyIsMacOS)' == 'True' and '$(_SmithyArchStr)' == 'X64'">
     <_SmithyCliPlatform>darwin-x86_64</_SmithyCliPlatform>
   </PropertyGroup>
   <PropertyGroup Condition="'$(_SmithyIsWindows)' == 'True'">
@@ -280,41 +286,54 @@
   <PropertyGroup Condition="'$(_SmithyIsMacOS)' != 'True' and '$(_SmithyIsWindows)' != 'True' and '$(_SmithyArchStr)' == 'Arm64'">
     <_SmithyCliPlatform>linux-aarch64</_SmithyCliPlatform>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(_SmithyIsMacOS)' != 'True' and '$(_SmithyIsWindows)' != 'True' and '$(_SmithyArchStr)' != 'Arm64'">
+  <PropertyGroup Condition="'$(_SmithyIsMacOS)' != 'True' and '$(_SmithyIsWindows)' != 'True' and '$(_SmithyArchStr)' == 'X64'">
     <_SmithyCliPlatform>linux-x86_64</_SmithyCliPlatform>
   </PropertyGroup>
 
-  <!-- Build the path to the bundled binary -->
-  <PropertyGroup>
-    <_SmithyBundledCliRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/smithy-cli'))</_SmithyBundledCliRoot>
-    <!-- The CLI is a self-contained distribution; launcher lives under bin/ -->
-    <_SmithyBundledCliPath Condition="'$(_SmithyIsWindows)' == 'True'"
-      >$(_SmithyBundledCliRoot)/windows-x64/bin/smithy.bat</_SmithyBundledCliPath
+  <!-- The launcher in the NSmithy.SmithyCli package, if referenced -->
+  <PropertyGroup Condition="'$(NSmithySmithyCliDirectory)' != '' and '$(_SmithyCliPlatform)' != ''">
+    <_SmithyPackagedCliPath Condition="'$(_SmithyIsWindows)' == 'True'"
+      >$(NSmithySmithyCliDirectory)/windows-x64/bin/smithy.bat</_SmithyPackagedCliPath
     >
-    <_SmithyBundledCliPath
-      Condition="'$(_SmithyIsWindows)' != 'True' and '$(_SmithyCliPlatform)' != ''"
-      >$(_SmithyBundledCliRoot)/$(_SmithyCliPlatform)/bin/smithy</_SmithyBundledCliPath
+    <_SmithyPackagedCliPath Condition="'$(_SmithyIsWindows)' != 'True'"
+      >$(NSmithySmithyCliDirectory)/$(_SmithyCliPlatform)/bin/smithy</_SmithyPackagedCliPath
     >
   </PropertyGroup>
 
-  <!-- Use bundled CLI when SmithyCliPath is not set and the binary exists -->
-  <PropertyGroup Condition="'$(SmithyCliPath)' == '' and '$(_SmithyBundledCliPath)' != '' and Exists('$(_SmithyBundledCliPath)')">
-    <SmithyCliPath>$(_SmithyBundledCliPath)</SmithyCliPath>
+  <PropertyGroup Condition="'$(SmithyCliPath)' == '' and '$(_SmithyPackagedCliPath)' != '' and Exists('$(_SmithyPackagedCliPath)')">
+    <SmithyCliPath>$(_SmithyPackagedCliPath)</SmithyCliPath>
+    <_SmithyCliFromPackage>true</_SmithyCliFromPackage>
   </PropertyGroup>
-  <!-- Fall back to smithy on PATH (pre-bundling behaviour) -->
   <PropertyGroup Condition="'$(SmithyCliPath)' == ''">
     <SmithyCliPath>smithy</SmithyCliPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(SmithyCliVersionCheck)' == ''">
+    <SmithyCliVersionCheck Condition="'$(_SmithyCliFromPackage)' == 'true'"
+      >exact</SmithyCliVersionCheck
+    >
+    <SmithyCliVersionCheck Condition="'$(_SmithyCliFromPackage)' != 'true'"
+      >minimum</SmithyCliVersionCheck
+    >
   </PropertyGroup>
 
   <!-- ================================================================
        Bundled Maven repo (populated by `gradle :bundleMavenRepo`, packed into
        tools/maven-repo/). When present, codegen resolves the plugin + first-party
        trait packages from it via SMITHY_MAVEN_REPOS against an isolated cache —
-       Smithy's own offline mechanism. Absent (e.g. falling back to `smithy` on PATH
-       in-repo), resolution uses the config's maven block as before.
+       Smithy's own offline mechanism. With SMITHY_MAVEN_REPOS set, the CLI no longer
+       assumes Maven Central, so other dependencies resolve only from repositories the
+       build file lists. Absent, or with SmithyUseBundledMavenRepo=false, resolution
+       uses the build file's maven block alone (Maven Central by default) and the
+       user's Maven cache.
        ================================================================ -->
   <PropertyGroup>
-    <_SmithyBundledMavenRepo>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/maven-repo'))</_SmithyBundledMavenRepo>
+    <SmithyUseBundledMavenRepo Condition="'$(SmithyUseBundledMavenRepo)' == ''"
+      >true</SmithyUseBundledMavenRepo
+    >
+    <_SmithyBundledMavenRepo Condition="'$(SmithyUseBundledMavenRepo)' == 'true'"
+      >$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../tools/maven-repo'))</_SmithyBundledMavenRepo
+    >
   </PropertyGroup>
 
   <PropertyGroup>
@@ -430,14 +449,15 @@
   </Target>
 
   <!--
-    Ensure the bundled Smithy CLI binary is executable on Unix.
+    Ensure the packaged Smithy CLI launcher is executable on Unix.
     NuGet does not preserve file permissions, so we chmod +x on first use.
     This is a no-op if the bit is already set, so it's safe to run every build.
+    A user-supplied SmithyCliPath is left alone: it may live on a read-only path.
   -->
   <Target
     Name="_EnsureSmithyCliExecutable"
     BeforeTargets="GenerateSmithyCode"
-    Condition="'$(_SmithyIsWindows)' != 'True' and '$(SmithyCliPath)' != 'smithy' and Exists('$(SmithyCliPath)')"
+    Condition="'$(_SmithyIsWindows)' != 'True' and '$(_SmithyCliFromPackage)' == 'true'"
   >
     <Exec Command="chmod +x &quot;$(SmithyCliPath)&quot;" />
   </Target>
@@ -456,6 +476,14 @@
   <PropertyGroup>
     <_SmithyMavenCachePath>$(SmithyBuildOutputPath)maven-cache</_SmithyMavenCachePath>
     <_SmithyMavenCacheStamp>$(SmithyBuildOutputPath)NSmithy.MavenCache.stamp</_SmithyMavenCacheStamp>
+  </PropertyGroup>
+
+  <!-- The environment the Smithy CLI runs with: the bundled Maven repo and its isolated cache,
+       when the repo holds the codegen plugin (in-repo, the directory exists before it is staged).
+       Evaluated here rather than in GenerateSmithyCode so that `dotnet nsmithy smithy` can read it
+       with -getProperty and run the CLI exactly as the build does. -->
+  <PropertyGroup Condition="'$(_SmithyBundledMavenRepo)' != '' and Exists('$(_SmithyBundledMavenRepo)/io/github/thomaslaich/nsmithy/smithy-csharp-codegen')">
+    <NSmithySmithyCliEnvironment>SMITHY_MAVEN_REPOS=$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri);SMITHY_MAVEN_CACHE=$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(_SmithyMavenCachePath)'))</NSmithySmithyCliEnvironment>
   </PropertyGroup>
 
   <Target
@@ -481,22 +509,70 @@
     Outputs="$(SmithyStampFile)"
   >
     <MakeDir Directories="$(SmithyBuildOutputPath)" />
-    <!-- Point the CLI at the bundled Maven repo with an isolated cache so codegen
-         resolves the plugin + traits from local files. Only when the repo actually
-         holds jars (the dir itself is committed just to carry a .gitignore); otherwise
-         leave the CLI's default (network) resolution in place. -->
-    <ItemGroup>
-      <_SmithyBundleJar Include="$(_SmithyBundledMavenRepo)/**/*.jar" />
-    </ItemGroup>
-    <PropertyGroup Condition="'@(_SmithyBundleJar)' != ''">
-      <_SmithyMavenEnv>SMITHY_MAVEN_REPOS=$([System.Uri]::new('$(_SmithyBundledMavenRepo)').AbsoluteUri);SMITHY_MAVEN_CACHE=$([System.IO.Path]::GetFullPath('$(_SmithyMavenCachePath)'))</_SmithyMavenEnv>
-    </PropertyGroup>
     <PropertyGroup>
       <_SmithyCliBuildOutput>$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\'))</_SmithyCliBuildOutput>
       <_SmithyCliCommand>&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)</_SmithyCliCommand>
       <!-- A redirected JVM writes in the platform encoding unless told otherwise. -->
-      <_SmithyCliEnv>$(_SmithyMavenEnv);SMITHY_OPTS=$(SMITHY_OPTS) -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8</_SmithyCliEnv>
+      <_SmithyCliEnv>$(NSmithySmithyCliEnvironment);SMITHY_OPTS=$(SMITHY_OPTS) -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8</_SmithyCliEnv>
     </PropertyGroup>
+    <!-- Check the CLI before running it. Here rather than in a target of its own, so that only
+         builds that regenerate pay for starting an external CLI just to ask its version. -->
+    <Error
+      Code="NSMITHYCLIVERSION"
+      Condition="'$(SmithyCliVersionCheck)' != 'minimum' and '$(SmithyCliVersionCheck)' != 'exact' and '$(SmithyCliVersionCheck)' != 'none'"
+      Text="NSmithy: SmithyCliVersionCheck is '$(SmithyCliVersionCheck)'; use minimum, exact, or none."
+    />
+    <PropertyGroup>
+      <_SmithyCheckCliVersion Condition="'$(SmithyCliVersionCheck)' != 'none'"
+        >true</_SmithyCheckCliVersion
+      >
+    </PropertyGroup>
+    <Exec
+      Command="&quot;$(SmithyCliPath)&quot; --version"
+      Condition="'$(_SmithyCheckCliVersion)' == 'true' and '$(_SmithyCliFromPackage)' != 'true'"
+      ConsoleToMSBuild="true"
+      IgnoreExitCode="true"
+      IgnoreStandardErrorWarningFormat="true"
+      StandardOutputImportance="Low"
+      StandardErrorImportance="Low"
+      WorkingDirectory="$(MSBuildProjectDirectory)"
+    >
+      <Output TaskParameter="ExitCode" PropertyName="_SmithyCliVersionExitCode" />
+      <Output TaskParameter="ConsoleOutput" PropertyName="_SmithyCliVersionOutput" />
+    </Exec>
+    <Error
+      Code="NSMITHYCLIMISSING"
+      Condition="'$(_SmithyCheckCliVersion)' == 'true' and '$(_SmithyCliFromPackage)' != 'true' and '$(_SmithyCliVersionExitCode)' != '0'"
+      Text="NSmithy: could not run the Smithy CLI ($(SmithyCliPath)). Reference the NSmithy.SmithyCli package ($(SmithyVersion)), set SmithyCliPath to a Smithy CLI $(SmithyVersion) or later, or put one on PATH."
+    />
+    <!-- ConsoleOutput joins the lines with ';'; take the line that is a version, past any JVM
+         warnings. Versions compare by their major.minor.patch core. -->
+    <PropertyGroup Condition="'$(_SmithyCheckCliVersion)' == 'true'">
+      <_SmithyCliVersion Condition="'$(_SmithyCliFromPackage)' == 'true'"
+        >$(NSmithySmithyCliVersion)</_SmithyCliVersion
+      >
+      <_SmithyCliVersion Condition="'$(_SmithyCliFromPackage)' != 'true'"
+        >$([System.Text.RegularExpressions.Regex]::Match('$(_SmithyCliVersionOutput)', '(?:^|;)(\d+\.\d+\.\d+[^;\s]*)').Groups[1].Value)</_SmithyCliVersion
+      >
+      <_SmithyCliVersionCore>$([System.Text.RegularExpressions.Regex]::Match('$(_SmithyCliVersion)', '^\d+\.\d+\.\d+').Value)</_SmithyCliVersionCore>
+      <_SmithyVersionCore>$([System.Text.RegularExpressions.Regex]::Match('$(SmithyVersion)', '^\d+\.\d+\.\d+').Value)</_SmithyVersionCore>
+    </PropertyGroup>
+    <Error
+      Code="NSMITHYCLIVERSION"
+      Condition="'$(_SmithyCheckCliVersion)' == 'true' and ('$(_SmithyCliVersionCore)' == '' or '$(_SmithyVersionCore)' == '')"
+      Text="NSmithy: could not read the version of the Smithy CLI ($(SmithyCliPath)), or SmithyVersion ($(SmithyVersion)) is not a version. Set SmithyCliVersionCheck to none to skip this check."
+    />
+    <Error
+      Code="NSMITHYCLIVERSION"
+      Condition="'$(SmithyCliVersionCheck)' == 'minimum' and '$(_SmithyCliVersionCore)' != '' and '$(_SmithyVersionCore)' != '' and $([MSBuild]::VersionLessThan('$(_SmithyCliVersionCore)', '$(_SmithyVersionCore)'))"
+      Text="NSmithy: Smithy CLI $(_SmithyCliVersion) ($(SmithyCliPath)) is older than SmithyVersion ($(SmithyVersion)). Use Smithy CLI $(SmithyVersion) or later, or set SmithyCliVersionCheck to none to skip this check."
+    />
+    <Error
+      Code="NSMITHYCLIVERSION"
+      Condition="'$(SmithyCliVersionCheck)' == 'exact' and '$(_SmithyCliVersionCore)' != '' and '$(_SmithyVersionCore)' != '' and !$([MSBuild]::VersionEquals('$(_SmithyCliVersionCore)', '$(_SmithyVersionCore)'))"
+      Text="NSmithy: Smithy CLI $(_SmithyCliVersion) ($(SmithyCliPath)) does not match SmithyVersion ($(SmithyVersion)), and SmithyCliVersionCheck is exact. Use Smithy CLI $(SmithyVersion) (for the package, reference NSmithy.SmithyCli $(SmithyVersion)), or set SmithyCliVersionCheck to minimum or none."
+    />
+
     <!-- What the previous run produced, and when this one starts: see the stale-output cleanup
          after the CLI. -->
     <ItemGroup>

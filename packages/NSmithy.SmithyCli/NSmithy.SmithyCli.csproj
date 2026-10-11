@@ -1,0 +1,71 @@
+<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="Version;PackageVersion">
+  <!--
+    Packs the Smithy CLI for every supported platform, each a self-contained distribution
+    (launcher + JRE) under tools/smithy-cli/{platform}/. Run download-smithy-cli.sh first.
+
+    Consumers reference this package next to NSmithy.MSBuild; its props tell the NSmithy
+    targets where the CLI is and which version it is. Leaving it out lets them provide the
+    CLI another way (SmithyCliPath, or smithy on PATH).
+
+    The package version is the Smithy CLI version (SMITHY_VERSION in download-smithy-cli.sh),
+    not the NSmithy version, so an NSmithy upgrade reuses the package already in the NuGet
+    cache. TreatAsLocalProperty keeps the release build's -p:Version from overriding it.
+    Republishing the same CLI needs a fourth version part (e.g. 1.73.0.1).
+  -->
+  <PropertyGroup>
+    <SmithyCliVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)download-smithy-cli.sh')), 'SMITHY_VERSION="([^"]+)"').Groups[1].Value)</SmithyCliVersion>
+    <Version>$(SmithyCliVersion)</Version>
+    <PackageVersion>$(SmithyCliVersion)</PackageVersion>
+    <PackageId>NSmithy.SmithyCli</PackageId>
+    <Description>The Smithy CLI with its Java runtime for every platform NSmithy supports. Reference it next to NSmithy.MSBuild to generate code without installing the Smithy CLI.</Description>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <NoWarn>$(NoWarn);NU5100;NU5128</NoWarn>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_NSmithyPackSmithyCliProps</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="NSmithy.SmithyCli.props" />
+    <None Include="cli/**/*" Exclude="cli/.gitignore" Pack="true" PackagePath="tools/smithy-cli/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <_SmithyCliLauncher Include="cli/darwin-aarch64/bin/smithy" />
+    <_SmithyCliLauncher Include="cli/darwin-x86_64/bin/smithy" />
+    <_SmithyCliLauncher Include="cli/linux-aarch64/bin/smithy" />
+    <_SmithyCliLauncher Include="cli/linux-x86_64/bin/smithy" />
+    <_SmithyCliLauncher Include="cli/windows-x64/bin/smithy.bat" />
+  </ItemGroup>
+
+  <!-- The props carry the CLI version, so they are written at pack time. -->
+  <Target Name="_NSmithyPackSmithyCliProps">
+    <Error
+      Condition="!Exists('%(_SmithyCliLauncher.Identity)')"
+      Text="NSmithy: %(_SmithyCliLauncher.Identity) is missing. Run `bash packages/NSmithy.SmithyCli/download-smithy-cli.sh` before packing."
+    />
+    <PropertyGroup>
+      <_NSmithySmithyCliProps>$(IntermediateOutputPath)nupkg/NSmithy.SmithyCli.props</_NSmithySmithyCliProps>
+    </PropertyGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)nupkg" />
+    <WriteLinesToFile
+      File="$(_NSmithySmithyCliProps)"
+      Lines="$([MSBuild]::Escape($([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/NSmithy.SmithyCli.props').Replace('SMITHY_CLI_VERSION', '$(SmithyCliVersion)'))))"
+      Overwrite="true"
+      WriteOnlyWhenDifferent="true"
+    />
+    <!-- Both folders: build/ for direct references (including developmentDependency ones that
+         leave out buildTransitive assets), buildTransitive/ for references through another
+         project. -->
+    <ItemGroup>
+      <TfmSpecificPackageFile
+        Include="$(_NSmithySmithyCliProps)"
+        PackagePath="build/NSmithy.SmithyCli.props"
+      />
+      <TfmSpecificPackageFile
+        Include="$(_NSmithySmithyCliProps)"
+        PackagePath="buildTransitive/NSmithy.SmithyCli.props"
+      />
+    </ItemGroup>
+  </Target>
+</Project>

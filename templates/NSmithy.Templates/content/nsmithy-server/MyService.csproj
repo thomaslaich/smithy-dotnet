@@ -15,6 +15,10 @@
 
   <ItemGroup>
     <PackageReference Include="NSmithy.Server.AspNetCore" Version="NSMITHY_VERSION" />
+    <!--#if (UseSmithyCliPackage)-->
+    <!-- The Smithy CLI that code generation runs. Leave it out to use your own (SmithyCliPath or PATH). -->
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
+    <!--#endif-->
     <!--#if (WithDocs)-->
     <PackageReference Include="NSmithy.Server.AspNetCore.Docs" Version="NSMITHY_VERSION" />
     <!--#endif-->
@@ -22,7 +26,7 @@
     <PackageReference Include="NSmithy.Codecs.Cbor" Version="NSMITHY_VERSION" />
     <PackageReference Include="NSmithy.Protocols.RpcV2Cbor" Version="NSMITHY_VERSION" />
     <!--#endif-->
-    <!--#if (WithContracts)-->
+    <!--#if (WithContractsProject)-->
     <!-- Codegen runs off the contracts project, which brings NSmithy.MSBuild with it. -->
     <ProjectReference Include="../ContractsName/ContractsName.csproj" />
     <!--#else-->
@@ -30,5 +34,4 @@
     <PackageReference Include="NSmithy.MSBuild" Version="NSMITHY_VERSION" PrivateAssets="all" />
     <!--#endif-->
   </ItemGroup>
-
 </Project>

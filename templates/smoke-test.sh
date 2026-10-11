@@ -82,13 +82,9 @@ for protocol in restJson1 simpleRestJson rpcv2Cbor grpc; do
   cp "$SRC/NuGet.config" "$qs/"
   dotnet new nsmithy-contracts -o "$qs/Hello.Contracts" -n Hello.Contracts --protocol "$protocol" > /dev/null
   dotnet new nsmithy-server -o "$qs/Hello.Server" -n Hello.Server --protocol "$protocol" \
-    --contracts Hello.Contracts --with-docs > /dev/null
-  dotnet new nsmithy-client -o "$qs/Hello.Client" -n Hello.Client --protocol "$protocol" > /dev/null
-  # What the quick start tells users to do for local development: drop the Maven contracts
-  # reference so NSmithy synthesizes a build from the sibling contracts project instead.
-  rm -f "$qs/Hello.Client/smithy-build.json"
-  dotnet add "$qs/Hello.Client/Hello.Client.csproj" reference \
-    "$qs/Hello.Contracts/Hello.Contracts.csproj" > /dev/null
+    --contracts-project Hello.Contracts --with-docs > /dev/null
+  dotnet new nsmithy-client -o "$qs/Hello.Client" -n Hello.Client --protocol "$protocol" \
+    --contracts-project Hello.Contracts > /dev/null
   localize "$qs"
   build "$protocol-contracts" "$qs/Hello.Contracts"
   build "$protocol-server" "$qs/Hello.Server"
@@ -102,6 +98,26 @@ for protocol in restJson1 simpleRestJson rpcv2Cbor grpc; do
   localize "$solo"
   build "$protocol-server-standalone" "$solo/Hello.Server"
 done
+
+# The default scaffolds above run smithy from PATH. --smithy-cli-package references
+# NSmithy.SmithyCli instead, so it builds with smithy taken off PATH.
+echo "== --smithy-cli-package =="
+pkg="$SRC/smithy-cli-package"
+mkdir -p "$pkg"
+cp "$SRC/NuGet.config" "$pkg/"
+dotnet new nsmithy-server -o "$pkg/Hello.Server" -n Hello.Server --smithy-cli-package > /dev/null
+localize "$pkg"
+NO_SMITHY_PATH=""
+IFS=: read -ra path_entries <<< "$PATH"
+for entry in "${path_entries[@]}"; do
+  [[ -x "$entry/smithy" ]] || NO_SMITHY_PATH="$NO_SMITHY_PATH${NO_SMITHY_PATH:+:}$entry"
+done
+if ! grep -q 'NSmithy.SmithyCli' "$pkg/Hello.Server/Hello.Server.csproj"; then
+  echo "  FAIL  server-smithy-cli-package: NSmithy.SmithyCli is not referenced"
+  failed+=("server-smithy-cli-package")
+else
+  PATH="$NO_SMITHY_PATH" build "server-smithy-cli-package" "$pkg/Hello.Server"
+fi
 
 if (( ${#failed[@]} > 0 )); then
   echo "smoke-test: ${#failed[@]} template build(s) failed: ${failed[*]}" >&2

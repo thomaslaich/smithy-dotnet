@@ -22,5 +22,6 @@
     <PackageReference Include="NSmithy.Protocols.RestJson" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.Protocols.RestXml" Version="0.0.0-SNAPSHOT" />
     <PackageReference Include="NSmithy.MSBuild" Version="0.0.0-SNAPSHOT" PrivateAssets="all" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
   </ItemGroup>
 </Project>

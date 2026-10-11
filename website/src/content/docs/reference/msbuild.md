@@ -10,53 +10,74 @@ with the .NET toolchain.
 
 ## Configuration sources
 
-When a project supplies `smithy-build.json`, configure generator options in its
-`csharp-codegen` plugin settings. Without one, NSmithy synthesizes the file from
-MSBuild properties and model sources. See [Code generation](/smithy-dotnet/concepts/code-generation/).
+Without a `smithy-build.json` at the project root, NSmithy synthesizes one under
+`obj/` from MSBuild properties and the contracts reference. With one, NSmithy
+runs it as is. See [Code generation](/smithy-dotnet/concepts/code-generation/).
+
+Properties marked **Synthesized only** feed the synthesized file and have no
+effect next to your own `smithy-build.json`; set the named `csharp-codegen`
+plugin setting there instead. All other properties apply in both cases.
 
 ## Properties
 
 ### Code generation
 
-| Property | Default | Description |
-| --- | --- | --- |
-| `SmithyService` | — | Smithy shape ID of the service to generate (e.g. `example.hello#HelloService`). Required when synthesizing a `smithy-build.json` from a contracts reference. |
-| `SmithyBaseNamespace` | — | Prefix prepended to generated C# namespaces. For example, `Acme` maps `example.library` to `Acme.Example.Library`. It does not filter model shapes. |
-| `SmithyGenerateServer` | `true` | Emit server stub types. Set to `false` in client-only projects. |
-| `SmithyGenerateClient` | `true` | Emit client types. Set to `false` in server-only projects. |
-| `SmithyGenerateDependencyInjection` | `false` | Generate the `Add{Service}Client` IHttpClientFactory extension (flows into `smithy-build.json` as the `csharp-codegen` `generateDependencyInjection` setting). Requires referencing `Microsoft.Extensions.Http` (or the `Microsoft.AspNetCore.App` shared framework). See [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/). |
-| `SmithyGenerateFakes` | `false` | Generate fake clients and handlers from modeled examples or deterministic placeholders. See [Fake handlers](/smithy-dotnet/servers/fake-handlers/) for response selection. |
-| `SmithyBuildFile` | `$(MSBuildProjectDirectory)/smithy-build.json` | Path to the Smithy build configuration file. When absent, NSmithy can synthesize one under `obj/` from `SmithySource` and `SmithyContractsBuildFile` items. |
-| `SmithyProjection` | `source` | Smithy build projection to use. |
-| `SmithyPlugin` | `csharp-codegen` | Smithy build plugin name. |
-| `SmithyBuildOutputPath` | `$(IntermediateOutputPath)Smithy/` | Root directory for all Smithy build output. |
-| `SmithyStampFile` | `$(SmithyBuildOutputPath)NSmithy.Generated.stamp` | Incremental build stamp file. Smithy codegen is skipped when inputs have not changed since this file was last written. |
-| `SmithyEmitGeneratedFiles` | `false` | Show generated `.g.cs` files in IDE project views when `true`. |
-| `SmithyCliPath` | bundled CLI | Smithy CLI executable. Set this to override the bundled executable. |
+| Property | Description |
+| --- | --- |
+| `SmithyService` | Smithy shape ID of the service to generate (e.g. `example.hello#HelloService`). Required when synthesizing a `smithy-build.json` from a contracts reference. **Synthesized only:** `service`. |
+| `SmithyBaseNamespace` | Prefix prepended to generated C# namespaces. For example, `Acme` maps `example.library` to `Acme.Example.Library`. It does not filter model shapes. **Synthesized only:** `baseNamespace`. |
+| `SmithyGenerateServer` | Emit server stub types. Set to `false` in client-only projects. With your own `smithy-build.json`, it selects whether the generated server files are compiled. Default: `true`. |
+| `SmithyGenerateClient` | Emit client types. Set to `false` in server-only projects. With your own `smithy-build.json`, it selects whether the generated client files are compiled. Default: `true`. |
+| `SmithyGenerateDependencyInjection` | Generate the `Add{Service}Client` IHttpClientFactory extension. Requires referencing `Microsoft.Extensions.Http` (or the `Microsoft.AspNetCore.App` shared framework). See [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/). Default: `false`. **Synthesized only:** `generateDependencyInjection`. |
+| `SmithyGenerateFakes` | Generate fake clients and handlers from modeled examples or deterministic placeholders. See [Fake handlers](/smithy-dotnet/servers/fake-handlers/) for response selection. Default: `false`. **Synthesized only:** `generateFakes`. |
+| `SmithyBuildFile` | Path to the Smithy build configuration file. When absent, NSmithy can synthesize one under `obj/` from `SmithySource` and `SmithyContractsBuildFile` items. Default: `$(MSBuildProjectDirectory)/smithy-build.json`. |
+| `SmithyProjection` | Smithy build projection to use. Default: `source`. |
+| `SmithyPlugin` | Smithy build plugin name. Default: `csharp-codegen`. |
+| `SmithyBuildOutputPath` | Root directory for all Smithy build output. Default: `$(IntermediateOutputPath)Smithy/`. |
+| `SmithyStampFile` | Incremental build stamp file. Smithy codegen is skipped when inputs have not changed since this file was last written. Default: `$(SmithyBuildOutputPath)NSmithy.Generated.stamp`. |
+| `SmithyEmitGeneratedFiles` | Show generated `.g.cs` files in IDE project views when `true`. Default: `false`. |
+
+### Smithy CLI
+
+See [Smithy CLI](/smithy-dotnet/reference/smithy-cli/).
+
+| Property | Description |
+| --- | --- |
+| `SmithyCliPath` | Smithy CLI executable. Takes precedence over the `NSmithy.SmithyCli` package and `smithy` on `PATH`. |
+| `SmithyVersion` | Smithy version NSmithy is built against. `SmithyCliVersionCheck` compares the Smithy CLI with it, and `software.amazon.smithy` Maven dependencies should use it. Default: `1.73.0`. |
+| `SmithyCliVersionCheck` | How the Smithy CLI's version is checked against `SmithyVersion`: `exact`, `minimum` (that version or later), or `none`. Default: `exact` for `NSmithy.SmithyCli`, `minimum` for a CLI you provide. |
+
+### Maven dependencies
+
+See [Maven dependencies](/smithy-dotnet/reference/maven-dependencies/).
+
+| Property | Description |
+| --- | --- |
+| `SmithyUseBundledMavenRepo` | Resolve NSmithy's plugins and the bundled trait packages from the Maven repository inside `NSmithy.MSBuild`. Set to `false` to resolve everything from Maven repositories, as the plain Smithy CLI does. Default: `true`. |
 
 ### Documentation
 
-| Property | Default | Description |
-| --- | --- | --- |
-| `SmithyGenerateDocs` | `false` | Generate Sphinx HTML documentation. Requires Python 3.11+. |
-| `SmithyOpenApiProtocol` | — | Protocol shape ID for OpenAPI generation. |
+| Property | Description |
+| --- | --- |
+| `SmithyGenerateDocs` | Generate Sphinx HTML documentation and copy it to `wwwroot/docs/`. Requires Python 3.11+. With your own `smithy-build.json`, add the `docgen` plugin there; the property still copies the output. Default: `false`. |
+| `SmithyOpenApiProtocol` | Protocol shape ID for OpenAPI generation; the output is copied to `wwwroot/openapi.json`. With your own `smithy-build.json`, add the `openapi` plugin there; the property still copies the output. |
 
 See [Endpoint documentation](/smithy-dotnet/guides/endpoint-documentation/) for setup.
 
 ### gRPC / Protobuf
 
-| Property | Default | Description |
-| --- | --- | --- |
-| `SmithyGrpcServices` | `Both` | Passed as `GrpcServices` to Grpc.Tools when `.proto` files are generated. Valid values: `Both`, `Client`, `Server`, `None`. |
+| Property | Description |
+| --- | --- |
+| `SmithyGrpcServices` | Passed as `GrpcServices` to Grpc.Tools when `.proto` files are generated. Valid values: `Both`, `Client`, `Server`, `None`. Default: `Both`. |
 
 ### Publishing (SmithyPublish=true)
 
-| Property | Default | Description |
-| --- | --- | --- |
-| `SmithyPublish` | `false` | Pack `.smithy` model files into the NuGet package and (when `SmithyMavenGroupId` is set) produce a Maven JAR on `dotnet pack`. |
-| `SmithySources` | `$(MSBuildProjectDirectory)/model` | Directory containing the `.smithy` source files to publish. |
-| `SmithyMavenGroupId` | — | Maven `groupId` for the emitted JAR (e.g. `io.github.acme`). When set, `dotnet pack` produces a JAR alongside the `.nupkg`. |
-| `SmithyMavenArtifactId` | — | Maven `artifactId` for the emitted JAR (e.g. `my-service-contracts`). Required when `SmithyMavenGroupId` is set. |
+| Property | Description |
+| --- | --- |
+| `SmithyPublish` | Pack `.smithy` model files into the NuGet package and (when `SmithyMavenGroupId` is set) produce a Maven JAR on `dotnet pack`. Default: `false`. |
+| `SmithySources` | Directory containing the `.smithy` source files to publish. Default: `$(MSBuildProjectDirectory)/model`. |
+| `SmithyMavenGroupId` | Maven `groupId` for the emitted JAR (e.g. `io.github.acme`). When set, `dotnet pack` produces a JAR alongside the `.nupkg`. |
+| `SmithyMavenArtifactId` | Maven `artifactId` for the emitted JAR (e.g. `my-service-contracts`). Required when `SmithyMavenGroupId` is set. |
 
 ## Items
 
@@ -73,29 +94,9 @@ automatically. NuGet packages require explicit `SmithySource` and
 See [Distributing contracts](/smithy-dotnet/guides/distributing-contracts/)
 for both configurations.
 
-Declare Maven dependencies in `smithy-build.json` under `maven.dependencies`.
+Declare Maven dependencies in `smithy-build.json` under `maven.dependencies`;
+see [Maven dependencies](/smithy-dotnet/reference/maven-dependencies/) for
+where they resolve from.
 There is no `SmithyMavenDependency` MSBuild item. Build-file synthesis reads one
 contract build configuration; use an explicit build file when combining models
 with separate configurations.
-
-## Smithy CLI
-
-NSmithy bundles the Smithy CLI inside `NSmithy.MSBuild` and
-selects the correct platform binary automatically. No separate installation is
-required. The bundle is self-contained and includes a JRE, so Java does not
-need to be installed either.
-
-NSmithy.MSBuild also bundles the NSmithy Smithy codegen plugins plus the common
-Smithy and alloy trait/doc/openapi dependencies used by the templates and
-examples. Additional Maven dependencies declared in `smithy-build.json` are not
-mirrored into the package; they remain the consuming project's responsibility
-and may require access to the configured Maven repositories.
-
-Set `SmithyCliPath` to override the bundled binary with a specific executable,
-for example when testing against a different CLI version:
-
-```xml title="MyService.csproj"
-<PropertyGroup>
-  <SmithyCliPath>/path/to/smithy</SmithyCliPath>
-</PropertyGroup>
-```

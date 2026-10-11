@@ -1,0 +1,186 @@
+---
+title: Smithy CLI
+description: Get the Smithy CLI from NuGet or provide your own, and how NSmithy checks its version.
+---
+
+import { TabItem, Tabs } from '@astrojs/starlight/components';
+
+Code generation runs the [Smithy CLI](https://smithy.io/2.0/guides/smithy-cli/index.html).
+There are two ways to provide it:
+
+- **From NuGet.** Reference the [`NSmithy.SmithyCli` package](#the-nsmithysmithycli-package),
+  which contains the CLI and its Java runtime. Nothing needs to be installed.
+  The NSmithy templates add it with `--smithy-cli-package`.
+- **Your own.** [Install the Smithy CLI](#installing-the-smithy-cli) yourself
+  and leave the package out. This is what the NSmithy templates do by default.
+
+NSmithy looks for the CLI in this order:
+
+1. `SmithyCliPath`, when set.
+2. The `NSmithy.SmithyCli` package, when the project references it.
+3. `smithy` on `PATH`.
+
+Before generating, NSmithy checks the CLI's version against `SmithyVersion`
+(currently `1.73.0`); see [Version check](#version-check).
+
+## The NSmithy.SmithyCli package
+
+`NSmithy.SmithyCli` contains the Smithy CLI with its Java runtime for macOS and
+Linux on x64 and arm64, and Windows on x64. Nothing else needs to be installed. The
+package version is the Smithy version, so upgrading NSmithy reuses the package
+already in the NuGet cache.
+
+The NSmithy templates add it to every project they create when you pass
+`--smithy-cli-package`:
+
+```shell
+dotnet new nsmithy-server -n HelloWorld.Server --smithy-cli-package
+```
+
+To add it yourself, reference it in each project that generates code:
+
+```xml title="MyService.Server.csproj"
+<ItemGroup>
+  <PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
+</ItemGroup>
+```
+
+It is a development dependency, so it never becomes a dependency of a package
+you publish. To add it to every project at once, put the reference in
+`Directory.Build.props`, or with central package management use a global
+package reference in `Directory.Packages.props`:
+
+```xml title="Directory.Packages.props"
+<ItemGroup>
+  <GlobalPackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
+</ItemGroup>
+```
+
+The package is restored with the rest of the project, so builds after
+`dotnet restore` need no network access for the CLI. Private feeds that mirror
+nuget.org need to include it.
+
+## Providing your own CLI
+
+Leave out `NSmithy.SmithyCli` to use a Smithy CLI you install yourself, for
+example from a package manager, a dev container, or a Nix environment. NSmithy
+then runs `smithy` from `PATH`. The NSmithy templates leave it out by default.
+
+### Installing the Smithy CLI
+
+Skip this with `NSmithy.SmithyCli`, which provides the CLI. Otherwise, install
+Smithy CLI `SmithyVersion` (1.73.0) or later so that `smithy` is on `PATH`:
+
+<Tabs syncKey="smithy-cli-install">
+  <TabItem label="Homebrew">
+    On macOS:
+
+    ```shell
+    brew tap smithy-lang/tap && brew install smithy-cli
+    ```
+  </TabItem>
+  <TabItem label="Scoop">
+    On Windows:
+
+    ```powershell
+    scoop bucket add smithy-lang https://github.com/smithy-lang/scoop-bucket
+    scoop install smithy-lang/smithy-cli
+    ```
+  </TabItem>
+  <TabItem label="pixi">
+    On any platform, from the conda-forge
+    [`smithy`](https://anaconda.org/channels/conda-forge/packages/smithy/overview)
+    package. Install it globally:
+
+    ```shell
+    pixi global install smithy
+    ```
+
+    Or add it to a project's environment, and build inside it with
+    `pixi shell` or `pixi run dotnet build`:
+
+    ```toml title="pixi.toml"
+    [dependencies]
+    smithy = ">=1.73.0"
+    ```
+  </TabItem>
+  <TabItem label="Installer">
+    On any platform, download the release archive for your platform and run
+    its installer, as described in the
+    [Smithy CLI installation guide](https://smithy.io/2.0/guides/smithy-cli/cli_installation.html).
+  </TabItem>
+</Tabs>
+
+Check the installed version with `smithy --version`.
+
+### Using a CLI that is not on PATH
+
+To use a CLI that is not on `PATH`, set `SmithyCliPath`:
+
+```xml title="Directory.Build.props"
+<PropertyGroup>
+  <SmithyCliPath>/opt/smithy/bin/smithy</SmithyCliPath>
+</PropertyGroup>
+```
+
+`SmithyCliPath` takes precedence over the package, so it also overrides
+`NSmithy.SmithyCli` for a single build:
+
+```shell
+dotnet build -p:SmithyCliPath=/opt/smithy/bin/smithy
+```
+
+NSmithy runs a CLI it did not provide as is and never changes its file
+permissions, so it can live on a read-only path such as the Nix store.
+
+## Running the Smithy CLI
+
+The [`dotnet-nsmithy`](https://www.nuget.org/packages/dotnet-nsmithy) tool runs
+the Smithy CLI a project's build uses, with the same Maven setup, so commands
+such as `validate`, `format`, `diff`, and `ast` work without installing the
+CLI when it comes from `NSmithy.SmithyCli`:
+
+```shell
+dotnet tool install --global dotnet-nsmithy
+dotnet nsmithy smithy -- validate
+```
+
+It restores the project in the current directory, or the one passed with
+`--project`, and runs the CLI from the current directory. Arguments after `--`
+go to the Smithy CLI.
+
+## Version check
+
+The generator plugins are built against one Smithy version, `SmithyVersion`.
+Before generating, NSmithy checks the CLI's version against it according to
+`SmithyCliVersionCheck`:
+
+| Value | Passes when |
+| --- | --- |
+| `exact` | The CLI is exactly `SmithyVersion`. Default for `NSmithy.SmithyCli`. |
+| `minimum` | The CLI is `SmithyVersion` or later. Default for a CLI you provide. |
+| `none` | Always; no check. |
+
+`NSmithy.SmithyCli` must match because each NSmithy release pairs with one
+Smithy version: when you upgrade NSmithy, upgrade the package to its
+`SmithyVersion`. A CLI you install yourself only has to be new enough.
+
+For a CLI from `PATH` or `SmithyCliPath`, NSmithy runs `smithy --version`, and
+only on builds that regenerate code. A failed check stops the build:
+
+```text
+error NSMITHYCLIVERSION: NSmithy: Smithy CLI 1.71.0 (smithy) is older than
+SmithyVersion (1.73.0). Use Smithy CLI 1.73.0 or later, or set
+SmithyCliVersionCheck to none to skip this check.
+```
+
+When no CLI can be run, the build fails with `NSMITHYCLIMISSING`.
+
+```xml title="Directory.Build.props"
+<PropertyGroup>
+  <SmithyCliVersionCheck>exact</SmithyCliVersionCheck>
+</PropertyGroup>
+```
+
+The plugins require a CLI that runs Java 21 or later, which every Smithy CLI
+since 1.73.0 bundles.

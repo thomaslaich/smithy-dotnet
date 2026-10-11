@@ -24,6 +24,12 @@
       "defaultValue": "restJson1",
       "description": "The Smithy protocol the service uses"
     },
+    "UseSmithyCliPackage": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "description": "Reference NSmithy.SmithyCli, which provides the Smithy CLI and its Java runtime, instead of using the Smithy CLI on PATH"
+    },
     "IsRestJson1":    { "type": "computed", "value": "(Protocol == \"restJson1\")" },
     "IsSimpleRestJson":{ "type": "computed", "value": "(Protocol == \"simpleRestJson\")" },
     "IsRpcv2Cbor":    { "type": "computed", "value": "(Protocol == \"rpcv2Cbor\")" },
