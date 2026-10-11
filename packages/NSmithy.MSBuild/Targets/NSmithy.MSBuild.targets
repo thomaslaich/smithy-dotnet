@@ -16,12 +16,11 @@
 
       (code generation)    Runs automatically when a smithy-build.json exists at the
                            project root, or when SmithySource items are present
-                           (collected from a contracts ProjectReference).
-                           For server/client projects without a local smithy-build.json,
-                           one is synthesized in obj/ from the contracts smithy-build.json
-                           with sources patched to absolute paths and the csharp-codegen
-                           plugin injected.
-                           Controlled by SmithyGenerateServer / SmithyGenerateClient.
+                           (collected from a contracts ProjectReference). The CLI runs an
+                           effective smithy-build.json written to obj/: the project's own
+                           file (or an empty one), the contracts' inputs, and the plugin
+                           settings from SmithyService and the other generation
+                           properties. See designs/build-configuration.md.
   -->
 
   <!-- ================================================================
@@ -72,7 +71,7 @@
   />
 
   <UsingTask
-    TaskName="SynthesizeSmithyBuildFile"
+    TaskName="WriteSmithyBuildFile"
     AssemblyFile="$(_NSmithyTasksAssembly)"
     TaskFactory="$(_NSmithyTaskFactory)"
   />
@@ -194,29 +193,6 @@
     <SmithyGrpcServices Condition="'$(SmithyGrpcServices)' == ''">Both</SmithyGrpcServices>
     <SmithyExtraArgs Condition="'$(SmithyExtraArgs)' == ''"></SmithyExtraArgs>
     <SmithyGenerateClient Condition="'$(SmithyGenerateClient)' == ''">true</SmithyGenerateClient>
-    <!--
-      Opt-in: generate the IHttpClientFactory registration extension
-      ({Service}.DependencyInjection.g.cs). Off by default because it requires
-      Microsoft.Extensions.Http, which plain (non-DI) clients must not be forced to depend on.
-      This flows into the synthesized smithy-build.json as the csharp-codegen
-      generateDependencyInjection setting, so the file is only *generated* when enabled — not
-      generated-then-excluded. When enabling, also reference Microsoft.Extensions.Http (or the
-      Microsoft.AspNetCore.App shared framework, which already provides it). Projects with an
-      explicit smithy-build.json set "generateDependencyInjection": true on the csharp-codegen
-      plugin instead.
-    -->
-    <SmithyGenerateDependencyInjection Condition="'$(SmithyGenerateDependencyInjection)' == ''"
-      >false</SmithyGenerateDependencyInjection
-    >
-    <!--
-      Opt-in: generate fakes returning deterministic canned responses (@examples output when
-      present, synthesized placeholders otherwise): Fake{Service}Handler
-      ({Service}.Fakes.Server.g.cs) with the server surface and Fake{Service}Client
-      ({Service}.Fakes.Client.g.cs) with the client surface. Requires at least one of
-      SmithyGenerateServer / SmithyGenerateClient. Projects with an explicit smithy-build.json set
-      "generateFakes": true on the csharp-codegen plugin instead.
-    -->
-    <SmithyGenerateFakes Condition="'$(SmithyGenerateFakes)' == ''">false</SmithyGenerateFakes>
   </PropertyGroup>
 
   <!--
@@ -344,7 +320,6 @@
     <SmithyStampFile Condition="'$(SmithyStampFile)' == ''"
       >$(SmithyBuildOutputPath)NSmithy.Generated.stamp</SmithyStampFile
     >
-    <SmithyBaseNamespace Condition="'$(SmithyBaseNamespace)' == ''"></SmithyBaseNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -395,57 +370,54 @@
   </Target>
 
   <!--
-    Synthesize a smithy-build.json when none exists on disk but SmithySource items
-    are present (collected from a contracts ProjectReference).
-    Reads the contracts smithy-build.json, patches sources to absolute paths, and
-    injects the csharp-codegen Maven dependency and plugin entry.
-    The condition check for SmithySource must be inside the target body — MSBuild
-    evaluates target Condition attributes before DependsOnTargets run, so
-    SmithySource would always appear empty at the Condition evaluation point.
+    Write the effective smithy-build.json that GenerateSmithyCode runs: the project's own build
+    file (or an empty one), the contracts' inputs, and the plugin settings from properties. See
+    designs/build-configuration.md. Projects with neither a build file nor contracts generate
+    nothing.
+    The checks on SmithySource are in the target body: MSBuild evaluates a target's Condition
+    before its DependsOnTargets run, so SmithySource would always appear empty there.
   -->
   <Target
     Name="_PrepareSmithyBuildFile"
-    BeforeTargets="GenerateSmithyCode"
     DependsOnTargets="_CollectSmithyItemsFromProjectReferences"
-    Condition="!Exists('$(SmithyBuildFile)')"
   >
+    <PropertyGroup>
+      <_SmithyProjectBuildFile Condition="Exists('$(SmithyBuildFile)')"
+        >$(SmithyBuildFile)</_SmithyProjectBuildFile
+      >
+      <_SmithyEffectiveBuildFile
+        Condition="'$(_SmithyProjectBuildFile)' != '' or '@(SmithySource)' != ''"
+        >$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(IntermediateOutputPath)', 'smithy-build.json'))</_SmithyEffectiveBuildFile
+      >
+    </PropertyGroup>
     <Error
       Text="NSmithy: SmithyService must be set when generating from a contracts reference. Add &lt;SmithyService&gt;my.namespace#MyService&lt;/SmithyService&gt; to your project."
-      Condition="'@(SmithySource)' != '' and '$(SmithyService)' == ''"
+      Condition="'@(SmithySource)' != '' and '$(SmithyService)' == '' and '$(_SmithyProjectBuildFile)' == ''"
     />
     <Error
       Text="NSmithy: could not find smithy-build.json in the contracts project. Ensure the contracts project has SmithyPublish=true and a smithy-build.json at its root."
       Condition="'@(SmithySource)' != '' and '@(SmithyContractsBuildFile)' == ''"
     />
-
-    <PropertyGroup Condition="'@(SmithySource)' != ''">
-      <_SmithySynthesizedBuildFile>$(IntermediateOutputPath)smithy-build.json</_SmithySynthesizedBuildFile>
-    </PropertyGroup>
-
-    <MakeDir Directories="$(IntermediateOutputPath)" Condition="'@(SmithySource)' != ''" />
-
-    <SynthesizeSmithyBuildFile
-      ContractsBuildFile="@(SmithyContractsBuildFile)"
+    <WriteSmithyBuildFile
+      ProjectBuildFile="$(_SmithyProjectBuildFile)"
+      ContractsBuildFiles="@(SmithyContractsBuildFile)"
       Sources="@(SmithySource)"
       Service="$(SmithyService)"
-      BaseNamespace="$(SmithyBaseNamespace)"
-      CSharpCodegenVersion="$(SmithyCSharpCodegenVersion)"
-      SmithyVersion="$(SmithyVersion)"
-      GenerateDocs="$(SmithyGenerateDocs)"
       GenerateClient="$(SmithyGenerateClient)"
       GenerateServer="$(SmithyGenerateServer)"
-      GenerateDependencyInjection="$(SmithyGenerateDependencyInjection)"
-      GenerateFakes="$(SmithyGenerateFakes)"
+      GenerateDocs="$(SmithyGenerateDocs)"
       OpenApiProtocol="$(SmithyOpenApiProtocol)"
       Grpc="$(SmithyGrpc)"
       ProtoPlugin="$(SmithyProtoPlugin)"
-      OutputFile="$(_SmithySynthesizedBuildFile)"
-      Condition="'@(SmithySource)' != ''"
+      Projection="$(SmithyProjection)"
+      CSharpCodegenVersion="$(SmithyCSharpCodegenVersion)"
+      SmithyVersion="$(SmithyVersion)"
+      OutputFile="$(_SmithyEffectiveBuildFile)"
+      Condition="'$(_SmithyEffectiveBuildFile)' != ''"
     />
-
-    <PropertyGroup Condition="'@(SmithySource)' != ''">
-      <SmithyBuildFile>$(_SmithySynthesizedBuildFile)</SmithyBuildFile>
-    </PropertyGroup>
+    <ItemGroup Condition="'$(_SmithyEffectiveBuildFile)' != ''">
+      <FileWrites Include="$(_SmithyEffectiveBuildFile)" />
+    </ItemGroup>
   </Target>
 
   <!--
@@ -456,7 +428,7 @@
   -->
   <Target
     Name="_EnsureSmithyCliExecutable"
-    BeforeTargets="GenerateSmithyCode"
+    BeforeTargets="_SmithyGenerateCode"
     Condition="'$(_SmithyIsWindows)' != 'True' and '$(_SmithyCliFromPackage)' == 'true'"
   >
     <Exec Command="chmod +x &quot;$(SmithyCliPath)&quot;" />
@@ -488,7 +460,7 @@
 
   <Target
     Name="_SmithyRefreshMavenCache"
-    BeforeTargets="GenerateSmithyCode"
+    BeforeTargets="_SmithyGenerateCode"
     Condition="Exists('$(_SmithyBundledMavenRepo)')"
     Inputs="@(_SmithyGeneratorInput)"
     Outputs="$(_SmithyMavenCacheStamp)"
@@ -501,17 +473,29 @@
     <Touch Files="$(_SmithyMavenCacheStamp)" AlwaysCreate="true" />
   </Target>
 
+  <!--
+    The entry point for code generation, run before CoreCompile or on its own with
+    -t:GenerateSmithyCode. It has no condition: whether a project generates is only known once
+    _PrepareSmithyBuildFile has written the effective build file, and MSBuild checks a target's
+    condition before the targets it depends on or that hook into it run. Dependencies run in
+    order, so _SmithyGenerateCode's condition is checked after _PrepareSmithyBuildFile.
+  -->
   <Target
     Name="GenerateSmithyCode"
     BeforeTargets="CoreCompile"
-    Condition="Exists('$(SmithyBuildFile)')"
-    Inputs="@(_SmithyGeneratorInput);@(SmithySource);@(SmithyContractsBuildFile)"
+    DependsOnTargets="_PrepareSmithyBuildFile;_SmithyGenerateCode"
+  />
+
+  <Target
+    Name="_SmithyGenerateCode"
+    Condition="'$(_SmithyEffectiveBuildFile)' != '' and Exists('$(_SmithyEffectiveBuildFile)')"
+    Inputs="@(_SmithyGeneratorInput);@(SmithySource);@(SmithyContractsBuildFile);$(_SmithyEffectiveBuildFile)"
     Outputs="$(SmithyStampFile)"
   >
     <MakeDir Directories="$(SmithyBuildOutputPath)" />
     <PropertyGroup>
       <_SmithyCliBuildOutput>$(SmithyBuildOutputPath.TrimEnd('/').TrimEnd('\'))</_SmithyCliBuildOutput>
-      <_SmithyCliCommand>&quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)</_SmithyCliCommand>
+      <_SmithyCliCommand>&quot;$(SmithyCliPath)&quot; build --config &quot;$(_SmithyEffectiveBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)</_SmithyCliCommand>
       <!-- A redirected JVM writes in the platform encoding unless told otherwise. -->
       <_SmithyCliEnv>$(NSmithySmithyCliEnvironment);SMITHY_OPTS=$(SMITHY_OPTS) -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8</_SmithyCliEnv>
     </PropertyGroup>
@@ -608,7 +592,7 @@
       Condition="'$(_SmithyCliExitCode)' != '0' and '$(MSBuildRuntimeType)' == 'Core'"
     />
     <Exec
-      Command="&quot;$(SmithyCliPath)&quot; validate --format csv --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs) &gt; &quot;$(_SmithyValidationEventsFile)&quot;"
+      Command="&quot;$(SmithyCliPath)&quot; validate --format csv --config &quot;$(_SmithyEffectiveBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs) &gt; &quot;$(_SmithyValidationEventsFile)&quot;"
       EnvironmentVariables="$(_SmithyCliEnv)"
       IgnoreExitCode="true"
       IgnoreStandardErrorWarningFormat="true"
@@ -649,7 +633,7 @@
     </ItemGroup>
     <Error
       Code="NSMITHYGEN"
-      Text="NSmithy: the Smithy CLI succeeded but produced no generated files, where the previous run produced @(_SmithyPreviousOutput->Count()). Command: &quot;$(SmithyCliPath)&quot; build --config &quot;$(SmithyBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)"
+      Text="NSmithy: the Smithy CLI succeeded but produced no generated files, where the previous run produced @(_SmithyPreviousOutput->Count()). Command: &quot;$(SmithyCliPath)&quot; build --config &quot;$(_SmithyEffectiveBuildFile)&quot; --output &quot;$(_SmithyCliBuildOutput)&quot; $(SmithyExtraArgs)"
       Condition="'@(_SmithyPreviousOutput)' != '' and '@(_SmithyGeneratedOutput)' == ''"
     />
     <Touch Files="$(SmithyStampFile)" AlwaysCreate="true" />
@@ -664,9 +648,8 @@
     Name="_AddSmithyGeneratedCompileItems"
     DependsOnTargets="GenerateSmithyCode"
     BeforeTargets="CoreCompile"
-    Condition="Exists('$(SmithyBuildFile)')"
   >
-    <ItemGroup>
+    <ItemGroup Condition="'$(_SmithyEffectiveBuildFile)' != ''">
       <Compile Remove="$(SmithyAllProjectionsGlob)" />
       <_SmithyExcludedGeneratedCompile
         Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.Client.g.cs"
@@ -690,9 +673,8 @@
     picks up the generated .proto and compiles it to C# in the same build pass.
 
     We cannot use BeforeTargets="BeforeBuild" here because BeforeBuild runs
-    before _PrepareSmithyBuildFile updates SmithyBuildFile; at that early point
-    Exists('$(SmithyBuildFile)') is false and the target would be excluded from
-    the build graph. Using _Protobuf_Compile_BeforeCsCompile as the anchor
+    before _PrepareSmithyBuildFile writes the effective build file. Using
+    _Protobuf_Compile_BeforeCsCompile as the anchor
     ensures our DependsOnTargets chain (_PrepareSmithyBuildFile → GenerateSmithyCode)
     runs first, generating the .proto, before Grpc.Tools looks for proto items.
   -->
@@ -715,20 +697,21 @@
   </Target>
 
   <!--
-    Copy the smithy-openapi output to wwwroot/openapi.json so that ASP.NET Core's
-    static file middleware can serve it at /openapi.json.
-    Only runs when SmithyOpenApiProtocol is set.
+    Copy the smithy-openapi output of SmithyProjection to wwwroot/openapi.json so that ASP.NET
+    Core's static file middleware can serve it at /openapi.json. Runs in Web SDK projects
+    whenever the build produced it, whether SmithyOpenApiProtocol or the project's
+    smithy-build.json configured it.
   -->
   <Target
     Name="_CopyOpenApiToWwwroot"
     AfterTargets="GenerateSmithyCode"
-    Condition="'$(SmithyOpenApiProtocol)' != ''"
+    Condition="'$(_SmithyEffectiveBuildFile)' != '' and '$(UsingMicrosoftNETSdkWeb)' == 'true'"
   >
     <PropertyGroup>
-      <_SmithyOutputDir>$([MSBuild]::EnsureTrailingSlash('$(MSBuildProjectDirectory)'))$(SmithyBuildOutputPath)</_SmithyOutputDir>
+      <_SmithyOutputDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(SmithyBuildOutputPath)'))</_SmithyOutputDir>
     </PropertyGroup>
     <ItemGroup>
-      <_OpenApiJson Include="$(_SmithyOutputDir)**/openapi/*.json" />
+      <_OpenApiJson Include="$(_SmithyOutputDir)$(SmithyProjection)/openapi/*.json" />
     </ItemGroup>
     <MakeDir Directories="$(MSBuildProjectDirectory)/wwwroot" Condition="'@(_OpenApiJson)' != ''" />
     <Copy
@@ -741,17 +724,18 @@
   </Target>
 
   <!--
-    Copy the smithy-docgen Sphinx HTML output to wwwroot/docs/ so that ASP.NET
-    Core's static file middleware can serve it at /docs/.
-    Only runs when SmithyGenerateDocs is true.
+    Copy the smithy-docgen Sphinx HTML output of SmithyProjection to wwwroot/docs/ so that
+    ASP.NET Core's static file middleware can serve it at /docs/. Runs in Web SDK projects
+    whenever the build produced it, whether SmithyGenerateDocs or the project's
+    smithy-build.json configured it.
   -->
   <Target
     Name="_CopyDocgenToWwwroot"
     AfterTargets="GenerateSmithyCode"
-    Condition="'$(SmithyGenerateDocs)' == 'true'"
+    Condition="'$(_SmithyEffectiveBuildFile)' != '' and '$(UsingMicrosoftNETSdkWeb)' == 'true'"
   >
     <PropertyGroup>
-      <_SmithyDocgenHtmlDir>$([MSBuild]::EnsureTrailingSlash('$(MSBuildProjectDirectory)'))$(SmithyBuildOutputPath)source/docgen/build/html/</_SmithyDocgenHtmlDir>
+      <_SmithyDocgenHtmlDir>$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(SmithyBuildOutputPath)', '$(SmithyProjection)', 'docgen', 'build', 'html'))</_SmithyDocgenHtmlDir>
       <_SmithyDocsDestDir>$(MSBuildProjectDirectory)/wwwroot/docs/</_SmithyDocsDestDir>
     </PropertyGroup>
     <ItemGroup>

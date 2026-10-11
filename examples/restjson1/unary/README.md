@@ -14,9 +14,9 @@ same generated operations and Smithy prompt templates are also exposed over MCP.
 - `client`: generated typed client that pages through all cities using the
   `nextToken` continuation token.
 
-The server and client reference the contracts project directly. No
-`smithy-build.json` is needed — NSmithy synthesizes one from the model sources
-and Maven dependencies declared in the contracts project.
+The server and client reference the contracts project directly and need no
+`smithy-build.json` of their own: NSmithy builds from the model sources and
+Maven dependencies declared in the contracts project.
 
 ## Prerequisites
 

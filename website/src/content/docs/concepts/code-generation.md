@@ -78,8 +78,12 @@ project's `.smithy` files and build configuration are registered with
 
 ## Configure generation
 
-Set `SmithyGenerateClient` and `SmithyGenerateServer` to select generated APIs
-and `SmithyBaseNamespace` to prefix generated C# namespaces. The
-[MSBuild reference](/smithy-dotnet/reference/msbuild/) lists every property, and
+MSBuild properties say what a project builds: `SmithyService` names the service,
+and `SmithyGenerateClient` and `SmithyGenerateServer` select the generated APIs.
+Settings that tune the output, such as `baseNamespace` to prefix generated C#
+namespaces, go in the project's `smithy-build.json`. On every build NSmithy
+merges both into one effective `smithy-build.json` under `obj/`. The
+[MSBuild reference](/smithy-dotnet/reference/msbuild/) lists every property and
+setting, and
 [Distributing contracts](/smithy-dotnet/guides/distributing-contracts/) covers
 model dependencies.

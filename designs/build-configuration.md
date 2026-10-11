@@ -7,12 +7,11 @@ build that the Smithy CLI runs.
 
 Two files describe a code-generation build:
 
-- **`smithy-build.json` describes the model**: its sources, the Maven
-  dependencies and repositories it needs, suppressions, projections, and any
+- **The project file says what the project builds**: the service, whether it
+  gets the client, the server, documentation, OpenAPI, or a `.proto` file.
+- **`smithy-build.json` says how**: the model's sources, Maven dependencies and
+  repositories, suppressions, projections, every other plugin setting, and any
   plugins the project runs besides NSmithy's.
-- **The project file describes what NSmithy generates**: MSBuild properties
-  select and configure NSmithy's plugins (`csharp-codegen`, `docgen`, `openapi`,
-  and the Protobuf plugin).
 
 On every build, NSmithy merges the two into one effective build file under
 `obj/` and runs the Smithy CLI on it. A project without its own
@@ -25,10 +24,12 @@ code path, and every MSBuild property means the same thing in every project.
   property does.
 - A project with a contracts reference generates code from a few properties and
   no `smithy-build.json` of its own.
+- Every plugin setting is available, including ones added to a plugin later,
+  without a matching MSBuild property.
 - The project's own `smithy-build.json` stays a plain Smithy file: the Smithy
   IDE tooling reads it, and a contracts project publishes it.
-- Misconfiguration fails the build with a message that names the fix, instead
-  of producing no output.
+- A setting configured in two places fails the build with a message that names
+  the fix; nothing is silently ignored.
 - The build that ran is inspectable as a file.
 
 ## Inputs
@@ -38,7 +39,7 @@ code path, and every MSBuild property means the same thing in every project.
 | Project build file | `$(SmithyBuildFile)`, `smithy-build.json` at the project root by default. Optional. |
 | Contract build files | `SmithyContractsBuildFile` items, collected from contracts project references or set for packaged contracts. |
 | Contract sources | `SmithySource` items, collected the same way. |
-| Generation properties | The MSBuild properties in the table below. |
+| Generation properties | `SmithyService`, `SmithyGenerateClient`, `SmithyGenerateServer`, `SmithyGenerateDocs`, `SmithyOpenApiProtocol`, `SmithyGrpc`, and `SmithyProjection`. |
 
 ## The effective build file
 
@@ -48,17 +49,21 @@ It is assembled in this order:
 
 1. **Model settings.** Everything in the project build file is kept as written:
    `sources`, `imports`, `maven`, `suppressions`, `projections`, `plugins`, and
-   any other key. Relative paths are resolved against the project build file's
-   directory.
+   any other key. Relative `sources` and `imports` are resolved against the
+   project build file's directory.
 2. **Contracts.** Each contract build file contributes its Maven dependencies,
-   repositories, and suppressions. `SmithySource` items are added to `sources`
-   as absolute paths.
+   repositories, and suppressions; its plugins are not carried over.
+   `SmithySource` items are added to `sources` as absolute paths.
 3. **Repositories.** When neither the project nor a contract lists a Maven
    repository, Maven Central is listed, as the plain Smithy CLI assumes it. The
    [bundled repository](#bundled-maven-repository) is searched before any
    listed one.
-4. **NSmithy's plugins.** Each enabled plugin is added with its settings, and
-   its Maven artifact is added to the dependencies.
+4. **Settings from properties.** Each enabled plugin gets the settings its
+   properties set, in the projection `SmithyProjection` selects (see
+   [Plugin settings](#plugin-settings)).
+5. **Plugin artifacts.** Each of NSmithy's plugins that appears anywhere in the
+   file gets its Maven artifact added to the dependencies: the NSmithy plugins
+   at the NSmithy version, `docgen` and `openapi` at `SmithyVersion`.
 
 Dependencies are combined by coordinate. The same artifact at two versions
 fails the build and names both sources.
@@ -67,41 +72,67 @@ The file is rewritten only when its content changes, and it is an input of the
 generation step, so a property change regenerates and an unchanged project
 skips the CLI.
 
-## NSmithy's plugins
+## Plugin settings
 
-| Plugin | Enabled by | Settings from |
+A setting comes from exactly one place. Properties set the keys below;
+`smithy-build.json` sets every other key of the same plugin. A key set both
+ways fails the build.
+
+| Plugin | Enabled by | Keys from properties |
 | --- | --- | --- |
-| `csharp-codegen` | `SmithyService` | `service` ← `SmithyService`, `baseNamespace` ← `SmithyBaseNamespace`, `generateClient` ← `SmithyGenerateClient`, `generateServer` ← `SmithyGenerateServer`, `generateDependencyInjection` ← `SmithyGenerateDependencyInjection`, `generateFakes` ← `SmithyGenerateFakes` |
+| `csharp-codegen` | `SmithyService` | `service` ← `SmithyService`; `generateClient` ← `SmithyGenerateClient` and `generateServer` ← `SmithyGenerateServer` when `false` |
 | `docgen` | `SmithyGenerateDocs` | `service` ← `SmithyService` |
-| `openapi` | `SmithyOpenApiProtocol` | `service` ← `SmithyService`, `protocol` ← `SmithyOpenApiProtocol`, `useIntegerType` = `true` |
-| `proto-codegen` | `SmithyGrpc` | `service` ← `SmithyService`, `baseNamespace` ← `SmithyBaseNamespace` |
+| `openapi` | `SmithyOpenApiProtocol` | `service` ← `SmithyService`, `protocol` ← `SmithyOpenApiProtocol` |
+| `proto-codegen` | `SmithyGrpc` | `service` ← `SmithyService` |
 
-`SmithyService` is the switch for code generation. A project without it, such
-as a contracts project, builds and validates its model and generates nothing.
-`docgen`, `openapi`, and `proto-codegen` require `SmithyService`; enabling one
+Some keys have defaults that apply only when the file does not set them:
+`openapi` writes integer shapes as `integer` (`useIntegerType`), and
+`proto-codegen` takes `baseNamespace` from `csharp-codegen` and suffixes C#
+namespaces with `Grpc`.
+
+The settings are written into `projections.<SmithyProjection>.plugins`,
+merged with the plugin's settings from that projection and from the file's
+top-level `plugins`. A projection other than `source` must exist in the
+project build file.
+
+`SmithyService` is the switch for code generation from properties. A project
+without it adds no plugins from properties. Such a project either only builds
+and validates its model, as a contracts project does, or configures NSmithy's
+plugins entirely in `smithy-build.json`, for example one `csharp-codegen` per
+projection to generate several services. `docgen`, `openapi`, and
+`proto-codegen` take their service from `SmithyService`; enabling one of them
 without it fails the build.
 
-The plugins are placed in the projection named by `SmithyProjection`. For the
-default `source` projection that is the top-level `plugins` object; for any
-other name it is `projections.<name>.plugins`, and that projection must exist
-in the project build file. The steps that collect output (compiling `.g.cs`
-files, copying docs and OpenAPI into `wwwroot/`, registering `.proto` files)
-read from the same projection.
+For example, a client that generates from a contracts project and also wants
+fakes and a namespace prefix:
 
-## Ownership
-
-NSmithy's plugins are configured through properties only. If the project build
-file or a contract build file configures `csharp-codegen`, `docgen`, `openapi`,
-or `proto-codegen` in the selected projection, the build fails:
-
-```text
-error NSMITHYPLUGIN: smithy-build.json configures the docgen plugin, which
-NSmithy configures from MSBuild properties. Remove it and set SmithyGenerateDocs
-to true instead.
+```xml
+<PropertyGroup>
+  <SmithyService>example.hello#HelloService</SmithyService>
+  <SmithyGenerateServer>false</SmithyGenerateServer>
+</PropertyGroup>
 ```
 
-There is no precedence between the two sources, so a value never silently
-loses. Plugins NSmithy does not own are kept and run as configured.
+```json
+{
+  "version": "1.0",
+  "plugins": {
+    "csharp-codegen": { "generateFakes": true, "baseNamespace": "Acme" }
+  }
+}
+```
+
+The effective `csharp-codegen` settings are `service`, `generateServer: false`,
+`generateFakes`, and `baseNamespace`.
+
+## Collecting output
+
+C# files are compiled from every projection's `csharp-codegen` output.
+`SmithyGenerateClient` and `SmithyGenerateServer` set to `false` also leave the
+corresponding files out of compilation, whichever projection produced them.
+`.proto` files are registered the same way. In Web SDK projects, documentation
+and OpenAPI output in `SmithyProjection` is copied to `wwwroot/docs/` and
+`wwwroot/openapi.json` whenever the build produces it.
 
 ## Bundled Maven repository
 
@@ -116,15 +147,15 @@ repositories. See [Maven dependencies](../website/src/content/docs/reference/mav
 A contracts project (`SmithyPublish=true`) publishes its own `smithy-build.json`
 in the NuGet package and the Maven JAR, never the effective build file. Its
 consumers therefore receive the model's settings and none of the contracts
-project's NSmithy plugins. Without `SmithyService`, a contracts project's build
-validates the model and generates nothing.
+project's generation settings. Without `SmithyService`, a contracts project's
+build validates the model and generates nothing.
 
 ## Diagnostics
 
 | Code | Condition |
 | --- | --- |
-| `NSMITHYPLUGIN` | A build file configures a plugin NSmithy owns. |
-| `NSMITHYSERVICE` | `docgen`, `openapi`, or `proto-codegen` is enabled without `SmithyService`. |
+| `NSMITHYPLUGIN` | A plugin key is set both by a property and in a build file. |
+| `NSMITHYSERVICE` | `SmithyGenerateDocs`, `SmithyOpenApiProtocol`, or `SmithyGrpc` is set without `SmithyService`. |
 | `NSMITHYPROJECTION` | `SmithyProjection` names a projection the project build file does not define. |
 | `NSMITHYDEPENDENCY` | Two inputs declare the same Maven artifact at different versions. |
 
@@ -138,16 +169,32 @@ The Smithy Gradle plugin's split: plugins and their settings live in
 `smithy-build.json`, and the build tool selects the file and projection and
 supplies dependencies. It never generates or merges the file. It is simple and
 explicit, but every server and client project then needs its own
-`smithy-build.json` with plugin settings, including those that only consume a
-contracts reference. Offering it next to synthesis produces two modes in which
-the same property either works or is ignored.
+`smithy-build.json`, including those that only consume a contracts reference.
+Offering it next to synthesis produces two modes in which the same property
+either works or is ignored.
+
+### A property for every plugin setting
+
+Mirroring each `csharp-codegen` setting as an MSBuild property keeps a project
+without its own `smithy-build.json` fully configurable, but every new plugin
+setting then needs a property, the reference doubles, and a project that
+configures plugins in its file has to know which properties stop applying.
+Properties cover the decisions about what a project builds; settings that tune
+the output live where Smithy keeps them.
+
+### Ownership per plugin
+
+Letting either the properties or the file configure a whole plugin, never
+both, avoids merging plugin settings, but makes a single file-only setting such
+as `generateFakes` move the entire plugin, service included, into
+`smithy-build.json`. Ownership per key keeps the service in the project file
+in that case.
 
 ### Merging with precedence
 
-Letting the project file and the properties both configure NSmithy's plugins,
-with one winning per key, keeps both habits working but makes the outcome
-depend on a precedence rule a reader has to look up. Failing on overlap keeps a
-single owner per setting.
+Letting a property and the file set the same key, with one winning, keeps both
+habits working but makes the outcome depend on a precedence rule a reader has
+to look up. Failing on overlap keeps a single owner per setting.
 
 ### Everything in the project file
 
@@ -158,13 +205,13 @@ settings stay in it.
 
 ## Tradeoffs
 
-- **A plugin's settings come only from properties.** A `csharp-codegen` setting
-  is usable only once it has an MSBuild property. The plugin's settings map one
-  to one onto properties, and new settings get a property when they are added.
+- **Tuning a project without a build file needs one.** A client that generates
+  from a contracts reference and wants fakes or a namespace prefix adds a small
+  `smithy-build.json` with only those plugin settings.
 - **The effective file differs from the one in the repository.** The IDE sees
   the project build file and the CLI runs the effective one. They differ only
-  in NSmithy's plugins and the contract inputs, and the effective file is on
-  disk under `obj/` for inspection.
+  in the settings from properties, the contract inputs, and the plugin
+  artifacts, and the effective file is on disk under `obj/` for inspection.
 - **Maven Central is assumed when nothing else is listed.** Matching the plain
   Smithy CLI means an unbundled dependency resolves without configuration, at
   the cost of a network request the first time. Listing any repository,

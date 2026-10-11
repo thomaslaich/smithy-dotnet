@@ -150,7 +150,7 @@ imports through a normal `PackageReference` are an intended improvement.
 The configuration above is the current workaround.
 :::
 
-Keep the runtime packages required by the generated client or server. When no
-explicit build file exists, NSmithy synthesizes `smithy-build.json` under `obj/`,
-invokes `smithy build`,
-and adds the generated `.g.cs` files to compilation.
+Keep the runtime packages required by the generated client or server. NSmithy
+merges the contract's build file into the effective `smithy-build.json` under
+`obj/`, invokes `smithy build`, and adds the generated `.g.cs` files to
+compilation.

@@ -10,18 +10,15 @@ container.
 
 ## Setup
 
-Enable the helper in the client project:
-
-```xml title="MyService.Client.csproj"
-<PropertyGroup>
-  <SmithyGenerateDependencyInjection>true</SmithyGenerateDependencyInjection>
-</PropertyGroup>
-```
-
-With an explicit `smithy-build.json`, set the plugin option instead:
+Enable the helper in the client project's `smithy-build.json`, next to its
+`.csproj`. A client that generates from a contracts reference adds the file with
+only this setting:
 
 ```json title="smithy-build.json"
-{ "plugins": { "csharp-codegen": { "service": "...", "generateDependencyInjection": true } } }
+{
+  "version": "1.0",
+  "plugins": { "csharp-codegen": { "generateDependencyInjection": true } }
+}
 ```
 
 It's opt-in because the generated code depends on `Microsoft.Extensions.Http`.

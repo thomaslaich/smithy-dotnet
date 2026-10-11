@@ -3,14 +3,17 @@ title: Fake clients
 description: A generated client that returns canned responses without a network call. Canned responses from @examples, placeholders everywhere else.
 ---
 
-With `SmithyGenerateFakes` enabled, codegen emits a `Fake{Service}Client`
-implementing `I{Service}Client`. Code that depends on the client interface
-runs against it with no server and no network:
+With `generateFakes` set on the `csharp-codegen` plugin, codegen emits a
+`Fake{Service}Client` implementing `I{Service}Client`. Code that depends on the
+client interface runs against it with no server and no network. Set it in the
+client project's `smithy-build.json`, which a client that generates from a
+contracts reference adds with only this setting:
 
-```xml title="MyService.Client.csproj"
-<PropertyGroup>
-  <SmithyGenerateFakes>true</SmithyGenerateFakes>
-</PropertyGroup>
+```json title="smithy-build.json"
+{
+  "version": "1.0",
+  "plugins": { "csharp-codegen": { "generateFakes": true } }
+}
 ```
 
 ```csharp
