@@ -24,6 +24,11 @@ build/
 !gradle/wrapper/gradle-wrapper.jar
 *.class
 
+# Eclipse / Buildship
+.project
+.classpath
+.settings/
+
 *.binlog
 
 # Local agent state
