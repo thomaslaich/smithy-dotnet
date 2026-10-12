@@ -27,6 +27,14 @@ handler receives `GetCityInput` and returns `GetCityOutput` regardless of how
 the request arrived. Handler implementations are application code and are never
 overwritten.
 
+Operation `@examples` entries become `<example>` code samples in the XML
+documentation on generated client methods and their interfaces. Each sample
+includes its title and description, constructs the supplied input, calls the
+async client method, and shows the expected output or exception when provided.
+Error examples wrap the call in a typed `try`/`catch` and describe the expected
+exception properties inside the catch block. Samples use a `client` variable
+representing an existing client instance.
+
 ## Runtime schemas
 
 Codecs and protocol adapters do not reflect over the generated records. They

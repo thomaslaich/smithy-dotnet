@@ -227,6 +227,7 @@ public final class ClientGenerator implements Runnable {
                 w.write("");
                 for (OperationShape op : operations) {
                   w.writeXmlDocs(op, operationParameterDocs(model, op));
+                  new ClientExamplesGenerator(context, w).write(op);
                   w.write("$L;", operationSignature(w, context, op));
                   paginationInfo(context, service, op)
                       .ifPresent(
@@ -697,6 +698,7 @@ public final class ClientGenerator implements Runnable {
 
   private void writeOperationMethod(Model model, OperationShape op) {
     writer.writeXmlDocs(op, operationParameterDocs(model, op));
+    new ClientExamplesGenerator(context, writer).write(op);
     writer.pushState();
     try {
       writer.putContext("signature", operationSignature(writer, context, op));
