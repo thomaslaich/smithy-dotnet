@@ -19,7 +19,7 @@ public sealed class XmlCodecTests
             "<Catalog xmlns=\"urn:example\"><items><member>a</member><member>b</member></items></Catalog>";
         var decoded = codec.DeserializeText(xml);
 
-        Assert.Equal(["a", "b"], decoded.Items!.Values);
+        Assert.Equal(["a", "b"], decoded.Items!);
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public sealed class XmlCodecTests
     {
         var xml = XmlCodecFactory
             .Default.FromSchema(NamespacedCatalogSchema.Schema)
-            .SerializeText(new NamespacedCatalog(new ItemList(["a", "b"])));
+            .SerializeText(new NamespacedCatalog(["a", "b"]));
 
         Assert.Equal(
             "<Catalog xmlns=\"urn:example\"><items><member>a</member><member>b</member></items></Catalog>",
@@ -60,7 +60,7 @@ public sealed class XmlCodecTests
             + "</ListAllMyBucketsResult>";
         var decoded = codec.DeserializeText(xml);
 
-        Assert.Equal(["assets", "logs"], decoded.Buckets!.Values.Select(bucket => bucket.Name));
+        Assert.Equal(["assets", "logs"], decoded.Buckets!.Select(bucket => bucket.Name));
     }
 
     [Fact]

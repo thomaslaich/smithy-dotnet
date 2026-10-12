@@ -29,7 +29,7 @@ var page = 1;
 await foreach (var result in client.ListCitiesPagesAsync(new ListCitiesInput(PageSize: 3)))
 {
     Console.WriteLine($"  Page {page++}:");
-    foreach (var city in result.Items.Values)
+    foreach (var city in result.Items)
         Console.WriteLine($"    {city.CityId}: {city.Name}");
 }
 

@@ -32,9 +32,9 @@ static Book NewBook(
         Checksum: checksum,
         Format: format,
         Category: category,
-        Tags: new TagList(tags),
-        Metadata: new StringMap(metadata),
-        NullableAttributes: new NullableAttributeMap(nullableAttributes),
+        Tags: tags.ToList(),
+        Metadata: metadata,
+        NullableAttributes: nullableAttributes,
         PublishedAt: publishedAt
     );
 }
@@ -44,12 +44,12 @@ var getResult = await client.GetBookAsync(new GetBookInput("1"));
 var b = getResult.Book;
 Console.WriteLine($"  [{b.Format} / {b.Category}] {b.Title} by {b.Author}");
 Console.WriteLine($"  Pages: {b.PageCount}  Checksum (fixed64): 0x{b.Checksum:X}");
-Console.WriteLine($"  Tags: {string.Join(", ", b.Tags?.Values ?? [])}");
+Console.WriteLine($"  Tags: {string.Join(", ", b.Tags ?? [])}");
 Console.WriteLine(
-    $"  Metadata: {string.Join(", ", (b.Metadata?.Values ?? new Dictionary<string, string>()).Select(kv => $"{kv.Key}={kv.Value}"))}"
+    $"  Metadata: {string.Join(", ", (b.Metadata ?? new Dictionary<string, string>()).Select(kv => $"{kv.Key}={kv.Value}"))}"
 );
 Console.WriteLine(
-    $"  NullableAttributes (sparse map): {string.Join(", ", (b.NullableAttributes?.Values ?? new Dictionary<string, string?>()).Select(kv => $"{kv.Key}={kv.Value ?? "<null>"}"))}"
+    $"  NullableAttributes (sparse map): {string.Join(", ", (b.NullableAttributes ?? new Dictionary<string, string?>()).Select(kv => $"{kv.Key}={kv.Value ?? "<null>"}"))}"
 );
 Console.WriteLine($"  Published: {b.PublishedAt:yyyy-MM-dd}");
 Console.WriteLine();
@@ -80,7 +80,7 @@ Console.WriteLine("=== ListBooks (@protoInlinedOneOf filter — by category) ===
 var listResult = await client.ListBooksAsync(
     new ListBooksInput(Filter: BookFilter.FromByCategory(BookCategory.SCIENCE), PageSize: 10)
 );
-foreach (var book in listResult.Books.Values)
+foreach (var book in listResult.Books)
     Console.WriteLine($"  {book.Title} by {book.Author}");
 Console.WriteLine();
 
@@ -88,42 +88,40 @@ Console.WriteLine("=== SearchBooks ===");
 var searchResult = await client.SearchBooksAsync(
     new SearchBooksInput(Query: "data", MaxResults: 5)
 );
-foreach (var book in searchResult.Books.Values)
+foreach (var book in searchResult.Books)
     Console.WriteLine($"  Match: {book.Title} by {book.Author}");
 Console.WriteLine();
 
 Console.WriteLine("=== UploadBooks (batch) ===");
 var uploadResult = await client.UploadBooksAsync(
-    new UploadBooksInput(
-        new BookList([
-            NewBook(
-                "",
-                "Structure and Interpretation of Computer Programs",
-                "Harold Abelson & Gerald Jay Sussman",
-                657,
-                0x51CA0ABE10B50101L,
-                BookFormat.EBOOK,
-                BookCategory.SCIENCE,
-                ["sicp", "lisp", "computer science"],
-                new Dictionary<string, string> { ["publisher"] = "MIT Press" },
-                new Dictionary<string, string?>(),
-                new DateTimeOffset(1996, 7, 25, 0, 0, 0, TimeSpan.Zero)
-            ),
-            NewBook(
-                "",
-                "The Pragmatic Programmer",
-                "David Thomas & Andrew Hunt",
-                352,
-                unchecked((long)0xA9A7169A71CA9A71UL),
-                BookFormat.PAPERBACK,
-                BookCategory.SCIENCE,
-                ["programming", "software engineering"],
-                new Dictionary<string, string> { ["edition"] = "20th anniversary" },
-                new Dictionary<string, string?>(),
-                new DateTimeOffset(2019, 9, 13, 0, 0, 0, TimeSpan.Zero)
-            ),
-        ])
-    )
+    new UploadBooksInput([
+        NewBook(
+            "",
+            "Structure and Interpretation of Computer Programs",
+            "Harold Abelson & Gerald Jay Sussman",
+            657,
+            0x51CA0ABE10B50101L,
+            BookFormat.EBOOK,
+            BookCategory.SCIENCE,
+            ["sicp", "lisp", "computer science"],
+            new Dictionary<string, string> { ["publisher"] = "MIT Press" },
+            new Dictionary<string, string?>(),
+            new DateTimeOffset(1996, 7, 25, 0, 0, 0, TimeSpan.Zero)
+        ),
+        NewBook(
+            "",
+            "The Pragmatic Programmer",
+            "David Thomas & Andrew Hunt",
+            352,
+            unchecked((long)0xA9A7169A71CA9A71UL),
+            BookFormat.PAPERBACK,
+            BookCategory.SCIENCE,
+            ["programming", "software engineering"],
+            new Dictionary<string, string> { ["edition"] = "20th anniversary" },
+            new Dictionary<string, string?>(),
+            new DateTimeOffset(2019, 9, 13, 0, 0, 0, TimeSpan.Zero)
+        ),
+    ])
 );
 Console.WriteLine($"  Uploaded {uploadResult.UploadedCount} books");
 

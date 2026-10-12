@@ -582,7 +582,7 @@ final class ClientGeneratorTest {
                 + " ListThingsItemsAsync(global::Example.Example.Pages.ListThingsInput input,"
                 + " CancellationToken cancellationToken = default);"),
         generated);
-    assertTrue(generated.contains("foreach (var item in items.Values)"), generated);
+    assertTrue(generated.contains("foreach (var item in items)"), generated);
     assertTrue(generated.contains("using System.Collections.Generic;"), generated);
     assertTrue(generated.contains("using System.Threading;"), generated);
     assertTrue(generated.contains("using System.Runtime.CompilerServices;"), generated);

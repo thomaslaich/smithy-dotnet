@@ -102,7 +102,7 @@ public sealed class SmithyValidatorTests
     {
         var validator = SmithyValidator.FromSchema(CodesSchema.Schema)!;
 
-        var errors = validator.GetErrors(new Codes(["a"]));
+        var errors = validator.GetErrors(["a"]);
 
         var error = Assert.Single(errors);
         Assert.Equal("/0", error.Path);
@@ -116,7 +116,7 @@ public sealed class SmithyValidatorTests
         var validator = SmithyValidator.FromSchema(ScoresSchema.Schema)!;
 
         var errors = validator.GetErrors(
-            new Scores(new Dictionary<string, int>(StringComparer.Ordinal) { ["x"] = 11 })
+            new Dictionary<string, int>(StringComparer.Ordinal) { ["x"] = 11 }
         );
 
         Assert.Equal(2, errors.Count);
@@ -204,21 +204,17 @@ public sealed class SmithyValidatorTests
     {
         var validator = SmithyValidator.FromSchema(BlobsSchema.Schema)!;
 
-        var errors = validator.GetErrors(
-            new Blobs([
-                [1, 2],
-                [1, 2],
-            ])
-        );
+        var errors = validator.GetErrors([
+            [1, 2],
+            [1, 2],
+        ]);
 
         Assert.Single(errors, error => error.ConstraintId == UniqueItemsTrait);
         Assert.Empty(
-            validator.GetErrors(
-                new Blobs([
-                    [1, 2],
-                    [3, 4],
-                ])
-            )
+            validator.GetErrors([
+                [1, 2],
+                [3, 4],
+            ])
         );
     }
 
@@ -228,7 +224,7 @@ public sealed class SmithyValidatorTests
         var validator = SmithyValidator.FromSchema(RangedScoresSchema.Schema)!;
 
         var errors = validator.GetErrors(
-            new RangedScores(new Dictionary<string, int>(StringComparer.Ordinal) { ["a/b~c"] = 11 })
+            new Dictionary<string, int>(StringComparer.Ordinal) { ["a/b~c"] = 11 }
         );
 
         var error = Assert.Single(errors);
@@ -262,13 +258,11 @@ public sealed class SmithyValidatorTests
         var validator = SmithyValidator.FromSchema(PaletteSchema.Schema)!;
 
         Assert.Empty(
-            validator.GetErrors(
-                new Palette(new Dictionary<string, string> { ["RED"] = "a", ["PUCE"] = "b" })
-            )
+            validator.GetErrors(new Dictionary<string, string> { ["RED"] = "a", ["PUCE"] = "b" })
         );
 
         var error = Assert.Single(
-            validator.GetErrors(new Palette(new Dictionary<string, string> { ["MAUVE"] = "a" }))
+            validator.GetErrors(new Dictionary<string, string> { ["MAUVE"] = "a" })
         );
         // Reported at the map, not the entry: the key is not a value sitting at the entry's pointer.
         Assert.Equal("", error.Path);
@@ -288,14 +282,14 @@ public sealed class SmithyValidatorTests
         // .NET equality alone would let these two duplicates through.
         var validator = SmithyValidator.FromSchema(BasketsSchema.Schema)!;
 
-        var errors = validator.GetErrors(new Baskets([NewBasket("a"), NewBasket("a")]));
+        var errors = validator.GetErrors([NewBasket("a"), NewBasket("a")]);
 
         Assert.Single(errors, error => error.ConstraintId == UniqueItemsTrait);
-        Assert.Empty(validator.GetErrors(new Baskets([NewBasket("a"), NewBasket("b")])));
+        Assert.Empty(validator.GetErrors([NewBasket("a"), NewBasket("b")]));
     }
 
     private static Profile NewProfile(string name, int age, params string[] tags) =>
-        new(Age: age, Name: name, Tags: new Tags(tags));
+        new(Age: age, Name: name, Tags: tags);
 
-    private static Basket NewBasket(params string[] items) => new(new Items(items));
+    private static Basket NewBasket(params string[] items) => new(items);
 }

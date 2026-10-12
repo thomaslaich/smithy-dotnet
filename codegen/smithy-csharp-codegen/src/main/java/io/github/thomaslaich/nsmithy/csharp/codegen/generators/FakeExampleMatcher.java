@@ -257,14 +257,14 @@ final class FakeExampleMatcher {
         ArrayNode array = node.expectArrayNode();
         String v = nextVar(counter);
         out.add(expr + " is { } " + v);
-        out.add(v + ".Values.Count == " + array.size());
+        out.add(v + ".Count == " + array.size());
         List<Node> elements = array.getElements();
         for (int i = 0; i < elements.size(); i++) {
           Node element = elements.get(i);
           if (element.isNullNode()) {
-            out.add(v + ".Values[" + i + "] is null");
+            out.add(v + "[" + i + "] is null");
           } else {
-            valueConditions(v + ".Values[" + i + "]", elementTarget, element, out, counter);
+            valueConditions(v + "[" + i + "]", elementTarget, element, out, counter);
           }
         }
       }
@@ -274,12 +274,12 @@ final class FakeExampleMatcher {
         ObjectNode obj = node.expectObjectNode();
         String v = nextVar(counter);
         out.add(expr + " is { } " + v);
-        out.add(v + ".Values.Count == " + obj.size());
+        out.add(v + ".Count == " + obj.size());
         for (Map.Entry<String, Node> entry : obj.getStringMap().entrySet()) {
           String mv = nextVar(counter);
           out.add(
               v
-                  + ".Values.TryGetValue("
+                  + ".TryGetValue("
                   + CSharpNaming.formatString(entry.getKey())
                   + ", out var "
                   + mv

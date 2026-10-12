@@ -16,8 +16,10 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.writer;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
 import io.github.thomaslaich.nsmithy.csharp.codegen.SymbolProperties;
+import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolReference;
@@ -76,8 +78,27 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
   public String typeName(Symbol symbol, String suffix) {
     Symbol reference =
         suffix.isEmpty() ? symbol : symbol.toBuilder().name(symbol.getName() + suffix).build();
+    @SuppressWarnings("unchecked")
+    List<Symbol> arguments =
+        (List<Symbol>) reference.getProperty(SymbolProperties.TYPE_ARGUMENTS).orElse(List.of());
+    if (!arguments.isEmpty()) {
+      Symbol generic =
+          reference.toBuilder()
+              .removeProperty(SymbolProperties.TYPE_ARGUMENTS)
+              .removeProperty(SymbolProperties.IS_VALUE_TYPE)
+              .build();
+      return typeName(generic)
+          + arguments.stream()
+              .map(this::typeArgumentName)
+              .collect(Collectors.joining(", ", "<", ">"));
+    }
     addUseImports(reference);
     return getImportContainer().reference(reference, reference.getName());
+  }
+
+  private String typeArgumentName(Symbol argument) {
+    boolean nullable = argument.getProperty(SymbolProperties.IS_NULLABLE).isPresent();
+    return typeName(argument) + (nullable ? "?" : "");
   }
 
   /** Emits a C# XML documentation summary from a Smithy shape's documentation trait. */

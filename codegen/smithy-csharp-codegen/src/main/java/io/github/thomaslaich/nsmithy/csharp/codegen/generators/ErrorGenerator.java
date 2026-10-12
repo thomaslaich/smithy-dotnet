@@ -99,11 +99,8 @@ public final class ErrorGenerator implements Runnable {
           .ifPresent(trait -> parameterDocs.put("message", trait.getValue()));
     }
     for (MemberShape m : ctor) {
-      m.getTrait(DocumentationTrait.class)
-          .ifPresent(
-              trait ->
-                  parameterDocs.put(
-                      CSharpNaming.parameterName(m.getMemberName()), trait.getValue()));
+      ShapeSupport.memberDocumentation(model, m)
+          .ifPresent(doc -> parameterDocs.put(CSharpNaming.parameterName(m.getMemberName()), doc));
     }
     writer.writeXmlDocs(shape, parameterDocs);
 
@@ -183,7 +180,8 @@ public final class ErrorGenerator implements Runnable {
       String prop = CSharpNaming.propertyName(m.getMemberName());
       boolean nullable = ShapeSupport.isNullable(m);
       String type = ShapeSupport.memberTypeExpr(writer, model, sp, m, nullable);
-      writer.writeXmlDocs(m);
+      ShapeSupport.memberDocumentation(model, m)
+          .ifPresent(doc -> writer.writeXmlDocs(doc, Map.of()));
       writer.write("public $L $L { get; }", type, prop);
     }
   }

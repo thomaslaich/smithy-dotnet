@@ -62,12 +62,10 @@ internal sealed class TwoCitiesWeatherClient : FakeWeatherClient
     ) =>
         Task.FromResult(
             new ListCitiesOutput(
-                Items: new CitySummaries(
-                    [
+                Items: [
                         new CitySummary(CityId: "SEA", Name: "Seattle"),
                         new CitySummary(CityId: "HOU", Name: "Houston"),
                     ]
-                )
             )
         );
 }

@@ -13,8 +13,8 @@ The following areas remain under development or consideration.
 
 - Keep the fully conformant AWS Query and EC2 Query clients green while
   expanding real-service coverage.
-- Keep the stable `aws.protocols#restJson1` and `smithy.protocols#rpcv2Cbor`
-  implementations fully conformant, and continue hardening
+- Keep `aws.protocols#restJson1` and `smithy.protocols#rpcv2Cbor` fully
+  conformant, and continue hardening
   `aws.protocols#restXml` as a preview implementation.
 - Build on regional endpoint resolution, profile/SSO/IMDS credentials,
   presigning, and published AWS signing test vectors with modeled endpoint rule sets,

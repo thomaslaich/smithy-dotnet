@@ -1,6 +1,7 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
+import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.SymbolProperties;
@@ -109,7 +110,18 @@ public final class SchemaGenerator {
 
   public static String schemaClassName(
       CSharpWriter writer, GenerationContext context, Shape shape) {
-    return writer.typeName(context.symbolProvider().toSymbol(shape), "Schema");
+    return writer.typeName(schemaOwner(context, shape), "Schema");
+  }
+
+  /**
+   * The symbol a shape's schema class is named after. A list or map is generated as {@code
+   * IReadOnlyList<T>} or {@code IReadOnlyDictionary<string, T>}, so its schema keeps the shape's
+   * own name and namespace instead.
+   */
+  public static Symbol schemaOwner(GenerationContext context, Shape shape) {
+    return shape instanceof ListShape || shape instanceof MapShape
+        ? CSharpSymbolProvider.declaredSymbol(context.settings(), shape)
+        : context.symbolProvider().toSymbol(shape);
   }
 
   public static String operationSchemaAccessor(
@@ -364,7 +376,7 @@ public final class SchemaGenerator {
                   private static readonly ${schema:T}<${memberType:L}> Target0 = ${elementSchema:L};
 
                   public override ${enumerable:T}<${memberType:L}> GetElements(${type:L} value) =>
-                      value.Values;
+                      value;
 
                   public override ${builderType:L} CreateTypedBuilder() => new();
 
@@ -372,13 +384,13 @@ public final class SchemaGenerator {
                       builder.Add(value);
 
                   public override ${type:L} Build(${builderType:L} builder) =>
-                      ${type:L}.FromOwnedList(builder);
+                      builder.AsReadOnly();
 
                   public override void SerializeElements<TSerializer>(
                       ${type:L} value,
                       ref TSerializer serializer)
                   {
-                      var elements = value.Values;
+                      var elements = value;
                       for (var index = 0; index < elements.Count; index++)
                       {
                           ${write:C|}
@@ -418,6 +430,7 @@ public final class SchemaGenerator {
       writer.putContext("generatedSchema", GENERATED_SCHEMA);
       writer.putContext("schema", RuntimeTypes.SCHEMA);
       writer.putContext("mapSchema", RuntimeTypes.MAP_SCHEMA);
+      writer.putContext("readOnlyDictionary", RuntimeTypes.READ_ONLY_DICTIONARY);
       writer.putContext("enumerable", RuntimeTypes.I_ENUMERABLE);
       writer.putContext("keyValuePair", RuntimeTypes.KEY_VALUE_PAIR);
       writer.putContext("stringComparer", RuntimeTypes.STRING_COMPARER);
@@ -470,7 +483,7 @@ public final class SchemaGenerator {
                   private static readonly ${schema:T}<${valueType:L}> Target0 = ${valueSchema:L};
 
                   public override ${enumerable:T}<${keyValuePair:T}<string, ${valueType:L}>> GetEntries(
-                      ${type:L} value) => value.Values;
+                      ${type:L} value) => value;
 
                   public override ${builderType:L} CreateTypedBuilder() =>
                       new(${stringComparer:T}.Ordinal);
@@ -479,13 +492,13 @@ public final class SchemaGenerator {
                       builder[key] = value;
 
                   public override ${type:L} Build(${builderType:L} builder) =>
-                      ${type:L}.FromOwnedDictionary(builder);
+                      new ${readOnlyDictionary:T}<string, ${valueType:L}>(builder);
 
                   public override void SerializeEntries<TSerializer>(
                       ${type:L} value,
                       ref TSerializer serializer)
                   {
-                      foreach (var entry in value.Values)
+                      foreach (var entry in value)
                       {
                           serializer.WriteString(0, entry.Key);
                           ${write:C|}
@@ -838,15 +851,18 @@ public final class SchemaGenerator {
       }
       case TIMESTAMP -> timestampLiteral(node);
       case DOCUMENT -> documentExpr(writer, node);
-      case LIST, SET -> type + ".FromOwnedList([])";
+      case LIST, SET -> "[]";
       case MAP -> {
         MapShape map = target.asMapShape().orElseThrow();
         Shape valueTarget = model.expectShape(map.getValue().getTarget());
         String valueType =
             writer.typeName(context.symbolProvider().toSymbol(valueTarget))
                 + (ShapeSupport.isSparse(map) ? "?" : "");
-        yield type
-            + ".FromOwnedDictionary(new "
+        yield "new "
+            + writer.typeName(RuntimeTypes.READ_ONLY_DICTIONARY)
+            + "<string, "
+            + valueType
+            + ">(new "
             + writer.typeName(RuntimeTypes.DICTIONARY)
             + "<string, "
             + valueType
