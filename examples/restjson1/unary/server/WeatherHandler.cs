@@ -64,7 +64,7 @@ internal sealed class WeatherHandler : IWeatherServiceHandler
 
         return Task.FromResult(
             new ListCitiesOutput(
-                Items: new CitySummaries([.. page.Select(c => new CitySummary(c.CityId, c.Name))]),
+                Items: [.. page.Select(c => new CitySummary(c.CityId, c.Name))],
                 NextToken: nextToken
             )
         );

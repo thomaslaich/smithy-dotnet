@@ -194,8 +194,7 @@ final class FakeHandlerGeneratorTest {
         generated.contains(
             "return Task.FromResult(new"
                 + " GetCityOutput(Name: \"Zurich\", Population:"
-                + " 400000, Tags: new TagList(new string[] {"
-                + " \"alpine\" })));"),
+                + " 400000, Tags: new string[] { \"alpine\" }));"),
         generated);
     assertFalse(generated.contains("GetCityOutput(Name: \"Zurich\", Mood:"), generated);
   }
@@ -207,9 +206,8 @@ final class FakeHandlerGeneratorTest {
     assertTrue(
         generated.contains(
             "new GetStatusOutput(Label: \"label\","
-                + " Attrs: new AttrMap(new"
-                + " Dictionary<string, string> { { \"key\", \"value\" }"
-                + " }), Choice: Choice.FromNum(0), Code: \"codexx\","
+                + " Attrs: new Dictionary<string, string> { { \"key\", \"value\" }"
+                + " }, Choice: Choice.FromNum(0), Code: \"codexx\","
                 + " Count: 5, Mood: Mood.HAPPY,"
                 + " When: DateTimeOffset.FromUnixTimeSeconds(1704067200))"),
         generated);
@@ -222,9 +220,8 @@ final class FakeHandlerGeneratorTest {
     assertTrue(
         generated.contains(
             "new GetTreeOutput(Root: new"
-                + " TreeNode(Id: \"id\", Children: new"
-                + " TreeList("
-                + "Array.Empty<TreeNode>())))"),
+                + " TreeNode(Id: \"id\", Children:"
+                + " Array.Empty<TreeNode>()))"),
         generated);
     assertFalse(generated.contains("Child: new TreeNode"), generated);
   }
@@ -282,9 +279,9 @@ final class FakeHandlerGeneratorTest {
 
     assertTrue(generated.contains("if (!(input.Filter is { } v0))"), generated);
     assertTrue(generated.contains("if (!(v0.Tags is { } v1))"), generated);
-    assertTrue(generated.contains("if (!(v1.Values.Count == 2))"), generated);
-    assertTrue(generated.contains("if (!(v1.Values[0] == \"a\"))"), generated);
-    assertTrue(generated.contains("if (!(v1.Values[1] == \"b\"))"), generated);
+    assertTrue(generated.contains("if (!(v1.Count == 2))"), generated);
+    assertTrue(generated.contains("if (!(v1[0] == \"a\"))"), generated);
+    assertTrue(generated.contains("if (!(v1[1] == \"b\"))"), generated);
   }
 
   @Test

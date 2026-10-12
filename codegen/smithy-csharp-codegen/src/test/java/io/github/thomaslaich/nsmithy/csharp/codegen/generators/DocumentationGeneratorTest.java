@@ -76,6 +76,26 @@ final class DocumentationGeneratorTest {
           value: String
       }
 
+      structure CollectionDocs {
+          cities: CityNames
+
+          /// Member docs win.
+          tags: CityNames
+
+          population: PopulationByCity
+      }
+
+      /// Names of cities.
+      list CityNames {
+          member: String
+      }
+
+      /// Population keyed by city.
+      map PopulationByCity {
+          key: String
+          value: Integer
+      }
+
       /// Forecast error docs.
       @error("client")
       structure ForecastError {
@@ -118,6 +138,20 @@ final class DocumentationGeneratorTest {
     assertTrue(generated.contains("/// Member-only docs."), generated);
     assertTrue(
         generated.contains("public sealed record class ParamOnlyDocs(string? Value = null);"));
+  }
+
+  @Test
+  void collectionMembersFallBackToTheCollectionShapeDocs() throws Exception {
+    String generated = renderStructure("example.weather#CollectionDocs");
+
+    assertTrue(generated.contains("/// <param name=\"Cities\">\n/// Names of cities."), generated);
+    assertTrue(generated.contains("/// <param name=\"Tags\">\n/// Member docs win."), generated);
+    assertTrue(
+        generated.contains("/// <param name=\"Population\">\n/// Population keyed by city."),
+        generated);
+    assertTrue(generated.contains("IReadOnlyList<string>? Cities = null"), generated);
+    assertTrue(
+        generated.contains("IReadOnlyDictionary<string, int>? Population = null"), generated);
   }
 
   @Test

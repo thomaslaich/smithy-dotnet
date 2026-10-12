@@ -6,8 +6,6 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ErrorGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeClientGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.FakeHandlerGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.IntEnumGenerator;
-import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ListGenerator;
-import io.github.thomaslaich.nsmithy.csharp.codegen.generators.MapGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.OperationSchemaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.SchemaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ServerGenerator;
@@ -215,12 +213,6 @@ final class DirectedCSharpCodegen
 
   @Override
   public void generateList(GenerateListDirective<GenerationContext, CSharpSettings> directive) {
-    directive
-        .context()
-        .writerDelegator()
-        .useShapeWriter(
-            directive.shape(),
-            writer -> new ListGenerator(directive.context(), writer, directive.shape()).run());
     writeSchema(
         directive.context(),
         directive.shape(),
@@ -229,12 +221,6 @@ final class DirectedCSharpCodegen
 
   @Override
   public void generateMap(GenerateMapDirective<GenerationContext, CSharpSettings> directive) {
-    directive
-        .context()
-        .writerDelegator()
-        .useShapeWriter(
-            directive.shape(),
-            writer -> new MapGenerator(directive.context(), writer, directive.shape()).run());
     writeSchema(
         directive.context(),
         directive.shape(),
@@ -296,7 +282,7 @@ final class DirectedCSharpCodegen
    */
   private static void writeSchema(
       GenerationContext context, Shape shape, Consumer<CSharpWriter> body) {
-    Symbol symbol = context.symbolProvider().toSymbol(shape);
+    Symbol symbol = SchemaGenerator.schemaOwner(context, shape);
     String file = symbol.getDefinitionFile().replaceFirst("\\.g\\.cs$", ".Schema.g.cs");
     context
         .writerDelegator()

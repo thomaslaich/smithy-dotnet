@@ -134,14 +134,24 @@ member name, traits, target schema, case matcher, and case constructor.
 
 Smithy `list` shapes are generated as `IReadOnlyList<T>` at usage sites. There
 is no standalone generated class for a list shape; the element type is resolved
-recursively and the list is represented inline. The generated schema still
-contains the list shape id, traits, and member target schema.
+recursively and the list is represented inline. A `@sparse` list has nullable
+elements (`IReadOnlyList<T?>`). Deserialized lists are read-only views that
+callers cannot modify.
+
+The list's schema keeps the shape's name: `list CityNames` produces
+`CityNamesSchema`, which carries the shape id, traits, and member target schema.
+A member without its own documentation takes the list shape's documentation,
+since the member is the only C# declaration left to carry it.
 
 ## Maps
 
-Smithy `map` shapes are generated as `IReadOnlyDictionary<TKey, TValue>`. Keys
-must be `string` or a string-like type. The generated schema contains the map
-shape id, traits, key schema, and value schema.
+Smithy `map` shapes are generated as `IReadOnlyDictionary<string, TValue>`. The
+key is always `string`, even when it targets an enum shape, because a key is
+written as a string on every wire format. A `@sparse` map has nullable values.
+
+Like lists, maps have no standalone generated class. The `<Map>Schema` class
+carries the shape id, traits, key schema, and value schema, and member
+documentation falls back to the map shape's documentation.
 
 ## Services
 

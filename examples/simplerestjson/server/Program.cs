@@ -17,11 +17,7 @@ internal sealed class PizzaHandler : IPizzaAdminServiceHandler
     {
         ["margherita"] = new MenuItem(
             Food.FromPizza(
-                new Pizza(
-                    PizzaBase.TOMATO,
-                    "Margherita",
-                    new Ingredients([Ingredient.TOMATO, Ingredient.CHEESE])
-                )
+                new Pizza(PizzaBase.TOMATO, "Margherita", [Ingredient.TOMATO, Ingredient.CHEESE])
             ),
             8.50f
         ),
@@ -30,15 +26,13 @@ internal sealed class PizzaHandler : IPizzaAdminServiceHandler
                 new Pizza(
                     PizzaBase.TOMATO,
                     "Pepperoni",
-                    new Ingredients([Ingredient.TOMATO, Ingredient.CHEESE, Ingredient.PEPPERONI])
+                    [Ingredient.TOMATO, Ingredient.CHEESE, Ingredient.PEPPERONI]
                 )
             ),
             10.00f
         ),
         ["caesar"] = new MenuItem(
-            Food.FromSalad(
-                new Salad(new Ingredients([Ingredient.SALAD, Ingredient.CHEESE]), "Caesar")
-            ),
+            Food.FromSalad(new Salad([Ingredient.SALAD, Ingredient.CHEESE], "Caesar")),
             7.00f
         ),
     };
@@ -70,7 +64,7 @@ internal sealed class PizzaHandler : IPizzaAdminServiceHandler
         {
             if (!_menus.TryGetValue(input.Restaurant, out var items))
                 items = DefaultMenu;
-            return Task.FromResult(new GetMenuOutput(new Menu(items)));
+            return Task.FromResult(new GetMenuOutput(items));
         }
     }
 

@@ -56,11 +56,11 @@ public sealed class ProtoCodecTests
         var codec = ProtoCodecFactory.Default.FromSchema(RepeatedSchema.Schema);
 
         // field 1, LEN (0x0A), len 3, packed varints 1 2 3
-        var bytes = codec.Serialize(new Repeated(new IntList([1, 2, 3])));
+        var bytes = codec.Serialize(new Repeated([1, 2, 3]));
         byte[] expected = [0x0A, 0x03, 0x01, 0x02, 0x03];
         int[] expectedNums = [1, 2, 3];
         Assert.Equal(expected, bytes);
-        Assert.Equal(expectedNums, codec.Deserialize(bytes).Nums.Values);
+        Assert.Equal(expectedNums, codec.Deserialize(bytes).Nums);
     }
 
     [Fact]
@@ -72,8 +72,8 @@ public sealed class ProtoCodecTests
         byte[] bytes = [0x0A, 0x03, 0x01, 0x96, 0x01];
         int[] expectedNums = [-1, 75];
 
-        Assert.Equal(expectedNums, codec.Deserialize(bytes).Nums.Values);
-        Assert.Equal(bytes, codec.Serialize(new RepeatedSigned(new SignedIntList(expectedNums))));
+        Assert.Equal(expectedNums, codec.Deserialize(bytes).Nums);
+        Assert.Equal(bytes, codec.Serialize(new RepeatedSigned(expectedNums)));
     }
 
     [Fact]
@@ -85,8 +85,8 @@ public sealed class ProtoCodecTests
         byte[] bytes = [0x0A, 0x05, 0x0A, 0x01, 0x61, 0x10, 0x01];
         var expected = new Dictionary<string, int> { ["a"] = -1 };
 
-        Assert.Equal(bytes, codec.Serialize(new IntMapHolder(new SignedIntMap(expected))));
-        Assert.Equal(expected, codec.Deserialize(bytes).Values.Values);
+        Assert.Equal(bytes, codec.Serialize(new IntMapHolder(expected)));
+        Assert.Equal(expected, codec.Deserialize(bytes).Values);
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public sealed class ProtoCodecTests
 
         var result = codec.Deserialize([]);
 
-        Assert.Empty(result.Nums.Values);
+        Assert.Empty(result.Nums);
         Assert.Empty(result.Metadata.Values);
         Assert.Empty(codec.Serialize(result));
     }
@@ -107,8 +107,8 @@ public sealed class ProtoCodecTests
         new(
             Cat: Category.UNSPECIFIED,
             Id: id,
-            Metadata: new StringMap(new Dictionary<string, string>()),
-            Tags: new Tags([]),
+            Metadata: new Dictionary<string, string>(),
+            Tags: [],
             PublishedAt: publishedAt
         );
 
@@ -120,8 +120,8 @@ public sealed class ProtoCodecTests
             Id: "abc",
             PageCount: 534,
             Checksum: unchecked((long)0xF05CA1A5CA1A5CA1UL),
-            Tags: new Tags(["fp", "scala"]),
-            Metadata: new StringMap(new Dictionary<string, string> { ["publisher"] = "Manning" }),
+            Tags: ["fp", "scala"],
+            Metadata: new Dictionary<string, string> { ["publisher"] = "Manning" },
             Detail: new Nested(42),
             Cat: Category.SCIENCE,
             PublishedAt: new DateTimeOffset(2023, 8, 29, 0, 0, 0, TimeSpan.Zero)
@@ -132,7 +132,7 @@ public sealed class ProtoCodecTests
         Assert.Equal(book.Id, result.Id);
         Assert.Equal(book.PageCount, result.PageCount);
         Assert.Equal(book.Checksum, result.Checksum);
-        Assert.Equal(book.Tags.Values, result.Tags.Values);
+        Assert.Equal(book.Tags, result.Tags);
         Assert.Equal(book.Metadata.Values, result.Metadata.Values);
         Assert.Equal(book.Detail, result.Detail);
         Assert.Equal(book.Cat, result.Cat);
@@ -216,15 +216,13 @@ public sealed class ProtoCodecTests
     {
         var codec = ProtoCodecFactory.Default.FromSchema(AttributedSchema.Schema);
         var input = new Attributed(
-            new Attrs(
-                new Dictionary<string, string?> { ["subtitle"] = "An Intro", ["series"] = null }
-            )
+            new Dictionary<string, string?> { ["subtitle"] = "An Intro", ["series"] = null }
         );
 
         var result = codec.Deserialize(codec.Serialize(input));
 
-        Assert.Equal("An Intro", result.Attrs.Values["subtitle"]);
-        Assert.Null(result.Attrs.Values["series"]);
+        Assert.Equal("An Intro", result.Attrs["subtitle"]);
+        Assert.Null(result.Attrs["series"]);
     }
 
     [Fact]

@@ -50,11 +50,8 @@ public final class StructureGenerator implements Runnable {
   private Map<String, String> parameterDocs(List<MemberShape> members) {
     Map<String, String> docs = new LinkedHashMap<>();
     for (MemberShape member : members) {
-      member
-          .getTrait(DocumentationTrait.class)
-          .ifPresent(
-              trait ->
-                  docs.put(CSharpNaming.propertyName(member.getMemberName()), trait.getValue()));
+      ShapeSupport.memberDocumentation(context.model(), member)
+          .ifPresent(doc -> docs.put(CSharpNaming.propertyName(member.getMemberName()), doc));
     }
     return docs;
   }

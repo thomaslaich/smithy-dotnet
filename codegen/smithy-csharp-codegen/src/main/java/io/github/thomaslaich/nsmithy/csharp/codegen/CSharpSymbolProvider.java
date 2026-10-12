@@ -7,6 +7,7 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
+import java.util.List;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
@@ -173,12 +174,18 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
 
   @Override
   public Symbol listShape(ListShape s) {
-    return generated(s, CSharpNaming.typeName(s.getId().getName()));
+    Symbol element = typeArgument(s.getMember(), ShapeSupport.isSparse(s));
+    return constructed(RuntimeTypes.I_READ_ONLY_LIST, element);
   }
 
+  /**
+   * A map key is always a {@code string}, even when it targets an enum shape: a map key is a JSON
+   * object name, which has no other form. The schema still carries the key's target shape.
+   */
   @Override
   public Symbol mapShape(MapShape s) {
-    return generated(s, CSharpNaming.typeName(s.getId().getName()));
+    Symbol value = typeArgument(s.getValue(), ShapeSupport.isSparse(s));
+    return constructed(RuntimeTypes.I_READ_ONLY_DICTIONARY, primitive("", "string", false), value);
   }
 
   @Override
@@ -204,8 +211,12 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
         .build();
   }
 
-  /** Generated user-defined shape: lives in the per-shape C# namespace, has its own .cs file. */
-  private Symbol generated(Shape shape, String typeName) {
+  /**
+   * The symbol a shape declares in its own namespace and file, even when its C# type is not a
+   * generated declaration: a list's or map's schema class is still named and filed after the shape.
+   */
+  public static Symbol declaredSymbol(CSharpSettings settings, Shape shape) {
+    String typeName = CSharpNaming.typeName(shape.getId().getName());
     String csNamespace = settings.csharpNamespace(shape.getId().getNamespace());
     String file = csNamespace.replace('.', '/') + "/" + typeName + ".g.cs";
     return Symbol.builder()
@@ -214,5 +225,24 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
         .definitionFile(file)
         .putProperty(SymbolProperties.IS_VALUE_TYPE, false)
         .build();
+  }
+
+  private Symbol typeArgument(MemberShape member, boolean nullable) {
+    Symbol target = toSymbol(model.expectShape(member.getTarget()));
+    return nullable
+        ? target.toBuilder().putProperty(SymbolProperties.IS_NULLABLE, true).build()
+        : target;
+  }
+
+  private static Symbol constructed(Symbol generic, Symbol... arguments) {
+    return generic.toBuilder()
+        .putProperty(SymbolProperties.TYPE_ARGUMENTS, List.of(arguments))
+        .putProperty(SymbolProperties.IS_VALUE_TYPE, false)
+        .build();
+  }
+
+  /** Generated user-defined shape: lives in the per-shape C# namespace, has its own .cs file. */
+  private Symbol generated(Shape shape, String typeName) {
+    return declaredSymbol(settings, shape).toBuilder().name(typeName).build();
   }
 }

@@ -15,11 +15,9 @@ public sealed class AwsQueryProtocolTests
         var input = new SendGreetingInput(
             Text: "hello world",
             When: DateTimeOffset.Parse("2015-01-25T08:00:00Z"),
-            Items: new StringList(["a", "b"]),
-            FlatItems: new StringList(["c", "d"]),
-            Tags: new StringMap(
-                new Dictionary<string, string> { ["first"] = "1", ["second"] = "2" }
-            ),
+            Items: ["a", "b"],
+            FlatItems: ["c", "d"],
+            Tags: new Dictionary<string, string> { ["first"] = "1", ["second"] = "2" },
             Nested: new Nested("inside")
         );
 
@@ -41,7 +39,7 @@ public sealed class AwsQueryProtocolTests
         var protocol = Bind<Ec2QueryProtocol>();
         var input = new SendGreetingInput(
             Text: "hello",
-            Items: new StringList(["a", "b"]),
+            Items: ["a", "b"],
             Nested: new Nested("v")
         );
 

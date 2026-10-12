@@ -19,6 +19,7 @@ import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.model.traits.ClientOptionalTrait;
 import software.amazon.smithy.model.traits.DefaultTrait;
+import software.amazon.smithy.model.traits.DocumentationTrait;
 import software.amazon.smithy.model.traits.HttpHeaderTrait;
 import software.amazon.smithy.model.traits.HttpLabelTrait;
 import software.amazon.smithy.model.traits.HttpPayloadTrait;
@@ -58,6 +59,26 @@ public final class ShapeSupport {
 
   public static boolean hasDefault(MemberShape member) {
     return member.hasTrait(DefaultTrait.class);
+  }
+
+  /**
+   * A member's documentation, falling back to its target's when the member has none and targets a
+   * list or map. Those are generated inline as {@code IReadOnlyList<T>} or {@code
+   * IReadOnlyDictionary<string, T>}, so the member is the only declaration that can carry the
+   * collection shape's documentation.
+   */
+  public static Optional<String> memberDocumentation(Model model, MemberShape member) {
+    Optional<DocumentationTrait> own = member.getTrait(DocumentationTrait.class);
+    if (own.isPresent()) {
+      return own.map(DocumentationTrait::getValue);
+    }
+    Shape target = model.expectShape(member.getTarget());
+    if (target.getType() != ShapeType.LIST
+        && target.getType() != ShapeType.SET
+        && target.getType() != ShapeType.MAP) {
+      return Optional.empty();
+    }
+    return target.getTrait(DocumentationTrait.class).map(DocumentationTrait::getValue);
   }
 
   public static boolean hasClientOptional(MemberShape member) {
@@ -416,8 +437,8 @@ public final class ShapeSupport {
           node.isNumberNode()
               ? "(" + typeName + ")" + node.expectNumberNode().getValue().longValue()
               : null;
-      case LIST, SET -> listLiteral(writer, model, sp, target, node, typeName);
-      case MAP -> mapLiteral(writer, model, sp, target, node, typeName);
+      case LIST, SET -> listLiteral(writer, model, sp, target, node);
+      case MAP -> mapLiteral(writer, model, sp, target, node);
       default -> defaultLiteral(node);
     };
   }
@@ -427,8 +448,7 @@ public final class ShapeSupport {
       Model model,
       SymbolProvider sp,
       Shape target,
-      software.amazon.smithy.model.node.Node node,
-      String typeName) {
+      software.amazon.smithy.model.node.Node node) {
     if (!node.isArrayNode()) return null;
     Shape memberTarget =
         model.expectShape(
@@ -450,7 +470,7 @@ public final class ShapeSupport {
       if (literal == null) return null;
       elements.add(literal);
     }
-    return "new " + typeName + "(new " + elementType + "[] {" + String.join(", ", elements) + "})";
+    return "new " + elementType + "[] {" + String.join(", ", elements) + "}";
   }
 
   private static String mapLiteral(
@@ -458,8 +478,7 @@ public final class ShapeSupport {
       Model model,
       SymbolProvider sp,
       Shape target,
-      software.amazon.smithy.model.node.Node node,
-      String typeName) {
+      software.amazon.smithy.model.node.Node node) {
     if (!node.isObjectNode()) return null;
     var mapShape =
         target
@@ -472,16 +491,12 @@ public final class ShapeSupport {
                             + ", but found "
                             + target.getType()
                             + "."));
-    Shape keyTarget = model.expectShape(mapShape.getKey().getTarget());
     Shape valueTarget = model.expectShape(mapShape.getValue().getTarget());
-    String keyType = writer.typeName(sp.toSymbol(keyTarget));
     String valueType = writer.typeName(sp.toSymbol(valueTarget));
     StringBuilder sb =
         new StringBuilder("new ")
-            .append(typeName)
-            .append("(new " + writer.typeName(RuntimeTypes.DICTIONARY) + "<")
-            .append(keyType)
-            .append(", ")
+            .append(writer.typeName(RuntimeTypes.DICTIONARY))
+            .append("<string, ")
             .append(valueType)
             .append("> {");
     boolean first = true;
@@ -495,7 +510,7 @@ public final class ShapeSupport {
       first = false;
       sb.append("{ ").append(keyLiteral).append(", ").append(valueLiteral).append(" }");
     }
-    return sb.append("})").toString();
+    return sb.append("}").toString();
   }
 
   private static String defaultLiteral(software.amazon.smithy.model.node.Node node) {

@@ -142,8 +142,8 @@ public sealed class JsonCodecTests
     public void JsonCodecRoundTripsListAndMap()
     {
         var input = new Bag(
-            Tags: new Tags(["a", "b"]),
-            Counts: new Counts(new Dictionary<string, int> { ["x"] = 1, ["y"] = 2 })
+            Tags: ["a", "b"],
+            Counts: new Dictionary<string, int> { ["x"] = 1, ["y"] = 2 }
         );
         var codec = JsonCodecFactory.Default.FromSchema(BagSchema.Schema);
 
@@ -159,15 +159,13 @@ public sealed class JsonCodecTests
     public void JsonCodecAppliesListElementMemberTraits()
     {
         var codec = JsonCodecFactory.Default.FromSchema(TimelineSchema.Schema);
-        var input = new Timeline(
-            new Events([new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero)])
-        );
+        var input = new Timeline([new DateTimeOffset(2026, 8, 9, 12, 34, 56, TimeSpan.Zero)]);
 
         var json = codec.SerializeText(input);
         var decoded = codec.DeserializeText(json);
 
         Assert.Equal("{\"events\":[\"2026-08-09T12:34:56Z\"]}", json);
-        Assert.Equal(input.Events.Values, decoded.Events.Values);
+        Assert.Equal(input.Events, decoded.Events);
     }
 
     [Fact]
@@ -201,7 +199,7 @@ public sealed class JsonCodecTests
     [Fact]
     public void JsonCodecRoundTripsRecursiveStructure()
     {
-        var input = new TreeNode("root", new TreeNodeList([new TreeNode("leaf")]));
+        var input = new TreeNode("root", [new TreeNode("leaf")]);
         var codec = JsonCodecFactory.Default.FromSchema(TreeNodeSchema.Schema);
 
         var json = codec.SerializeText(input);
@@ -209,8 +207,8 @@ public sealed class JsonCodecTests
 
         Assert.Equal("{\"value\":\"root\",\"children\":[{\"value\":\"leaf\"}]}", json);
         Assert.Equal(input.Value, decoded.Value);
-        Assert.Equal(input.Children!.Values.Single(), decoded.Children!.Values.Single());
-        Assert.Null(decoded.Children.Values.Single().Children);
+        Assert.Equal(input.Children!.Single(), decoded.Children!.Single());
+        Assert.Null(decoded.Children!.Single().Children);
     }
 
     // ---------------- unions ----------------
@@ -303,15 +301,14 @@ public sealed class JsonCodecTests
     }
 
     [Fact]
-    public void DefaultedCollectionsAreNotSharedBetweenValues()
+    public void DefaultedCollectionsAreEmptyAndCannotBeModified()
     {
         var codec = JsonCodecFactory.Default.FromSchema(DefaultedSchema.Schema);
 
-        var first = codec.DeserializeText("{}");
-        var second = codec.DeserializeText("{}");
+        var value = codec.DeserializeText("{}");
 
-        Assert.Empty(first.Labels!.Values);
-        Assert.NotSame(first.Labels, second.Labels);
+        Assert.Empty(value.Labels!);
+        Assert.Throws<NotSupportedException>(() => ((IList<string>)value.Labels!).Add("x"));
     }
 
     // A response writes a member's default when its value is absent; a request body leaves it

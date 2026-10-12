@@ -24,7 +24,7 @@ carries a continuation token:
 ```csharp
 await foreach (var page in client.ListCitiesPagesAsync(new ListCitiesInput(PageSize: 3)))
 {
-    foreach (var city in page.Items.Values)
+    foreach (var city in page.Items)
         Console.WriteLine(city.Name);
 }
 ```

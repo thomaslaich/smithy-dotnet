@@ -19,8 +19,8 @@ var version = await client.VersionAsync(new VersionInput());
 Console.WriteLine($"Version: {version.Version}");
 
 var menu = await client.GetMenuAsync(new GetMenuInput("napoli"));
-Console.WriteLine($"Menu for napoli ({menu.Menu.Values.Count} items):");
-foreach (var (name, item) in menu.Menu.Values)
+Console.WriteLine($"Menu for napoli ({menu.Menu.Count} items):");
+foreach (var (name, item) in menu.Menu)
     Console.WriteLine($"  {name}: ${item.Price:F2}");
 
 var added = await client.AddMenuItemAsync(
@@ -30,7 +30,7 @@ var added = await client.AddMenuItemAsync(
                 new Pizza(
                     PizzaBase.TOMATO,
                     "Hawaii",
-                    new Ingredients([Ingredient.TOMATO, Ingredient.CHEESE, Ingredient.PINEAPPLE])
+                    [Ingredient.TOMATO, Ingredient.CHEESE, Ingredient.PINEAPPLE]
                 )
             ),
             12.50f
@@ -41,6 +41,6 @@ var added = await client.AddMenuItemAsync(
 Console.WriteLine($"Added item: {added.ItemId} at {added.Added:u}");
 
 menu = await client.GetMenuAsync(new GetMenuInput("napoli"));
-Console.WriteLine($"Updated menu ({menu.Menu.Values.Count} items):");
-foreach (var (name, item) in menu.Menu.Values)
+Console.WriteLine($"Updated menu ({menu.Menu.Count} items):");
+foreach (var (name, item) in menu.Menu)
     Console.WriteLine($"  {name}: ${item.Price:F2}");

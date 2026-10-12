@@ -189,7 +189,7 @@ final class FakeClientGeneratorTest {
                 + " cancellationToken).ConfigureAwait(false))"),
         generated);
     assertTrue(generated.contains("var items = page.Items;"), generated);
-    assertTrue(generated.contains("foreach (var item in items.Values)"), generated);
+    assertTrue(generated.contains("foreach (var item in items)"), generated);
   }
 
   @Test

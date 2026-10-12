@@ -430,23 +430,10 @@ final class FakeValueSynthesizer {
       }
     }
 
-    String typeName = qualifiedType(target);
     if (elements.isEmpty()) {
-      return "new "
-          + typeName
-          + "("
-          + writer.typeName(RuntimeTypes.ARRAY)
-          + ".Empty<"
-          + elementType
-          + ">())";
+      return writer.typeName(RuntimeTypes.ARRAY) + ".Empty<" + elementType + ">()";
     }
-    return "new "
-        + typeName
-        + "(new "
-        + elementType
-        + "[] { "
-        + String.join(", ", elements)
-        + " })";
+    return "new " + elementType + "[] { " + String.join(", ", elements) + " }";
   }
 
   private String mapExpr(MapShape map, Node node, Set<ShapeId> stack, MemberShape member) {
@@ -480,12 +467,11 @@ final class FakeValueSynthesizer {
       }
     }
 
-    String typeName = qualifiedType(map);
     String dictionary = writer.typeName(RuntimeTypes.DICTIONARY) + "<string, " + valueType + ">";
     if (entries.isEmpty()) {
-      return "new " + typeName + "(new " + dictionary + "())";
+      return "new " + dictionary + "()";
     }
-    return "new " + typeName + "(new " + dictionary + " { " + String.join(", ", entries) + " })";
+    return "new " + dictionary + " { " + String.join(", ", entries) + " }";
   }
 
   private String eventStreamExpr(

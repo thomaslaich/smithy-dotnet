@@ -68,9 +68,9 @@ public sealed class RestJson1ProtocolTests
 
         var input = Protocol(EmptyPrefixHeadersSchema.Schema).DeserializeRequest(request);
 
-        Assert.Equal("abc", input.ExtraHeaders.Values["X-Extra-Trace"]);
-        Assert.DoesNotContain("Host", input.ExtraHeaders.Values.Keys);
-        Assert.DoesNotContain("Content-Length", input.ExtraHeaders.Values.Keys);
+        Assert.Equal("abc", input.ExtraHeaders["X-Extra-Trace"]);
+        Assert.DoesNotContain("Host", input.ExtraHeaders.Keys);
+        Assert.DoesNotContain("Content-Length", input.ExtraHeaders.Keys);
     }
 
     [Fact]
@@ -107,15 +107,13 @@ public sealed class RestJson1ProtocolTests
     public void RestJson1ProtocolRoundTripsStringEnumHeaderListWithQuotedComma()
     {
         var operation = EnumHeaderListSchema.Schema;
-        var input = new EnumHeaderListInput(
-            new HeaderStatusList([HeaderStatus.ACTIVEBLUE, HeaderStatus.PENDING])
-        );
+        var input = new EnumHeaderListInput([HeaderStatus.ACTIVEBLUE, HeaderStatus.PENDING]);
 
         var request = Protocol(operation).SerializeRequest(input);
         var decoded = Protocol(operation).DeserializeRequest(request);
 
         Assert.Equal("\"ACTIVE,BLUE\", PENDING", request.Headers["X-Status"].Single());
-        Assert.Equal(input.Statuses.Values, decoded.Statuses.Values);
+        Assert.Equal(input.Statuses, decoded.Statuses);
     }
 
     [Fact]

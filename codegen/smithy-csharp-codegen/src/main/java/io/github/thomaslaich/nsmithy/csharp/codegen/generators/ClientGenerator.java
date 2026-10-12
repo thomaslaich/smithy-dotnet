@@ -860,7 +860,7 @@ public final class ClientGenerator implements Runnable {
                               {
                                   continue;
                               }
-                              foreach (var item in items.Values)
+                              foreach (var item in items)
                               {
                                   yield return item;
                               }

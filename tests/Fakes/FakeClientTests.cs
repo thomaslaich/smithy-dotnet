@@ -111,13 +111,11 @@ public class FakeClientTests
         ) =>
             Task.FromResult(
                 new ListCitiesOutput(
-                    Items: new CitySummaries(
-                        new[]
-                        {
-                            new CitySummary(CityId: "SEA", Name: "Seattle"),
-                            new CitySummary(CityId: "HOU", Name: "Houston"),
-                        }
-                    )
+                    Items: new[]
+                    {
+                        new CitySummary(CityId: "SEA", Name: "Seattle"),
+                        new CitySummary(CityId: "HOU", Name: "Houston"),
+                    }
                 )
             );
 
