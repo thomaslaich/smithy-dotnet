@@ -13,8 +13,7 @@ final class CSharpNamingTest {
 
   @Test
   void formatStringEscapesCharactersCSharpTreatsAsLineBreaks() {
-    assertEquals(
-        "\"a\\u2028b\\u2029c\\u0085d\"", CSharpNaming.formatString("a b c\u0085d"));
+    assertEquals("\"a\\u2028b\\u2029c\\u0085d\"", CSharpNaming.formatString("a b c\u0085d"));
   }
 
   @Test

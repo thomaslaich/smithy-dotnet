@@ -37,8 +37,7 @@ final class SchemaGeneratorTest {
     for (String name :
         new String[] {"Boolean", "Byte", "Short", "Integer", "Long", "Float", "Double"}) {
       var boxed = prelude.expectShape(ShapeId.from("smithy.api#" + name));
-      var primitive =
-          prelude.expectShape(ShapeId.from("smithy.api#Primitive" + name));
+      var primitive = prelude.expectShape(ShapeId.from("smithy.api#Primitive" + name));
 
       assertEquals(
           SchemaGenerator.shapeSchemaAccessor(writer, null, boxed),
