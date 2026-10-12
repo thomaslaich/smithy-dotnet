@@ -13,9 +13,9 @@
 
 **[Docs](https://thomaslaich.github.io/smithy-dotnet/)** · **[Examples](examples/README.md)** · **[Design Docs](designs/README.md)** · **[smithy.io](https://smithy.io)**
 
-NSmithy generates C# for .NET from [Smithy](https://smithy.io) models. Smithy is the interface definition language AWS uses for its SDKs: a model describes a service's operations, data types, and errors once, independent of programming language and protocol. Smithy has code generators for Java, TypeScript, Go, Rust, Python, Kotlin, and Scala, so a .NET service and clients in those languages can share one model.
+NSmithy is a community-maintained Smithy code generator for C# and .NET. [Smithy](https://smithy.io) is a protocol-agnostic interface definition language: a model describes a service's operations, data types, and errors once, independent of programming language. AWS defines its entire API surface in Smithy and generates its SDKs from it. Larger organizations also use it for API governance, since models can be linted, validated, and checked for breaking changes before any code exists.
 
-NSmithy generates typed clients, ASP.NET Core server stubs, and model types from a Smithy model during `dotnet build`, with no separate codegen step. A client and a server generated from the same model agree on routes, serialization, and errors. It supports restJson1, rpcv2Cbor, gRPC, and the AWS protocols; see [protocol status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/).
+Smithy has code generators for Java, TypeScript, Go, Rust, Python, Kotlin, and Scala, so a .NET service and clients in those languages can share one model. NSmithy generates typed clients, ASP.NET Core server stubs, and model types from a Smithy model during `dotnet build`, with no separate codegen step. A client and a server generated from the same model agree on routes, serialization, and errors. It supports restJson1, rpcv2Cbor, gRPC, and the AWS protocols; see [protocol status](https://thomaslaich.github.io/smithy-dotnet/protocols/status/).
 
 ## Quick start
 
