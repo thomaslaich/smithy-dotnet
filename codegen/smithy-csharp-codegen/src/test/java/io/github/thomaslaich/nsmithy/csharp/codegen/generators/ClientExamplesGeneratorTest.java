@@ -130,11 +130,10 @@ final class ClientExamplesGeneratorTest {
     assertTrue(
         code.contains("new Nested(Child: new Nested(Text: \"inner\"), Text: \"outer\")"), code);
     assertTrue(code.contains("Choice.FromText(\"chosen\")"), code);
-    assertTrue(code.contains("new StringValues(new string?[] { \"first\", \"second\" })"), code);
+    assertTrue(code.contains("new string?[] { \"first\", \"second\" }"), code);
     assertTrue(
         code.contains(
-            "new Tags(new Dictionary<string, string?> { { \"a\", \"start\" }, { \"z\", \"last\" }"
-                + " })"),
+            "new Dictionary<string, string?> { { \"a\", \"start\" }, { \"z\", \"last\" }" + " }"),
         code);
     assertTrue(code.contains("new State(\"ready\")"), code);
     assertTrue(code.contains("(Level)1"), code);
@@ -267,8 +266,8 @@ final class ClientExamplesGeneratorTest {
             .filter(s -> s.contains("expectedOutput = new Response"))
             .findFirst()
             .orElseThrow();
-    assertTrue(code.contains("new StringValues(new string?[] {  })"), code);
-    assertTrue(code.contains("new Tags(new Dictionary<string, string?> {  })"), code);
+    assertTrue(code.contains("new string?[] {  }"), code);
+    assertTrue(code.contains("new Dictionary<string, string?> {  }"), code);
     assertTrue(code.contains("Choice.FromEmpty(SmithyUnit.Value)"), code);
     assertTrue(code.contains("Data: Document.Null"), code);
   }

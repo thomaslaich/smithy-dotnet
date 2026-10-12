@@ -137,13 +137,7 @@ final class ClientExamplesGenerator {
         for (Node element : node.expectArrayNode().getElements()) {
           elements.add(value(member.getTarget(), element));
         }
-        yield "new "
-            + type(shape)
-            + "(new "
-            + elementType(shape, member)
-            + "[] { "
-            + String.join(", ", elements)
-            + " })";
+        yield "new " + elementType(shape, member) + "[] { " + String.join(", ", elements) + " }";
       }
       case MAP -> {
         var map = shape.asMapShape().orElseThrow();
@@ -159,14 +153,12 @@ final class ClientExamplesGenerator {
                             + value(map.getValue().getTarget(), entry.getValue())
                             + " }"));
         yield "new "
-            + type(shape)
-            + "(new "
             + writer.typeName(RuntimeTypes.DICTIONARY)
             + "<string, "
             + elementType(shape, map.getValue())
             + "> { "
             + String.join(", ", entries)
-            + " })";
+            + " }";
       }
       case STRING -> CSharpNaming.formatString(node.expectStringNode().getValue());
       case BOOLEAN -> Boolean.toString(node.expectBooleanNode().getValue());
