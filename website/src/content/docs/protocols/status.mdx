@@ -13,13 +13,13 @@ test totals.
 
 | Protocol | Stage | Client conformance | Server conformance |
 | --- | --- | --- | --- |
-| [`restJson1`](../rest-json/) | <Badge text="Stable" variant="success" /> | Requests 142/142 (100%)<br />Responses 108/108 (100%) | Requests 132/132 (100%)<br />Responses 92/92 (100%)<br />Malformed 655/655 (100%) |
+| [`restJson1`](../rest-json/) | <Badge text="Preview" variant="note" /> | Requests 142/142 (100%)<br />Responses 108/108 (100%) | Requests 132/132 (100%)<br />Responses 92/92 (100%)<br />Malformed 655/655 (100%) |
 | [`awsJson1_1`](../aws-json/) | <Badge text="Early preview" variant="caution" /> | Requests 57/57 (100%)<br />Responses 62/62 (100%) | Client only |
 | [`awsJson1_0`](../aws-json/) | <Badge text="Early preview" variant="caution" /> | Runtime support, no conformance project | Client only |
 | [`awsQuery`](../aws-query/) | <Badge text="Preview" variant="note" /> | Requests 38/38 (100%)<br />Responses 39/39 (100%) | Client only |
 | [`ec2Query`](../aws-ec2-query/) | <Badge text="Preview" variant="note" /> | Requests 30/30 (100%)<br />Responses 29/29 (100%) | Client only |
 | [`restXml`](../rest-xml/) | <Badge text="Preview" variant="note" /> | Requests 109/109 (100%)<br />Responses 84/84 (100%) | Client only |
-| [`rpcv2Cbor`](../rpc-v2-cbor/) | <Badge text="Stable" variant="success" /> | Requests 29/29 (100%)<br />Responses 43/43 (100%) | Requests 37/37 (100%)<br />Responses 27/27 (100%) |
+| [`rpcv2Cbor`](../rpc-v2-cbor/) | <Badge text="Preview" variant="note" /> | Requests 29/29 (100%)<br />Responses 43/43 (100%) | Requests 37/37 (100%)<br />Responses 27/27 (100%) |
 | [`simpleRestJson`](../rest-json/) | <Badge text="Preview" variant="note" /> | Requests 23/23 (100%)<br />Responses 20/20 (100%) | Requests 23/23 (100%)<br />Responses 20/20 (100%) |
 | [`grpc`](../grpc/) | <Badge text="Experimental" variant="danger" /> | End-to-end examples | End-to-end examples |
 
@@ -72,7 +72,8 @@ behavior.
   passes on every generated surface, and the generated API changes only with
   care for existing users.
 - <Badge text="Preview" variant="note" /> useful end-to-end support with meaningful conformance coverage.
-  Some protocol features or convenience APIs are still incomplete.
+  Some protocol features or convenience APIs are still incomplete, and the generated API can
+  still change.
 - <Badge text="Early preview" variant="caution" /> a narrower verified slice. Check the conformance totals and
   known limitations before adopting it.
 - <Badge text="Experimental" variant="danger" /> the API and supported model surface can still change.

@@ -1,7 +1,15 @@
 ---
 title: MCP
 description: Expose generated Smithy services through Model Context Protocol without reflection or transport coupling.
+sidebar:
+  badge:
+    text: Experimental
+    variant: danger
 ---
+
+:::caution[Experimental]
+The MCP adapter's API and supported model surface can still change.
+:::
 
 `NSmithy.Server.Mcp` exposes generated services through the
 [Model Context Protocol](https://modelcontextprotocol.io/). It maps unary
