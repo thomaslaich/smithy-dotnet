@@ -31,7 +31,9 @@ Operation `@examples` entries become `<example>` code samples in the XML
 documentation on generated client methods and their interfaces. Each sample
 includes its title and description, constructs the supplied input, calls the
 async client method, and shows the expected output or exception when provided.
-Samples use a `client` variable representing an existing client instance.
+Error examples wrap the call in a typed `try`/`catch` and describe the expected
+exception properties inside the catch block. Samples use a `client` variable
+representing an existing client instance.
 
 ## Runtime schemas
 

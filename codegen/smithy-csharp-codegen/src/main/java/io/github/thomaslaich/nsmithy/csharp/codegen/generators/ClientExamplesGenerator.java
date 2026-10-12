@@ -47,21 +47,21 @@ final class ClientExamplesGenerator {
                       .append(value(operation.getInputShape(), example.getInput()))
                       .append(";\n");
                 }
-                code.append(hasOutput ? "var output = " : "")
-                    .append("await client.")
-                    .append(CSharpNaming.typeName(operation.getId().getName()))
-                    .append("Async(")
-                    .append(hasInput ? "input" : "")
-                    .append(");");
+                String call =
+                    "await client."
+                        + CSharpNaming.typeName(operation.getId().getName())
+                        + "Async("
+                        + (hasInput ? "input" : "")
+                        + ");";
                 if (example.getError().isPresent()) {
-                  var error = example.getError().get();
-                  code.append("\n\n// Expected exception:\nvar expectedError = ")
-                      .append(value(error.getShapeId(), error.getContent()))
-                      .append(";");
-                } else if (hasOutput && example.getOutput().isPresent()) {
-                  code.append("\n\n// Expected output:\nvar expectedOutput = ")
-                      .append(value(operation.getOutputShape(), example.getOutput().get()))
-                      .append(";");
+                  writeErrorExample(code, call, example.getError().get());
+                } else {
+                  code.append(hasOutput ? "var output = " : "").append(call);
+                  if (hasOutput && example.getOutput().isPresent()) {
+                    code.append("\n\n// Expected output:\nvar expectedOutput = ")
+                        .append(value(operation.getOutputShape(), example.getOutput().get()))
+                        .append(";");
+                  }
                 }
                 for (String iterator : iterators) {
                   code.append("\n\n").append(iterator);
@@ -70,6 +70,39 @@ final class ClientExamplesGenerator {
                     example.getTitle(), example.getDocumentation().orElse(null), code.toString());
               }
             });
+  }
+
+  private void writeErrorExample(
+      StringBuilder code, String call, ExamplesTrait.ErrorExample example) {
+    StructureShape error = context.model().expectShape(example.getShapeId(), StructureShape.class);
+    MemberShape message = ShapeSupport.errorMessageMember(context.model(), error).orElse(null);
+    // The sample documents properties without inspecting an exception instance, so omit the
+    // catch variable to keep pasted samples free of unused-variable warnings.
+    code.append("try\n{\n    ")
+        .append(call)
+        .append("\n}\ncatch (")
+        .append(type(error))
+        .append(")\n{");
+    if (example.getContent().isEmpty()) {
+      code.append("\n    // Expected exception; no example properties supplied.");
+    }
+    for (MemberShape member : ShapeSupport.sortedMembers(error)) {
+      example
+          .getContent()
+          .getMember(member.getMemberName())
+          .ifPresent(
+              node -> {
+                String property =
+                    member.equals(message)
+                        ? "Message"
+                        : CSharpNaming.propertyName(member.getMemberName());
+                code.append("\n    // Expected ")
+                    .append(property)
+                    .append(": ")
+                    .append(memberValue(member, node));
+              });
+    }
+    code.append("\n}");
   }
 
   private String value(ShapeId id, Node node) {
