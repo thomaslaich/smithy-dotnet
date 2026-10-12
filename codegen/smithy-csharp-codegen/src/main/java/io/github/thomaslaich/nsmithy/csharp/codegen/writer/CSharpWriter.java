@@ -175,6 +175,25 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
             });
   }
 
+  /** Writes an example, preserving code indentation and escaping all model-provided text. */
+  public void writeXmlExample(String title, String documentation, String code) {
+    write("/// <example>");
+    write("/// <para>");
+    writeXmlText(title);
+    write("/// </para>");
+    if (documentation != null && !documentation.isBlank()) {
+      write("/// <para>");
+      writeXmlText(documentation);
+      write("/// </para>");
+    }
+    write("/// <code>");
+    for (String line : code.split("\\R", -1)) {
+      write("/// $L", escapeXml(line));
+    }
+    write("/// </code>");
+    write("/// </example>");
+  }
+
   private void writeXmlDocs(String summary) {
     writeXmlDocs(summary, Map.of());
   }
