@@ -172,7 +172,7 @@ final class FakeValueSynthesizer {
           + ")";
     }
     List<MemberShape> members = ShapeSupport.sortedMembers(target);
-    return typeName + "." + CSharpNaming.propertyName(members.get(0).getMemberName());
+    return typeName + "." + CSharpNaming.stringEnumValueName(members.get(0));
   }
 
   String intEnumExpr(Shape target, Node node) {
@@ -181,7 +181,7 @@ final class FakeValueSynthesizer {
       return "(" + typeName + ")" + node.expectNumberNode().getValue().longValue();
     }
     List<MemberShape> members = ShapeSupport.sortedMembers(target);
-    return typeName + "." + CSharpNaming.propertyName(members.get(0).getMemberName());
+    return typeName + "." + CSharpNaming.memberName(members.get(0));
   }
 
   String blobBytesExpr(Node node, String hint) {
@@ -311,7 +311,7 @@ final class FakeValueSynthesizer {
           }
           continue;
         }
-        args.add(CSharpNaming.propertyName(member.getMemberName()) + ": " + expr);
+        args.add(CSharpNaming.memberName(member) + ": " + expr);
       }
       return "new " + qualifiedType(shape) + "(" + String.join(", ", args) + ")";
     } finally {
@@ -374,8 +374,8 @@ final class FakeValueSynthesizer {
         String value = memberExpr(variant.get(), entry.getValue(), stack);
         if (value != null) {
           return typeName
-              + ".From"
-              + CSharpNaming.typeName(variant.get().getMemberName())
+              + "."
+              + CSharpNaming.variantFactoryName(variant.get())
               + "("
               + value
               + ")";
@@ -385,12 +385,7 @@ final class FakeValueSynthesizer {
     for (MemberShape variant : ShapeSupport.sortedMembers(union)) {
       String value = memberExpr(variant, null, stack);
       if (value != null) {
-        return typeName
-            + ".From"
-            + CSharpNaming.typeName(variant.getMemberName())
-            + "("
-            + value
-            + ")";
+        return typeName + "." + CSharpNaming.variantFactoryName(variant) + "(" + value + ")";
       }
     }
     return null;
@@ -504,7 +499,7 @@ final class FakeValueSynthesizer {
     String base =
         "Fake"
             + CSharpNaming.typeName(op.getId().getName())
-            + CSharpNaming.propertyName(member.getMemberName())
+            + CSharpNaming.memberName(member)
             + "Events";
     // One iterator per synthesized expression: match arms for different @examples entries of the
     // same event-stream operation each need their own method.

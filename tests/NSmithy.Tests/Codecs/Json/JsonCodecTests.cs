@@ -1,6 +1,7 @@
 using NSmithy.Codecs.Json;
 using NSmithy.Core.Serde;
 using Nsmithy.Tests.Json;
+using Nsmithy.Tests.Json.Schemas;
 
 namespace NSmithy.Tests.Codecs.Json;
 

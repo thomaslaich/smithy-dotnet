@@ -2,6 +2,7 @@ using System.Net;
 using NSmithy.Http;
 using NSmithy.Protocols.AwsJson;
 using Nsmithy.Tests.Awsjson;
+using Nsmithy.Tests.Awsjson.Schemas;
 
 namespace NSmithy.Tests.Protocols.AwsJson;
 

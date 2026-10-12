@@ -3,6 +3,7 @@ using System.Text;
 using NSmithy.Http;
 using NSmithy.Protocols.AwsQuery;
 using Nsmithy.Tests.Awsquery;
+using Nsmithy.Tests.Awsquery.Schemas;
 
 namespace NSmithy.Tests.Protocols.AwsQuery;
 

@@ -108,9 +108,33 @@ public final class SchemaGenerator {
         : accessor;
   }
 
+  /**
+   * The child namespace that holds every generated schema class, so that a schema class can never
+   * clash with a model type: {@code Example.Weather.Person}'s schema is {@code
+   * Example.Weather.Schemas.PersonSchema}.
+   */
+  public static final String SCHEMAS_NAMESPACE = "Schemas";
+
+  public static String schemaNamespace(String modelNamespace) {
+    return modelNamespace + "." + SCHEMAS_NAMESPACE;
+  }
+
   public static String schemaClassName(
       CSharpWriter writer, GenerationContext context, Shape shape) {
-    return writer.typeName(schemaOwner(context, shape), "Schema");
+    return writer.typeName(schemaClass(schemaOwner(context, shape)));
+  }
+
+  /**
+   * The schema class for a type: generated types keep theirs in the {@code Schemas} namespace,
+   * while a runtime type the model binds to (such as the framework's validation exception) brings
+   * its own.
+   */
+  private static Symbol schemaClass(Symbol owner) {
+    Symbol.Builder schema = owner.toBuilder().name(owner.getName() + "Schema");
+    if (!owner.getDefinitionFile().isEmpty()) {
+      schema.namespace(schemaNamespace(owner.getNamespace()), ".");
+    }
+    return schema.build();
   }
 
   /**
@@ -126,14 +150,14 @@ public final class SchemaGenerator {
 
   public static String operationSchemaAccessor(
       CSharpWriter writer, GenerationContext context, OperationShape shape) {
-    return writer.typeName(context.symbolProvider().toSymbol(shape), "Schema") + ".Schema";
+    return writer.typeName(schemaClass(context.symbolProvider().toSymbol(shape))) + ".Schema";
   }
 
   public static String serviceSchemaAccessor(
       CSharpWriter writer,
       GenerationContext context,
       software.amazon.smithy.model.shapes.ServiceShape service) {
-    return writer.typeName(context.symbolProvider().toSymbol(service), "Schema") + ".Schema";
+    return writer.typeName(schemaClass(context.symbolProvider().toSymbol(service))) + ".Schema";
   }
 
   public static String operationShapeType(
@@ -193,6 +217,12 @@ public final class SchemaGenerator {
     writer.pushState();
     try {
       writer.putContext("schemaClass", localSchemaClassName(shape));
+      // The staged builder holds one property per member, so it cannot share a member's name.
+      writer.putContext(
+          "builderClass",
+          members.stream().anyMatch(m -> CSharpNaming.memberName(m).equals("Builder"))
+              ? "ShapeBuilder"
+              : "Builder");
       writer.putContext("generatedSchema", GENERATED_SCHEMA);
       writer.putContext("type", context.symbolProvider().toSymbol(shape));
       writer.putContext("schema", RuntimeTypes.SCHEMA);
@@ -222,7 +252,7 @@ public final class SchemaGenerator {
                       context,
                       member,
                       String.valueOf(index),
-                      "value." + CSharpNaming.propertyName(member.getMemberName()),
+                      "value." + CSharpNaming.memberName(member),
                       "value" + index,
                       propertyMayBeNull(context, member, isError),
                       defaultLiteral(w, context, member),
@@ -250,7 +280,7 @@ public final class SchemaGenerator {
                                 break;\
                             """,
                             index,
-                            CSharpNaming.propertyName(member.getMemberName()),
+                            CSharpNaming.memberName(member),
                             readValue(
                                 w,
                                 context,
@@ -265,16 +295,16 @@ public final class SchemaGenerator {
           """
           public static partial class ${schemaClass:L}
           {
-              public sealed class Builder
+              public sealed class ${builderClass:L}
               {
                   ${builderProperties:C|}
               }
 
-              public static ${structSchema:T}<${type:T}, Builder> Schema { get; } =
+              public static ${structSchema:T}<${type:T}, ${builderClass:L}> Schema { get; } =
                   new ${generatedSchema:L}();
 
               private sealed class ${generatedSchema:L}()
-                  : ${structSchema:T}<${type:T}, Builder>(
+                  : ${structSchema:T}<${type:T}, ${builderClass:L}>(
                       ${shapeId:L},
                       [
                           ${memberDeclarations:C|}
@@ -283,9 +313,9 @@ public final class SchemaGenerator {
               {
                   ${targets:C|}
 
-                  public override Builder CreateTypedBuilder() => new()${builderDefaults:L};
+                  public override ${builderClass:L} CreateTypedBuilder() => new()${builderDefaults:L};
 
-                  public override ${type:T} Build(Builder builder) =>
+                  public override ${type:T} Build(${builderClass:L} builder) =>
                       new ${type:T}(${constructorArguments:L});
 
                   public override void SerializeMembers<TSerializer>(
@@ -296,7 +326,7 @@ public final class SchemaGenerator {
                   }
 
                   public override void DeserializeMember<TDeserializer>(
-                      Builder builder,
+                      ${builderClass:L} builder,
                       int index,
                       ref TDeserializer deserializer)
                   {
@@ -606,7 +636,7 @@ public final class SchemaGenerator {
                   w.write(
                       "$T.$L => $L,",
                       unionType,
-                      CSharpNaming.typeName(members.get(index).getMemberName()),
+                      CSharpNaming.variantName(members.get(index)),
                       index);
                 }
               }));
@@ -616,10 +646,7 @@ public final class SchemaGenerator {
               w -> {
                 for (int index = 0; index < members.size(); index++) {
                   MemberShape member = members.get(index);
-                  w.write(
-                      "case $T.$L @case:",
-                      unionType,
-                      CSharpNaming.typeName(member.getMemberName()));
+                  w.write("case $T.$L @case:", unionType, CSharpNaming.variantName(member));
                   w.indent();
                   writeValue(
                       w,
@@ -644,7 +671,7 @@ public final class SchemaGenerator {
                       "$L => new $T.$L(($L)!),",
                       index,
                       unionType,
-                      CSharpNaming.typeName(members.get(index).getMemberName()),
+                      CSharpNaming.variantName(members.get(index)),
                       readValue(
                           w,
                           context,
@@ -782,7 +809,7 @@ public final class SchemaGenerator {
           "public $L $L { get; set; }",
           ShapeSupport.memberTypeExpr(
               writer, context.model(), context.symbolProvider(), member, true),
-          CSharpNaming.propertyName(member.getMemberName()));
+          CSharpNaming.memberName(member));
     }
   }
 
@@ -797,7 +824,7 @@ public final class SchemaGenerator {
     for (MemberShape member : members) {
       String literal = defaultLiteral(writer, context, member);
       if (literal != null) {
-        assignments.add(CSharpNaming.propertyName(member.getMemberName()) + " = " + literal);
+        assignments.add(CSharpNaming.memberName(member) + " = " + literal);
       }
     }
     return assignments.isEmpty() ? "" : " { " + String.join(", ", assignments) + " }";
@@ -1252,7 +1279,7 @@ public final class SchemaGenerator {
       CSharpWriter writer, GenerationContext context, Shape shape, List<MemberShape> members) {
     if (!shape.isStructureShape()) {
       return members.stream()
-          .map(m -> "builder." + CSharpNaming.propertyName(m.getMemberName()))
+          .map(m -> "builder." + CSharpNaming.memberName(m))
           .collect(Collectors.joining(", "));
     }
 
@@ -1265,14 +1292,14 @@ public final class SchemaGenerator {
       args.add(
           errorMessageMember == null
               ? "null"
-              : "builder." + CSharpNaming.propertyName(errorMessageMember.getMemberName()));
+              : "builder." + CSharpNaming.memberName(errorMessageMember));
     }
     for (MemberShape member :
         ShapeSupport.constructorMembers(shape.asStructureShape().orElseThrow())) {
       if (errorMessageMember != null && member.equals(errorMessageMember)) {
         continue;
       }
-      String prop = CSharpNaming.propertyName(member.getMemberName());
+      String prop = CSharpNaming.memberName(member);
       String expr = "builder." + prop;
       if (ShapeSupport.isRequired(member)) {
         Symbol memberSymbol = context.symbolProvider().toSymbol(member);

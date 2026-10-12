@@ -48,33 +48,38 @@ final class TypeNameGeneratorTest {
   @Test
   void shortensLocalTypesAndSchemaAccessorsWithoutChangingDocumentation() {
     var context = context();
-    var writer =
-        new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
-            .apply("test.g.cs", "Example.Library");
+    var factory = new CSharpWriter.CSharpWriterFactory(context.model(), context.settings());
     var shape =
         context
             .model()
             .expectShape(ShapeId.from("example.library#DeleteBookInput"), StructureShape.class);
-    new StructureGenerator(context, writer, shape).run();
-    SchemaGenerator.writeStructureSchema(writer, context, shape, List.copyOf(shape.members()));
-    String generated = writer.toString();
-    assertTrue(generated.contains("StructSchema<DeleteBookInput, Builder> Schema"), generated);
+    var recordWriter = factory.apply("test.g.cs", "Example.Library");
+    new StructureGenerator(context, recordWriter, shape).run();
+    var schemaWriter = factory.apply("test.Schema.g.cs", "Example.Library.Schemas");
+    SchemaGenerator.writeStructureSchema(
+        schemaWriter, context, shape, List.copyOf(shape.members()));
+    String record = recordWriter.toString();
+    String schema = schemaWriter.toString();
+
+    assertTrue(record.contains("Book? Item"), record);
+    assertTrue(record.contains("global::Example.Other.Book? Other"), record);
+    assertTrue(record.contains("global::Example.Library.Builder? Helper"), record);
+    assertTrue(record.contains("global::Example.Library.GeneratedSchema? Serializer"), record);
+    assertFalse(record.contains("global::Example.Library.Book?"), record);
+
+    assertTrue(schema.contains("namespace Example.Library.Schemas;"), schema);
     assertTrue(
-        generated.contains("serializer.WriteStruct(0, value0, BookSchema.Schema);"), generated);
-    assertTrue(generated.contains("Book? Item"), generated);
-    assertTrue(generated.contains("BookSchema.Schema!"), generated);
-    assertTrue(generated.contains("global::Example.Other.Book? Other"), generated);
-    assertTrue(generated.contains("global::Example.Other.BookSchema.Schema!"), generated);
-    assertTrue(generated.contains("global::Example.Library.Builder? Helper"), generated);
+        schema.contains("StructSchema<global::Example.Library.DeleteBookInput, Builder> Schema"),
+        schema);
+    assertTrue(schema.contains("serializer.WriteStruct(0, value0, BookSchema.Schema);"), schema);
+    assertTrue(schema.contains("BookSchema.Schema!"), schema);
+    assertTrue(schema.contains("global::Example.Other.Schemas.BookSchema.Schema!"), schema);
+    assertTrue(schema.contains("global::NSmithy.Core.Serde.Schemas.Lazy("), schema);
+    assertTrue(schema.contains("private sealed class GeneratedSchema()"), schema);
     assertTrue(
-        generated.contains("global::Example.Library.GeneratedSchema? Serializer"), generated);
-    assertTrue(generated.contains("private sealed class GeneratedSchema()"), generated);
-    assertTrue(
-        generated.contains("/// Example.Library.DeleteBookInput stays qualified in documentation."),
-        generated);
-    assertFalse(generated.contains("global::Example.Library.Book"), generated);
-    assertFalse(generated.contains("Example.Library.DeleteBookInput>"), generated);
-    assertFalse(generated.contains("using Example.Other;"), generated);
+        schema.contains("Example.Library.DeleteBookInput stays qualified in documentation."),
+        schema);
+    assertFalse(schema.contains("using Example.Other;"), schema);
   }
 
   @Test

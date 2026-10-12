@@ -1,4 +1,5 @@
 using Example.Weather;
+using Example.Weather.Schemas;
 using NSmithy.Server.AspNetCore.Docs;
 using NSmithy.Server.Mcp;
 using OpenTelemetry.Metrics;

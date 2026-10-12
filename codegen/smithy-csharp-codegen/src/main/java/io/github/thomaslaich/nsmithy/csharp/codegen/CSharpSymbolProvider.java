@@ -6,8 +6,10 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
+import io.github.thomaslaich.nsmithy.csharp.codegen.generators.SchemaGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import java.util.List;
+import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
@@ -56,7 +58,7 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
 
   @Override
   public String toMemberName(MemberShape shape) {
-    return CSharpNaming.propertyName(shape.getMemberName());
+    return CSharpNaming.memberName(shape);
   }
 
   @Override
@@ -132,12 +134,12 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
 
   @Override
   public Symbol enumShape(EnumShape s) {
-    return generated(s, CSharpNaming.typeName(s.getId().getName()));
+    return declaredType(s);
   }
 
   @Override
   public Symbol intEnumShape(IntEnumShape s) {
-    return generated(s, CSharpNaming.typeName(s.getId().getName()));
+    return declaredType(s);
   }
 
   @Override
@@ -157,12 +159,12 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
           .putProperty(SymbolProperties.IS_VALUE_TYPE, false)
           .build();
     }
-    return generated(s, CSharpNaming.typeName(s.getId().getName()));
+    return declaredType(s);
   }
 
   @Override
   public Symbol unionShape(UnionShape s) {
-    return generated(s, CSharpNaming.typeName(s.getId().getName()));
+    return declaredType(s);
   }
 
   @Override
@@ -225,6 +227,24 @@ public final class CSharpSymbolProvider implements SymbolProvider, ShapeVisitor<
         .definitionFile(file)
         .putProperty(SymbolProperties.IS_VALUE_TYPE, false)
         .build();
+  }
+
+  /**
+   * A structure, union, or enum: a C# type declared in the shape's namespace. It cannot be named
+   * {@code Schemas}, which is the child namespace that holds the generated schema classes.
+   */
+  private Symbol declaredType(Shape shape) {
+    String typeName = CSharpNaming.typeName(shape.getId().getName());
+    if (typeName.equals(SchemaGenerator.SCHEMAS_NAMESPACE)) {
+      throw new CodegenException(
+          "Shape "
+              + shape.getId()
+              + " would generate a C# type named Schemas, which clashes with the "
+              + settings.csharpNamespace(shape.getId().getNamespace())
+              + ".Schemas namespace that holds generated schema classes. Rename the shape, for"
+              + " example with the renameShapes build transform.");
+    }
+    return generated(shape, typeName);
   }
 
   private Symbol typeArgument(MemberShape member, boolean nullable) {

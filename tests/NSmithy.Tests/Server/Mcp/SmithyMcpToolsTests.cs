@@ -8,6 +8,7 @@ using NSmithy.Core.Serde;
 using NSmithy.Server;
 using NSmithy.Server.Mcp;
 using Nsmithy.Tests.Mcp;
+using Nsmithy.Tests.Mcp.Schemas;
 
 namespace NSmithy.Tests.Server.Mcp;
 

@@ -49,16 +49,20 @@ interface and hold no serializer callbacks. When deserialization needs staged
 construction, the generator emits a separate builder type instead of adding
 mutable hooks to the model.
 
-A shape's schema lives in a sibling class named after the shape, generated
-into its own file: `MenuItem.g.cs` holds the type a consumer uses,
-`MenuItem.Schema.g.cs` the schema the runtime serializes it with. An operation
-or service has no type of its own, so it gets only the `.Schema.g.cs` file.
+A shape's schema lives in a class named after the shape in the child
+`Schemas` namespace, generated into its own file: `MenuItem.g.cs` holds the type
+a consumer uses, `MenuItem.Schema.g.cs` the schema the runtime serializes it
+with. An operation or service has no type of its own, so it gets only the
+`.Schema.g.cs` file. Keeping schema classes in their own namespace means a
+schema class never clashes with a model type.
 
 ```csharp
 // MenuItem.g.cs
+namespace Example.Pizza;
 public sealed record class MenuItem(Food Food, float Price);
 
 // MenuItem.Schema.g.cs
+namespace Example.Pizza.Schemas;
 public static partial class MenuItemSchema
 {
     public sealed class Builder { /* ... */ }

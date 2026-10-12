@@ -316,7 +316,7 @@ internal static class ParamBinder
         var schemaProperty =
             targetType.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static)
             ?? targetType
-                .Assembly.GetType($"{targetType.Namespace}.{targetType.Name}Schema")
+                .Assembly.GetType($"{targetType.Namespace}.Schemas.{targetType.Name}Schema")
                 ?.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static);
         return schemaProperty?.GetValue(null) as Schema;
     }

@@ -3,6 +3,7 @@ using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Core.Validation;
 using Nsmithy.Tests.Proto;
+using Nsmithy.Tests.Proto.Schemas;
 
 namespace NSmithy.Tests.Codecs.Proto;
 

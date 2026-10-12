@@ -469,14 +469,14 @@ final class ServerGeneratorTest {
     assertTrue(generated.contains("draft/2020-12/schema"), generated);
     assertTrue(
         generated.contains(
-            "ServiceOperation.Create(global::Example.Example.Catalog.NotifySchema.Schema, async"
-                + " (input, ct) => { await notifyHandler.NotifyAsync(input,"
+            "ServiceOperation.Create(global::Example.Example.Catalog.Schemas.NotifySchema.Schema,"
+                + " async (input, ct) => { await notifyHandler.NotifyAsync(input,"
                 + " ct).ConfigureAwait(false); return SmithyUnit.Value; },"
                 + " NotifyJsonSchemas.Value),"),
         generated);
     assertTrue(
         generated.contains(
-            "ServiceOperation.Create(global::Example.Example.Catalog.PingSchema.Schema, "
+            "ServiceOperation.Create(global::Example.Example.Catalog.Schemas.PingSchema.Schema, "
                 + "(_, ct) => pingHandler.PingAsync(ct), PingJsonSchemas.Value),"),
         generated);
   }

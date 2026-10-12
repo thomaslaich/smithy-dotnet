@@ -225,7 +225,7 @@ internal static class HttpResponseRunner
     private static ShapeKind? GetSchemaKind(Type type)
     {
         // The functional schema lives on the generated companion `{Type}Schema` class.
-        var schemaType = type.Assembly.GetType(type.FullName + "Schema");
+        var schemaType = type.Assembly.GetType($"{type.Namespace}.Schemas.{type.Name}Schema");
         var schemaProp = schemaType?.GetProperty(
             "Schema",
             BindingFlags.Public | BindingFlags.Static
@@ -325,7 +325,7 @@ internal static class ResponseAssertions
     private static ShapeKind? GetSchemaKind(Type type)
     {
         // The functional schema lives on the generated companion `{Type}Schema` class.
-        var schemaType = type.Assembly.GetType(type.FullName + "Schema");
+        var schemaType = type.Assembly.GetType($"{type.Namespace}.Schemas.{type.Name}Schema");
         var schemaProp = schemaType?.GetProperty(
             "Schema",
             BindingFlags.Public | BindingFlags.Static

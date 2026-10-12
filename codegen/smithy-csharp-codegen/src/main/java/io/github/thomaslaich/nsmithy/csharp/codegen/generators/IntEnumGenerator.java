@@ -44,7 +44,7 @@ public final class IntEnumGenerator implements Runnable {
 
   private void writeVariants() {
     for (MemberShape member : ShapeSupport.sortedMembers(shape)) {
-      String property = CSharpNaming.propertyName(member.getMemberName());
+      String property = CSharpNaming.memberName(member);
       Integer value =
           member.getTrait(EnumValueTrait.class).flatMap(EnumValueTrait::getIntValue).orElse(null);
       writer.writeXmlDocs(member);
