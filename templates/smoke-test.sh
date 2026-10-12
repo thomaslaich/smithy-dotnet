@@ -73,6 +73,45 @@ build() { # build <label> <project-dir>
   fi
 }
 
+# Verify the restored consumer graph, not just compilation: unrelated protocol/codec
+# dependencies on the host would still let every template build successfully.
+check_server_dependencies() { # check_server_dependencies <label> <project-dir> <protocol>
+  local label="$1" assets="$2/obj/project.assets.json" protocol="$3"
+  local expected_protocol expected_codec package
+  case "$protocol" in
+    restJson1|simpleRestJson) expected_protocol=RestJson; expected_codec=Json ;;
+    rpcv2Cbor) expected_protocol=RpcV2Cbor; expected_codec=Cbor ;;
+    grpc) expected_protocol=Grpc; expected_codec=Proto ;;
+  esac
+  if [[ ! -f "$assets" ]]; then
+    echo "  FAIL  $label-dependencies: restore assets missing"
+    failed+=("$label-dependencies")
+    return
+  fi
+  for package in "NSmithy.Protocols.$expected_protocol" "NSmithy.Codecs.$expected_codec"; do
+    if ! grep -Fq "\"$package/" "$assets"; then
+      echo "  FAIL  $label-dependencies: missing $package"
+      failed+=("$label-dependencies")
+      return
+    fi
+  done
+  for package in RestJson RpcV2Cbor Grpc; do
+    if [[ "$package" != "$expected_protocol" ]] && grep -Fq "\"NSmithy.Protocols.$package/" "$assets"; then
+      echo "  FAIL  $label-dependencies: unexpected NSmithy.Protocols.$package"
+      failed+=("$label-dependencies")
+      return
+    fi
+  done
+  for package in Json Cbor Proto; do
+    if [[ "$package" != "$expected_codec" ]] && grep -Fq "\"NSmithy.Codecs.$package/" "$assets"; then
+      echo "  FAIL  $label-dependencies: unexpected NSmithy.Codecs.$package"
+      failed+=("$label-dependencies")
+      return
+    fi
+  done
+  echo "  PASS  $label-dependencies"
+}
+
 for protocol in restJson1 simpleRestJson rpcv2Cbor grpc; do
   echo "== $protocol =="
 
@@ -88,6 +127,7 @@ for protocol in restJson1 simpleRestJson rpcv2Cbor grpc; do
   localize "$qs"
   build "$protocol-contracts" "$qs/Hello.Contracts"
   build "$protocol-server" "$qs/Hello.Server"
+  check_server_dependencies "$protocol-server" "$qs/Hello.Server" "$protocol"
   build "$protocol-client" "$qs/Hello.Client"
 
   # Standalone server: owns model/ and smithy-build.json itself, and no docs endpoints.
@@ -97,6 +137,7 @@ for protocol in restJson1 simpleRestJson rpcv2Cbor grpc; do
   dotnet new nsmithy-server -o "$solo/Hello.Server" -n Hello.Server --protocol "$protocol" > /dev/null
   localize "$solo"
   build "$protocol-server-standalone" "$solo/Hello.Server"
+  check_server_dependencies "$protocol-server-standalone" "$solo/Hello.Server" "$protocol"
 done
 
 # The default scaffolds above run smithy from PATH. --smithy-cli-package references

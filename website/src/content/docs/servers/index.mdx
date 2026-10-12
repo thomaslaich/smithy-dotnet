@@ -12,6 +12,22 @@ NSmithy generates handler interfaces whose methods accept modeled inputs and
 return modeled outputs. You implement the operations; the runtime handles
 serialization, dispatch, and modeled errors.
 
+## Reference the protocol package
+
+Reference `NSmithy.Server.AspNetCore` and the package for each protocol your
+server generates. The host is protocol-agnostic and does not bring in protocol
+or codec packages itself; each protocol package brings its required codecs.
+The `nsmithy-server` template adds the matching reference automatically.
+
+| Service protocol | Package to add alongside `NSmithy.Server.AspNetCore` |
+| --- | --- |
+| `restJson1` or `simpleRestJson` | `NSmithy.Protocols.RestJson` |
+| `rpcv2Cbor` | `NSmithy.Protocols.RpcV2Cbor` |
+| `grpc` | `NSmithy.Protocols.Grpc` |
+
+When upgrading an existing REST/JSON or gRPC server, add the corresponding
+protocol package explicitly, using the same NSmithy version as the host.
+
 ## Implement an operation
 
 For a `Library` service with a `GetBook` operation, modeled as in
