@@ -155,7 +155,16 @@ public final class ErrorGenerator implements Runnable {
     for (MemberShape member : members) {
       String property = CSharpNaming.propertyName(member.getMemberName());
       String parameter = CSharpNaming.parameterName(member.getMemberName());
-      if (!ShapeSupport.isNullable(member)
+      // A defaulted member takes a nullable, optional parameter but keeps a non-nullable
+      // property, so an omitted argument falls back to the modeled default.
+      String defaultValue =
+          ShapeSupport.isNullable(member)
+              ? null
+              : ShapeSupport.defaultValueExpression(
+                  writer, context.model(), context.symbolProvider(), member);
+      if (defaultValue != null) {
+        writer.write("$L = $L ?? $L;", property, parameter, defaultValue);
+      } else if (!ShapeSupport.isNullable(member)
           && ShapeSupport.isReferenceType(context.model(), member)) {
         writer.write(
             "$L = $L ?? throw new $T(nameof($L));",

@@ -37,7 +37,7 @@ final class ErrorGeneratorTest {
       operation GetForecast {
           input := {}
           output := {}
-          errors: [ThrottlingError, TransientError, ValidationError]
+          errors: [ThrottlingError, TransientError, ValidationError, DefaultedError]
       }
 
       @error("client")
@@ -55,6 +55,24 @@ final class ErrorGeneratorTest {
       @error("client")
       structure ValidationError {
           message: String
+      }
+
+      @error("client")
+      structure DefaultedError {
+          @required
+          message: String
+
+          @required
+          reason: Reason = "OTHER"
+
+          retries: Integer = 3
+
+          field: String = "unknown"
+      }
+
+      enum Reason {
+          OTHER
+          INVALID
       }
       """;
 
@@ -93,6 +111,20 @@ final class ErrorGeneratorTest {
         generated);
     assertTrue(generated.contains("serializer.WriteString("), generated);
     assertTrue(generated.contains("builder.Message = deserializer.ReadString();"), generated);
+  }
+
+  @Test
+  void defaultedMembersFallBackToTheirModeledDefault() throws Exception {
+    String generated = renderError("example.weather#DefaultedError");
+
+    assertTrue(generated.contains("Reason? reason = null"), generated);
+    assertTrue(
+        generated.contains(
+            "Reason = reason ?? new global::Example.Example.Weather.Reason(\"OTHER\");"),
+        generated);
+    assertTrue(generated.contains("Retries = retries ?? 3;"), generated);
+    assertTrue(generated.contains("Field = field ?? \"unknown\";"), generated);
+    assertTrue(generated.contains("public int Retries { get; }"), generated);
   }
 
   private String renderError(String shapeId) throws Exception {
