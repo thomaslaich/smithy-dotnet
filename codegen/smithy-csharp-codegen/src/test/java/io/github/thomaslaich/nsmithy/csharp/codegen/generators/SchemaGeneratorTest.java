@@ -1,10 +1,13 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import org.junit.jupiter.api.Test;
 import software.amazon.smithy.codegen.core.CodegenException;
+import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.StructureShape;
 
@@ -25,5 +28,20 @@ final class SchemaGeneratorTest {
         ex.getMessage().contains("Supported prelude schema shapes: Boolean, Byte"),
         ex.getMessage());
     assertTrue(ex.getMessage().contains("Document, Unit."), ex.getMessage());
+  }
+
+  @Test
+  void primitivePreludeShapesShareTheBoxedSchemas() {
+    var prelude = Model.assembler().assemble().unwrap();
+    var writer = new CSharpWriter("example");
+    for (String name :
+        new String[] {"Boolean", "Byte", "Short", "Integer", "Long", "Float", "Double"}) {
+      var boxed = prelude.expectShape(ShapeId.from("smithy.api#" + name));
+      var primitive = prelude.expectShape(ShapeId.from("smithy.api#Primitive" + name));
+
+      assertEquals(
+          SchemaGenerator.shapeSchemaAccessor(writer, null, boxed),
+          SchemaGenerator.shapeSchemaAccessor(writer, null, primitive));
+    }
   }
 }
