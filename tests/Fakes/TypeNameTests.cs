@@ -1,4 +1,5 @@
 using Example.Names;
+using Example.Names.Schemas;
 using NSmithy.Core.Serde;
 
 namespace NSmithy.Fakes.Tests;

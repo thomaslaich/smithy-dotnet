@@ -41,6 +41,7 @@ Register the generated handler as usual, then select the service by its generate
 schema. This exposes its tools and prompts together:
 
 ```csharp title="Program.cs"
+using Example.Weather.Schemas;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NSmithy.Server.Mcp;

@@ -93,9 +93,7 @@ final class ClientExamplesGenerator {
           .ifPresent(
               node -> {
                 String property =
-                    member.equals(message)
-                        ? "Message"
-                        : CSharpNaming.propertyName(member.getMemberName());
+                    member.equals(message) ? "Message" : CSharpNaming.memberName(member);
                 code.append("\n    // Expected ")
                     .append(property)
                     .append(": ")
@@ -119,13 +117,18 @@ final class ClientExamplesGenerator {
               ? writer.typeName(RuntimeTypes.SMITHY_UNIT) + ".Value"
               : structure(shape.asStructureShape().orElseThrow(), node.expectObjectNode());
       case UNION -> {
-        var entry = node.expectObjectNode().getStringMap().entrySet().iterator().next();
-        var member = shape.getMember(entry.getKey()).orElseThrow();
+        // Smithy accepts an example union with no variant or an unknown one; documentation shows
+        // it as absent rather than failing the build.
+        var entry = node.expectObjectNode().getStringMap().entrySet().stream().findFirst();
+        var member = entry.flatMap(e -> shape.getMember(e.getKey()));
+        if (member.isEmpty()) {
+          yield "null";
+        }
         yield type(shape)
-            + ".From"
-            + CSharpNaming.typeName(member.getMemberName())
+            + "."
+            + CSharpNaming.variantFactoryName(member.get())
             + "("
-            + value(member.getTarget(), entry.getValue())
+            + value(member.get().getTarget(), entry.get().getValue())
             + ")";
       }
       case LIST, SET -> {
@@ -212,7 +215,7 @@ final class ClientExamplesGenerator {
       args.add(
           (error
                   ? CSharpNaming.parameterName(member.getMemberName())
-                  : CSharpNaming.propertyName(member.getMemberName()))
+                  : CSharpNaming.memberName(member))
               + ": "
               + expression);
     }

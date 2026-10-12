@@ -4,6 +4,7 @@ using NSmithy.Core.Serde;
 using NSmithy.Http;
 using NSmithy.Protocols.Grpc;
 using Nsmithy.Tests.Grpc;
+using Nsmithy.Tests.Grpc.Schemas;
 
 namespace NSmithy.Tests.Protocols.Grpc;
 

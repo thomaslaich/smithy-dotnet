@@ -273,6 +273,17 @@ final class ClientExamplesGeneratorTest {
   }
 
   @Test
+  void unionExampleWithoutAVariantRendersAsNull() throws Exception {
+    String model = MODEL.replace("choice: { text: \"chosen\" }", "choice: {}");
+    String code =
+        examples(render(model)).stream()
+            .filter(s -> s.contains("expectedOutput = new Response"))
+            .findFirst()
+            .orElseThrow();
+    assertTrue(code.contains("Choice: null"), code);
+  }
+
+  @Test
   void omittedInputUsesDeclaredDefaultsAndMarksMissingRequiredValues() throws Exception {
     String model =
         MODEL

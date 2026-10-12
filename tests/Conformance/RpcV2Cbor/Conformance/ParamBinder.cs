@@ -295,7 +295,9 @@ internal static class ParamBinder
     private static ShapeKind? GetSchemaKind(Type targetType)
     {
         // The functional schema lives on the generated companion `{Type}Schema` class.
-        var schemaType = targetType.Assembly.GetType(targetType.FullName + "Schema");
+        var schemaType = targetType.Assembly.GetType(
+            $"{targetType.Namespace}.Schemas.{targetType.Name}Schema"
+        );
         var schemaProp = schemaType?.GetProperty(
             "Schema",
             BindingFlags.Public | BindingFlags.Static

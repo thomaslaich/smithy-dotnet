@@ -16,6 +16,7 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.writer;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
 import io.github.thomaslaich.nsmithy.csharp.codegen.SymbolProperties;
+import io.github.thomaslaich.nsmithy.csharp.codegen.generators.SchemaGenerator;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -64,8 +65,8 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
         .members()
         .forEach(
             member -> {
-              getImportContainer().reserveName(CSharpNaming.propertyName(member.getMemberName()));
-              getImportContainer().reserveName(CSharpNaming.typeName(member.getMemberName()));
+              getImportContainer().reserveName(CSharpNaming.memberName(member));
+              getImportContainer().reserveName(CSharpNaming.variantName(member));
             });
   }
 
@@ -174,6 +175,8 @@ public final class CSharpWriter extends SymbolWriter<CSharpWriter, ImportDeclara
 
   /** Include declarations that can shadow framework types even when this file never uses them. */
   private void reserveModelNames(Model model, CSharpSettings settings) {
+    // Every model namespace has a child Schemas namespace, which hides the runtime Schemas type.
+    getImportContainer().reserveNamespaceSegment(SchemaGenerator.SCHEMAS_NAMESPACE);
     model
         .shapes()
         .filter(shape -> !shape.isMemberShape())

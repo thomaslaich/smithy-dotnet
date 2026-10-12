@@ -4,6 +4,7 @@ using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Protocols.Rest;
 using Nsmithy.Tests.Core;
+using Nsmithy.Tests.Core.Schemas;
 
 namespace NSmithy.Tests.Core;
 

@@ -154,8 +154,7 @@ public final class ClientGenerator implements Runnable {
   static String memberPathExpr(String root, List<MemberShape> path) {
     StringBuilder expr = new StringBuilder(root);
     for (int i = 0; i < path.size(); i++) {
-      expr.append(i == 0 ? "." : "?.")
-          .append(CSharpNaming.propertyName(path.get(i).getMemberName()));
+      expr.append(i == 0 ? "." : "?.").append(CSharpNaming.memberName(path.get(i)));
     }
     return expr.toString();
   }
@@ -681,7 +680,7 @@ public final class ClientGenerator implements Runnable {
                   return ("new " + writer.typeName(RuntimeTypes.SMITHY_HOST_LABEL) + "(")
                       + CSharpNaming.formatString(name)
                       + ", input."
-                      + CSharpNaming.propertyName(member.getMemberName())
+                      + CSharpNaming.memberName(member)
                       + ")";
                 })
             .collect(Collectors.joining(", "));
@@ -776,7 +775,7 @@ public final class ClientGenerator implements Runnable {
           writer.consumer(
               w -> {
                 for (MemberShape member : idempotencyMembers) {
-                  String property = CSharpNaming.propertyName(member.getMemberName());
+                  String property = CSharpNaming.memberName(member);
                   w.write("$L = input.$L ?? this.idempotencyTokenProvider(),", property, property);
                 }
               }));
@@ -815,8 +814,7 @@ public final class ClientGenerator implements Runnable {
     writer.pushState();
     try {
       writer.putContext("operation", CSharpNaming.typeName(op.getId().getName()));
-      writer.putContext(
-          "tokenProperty", CSharpNaming.propertyName(info.getInputTokenMember().getMemberName()));
+      writer.putContext("tokenProperty", CSharpNaming.memberName(info.getInputTokenMember()));
       writer.putContext("outputToken", memberPathExpr("output", info.getOutputTokenMemberPath()));
       writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
       writer.putContext(

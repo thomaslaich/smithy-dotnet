@@ -228,7 +228,7 @@ internal static class HttpResponseRunner
     private static ShapeKind? GetSchemaKind(Type type)
     {
         // The functional schema lives on the generated companion `{Type}Schema` class.
-        var schemaType = type.Assembly.GetType(type.FullName + "Schema");
+        var schemaType = type.Assembly.GetType($"{type.Namespace}.Schemas.{type.Name}Schema");
         var schemaProp = schemaType?.GetProperty(
             "Schema",
             BindingFlags.Public | BindingFlags.Static
@@ -276,7 +276,9 @@ internal static class ConformanceClients
     private static bool OperationMatchesNamespace(MethodInfo method, string operationShapeId)
     {
         var inputType = method.GetParameters()[0].ParameterType;
-        var schemaType = inputType.Assembly.GetType(inputType.FullName + "Schema");
+        var schemaType = inputType.Assembly.GetType(
+            $"{inputType.Namespace}.Schemas.{inputType.Name}Schema"
+        );
         var schema =
             schemaType
                 ?.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static)
@@ -345,7 +347,7 @@ internal static class ResponseAssertions
     private static ShapeKind? GetSchemaKind(Type type)
     {
         // The functional schema lives on the generated companion `{Type}Schema` class.
-        var schemaType = type.Assembly.GetType(type.FullName + "Schema");
+        var schemaType = type.Assembly.GetType($"{type.Namespace}.Schemas.{type.Name}Schema");
         var schemaProp = schemaType?.GetProperty(
             "Schema",
             BindingFlags.Public | BindingFlags.Static

@@ -198,7 +198,7 @@ final class FakeExampleMatcher {
         continue;
       }
       valueConditions(
-          subject + "." + CSharpNaming.propertyName(member.getMemberName()),
+          subject + "." + CSharpNaming.memberName(member),
           model.expectShape(member.getTarget()),
           valueNode,
           out,
@@ -332,7 +332,7 @@ final class FakeExampleMatcher {
         continue;
       }
       String variantType =
-          values.qualifiedType(union) + "." + CSharpNaming.typeName(variant.get().getMemberName());
+          values.qualifiedType(union) + "." + CSharpNaming.variantName(variant.get());
       String v = nextVar(counter);
       out.add(expr + " is " + variantType + " " + v);
       valueConditions(

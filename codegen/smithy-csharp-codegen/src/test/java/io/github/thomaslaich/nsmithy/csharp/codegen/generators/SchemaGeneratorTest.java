@@ -44,4 +44,38 @@ final class SchemaGeneratorTest {
           SchemaGenerator.shapeSchemaAccessor(writer, null, primitive));
     }
   }
+
+  @Test
+  void typeNamedSchemasFailsWithAClearError() {
+    Model model =
+        Model.assembler()
+            .addUnparsedModel(
+                "model.smithy",
+                """
+                $version: "2"
+                namespace example.weather
+                service Weather { version: "1", operations: [GetSchemas] }
+                operation GetSchemas { input := { schemas: Schemas } }
+                structure Schemas { name: String }
+                """)
+            .assemble()
+            .unwrap();
+    var settings =
+        io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings.fromNode(
+            software.amazon.smithy.model.node.ObjectNode.builder()
+                .withMember(
+                    "service",
+                    software.amazon.smithy.model.node.Node.from("example.weather#Weather"))
+                .build());
+    var symbols =
+        new io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider(model, settings);
+
+    CodegenException ex =
+        assertThrows(
+            CodegenException.class,
+            () -> symbols.toSymbol(model.expectShape(ShapeId.from("example.weather#Schemas"))));
+
+    assertTrue(ex.getMessage().contains("C# type named Schemas"), ex.getMessage());
+    assertTrue(ex.getMessage().contains("Example.Weather.Schemas namespace"), ex.getMessage());
+  }
 }

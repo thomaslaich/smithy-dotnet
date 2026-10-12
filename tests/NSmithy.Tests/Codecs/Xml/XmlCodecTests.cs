@@ -1,6 +1,7 @@
 using NSmithy.Codecs.Xml;
 using NSmithy.Core.Serde;
 using Nsmithy.Tests.Xml;
+using Nsmithy.Tests.Xml.Schemas;
 
 namespace NSmithy.Tests.Codecs.Xml;
 

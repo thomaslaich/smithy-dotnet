@@ -51,7 +51,7 @@ public final class StructureGenerator implements Runnable {
     Map<String, String> docs = new LinkedHashMap<>();
     for (MemberShape member : members) {
       ShapeSupport.memberDocumentation(context.model(), member)
-          .ifPresent(doc -> docs.put(CSharpNaming.propertyName(member.getMemberName()), doc));
+          .ifPresent(doc -> docs.put(CSharpNaming.memberName(member), doc));
     }
     return docs;
   }
@@ -67,7 +67,7 @@ public final class StructureGenerator implements Runnable {
       MemberShape member = ctorMembers.get(i);
       sig.append(ShapeSupport.parameterTypeExpr(writer, context.model(), sp, member))
           .append(' ')
-          .append(CSharpNaming.propertyName(member.getMemberName()));
+          .append(CSharpNaming.memberName(member));
       if (ShapeSupport.isOptionalParameter(member)) {
         sig.append(" = null");
       }
