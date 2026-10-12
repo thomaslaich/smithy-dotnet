@@ -357,6 +357,6 @@ final class FakeExampleMatcher {
   }
 
   private static String quote(String title) {
-    return "\"" + title.replace('\n', ' ').replace('\r', ' ') + "\"";
+    return "\"" + String.join(" ", title.split("\\R")) + "\"";
   }
 }

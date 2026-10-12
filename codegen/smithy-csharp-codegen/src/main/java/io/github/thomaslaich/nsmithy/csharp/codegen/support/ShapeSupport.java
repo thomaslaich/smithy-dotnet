@@ -500,8 +500,7 @@ public final class ShapeSupport {
 
   private static String defaultLiteral(software.amazon.smithy.model.node.Node node) {
     if (node.isStringNode()) {
-      String s = node.expectStringNode().getValue();
-      return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+      return CSharpNaming.formatString(node.expectStringNode().getValue());
     }
     if (node.isBooleanNode()) {
       return node.expectBooleanNode().getValue() ? "true" : "false";

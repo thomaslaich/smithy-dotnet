@@ -45,13 +45,15 @@ public final class SchemaGenerator {
       CSharpWriter writer, GenerationContext context, Shape shape) {
     if ("smithy.api".equals(shape.getId().getNamespace())) {
       return switch (shape.getId().getName()) {
-        case "Boolean" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Boolean");
-        case "Byte" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Byte");
-        case "Short" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Short");
-        case "Integer" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Integer");
-        case "Long" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Long");
-        case "Float" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Float");
-        case "Double" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Double");
+        // The deprecated Primitive* shapes differ only by a default value, which Smithy also
+        // places on every member that targets them.
+        case "Boolean", "PrimitiveBoolean" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Boolean");
+        case "Byte", "PrimitiveByte" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Byte");
+        case "Short", "PrimitiveShort" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Short");
+        case "Integer", "PrimitiveInteger" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Integer");
+        case "Long", "PrimitiveLong" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Long");
+        case "Float", "PrimitiveFloat" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Float");
+        case "Double", "PrimitiveDouble" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".Double");
         case "BigInteger" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".BigInteger");
         case "BigDecimal" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".BigDecimal");
         case "String" -> (writer.typeName(RuntimeTypes.SCHEMAS) + ".String");
@@ -1149,6 +1151,13 @@ public final class SchemaGenerator {
         "Long",
         "Float",
         "Double",
+        "PrimitiveBoolean",
+        "PrimitiveByte",
+        "PrimitiveShort",
+        "PrimitiveInteger",
+        "PrimitiveLong",
+        "PrimitiveFloat",
+        "PrimitiveDouble",
         "BigInteger",
         "BigDecimal",
         "String",

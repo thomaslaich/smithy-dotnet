@@ -175,7 +175,15 @@ public final class CSharpNaming {
         case '\n' -> sb.append("\\n");
         case '\r' -> sb.append("\\r");
         case '\t' -> sb.append("\\t");
-        default -> sb.append(c);
+        default -> {
+          // C# also ends a line at U+0085, U+2028, and U+2029, so those (and any other
+          // control character) must be escaped to keep the literal on one line.
+          if (Character.isISOControl(c) || c == '\u2028' || c == '\u2029') {
+            sb.append(String.format("\\u%04X", (int) c));
+          } else {
+            sb.append(c);
+          }
+        }
       }
     }
     sb.append('"');
