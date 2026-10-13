@@ -66,6 +66,9 @@ final class TypeNameGeneratorTest {
     assertTrue(record.contains("global::Example.Library.Builder? Helper"), record);
     assertTrue(record.contains("global::Example.Library.GeneratedSchema? Serializer"), record);
     assertFalse(record.contains("global::Example.Library.Book?"), record);
+    assertTrue(
+        record.contains("Example.Library.DeleteBookInput stays qualified in documentation."),
+        record);
 
     assertTrue(schema.contains("namespace Example.Library.Schemas;"), schema);
     assertTrue(
@@ -76,9 +79,7 @@ final class TypeNameGeneratorTest {
     assertTrue(schema.contains("global::Example.Other.Schemas.BookSchema.Schema!"), schema);
     assertTrue(schema.contains("global::NSmithy.Core.Serde.Schemas.Lazy("), schema);
     assertTrue(schema.contains("private sealed class GeneratedSchema()"), schema);
-    assertTrue(
-        schema.contains("Example.Library.DeleteBookInput stays qualified in documentation."),
-        schema);
+    assertFalse(schema.contains("smithy.api#documentation"), schema);
     assertFalse(schema.contains("using Example.Other;"), schema);
   }
 

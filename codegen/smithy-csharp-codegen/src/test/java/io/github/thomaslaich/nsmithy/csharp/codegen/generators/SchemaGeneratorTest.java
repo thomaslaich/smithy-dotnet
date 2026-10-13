@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.model.Model;
@@ -43,6 +44,42 @@ final class SchemaGeneratorTest {
           SchemaGenerator.shapeSchemaAccessor(writer, null, boxed),
           SchemaGenerator.shapeSchemaAccessor(writer, null, primitive));
     }
+  }
+
+  @Test
+  void runtimeSchemasOmitBuildTimeTraits() {
+    Model model =
+        Model.assembler()
+            .addUnparsedModel(
+                "model.smithy",
+                """
+                $version: "2"
+                namespace example.weather
+
+                @trait
+                string owner
+
+                /// Returns a forecast.
+                @owner("weather-team")
+                @readonly
+                @examples([{ title: "Zurich" }])
+                @tags(["public"])
+                @externalDocumentation(Guide: "https://example.com")
+                @deprecated
+                operation GetForecast {}
+                """)
+            .assemble()
+            .unwrap();
+    var operation = model.expectShape(ShapeId.from("example.weather#GetForecast"));
+
+    var retained =
+        operation.getAllTraits().values().stream()
+            .filter(SchemaGenerator::isRuntimeTrait)
+            .map(trait -> trait.toShapeId().toString())
+            .sorted()
+            .toList();
+
+    assertEquals(List.of("example.weather#owner", "smithy.api#readonly"), retained);
   }
 
   @Test

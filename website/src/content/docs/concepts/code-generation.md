@@ -69,6 +69,9 @@ implement it: a new constraint, protocol, or client feature needs a component
 that interprets it, and traits that change the C# representation, such as
 `@required`, need generator support.
 
+Schemas leave out traits used only at build time, such as `@documentation`,
+`@examples`, `@tags`, `@deprecated`, and test traits.
+
 ## The toolchain
 
 Two NuGet packages provide the tools generation needs:

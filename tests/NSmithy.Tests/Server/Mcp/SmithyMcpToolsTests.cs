@@ -24,6 +24,9 @@ public sealed class SmithyMcpToolsTests
         var tool = Assert.Single(tools).ProtocolTool;
         Assert.Equal("LookupWeather", tool.Name);
         Assert.Equal("Looks up the weather for a place.", tool.Description);
+        Assert.False(
+            LookupWeatherSchema.Schema.HasTrait(ShapeId.Parse("smithy.api#documentation"))
+        );
         Assert.True(tool.Annotations?.ReadOnlyHint);
         Assert.False(tool.Annotations?.DestructiveHint);
 
