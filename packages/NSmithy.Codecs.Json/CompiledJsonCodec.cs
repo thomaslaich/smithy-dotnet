@@ -21,13 +21,14 @@ internal sealed class CompiledJsonCodec<T> : ICodec<T>
         bool materializeTopLevelDefaults,
         WireReadMode readMode,
         bool honorJsonNameTrait,
-        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null
+        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null,
+        KeyValuePair<string, string>? discriminator = null
     )
     {
         this.schema = schema;
         this.materializeTopLevelDefaults = materializeTopLevelDefaults;
         this.readMode = readMode;
-        root = new JsonPlans(honorJsonNameTrait).ForRoot(schema, memberTraits);
+        root = new JsonPlans(honorJsonNameTrait).ForRoot(schema, memberTraits, discriminator);
     }
 
     public byte[] Serialize(T value)

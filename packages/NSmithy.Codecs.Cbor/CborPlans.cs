@@ -14,6 +14,9 @@ internal sealed class CborMemberPlan(string name, bool isRequired, Schema target
 
     /// <summary>The plan of the member's target when it is an aggregate.</summary>
     public CborShapePlan? Shape { get; } = plans.ForTarget(target);
+
+    /// <summary>An entry written ahead of a top-level structure's members; only a root has one.</summary>
+    public KeyValuePair<string, string>? Discriminator { get; init; }
 }
 
 /// <summary>The CBOR codec's plan for one aggregate shape, indexed by member position.</summary>
@@ -67,8 +70,10 @@ internal sealed class CborPlans
     );
 
     /// <summary>The plan for a top-level value, which is no member of anything.</summary>
-    public CborMemberPlan ForRoot(Schema schema) =>
-        new(schema.Id.Name, isRequired: true, schema, this);
+    public CborMemberPlan ForRoot(
+        Schema schema,
+        KeyValuePair<string, string>? discriminator = null
+    ) => new(schema.Id.Name, isRequired: true, schema, this) { Discriminator = discriminator };
 
     /// <summary>The plan for a member's target, or null when the target is a simple shape.</summary>
     public CborShapePlan? ForTarget(Schema target)

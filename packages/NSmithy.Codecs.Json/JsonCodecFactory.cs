@@ -21,7 +21,8 @@ public sealed class JsonCodecFactory(
             schema,
             resolved.MaterializeTopLevelDefaults,
             readMode,
-            honorJsonNameTrait
+            honorJsonNameTrait,
+            discriminator: resolved.Discriminator
         );
     }
 

@@ -328,4 +328,20 @@ public sealed class JsonCodecTests
 
         Assert.Equal(expected, codec.SerializeText(new Defaulted()));
     }
+
+    // ---------------- discriminator ----------------
+
+    [Fact]
+    public void DiscriminatorLeadsTheStructureMembers()
+    {
+        var codec = JsonCodecFactory.Default.FromSchema(
+            DefaultedSchema.Schema,
+            new CodecFactoryOptions { Discriminator = new("__type", "smithy.example#Defaulted") }
+        );
+
+        Assert.Equal(
+            "{\"__type\":\"smithy.example#Defaulted\",\"count\":7,\"labels\":[]}",
+            codec.SerializeText(new Defaulted())
+        );
+    }
 }

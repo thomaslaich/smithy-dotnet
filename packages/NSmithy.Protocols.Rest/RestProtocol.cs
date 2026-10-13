@@ -404,49 +404,13 @@ public static class RestProtocol
     }
 
     /// <summary>
-    /// Serializes a modeled error into a REST error response: the supplied HTTP status code, an
-    /// <c>X-Amzn-Errortype</c> discriminator carrying the error's shape name, the error's HTTP
-    /// header/payload bindings, and a body holding the remaining members (at minimum <c>{}</c>).
-    /// </summary>
-    public static SmithyHttpServerResponse SerializeError<TError>(
-        Schema<TError> errorSchema,
-        TError value,
-        string errorShapeId,
-        int statusCode,
-        IRestBodyCodecFactory codecFactory,
-        bool rawStringPayloads,
-        string errorTypeHeader
-    )
-    {
-        ArgumentNullException.ThrowIfNull(errorSchema);
-        ArgumentNullException.ThrowIfNull(errorShapeId);
-        ArgumentNullException.ThrowIfNull(codecFactory);
-
-        if (errorSchema.Resolved is not IStructSchema<TError> schema)
-        {
-            throw new InvalidOperationException(
-                $"Error schema '{errorSchema.Id}' must be a structure schema."
-            );
-        }
-
-        return CompileErrorSerializer(
-            errorSchema,
-            codecFactory,
-            rawStringPayloads,
-            errorTypeHeader
-        )(value, errorShapeId, statusCode);
-    }
-
-    /// <summary>
     /// Compiles an error shape into a response writer, resolving everything the shape determines —
     /// which members bind to headers, which to the body, the projected body codec — once instead of
     /// per response.
     /// </summary>
     /// <remarks>
-    /// <see cref="SerializeError"/> compiles on every call, so it is the ad-hoc entry point; anything
-    /// serializing the same error repeatedly should hold the result of this instead. The shape id and
-    /// status code stay parameters rather than being baked in, because the malformed-request schema
-    /// is one shape serving several of each.
+    /// The shape id and status code stay parameters rather than being baked in, because the
+    /// malformed-request schema is one shape serving several of each.
     /// </remarks>
     internal static RestErrorSerializer<TError> CompileErrorSerializer<TError>(
         Schema<TError> errorSchema,

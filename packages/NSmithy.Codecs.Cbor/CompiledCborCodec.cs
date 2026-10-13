@@ -3,10 +3,13 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Cbor;
 
-internal sealed class CompiledCborCodec<T>(Schema<T> schema, bool materializeTopLevelDefaults)
-    : ICodec<T>
+internal sealed class CompiledCborCodec<T>(
+    Schema<T> schema,
+    bool materializeTopLevelDefaults,
+    KeyValuePair<string, string>? discriminator
+) : ICodec<T>
 {
-    private readonly CborMemberPlan root = new CborPlans().ForRoot(schema);
+    private readonly CborMemberPlan root = new CborPlans().ForRoot(schema, discriminator);
 
     public byte[] Serialize(T value)
     {
