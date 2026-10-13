@@ -6,7 +6,7 @@ using NSmithy.Client;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 
-namespace RpcV2Json.Conformance;
+namespace RpcV2.Conformance;
 
 /// <summary>
 /// Drives a single httpResponseTests case end-to-end:
@@ -75,9 +75,7 @@ internal static class HttpResponseRunner
     private static HttpResponseMessage BuildResponse(HttpResponseTestCase testCase)
     {
         var msg = new HttpResponseMessage((HttpStatusCode)testCase.Code);
-        var bodyBytes = string.IsNullOrEmpty(testCase.Body)
-            ? []
-            : System.Text.Encoding.UTF8.GetBytes(testCase.Body);
+        var bodyBytes = ConformanceProtocol.DecodeBody(testCase.Body);
         var content = new ByteArrayContent(bodyBytes);
         if (!string.IsNullOrEmpty(testCase.BodyMediaType))
         {

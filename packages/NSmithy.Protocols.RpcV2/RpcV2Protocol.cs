@@ -89,20 +89,8 @@ public abstract class RpcV2Protocol : IProtocol
             var inputValidator = isServer ? SmithyValidator.FromSchema(operation.Input) : null;
 
             // Each direction is chosen independently; the four call shapes are their cross product.
-            var request = EventStreamBinding.TryBind(
-                operation.Input,
-                new StreamingRequestCompiler<TInput>(protocol),
-                out var streamingRequest
-            )
-                ? streamingRequest
-                : protocol.UnaryRequestStrategy(operation.Input);
-            var response = EventStreamBinding.TryBind(
-                operation.Output,
-                new StreamingResponseCompiler<TOutput>(protocol),
-                out var streamingResponse
-            )
-                ? streamingResponse
-                : protocol.UnaryResponseStrategy(operation.Output);
+            var request = protocol.CompileRequest(operation.Input);
+            var response = protocol.CompileResponse(operation.Output);
 
             return new OperationProtocol<TInput, TOutput>(
                 protocol,
@@ -115,6 +103,24 @@ public abstract class RpcV2Protocol : IProtocol
             );
         }
     }
+
+    private RequestStrategy<TInput> CompileRequest<TInput>(Schema<TInput> inputSchema) =>
+        EventStreamBinding.TryBind(
+            inputSchema,
+            new StreamingRequestCompiler<TInput>(this),
+            out var streamingRequest
+        )
+            ? streamingRequest
+            : UnaryRequestStrategy(inputSchema);
+
+    private ResponseStrategy<TOutput> CompileResponse<TOutput>(Schema<TOutput> outputSchema) =>
+        EventStreamBinding.TryBind(
+            outputSchema,
+            new StreamingResponseCompiler<TOutput>(this),
+            out var streamingResponse
+        )
+            ? streamingResponse
+            : UnaryResponseStrategy(outputSchema);
 
     private sealed class StreamingRequestCompiler<TInput>(RpcV2Protocol protocol)
         : IEventStreamBindingVisitor<TInput, RequestStrategy<TInput>>

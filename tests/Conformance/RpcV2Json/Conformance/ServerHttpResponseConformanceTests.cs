@@ -1,3 +1,5 @@
+using RpcV2.Conformance;
+
 namespace RpcV2Json.Conformance;
 
 public sealed class ServerHttpResponseConformanceTests

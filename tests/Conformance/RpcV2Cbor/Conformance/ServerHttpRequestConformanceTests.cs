@@ -1,3 +1,5 @@
+using RpcV2.Conformance;
+
 namespace RpcV2Cbor.Conformance;
 
 public sealed class ServerHttpRequestConformanceTests
