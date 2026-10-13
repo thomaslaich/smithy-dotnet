@@ -1,5 +1,4 @@
 using Example.Weather;
-using Example.Weather.Schemas;
 using NSmithy.Server.AspNetCore.Docs;
 using NSmithy.Server.Mcp;
 using OpenTelemetry.Metrics;
@@ -43,7 +42,7 @@ static async Task RunMcpServerAsync(string[] args)
     builder
         .Services.AddMcpServer()
         .WithStdioServerTransport()
-        .WithSmithyService(WeatherSchema.Schema);
+        .WithSmithyService<WeatherServiceDefinition>();
 
     await builder.Build().RunAsync();
 }

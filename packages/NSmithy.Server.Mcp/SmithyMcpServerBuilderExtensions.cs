@@ -10,6 +10,24 @@ namespace NSmithy.Server.Mcp;
 public static class SmithyMcpServerBuilderExtensions
 {
     /// <summary>
+    /// Adds the tools and prompts for the generated service definition
+    /// <typeparamref name="TDefinition"/>, such as <c>WeatherServiceDefinition</c>. The definition
+    /// and its operation handlers are resolved from dependency injection when MCP server options
+    /// are materialized.
+    /// </summary>
+    public static IMcpServerBuilder WithSmithyService<TDefinition>(this IMcpServerBuilder builder)
+        where TDefinition : class, IServiceDefinition
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        return builder.WithSmithyDefinition(services =>
+            SingleDefinition(
+                services.GetServices<IServiceDefinition>().OfType<TDefinition>(),
+                typeof(TDefinition).FullName
+            )
+        );
+    }
+
+    /// <summary>
     /// Adds the tools and prompts for the generated service identified by
     /// <paramref name="schema"/>. The generated service definition and operation handlers are
     /// resolved from dependency injection when MCP server options are materialized.
@@ -22,24 +40,13 @@ public static class SmithyMcpServerBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(schema);
         return builder.WithSmithyDefinition(services =>
-        {
-            var matches = services
-                .GetServices<IServiceDefinition>()
-                .Where(definition => definition.Schema.Id == schema.Id)
-                .ToArray();
-            return matches.Length switch
-            {
-                1 => matches[0],
-                0 => throw new InvalidOperationException(
-                    $"Generated service definition '{schema.Id}' is not registered. Call the "
-                        + "generated Add{Service} method, or Add{Service}Handler for an aggregate "
-                        + "handler, before WithSmithyService."
-                ),
-                _ => throw new InvalidOperationException(
-                    $"Generated service definition '{schema.Id}' is registered more than once."
-                ),
-            };
-        });
+            SingleDefinition(
+                services
+                    .GetServices<IServiceDefinition>()
+                    .Where(definition => definition.Schema.Id == schema.Id),
+                schema.Id.ToString()
+            )
+        );
     }
 
     /// <summary>Adds the unary operations in <paramref name="catalog"/> as MCP tools.</summary>
@@ -62,6 +69,26 @@ public static class SmithyMcpServerBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(definitions);
         return builder.WithPrompts(SmithyMcpPrompts.Create(definitions));
+    }
+
+    private static IServiceDefinition SingleDefinition(
+        IEnumerable<IServiceDefinition> definitions,
+        string? name
+    )
+    {
+        var matches = definitions.ToArray();
+        return matches.Length switch
+        {
+            1 => matches[0],
+            0 => throw new InvalidOperationException(
+                $"Generated service definition '{name}' is not registered. Call the generated "
+                    + "Add{Service} method, or Add{Service}Handler for an aggregate handler, "
+                    + "before WithSmithyService."
+            ),
+            _ => throw new InvalidOperationException(
+                $"Generated service definition '{name}' is registered more than once."
+            ),
+        };
     }
 
     private static IMcpServerBuilder WithSmithyDefinition(

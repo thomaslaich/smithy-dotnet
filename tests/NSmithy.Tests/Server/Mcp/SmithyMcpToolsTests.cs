@@ -207,13 +207,45 @@ public sealed class SmithyMcpToolsTests
             )
         );
         services.AddFixturesService();
-        services.AddMcpServer().WithSmithyService(FixturesSchema.Schema);
+        services.AddMcpServer().WithSmithyService<FixturesServiceDefinition>();
 
         using var provider = services.BuildServiceProvider();
         var options = provider.GetRequiredService<IOptions<McpServerOptions>>().Value;
 
         Assert.Single(options.ToolCollection!);
         Assert.Single(options.PromptCollection!);
+    }
+
+    [Fact]
+    public void ResolvesGeneratedServiceDefinitionBySchema()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<ILookupWeatherHandler>(
+            new LookupHandler(
+                static (input, _) => Task.FromResult(new LookupWeatherOutput(input.Place))
+            )
+        );
+        services.AddFixturesService();
+        services.AddMcpServer().WithSmithyService(FixturesSchema.Schema);
+
+        using var provider = services.BuildServiceProvider();
+        var options = provider.GetRequiredService<IOptions<McpServerOptions>>().Value;
+
+        Assert.Single(options.ToolCollection!);
+    }
+
+    [Fact]
+    public void UnregisteredServiceDefinitionFailsWithAClearError()
+    {
+        var services = new ServiceCollection();
+        services.AddMcpServer().WithSmithyService<FixturesServiceDefinition>();
+
+        using var provider = services.BuildServiceProvider();
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            provider.GetRequiredService<IOptions<McpServerOptions>>().Value
+        );
+
+        Assert.Contains("FixturesServiceDefinition", exception.Message, StringComparison.Ordinal);
     }
 
     private static ServiceOperationCatalog Catalog(

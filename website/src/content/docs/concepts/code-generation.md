@@ -60,7 +60,7 @@ protocol implementation combines the schemas with its own encoding rules.
 
 Each shape's schema is a class in the child `Schemas` namespace:
 `Example.Weather.Person` has `Example.Weather.Schemas.PersonSchema`. Import that
-namespace when you hand a schema to a codec or to `WithSmithyService`.
+namespace when you hand a schema to a codec.
 
 Because trait values are model data, a schema can retain traits the generator
 knows nothing about. A custom `@owner("catalog-team")` trait reaches the
