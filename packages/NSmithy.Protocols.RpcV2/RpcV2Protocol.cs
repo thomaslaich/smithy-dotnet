@@ -733,7 +733,7 @@ public abstract class RpcV2Protocol : IProtocol
             : content;
 
     /// <summary>Whether the response carries this protocol's <c>Smithy-Protocol</c> header.</summary>
-    protected bool IsProtocolResponse(SmithyHttpClientResponse response)
+    private bool IsProtocolResponse(SmithyHttpClientResponse response)
     {
         ArgumentNullException.ThrowIfNull(response);
         return response.Headers.TryGetValue("Smithy-Protocol", out var values)
@@ -741,7 +741,7 @@ public abstract class RpcV2Protocol : IProtocol
     }
 
     /// <summary>Throws unless the response carries this protocol's <c>Smithy-Protocol</c> header.</summary>
-    protected void EnsureProtocolResponse(SmithyHttpClientResponse response)
+    private void EnsureProtocolResponse(SmithyHttpClientResponse response)
     {
         if (!IsProtocolResponse(response))
         {
