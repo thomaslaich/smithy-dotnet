@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 
-namespace RpcV2Cbor.Conformance;
+namespace RpcV2.Conformance;
 
 /// <summary>
 /// Materializes a generated input/output shape instance from the {@code params} object of a
@@ -49,6 +49,11 @@ internal static class ParamBinder
             return BindDouble(value);
         if (targetType == typeof(decimal))
             return (decimal)value!;
+        if (targetType == typeof(System.Numerics.BigInteger))
+            return System.Numerics.BigInteger.Parse(
+                value!.ToJsonString(),
+                System.Globalization.CultureInfo.InvariantCulture
+            );
         if (targetType == typeof(byte[]))
         {
             var text = (string)value!;

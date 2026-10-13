@@ -4,32 +4,21 @@ using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Json;
 
-internal sealed class CompiledJsonCodec<T> : ICodec<T>
+internal sealed class CompiledJsonCodec<T>(
+    Schema<T> schema,
+    bool materializeTopLevelDefaults,
+    WireReadMode readMode,
+    JsonPlans plans,
+    IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null,
+    KeyValuePair<string, string>? discriminator = null
+) : ICodec<T>
 {
-    private readonly Schema<T> schema;
-    private readonly JsonMemberPlan root;
-    private readonly bool materializeTopLevelDefaults;
-    private readonly WireReadMode readMode;
+    private readonly JsonMemberPlan root = plans.ForRoot(schema, memberTraits, discriminator);
 
     // Size hint carried between calls: a codec instance serializes the same shape
     // repeatedly, so the previous payload size is a good guess at the next one and
     // usually avoids growing the scratch buffer at all.
     private int sizeHint = 256;
-
-    public CompiledJsonCodec(
-        Schema<T> schema,
-        bool materializeTopLevelDefaults,
-        WireReadMode readMode,
-        bool honorJsonNameTrait,
-        IReadOnlyDictionary<ShapeId, Trait>? memberTraits = null,
-        KeyValuePair<string, string>? discriminator = null
-    )
-    {
-        this.schema = schema;
-        this.materializeTopLevelDefaults = materializeTopLevelDefaults;
-        this.readMode = readMode;
-        root = new JsonPlans(honorJsonNameTrait).ForRoot(schema, memberTraits, discriminator);
-    }
 
     public byte[] Serialize(T value)
     {
@@ -81,29 +70,19 @@ internal static class JsonBody
     }
 }
 
-internal sealed class CompiledJsonProjectionCodec<T, TBuilder> : IProjectionCodec<T, TBuilder>
+internal sealed class CompiledJsonProjectionCodec<T, TBuilder>(
+    StructProjection<T, TBuilder> projection,
+    bool materializeTopLevelDefaults,
+    WireReadMode readMode,
+    JsonPlans plans
+) : IProjectionCodec<T, TBuilder>
 {
-    private readonly StructSchema<T, TBuilder> source;
-    private readonly JsonShapePlan plan;
-    private readonly bool materializeTopLevelDefaults;
-    private readonly WireReadMode readMode;
+    private readonly StructSchema<T, TBuilder> source = projection.Source;
+    private readonly JsonShapePlan plan = plans
+        .ForTarget(projection.Source)!
+        .Project(name => projection.GetMember(name) is not null);
 
     private int sizeHint = 256;
-
-    public CompiledJsonProjectionCodec(
-        StructProjection<T, TBuilder> projection,
-        bool materializeTopLevelDefaults,
-        WireReadMode readMode,
-        bool honorJsonNameTrait
-    )
-    {
-        source = projection.Source;
-        this.materializeTopLevelDefaults = materializeTopLevelDefaults;
-        this.readMode = readMode;
-        plan = new JsonPlans(honorJsonNameTrait)
-            .ForTarget((Schema)projection.Source)!
-            .Project(name => projection.GetMember(name) is not null);
-    }
 
     public byte[] Serialize(T value)
     {

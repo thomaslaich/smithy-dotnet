@@ -39,6 +39,11 @@
     <ProjectReference Include="../../../packages/NSmithy.Server.AspNetCore/NSmithy.Server.AspNetCore.csproj" />
   </ItemGroup>
 
+  <!-- Compile the shared harness here so reflection discovers this suite's generated types. -->
+  <ItemGroup>
+    <Compile Include="../RpcV2/*.cs" Link="Conformance/Shared/%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <Import Project="../../../packages/NSmithy.MSBuild/Targets/NSmithy.MSBuild.targets" />
 
   <Target

@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 
-namespace RpcV2Cbor.Conformance;
+namespace RpcV2.Conformance;
 
 /// <summary>
 /// HTTP handler that records the outgoing request (method, URI, headers, body) and returns a

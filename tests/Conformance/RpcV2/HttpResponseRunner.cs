@@ -6,7 +6,7 @@ using NSmithy.Client;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 
-namespace RpcV2Cbor.Conformance;
+namespace RpcV2.Conformance;
 
 /// <summary>
 /// Drives a single httpResponseTests case end-to-end:
@@ -75,10 +75,7 @@ internal static class HttpResponseRunner
     private static HttpResponseMessage BuildResponse(HttpResponseTestCase testCase)
     {
         var msg = new HttpResponseMessage((HttpStatusCode)testCase.Code);
-        // rpcv2Cbor bodies are base64-encoded binary in the test fixture.
-        var bodyBytes = string.IsNullOrEmpty(testCase.Body)
-            ? []
-            : Convert.FromBase64String(testCase.Body);
+        var bodyBytes = ConformanceProtocol.DecodeBody(testCase.Body);
         var content = new ByteArrayContent(bodyBytes);
         if (!string.IsNullOrEmpty(testCase.BodyMediaType))
         {
@@ -642,6 +639,30 @@ internal static class ResponseAssertions
             Assert.Equal((bool)expected!, b);
             return;
         }
+        // Arbitrary-precision values are compared exactly, from the fixture's own number text.
+        if (actual is System.Numerics.BigInteger bigInteger)
+        {
+            Assert.Equal(
+                System.Numerics.BigInteger.Parse(
+                    expected.ToJsonString(),
+                    System.Globalization.CultureInfo.InvariantCulture
+                ),
+                bigInteger
+            );
+            return;
+        }
+        if (actual is decimal bigDecimal)
+        {
+            Assert.Equal(
+                decimal.Parse(
+                    expected.ToJsonString(),
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture
+                ),
+                bigDecimal
+            );
+            return;
+        }
         if (
             actual is int
             || actual is long
@@ -659,8 +680,7 @@ internal static class ResponseAssertions
                 actual,
                 System.Globalization.CultureInfo.InvariantCulture
             );
-            // Smithy protocol-test params represent IEEE 754 special values as strings even
-            // though rpcv2Cbor carries them as native CBOR floats.
+            // Smithy protocol-test params represent IEEE 754 special values as strings.
             if (expected.TryGetValue<string>(out var specialString))
             {
                 var expectedSpecial = specialString switch

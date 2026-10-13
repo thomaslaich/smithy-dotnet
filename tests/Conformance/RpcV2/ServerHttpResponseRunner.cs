@@ -2,7 +2,7 @@ using System.Reflection;
 using System.Text.Json.Nodes;
 using NSmithy.Client;
 
-namespace RpcV2Cbor.Conformance;
+namespace RpcV2.Conformance;
 
 internal static class ServerHttpResponseRunner
 {
@@ -40,7 +40,7 @@ internal static class ServerHttpResponseRunner
             )
             .ConfigureAwait(false);
 
-        await using var host = await RpcV2CborServerHost
+        await using var host = await RpcV2ServerHost
             .StartAsync(
                 localOpName,
                 (method, args) =>
@@ -55,7 +55,7 @@ internal static class ServerHttpResponseRunner
 
         using var request = CreateReplayRequest(generatedRequest);
         using var response = await host.Client.SendAsync(request).ConfigureAwait(false);
-        await ServerCborResponseAssertions.AssertAsync(testCase, response).ConfigureAwait(false);
+        await ServerResponseAssertions.AssertAsync(testCase, response).ConfigureAwait(false);
     }
 
     private static Type ResolveErrorType(string shapeId)

@@ -1,11 +1,8 @@
-using System.Net;
 using System.Reflection;
-using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using NSmithy.Client;
 
-namespace RpcV2Cbor.Conformance;
+namespace RpcV2.Conformance;
 
 /// <summary>
 /// Drives a single httpRequestTests case end-to-end:
@@ -150,63 +147,7 @@ internal static class RequestAssertions
                 $"Header '{name}' was forbidden but present."
             );
 
-        AssertBody(expected, actual);
-    }
-
-    private static void AssertBody(HttpRequestTestCase expected, RecordedRequest actual)
-    {
-        // rpcv2Cbor bodies are base64-encoded binary in the test fixture.
-        var expectedBytes = string.IsNullOrEmpty(expected.Body)
-            ? []
-            : Convert.FromBase64String(expected.Body);
-
-        if (expectedBytes.Length == 0 && actual.Body.Length == 0)
-            return;
-
-        // Use structural CBOR comparison so definite/indefinite length differences don't fail.
-        CborAssert.AreStructurallyEqual(expectedBytes, actual.Body);
-    }
-
-    private static bool TryParseJson(string s, out JsonNode? node)
-    {
-        if (string.IsNullOrWhiteSpace(s))
-        {
-            node = null;
-            return true;
-        }
-        try
-        {
-            node = JsonNode.Parse(s);
-            return true;
-        }
-        catch (JsonException)
-        {
-            node = null;
-            return false;
-        }
-    }
-
-    private static bool JsonEquals(JsonNode? a, JsonNode? b) =>
-        (a, b) switch
-        {
-            (null, null) => true,
-            (null, _) or (_, null) => false,
-            (JsonObject ao, JsonObject bo) => ao.Count == bo.Count
-                && ao.All(kv =>
-                    bo.TryGetPropertyValue(kv.Key, out var bv) && JsonEquals(kv.Value, bv)
-                ),
-            (JsonArray aa, JsonArray bb) => aa.Count == bb.Count
-                && aa.Zip(bb, JsonEquals).All(x => x),
-            (JsonValue av, JsonValue bv) => JsonValueEquals(av, bv),
-            _ => false,
-        };
-
-    private static bool JsonValueEquals(JsonValue a, JsonValue b)
-    {
-        // Compare numbers numerically so 9 / 9.0 / 9.00 collapse, but keep strings/bools strict.
-        if (a.TryGetValue<double>(out var ad) && b.TryGetValue<double>(out var bd))
-            return ad == bd;
-        return string.Equals(a.ToJsonString(), b.ToJsonString(), StringComparison.Ordinal);
+        ConformanceProtocol.AssertBody(expected.Body, actual.Body);
     }
 
     private static string PathOf(string uri)

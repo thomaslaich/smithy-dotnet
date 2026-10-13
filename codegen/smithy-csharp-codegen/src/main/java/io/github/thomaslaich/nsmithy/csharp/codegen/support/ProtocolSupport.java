@@ -1,6 +1,7 @@
 /*
  * Encapsulates protocol-specific decisions for HTTP client codegen:
- *   - which runtime helper class to call (REST, AWS JSON/Query, rpcv2Cbor, and gRPC protocols)
+ *   - which runtime helper class to call (REST, AWS JSON/Query, rpcv2Cbor, rpcv2Json, and gRPC
+ *     protocols)
  *   - which codec to use (JSON / XML / CBOR)
  *   - whether to use HTTP binding traits or treat the whole input/output as the body
  *   - how to dispatch errors (status code vs error type from body)
@@ -36,6 +37,7 @@ public final class ProtocolSupport {
     REST_JSON_1,
     REST_XML,
     RPC_V2_CBOR,
+    RPC_V2_JSON,
     GRPC
   }
 
@@ -73,6 +75,10 @@ public final class ProtocolSupport {
     return s.findTrait(TraitIds.RPC_V2_CBOR).isPresent();
   }
 
+  public static boolean isRpcV2JsonService(ServiceShape s) {
+    return s.findTrait(TraitIds.RPC_V2_JSON).isPresent();
+  }
+
   public static boolean isGrpcService(ServiceShape s) {
     return s.findTrait(TraitIds.GRPC).isPresent();
   }
@@ -82,11 +88,15 @@ public final class ProtocolSupport {
   }
 
   public static boolean emitsHttpAspNetCoreServer(ServiceShape s) {
-    return isSimpleRestJsonService(s) || isRestJson1Service(s) || isRpcV2CborService(s);
+    return isSimpleRestJsonService(s)
+        || isRestJson1Service(s)
+        || isRpcV2CborService(s)
+        || isRpcV2JsonService(s);
   }
 
   public static Kind kindOf(ServiceShape s) {
     if (isRpcV2CborService(s)) return Kind.RPC_V2_CBOR;
+    if (isRpcV2JsonService(s)) return Kind.RPC_V2_JSON;
     if (isRestXmlService(s)) return Kind.REST_XML;
     if (isAwsQueryService(s)) return Kind.AWS_QUERY;
     if (isEc2QueryService(s)) return Kind.EC2_QUERY;
@@ -99,14 +109,15 @@ public final class ProtocolSupport {
 
   /**
    * Every protocol the service declares, in the documented precedence order {@code rpcv2Cbor >
-   * restXml > awsQuery > ec2Query > awsJson1_1 > awsJson1_0 > simpleRestJson > restJson1 > grpc}.
-   * The unified client builder generates a {@code With{Kind}()} method per declared kind and uses
-   * the first as the default protocol. Returns an empty list for a service with no supported
-   * protocol trait.
+   * rpcv2Json > restXml > awsQuery > ec2Query > awsJson1_1 > awsJson1_0 > simpleRestJson >
+   * restJson1 > grpc}. The unified client builder generates a {@code With{Kind}()} method per
+   * declared kind and uses the first as the default protocol. Returns an empty list for a service
+   * with no supported protocol trait.
    */
   public static List<Kind> declaredKinds(ServiceShape s) {
     List<Kind> kinds = new ArrayList<>();
     if (isRpcV2CborService(s)) kinds.add(Kind.RPC_V2_CBOR);
+    if (isRpcV2JsonService(s)) kinds.add(Kind.RPC_V2_JSON);
     if (isRestXmlService(s)) kinds.add(Kind.REST_XML);
     if (isAwsQueryService(s)) kinds.add(Kind.AWS_QUERY);
     if (isEc2QueryService(s)) kinds.add(Kind.EC2_QUERY);
@@ -128,6 +139,7 @@ public final class ProtocolSupport {
       case REST_JSON_1 -> TraitIds.REST_JSON_1;
       case REST_XML -> TraitIds.REST_XML;
       case RPC_V2_CBOR -> TraitIds.RPC_V2_CBOR;
+      case RPC_V2_JSON -> TraitIds.RPC_V2_JSON;
       case GRPC -> TraitIds.GRPC;
     };
   }
@@ -205,6 +217,7 @@ public final class ProtocolSupport {
               + String.join(
                   ", ",
                   TraitIds.RPC_V2_CBOR.toString(),
+                  TraitIds.RPC_V2_JSON.toString(),
                   TraitIds.REST_XML.toString(),
                   TraitIds.AWS_QUERY.toString(),
                   TraitIds.EC2_QUERY.toString(),
@@ -229,6 +242,7 @@ public final class ProtocolSupport {
       case REST_JSON_1 -> RuntimeTypes.REST_JSON1_PROTOCOL;
       case REST_XML -> RuntimeTypes.REST_XML_PROTOCOL;
       case RPC_V2_CBOR -> RuntimeTypes.RPC_V2_CBOR_PROTOCOL;
+      case RPC_V2_JSON -> RuntimeTypes.RPC_V2_JSON_PROTOCOL;
       case GRPC -> RuntimeTypes.GRPC_PROTOCOL;
     };
   }
@@ -238,7 +252,7 @@ public final class ProtocolSupport {
       case AWS_JSON_1_0 -> "application/x-amz-json-1.0";
       case AWS_JSON_1_1 -> "application/x-amz-json-1.1";
       case AWS_QUERY, EC2_QUERY -> "application/x-www-form-urlencoded";
-      case SIMPLE_REST_JSON, REST_JSON_1 -> "application/json";
+      case SIMPLE_REST_JSON, REST_JSON_1, RPC_V2_JSON -> "application/json";
       case REST_XML -> "application/xml";
       case RPC_V2_CBOR -> "application/cbor";
       case GRPC -> "application/grpc+proto";
@@ -248,7 +262,7 @@ public final class ProtocolSupport {
   /** True when the runtime protocol can bind Smithy event-stream operation inputs/outputs. */
   public static boolean supportsEventStreams(Kind kind) {
     return switch (kind) {
-      case REST_JSON_1, SIMPLE_REST_JSON, RPC_V2_CBOR, GRPC -> true;
+      case REST_JSON_1, SIMPLE_REST_JSON, RPC_V2_CBOR, RPC_V2_JSON, GRPC -> true;
       case AWS_JSON_1_0, AWS_JSON_1_1, AWS_QUERY, EC2_QUERY, REST_XML -> false;
     };
   }

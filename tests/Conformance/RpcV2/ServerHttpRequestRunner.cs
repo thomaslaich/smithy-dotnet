@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Text.Json.Nodes;
 
-namespace RpcV2Cbor.Conformance;
+namespace RpcV2.Conformance;
 
 internal static class ServerHttpRequestRunner
 {
@@ -10,7 +10,7 @@ internal static class ServerHttpRequestRunner
         object? capturedInput = null;
         MethodInfo? capturedMethod = null;
 
-        await using var host = await RpcV2CborServerHost
+        await using var host = await RpcV2ServerHost
             .StartAsync(
                 testCase.OperationName,
                 (method, args) =>
@@ -22,10 +22,7 @@ internal static class ServerHttpRequestRunner
             )
             .ConfigureAwait(false);
 
-        using var request = ServerCborRequestFactory.FromTestCase(
-            testCase,
-            host.Client.BaseAddress!
-        );
+        using var request = ServerRequestFactory.FromTestCase(testCase, host.Client.BaseAddress!);
         using var response = await host.Client.SendAsync(request).ConfigureAwait(false);
         Assert.True(
             (int)response.StatusCode < 500,

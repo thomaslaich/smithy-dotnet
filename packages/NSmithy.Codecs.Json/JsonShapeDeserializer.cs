@@ -43,14 +43,37 @@ internal readonly struct JsonShapeDeserializer(
     public readonly double ReadDouble() => ReadValue(current, "a double", JsonWire.ReadDouble);
 
     public BigInteger ReadBigInteger() =>
-        ReadValue(
-            current,
-            "a bigInteger",
-            static element => BigInteger.Parse(element.GetRawText(), CultureInfo.InvariantCulture)
-        );
+        entry.BigNumbersAsStrings
+            ? ReadValue(
+                current,
+                "a bigInteger string",
+                static element =>
+                    BigInteger.Parse(
+                        element.GetString()!,
+                        NumberStyles.AllowLeadingSign,
+                        CultureInfo.InvariantCulture
+                    )
+            )
+            : ReadValue(
+                current,
+                "a bigInteger",
+                static element =>
+                    BigInteger.Parse(element.GetRawText(), CultureInfo.InvariantCulture)
+            );
 
     public readonly decimal ReadBigDecimal() =>
-        ReadValue(current, "a bigDecimal", static element => element.GetDecimal());
+        entry.BigNumbersAsStrings
+            ? ReadValue(
+                current,
+                "a bigDecimal string",
+                static element =>
+                    decimal.Parse(
+                        element.GetString()!,
+                        NumberStyles.Float,
+                        CultureInfo.InvariantCulture
+                    )
+            )
+            : ReadValue(current, "a bigDecimal", static element => element.GetDecimal());
 
     public string ReadString() =>
         TryReadNull()

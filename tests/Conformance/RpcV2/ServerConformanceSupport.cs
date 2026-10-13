@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
@@ -8,10 +7,10 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using NSmithy.Server.AspNetCore;
 
-namespace RpcV2Cbor.Conformance;
+namespace RpcV2.Conformance;
 
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1852:Seal internal types")]
-internal class RpcV2CborServerDispatchProxy : DispatchProxy
+internal class RpcV2ServerDispatchProxy : DispatchProxy
 {
     public required Func<MethodInfo, object?[]?, object?> Invoker { get; set; }
 
@@ -22,11 +21,11 @@ internal class RpcV2CborServerDispatchProxy : DispatchProxy
     }
 }
 
-internal sealed class RpcV2CborServerHost : IAsyncDisposable
+internal sealed class RpcV2ServerHost : IAsyncDisposable
 {
     private readonly WebApplication app;
 
-    private RpcV2CborServerHost(WebApplication app, HttpClient client)
+    private RpcV2ServerHost(WebApplication app, HttpClient client)
     {
         this.app = app;
         Client = client;
@@ -34,7 +33,7 @@ internal sealed class RpcV2CborServerHost : IAsyncDisposable
 
     public HttpClient Client { get; }
 
-    public static async Task<RpcV2CborServerHost> StartAsync(
+    public static async Task<RpcV2ServerHost> StartAsync(
         string operationName,
         Func<MethodInfo, object?[]?, object?> invoker,
         CancellationToken cancellationToken = default
@@ -65,10 +64,10 @@ internal sealed class RpcV2CborServerHost : IAsyncDisposable
                 .Features.Get<IServerAddressesFeature>()
                 ?.Addresses.FirstOrDefault()
             ?? throw new InvalidOperationException(
-                "Unable to determine the RpcV2Cbor test server address."
+                "Unable to determine the RPC v2 test server address."
             );
 
-        return new RpcV2CborServerHost(app, new HttpClient { BaseAddress = new Uri(address) });
+        return new RpcV2ServerHost(app, new HttpClient { BaseAddress = new Uri(address) });
     }
 
     public async ValueTask DisposeAsync()
@@ -79,7 +78,7 @@ internal sealed class RpcV2CborServerHost : IAsyncDisposable
 
     private static Type ResolveOperationHandlerInterface(string operationName)
     {
-        var assembly = typeof(RpcV2CborServerHost).Assembly;
+        var assembly = typeof(RpcV2ServerHost).Assembly;
         var handlerName = "I" + operationName + "Handler";
         return assembly
             .GetTypes()
@@ -109,7 +108,7 @@ internal sealed class RpcV2CborServerHost : IAsyncDisposable
                 t.IsEnum
                 && string.Equals(t.Name, serviceName + "Protocols", StringComparison.Ordinal)
             );
-        var protocol = Enum.Parse(protocolType, "RpcV2Cbor");
+        var protocol = Enum.Parse(protocolType, ConformanceProtocol.Name);
         var endpointRouteBuilderType = typeof(IEndpointRouteBuilder);
         var method = aggregateHandler
             .Assembly.GetTypes()
@@ -134,37 +133,31 @@ internal sealed class RpcV2CborServerHost : IAsyncDisposable
         var create = typeof(DispatchProxy)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
             .Single(m => m.Name == nameof(DispatchProxy.Create) && m.IsGenericMethodDefinition)
-            .MakeGenericMethod(aggregateHandler, typeof(RpcV2CborServerDispatchProxy));
+            .MakeGenericMethod(aggregateHandler, typeof(RpcV2ServerDispatchProxy));
         var proxy =
             create.Invoke(null, null)
             ?? throw new InvalidOperationException(
                 $"Unable to create proxy for {aggregateHandler}."
             );
-        ((RpcV2CborServerDispatchProxy)proxy).Invoker = invoker;
+        ((RpcV2ServerDispatchProxy)proxy).Invoker = invoker;
         return proxy;
     }
 }
 
-internal static class ServerCborRequestFactory
+internal static class ServerRequestFactory
 {
-    private const string CborContentType = "application/cbor";
-
     /// <summary>
-    /// Builds an HTTP request from a protocol test case for a rpcv2Cbor operation.
-    /// The body in the test fixture is hex-encoded CBOR binary.
+    /// Builds an HTTP request from a protocol test case for an RPC v2 operation.
     /// </summary>
     public static HttpRequestMessage FromTestCase(HttpRequestTestCase testCase, Uri baseAddress)
     {
         var uri = BuildUri(baseAddress, testCase.Uri, testCase.QueryParams);
         var request = new HttpRequestMessage(new HttpMethod(testCase.Method), uri);
 
-        // rpcv2Cbor bodies are base64-encoded binary in the test fixture
         byte[]? bodyBytes = null;
         if (testCase.Body is not null || testCase.BodyMediaType is not null)
         {
-            bodyBytes = string.IsNullOrEmpty(testCase.Body)
-                ? []
-                : Convert.FromBase64String(testCase.Body);
+            bodyBytes = ConformanceProtocol.DecodeBody(testCase.Body);
         }
 
         ByteArrayContent? content = null;
@@ -228,7 +221,7 @@ internal static class ServerCborRequestFactory
     }
 }
 
-internal static class ServerCborResponseAssertions
+internal static class ServerResponseAssertions
 {
     public static async Task AssertAsync(HttpResponseTestCase expected, HttpResponseMessage actual)
     {
@@ -257,9 +250,6 @@ internal static class ServerCborResponseAssertions
             return;
         }
 
-        // rpcv2Cbor bodies are base64-encoded binary; use structural comparison to
-        // tolerate definite/indefinite length differences between the fixture and codec.
-        var expectedBytes = Convert.FromBase64String(expected.Body);
-        CborAssert.AreStructurallyEqual(expectedBytes, actualBodyBytes);
+        ConformanceProtocol.AssertBody(expected.Body, actualBodyBytes);
     }
 }

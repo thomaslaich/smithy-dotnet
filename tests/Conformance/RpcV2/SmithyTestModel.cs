@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace RpcV2Cbor.Conformance;
+namespace RpcV2.Conformance;
 
 /// <summary>
 /// Minimal reader over the assembled Smithy AST (model.json) — exposes operation traits used by
@@ -26,7 +26,7 @@ internal sealed class SmithyTestModel
         {
             throw new FileNotFoundException(
                 $"smithy-model.json not found beside test assembly at {path}. "
-                    + "Make sure RpcV2Cbor.Conformance.csproj copies it to output."
+                    + "Make sure the conformance project copies it to output."
             );
         }
         var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
