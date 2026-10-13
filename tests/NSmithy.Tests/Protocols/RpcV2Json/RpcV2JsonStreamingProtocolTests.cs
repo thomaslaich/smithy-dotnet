@@ -5,6 +5,7 @@ using NSmithy.EventStream;
 using NSmithy.Http;
 using NSmithy.Protocols.RpcV2Json;
 using Nsmithy.Tests.Rpcv2cbor;
+using Nsmithy.Tests.Rpcv2cbor.Schemas;
 
 namespace NSmithy.Tests.Protocols.RpcV2Json;
 
