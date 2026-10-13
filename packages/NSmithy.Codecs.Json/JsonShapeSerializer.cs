@@ -308,6 +308,11 @@ internal readonly struct JsonShapeSerializer : IShapeSerializer
         }
 
         writer.WriteStartObject();
+        if (entry.Discriminator is { } leading)
+        {
+            writer.WriteString(leading.Key, leading.Value);
+        }
+
         // Only the top-level structure follows the codec's default-materialization option;
         // nested structures always write their defaults.
         var nested = new JsonShapeSerializer(

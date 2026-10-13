@@ -359,84 +359,6 @@ public sealed class RpcV2CborProtocol : IProtocol
             serverErrors.TrySerialize(exception, out message);
     }
 
-    /// <summary>
-    /// Serializes a modeled error into a rpcv2Cbor error response: a CBOR body carrying a
-    /// <c>__type</c> discriminator (the absolute shape id) plus the error's members, with the
-    /// supplied HTTP status code and the protocol header.
-    /// </summary>
-    public static SmithyHttpServerResponse SerializeError<TError>(
-        Schema<TError> errorSchema,
-        TError error,
-        string errorShapeId,
-        int statusCode
-    )
-    {
-        ArgumentNullException.ThrowIfNull(errorSchema);
-        ArgumentNullException.ThrowIfNull(errorShapeId);
-
-        return SerializeError(
-            CompileErrorMemberWriters(errorSchema),
-            error,
-            errorShapeId,
-            statusCode
-        );
-    }
-
-    private static SmithyHttpServerResponse SerializeError<TError>(
-        CborMembersWriter<TError> memberWriters,
-        TError error,
-        string errorShapeId,
-        int statusCode
-    ) =>
-        BufferedResponse(
-            statusCode,
-            SerializeErrorBody(memberWriters, error, errorShapeId),
-            headers =>
-            {
-                headers["Smithy-Protocol"] = ["rpc-v2-cbor"];
-                headers["Content-Type"] = [ContentType];
-            }
-        );
-
-    /// <summary>
-    /// Compiles an error shape's member writers, which is everything the shape determines about how
-    /// its body is written.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="SerializeError"/> compiles on every call, so it is the ad-hoc entry point; the
-    /// server path holds the result of this per error instead.
-    /// </remarks>
-    internal static CborMembersWriter<TError> CompileErrorMemberWriters<TError>(
-        Schema<TError> errorSchema
-    )
-    {
-        ArgumentNullException.ThrowIfNull(errorSchema);
-
-        if (errorSchema.Resolved is not IStructSchema<TError> structSchema)
-        {
-            throw new InvalidOperationException(
-                "rpcv2Cbor errors must be backed by a structure schema."
-            );
-        }
-
-        return new CborMembersWriter<TError>(structSchema);
-    }
-
-    private static byte[] SerializeErrorBody<TError>(
-        CborMembersWriter<TError> memberWriters,
-        TError error,
-        string errorShapeId
-    )
-    {
-        var writer = new CborWriter(CborConformanceMode.Lax);
-        writer.WriteStartMap(null);
-        writer.WriteTextString("__type");
-        writer.WriteTextString(errorShapeId);
-        memberWriters.Write(writer, error);
-        writer.WriteEndMap();
-        return writer.Encode();
-    }
-
     private static ValueTask<Exception?> DeserializeModeledErrorAsync(
         IReadOnlyList<HttpOperationError> httpErrors,
         SmithyHttpClientResponse response
@@ -465,10 +387,23 @@ public sealed class RpcV2CborProtocol : IProtocol
         )
             where TError : Exception
         {
-            var memberWriters = CompileErrorMemberWriters(schema.Schema);
-            var errorShapeId = schema.Id.ToString();
+            // The body is a CBOR map of the __type discriminator (the absolute shape id) followed
+            // by the error's members.
+            var codec = CodecFactory.FromSchema(
+                schema.Schema,
+                new CodecFactoryOptions { Discriminator = new("__type", schema.Id.ToString()) }
+            );
             var statusCode = schema.HttpStatusCode;
-            return value => SerializeError(memberWriters, value, errorShapeId, statusCode);
+            return value =>
+                BufferedResponse(
+                    statusCode,
+                    codec.Serialize(value),
+                    headers =>
+                    {
+                        headers["Smithy-Protocol"] = ["rpc-v2-cbor"];
+                        headers["Content-Type"] = [ContentType];
+                    }
+                );
         }
     }
 

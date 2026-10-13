@@ -225,6 +225,12 @@ internal readonly struct CborShapeSerializer : IShapeSerializer
         }
 
         writer.WriteStartMap(null);
+        if (entry.Discriminator is { } leading)
+        {
+            writer.WriteTextString(leading.Key);
+            writer.WriteTextString(leading.Value);
+        }
+
         // Only the top-level structure follows the codec's default-materialization option;
         // nested structures always write their defaults.
         var nested = new CborShapeSerializer(

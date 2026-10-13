@@ -32,6 +32,9 @@ internal sealed class JsonMemberPlan(
 
     /// <summary>The plan of the member's target when it is an aggregate.</summary>
     public JsonShapePlan? Shape { get; } = plans.ForTarget(target);
+
+    /// <summary>An entry written ahead of a top-level structure's members; only a root has one.</summary>
+    public KeyValuePair<string, string>? Discriminator { get; init; }
 }
 
 /// <summary>The JSON codec's plan for one aggregate shape, indexed by member position.</summary>
@@ -105,7 +108,11 @@ internal sealed class JsonPlans(bool honorJsonNameTrait)
     );
 
     /// <summary>The plan for a top-level value, which is no member of anything.</summary>
-    public JsonMemberPlan ForRoot(Schema schema, IReadOnlyDictionary<ShapeId, Trait>? traits) =>
+    public JsonMemberPlan ForRoot(
+        Schema schema,
+        IReadOnlyDictionary<ShapeId, Trait>? traits,
+        KeyValuePair<string, string>? discriminator = null
+    ) =>
         new(
             schema.Id.Name,
             schema.Id.Name,
@@ -116,7 +123,10 @@ internal sealed class JsonPlans(bool honorJsonNameTrait)
                     ? trait
                     : schema.Resolved.GetTrait(id),
             this
-        );
+        )
+        {
+            Discriminator = discriminator,
+        };
 
     /// <summary>The plan for a member's target, or null when the target is a simple shape.</summary>
     public JsonShapePlan? ForTarget(Schema target)

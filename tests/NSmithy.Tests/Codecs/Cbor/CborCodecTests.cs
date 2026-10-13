@@ -43,4 +43,26 @@ public sealed class CborCodecTests
         Assert.Equal("x", reader.ReadTextString());
         Assert.Equal(CborReaderState.Finished, reader.PeekState());
     }
+
+    [Fact]
+    public void CborCodecWritesDiscriminatorAheadOfMembers()
+    {
+        var input = new Person(Name: "Ada", Age: 36, Address: new Address("London"));
+        var codec = CborCodecFactory.Default.FromSchema(
+            PersonSchema.Schema,
+            new CodecFactoryOptions { Discriminator = new("__type", "smithy.example#Person") }
+        );
+
+        var bytes = codec.Serialize(input);
+
+        var reader = new CborReader(bytes);
+        reader.ReadStartMap();
+        Assert.Equal("__type", reader.ReadTextString());
+        Assert.Equal("smithy.example#Person", reader.ReadTextString());
+        // The members follow unchanged, so a plain codec still reads the value back.
+        Assert.Equal(
+            input,
+            CborCodecFactory.Default.FromSchema(PersonSchema.Schema).Deserialize(bytes)
+        );
+    }
 }

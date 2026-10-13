@@ -28,6 +28,12 @@ public sealed record CodecFactoryOptions
     /// one. Ignored by formats that do not represent named document roots.
     /// </summary>
     public string? DefaultRootName { get; init; }
+
+    /// <summary>
+    /// A string-valued entry, such as an error's <c>__type</c>, written ahead of the members of a
+    /// top-level structure. Ignored by formats that do not support it.
+    /// </summary>
+    public KeyValuePair<string, string>? Discriminator { get; init; }
 }
 
 /// <summary>Creates complete codecs from Smithy schemas.</summary>

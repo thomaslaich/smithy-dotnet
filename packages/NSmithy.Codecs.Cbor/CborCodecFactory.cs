@@ -13,7 +13,11 @@ public sealed class CborCodecFactory : IProjectionCodecFactory
     {
         ArgumentNullException.ThrowIfNull(schema);
         var resolved = options ?? CodecFactoryOptions.Default;
-        return new CompiledCborCodec<T>(schema, resolved.MaterializeTopLevelDefaults);
+        return new CompiledCborCodec<T>(
+            schema,
+            resolved.MaterializeTopLevelDefaults,
+            resolved.Discriminator
+        );
     }
 
     public IProjectionCodec<T, TBuilder> FromProjection<T, TBuilder>(
