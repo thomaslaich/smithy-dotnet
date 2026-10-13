@@ -287,6 +287,14 @@ interprets constraint traits and nothing else. Each consumer puts its parsing
 behind a small helper such as `RestTraits` or `XmlTraits`, so trait ids and
 parsing stay centralized while the core model remains open-ended.
 
+Traits consumed at build time stay out of the schemas: `@documentation`,
+`@examples`, `@externalDocumentation`, `@deprecated`, `@since`, `@tags`,
+`@title`, `@unstable`, `@recommended`, `@suppress`, `smithy.ai#prompts`,
+`smithy.rules#endpointTests`, `smithy.waiters#waitable`, and every trait in the
+`smithy.test`, `aws.iam`, and `aws.cloudformation` namespaces. XML doc comments,
+JSON Schemas, MCP tool descriptions, prompts, and examples are generated from
+them instead.
+
 ## Presence and Nullability
 
 Presence is a property of the *member position*, never of the target shape:

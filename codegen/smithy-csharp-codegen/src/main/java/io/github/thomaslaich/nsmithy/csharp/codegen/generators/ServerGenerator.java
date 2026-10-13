@@ -408,13 +408,18 @@ public final class ServerGenerator implements Runnable {
             "outputSchema",
             CSharpNaming.formatString(
                 JsonSchemaGenerator.generate(context.model(), op.getOutputShape())));
+        op.getTrait(DocumentationTrait.class)
+            .ifPresent(
+                trait ->
+                    writer.putContext("description", CSharpNaming.formatString(trait.getValue())));
         writer.write(
             """
             private static class ${schemaClass:L}
             {
                 public static ${operationJsonSchemas:T} Value { get; } = new(
                     ${inputSchema:L},
-                    ${outputSchema:L}
+                    ${outputSchema:L}${?description},
+                    ${description:L}${/description}
                 );
             }
             """);

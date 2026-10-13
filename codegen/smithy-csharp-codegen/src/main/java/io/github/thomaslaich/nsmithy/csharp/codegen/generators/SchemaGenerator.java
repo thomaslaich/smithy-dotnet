@@ -5,6 +5,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.SymbolProperties;
+import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.math.BigDecimal;
@@ -14,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -33,14 +35,43 @@ import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeType;
 import software.amazon.smithy.model.shapes.UnionShape;
 import software.amazon.smithy.model.traits.DefaultTrait;
+import software.amazon.smithy.model.traits.DeprecatedTrait;
+import software.amazon.smithy.model.traits.DocumentationTrait;
 import software.amazon.smithy.model.traits.EnumValueTrait;
 import software.amazon.smithy.model.traits.ErrorTrait;
+import software.amazon.smithy.model.traits.ExamplesTrait;
+import software.amazon.smithy.model.traits.ExternalDocumentationTrait;
 import software.amazon.smithy.model.traits.InternalTrait;
+import software.amazon.smithy.model.traits.RecommendedTrait;
+import software.amazon.smithy.model.traits.SinceTrait;
+import software.amazon.smithy.model.traits.SuppressTrait;
+import software.amazon.smithy.model.traits.TagsTrait;
+import software.amazon.smithy.model.traits.TitleTrait;
 import software.amazon.smithy.model.traits.Trait;
+import software.amazon.smithy.model.traits.UnstableTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
 public final class SchemaGenerator {
+
+  private static final Set<ShapeId> BUILD_TIME_TRAITS =
+      Set.of(
+          DeprecatedTrait.ID,
+          DocumentationTrait.ID,
+          ExamplesTrait.ID,
+          ExternalDocumentationTrait.ID,
+          RecommendedTrait.ID,
+          SinceTrait.ID,
+          SuppressTrait.ID,
+          TagsTrait.ID,
+          TitleTrait.ID,
+          UnstableTrait.ID,
+          TraitIds.PROMPTS,
+          ShapeId.from("smithy.rules#endpointTests"),
+          ShapeId.from("smithy.waiters#waitable"));
+
+  private static final Set<String> BUILD_TIME_TRAIT_NAMESPACES =
+      Set.of("smithy.test", "aws.iam", "aws.cloudformation");
 
   public static String shapeSchemaAccessor(
       CSharpWriter writer, GenerationContext context, Shape shape) {
@@ -178,6 +209,16 @@ public final class SchemaGenerator {
         + ")";
   }
 
+  /**
+   * Whether a trait is carried into runtime schemas. Documentation, tooling, and test traits are
+   * consumed at build time and left out, which keeps schema classes small.
+   */
+  static boolean isRuntimeTrait(Trait trait) {
+    ShapeId id = trait.toShapeId();
+    return !BUILD_TIME_TRAITS.contains(id)
+        && !BUILD_TIME_TRAIT_NAMESPACES.contains(id.getNamespace());
+  }
+
   public static String traitExpr(CSharpWriter writer, Trait trait) {
     String idExpr = shapeIdExpr(writer, trait.toShapeId());
     Node node = trait.toNode();
@@ -193,11 +234,12 @@ public final class SchemaGenerator {
   }
 
   public static String traitsExpr(CSharpWriter writer, Collection<? extends Trait> traits) {
-    if (traits.isEmpty()) {
+    List<Trait> sorted =
+        traits.stream().filter(SchemaGenerator::isRuntimeTrait).collect(Collectors.toList());
+    if (sorted.isEmpty()) {
       return "null";
     }
 
-    List<Trait> sorted = new ArrayList<>(traits);
     sorted.sort(java.util.Comparator.comparing(t -> t.toShapeId().toString()));
     return "["
         + sorted.stream().map(value -> traitExpr(writer, value)).collect(Collectors.joining(", "))

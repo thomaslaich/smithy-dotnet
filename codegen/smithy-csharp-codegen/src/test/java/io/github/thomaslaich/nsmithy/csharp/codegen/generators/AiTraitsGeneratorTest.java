@@ -30,7 +30,7 @@ final class AiTraitsGeneratorTest {
   @TempDir Path tempDir;
 
   @Test
-  void preservesPromptsOnServiceAndOperationRuntimeSchemas() throws Exception {
+  void leavesPromptsOutOfServiceAndOperationRuntimeSchemas() throws Exception {
     Model model = assemble("ai/prompts.smithy").unwrap();
     var service = model.expectShape(ShapeId.from(SERVICE_ID), ServiceShape.class);
     var operation =
@@ -39,19 +39,11 @@ final class AiTraitsGeneratorTest {
     String serviceSchema = renderServiceSchema(service);
     String operationSchema = renderOperationSchema(model, operation);
 
-    assertTrue(
-        serviceSchema.contains("new Trait(ShapeId.Parse(\"smithy.ai#prompts\")"), serviceSchema);
-    assertTrue(serviceSchema.contains("\"weather_brief\""), serviceSchema);
-    assertTrue(serviceSchema.contains("\"Create a concise weather brief\""), serviceSchema);
-    assertTrue(serviceSchema.contains("\"example.weather#WeatherBriefArguments\""), serviceSchema);
-    assertTrue(serviceSchema.contains("\"The user wants a short weather summary\""), serviceSchema);
-
-    assertTrue(
-        operationSchema.contains("new Trait(ShapeId.Parse(\"smithy.ai#prompts\")"),
-        operationSchema);
-    assertTrue(operationSchema.contains("\"forecast_for_location\""), operationSchema);
-    assertTrue(operationSchema.contains("\"Get the forecast for one location\""), operationSchema);
-    assertTrue(operationSchema.contains("\"example.weather#GetForecastInput\""), operationSchema);
+    // Prompts are generated as server prompt definitions, so runtime schemas omit the trait.
+    assertFalse(serviceSchema.contains("smithy.ai#prompts"), serviceSchema);
+    assertFalse(serviceSchema.contains("weather_brief"), serviceSchema);
+    assertFalse(operationSchema.contains("smithy.ai#prompts"), operationSchema);
+    assertFalse(operationSchema.contains("forecast_for_location"), operationSchema);
     assertFalse(operationSchema.contains("OperationJsonSchemas"), operationSchema);
   }
 
