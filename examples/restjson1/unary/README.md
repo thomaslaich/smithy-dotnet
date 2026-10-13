@@ -127,7 +127,7 @@ The model also contributes two prompts:
 Both prompts accept a required `cityId` argument. A prompt template does not
 call a handler itself; the MCP client expands it into instructions for the model,
 which then chooses and invokes the named tools. The server exposes the tools and
-prompts together through `.WithSmithyService(WeatherSchema.Schema)`.
+prompts together through `.WithSmithyService<WeatherServiceDefinition>()`.
 
 The ASP.NET Core and MCP hosts share the same `WeatherHandler`; only the
 transport adapter changes.

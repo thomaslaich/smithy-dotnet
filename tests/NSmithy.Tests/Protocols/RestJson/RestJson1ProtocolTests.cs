@@ -6,6 +6,7 @@ using NSmithy.EventStream;
 using NSmithy.Http;
 using NSmithy.Protocols.RestJson;
 using Nsmithy.Tests.Rest;
+using Nsmithy.Tests.Rest.Schemas;
 
 namespace NSmithy.Tests.Protocols.RestJson;
 

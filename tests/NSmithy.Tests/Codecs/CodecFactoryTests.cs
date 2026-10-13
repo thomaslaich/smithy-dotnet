@@ -4,6 +4,7 @@ using NSmithy.Codecs.Proto;
 using NSmithy.Codecs.Xml;
 using NSmithy.Core.Serde;
 using Nsmithy.Tests.Core;
+using Nsmithy.Tests.Core.Schemas;
 
 namespace NSmithy.Tests.Codecs;
 

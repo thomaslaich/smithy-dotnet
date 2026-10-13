@@ -93,7 +93,8 @@ public final class UnionGenerator implements Runnable {
     writer.pushState();
     try {
       writer.putContext("typeName", typeName);
-      writer.putContext("variantName", CSharpNaming.typeName(member.getMemberName()));
+      writer.putContext("variantName", CSharpNaming.variantName(member));
+      writer.putContext("factoryName", CSharpNaming.variantFactoryName(member));
       writer.putContext("valueType", valueType);
       writer.putContext("valueExpression", valueExpression);
       writer.write(
@@ -108,7 +109,7 @@ public final class UnionGenerator implements Runnable {
               public ${valueType:L} Value { get; }
           }
 
-          public static ${typeName:L} From${variantName:L}(${valueType:L} value)
+          public static ${typeName:L} ${factoryName:L}(${valueType:L} value)
           {
               return new ${variantName:L}(value);
           }
@@ -135,7 +136,7 @@ public final class UnionGenerator implements Runnable {
                       RuntimeTypes.FUNC,
                       ShapeSupport.memberTypeExpr(
                           w, context.model(), context.symbolProvider(), member, false),
-                      CSharpNaming.parameterName(member.getMemberName()));
+                      matchParameterName(member));
                 }
               }));
       writer.putContext(
@@ -146,7 +147,7 @@ public final class UnionGenerator implements Runnable {
                   w.write(
                       "$T.ThrowIfNull($L);",
                       RuntimeTypes.ARGUMENT_NULL_EXCEPTION,
-                      CSharpNaming.parameterName(member.getMemberName()));
+                      matchParameterName(member));
                 }
               }));
       writer.putContext(
@@ -155,9 +156,9 @@ public final class UnionGenerator implements Runnable {
               w -> {
                 for (MemberShape member : members) {
                   w.write(
-                      "$L value => $L(value.Value),",
-                      CSharpNaming.typeName(member.getMemberName()),
-                      CSharpNaming.parameterName(member.getMemberName()));
+                      "$L variant => $L(variant.Value),",
+                      CSharpNaming.variantName(member),
+                      matchParameterName(member));
                 }
               }));
       writer.write(
@@ -172,7 +173,7 @@ public final class UnionGenerator implements Runnable {
               return this switch
               {
                   ${cases:C|}
-                  Unknown value => unknown(value.Tag, value.Value),
+                  Unknown variant => unknown(variant.Tag, variant.Value),
                   _ => throw new ${invalidOperationException:T}("Unknown union variant."),
               };
           }
@@ -180,5 +181,14 @@ public final class UnionGenerator implements Runnable {
     } finally {
       writer.popState();
     }
+  }
+
+  /**
+   * A {@code Match} handler parameter. It cannot reuse the {@code unknown} handler's name or the
+   * {@code variant} pattern variable, so a member with one of those names takes a suffix.
+   */
+  private static String matchParameterName(MemberShape member) {
+    String name = CSharpNaming.parameterName(member.getMemberName());
+    return name.equals("unknown") || name.equals("variant") ? name + "Value" : name;
   }
 }

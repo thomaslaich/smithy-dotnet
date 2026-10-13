@@ -81,7 +81,7 @@ final class DirectedCSharpCodegen
     ctx.writerDelegator()
         .useFileWriter(
             dir + "/" + typeName + ".Schema.g.cs",
-            csNamespace,
+            SchemaGenerator.schemaNamespace(csNamespace),
             writer -> new ServiceSchemaGenerator(writer, directive.shape()).run());
 
     // Service-level files use a dotted ".Client"/".Server" suffix so the MSBuild
@@ -288,7 +288,7 @@ final class DirectedCSharpCodegen
         .writerDelegator()
         .useFileWriter(
             file,
-            symbol.getNamespace(),
+            SchemaGenerator.schemaNamespace(symbol.getNamespace()),
             writer -> {
               writer.reserveMemberNames(shape);
               body.accept(writer);

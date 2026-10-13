@@ -52,7 +52,6 @@ public static class SmithyMcpTools
 
 internal sealed class SmithyMcpTool : McpServerTool
 {
-    private static readonly ShapeId DocumentationTrait = ShapeId.Parse("smithy.api#documentation");
     private static readonly ShapeId IdempotentTrait = ShapeId.Parse("smithy.api#idempotent");
     private static readonly ShapeId ReadonlyTrait = ShapeId.Parse("smithy.api#readonly");
 
@@ -82,7 +81,7 @@ internal sealed class SmithyMcpTool : McpServerTool
         ProtocolTool = new Tool
         {
             Name = schema.Id.Name,
-            Description = StringTrait(schema, DocumentationTrait),
+            Description = jsonSchemas.Description,
             InputSchema = inputSchema,
             OutputSchema = outputSchema,
             Annotations = new ToolAnnotations
@@ -185,9 +184,6 @@ internal sealed class SmithyMcpTool : McpServerTool
 
     private static CallToolResult Error(string message) =>
         new() { Content = [new TextContentBlock { Text = message }], IsError = true };
-
-    private static string? StringTrait(IOperationSchema schema, ShapeId id) =>
-        schema.GetTrait(id)?.Value is { Kind: DocumentKind.String } value ? value.AsString() : null;
 
     private sealed class OperationErrorMatcher(Exception exception)
         : IOperationErrorSchemaVisitor<bool>

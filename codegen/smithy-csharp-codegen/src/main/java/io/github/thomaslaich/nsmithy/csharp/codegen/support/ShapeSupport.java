@@ -403,7 +403,7 @@ public final class ShapeSupport {
 
   /** "Foo" -> "FooAsync". Convenience for generated method names. */
   public static String asyncMethodName(String operationName) {
-    return CSharpNaming.propertyName(operationName) + "Async";
+    return CSharpNaming.pascal(operationName) + "Async";
   }
 
   private ShapeSupport() {}

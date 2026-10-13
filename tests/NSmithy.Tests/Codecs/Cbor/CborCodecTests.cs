@@ -2,6 +2,7 @@ using System.Formats.Cbor;
 using NSmithy.Codecs.Cbor;
 using NSmithy.Core.Serde;
 using Nsmithy.Tests.Cbor;
+using Nsmithy.Tests.Cbor.Schemas;
 
 namespace NSmithy.Tests.Codecs.Cbor;
 

@@ -112,16 +112,21 @@ properties.
 
 ## Unions
 
-Smithy unions are generated as a sealed C# class hierarchy. A `sealed` abstract
-base class represents the union type; each member becomes a concrete nested
-`record` subclass holding the member value.
+Smithy unions are generated as a C# class hierarchy. An abstract base record
+represents the union type; each member becomes a sealed nested record holding
+the member value, with a `From<Member>` factory on the base. Every union also
+has an `Unknown` case (with `Tag` and `Value`) and a `Match` method.
 
 ```csharp
 // Smithy: union Shape { circle: Circle, square: Square }
-public abstract record Shape
+public abstract partial record class Shape
 {
-    public sealed record CircleCase(Circle Value) : Shape;
-    public sealed record SquareCase(Square Value) : Shape;
+    public sealed partial record class Circle : Shape { public Circle Value { get; } }
+    public sealed partial record class Square : Shape { public Square Value { get; } }
+    public sealed partial record class Unknown : Shape { /* Tag, Value */ }
+
+    public static Shape FromCircle(Circle value);
+    public static Shape FromSquare(Square value);
 }
 ```
 
@@ -184,3 +189,26 @@ Examples (with empty `baseNamespace`):
 - Member names follow PascalCase (`FirstName`, `CreatedAt`).
 - Smithy `camelCase` member names are converted to PascalCase in C#.
 - Smithy names that conflict with C# keywords are escaped with a `@` prefix.
+
+### Name collisions
+
+A Smithy name that would clash with a name C# or the generator already uses
+takes a suffix. Only the colliding name changes; wire names stay the modeled
+ones.
+
+| Collision | Generated name |
+| --- | --- |
+| A structure or error member named like its type (`DomainName.domainName`) | `DomainNameValue` |
+| A member, enum value, or shape named like an inherited member (`Equals`, `GetHashCode`, `ToString`, `GetType`, `MemberwiseClone`, `Finalize`, `ReferenceEquals`) or a record member (`EqualityContract`, `PrintMembers`, `Deconstruct`) | `EqualsValue` |
+| A string enum value named `Value` or `FromValue` | `ValueValue`, `FromValueValue` |
+| A union variant named `Value`, `Tag`, `Unknown`, `Match`, like an inherited member, or like its union | `ValueCase`; the factory stays `FromValue` |
+
+### Schema classes
+
+Every schema class lives in the child namespace `<Namespace>.Schemas` and keeps
+the `Schema` suffix: `Example.Weather.Person` has the schema class
+`Example.Weather.Schemas.PersonSchema`. A schema class therefore never clashes
+with a model type, even when the model has both `Dataset` and `DatasetSchema`.
+
+A shape that would generate a C# type named `Schemas` clashes with that
+namespace, so code generation fails and asks for the shape to be renamed.

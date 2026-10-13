@@ -119,6 +119,14 @@
           "baseNamespace": ""
         }
       }
+    },
+    "naming": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.naming#Fixtures",
+          "baseNamespace": ""
+        }
+      }
     }
   }
 }

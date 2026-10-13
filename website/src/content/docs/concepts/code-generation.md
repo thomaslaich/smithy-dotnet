@@ -36,6 +36,20 @@ Error examples wrap the call in a typed `try`/`catch` and describe the expected
 exception properties inside the catch block. Samples use a `client` variable
 representing an existing client instance.
 
+### Name collisions
+
+A Smithy name that clashes with a name C# or the generator already uses gets a
+suffix. Only the colliding name changes; wire names stay as modeled.
+
+| Model | Generated C# |
+| --- | --- |
+| `structure DomainName { domainName: String }` | `DomainName.DomainNameValue` |
+| A member, enum value, or shape named `Equals`, `ToString`, `GetHashCode`, or another inherited member | `EqualsValue` |
+| A union variant named `value`, `tag`, `unknown`, `match`, or like its union | Variant class `ValueCase`, factory `FromValue` |
+
+A shape that would generate a type named `Schemas` fails generation, because
+that name is reserved for the schema namespace.
+
 ## Runtime schemas
 
 Codecs and protocol adapters do not reflect over the generated records. They
@@ -44,12 +58,19 @@ typed accessors for reading and constructing values. The generator therefore
 does not emit a serializer for every shape and protocol combination; each
 protocol implementation combines the schemas with its own encoding rules.
 
+Each shape's schema is a class in the child `Schemas` namespace:
+`Example.Weather.Person` has `Example.Weather.Schemas.PersonSchema`. Import that
+namespace when you hand a schema to a codec.
+
 Because trait values are model data, a schema can retain traits the generator
 knows nothing about. A custom `@owner("catalog-team")` trait reaches the
 running application without a generator change. Retaining a trait does not
 implement it: a new constraint, protocol, or client feature needs a component
 that interprets it, and traits that change the C# representation, such as
 `@required`, need generator support.
+
+Schemas leave out traits used only at build time, such as `@documentation`,
+`@examples`, `@tags`, `@deprecated`, and test traits.
 
 ## The toolchain
 

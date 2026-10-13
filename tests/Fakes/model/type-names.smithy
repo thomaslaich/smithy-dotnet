@@ -90,11 +90,11 @@ structure List {}
 structure Exception {}
 structure Uri {}
 
-// Runtime symbol imports must be as collision-safe as framework symbol imports.
+// Runtime symbol imports must be as collision-safe as framework symbol imports. A type named
+// Schemas is rejected outright: it would clash with the namespace that holds schema classes.
 structure RuntimeNames {
     documentType: Document
     schemaType: Schema
-    schemasType: Schemas
     shapeIdType: ShapeId
     traitType: Trait
     runtimeType: SmithyServerRuntime
@@ -102,7 +102,6 @@ structure RuntimeNames {
 
 structure Document {}
 structure Schema {}
-structure Schemas {}
 structure ShapeId {}
 structure Trait {}
 structure SmithyServerRuntime {}

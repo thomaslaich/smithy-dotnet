@@ -102,7 +102,9 @@ internal static class HttpRequestRunner
     private static bool OperationMatchesNamespace(MethodInfo method, string operationShapeId)
     {
         var inputType = method.GetParameters()[0].ParameterType;
-        var schemaType = inputType.Assembly.GetType(inputType.FullName + "Schema");
+        var schemaType = inputType.Assembly.GetType(
+            $"{inputType.Namespace}.Schemas.{inputType.Name}Schema"
+        );
         var schema =
             schemaType
                 ?.GetProperty("Schema", BindingFlags.Public | BindingFlags.Static)

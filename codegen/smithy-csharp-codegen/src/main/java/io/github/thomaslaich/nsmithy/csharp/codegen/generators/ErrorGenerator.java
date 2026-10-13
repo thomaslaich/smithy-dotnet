@@ -150,7 +150,7 @@ public final class ErrorGenerator implements Runnable {
 
   private void writeAssignments(List<MemberShape> members) {
     for (MemberShape member : members) {
-      String property = CSharpNaming.propertyName(member.getMemberName());
+      String property = CSharpNaming.memberName(member);
       String parameter = CSharpNaming.parameterName(member.getMemberName());
       // A defaulted member takes a nullable, optional parameter but keeps a non-nullable
       // property, so an omitted argument falls back to the modeled default.
@@ -177,7 +177,7 @@ public final class ErrorGenerator implements Runnable {
 
   private void writeProperties(SymbolProvider sp, Model model, MemberShape excluded) {
     for (MemberShape m : ShapeSupport.sortedMembers(shape, excluded)) {
-      String prop = CSharpNaming.propertyName(m.getMemberName());
+      String prop = CSharpNaming.memberName(m);
       boolean nullable = ShapeSupport.isNullable(m);
       String type = ShapeSupport.memberTypeExpr(writer, model, sp, m, nullable);
       ShapeSupport.memberDocumentation(model, m)

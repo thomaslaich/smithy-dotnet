@@ -2,6 +2,7 @@ using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Core.Validation;
 using Nsmithy.Tests.Validation;
+using Nsmithy.Tests.Validation.Schemas;
 
 namespace NSmithy.Tests.Core;
 

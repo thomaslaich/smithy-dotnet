@@ -38,9 +38,10 @@ server runtimes.
 ## Register a generated service
 
 Register the generated handler as usual, then select the service by its generated
-schema. This exposes its tools and prompts together:
+service definition. This exposes its tools and prompts together:
 
 ```csharp title="Program.cs"
+using Example.Weather;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using NSmithy.Server.Mcp;
@@ -51,7 +52,7 @@ builder.Services.AddWeatherServiceHandler<WeatherHandler>();
 builder.Services
     .AddMcpServer()
     .WithStdioServerTransport()
-    .WithSmithyService(WeatherSchema.Schema);
+    .WithSmithyService<WeatherServiceDefinition>();
 
 await builder.Build().RunAsync();
 ```
@@ -69,7 +70,7 @@ builder.Services.AddSingleton<IGetForecastHandler, GetForecastHandler>();
 ```
 
 `WithSmithyService` is explicit: registering a service or its handlers in DI
-does not expose it to MCP until its schema is selected.
+does not expose it to MCP until its definition is selected.
 
 ## Tools
 
