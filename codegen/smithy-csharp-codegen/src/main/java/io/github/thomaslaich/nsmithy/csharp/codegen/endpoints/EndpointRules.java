@@ -260,6 +260,11 @@ public final class EndpointRules {
     return authSchemeIds.getOrDefault(name, name);
   }
 
+  /** Endpoint {@code authSchemes} names mapped to auth trait shape ids. */
+  public Map<String, String> authSchemeIds() {
+    return authSchemeIds;
+  }
+
   /** Rule parameters supplied by client configuration properties, in declaration order. */
   public List<ConfigParameter> configParameters() {
     return configParameters;

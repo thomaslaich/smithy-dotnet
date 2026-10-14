@@ -25,10 +25,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../../packages/NSmithy.Aws/NSmithy.Aws.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Client/NSmithy.Client.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Core/NSmithy.Core.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.Http/NSmithy.Http.csproj" />
     <ProjectReference Include="../../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Protocols.AwsJson/NSmithy.Protocols.AwsJson.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Protocols.AwsQuery/NSmithy.Protocols.AwsQuery.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Protocols.RestXml/NSmithy.Protocols.RestXml.csproj" />
   </ItemGroup>
 
   <Import Project="../../../packages/NSmithy.MSBuild/Targets/NSmithy.MSBuild.targets" />

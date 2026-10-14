@@ -330,9 +330,10 @@ standard functions compile to C# operators and need no runtime support.
 `NSmithy.Aws.AwsEndpointFunctions` implements `aws.partition`,
 `aws.parseArn`, and `aws.isVirtualHostableS3Bucket`. Partition data is a
 generated C# table built from the `partitions.json` of `smithy-aws-endpoints`
-at the Smithy version NSmithy builds against. `aws.partition` matches a region
-exactly, then by each partition's region pattern, and falls back to the `aws`
-partition.
+at the Smithy version NSmithy builds against. The codegen build's
+`generateAwsPartitions` task writes it, and its tests fail while the checked-in
+table is stale. `aws.partition` matches a region exactly, then by each
+partition's region pattern, and falls back to the `aws` partition.
 
 Generated code for a service whose rules use AWS functions or built-ins
 references `NSmithy.Aws`.
@@ -343,8 +344,10 @@ references `NSmithy.Aws`.
 with a `name` and scheme properties. The generator turns it into
 `SmithyEndpoint.AuthSchemes`, mapping each name to the auth trait's shape id
 the client's schemes are keyed by (`sigv4` to `aws.auth#sigv4`, `sigv4a` to
-`aws.auth#sigv4a`); names without a mapping are kept as written. The record's
-other fields become the scheme's `Properties`.
+`aws.auth#sigv4a`); names without a mapping are kept as written. A name the
+rules compute (S3 picks `sigv4` or `sigv4-s3express` at resolution time) is
+mapped by a `switch` in the generated result. The record's other fields become
+the scheme's `Properties`.
 
 Auth selection narrows the operation's modeled schemes to those the endpoint
 lists, as for any resolver. The selected scheme's signer reads its entry from
@@ -386,12 +389,14 @@ service and the id.
   fixture model that exercises client construction, memoization, and SigV4
   overrides.
 - **Conformance** in `tests/Conformance/Endpoints` runs every `@endpointTests`
-  case. Its models come from Maven: `smithy-rules-engine-tests` for the
-  standard library (these carry only decision trees, so every case also tests
-  BDD compilation) and AWS service models from `software.amazon.api.models`
-  (S3, S3 Control, STS, Lambda, DynamoDB) for the AWS functions, built-ins,
-  and auth scheme properties. Cases with only `params` call `Resolve`
-  directly; cases with `operationInputs` invoke the generated client against
-  a recording handler and check the endpoint and headers of the sent request.
-  The pass rate feeds the docs' protocol status page like the other
-  conformance projects.
+  case. Its models are `smithy-rules-engine-tests` for the standard library,
+  the `aws.partition`, `aws.parseArn`, and `aws.isVirtualHostableS3Bucket`
+  test models of `smithy-aws-endpoints` (rule sets only, so their cases also
+  test BDD compilation), and AWS service models from
+  `software.amazon.api.models` (S3, S3 Control, STS, Lambda, DynamoDB) for the
+  AWS built-ins and auth scheme properties. A case's `params` go through
+  `Resolve`; each of its `operationInputs` binds the operation input through
+  the resolver's `ResolveEndpointAsync`. Requests through a generated STS
+  client check that the resolved endpoint reaches the HTTP request and the
+  SigV4 scope. The pass rate feeds the docs' protocol status page like the
+  other conformance projects.

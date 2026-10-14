@@ -1,0 +1,121 @@
+/*
+ * The AWS endpoint rules functions, built-ins, and auth scheme names.
+ */
+package io.github.thomaslaich.nsmithy.csharp.codegen.integrations.aws;
+
+import static io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointValueType.field;
+
+import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
+import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointBuiltIn;
+import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointFunction;
+import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointValueType;
+import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
+import java.util.List;
+import java.util.Map;
+import software.amazon.smithy.utils.SmithyInternalApi;
+
+/**
+ * Supplies what AWS endpoint rule sets need beyond the standard library: the {@code aws.*}
+ * functions of {@code NSmithy.Aws.AwsEndpointFunctions}, the {@code AWS::*} built-ins as client
+ * configuration properties, and the auth trait ids of the {@code sigv4} and {@code sigv4a} endpoint
+ * auth schemes.
+ */
+@SmithyInternalApi
+public final class AwsEndpointsIntegration implements CSharpIntegration {
+
+  private static final EndpointValueType PARTITION =
+      EndpointValueType.record(
+          RuntimeTypes.AWS_PARTITION,
+          Map.of(
+              "name", field("Name", EndpointValueType.STRING),
+              "dnsSuffix", field("DnsSuffix", EndpointValueType.STRING),
+              "dualStackDnsSuffix", field("DualStackDnsSuffix", EndpointValueType.STRING),
+              "supportsFIPS", field("SupportsFips", EndpointValueType.BOOLEAN),
+              "supportsDualStack", field("SupportsDualStack", EndpointValueType.BOOLEAN),
+              "implicitGlobalRegion", field("ImplicitGlobalRegion", EndpointValueType.STRING)));
+
+  private static final EndpointValueType ARN =
+      EndpointValueType.record(
+          RuntimeTypes.AWS_ARN,
+          Map.of(
+              "partition", field("Partition", EndpointValueType.STRING),
+              "service", field("Service", EndpointValueType.STRING),
+              "region", field("Region", EndpointValueType.STRING),
+              "accountId", field("AccountId", EndpointValueType.STRING),
+              "resourceId", field("ResourceId", EndpointValueType.STRING_LIST)));
+
+  @Override
+  public String name() {
+    return "aws-endpoints";
+  }
+
+  @Override
+  public List<EndpointFunction> endpointFunctions() {
+    return List.of(
+        new EndpointFunction(
+            "aws.partition", RuntimeTypes.AWS_ENDPOINT_FUNCTIONS, "Partition", PARTITION, false),
+        new EndpointFunction(
+            "aws.parseArn", RuntimeTypes.AWS_ENDPOINT_FUNCTIONS, "ParseArn", ARN, true),
+        new EndpointFunction(
+            "aws.isVirtualHostableS3Bucket",
+            RuntimeTypes.AWS_ENDPOINT_FUNCTIONS,
+            "IsVirtualHostableS3Bucket",
+            EndpointValueType.BOOLEAN,
+            false));
+  }
+
+  @Override
+  public List<EndpointBuiltIn> endpointBuiltIns() {
+    return List.of(
+        new EndpointBuiltIn(
+            "AWS::Region", "Region", "The AWS region requests are sent to, such as us-east-1."),
+        new EndpointBuiltIn("AWS::UseFIPS", "UseFips", "Whether to use FIPS endpoints."),
+        new EndpointBuiltIn(
+            "AWS::UseDualStack",
+            "UseDualStack",
+            "Whether to use dual-stack (IPv4 and IPv6) endpoints."),
+        new EndpointBuiltIn(
+            "AWS::Auth::AccountId",
+            "AccountId",
+            "The AWS account id, for account-based endpoints."),
+        new EndpointBuiltIn(
+            "AWS::Auth::AccountIdEndpointMode",
+            "AccountIdEndpointMode",
+            "Whether account-based endpoints are used: preferred, required, or disabled."),
+        new EndpointBuiltIn(
+            "AWS::Auth::CredentialScope",
+            "CredentialScope",
+            "The credential scope, for scoped endpoints."),
+        new EndpointBuiltIn(
+            "AWS::S3::Accelerate", "Accelerate", "Whether to use S3 Transfer Acceleration."),
+        new EndpointBuiltIn(
+            "AWS::S3::DisableMultiRegionAccessPoints",
+            "DisableMultiRegionAccessPoints",
+            "Whether to reject S3 Multi-Region Access Point ARNs."),
+        new EndpointBuiltIn(
+            "AWS::S3::ForcePathStyle",
+            "ForcePathStyle",
+            "Whether to address S3 buckets in the path instead of the host name."),
+        new EndpointBuiltIn(
+            "AWS::S3::UseArnRegion",
+            "UseArnRegion",
+            "Whether the region in an ARN takes precedence over the configured region."),
+        new EndpointBuiltIn(
+            "AWS::S3::UseGlobalEndpoint",
+            "UseGlobalEndpoint",
+            "Whether us-east-1 requests use the global S3 endpoint."),
+        new EndpointBuiltIn(
+            "AWS::S3Control::UseArnRegion",
+            "UseArnRegion",
+            "Whether the region in an ARN takes precedence over the configured region."),
+        new EndpointBuiltIn(
+            "AWS::STS::UseGlobalEndpoint",
+            "UseGlobalEndpoint",
+            "Whether us-east-1 requests use the global STS endpoint."));
+  }
+
+  @Override
+  public Map<String, String> endpointAuthSchemeIds() {
+    return Map.of("sigv4", "aws.auth#sigv4", "sigv4a", "aws.auth#sigv4a");
+  }
+}
