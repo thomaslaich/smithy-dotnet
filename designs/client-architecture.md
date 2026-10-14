@@ -188,8 +188,9 @@ public interface IEndpointResolver
 
 public sealed record SmithyEndpoint(
     Uri Uri,
-    IReadOnlyDictionary<string, string>? Headers = null,
-    IReadOnlyList<string>? AuthSchemes = null);
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? Headers = null,
+    IReadOnlyList<SmithyEndpointAuthScheme>? AuthSchemes = null,
+    IReadOnlyDictionary<string, Document>? Properties = null);
 
 public sealed record SmithyEndpointParameters(
     ShapeId ServiceId,
@@ -198,18 +199,20 @@ public sealed record SmithyEndpointParameters(
     object? Input);
 ```
 
-A static `Config.Endpoint` is the simplest resolver (`StaticEndpointResolver`)
-and is used when no resolver is configured; `Config.EndpointResolver` overrides
-it for request routing. Resolution runs once per invocation, before
-serialization. Resolved endpoint headers are added to every request sent to
+Services with endpoint rules get a generated resolver, described in
+[endpoint-rules.md](endpoint-rules.md). Otherwise a static `Config.Endpoint` is
+the simplest resolver (`StaticEndpointResolver`) and is used when no resolver is
+configured; `Config.EndpointResolver` overrides it for request routing.
+Resolution runs once per invocation, before serialization. Resolved endpoint headers are added to every request sent to
 that endpoint. Protocols and generated code apply host labels and operation
 endpoint traits through the same resolution path when an endpoint depends on
 operation metadata or input.
 
 Resolved endpoints may narrow auth schemes: when `SmithyEndpoint.AuthSchemes`
 is non-null, only modeled schemes also present there are considered by auth
-selection. That lets endpoint rules and auth selection compose without
-protocol-specific branches in generated clients.
+selection, and each entry's properties reach the selected scheme's signer. That
+lets endpoint rules and auth selection compose without protocol-specific
+branches in generated clients.
 
 ## Auth
 
