@@ -127,6 +127,14 @@
           "baseNamespace": ""
         }
       }
+    },
+    "endpoints": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.endpoints#Storage",
+          "baseNamespace": ""
+        }
+      }
     }
   }
 }

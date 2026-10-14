@@ -1,0 +1,244 @@
+{
+  "version": "1.0",
+  "maven": {
+    "repositories": [
+      {
+        "url": "https://repo.maven.apache.org/maven2/"
+      }
+    ],
+    "dependencies": [
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
+      "software.amazon.smithy:smithy-rules-engine-tests:1.73.0"
+    ]
+  },
+  "projections": {
+    "defaultvaluesservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#DefaultValuesService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#DefaultValuesService",
+          "baseNamespace": "DefaultValuesService",
+          "generateServer": false
+        }
+      }
+    },
+    "endpointstringarrayservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#EndpointStringArrayService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#EndpointStringArrayService",
+          "baseNamespace": "EndpointStringArrayService",
+          "generateServer": false
+        }
+      }
+    },
+    "coalescetest": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#CoalesceTest"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#CoalesceTest",
+          "baseNamespace": "CoalesceTest",
+          "generateServer": false
+        }
+      }
+    },
+    "endpointbindingservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#EndpointBindingService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#EndpointBindingService",
+          "baseNamespace": "EndpointBindingService",
+          "generateServer": false
+        }
+      }
+    },
+    "parseurlservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#ParseUrlService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#ParseUrlService",
+          "baseNamespace": "ParseUrlService",
+          "generateServer": false
+        }
+      }
+    },
+    "headersservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#HeadersService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#HeadersService",
+          "baseNamespace": "HeadersService",
+          "generateServer": false
+        }
+      }
+    },
+    "itetest": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#IteTest"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#IteTest",
+          "baseNamespace": "IteTest",
+          "generateServer": false
+        }
+      }
+    },
+    "getattrservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#GetAttrService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#GetAttrService",
+          "baseNamespace": "GetAttrService",
+          "generateServer": false
+        }
+      }
+    },
+    "validhostlabelservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#ValidHostLabelService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#ValidHostLabelService",
+          "baseNamespace": "ValidHostLabelService",
+          "generateServer": false
+        }
+      }
+    },
+    "substringservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#SubstringService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#SubstringService",
+          "baseNamespace": "SubstringService",
+          "generateServer": false
+        }
+      }
+    },
+    "urlencodeservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#UrlEncodeService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#UrlEncodeService",
+          "baseNamespace": "UrlEncodeService",
+          "generateServer": false
+        }
+      }
+    },
+    "splittest": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#SplitTest"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#SplitTest",
+          "baseNamespace": "SplitTest",
+          "generateServer": false
+        }
+      }
+    }
+  }
+}
