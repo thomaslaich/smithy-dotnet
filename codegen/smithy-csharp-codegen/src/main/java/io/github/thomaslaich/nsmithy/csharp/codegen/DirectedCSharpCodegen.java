@@ -1,5 +1,7 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
+import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointResolverGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointRules;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ClientDependencyInjectionGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ClientGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ErrorGenerator;
@@ -108,11 +110,19 @@ final class DirectedCSharpCodegen
     // gated by settings so a client- or server-only project never writes the half it discards —
     // the MSBuild compile-time exclusion is then belt-and-suspenders.
     if (ctx.settings().generateClient()) {
+      Optional<EndpointRules> endpointRules = EndpointRules.of(ctx, directive.shape());
       ctx.writerDelegator()
           .useFileWriter(
               dir + "/" + typeName + ".Client.g.cs",
               csNamespace,
-              writer -> new ClientGenerator(ctx, writer, directive.shape()).run());
+              writer -> new ClientGenerator(ctx, writer, directive.shape(), endpointRules).run());
+      endpointRules.ifPresent(
+          rules ->
+              ctx.writerDelegator()
+                  .useFileWriter(
+                      dir + "/" + typeName + ".Endpoints.Client.g.cs",
+                      csNamespace,
+                      writer -> new EndpointResolverGenerator(ctx, writer, rules).run()));
     }
 
     if (ctx.settings().generateServer()) {

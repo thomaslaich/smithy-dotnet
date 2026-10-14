@@ -41,12 +41,16 @@ public final class RuntimeTypes {
   public static final Symbol LIST = type("System.Collections.Generic.List");
   public static final Symbol MEMORY_STREAM = type("System.IO.MemoryStream");
   public static final Symbol NOT_SUPPORTED_EXCEPTION = type("System.NotSupportedException");
+  public static final Symbol READ_ONLY_SPAN = type("System.ReadOnlySpan");
   public static final Symbol READ_ONLY_DICTIONARY =
       type("System.Collections.ObjectModel.ReadOnlyDictionary");
   public static final Symbol STREAM = type("System.IO.Stream");
   public static final Symbol STRING_COMPARER = type("System.StringComparer");
   public static final Symbol TASK = type("System.Threading.Tasks.Task");
+  public static final Symbol UNREACHABLE_EXCEPTION =
+      type("System.Diagnostics.UnreachableException");
   public static final Symbol URI = type("System.Uri");
+  public static final Symbol VALUE_TASK = type("System.Threading.Tasks.ValueTask");
 
   // NSmithy models and serialization
   public static final Symbol DOCUMENT = type("NSmithy.Core.Document");
@@ -70,6 +74,18 @@ public final class RuntimeTypes {
       type("NSmithy.Core.Validation.ValidationException");
 
   // NSmithy clients and HTTP
+  public static final Symbol ENDPOINT_FUNCTIONS = type("NSmithy.Client.EndpointFunctions");
+  public static final Symbol ENDPOINT_URL = type("NSmithy.Client.EndpointUrl");
+  public static final Symbol I_ENDPOINT_RESOLVER = type("NSmithy.Client.IEndpointResolver");
+  public static final Symbol SMITHY_ENDPOINT = type("NSmithy.Client.SmithyEndpoint");
+  public static final Symbol SMITHY_ENDPOINT_AUTH_SCHEME =
+      type("NSmithy.Client.SmithyEndpointAuthScheme");
+  public static final Symbol SMITHY_ENDPOINT_PARAMETERS =
+      type("NSmithy.Client.SmithyEndpointParameters");
+  public static final Symbol SMITHY_ENDPOINT_RESOLUTION_EXCEPTION =
+      type("NSmithy.Client.SmithyEndpointResolutionException");
+  public static final Symbol STATIC_ENDPOINT_RESOLVER =
+      type("NSmithy.Client.StaticEndpointResolver");
   public static final Symbol I_SERVER_OPERATION_PROTOCOL =
       type("NSmithy.Http.IServerOperationProtocol");
   public static final Symbol I_SERVICE_PROTOCOL = type("NSmithy.Http.IServiceProtocol");

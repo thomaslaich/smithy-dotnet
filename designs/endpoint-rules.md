@@ -53,9 +53,7 @@ For each service, the generator takes the `EndpointBddTrait`:
 
 1. If the service has `@endpointBdd`, that trait is used as is.
 2. Otherwise, if it has `@endpointRuleSet`, the rule set is compiled with
-   `CompileBdd.compileBdd`. Services whose rule set uses AWS functions are
-   compiled with `CompileBddForAws`, which applies the AWS-specific tree
-   rewrites first.
+   `CompileBdd.compileBdd`.
 3. A service with neither gets no generated resolver.
 
 A BDD has a parameter list, a condition list, a result list, and a node table.
@@ -107,7 +105,8 @@ public sealed record LambdaEndpointParameters
 | `Boolean` | `bool` |
 | `StringArray` | `IReadOnlyList<string>` |
 
-Deprecated parameters are marked `[Obsolete]` with the modeled message.
+A deprecated parameter's documentation carries the modeled deprecation
+message.
 
 ### Resolver
 
@@ -256,8 +255,8 @@ private LambdaEndpointParameters Bind(SmithyEndpointParameters call) =>
 ```
 
 An operation with no static, context, or operation-context parameters
-resolves the same endpoint on every call. The resolver memoizes those
-endpoints per operation. When no operation in the service binds per-operation
+resolves the client-level parameters alone, so all such operations share one
+endpoint, resolved on first use and then reused. When no operation in the service binds per-operation
 parameters, the resolver resolves once at construction and exposes the result
 as `StaticEndpoint`, so the client runtime keeps its static-endpoint fast
 path. A configuration the rules reject (FIPS with a custom endpoint, say) then
@@ -277,6 +276,8 @@ parameter:
   `CredentialScope`, and the S3, S3 Control, and STS built-ins.
 - A parameter bound to both a client context parameter and a built-in (S3's
   `ForcePathStyle`, for one) gets a single property.
+- A string client context parameter named `Endpoint` is the custom endpoint,
+  bound like `SDK::Endpoint`.
 
 Only parameters the rule set declares produce properties. A built-in no
 provider recognizes fails code generation with a message naming it.
@@ -363,14 +364,13 @@ binding, and result construction. Two extension points, contributed through
 `CSharpIntegration`, keep AWS knowledge out of it:
 
 - **Function providers** map a rules function id to its runtime call and
-  result type. The core provides the standard library; the AWS integration
-  provides `aws.*`.
+  result type. The generator has the standard library built in; the AWS
+  integration provides `aws.*`.
 - **Built-in providers** map a built-in id to a client configuration
   property. The core provides `SDK::Endpoint`; the AWS integration provides
   `AWS::*`.
 
-The AWS integration also owns the auth scheme name mapping and the choice of
-`CompileBddForAws`. It is registered through the Java service loader like any
+The AWS integration also owns the auth scheme name mapping. It is registered through the Java service loader like any
 third-party integration.
 
 A function or built-in no provider handles fails code generation, naming the

@@ -23,6 +23,12 @@ dependencies {
     api("software.amazon.smithy:smithy-build:$smithyVersion")
     api("software.amazon.smithy:smithy-utils:$smithyVersion")
     implementation("software.amazon.smithy:smithy-jsonschema:$smithyVersion")
+    // Endpoint rules: the BDD and rule-set traits, BDD compilation, and the JMESPath subset of
+    // @operationContextParams. smithy-aws-endpoints registers the aws.* rule functions, so models
+    // using them validate wherever the C# plugin is loaded.
+    implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-jmespath:$smithyVersion")
+    runtimeOnly("software.amazon.smithy:smithy-aws-endpoints:$smithyVersion")
 
     // Makes the official smithy.ai trait definitions and validators available whenever the
     // C# build plugin is loaded. In particular, models can use smithy.ai#prompts without copying
@@ -37,6 +43,13 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+// Generator tests define the protocol traits they use inline; the AWS trait definitions that
+// smithy-aws-endpoints brings onto the plugin's runtime classpath would conflict with them.
+configurations.testRuntimeClasspath {
+    exclude(group = "software.amazon.smithy", module = "smithy-aws-endpoints")
+    exclude(group = "software.amazon.smithy", module = "smithy-aws-traits")
 }
 
 mavenPublishing {
