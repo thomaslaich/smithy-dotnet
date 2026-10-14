@@ -1,6 +1,7 @@
 using System.Net;
 using NSmithy.Aws;
 using NSmithy.Client;
+using NSmithy.Core;
 using NSmithy.Http;
 
 namespace NSmithy.Tests.Aws;
@@ -93,6 +94,51 @@ public sealed class AwsSigV4InterceptorTests
             new AwsCredentials("AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
         );
 
+        Assert.Equal(
+            "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request, SignedHeaders=host;range;x-amz-content-sha256;x-amz-date, Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41",
+            Assert.Single(request.Headers["Authorization"])
+        );
+    }
+
+    [Fact]
+    public async Task SignUsesSigningNameAndRegionFromTheResolvedEndpoint()
+    {
+        var request = new SmithyHttpRequest(
+            HttpMethod.Get,
+            "https://examplebucket.s3.amazonaws.com/test.txt"
+        );
+        request.Headers["Range"] = ["bytes=0-9"];
+        var signer = new AwsSigV4Signer(
+            "s3-control",
+            "eu-west-1",
+            new FixedTimeProvider(new DateTimeOffset(2013, 05, 24, 0, 0, 0, TimeSpan.Zero))
+        );
+        var context = new SmithyContext();
+        context.Set(
+            SmithyContextKeys.ResolvedEndpoint,
+            new SmithyEndpoint(
+                new Uri("https://examplebucket.s3.amazonaws.com"),
+                AuthSchemes:
+                [
+                    new SmithyEndpointAuthScheme(
+                        "aws.auth#sigv4",
+                        new Dictionary<string, Document>
+                        {
+                            ["signingName"] = Document.From("s3"),
+                            ["signingRegion"] = Document.From("us-east-1"),
+                        }
+                    ),
+                ]
+            )
+        );
+
+        await signer.SignAsync(
+            context,
+            request,
+            new AwsCredentials("AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        );
+
+        // Same vector as SignMatchesAwsPublishedS3GetObjectVector: the endpoint's scope wins.
         Assert.Equal(
             "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request, SignedHeaders=host;range;x-amz-content-sha256;x-amz-date, Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41",
             Assert.Single(request.Headers["Authorization"])

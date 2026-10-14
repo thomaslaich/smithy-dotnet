@@ -15,8 +15,8 @@ public sealed class AwsRegionalEndpointResolver : IEndpointResolver
         string region,
         bool useFips = false,
         bool useDualStack = false,
-        IReadOnlyDictionary<string, string>? headers = null,
-        IReadOnlyList<string>? authSchemes = null
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? headers = null,
+        IReadOnlyList<SmithyEndpointAuthScheme>? authSchemes = null
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(endpointPrefix);

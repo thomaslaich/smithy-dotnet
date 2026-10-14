@@ -144,7 +144,10 @@ public sealed class SmithyEndpointResolutionTests
             transport,
             endpointResolver: new DelegateResolver(_ => new SmithyEndpoint(
                 new Uri("https://api.example.com"),
-                Headers: new Dictionary<string, string> { ["x-endpoint-key"] = "route-1" }
+                Headers: new Dictionary<string, IReadOnlyList<string>>
+                {
+                    ["x-endpoint-key"] = ["route-1"],
+                }
             ))
         );
 
@@ -202,7 +205,7 @@ public sealed class SmithyEndpointResolutionTests
             transport,
             endpointResolver: new DelegateResolver(_ => new SmithyEndpoint(
                 new Uri("https://api.example.com"),
-                AuthSchemes: ["scheme#b"]
+                AuthSchemes: [new SmithyEndpointAuthScheme("scheme#b")]
             )),
             authSchemes: new Dictionary<string, ISmithyAuthScheme>(StringComparer.Ordinal)
             {
