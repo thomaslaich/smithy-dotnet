@@ -547,40 +547,63 @@ public final class EndpointResolverGenerator implements Runnable {
             });
     Map<Identifier, Literal> properties = new LinkedHashMap<>(members);
     Literal name = properties.remove(Identifier.of("name"));
-    String schemeName =
-        name == null
-            ? null
-            : name.accept(
-                new LiteralVisitor<String>() {
-                  @Override
-                  public String visitString(Template value) {
-                    return value.isStatic() ? value.expectLiteral() : null;
-                  }
-
-                  @Override
-                  public String visitBoolean(boolean value) {
-                    return null;
-                  }
-
-                  @Override
-                  public String visitRecord(Map<Identifier, Literal> members) {
-                    return null;
-                  }
-
-                  @Override
-                  public String visitTuple(List<Literal> members) {
-                    return null;
-                  }
-
-                  @Override
-                  public String visitInteger(int value) {
-                    return null;
-                  }
-                });
-    if (schemeName == null) {
-      throw new CodegenException("Endpoint auth schemes need a literal name: " + literal);
+    if (name == null) {
+      throw new CodegenException("Endpoint auth schemes need a name: " + literal);
     }
-    String id = CSharpNaming.formatString(rules.authSchemeId(schemeName));
+    String id =
+        name.accept(
+            new LiteralVisitor<String>() {
+              @Override
+              public String visitString(Template value) {
+                if (value.isStatic()) {
+                  return CSharpNaming.formatString(rules.authSchemeId(value.expectLiteral()));
+                }
+                // A name computed by the rules maps to its auth trait id when the result is built.
+                String computed = renderer.template(value);
+                if (rules.authSchemeIds().isEmpty()) {
+                  return computed;
+                }
+                String arms =
+                    rules.authSchemeIds().entrySet().stream()
+                        .sorted(Map.Entry.comparingByKey())
+                        .map(
+                            entry ->
+                                CSharpNaming.formatString(entry.getKey())
+                                    + " => "
+                                    + CSharpNaming.formatString(entry.getValue())
+                                    + ", ")
+                        .collect(Collectors.joining());
+                return EndpointExpressionRenderer.parenthesize(computed)
+                    + " switch { "
+                    + arms
+                    + "var other => other }";
+              }
+
+              @Override
+              public String visitBoolean(boolean value) {
+                throw invalid();
+              }
+
+              @Override
+              public String visitRecord(Map<Identifier, Literal> members) {
+                throw invalid();
+              }
+
+              @Override
+              public String visitTuple(List<Literal> members) {
+                throw invalid();
+              }
+
+              @Override
+              public String visitInteger(int value) {
+                throw invalid();
+              }
+
+              private CodegenException invalid() {
+                return new CodegenException(
+                    "Endpoint auth scheme names must be strings: " + literal);
+              }
+            });
     if (properties.isEmpty()) {
       return writer.format("new $T($L)", RuntimeTypes.SMITHY_ENDPOINT_AUTH_SCHEME, id);
     }

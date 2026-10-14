@@ -100,7 +100,7 @@ public sealed class GeneratedEndpointRulesTests
         );
 
         var scheme = Assert.Single(endpoint.AuthSchemes!);
-        Assert.Equal("sigv4", scheme.SchemeId);
+        Assert.Equal("aws.auth#sigv4", scheme.SchemeId);
         Assert.Equal("storage", scheme.GetString("signingName"));
         Assert.Equal("eu-west-1", scheme.GetString("signingRegion"));
     }

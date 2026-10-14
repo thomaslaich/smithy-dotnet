@@ -118,7 +118,7 @@ public sealed class EndpointConformanceTests
             var schemes = new JsonArray();
             foreach (var scheme in authSchemes)
             {
-                var entry = new JsonObject { ["name"] = scheme.SchemeId };
+                var entry = new JsonObject { ["name"] = RuleSchemeName(scheme.SchemeId) };
                 foreach (
                     var (key, value) in scheme.Properties ?? new Dictionary<string, Document>()
                 )
@@ -139,6 +139,15 @@ public sealed class EndpointConformanceTests
             $"Expected properties {expected?.ToJsonString() ?? "{}"} but got {actual.ToJsonString()}"
         );
     }
+
+    // Generated resolvers key AWS schemes by their auth trait id; the cases use the rule names.
+    private static string RuleSchemeName(string schemeId) =>
+        schemeId switch
+        {
+            "aws.auth#sigv4" => "sigv4",
+            "aws.auth#sigv4a" => "sigv4a",
+            _ => schemeId,
+        };
 
     private static JsonNode? ToJson(Document document) =>
         document.Kind switch
@@ -170,14 +179,18 @@ public sealed class EndpointConformanceTests
             csharpNamespace =
                 id.Name + "." + string.Join('.', id.Namespace.Split('.').Select(Pascal));
             var assembly = typeof(EndpointConformanceTests).Assembly;
-            parametersType = assembly.GetType(
-                $"{csharpNamespace}.{id.Name}EndpointParameters",
-                throwOnError: true
-            )!;
-            resolverType = assembly.GetType(
-                $"{csharpNamespace}.{id.Name}EndpointResolver",
-                throwOnError: true
-            )!;
+            parametersType = assembly
+                .GetTypes()
+                .Single(t =>
+                    t.Namespace == csharpNamespace
+                    && t.Name.EndsWith("EndpointParameters", StringComparison.Ordinal)
+                );
+            resolverType = assembly
+                .GetTypes()
+                .Single(t =>
+                    t.Namespace == csharpNamespace
+                    && t.Name.EndsWith("EndpointResolver", StringComparison.Ordinal)
+                );
         }
 
         public static GeneratedService For(string serviceId) => new(serviceId);
@@ -311,7 +324,8 @@ public sealed class EndpointConformanceTests
 
 /// <summary>
 /// Builds a generated operation input from test JSON: structures through their constructor,
-/// with parameters matched by name; unions through their <c>From{Member}</c> factories.
+/// with parameters matched by name; enums through <c>FromValue</c>; unions through their
+/// <c>From{Member}</c> factories.
 /// </summary>
 internal static class InputBinder
 {
@@ -359,6 +373,17 @@ internal static class InputBinder
                 dictionary[key] = Bind(valueType, item);
             }
             return dictionary;
+        }
+        if (
+            value is JsonValue enumValue
+            && target.GetMethod("FromValue", BindingFlags.Public | BindingFlags.Static)
+                is { } fromValue
+        )
+        {
+            return fromValue.Invoke(
+                null,
+                [Bind(fromValue.GetParameters()[0].ParameterType, enumValue)]
+            );
         }
         if (target.IsAbstract)
         {

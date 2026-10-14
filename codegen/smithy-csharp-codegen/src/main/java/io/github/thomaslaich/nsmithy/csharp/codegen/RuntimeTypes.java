@@ -127,6 +127,9 @@ public final class RuntimeTypes {
       type("NSmithy.Protocols.AwsQuery.AwsQueryProtocol");
   public static final Symbol EC2_QUERY_PROTOCOL =
       type("NSmithy.Protocols.AwsQuery.Ec2QueryProtocol");
+  public static final Symbol AWS_ARN = type("NSmithy.Aws.AwsArn");
+  public static final Symbol AWS_ENDPOINT_FUNCTIONS = type("NSmithy.Aws.AwsEndpointFunctions");
+  public static final Symbol AWS_PARTITION = type("NSmithy.Aws.AwsPartition");
   public static final Symbol GLACIER_INTERCEPTOR = type("NSmithy.Aws.GlacierInterceptor");
   public static final Symbol GRPC_PROTOCOL = type("NSmithy.Protocols.Grpc.GrpcProtocol");
   public static final Symbol REST_JSON1_PROTOCOL =

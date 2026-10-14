@@ -6,10 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSymbolProvider;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import software.amazon.smithy.build.FileManifest;
@@ -140,7 +143,57 @@ class EndpointResolverGeneratorTest {
     assertFalse(generated.contains("StaticEndpoint = Resolve(clientParameters);"), generated);
   }
 
+  @Test
+  void computedAuthSchemeNamesMapToAuthTraitIdsWhenTheResultIsBuilt() throws Exception {
+    String source =
+        """
+        $version: "2"
+        metadata suppressions = [{ id: "UnstableTrait", namespace: "example.weather" }]
+        namespace example.weather
+
+        use smithy.rules#clientContextParams
+        use smithy.rules#endpointRuleSet
+
+        @clientContextParams(AuthName: { type: "string" })
+        @endpointRuleSet({
+            version: "1.0"
+            parameters: { AuthName: { type: "String", required: false } }
+            rules: [
+                {
+                    conditions: [{ fn: "isSet", argv: [{ ref: "AuthName" }] }]
+                    type: "endpoint"
+                    endpoint: {
+                        url: "https://example.com"
+                        properties: { authSchemes: [{ name: "{AuthName}" }] }
+                    }
+                }
+                { conditions: [], type: "error", error: "AuthName must be set" }
+            ]
+        })
+        service Weather { version: "2024-01-01" }
+        """;
+    CSharpIntegration integration =
+        new CSharpIntegration() {
+          @Override
+          public Map<String, String> endpointAuthSchemeIds() {
+            return Map.of("sigv4", "aws.auth#sigv4");
+          }
+        };
+
+    String generated = render(source, List.of(integration));
+
+    assertTrue(
+        generated.contains(
+            "new SmithyEndpointAuthScheme(authName! switch { \"sigv4\" => \"aws.auth#sigv4\","
+                + " var other => other })"),
+        generated);
+  }
+
   private String render(String source) throws Exception {
+    return render(source, List.of());
+  }
+
+  private String render(String source, List<CSharpIntegration> integrations) throws Exception {
     Model model =
         Model.assembler()
             .discoverModels(getClass().getClassLoader())
@@ -162,6 +215,7 @@ class EndpointResolverGeneratorTest {
             .symbolProvider(symbolProvider)
             .fileManifest(manifest)
             .writerDelegator(new CSharpDelegator(manifest, symbolProvider, model, settings))
+            .integrations(integrations)
             .build();
     var writer =
         new CSharpWriter.CSharpWriterFactory(context.model(), context.settings())
