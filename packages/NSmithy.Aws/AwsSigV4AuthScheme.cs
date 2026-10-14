@@ -9,7 +9,9 @@ public sealed class AwsSigV4AuthScheme(
     TimeProvider? timeProvider = null
 ) : ISmithyAuthScheme
 {
-    public string SchemeId => "aws.auth#sigv4";
+    internal const string Id = "aws.auth#sigv4";
+
+    public string SchemeId => Id;
 
     public ISmithyIdentityResolver IdentityResolver { get; } =
         new SmithyCachingIdentityResolver(

@@ -319,14 +319,14 @@ public sealed record SmithyEndpointAuthScheme(
 public sealed class SmithyEndpointResolutionException : Exception;
 ```
 
-`NSmithy.Client.Endpoints.EndpointFunctions` implements `parseURL`,
+`NSmithy.Client.EndpointFunctions` implements `parseURL`,
 `substring`, `uriEncode`, `isValidHostLabel`, `split`, and list indexing
 (negative indexes count from the end; out of range is null). The remaining
 standard functions compile to C# operators and need no runtime support.
 
 ### AWS
 
-`NSmithy.Aws.Endpoints.AwsEndpointFunctions` implements `aws.partition`,
+`NSmithy.Aws.AwsEndpointFunctions` implements `aws.partition`,
 `aws.parseArn`, and `aws.isVirtualHostableS3Bucket`. Partition data is a
 generated C# table built from the `partitions.json` of `smithy-aws-endpoints`
 at the Smithy version NSmithy builds against. `aws.partition` matches a region

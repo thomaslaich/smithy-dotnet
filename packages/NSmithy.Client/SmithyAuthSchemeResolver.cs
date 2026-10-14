@@ -69,7 +69,7 @@ public static class SmithyAuthSchemeResolver
     /// </summary>
     public static ISmithyAuthScheme? SelectScheme(
         IReadOnlyList<string> operationAuthSchemes,
-        IReadOnlyList<string>? endpointAuthSchemes,
+        IReadOnlyList<SmithyEndpointAuthScheme>? endpointAuthSchemes,
         IReadOnlyDictionary<string, ISmithyAuthScheme> schemes
     )
     {
@@ -86,7 +86,9 @@ public static class SmithyAuthSchemeResolver
         {
             if (
                 endpointAuthSchemes is not null
-                && !endpointAuthSchemes.Contains(schemeId, StringComparer.Ordinal)
+                && !endpointAuthSchemes.Any(s =>
+                    string.Equals(s.SchemeId, schemeId, StringComparison.Ordinal)
+                )
             )
             {
                 continue;
@@ -111,7 +113,7 @@ public static class SmithyAuthSchemeResolver
                 + (
                     endpointAuthSchemes is null
                         ? "."
-                        : $" narrowed by the endpoint to [{string.Join(", ", endpointAuthSchemes)}]."
+                        : $" narrowed by the endpoint to [{string.Join(", ", endpointAuthSchemes.Select(s => s.SchemeId))}]."
                 )
         );
     }

@@ -509,7 +509,7 @@ public sealed class SmithyClientRuntime(
         {
             foreach (var header in resolvedEndpoint.Headers)
             {
-                resolved.Headers[header.Key] = [header.Value];
+                resolved.Headers[header.Key] = header.Value;
             }
         }
 

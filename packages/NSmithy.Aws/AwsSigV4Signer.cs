@@ -64,11 +64,47 @@ public sealed class AwsSigV4Signer(
                 $"AWS SigV4 requires an {nameof(AwsCredentials)} identity.",
                 nameof(identity)
             );
-        Sign(request, credentials, timeProvider.GetUtcNow());
+        var (signingName, signingRegion) = SigningScope(context);
+        Sign(request, credentials, timeProvider.GetUtcNow(), signingName, signingRegion);
         return ValueTask.FromResult(request);
     }
 
-    internal void Sign(SmithyHttpRequest request, AwsCredentials credentials, DateTimeOffset now)
+    /// <summary>
+    /// The signing name and region for one request: the resolved endpoint's SigV4 auth scheme
+    /// properties when it sets them, otherwise the values this signer was constructed with.
+    /// </summary>
+    private (string Service, string Region) SigningScope(SmithyContext context)
+    {
+        if (
+            !context.TryGet(SmithyContextKeys.ResolvedEndpoint, out var endpoint)
+            || endpoint?.AuthSchemes is not { } authSchemes
+        )
+        {
+            return (service, region);
+        }
+        foreach (var authScheme in authSchemes)
+        {
+            if (string.Equals(authScheme.SchemeId, AwsSigV4AuthScheme.Id, StringComparison.Ordinal))
+            {
+                return (
+                    authScheme.GetString("signingName") ?? service,
+                    authScheme.GetString("signingRegion") ?? region
+                );
+            }
+        }
+        return (service, region);
+    }
+
+    internal void Sign(SmithyHttpRequest request, AwsCredentials credentials, DateTimeOffset now) =>
+        Sign(request, credentials, now, service, region);
+
+    private void Sign(
+        SmithyHttpRequest request,
+        AwsCredentials credentials,
+        DateTimeOffset now,
+        string signingName,
+        string signingRegion
+    )
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(credentials);
@@ -105,7 +141,7 @@ public sealed class AwsSigV4Signer(
             payloadHash
         );
 
-        var credentialScope = $"{date}/{region}/{service}/aws4_request";
+        var credentialScope = $"{date}/{signingRegion}/{signingName}/aws4_request";
         var stringToSign = string.Join(
             '\n',
             Algorithm,
@@ -115,7 +151,7 @@ public sealed class AwsSigV4Signer(
         );
         var signature = ToHex(
             HmacSha256(
-                DeriveSigningKey(credentials.SecretAccessKey, date, region, service),
+                DeriveSigningKey(credentials.SecretAccessKey, date, signingRegion, signingName),
                 stringToSign
             )
         );
