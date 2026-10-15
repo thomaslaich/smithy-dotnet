@@ -1,6 +1,9 @@
 ---
 title: gRPC
 description: Generate native gRPC clients and servers from alloy.proto#grpc without protoc or Grpc.Tools.
+head:
+  - tag: title
+    content: Smithy gRPC for C# and .NET | NSmithy
 ---
 
 `alloy.proto#grpc` generates native gRPC clients and ASP.NET Core servers from a

@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>AWS Query and EC2 Query protocols for NSmithy clients.</Description>
+    <PackageTags>$(PackageTags);aws;awsquery;ec2</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
     <ProjectReference Include="../NSmithy.Http/NSmithy.Http.csproj" />

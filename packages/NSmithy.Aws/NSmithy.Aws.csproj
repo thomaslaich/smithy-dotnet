@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>AWS client support for NSmithy: SigV4 signing, presigning, credentials, and regional endpoint resolution.</Description>
+    <PackageTags>$(PackageTags);aws;sigv4;sdk</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Client/NSmithy.Client.csproj" />
     <ProjectReference Include="../NSmithy.Http/NSmithy.Http.csproj" />

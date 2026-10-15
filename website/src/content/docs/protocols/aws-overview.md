@@ -1,6 +1,9 @@
 ---
 title: AWS protocols
 description: Choose an AWS wire protocol and understand the runtime features needed to call AWS services.
+head:
+  - tag: title
+    content: AWS protocols for C# and .NET | NSmithy
 ---
 
 NSmithy supports several wire protocols used by AWS services. AWS JSON, AWS

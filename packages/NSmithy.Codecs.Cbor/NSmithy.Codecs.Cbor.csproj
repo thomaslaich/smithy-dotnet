@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>CBOR serializer and deserializer for Smithy shapes, used by the NSmithy rpcv2Cbor protocol.</Description>
+    <PackageTags>$(PackageTags);cbor;serialization</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Core/NSmithy.Core.csproj" />
     <PackageReference Include="System.Formats.Cbor" />

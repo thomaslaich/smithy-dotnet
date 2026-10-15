@@ -33,6 +33,12 @@ export default defineConfig({
 			description: 'Generate C# models, typed HTTP clients, and ASP.NET Core servers from Smithy models.',
 			// Load the landing-page fonts globally so the docs share the same type.
 			head: [
+				// Link-preview card for every page (Starlight already sets twitter:card).
+				{ tag: 'meta', attrs: { property: 'og:image', content: 'https://thomaslaich.github.io/smithy-dotnet/og.png' } },
+				{ tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
+				{ tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
+				{ tag: 'meta', attrs: { property: 'og:image:alt', content: 'NSmithy: Smithy for .NET' } },
+				{ tag: 'meta', attrs: { name: 'twitter:image', content: 'https://thomaslaich.github.io/smithy-dotnet/og.png' } },
 				{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
 				{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: true } },
 				{

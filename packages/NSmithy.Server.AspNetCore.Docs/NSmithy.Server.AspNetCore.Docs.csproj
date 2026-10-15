@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Serves API reference documentation for NSmithy services in ASP.NET Core with Scalar.</Description>
+    <PackageTags>$(PackageTags);aspnetcore;scalar;api-docs</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Scalar.AspNetCore" />

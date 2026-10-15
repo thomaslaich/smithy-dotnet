@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Smithy rpcv2Json protocol for NSmithy clients and ASP.NET Core servers.</Description>
+    <PackageTags>$(PackageTags);rpc;rpcv2;json</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Codecs.Json/NSmithy.Codecs.Json.csproj" />
     <ProjectReference Include="../NSmithy.Http/NSmithy.Http.csproj" />

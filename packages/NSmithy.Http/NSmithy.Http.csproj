@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>HTTP transport, protocol abstractions, and modeled error handling shared by NSmithy clients and servers.</Description>
+    <PackageTags>$(PackageTags);http</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Core/NSmithy.Core.csproj" />
   </ItemGroup>

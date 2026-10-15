@@ -13,6 +13,7 @@
     Republishing the same CLI needs a fourth version part (e.g. 1.73.0.1).
   -->
   <PropertyGroup>
+    <PackageTags>$(PackageTags);smithy-cli;msbuild</PackageTags>
     <SmithyCliVersion>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)download-smithy-cli.sh')), 'SMITHY_VERSION="([^"]+)"').Groups[1].Value)</SmithyCliVersion>
     <Version>$(SmithyCliVersion)</Version>
     <PackageVersion>$(SmithyCliVersion)</PackageVersion>

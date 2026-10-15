@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <Description>Core types for NSmithy-generated code: shape IDs, documents, traits, validation, and the shape serialization contracts.</Description>
     <NoWarn>$(NoWarn);CA1720</NoWarn>
   </PropertyGroup>
 </Project>

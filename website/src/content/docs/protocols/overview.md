@@ -1,6 +1,9 @@
 ---
 title: Protocols
 description: Choose a Smithy protocol and understand what it changes in generated .NET clients and servers.
+head:
+  - tag: title
+    content: Smithy protocols for C# and .NET | NSmithy
 ---
 
 NSmithy binds modeled operations to the protocols below. For the separation

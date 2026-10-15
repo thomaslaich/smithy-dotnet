@@ -1,6 +1,9 @@
 ---
 title: AWS Query
 description: Form-encoded requests and XML responses using aws.protocols#awsQuery.
+head:
+  - tag: title
+    content: AWS Query protocol for C# and .NET | NSmithy
 ---
 
 `aws.protocols#awsQuery` is an RPC protocol that sends form-encoded requests

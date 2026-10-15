@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://thomaslaich.github.io/smithy-dotnet/sitemap-index.xml

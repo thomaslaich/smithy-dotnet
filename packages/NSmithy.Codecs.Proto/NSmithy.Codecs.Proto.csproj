@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Protobuf serializer and deserializer for Smithy shapes, used by the NSmithy gRPC protocol without Google.Protobuf.</Description>
+    <PackageTags>$(PackageTags);protobuf;serialization</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Core/NSmithy.Core.csproj" />
   </ItemGroup>

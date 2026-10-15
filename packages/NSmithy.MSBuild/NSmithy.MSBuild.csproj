@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <Description>Generates C# from Smithy models during dotnet build by running the Smithy CLI with the NSmithy code generator.</Description>
+    <PackageTags>$(PackageTags);msbuild;build</PackageTags>
     <!--
       Put the task assembly in tasks/{tfm}/ rather than lib/{tfm}/ so consumers
       do not get it as a compile-time reference — it is a build tool, not a library.

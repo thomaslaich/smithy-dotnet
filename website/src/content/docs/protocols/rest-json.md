@@ -1,6 +1,9 @@
 ---
 title: REST JSON
 description: Compare alloy#simpleRestJson and aws.protocols#restJson1, two JSON over HTTP protocols with Smithy REST bindings.
+head:
+  - tag: title
+    content: Smithy REST JSON for C# and .NET | NSmithy
 ---
 
 NSmithy supports two REST JSON protocols. Both generate a typed .NET client and

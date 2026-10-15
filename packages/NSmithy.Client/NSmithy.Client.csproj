@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Runtime for NSmithy-generated C# clients: authentication schemes, retries, interceptors, pagination, and endpoint resolution.</Description>
+    <PackageTags>$(PackageTags);client;httpclient;sdk</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Http/NSmithy.Http.csproj" />
 
