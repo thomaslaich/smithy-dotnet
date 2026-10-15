@@ -11,6 +11,17 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.13.0]
+
+This release adds the rpcv2Json protocol and reshapes parts of the generated API.
+Lists and maps are now plain `IReadOnlyList<T>` and `IReadOnlyDictionary<string, T>`,
+schema classes move to a `Schemas` namespace, and colliding generated names get a
+suffix. Every service in the AWS model catalog now generates code that compiles.
+When upgrading, replace `.Values` on list and map wrappers with the collection itself,
+update references to schema classes, and add the protocol package your server uses
+(`NSmithy.Protocols.RestJson` or `NSmithy.Protocols.Grpc`) next to
+`NSmithy.Server.AspNetCore`.
+
 ### Changed
 
 - **BREAKING: the ASP.NET Core host is protocol-agnostic.**
@@ -22,6 +33,22 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `NSmithy.Protocols.RpcV2Cbor` remains required for CBOR servers. The server
   template and examples now reference their protocol packages explicitly, so
   servers no longer acquire unrelated protocols and codecs through the host.
+- **BREAKING: lists and maps are generated as read-only collections.** Named list
+  and map shapes no longer generate wrapper records with a `Values` property;
+  members are typed `IReadOnlyList<T>` and `IReadOnlyDictionary<string, T>`
+  directly. restJson1 and rpcv2Cbor move back to Preview.
+- **BREAKING: schema classes live in `<Namespace>.Schemas`.** All generated schema
+  classes take the `Schema` suffix and move to their own namespace, so they never
+  clash with a model type. A model type named `Schemas` fails generation.
+- **BREAKING: generated name collisions are resolved.** Members, enum values, and
+  types named like their type or an inherited member (`Equals`, `ToString`, ...)
+  take a `Value` suffix (`EqualsValue`). Union variant classes named `Value`, `Tag`,
+  `Unknown`, `Match`, an inherited member, or their union take a `Case` suffix
+  (`ValueCase`); the factory stays `FromValue`.
+- **BREAKING: error discriminators are a codec option.** The JSON and CBOR codecs
+  write `CodecFactoryOptions.Discriminator` ahead of a top-level structure's
+  members. The public `SerializeError` helpers on `RestProtocol` and
+  `RpcV2CborProtocol` are removed.
 
 ### Added
 
@@ -29,12 +56,18 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `NSmithy.Protocols.RpcV2Json` package, including event streams. It shares a new
   `NSmithy.Protocols.RpcV2` base with `NSmithy.Protocols.RpcV2Cbor`.
 - `JsonCodecFactory` options `honorTimestampFormatTrait` and `bigNumbersAsStrings`.
+- Operation `@examples` render as `<example>` blocks in generated client XML docs.
 
 ### Fixed
 
 - RPC v2 servers reject requests that carry an `X-Amz-Target` or `X-Amzn-Target`
   header, as the specification requires.
 - Generated code compiles for `bigInteger` trait values outside the `long` range.
+- String literals escape U+2028, U+2029, U+0085, and other control characters.
+- The deprecated `smithy.api#Primitive*` prelude shapes are supported.
+- Error structure members with a `@default` fall back to the modeled default when
+  omitted, instead of failing to compile or throwing `ArgumentNullException`.
+- Union examples with no variant no longer crash doc generation.
 
 ## [0.12.0]
 
@@ -530,7 +563,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.10.1...v0.11.0
 [0.10.1]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.10.0...v0.10.1
