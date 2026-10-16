@@ -4,7 +4,8 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>dotnet-nsmithy</ToolCommandName>
     <RollForward>Major</RollForward>
-    <Description>NSmithy CLI — run a project's Smithy CLI and publish Maven JARs produced by 'dotnet pack'.</Description>
+    <Description>The NSmithy .NET tool. Runs a project's Smithy CLI and publishes the Maven JARs produced by 'dotnet pack'.</Description>
+    <PackageTags>$(PackageTags);dotnet-tool;cli;maven</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>

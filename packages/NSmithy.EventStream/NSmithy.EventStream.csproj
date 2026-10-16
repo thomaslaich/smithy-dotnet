@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Smithy event stream message framing and headers used by NSmithy streaming operations.</Description>
+    <PackageTags>$(PackageTags);event-stream;streaming</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="System.IO.Hashing" />
   </ItemGroup>

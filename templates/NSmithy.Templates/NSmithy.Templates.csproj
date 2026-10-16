@@ -4,6 +4,7 @@
     <PackageId>NSmithy.Templates</PackageId>
     <Title>NSmithy Templates</Title>
     <Description>dotnet new templates for scaffolding NSmithy server, contracts, and client projects.</Description>
+    <PackageTags>$(PackageTags);templates;dotnet-new;aspnetcore</PackageTags>
     <TargetFramework>net10.0</TargetFramework>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <NoDefaultExcludes>true</NoDefaultExcludes>

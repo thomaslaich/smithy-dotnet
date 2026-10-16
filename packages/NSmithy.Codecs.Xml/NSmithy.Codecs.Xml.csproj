@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>XML serializer and deserializer for Smithy shapes, used by NSmithy AWS XML protocols.</Description>
+    <PackageTags>$(PackageTags);xml;serialization</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Core/NSmithy.Core.csproj" />
   </ItemGroup>

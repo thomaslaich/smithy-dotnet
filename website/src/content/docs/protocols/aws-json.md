@@ -1,6 +1,9 @@
 ---
 title: AWS JSON
 description: Client support for the aws.protocols#awsJson1_0 and aws.protocols#awsJson1_1 JSON RPC protocols.
+head:
+  - tag: title
+    content: AWS JSON protocol for C# and .NET | NSmithy
 ---
 
 `aws.protocols#awsJson1_0` and `aws.protocols#awsJson1_1` are JSON RPC

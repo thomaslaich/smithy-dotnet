@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>JSON serializer and deserializer for Smithy shapes, used by NSmithy JSON protocols.</Description>
+    <PackageTags>$(PackageTags);json;serialization</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Core/NSmithy.Core.csproj" />
   </ItemGroup>

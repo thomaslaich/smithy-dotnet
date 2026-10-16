@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <PackageTags>$(PackageTags);mcp;model-context-protocol;ai</PackageTags>
     <Description>Model Context Protocol server tools for generated NSmithy services.</Description>
   </PropertyGroup>
   <ItemGroup>

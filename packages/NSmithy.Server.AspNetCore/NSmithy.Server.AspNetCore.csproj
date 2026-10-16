@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Hosts NSmithy-generated services as ASP.NET Core minimal API endpoints.</Description>
+    <PackageTags>$(PackageTags);aspnetcore;minimal-api;server</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../NSmithy.Server/NSmithy.Server.csproj" />

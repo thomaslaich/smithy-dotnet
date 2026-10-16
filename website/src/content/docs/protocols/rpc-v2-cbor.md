@@ -1,6 +1,9 @@
 ---
 title: RPC v2 CBOR
 description: Binary CBOR RPC over HTTP using smithy.protocols#rpcv2Cbor, with unary and streaming client and server support.
+head:
+  - tag: title
+    content: Smithy RPC v2 CBOR for C# and .NET | NSmithy
 ---
 
 `smithy.protocols#rpcv2Cbor` is a compact binary RPC protocol defined by Smithy.

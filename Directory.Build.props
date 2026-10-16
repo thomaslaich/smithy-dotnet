@@ -16,9 +16,11 @@
     <VersionPrefix>0.0.0</VersionPrefix>
     <VersionSuffix>SNAPSHOT</VersionSuffix>
     <Authors>Thomas Laich</Authors>
-    <Description>NSmithy — C# code generation and runtime toolkit for Smithy models.</Description>
+    <Description>NSmithy generates C# clients, ASP.NET Core servers, and model types from Smithy models during dotnet build.</Description>
+    <PackageTags>smithy;nsmithy;codegen;code-generation;idl;api;csharp;dotnet</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
     <PackageProjectUrl>https://thomaslaich.github.io/smithy-dotnet/</PackageProjectUrl>
     <RepositoryUrl>https://github.com/thomaslaich/smithy-dotnet</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -26,5 +28,6 @@
 
   <ItemGroup Condition="'$(IsPackable)' != 'false'">
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="/" />
+    <None Include="$(MSBuildThisFileDirectory)packages/icon.png" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

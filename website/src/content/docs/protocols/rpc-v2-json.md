@@ -1,6 +1,9 @@
 ---
 title: RPC v2 JSON
 description: JSON RPC over HTTP using smithy.protocols#rpcv2Json, with unary and streaming client and server support.
+head:
+  - tag: title
+    content: Smithy RPC v2 JSON for C# and .NET | NSmithy
 ---
 
 `smithy.protocols#rpcv2Json` is the JSON variant of Smithy's RPC v2 protocol.

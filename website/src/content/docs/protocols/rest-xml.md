@@ -1,6 +1,9 @@
 ---
 title: AWS restXml
 description: XML over HTTP client support for aws.protocols#restXml.
+head:
+  - tag: title
+    content: AWS restXml protocol for C# and .NET | NSmithy
 ---
 
 `aws.protocols#restXml` is the XML over HTTP protocol used by AWS services such

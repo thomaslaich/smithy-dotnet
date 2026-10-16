@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Smithy HTTP binding support (routes, headers, query strings, status codes) shared by NSmithy REST protocols.</Description>
+    <PackageTags>$(PackageTags);rest;http</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Core/NSmithy.Core.csproj" />
     <ProjectReference Include="../NSmithy.EventStream/NSmithy.EventStream.csproj" />

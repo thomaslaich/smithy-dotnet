@@ -1,6 +1,9 @@
 ---
 title: AWS EC2 Query
 description: Form-encoded EC2 Query requests and XML responses using aws.protocols#ec2Query.
+head:
+  - tag: title
+    content: AWS EC2 Query protocol for C# and .NET | NSmithy
 ---
 
 `aws.protocols#ec2Query` is the EC2-specific variant of [AWS

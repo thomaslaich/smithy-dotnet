@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>AWS restXml protocol for NSmithy clients.</Description>
+    <PackageTags>$(PackageTags);aws;rest;xml;restxml</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Codecs.Xml/NSmithy.Codecs.Xml.csproj" />
     <ProjectReference Include="../NSmithy.Protocols.Rest/NSmithy.Protocols.Rest.csproj" />

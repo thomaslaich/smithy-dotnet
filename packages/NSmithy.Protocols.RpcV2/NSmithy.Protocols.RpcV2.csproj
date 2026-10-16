@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Routing, errors, and event streams shared by the Smithy RPC v2 protocols in NSmithy.</Description>
+    <PackageTags>$(PackageTags);rpc;rpcv2</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Core/NSmithy.Core.csproj" />
     <ProjectReference Include="../NSmithy.EventStream/NSmithy.EventStream.csproj" />

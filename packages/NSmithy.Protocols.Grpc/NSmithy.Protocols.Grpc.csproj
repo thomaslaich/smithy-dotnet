@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Native gRPC protocol for NSmithy clients and ASP.NET Core servers, without protoc or Grpc.Tools.</Description>
+    <PackageTags>$(PackageTags);grpc;protobuf;http2</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../NSmithy.Codecs.Proto/NSmithy.Codecs.Proto.csproj" />
     <ProjectReference Include="../NSmithy.Http/NSmithy.Http.csproj" />
