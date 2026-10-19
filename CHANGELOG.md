@@ -11,6 +11,31 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- Generated endpoint resolvers for services with `@endpointRuleSet` or
+  `@endpointBdd`. Clients use them by default, and each rule parameter a client
+  supplies becomes a `{Service}ClientConfig` property, such as `Region`.
+- `NSmithy.Aws` implements the `aws.partition`, `aws.parseArn`, and
+  `aws.isVirtualHostableS3Bucket` rule functions and the `AWS::*` built-ins.
+- `AwsSigV4AuthScheme(credentialsProvider)`, which takes the signing name and
+  region from the resolved endpoint.
+- `CSharpIntegration` hooks for endpoint rule functions, built-ins, and auth
+  scheme properties.
+
+### Changed
+
+- **BREAKING:** `SmithyEndpoint.Headers` values are lists, and
+  `SmithyEndpoint.AuthSchemes` holds `SmithyEndpointAuthScheme` records with
+  scheme properties instead of scheme ids. `SmithyEndpoint` also carries the
+  endpoint's other `Properties`.
+
+### Fixed
+
+- SigV4 double-encodes and normalizes the canonical path for services other than
+  S3, as the specification requires. It previously signed every path the S3 way,
+  which differs for paths with reserved characters, such as a Lambda function ARN.
+
 ## [0.13.0]
 
 This release adds the rpcv2Json protocol and reshapes parts of the generated API.

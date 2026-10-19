@@ -48,7 +48,9 @@ NSmithy is not intended to replace the AWS SDK. It does, however, cover a useful
 part of the AWS client stack:
 
 - SigV4 signing and presigning
-- Standard regional endpoint resolution
+- Modeled endpoint rules, including partitions, FIPS, dual-stack, and S3
+  addressing, plus standard regional endpoint resolution for models without
+  rules
 - Environment, shared-profile, SSO, and IMDS credentials
 - Standard retries with jitter, retry quotas, `Retry-After`, and modeled
   `@retryable` errors
@@ -58,7 +60,6 @@ part of the AWS client stack:
 NSmithy does not yet provide:
 
 - SigV4a
-- Modeled service-specific endpoint rule sets
 - The complete credential provider chain, including assume-role, web identity,
   and ECS container credentials
 - AWS service-specific retry, paginator, and utility behavior

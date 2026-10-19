@@ -114,6 +114,7 @@ export default defineConfig({
 						{ label: 'Observability', slug: 'guides/client-configuration/observability' },
 						{ label: 'Pagination', slug: 'guides/client-configuration/pagination' },
 						{ label: 'Transport', slug: 'guides/client-configuration/transport' },
+						{ label: 'Endpoint rules', slug: 'guides/client-configuration/endpoint-rules' },
 						{ label: 'Dependency injection', slug: 'guides/client-configuration/dependency-injection' },
 						{ label: 'Fake clients', slug: 'guides/client-configuration/fake-clients' },
 					],

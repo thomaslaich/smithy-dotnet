@@ -24,6 +24,23 @@ test totals.
 | [`simpleRestJson`](../rest-json/) | <Badge text="Preview" variant="note" /> | Requests 23/23 (100%)<br />Responses 20/20 (100%) | Requests 23/23 (100%)<br />Responses 20/20 (100%) |
 | [`grpc`](../grpc/) | <Badge text="Experimental" variant="danger" /> | End-to-end examples | End-to-end examples |
 
+## Endpoint rules
+
+Generated [endpoint resolvers](/smithy-dotnet/guides/client-configuration/endpoint-rules/)
+run the official `@endpointTests` cases. Each case resolves its parameters
+directly, and each of its operation inputs through the operation's parameter
+bindings.
+
+| Fixtures | Cases | Operation inputs |
+| --- | --- | --- |
+| Rules engine standard library | 95/95 (100%) | 16/16 (100%) |
+| `aws.*` functions | 37/37 (100%) | None |
+| DynamoDB | 548/548 (100%) | 267/267 (100%) |
+| Lambda | 71/71 (100%) | None |
+| S3 | 393/393 (100%) | 215/215 (100%) |
+| S3 Control | 134/134 (100%) | 187/187 (100%) |
+| STS | 69/69 (100%) | 18/18 (100%) |
+
 ## How the numbers are counted
 
 Each fraction is:
@@ -61,6 +78,10 @@ count as official conformance.
   request and response case.
 - AWS JSON 1.1 passes every applicable official client request and response case.
   `AwsJson10Protocol` has runtime support but no separate conformance project.
+- The endpoint rules fixtures are the `smithy-rules-engine-tests` models, the
+  `aws.*` function test models of `smithy-aws-endpoints`, and the published
+  models of five AWS services chosen for their built-ins and auth scheme
+  properties.
 - gRPC is not part of Smithy's HTTP protocol test suite. Its codec and transport
   tests cover complex messages, numeric encodings, collections, oneofs,
   documents, errors, trailers, and all three streaming modes. Grpc.Net

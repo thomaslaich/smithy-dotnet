@@ -174,10 +174,9 @@ and server pattern.
 ## Calling AWS services
 
 restJson1 is useful outside AWS. When calling AWS itself, the request normally
-also needs SigV4 signing, regional endpoint resolution, credentials, retries,
-and service-specific endpoint rules. NSmithy provides early SigV4 support and a
-standard credential chain, but it does not yet cover the complete AWS SDK
-runtime. See [Authentication](/smithy-dotnet/guides/client-configuration/authentication/)
+also needs SigV4 signing, endpoint rules, credentials, and retries. NSmithy
+provides early SigV4 support, generated endpoint resolvers, and a standard
+credential chain, but it does not yet cover the complete AWS SDK runtime. See [Authentication](/smithy-dotnet/guides/client-configuration/authentication/)
 and the [AWS Protocols Overview](/smithy-dotnet/protocols/aws-overview/).
 
 ## Examples
