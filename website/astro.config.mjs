@@ -137,6 +137,7 @@ export default defineConfig({
 						{ label: 'REST JSON', slug: 'protocols/rest-json', badge: { text: 'Preview', variant: 'note' } },
 						{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor', badge: { text: 'Preview', variant: 'note' } },
 						{ label: 'RPC v2 JSON', slug: 'protocols/rpc-v2-json', badge: { text: 'Preview', variant: 'note' } },
+						{ label: 'gRPC', slug: 'protocols/grpc', badge: { text: 'Experimental', variant: 'danger' } },
 						{
 							label: 'AWS protocols',
 							items: [
@@ -147,7 +148,6 @@ export default defineConfig({
 								{ label: 'AWS restXml', slug: 'protocols/rest-xml', badge: { text: 'Preview', variant: 'note' } },
 							],
 						},
-						{ label: 'gRPC', slug: 'protocols/grpc', badge: { text: 'Experimental', variant: 'danger' } },
 						{ label: 'Protocol status', slug: 'protocols/status' },
 					],
 				},
