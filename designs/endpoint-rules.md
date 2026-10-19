@@ -16,7 +16,7 @@ default, so a client for a rules-bearing service needs only its parameters
 var client = new LambdaClient(new LambdaClientConfig
 {
     Region = "eu-central-1",
-    AuthSchemes = { new AwsSigV4AuthScheme("lambda", "eu-central-1", credentials) },
+    AuthSchemes = { new AwsSigV4AuthScheme(credentials) },
 });
 ```
 
@@ -349,12 +349,23 @@ rules compute (S3 picks `sigv4` or `sigv4-s3express` at resolution time) is
 mapped by a `switch` in the generated result. The record's other fields become
 the scheme's `Properties`.
 
+An endpoint result without `authSchemes` lists every scheme the service's
+operations can use, in the client's order, with the properties integrations
+supply for it. The AWS integration supplies the SigV4 signing scope: the
+`@aws.auth#sigv4` trait's `name` as `signingName`, and the `AWS::Region`
+parameter as `signingRegion`. A service no integration supplies properties
+for keeps results without auth schemes.
+
 Auth selection narrows the operation's modeled schemes to those the endpoint
 lists, as for any resolver. The selected scheme's signer reads its entry from
 the resolved endpoint in the `SmithyContext`. `AwsSigV4Signer` takes
 `signingName`, `signingRegion`, `disableDoubleEncoding`, and
-`disableNormalizePath` from it, falling back to the service and region it was
-constructed with for anything the endpoint does not set.
+`disableNormalizePath` from it. A signing name or region the endpoint does not
+set falls back to the one the scheme was constructed with, so
+`AwsSigV4AuthScheme` needs neither for a client with endpoint rules. Without
+the two flags, the signer applies S3's path rules (encode once, no
+normalization) for the `s3`, `s3-outposts`, and `s3express` signing names, and
+SigV4's standard rules otherwise.
 
 ## Code generation structure
 
@@ -372,8 +383,11 @@ binding, and result construction. Two extension points, contributed through
 - **Built-in providers** map a built-in id to a client configuration
   property. The core provides `SDK::Endpoint`; the AWS integration provides
   `AWS::*`.
+- **Auth scheme providers** map endpoint auth scheme names to auth trait ids
+  and supply the properties of results without `authSchemes`.
 
-The AWS integration also owns the auth scheme name mapping. It is registered through the Java service loader like any
+The AWS integration provides the SigV4 and SigV4a mappings and the SigV4 signing
+scope. It is registered through the Java service loader like any
 third-party integration.
 
 A function or built-in no provider handles fails code generation, naming the

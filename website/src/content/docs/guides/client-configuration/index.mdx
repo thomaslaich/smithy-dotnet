@@ -50,7 +50,7 @@ when you want to set client options.
 | --- | --- |
 | `Endpoint` | The service endpoint. Set by the endpoint constructor, and optional for the `HttpClient` constructor. |
 | `Protocol` | The wire protocol. Defaults to the service's primary declared [protocol](/smithy-dotnet/protocols/overview/). |
-| `EndpointResolver` | Per-operation endpoint resolution. Overrides the static `Endpoint` for request routing; can vary the endpoint by operation, add endpoint headers, and narrow auth schemes. |
+| `EndpointResolver` | Per-operation endpoint resolution. Overrides the static `Endpoint` and any modeled [endpoint rules](/smithy-dotnet/guides/client-configuration/endpoint-rules/); can vary the endpoint by operation, add endpoint headers, and narrow auth schemes. |
 | `DisableHostPrefixInjection` | Disables generated `@endpoint(hostPrefix)` / `@hostLabel` expansion. |
 | `UserAgent` | User-Agent used when the modeled request does not set one. Defaults to `NSmithy.Client/{version}`. |
 | `AuthSchemes` | Available auth implementations. Selection uses the operation’s effective modeled schemes and configured implementations; see [Authentication](/smithy-dotnet/guides/client-configuration/authentication/). |
@@ -60,7 +60,9 @@ when you want to set client options.
 | `IdempotencyTokenProvider` | Overrides the idempotency-token generator (default: a random GUID). |
 
 Configuration options are optional; supply an endpoint through the constructor,
-configuration, or the provided `HttpClient`.
+configuration, or the provided `HttpClient`. A service with modeled endpoint
+rules needs no endpoint: its configuration also has a property for each rule
+parameter, such as `Region`. See [Endpoint rules](/smithy-dotnet/guides/client-configuration/endpoint-rules/).
 
 ## Transport and lifetime
 
@@ -83,6 +85,7 @@ variants, endpoint precedence, and ownership of supplied transports.
   <LinkCard title="Observability" href="/smithy-dotnet/guides/client-configuration/observability/" description="OpenTelemetry tracing and metrics." />
   <LinkCard title="Pagination" href="/smithy-dotnet/guides/client-configuration/pagination/" description="Generated IAsyncEnumerable paginators for @paginated operations." />
   <LinkCard title="Transport" href="/smithy-dotnet/guides/client-configuration/transport/" description="Endpoint, HttpClient, and low-level runtime ownership." />
+  <LinkCard title="Endpoint rules" href="/smithy-dotnet/guides/client-configuration/endpoint-rules/" description="Generated resolvers for modeled endpoint rules." />
   <LinkCard title="Dependency injection" href="/smithy-dotnet/guides/client-configuration/dependency-injection/" description="Add{Service}Client, IHttpClientFactory, and typed-client lifetime." />
   <LinkCard title="Fake clients" href="/smithy-dotnet/guides/client-configuration/fake-clients/" description="Canned responses without a network call, for tests and early integration." />
 </CardGrid>
