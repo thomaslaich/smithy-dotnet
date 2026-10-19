@@ -134,6 +134,24 @@ public sealed class EndpointConformanceTests
             actual[key] = ToJson(value);
         }
 
+        // Where the rules set no auth schemes, the resolver lists the modeled ones with the SigV4
+        // signing scope the AWS integration supplies; the cases leave those out.
+        if (expected?["authSchemes"] is null && actual["authSchemes"] is JsonArray defaults)
+        {
+            foreach (var scheme in defaults)
+            {
+                Assert.All(
+                    scheme!.AsObject(),
+                    property =>
+                        Assert.Contains(
+                            property.Key,
+                            (string[])["name", "signingName", "signingRegion"]
+                        )
+                );
+            }
+            actual.Remove("authSchemes");
+        }
+
         Assert.True(
             JsonNode.DeepEquals(expected ?? [], actual),
             $"Expected properties {expected?.ToJsonString() ?? "{}"} but got {actual.ToJsonString()}"

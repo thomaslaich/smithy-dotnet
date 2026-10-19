@@ -7,21 +7,26 @@ import static io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointVal
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointBuiltIn;
+import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointDefaultAuthScheme;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointFunction;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointValueType;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import java.util.List;
 import java.util.Map;
+import software.amazon.smithy.model.shapes.ServiceShape;
+import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 /**
  * Supplies what AWS endpoint rule sets need beyond the standard library: the {@code aws.*}
  * functions of {@code NSmithy.Aws.AwsEndpointFunctions}, the {@code AWS::*} built-ins as client
- * configuration properties, and the auth trait ids of the {@code sigv4} and {@code sigv4a} endpoint
- * auth schemes.
+ * configuration properties, the auth trait ids of the {@code sigv4} and {@code sigv4a} endpoint
+ * auth schemes, and the SigV4 signing scope of endpoints whose rules set none.
  */
 @SmithyInternalApi
 public final class AwsEndpointsIntegration implements CSharpIntegration {
+
+  private static final ShapeId SIGV4 = ShapeId.from("aws.auth#sigv4");
 
   private static final EndpointValueType PARTITION =
       EndpointValueType.record(
@@ -117,5 +122,25 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
   @Override
   public Map<String, String> endpointAuthSchemeIds() {
     return Map.of("sigv4", "aws.auth#sigv4", "sigv4a", "aws.auth#sigv4a");
+  }
+
+  /**
+   * Endpoints whose rules set no auth schemes sign SigV4 with the {@code @sigv4} trait's name and
+   * the configured region.
+   */
+  @Override
+  public List<EndpointDefaultAuthScheme> endpointDefaultAuthSchemes(ServiceShape service) {
+    return service
+        .findTrait(SIGV4)
+        .flatMap(trait -> trait.toNode().asObjectNode())
+        .flatMap(node -> node.getStringMember("name"))
+        .map(
+            name ->
+                List.of(
+                    new EndpointDefaultAuthScheme(
+                        SIGV4.toString(),
+                        Map.of("signingName", name.getValue()),
+                        Map.of("signingRegion", "AWS::Region"))))
+        .orElse(List.of());
   }
 }

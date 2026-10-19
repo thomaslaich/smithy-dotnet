@@ -189,6 +189,60 @@ class EndpointResolverGeneratorTest {
         generated);
   }
 
+  @Test
+  void resultsWithoutAuthSchemesCarryTheIntegrationDefaults() throws Exception {
+    String source =
+        """
+        $version: "2"
+        metadata suppressions = [{ id: "UnstableTrait", namespace: "example.weather" }]
+        namespace example.weather
+
+        use smithy.rules#endpointRuleSet
+
+        @httpBasicAuth
+        @httpBearerAuth
+        @endpointRuleSet({
+            version: "1.0"
+            parameters: {
+                Endpoint: { type: "String", required: false, builtIn: "SDK::Endpoint" }
+            }
+            rules: [
+                {
+                    conditions: []
+                    type: "endpoint"
+                    endpoint: { url: "https://example.com" }
+                }
+            ]
+        })
+        service Weather { version: "2024-01-01" }
+        """;
+    CSharpIntegration integration =
+        new CSharpIntegration() {
+          @Override
+          public List<EndpointDefaultAuthScheme> endpointDefaultAuthSchemes(ServiceShape service) {
+            return List.of(
+                new EndpointDefaultAuthScheme(
+                    "smithy.api#httpBearerAuth",
+                    Map.of("realm", "weather"),
+                    Map.of("endpoint", "SDK::Endpoint")));
+          }
+        };
+
+    String generated = render(source, List.of(integration));
+
+    assertTrue(generated.contains(", AuthSchemes: DefaultAuthSchemes())"), generated);
+    assertTrue(
+        generated.contains("new SmithyEndpointAuthScheme(\"smithy.api#httpBasicAuth\"),"),
+        generated);
+    assertTrue(
+        generated.contains(
+            "new SmithyEndpointAuthScheme(\"smithy.api#httpBearerAuth\", new Dictionary<string,"
+                + " Document> { [\"realm\"] = Document.From(\"weather\"),"
+                + " [\"endpoint\"] = endpoint is null ? Document.Null :"
+                + " Document.From(endpoint) }),"),
+        generated);
+  }
+
   private String render(String source) throws Exception {
     return render(source, List.of());
   }

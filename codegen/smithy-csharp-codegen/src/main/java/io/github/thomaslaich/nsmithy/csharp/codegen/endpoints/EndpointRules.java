@@ -9,13 +9,18 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import software.amazon.smithy.codegen.core.CodegenException;
+import software.amazon.smithy.model.knowledge.ServiceIndex;
+import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.rulesengine.language.syntax.parameters.BuiltIns;
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter;
@@ -99,12 +104,25 @@ public final class EndpointRules {
    */
   public record ConfigParameter(Parameter parameter, String property, String documentation) {}
 
+  /**
+   * A modeled auth scheme as endpoints without rule-set {@code authSchemes} carry it.
+   *
+   * @param schemeId the auth trait shape id.
+   * @param properties properties with a fixed string value.
+   * @param parameterProperties properties whose value is a rule parameter, keyed by property name.
+   */
+  public record DefaultAuthScheme(
+      String schemeId,
+      Map<String, String> properties,
+      Map<String, Parameter> parameterProperties) {}
+
   private final ServiceShape service;
   private final EndpointBddTrait bdd;
   private final Map<String, EndpointFunction> functions;
   private final Map<String, String> authSchemeIds;
   private final List<ConfigParameter> configParameters;
   private final Optional<Parameter> endpointParameter;
+  private final List<DefaultAuthScheme> defaultAuthSchemes;
 
   private EndpointRules(
       ServiceShape service,
@@ -112,13 +130,15 @@ public final class EndpointRules {
       Map<String, EndpointFunction> functions,
       Map<String, String> authSchemeIds,
       List<ConfigParameter> configParameters,
-      Optional<Parameter> endpointParameter) {
+      Optional<Parameter> endpointParameter,
+      List<DefaultAuthScheme> defaultAuthSchemes) {
     this.service = service;
     this.bdd = bdd;
     this.functions = functions;
     this.authSchemeIds = authSchemeIds;
     this.configParameters = configParameters;
     this.endpointParameter = endpointParameter;
+    this.defaultAuthSchemes = defaultAuthSchemes;
   }
 
   /** The service's endpoint rules, or empty when it models none. */
@@ -138,11 +158,15 @@ public final class EndpointRules {
     Map<String, EndpointFunction> functions = new HashMap<>();
     Map<String, EndpointBuiltIn> builtIns = new HashMap<>();
     Map<String, String> authSchemeIds = new HashMap<>();
+    Map<String, EndpointDefaultAuthScheme> authSchemeDefaults = new HashMap<>();
     STANDARD_FUNCTIONS.forEach(function -> functions.put(function.id(), function));
     for (CSharpIntegration integration : context.integrations()) {
       integration.endpointFunctions().forEach(function -> functions.put(function.id(), function));
       integration.endpointBuiltIns().forEach(builtIn -> builtIns.put(builtIn.id(), builtIn));
       authSchemeIds.putAll(integration.endpointAuthSchemeIds());
+      integration
+          .endpointDefaultAuthSchemes(service)
+          .forEach(scheme -> authSchemeDefaults.put(scheme.schemeId(), scheme));
     }
 
     Map<String, ClientContextParamDefinition> clientContext =
@@ -230,7 +254,62 @@ public final class EndpointRules {
             Map.copyOf(functions),
             Map.copyOf(authSchemeIds),
             List.copyOf(configParameters),
-            endpointParameter));
+            endpointParameter,
+            defaultAuthSchemes(context, service, bdd.get(), authSchemeDefaults)));
+  }
+
+  /**
+   * Every auth scheme the service's operations can use, in the order the client lists them, with
+   * the integration-supplied properties. Empty when no integration supplies properties for any of
+   * them, so endpoints without rule-set auth schemes keep the full modeled list.
+   */
+  private static List<DefaultAuthScheme> defaultAuthSchemes(
+      GenerationContext context,
+      ServiceShape service,
+      EndpointBddTrait bdd,
+      Map<String, EndpointDefaultAuthScheme> defaults) {
+    ServiceIndex serviceIndex = ServiceIndex.of(context.model());
+    Set<String> modeled = new LinkedHashSet<>();
+    serviceIndex
+        .getEffectiveAuthSchemes(service)
+        .keySet()
+        .forEach(id -> modeled.add(id.toString()));
+    TopDownIndex.of(context.model()).getContainedOperations(service).stream()
+        .sorted(Comparator.comparing(operation -> operation.getId().toString()))
+        .forEach(
+            operation ->
+                serviceIndex
+                    .getEffectiveAuthSchemes(service, operation)
+                    .keySet()
+                    .forEach(id -> modeled.add(id.toString())));
+    if (modeled.stream().noneMatch(defaults::containsKey)) {
+      return List.of();
+    }
+
+    Map<String, Parameter> byBuiltIn = new HashMap<>();
+    for (Parameter parameter : bdd.getParameters()) {
+      parameter.getBuiltIn().ifPresent(builtIn -> byBuiltIn.put(builtIn, parameter));
+    }
+    List<DefaultAuthScheme> schemes = new ArrayList<>();
+    for (String schemeId : modeled) {
+      EndpointDefaultAuthScheme scheme = defaults.get(schemeId);
+      if (scheme == null) {
+        schemes.add(new DefaultAuthScheme(schemeId, Map.of(), Map.of()));
+        continue;
+      }
+      Map<String, Parameter> parameterProperties = new LinkedHashMap<>();
+      new TreeMap<>(scheme.builtInProperties())
+          .forEach(
+              (property, builtIn) -> {
+                Parameter parameter = byBuiltIn.get(builtIn);
+                if (parameter != null) {
+                  parameterProperties.put(property, parameter);
+                }
+              });
+      schemes.add(
+          new DefaultAuthScheme(schemeId, new TreeMap<>(scheme.properties()), parameterProperties));
+    }
+    return List.copyOf(schemes);
   }
 
   public ServiceShape service() {
@@ -268,6 +347,14 @@ public final class EndpointRules {
   /** Rule parameters supplied by client configuration properties, in declaration order. */
   public List<ConfigParameter> configParameters() {
     return configParameters;
+  }
+
+  /**
+   * The auth schemes an endpoint carries when its rules set no {@code authSchemes}; empty when it
+   * carries none.
+   */
+  public List<DefaultAuthScheme> defaultAuthSchemes() {
+    return defaultAuthSchemes;
   }
 
   /** The parameter bound to {@code SDK::Endpoint}, if the rules declare one. */
