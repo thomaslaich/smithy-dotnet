@@ -8,11 +8,13 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.integrations;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointBuiltIn;
+import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointDefaultAuthScheme;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointFunction;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
 import java.util.Map;
 import software.amazon.smithy.codegen.core.SmithyIntegration;
+import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
 @SmithyUnstableApi
@@ -35,5 +37,13 @@ public interface CSharpIntegration
    */
   default Map<String, String> endpointAuthSchemeIds() {
     return Map.of();
+  }
+
+  /**
+   * Properties of the service's modeled auth schemes on endpoints whose rules set no {@code
+   * authSchemes}.
+   */
+  default List<EndpointDefaultAuthScheme> endpointDefaultAuthSchemes(ServiceShape service) {
+    return List.of();
   }
 }

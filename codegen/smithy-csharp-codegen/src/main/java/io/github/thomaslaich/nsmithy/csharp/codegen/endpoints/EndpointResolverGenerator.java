@@ -68,6 +68,8 @@ public final class EndpointResolverGenerator implements Runnable {
   private final String parametersType;
   private final String resolverType;
   private final String configType;
+  private Map<Identifier, Local> parameterLocals = Map.of();
+  private boolean usesDefaultAuthSchemes;
 
   public EndpointResolverGenerator(
       GenerationContext context, CSharpWriter writer, EndpointRules rules) {
@@ -326,6 +328,7 @@ public final class EndpointResolverGenerator implements Runnable {
           new Local(name, valueType(parameter), parameter.getDefault().isEmpty()));
       declarations.add("var " + name + " = parameters." + propertyName(parameter) + ";");
     }
+    parameterLocals = Map.copyOf(locals);
 
     EndpointExpressionRenderer renderer = new EndpointExpressionRenderer(writer, rules, locals);
     List<String> conditions = new ArrayList<>();
@@ -419,8 +422,89 @@ public final class EndpointResolverGenerator implements Runnable {
     writer.write("_ => throw $T.NoMatch(),", RuntimeTypes.SMITHY_ENDPOINT_RESOLUTION_EXCEPTION);
     writer.dedent();
     writer.write("};");
+    if (usesDefaultAuthSchemes) {
+      writer.write("");
+      writeDefaultAuthSchemes();
+    }
     writer.dedent();
     writer.write("}");
+  }
+
+  /**
+   * The modeled auth schemes, with integration-supplied properties, for endpoints whose rules set
+   * no {@code authSchemes}.
+   */
+  private void writeDefaultAuthSchemes() {
+    writer.write(
+        "$T<$T> DefaultAuthSchemes() => new $T[]",
+        RuntimeTypes.I_READ_ONLY_LIST,
+        RuntimeTypes.SMITHY_ENDPOINT_AUTH_SCHEME,
+        RuntimeTypes.SMITHY_ENDPOINT_AUTH_SCHEME);
+    writer.write("{");
+    writer.indent();
+    String documentType = writer.typeName(RuntimeTypes.DOCUMENT);
+    for (EndpointRules.DefaultAuthScheme scheme : rules.defaultAuthSchemes()) {
+      List<String> entries = new ArrayList<>();
+      scheme
+          .properties()
+          .forEach(
+              (name, value) ->
+                  entries.add(
+                      "["
+                          + CSharpNaming.formatString(name)
+                          + "] = "
+                          + documentType
+                          + ".From("
+                          + CSharpNaming.formatString(value)
+                          + ")"));
+      scheme
+          .parameterProperties()
+          .forEach(
+              (name, parameter) -> {
+                Local local = parameterLocals.get(parameter.getName());
+                if (local.type().kind() != EndpointValueType.Kind.STRING
+                    && local.type().kind() != EndpointValueType.Kind.BOOLEAN) {
+                  throw new CodegenException(
+                      "Auth scheme property "
+                          + name
+                          + " of "
+                          + scheme.schemeId()
+                          + " needs a string or boolean parameter, not "
+                          + parameter.getNameString());
+                }
+                String value =
+                    local.nullable()
+                        ? local.name()
+                            + " is null ? "
+                            + documentType
+                            + ".Null : "
+                            + documentType
+                            + ".From("
+                            + local.name()
+                            + (local.type().kind() == EndpointValueType.Kind.BOOLEAN
+                                ? ".Value"
+                                : "")
+                            + ")"
+                        : documentType + ".From(" + local.name() + ")";
+                entries.add("[" + CSharpNaming.formatString(name) + "] = " + value);
+              });
+      if (entries.isEmpty()) {
+        writer.write(
+            "new $T($L),",
+            RuntimeTypes.SMITHY_ENDPOINT_AUTH_SCHEME,
+            CSharpNaming.formatString(scheme.schemeId()));
+      } else {
+        writer.write(
+            "new $T($L, new $T<string, $T> { $L }),",
+            RuntimeTypes.SMITHY_ENDPOINT_AUTH_SCHEME,
+            CSharpNaming.formatString(scheme.schemeId()),
+            RuntimeTypes.DICTIONARY,
+            RuntimeTypes.DOCUMENT,
+            String.join(", ", entries));
+      }
+    }
+    writer.dedent();
+    writer.write("};");
   }
 
   // ---------------- endpoint results ----------------
@@ -440,6 +524,9 @@ public final class EndpointResolverGenerator implements Runnable {
     Literal authSchemes = properties.remove(Identifier.of("authSchemes"));
     if (authSchemes != null) {
       sb.append(", AuthSchemes: ").append(authSchemes(renderer, authSchemes));
+    } else if (!rules.defaultAuthSchemes().isEmpty()) {
+      usesDefaultAuthSchemes = true;
+      sb.append(", AuthSchemes: DefaultAuthSchemes()");
     }
     if (!properties.isEmpty()) {
       sb.append(", Properties: ").append(documentMap(renderer, properties));

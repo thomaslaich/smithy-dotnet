@@ -7,7 +7,8 @@ namespace Endpoints.Conformance;
 
 /// <summary>
 /// Sends requests through a generated AWS client: the endpoint comes from the modeled rules and
-/// the configured region, and SigV4 signs with the scope the endpoint names, if any.
+/// the configured region, and SigV4 signs with the scope the endpoint names, or with the
+/// service's signing name and the configured region where the rules name none.
 /// </summary>
 public sealed class AwsClientEndpointTests
 {
@@ -65,11 +66,8 @@ public sealed class AwsClientEndpointTests
         AWSSecurityTokenServiceV20110615ClientConfig config
     )
     {
-        // Endpoints without auth scheme properties sign with the scheme's own region.
         config.AuthSchemes.Add(
             new AwsSigV4AuthScheme(
-                "sts",
-                config.Region!,
                 new StaticAwsCredentialsProvider(new AwsCredentials("AKID", "SECRET"))
             )
         );
