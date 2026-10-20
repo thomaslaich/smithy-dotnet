@@ -15,9 +15,9 @@ between a contract and its wire representation, see
 | Protocol | Generated APIs | Choose it for |
 | --- | --- | --- |
 | [`restJson1`](../rest-json/) | Client and server | General REST APIs, broad tooling support, streaming, and AWS-compatible behavior |
+| [`simpleRestJson`](../rest-json/) | Client and server | Alloy and Smithy4s interoperability |
 | [`rpcv2Cbor`](../rpc-v2-cbor/) | Client and server | Compact binary RPC with CBOR and event streaming |
 | [`rpcv2Json`](../rpc-v2-json/) | Client and server | Smithy RPC with JSON bodies and event streaming |
-| [`simpleRestJson`](../rest-json/) | Client and server | Alloy and Smithy4s interoperability |
 | [`grpc`](../grpc/) | Client and server | Standard gRPC and protobuf interoperability |
 | [`awsJson1_1`](../aws-json/) | Client | Existing AWS JSON RPC services |
 | [`awsJson1_0`](../aws-json/) | Client | Existing AWS JSON 1.0 services |
