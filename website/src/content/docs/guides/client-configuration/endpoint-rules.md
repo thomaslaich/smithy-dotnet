@@ -19,12 +19,27 @@ using var lambda = new LambdaClient(new LambdaClientConfig
 });
 ```
 
-The rules are compiled into C# at build time. Nothing is parsed or interpreted
-at runtime.
+`Region` and `UseFips` are generated from the parameters Lambda's endpoint
+rules declare. Another service's configuration has the properties its own rules
+declare.
+
+`LambdaEndpointResolver` implements `IEndpointResolver`. The client creates it
+from its configuration unless `EndpointResolver` is set. The rules are compiled
+into C# at build time. Nothing is parsed or interpreted at runtime.
 
 ## Parameters
 
-Rule parameters that client configuration supplies become properties of
+The rules declare their parameters. Lambda's include:
+
+```json
+"parameters": {
+  "Region": { "type": "string", "builtIn": "AWS::Region" },
+  "UseFIPS": { "type": "boolean", "builtIn": "AWS::UseFIPS", "required": true, "default": false },
+  "Endpoint": { "type": "string", "builtIn": "SDK::Endpoint" }
+}
+```
+
+Parameters that client configuration supplies become properties of
 `{Service}ClientConfig`:
 
 | Parameter source | Configuration property |
@@ -41,7 +56,7 @@ come from each operation and its input.
 
 | Configuration | Resolution |
 | --- | --- |
-| `EndpointResolver` set | The configured resolver. The rules are not used. |
+| `EndpointResolver` set | The configured resolver. The generated resolver is not used. |
 | `Endpoint` set | The rules, with `Endpoint` as the custom endpoint. |
 | Neither | The rules, from the configured parameters. |
 
