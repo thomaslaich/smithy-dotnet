@@ -94,6 +94,30 @@ preference to the `HttpClient`, including downgrade policy. The
 `configureClient` callback runs afterwards and can override that setup. Native
 gRPC defaults to exact HTTP/2.
 
+## Resolving configuration dependencies
+
+Use the service-provider overload when configuration needs registered dependencies:
+
+```csharp
+services.AddScoped<CompanyEndpointResolver>();
+services.AddWeatherClient(
+    (provider, config) =>
+    {
+        config.EndpointResolver = provider.GetRequiredService<CompanyEndpointResolver>();
+    },
+    configureClient: client => client.Timeout = TimeSpan.FromSeconds(10));
+```
+
+This callback runs once per typed-client creation, with a fresh config and the
+service provider resolving that client. Scoped dependencies come from that scope,
+not from the separate scope that `IHttpClientFactory` uses for pooled handlers.
+A custom endpoint resolver can supply the URL without `BaseAddress` or `Endpoint`.
+
+With this overload, protocol HTTP defaults are applied during typed-client creation,
+after the factory's HTTP-client callbacks. Use the `configureClient` argument shown
+above to override those defaults. Handler registrations still compose normally.
+The existing overload without a service provider keeps its registration-time config.
+
 ## Manual registration
 
 The generated helper is preferred. It configures the typed client and applies

@@ -68,6 +68,24 @@ public sealed class GeneratedEndpointRulesTests
         Assert.Equal("FIPS and custom endpoint are not supported", error.Message);
     }
 
+    [Theory]
+    [InlineData(null, "http://localhost:9000")]
+    [InlineData("https://explicit.example.com", "https://explicit.example.com")]
+    public async Task ResolverUsesConfiguredEndpointUnlessExplicitlyOverridden(
+        string? explicitEndpoint,
+        string expected
+    )
+    {
+        var resolver = new StorageEndpointResolver(
+            new StorageClientConfig { Endpoint = new Uri("http://localhost:9000") },
+            explicitEndpoint is null ? null : new Uri(explicitEndpoint)
+        );
+
+        var endpoint = await resolver.ResolveEndpointAsync(Parameters("ListBuckets", null));
+
+        Assert.Equal(new Uri(expected), endpoint.Uri);
+    }
+
     [Fact]
     public async Task ContextParamsBindFromTheOperationInput()
     {
@@ -86,6 +104,25 @@ public sealed class GeneratedEndpointRulesTests
             handler.Request!.RequestUri
         );
         Assert.Equal(["holiday"], handler.Request.Headers.GetValues("x-bucket"));
+    }
+
+    [Fact]
+    public async Task CustomResolverReplacesRulesWithoutRequiringRuleParameters()
+    {
+        var handler = new RecordingHandler();
+        using var client = new StorageClient(
+            new HttpClient(handler),
+            new StorageClientConfig
+            {
+                Endpoint = new Uri("https://ignored.example.test"),
+                UseFips = true,
+                EndpointResolver = new StaticEndpointResolver(
+                    new Uri("https://custom.example.test")
+                ),
+            }
+        );
+        await client.ListBucketsAsync(new ListBucketsInput());
+        Assert.Equal(new Uri("https://custom.example.test/"), handler.Request!.RequestUri);
     }
 
     [Fact]

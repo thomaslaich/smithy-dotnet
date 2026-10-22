@@ -108,6 +108,10 @@ public sealed record LambdaEndpointParameters
 A deprecated parameter's documentation carries the modeled deprecation
 message.
 
+Before evaluating the BDD, the resolver applies parameter defaults and rejects
+missing required values with `SmithyEndpointResolutionException`. A required
+boolean may be `false`, and a required list may be empty; only null is missing.
+
 ### Resolver
 
 `{Service}EndpointResolver` implements `IEndpointResolver` and exposes a
@@ -254,6 +258,10 @@ private LambdaEndpointParameters Bind(SmithyEndpointParameters call) =>
     };
 ```
 
+Binding expressions are built from least to most specific. A null member value
+falls back to operation context and then client configuration/defaults. Static
+bindings override the entire expression and do not require an input object.
+
 An operation with no static, context, or operation-context parameters
 resolves the client-level parameters alone, so all such operations share one
 endpoint, resolved on first use and then reused. When no operation in the service binds per-operation
@@ -261,6 +269,27 @@ parameters, the resolver resolves once at construction and exposes the result
 as `StaticEndpoint`, so the client runtime keeps its static-endpoint fast
 path. A configuration the rules reject (FIPS with a custom endpoint, say) then
 fails client construction instead of the first call.
+
+### Endpoint-dependent request paths
+
+`SmithyEndpoint.RequestPathAdapter` is an optional delegate attached to an endpoint
+result. It adapts the serialized relative path, including its query string, before
+the runtime joins it to the resolved endpoint. It runs once per execution, before
+signing and retry cloning, on both the static and dynamic execution paths. A null
+adapter preserves the modeled path. Adapters must be thread-safe.
+
+The AWS integration attaches a static adapter to every generated S3 endpoint,
+including results returned by the typed `Resolve` method. For operations whose HTTP
+path starts with `/{Bucket}`, it removes that serialized label: S3 rule endpoints
+already contain the bucket in either the authority or base path. Keys and query
+strings keep their wire encoding. Operations without a bucket label remain unchanged.
+A custom resolver returning an ordinary endpoint retains the modeled path.
+
+A resolver decorator only needs to forward `ResolveEndpointAsync`; there is no path
+method on the resolver interface. Use a record copy (`endpoint with { ... }`) to
+preserve path adaptation, headers, auth schemes, and properties. Host-prefix injection
+also preserves this metadata. Changing the destination may require updating its auth
+properties; copying the old signing region is not always appropriate.
 
 ### Client configuration
 
@@ -286,7 +315,8 @@ provider recognizes fails code generation with a message naming it.
 
 A client for a rules-bearing service resolves endpoints with its generated
 resolver unless `Config.EndpointResolver` is set, which replaces it. It
-needs no endpoint at construction, so its config constructor is public:
+needs no explicit endpoint at construction. Every generated client has a public
+configuration-only constructor, including clients for services without rules:
 
 ```csharp
 new LambdaClient(config);                 // endpoint from the rules
@@ -297,8 +327,33 @@ new LambdaClient(httpClient, config);     // likewise for HttpClient.BaseAddress
 When the rule set declares no `SDK::Endpoint` parameter, a configured
 endpoint bypasses the rules and routes every operation to that endpoint.
 
-Clients for services without endpoint rules require an endpoint and resolve
-with `StaticEndpointResolver`.
+Clients for services without endpoint rules accept either a configured endpoint
+(resolved with `StaticEndpointResolver`) or a custom resolver. A custom resolver is
+not a fallback chain: its errors propagate without trying another endpoint source.
+
+### Custom resolver inputs and lifecycle
+
+`ResolveEndpointAsync(SmithyEndpointParameters, CancellationToken)` receives service
+and operation IDs, the configured URL (if any), and the actual operation input.
+Generated clients also populate `Operation` with `IOperationSchema`, exposing the
+operation's traits and input/output schemas. It is nullable for manually assembled
+runtime bindings. Schema visitors recover generic types without reflection.
+
+Dependencies such as a service directory or deployment configuration belong in the
+resolver's constructor. Use the service-provider-aware `Add{Service}Client` overload
+to resolve them from the calling DI scope. Its callback creates a fresh configuration
+for each typed client, not in the separate HTTP handler scope.
+
+The parameter object is not a normalized bag of the generated rules' parameters.
+There is also no arbitrary per-call options bag in this release; routing information
+must come from the modeled input or injected dependencies. Adding such options later
+requires a coherent API across generated methods, runtime, and interceptors.
+
+Resolution runs before serialization and interceptor lifecycle hooks. Retries reuse
+the result, including its path adaptation and signing properties. The cancellation
+token includes the configured operation deadline. `StaticEndpoint` can bypass
+resolution entirely; expose it only when the complete endpoint result is invariant.
+Shared resolvers and their dependencies must support concurrent calls.
 
 ## Runtime
 
@@ -311,7 +366,10 @@ public sealed record SmithyEndpoint(
     Uri Uri,
     IReadOnlyDictionary<string, IReadOnlyList<string>>? Headers = null,
     IReadOnlyList<SmithyEndpointAuthScheme>? AuthSchemes = null,
-    IReadOnlyDictionary<string, Document>? Properties = null);
+    IReadOnlyDictionary<string, Document>? Properties = null)
+{
+    public Func<ShapeId, string, string>? RequestPathAdapter { get; init; }
+}
 
 public sealed record SmithyEndpointAuthScheme(
     string SchemeId,
@@ -374,7 +432,7 @@ Endpoint generation lives in `smithy-csharp-codegen`, which depends on
 codegen repository used by `NSmithy.MSBuild`.
 
 The generator core handles the BDD walk, the standard library, parameter
-binding, and result construction. Two extension points, contributed through
+binding, and result construction. Extension points contributed through
 `CSharpIntegration`, keep AWS knowledge out of it:
 
 - **Function providers** map a rules function id to its runtime call and
@@ -385,6 +443,9 @@ binding, and result construction. Two extension points, contributed through
   `AWS::*`.
 - **Auth scheme providers** map endpoint auth scheme names to auth trait ids
   and supply the properties of results without `authSchemes`.
+- **Request-path providers** emit a static adapter and return its delegate expression
+  through `writeEndpointRequestPathAdapter`. The generator attaches it to each endpoint
+  result. Only one integration may supply an adapter for a service.
 
 The AWS integration provides the SigV4 and SigV4a mappings and the SigV4 signing
 scope. It is registered through the Java service loader like any
@@ -410,7 +471,7 @@ service and the id.
   `software.amazon.api.models` (S3, S3 Control, STS, Lambda, DynamoDB) for the
   AWS built-ins and auth scheme properties. A case's `params` go through
   `Resolve`; each of its `operationInputs` binds the operation input through
-  the resolver's `ResolveEndpointAsync`. Requests through a generated STS
-  client check that the resolved endpoint reaches the HTTP request and the
+  the resolver's `ResolveEndpointAsync`. Requests through generated STS and S3
+  clients check endpoint paths, custom endpoints, query strings, retries, and the
   SigV4 scope. The pass rate feeds the docs' protocol status page like the
   other conformance projects.

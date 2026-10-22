@@ -35,7 +35,7 @@ public sealed class SmithyHttpClientEnvironment : IDisposable
     /// <param name="modeledEndpointResolver">
     /// Creates the service's generated endpoint resolver from the configured endpoint (null when
     /// none is set). Used unless <c>Config.EndpointResolver</c> is set; a service without endpoint
-    /// rules passes null and then requires an endpoint.
+    /// rules passes null and requires either a configured endpoint or a custom resolver.
     /// </param>
     public static SmithyHttpClientEnvironment Create(
         ServiceSchema service,
@@ -57,7 +57,7 @@ public sealed class SmithyHttpClientEnvironment : IDisposable
         if (endpoint is null && endpointResolver is null)
         {
             throw new ArgumentException(
-                "Set Config.Endpoint or httpClient.BaseAddress.",
+                "Set Config.Endpoint, httpClient.BaseAddress, or Config.EndpointResolver, or provide modeled endpoint rules.",
                 nameof(config)
             );
         }

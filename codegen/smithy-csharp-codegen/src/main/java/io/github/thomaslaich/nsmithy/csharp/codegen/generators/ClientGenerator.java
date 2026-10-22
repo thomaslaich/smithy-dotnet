@@ -392,10 +392,6 @@ public final class ClientGenerator implements Runnable {
       writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
       writer.putContext("serviceSchema", serviceSchema);
       writer.putContext("protocol", primaryProtocol);
-      // A service with endpoint rules resolves its endpoint from them, so its clients need no
-      // endpoint at construction.
-      writer.putContext(
-          "configConstructorAccess", endpointRules.isPresent() ? "public" : "private");
       writer.putContext(
           "ownedInitialization",
           writer.consumer(
@@ -422,7 +418,8 @@ public final class ClientGenerator implements Runnable {
           writer.consumer(
               w -> writeConstructorBindings(needsRuntime, needsIdempotency, operations)));
 
-      // The explicit endpoint wins over config.Endpoint. The private constructor receives a copy.
+      // The explicit endpoint wins over config.Endpoint. The configuration constructor receives a
+      // copy.
       writer.write(
           """
           public ${client:L}(${uri:T} endpoint, ${client:L}Config? config = null)
@@ -430,7 +427,7 @@ public final class ClientGenerator implements Runnable {
           {
           }
 
-          ${configConstructorAccess:L} ${client:L}(${client:L}Config config)
+          public ${client:L}(${client:L}Config config)
           {
               ${argumentNullException:T}.ThrowIfNull(config);
               ${ownedInitialization:C|}
@@ -716,7 +713,7 @@ public final class ClientGenerator implements Runnable {
             this.${operation:L}Binding = new ${binding:T}<${inputType:L}, ${outputType:L}>(
                 ${serviceSchema:L}.Id, ${operationSchema:L}.Id,
                 serviceProtocol.ForClientOperation(${operationSchema:L}),
-                ${authSchemes:L}, ${hostPrefix:L});\
+                ${authSchemes:L}, ${hostPrefix:L}, ${operationSchema:L});\
             """);
       }
     } finally {

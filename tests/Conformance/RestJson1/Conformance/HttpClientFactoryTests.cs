@@ -1,5 +1,6 @@
 using Aws.Protocoltests.Restjson;
 using Microsoft.Extensions.DependencyInjection;
+using NSmithy.Client;
 using NSmithy.Protocols.RestJson;
 
 namespace RestJson1.Conformance;
@@ -144,5 +145,79 @@ public sealed class HttpClientFactoryTests
 
         Assert.NotNull(handler.Captured);
         Assert.StartsWith("https://example.test/", handler.Captured!.RequestUri.ToString());
+    }
+
+    [Fact]
+    public void ConfigurationOnlyConstructionSupportsRulelessServices()
+    {
+        using var client = new RestJsonClient(
+            new RestJsonClientConfig
+            {
+                EndpointResolver = new StaticEndpointResolver(new Uri("https://example.test")),
+            }
+        );
+        var error = Assert.Throws<ArgumentException>(() =>
+            new RestJsonClient(new RestJsonClientConfig())
+        );
+        Assert.Contains("EndpointResolver", error.Message);
+    }
+
+    [Fact]
+    public async Task ResolverDependenciesAndConfigurationBelongToTheResolvingScope()
+    {
+        var handler = new RecordingHttpMessageHandler(_ => RecordingHttpMessageHandler.EmptyOk());
+        var services = new ServiceCollection();
+        var configurations = new List<RestJsonClientConfig>();
+        services.AddScoped<ScopedResolver>();
+        services
+            .AddRestJsonClient(
+                (provider, config) =>
+                {
+                    config.EndpointResolver = provider.GetRequiredService<ScopedResolver>();
+                    configurations.Add(config);
+                },
+                http => http.DefaultRequestHeaders.Add("x-client", "configured")
+            )
+            .ConfigurePrimaryHttpMessageHandler(() => handler);
+        using var provider = services.BuildServiceProvider(
+            new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true }
+        );
+        Assert.Empty(configurations);
+        for (var i = 0; i < 2; i++)
+        {
+            using var scope = provider.CreateScope();
+            var resolver = scope.ServiceProvider.GetRequiredService<ScopedResolver>();
+            var client = scope.ServiceProvider.GetRequiredService<IRestJsonClient>();
+            var input = new NoInputAndOutputInput();
+            await client.NoInputAndOutputAsync(input);
+            Assert.Equal(
+                resolver.Endpoint,
+                handler.Captured!.RequestUri.GetLeftPart(UriPartial.Authority)
+            );
+            Assert.Equal(["configured"], handler.Captured.Headers["x-client"]);
+            Assert.NotNull(resolver.Parameters);
+            Assert.Same(input, resolver.Parameters.Input);
+            Assert.NotNull(resolver.Parameters.Operation);
+            Assert.Equal(resolver.Parameters.OperationId, resolver.Parameters.Operation.Id);
+            Assert.Same(resolver, configurations[i].EndpointResolver);
+        }
+        Assert.Equal(2, configurations.Count);
+        Assert.NotSame(configurations[0], configurations[1]);
+        Assert.NotSame(configurations[0].EndpointResolver, configurations[1].EndpointResolver);
+    }
+
+    private sealed class ScopedResolver : IEndpointResolver
+    {
+        public string Endpoint { get; } = $"https://service-{Guid.NewGuid():N}.example.test";
+        public SmithyEndpointParameters? Parameters { get; private set; }
+
+        public ValueTask<SmithyEndpoint> ResolveEndpointAsync(
+            SmithyEndpointParameters parameters,
+            CancellationToken cancellationToken = default
+        )
+        {
+            Parameters = parameters;
+            return ValueTask.FromResult(new SmithyEndpoint(new Uri(Endpoint)));
+        }
     }
 }

@@ -21,7 +21,15 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - `AwsSigV4AuthScheme(credentialsProvider)`, which takes the signing name and
   region from the resolved endpoint.
 - `CSharpIntegration` hooks for endpoint rule functions, built-ins, and auth
-  scheme properties.
+  scheme properties, plus endpoint-dependent request paths. Generated S3 resolvers
+  remove the modeled bucket path label because the endpoint rules already place it
+  in the host or base path.
+
+- Custom endpoint resolvers receive operation-schema metadata alongside operation
+  identifiers and input. Configuration-only construction also works without modeled
+  rules, and generated DI registration can resolve dependencies from the caller's scope.
+- Endpoint results carry optional request-path adaptation. Resolver decorators and
+  record copies preserve S3 addressing without an extra resolver method.
 
 ### Changed
 
