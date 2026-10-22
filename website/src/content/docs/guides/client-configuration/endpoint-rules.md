@@ -61,10 +61,9 @@ come from each operation and its input.
 | `Endpoint` set and rules do not model `SDK::Endpoint` | The configured URL, bypassing rules. |
 | Neither | The rules, from the configured parameters. |
 
-`Endpoint` falls back to `HttpClient.BaseAddress` when unset. A configured URL goes
-through rules that model `SDK::Endpoint`. For S3, for example,
-they still apply path-style addressing and reject a custom endpoint combined
-with FIPS.
+`Endpoint` falls back to `HttpClient.BaseAddress`. Rules that model
+`SDK::Endpoint` still apply to a configured URL. S3's, for example, apply
+path-style addressing and reject a custom endpoint combined with FIPS.
 
 ## Results
 
@@ -80,107 +79,141 @@ depend only on client configuration are resolved once, when the client is
 constructed. Rules that also bind operation input are resolved on each call,
 before the request is serialized.
 
-## Custom resolvers
+## Rules for your own services
 
-A custom resolver works for services with or without modeled endpoint rules. It
-replaces generated resolution and does not require a configured URL:
+Endpoint rules are not specific to AWS. This service picks its host from an
+`Environment` client context parameter and accepts an explicit URL through
+`SDK::Endpoint`:
 
-```csharp
-using var client = new InventoryClient(new InventoryClientConfig
-{
-    EndpointResolver = new DirectoryResolver(directory),
-});
+```smithy
+@clientContextParams(Environment: { type: "string" })
+@endpointRuleSet({
+    version: "1.0"
+    parameters: {
+        Environment: { type: "String", required: true, default: "test" }
+        Endpoint: { type: "String", builtIn: "SDK::Endpoint" }
+    }
+    rules: [
+        {
+            conditions: [{ fn: "isSet", argv: [{ ref: "Endpoint" }] }]
+            type: "endpoint"
+            endpoint: { url: { ref: "Endpoint" } }
+        }
+        {
+            conditions: [{ fn: "stringEquals", argv: [{ ref: "Environment" }, "prod"] }]
+            type: "endpoint"
+            endpoint: { url: "https://inventory.example.com" }
+        }
+        {
+            conditions: [{ fn: "stringEquals", argv: [{ ref: "Environment" }, "test"] }]
+            type: "endpoint"
+            endpoint: { url: "https://inventory.test.example.com" }
+        }
+        { conditions: [], type: "error", error: "Environment must be prod or test" }
+    ]
+})
+service Inventory { ... }
 ```
 
-The resolver receives:
-
-| Input | Use |
-| --- | --- |
-| `ServiceId`, `OperationId` | Select a service or operation-specific destination. |
-| `ConfiguredEndpoint` | Honor an optional configured override, if your resolver supports it. |
-| `Input` | Read routing information from the actual generated request object. |
-| `Operation` | Inspect modeled traits and input/output schemas; supplied by generated clients. |
-| `CancellationToken` | Cancel discovery, including when the operation deadline expires. |
-
-`Operation` can be null for manually constructed runtime bindings. For known input
-types, cast `Input`; generic integrations can use schema visitors without reflection.
-These inputs are not the generated rules' bound parameter bag. There is no arbitrary
-per-call routing context API yet; use modeled input or injected dependencies.
-
-Resolution happens before interceptor lifecycle hooks and serialization. It runs once
-per invocation; retries reuse the endpoint. Shared resolvers must support concurrent
-calls. A resolver can expose `StaticEndpoint` to skip per-call resolution only when
-its complete result is constant.
-
-### Example: an internal inventory service
-
-This example uses `alloy#simpleRestJson` with no AWS endpoint functions or built-ins.
-Its rules accept an explicit `SDK::Endpoint` override; otherwise `Environment` selects
-`https://inventory.prod.example.test` or `https://inventory.test.example.test`.
-Unsupported environments produce an error. The complete model and executable examples
-are in `tests/NSmithy.Tests/model/inventory-endpoints.smithy` and
-`tests/NSmithy.Tests/Client/InventoryEndpointExampleTests.cs`.
-
 ```csharp
-// Generated rules choose the production URL.
-using var production = new InventoryClient(new InventoryClientConfig
-{
-    Environment = "prod",
-});
-
-// The same rules accept a local URL.
+using var production = new InventoryClient(new InventoryClientConfig { Environment = "prod" });
 using var local = new InventoryClient(new InventoryClientConfig
 {
     Endpoint = new Uri("http://localhost:5000"),
 });
 ```
 
-An application can instead supply a directory shared across service clients:
+Rules that need functions or built-ins beyond the standard library need a
+`CSharpIntegration` that maps them to C#, as `NSmithy.Aws` does for AWS.
+
+## Custom resolvers
+
+Set `EndpointResolver` to replace generated resolution. This works whether or
+not the service models endpoint rules, and the client then needs no `Endpoint`.
+A resolver implements:
 
 ```csharp
-public sealed class DirectoryResolver(ServiceDirectory directory) : IEndpointResolver
+public interface IEndpointResolver
 {
-    public ValueTask<SmithyEndpoint> ResolveEndpointAsync(
+    ValueTask<SmithyEndpoint> ResolveEndpointAsync(
         SmithyEndpointParameters parameters,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        return ValueTask.FromResult(
-            new SmithyEndpoint(directory.GetEndpoint(parameters.ServiceId)));
-    }
+        CancellationToken cancellationToken = default);
+
+    SmithyEndpoint? StaticEndpoint => null;
 }
 ```
 
-Here `ServiceDirectory` is an application-owned service mapping Smithy service IDs to
-URLs. An implementation that performs network I/O can await it and pass cancellation.
-It owns caching and refresh policy. To use DI:
+`SmithyEndpointParameters` describes one call:
+
+| Member | Content |
+| --- | --- |
+| `ServiceId`, `OperationId` | The Smithy shape ids of the service and operation |
+| `ConfiguredEndpoint` | The client's `Endpoint`, if set |
+| `Input` | The operation input. Cast it to the generated input type to route on its members. |
+| `Operation` | The operation's schema, with its traits and input and output schemas |
+
+Anything else the resolver needs, such as a service registry, comes in through
+its constructor.
+
+The client resolves the endpoint once per call, before serializing the request
+and before interceptors run. Retries reuse it. One resolver serves concurrent
+calls, so it must be thread-safe. A resolver whose result never changes returns
+it from `StaticEndpoint`, and the client then skips per-call resolution.
+
+This resolver looks services up in a registry:
 
 ```csharp
-services.AddSingleton(directory);
-services.AddSingleton<DirectoryResolver>();
+public sealed class RegistryResolver(ServiceRegistry registry) : IEndpointResolver
+{
+    public async ValueTask<SmithyEndpoint> ResolveEndpointAsync(
+        SmithyEndpointParameters parameters,
+        CancellationToken cancellationToken = default) =>
+        new SmithyEndpoint(await registry.LookupAsync(parameters.ServiceId, cancellationToken));
+}
+```
+
+To take the resolver from dependency injection, use the
+[registration overload](/smithy-dotnet/guides/client-configuration/dependency-injection/#resolving-configuration-dependencies)
+that passes the service provider:
+
+```csharp
+services.AddSingleton<RegistryResolver>();
 services.AddInventoryClient((provider, config) =>
 {
-    config.EndpointResolver = provider.GetRequiredService<DirectoryResolver>();
+    config.EndpointResolver = provider.GetRequiredService<RegistryResolver>();
 });
 ```
 
-Enable [generated DI registration](/smithy-dotnet/guides/client-configuration/dependency-injection/)
-for this overload. Supplying `EndpointResolver` replaces the Inventory rules.
-
 ### Wrapping a generated resolver
 
-A decorator may call a generated resolver and return its endpoint or a record copy:
+A generated resolver is an ordinary `IEndpointResolver`, so a decorator can call
+it and adjust the result:
 
 ```csharp
-var endpoint = await inner.ResolveEndpointAsync(parameters, cancellationToken);
-return endpoint with { Headers = updatedHeaders };
+public sealed class TracingHeaderResolver(IEndpointResolver inner) : IEndpointResolver
+{
+    public async ValueTask<SmithyEndpoint> ResolveEndpointAsync(
+        SmithyEndpointParameters parameters,
+        CancellationToken cancellationToken = default)
+    {
+        var endpoint = await inner.ResolveEndpointAsync(parameters, cancellationToken);
+        return endpoint with
+        {
+            Headers = new Dictionary<string, IReadOnlyList<string>>(
+                endpoint.Headers ?? new Dictionary<string, IReadOnlyList<string>>())
+            {
+                ["x-trace-origin"] = ["inventory"],
+            },
+        };
+    }
+}
+
+var config = new InventoryClientConfig { Environment = "prod" };
+config.EndpointResolver = new TracingHeaderResolver(new InventoryEndpointResolver(config));
 ```
 
-Preserve the result's metadata. In particular, `RequestPathAdapter` carries optional
-service-specific path adjustment, such as S3 bucket addressing. It runs before URL
-joining, signing, and retries. A record copy preserves it automatically. An ordinary
-custom endpoint has no adapter and retains the modeled HTTP path. If you change the
-destination, also consider whether its authentication properties need to change.
+The record copy keeps the endpoint's auth schemes and their signing properties.
+A decorator that changes the host should check that they still apply.
 
 ## AWS services
 
@@ -205,6 +238,10 @@ service's rules declare.
 | `AWS::S3::ForcePathStyle` | `ForcePathStyle` |
 | `AWS::S3::UseArnRegion`, `AWS::S3Control::UseArnRegion` | `UseArnRegion` |
 | `AWS::S3::UseGlobalEndpoint`, `AWS::STS::UseGlobalEndpoint` | `UseGlobalEndpoint` |
+
+S3's rules put the bucket in the host, or in the endpoint's path for path-style
+addressing, so generated S3 operations have no `/{Bucket}` path segment. A
+custom S3 resolver adds the bucket to the endpoint itself.
 
 Every resolved AWS endpoint names its SigV4 signing scope: either the one the
 rules set, or the service's `@sigv4` signing name and the configured `Region`.

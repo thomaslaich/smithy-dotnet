@@ -29,7 +29,7 @@ if (actual != expected)
     throw new InvalidOperationException($"REST/JSON NativeAOT round trip failed: {actual}");
 }
 
-// Exercise endpoint metadata and result-carried path adaptation through the native client runtime.
+// Exercise endpoint resolution with operation metadata through the native client runtime.
 var endpointTransport = new AotEndpointTransport();
 var runtime = new SmithyClientRuntime(
     endpointTransport,
@@ -44,9 +44,9 @@ await runtime.InvokeAsync(
     ),
     expected
 );
-if (endpointTransport.RequestUri != "https://aot.example/base/ada%20lovelace")
+if (endpointTransport.RequestUri != "https://aot.example/base/users/ada%20lovelace")
 {
-    throw new InvalidOperationException("NativeAOT endpoint path adaptation failed.");
+    throw new InvalidOperationException("NativeAOT endpoint resolution failed.");
 }
 
 var mcpTools = SmithyMcpTools.Create(
@@ -185,10 +185,7 @@ internal sealed class AotEndpointResolver : IEndpointResolver
                 "NativeAOT endpoint operation metadata is missing."
             );
         }
-        var endpoint = new SmithyEndpoint(new Uri("https://aot.example"))
-        {
-            RequestPathAdapter = static (_, path) => path["/users".Length..],
-        };
+        var endpoint = new SmithyEndpoint(new Uri("https://aot.example"));
         return ValueTask.FromResult(endpoint with { Uri = new Uri("https://aot.example/base") });
     }
 }

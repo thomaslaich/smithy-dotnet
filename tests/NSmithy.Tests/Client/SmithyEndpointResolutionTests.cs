@@ -9,29 +9,6 @@ namespace NSmithy.Tests.Client;
 
 public sealed class SmithyEndpointResolutionTests
 {
-    [Theory]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    [InlineData(false, false)]
-    public async Task EndpointPathsArePreparedOnBothExecutionPaths(
-        bool isStatic,
-        bool useInterceptor
-    )
-    {
-        var resolver = new PathPreparingResolver(isStatic);
-        var transport = new RecordingTransport();
-        var runtime = new SmithyClientRuntime(
-            transport,
-            interceptors: useInterceptor ? [new EndpointRecordingInterceptor([])] : null,
-            endpointResolver: resolver
-        );
-
-        await runtime.InvokeAsync(Binding(hostPrefix: _ => "prefix."), "bucket/input");
-
-        Assert.Equal("https://prefix.api.example.com/base/input", transport.Request!.RequestUri);
-        Assert.Equal(1, resolver.Preparations);
-    }
-
     [Fact]
     public async Task ResolverRoutesRequestsPerOperation()
     {
@@ -325,35 +302,6 @@ public sealed class SmithyEndpointResolutionTests
             SmithyEndpointParameters parameters,
             CancellationToken cancellationToken = default
         ) => ValueTask.FromResult(resolve(parameters));
-    }
-
-    private sealed class PathPreparingResolver : IEndpointResolver
-    {
-        private readonly bool isStatic;
-        private readonly SmithyEndpoint endpoint;
-
-        public PathPreparingResolver(bool isStatic)
-        {
-            this.isStatic = isStatic;
-            endpoint = new(new Uri("https://api.example.com/base"))
-            {
-                RequestPathAdapter = (operationId, requestPath) =>
-                {
-                    Assert.Equal(ShapeId.Parse("example.weather#GetForecast"), operationId);
-                    Assert.Equal("/bucket/input", requestPath);
-                    Preparations++;
-                    return requestPath["/bucket".Length..];
-                },
-            };
-        }
-
-        public int Preparations { get; private set; }
-        public SmithyEndpoint? StaticEndpoint => isStatic ? endpoint : null;
-
-        public ValueTask<SmithyEndpoint> ResolveEndpointAsync(
-            SmithyEndpointParameters parameters,
-            CancellationToken cancellationToken = default
-        ) => ValueTask.FromResult(endpoint);
     }
 
     private sealed class RecordingTransport : IHttpTransport
