@@ -70,7 +70,6 @@ public final class EndpointResolverGenerator implements Runnable {
   private final String configType;
   private Map<Identifier, Local> parameterLocals = Map.of();
   private boolean usesDefaultAuthSchemes;
-  private String requestPathAdapter;
 
   public EndpointResolverGenerator(
       GenerationContext context, CSharpWriter writer, EndpointRules rules) {
@@ -195,17 +194,6 @@ public final class EndpointResolverGenerator implements Runnable {
 
     writer.write("public $T? StaticEndpoint { get; }", RuntimeTypes.SMITHY_ENDPOINT);
     writer.write("");
-
-    for (var integration : context.integrations()) {
-      var adapter = integration.writeEndpointRequestPathAdapter(context, rules.service(), writer);
-      if (adapter.isPresent()) {
-        if (requestPathAdapter != null) {
-          throw new IllegalStateException(
-              "Multiple endpoint path adapters for " + rules.service().getId());
-        }
-        requestPathAdapter = adapter.get();
-      }
-    }
 
     writer.write(
         "public $T<$T> ResolveEndpointAsync($T parameters, $T cancellationToken = default)",
@@ -553,11 +541,7 @@ public final class EndpointResolverGenerator implements Runnable {
     if (!properties.isEmpty()) {
       sb.append(", Properties: ").append(documentMap(renderer, properties));
     }
-    sb.append(')');
-    if (requestPathAdapter != null) {
-      sb.append(" { RequestPathAdapter = ").append(requestPathAdapter).append(" }");
-    }
-    return sb.toString();
+    return sb.append(')').toString();
   }
 
   private String headers(

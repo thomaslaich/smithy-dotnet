@@ -270,26 +270,16 @@ as `StaticEndpoint`, so the client runtime keeps its static-endpoint fast
 path. A configuration the rules reject (FIPS with a custom endpoint, say) then
 fails client construction instead of the first call.
 
-### Endpoint-dependent request paths
+### S3 bucket paths
 
-`SmithyEndpoint.RequestPathAdapter` is an optional delegate attached to an endpoint
-result. It adapts the serialized relative path, including its query string, before
-the runtime joins it to the resolved endpoint. It runs once per execution, before
-signing and retry cloning, on both the static and dynamic execution paths. A null
-adapter preserves the modeled path. Adapters must be thread-safe.
-
-The AWS integration attaches a static adapter to every generated S3 endpoint,
-including results returned by the typed `Resolve` method. For operations whose HTTP
-path starts with `/{Bucket}`, it removes that serialized label: S3 rule endpoints
-already contain the bucket in either the authority or base path. Keys and query
-strings keep their wire encoding. Operations without a bucket label remain unchanged.
-A custom resolver returning an ordinary endpoint retains the modeled path.
-
-A resolver decorator only needs to forward `ResolveEndpointAsync`; there is no path
-method on the resolver interface. Use a record copy (`endpoint with { ... }`) to
-preserve path adaptation, headers, auth schemes, and properties. Host-prefix injection
-also preserves this metadata. Changing the destination may require updating its auth
-properties; copying the old signing region is not always appropriate.
+S3's rules place the bucket in the host or, for path-style addressing, in the
+endpoint's path. The modeled `/{Bucket}` path segment would repeat it, so the
+AWS integration removes that segment from the `@http` URIs of the S3 service's
+operations in `preprocessModel`, when the service has endpoint rules. `Bucket`
+keeps its `@httpLabel` binding: it stays required and out of the body, and
+serializing it is a no-op because its label no longer appears in the URI.
+Generated clients, presigning, and custom resolvers all see the same paths. A
+custom S3 resolver adds the bucket to the endpoint itself.
 
 ### Client configuration
 
@@ -344,13 +334,12 @@ resolver's constructor. Use the service-provider-aware `Add{Service}Client` over
 to resolve them from the calling DI scope. Its callback creates a fresh configuration
 for each typed client, not in the separate HTTP handler scope.
 
-The parameter object is not a normalized bag of the generated rules' parameters.
-There is also no arbitrary per-call options bag in this release; routing information
-must come from the modeled input or injected dependencies. Adding such options later
-requires a coherent API across generated methods, runtime, and interceptors.
+The parameter object is not a bag of the generated rules' parameters, and there
+is no per-call options bag: routing information comes from the modeled input or
+injected dependencies.
 
 Resolution runs before serialization and interceptor lifecycle hooks. Retries reuse
-the result, including its path adaptation and signing properties. The cancellation
+the result, including its signing properties. The cancellation
 token includes the configured operation deadline. `StaticEndpoint` can bypass
 resolution entirely; expose it only when the complete endpoint result is invariant.
 Shared resolvers and their dependencies must support concurrent calls.
@@ -366,10 +355,7 @@ public sealed record SmithyEndpoint(
     Uri Uri,
     IReadOnlyDictionary<string, IReadOnlyList<string>>? Headers = null,
     IReadOnlyList<SmithyEndpointAuthScheme>? AuthSchemes = null,
-    IReadOnlyDictionary<string, Document>? Properties = null)
-{
-    public Func<ShapeId, string, string>? RequestPathAdapter { get; init; }
-}
+    IReadOnlyDictionary<string, Document>? Properties = null);
 
 public sealed record SmithyEndpointAuthScheme(
     string SchemeId,
@@ -443,12 +429,9 @@ binding, and result construction. Extension points contributed through
   `AWS::*`.
 - **Auth scheme providers** map endpoint auth scheme names to auth trait ids
   and supply the properties of results without `authSchemes`.
-- **Request-path providers** emit a static adapter and return its delegate expression
-  through `writeEndpointRequestPathAdapter`. The generator attaches it to each endpoint
-  result. Only one integration may supply an adapter for a service.
 
-The AWS integration provides the SigV4 and SigV4a mappings and the SigV4 signing
-scope. It is registered through the Java service loader like any
+The AWS integration provides the SigV4 and SigV4a mappings, the SigV4 signing
+scope, and the S3 bucket path transform. It is registered through the Java service loader like any
 third-party integration.
 
 A function or built-in no provider handles fails code generation, naming the

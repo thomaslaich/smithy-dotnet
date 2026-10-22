@@ -108,15 +108,14 @@ services.AddWeatherClient(
     configureClient: client => client.Timeout = TimeSpan.FromSeconds(10));
 ```
 
-This callback runs once per typed-client creation, with a fresh config and the
-service provider resolving that client. Scoped dependencies come from that scope,
-not from the separate scope that `IHttpClientFactory` uses for pooled handlers.
-A custom endpoint resolver can supply the URL without `BaseAddress` or `Endpoint`.
+The callback runs each time a typed client is created, with a fresh config and
+the provider that resolves the client. Scoped dependencies come from that scope,
+not from the scope `IHttpClientFactory` uses for pooled handlers. With a custom
+endpoint resolver, neither `BaseAddress` nor `Endpoint` is needed.
 
-With this overload, protocol HTTP defaults are applied during typed-client creation,
-after the factory's HTTP-client callbacks. Use the `configureClient` argument shown
-above to override those defaults. Handler registrations still compose normally.
-The existing overload without a service provider keeps its registration-time config.
+This overload applies the protocol's HTTP defaults when the typed client is
+created, after the factory's `HttpClient` callbacks. `configureClient` runs last
+and can override them.
 
 ## Manual registration
 

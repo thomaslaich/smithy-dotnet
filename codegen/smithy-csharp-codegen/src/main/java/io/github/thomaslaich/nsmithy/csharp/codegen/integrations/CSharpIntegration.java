@@ -13,7 +13,6 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointFunction;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import software.amazon.smithy.codegen.core.SmithyIntegration;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.utils.SmithyUnstableApi;
@@ -46,16 +45,5 @@ public interface CSharpIntegration
    */
   default List<EndpointDefaultAuthScheme> endpointDefaultAuthSchemes(ServiceShape service) {
     return List.of();
-  }
-
-  /**
-   * Writes any helper members needed for a service's endpoint path adapter and returns a C#
-   * expression for its thread-safe delegate (ShapeId, string) -> string. The expression is attached
-   * to every endpoint result, including direct Resolve calls. At most one integration may supply an
-   * adapter for a service.
-   */
-  default Optional<String> writeEndpointRequestPathAdapter(
-      GenerationContext context, ServiceShape service, CSharpWriter writer) {
-    return Optional.empty();
   }
 }

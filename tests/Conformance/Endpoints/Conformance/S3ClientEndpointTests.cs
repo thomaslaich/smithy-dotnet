@@ -52,7 +52,7 @@ public sealed class S3ClientEndpointTests
     [Theory]
     [InlineData(false, "https://my-bucket.s3.us-west-2.amazonaws.com/")]
     [InlineData(true, "https://s3.us-west-2.amazonaws.com/my-bucket/")]
-    public async Task BucketOnlyPathsAreAdapted(bool pathStyle, string expected)
+    public async Task BucketOnlyPathsHaveNoBucketSegment(bool pathStyle, string expected)
     {
         var handler = new RecordingHandler();
         using var client = Client(
@@ -98,29 +98,24 @@ public sealed class S3ClientEndpointTests
     }
 
     [Fact]
-    public async Task CustomResolversKeepTheModeledPath()
+    public async Task CustomResolversPlaceTheBucketThemselves()
     {
         var handler = new RecordingHandler();
         using var client = Client(
             handler,
-            new()
-            {
-                EndpointResolver = new StaticEndpointResolver(
-                    new Uri("http://localhost:9000/base")
-                ),
-            }
+            new() { EndpointResolver = new PathStyleResolver(new Uri("http://localhost:9000")) }
         );
 
         await client.HeadObjectAsync(new HeadObjectInput("my-bucket", "photo.jpg"));
 
         Assert.Equal(
-            "http://localhost:9000/base/my-bucket/photo.jpg",
+            "http://localhost:9000/my-bucket/photo.jpg",
             Assert.Single(handler.Requests).RequestUri!.AbsoluteUri
         );
     }
 
     [Fact]
-    public async Task RetriesKeepTheAdaptedPathAndSignature()
+    public async Task RetriesKeepThePathAndSignature()
     {
         var handler = new RecordingHandler(failFirst: true);
         using var client = Client(
@@ -149,7 +144,7 @@ public sealed class S3ClientEndpointTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ResolverDecoratorsPreservePathsAndSigningMetadata(bool pathStyle)
+    public async Task ResolverDecoratorsKeepAddressingAndSigningMetadata(bool pathStyle)
     {
         var handler = new RecordingHandler();
         var config = new AmazonS3ClientConfig { Region = "eu-west-1", ForcePathStyle = pathStyle };
@@ -172,7 +167,7 @@ public sealed class S3ClientEndpointTests
         Assert.Equal("HeadObject", resolver.Operation!.Id.Name);
     }
 
-    // A decorator only implements resolution. A record copy preserves path and auth behavior.
+    // A record copy keeps the generated endpoint's auth scheme properties.
     private sealed class ForwardingResolver(IEndpointResolver inner) : IEndpointResolver
     {
         public NSmithy.Core.Serde.IOperationSchema? Operation { get; private set; }
@@ -195,6 +190,23 @@ public sealed class S3ClientEndpointTests
                 },
             };
         }
+    }
+
+    // The modeled S3 paths have no bucket segment, so a custom resolver adds the bucket to the
+    // endpoint, here path-style.
+    private sealed class PathStyleResolver(Uri baseUri) : IEndpointResolver
+    {
+        public ValueTask<SmithyEndpoint> ResolveEndpointAsync(
+            SmithyEndpointParameters parameters,
+            CancellationToken cancellationToken = default
+        ) =>
+            ValueTask.FromResult(
+                new SmithyEndpoint(
+                    parameters.Input is HeadObjectInput input
+                        ? new Uri(baseUri, input.Bucket)
+                        : baseUri
+                )
+            );
     }
 
     private static AmazonS3Client Client(RecordingHandler handler, AmazonS3ClientConfig config)

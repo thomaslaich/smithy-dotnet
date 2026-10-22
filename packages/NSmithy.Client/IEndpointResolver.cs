@@ -46,20 +46,12 @@ public sealed record SmithyEndpoint(
 {
     private Uri uri = RequireAbsolute(Uri);
 
-    /// <summary>The absolute base URI. A record copy preserves the endpoint's other metadata.</summary>
+    /// <summary>The absolute base URI.</summary>
     public Uri Uri
     {
         get => uri;
         init => uri = RequireAbsolute(value);
     }
-
-    /// <summary>
-    /// Optional service-specific adaptation of the serialized relative path (including its query).
-    /// Runs once per invocation, before joining the base URI, signing, and retry cloning. Null
-    /// preserves the modeled path. The adapter must be thread-safe and must preserve wire encoding.
-    /// Decorators should preserve this property when copying a resolved endpoint.
-    /// </summary>
-    public Func<ShapeId, string, string>? RequestPathAdapter { get; init; }
 
     private static Uri RequireAbsolute(Uri value)
     {
