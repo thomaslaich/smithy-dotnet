@@ -5,16 +5,22 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.integrations.aws;
 
 import static io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointValueType.field;
 
+import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
+import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointBuiltIn;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointDefaultAuthScheme;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointFunction;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointValueType;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
+import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.ShapeId;
+import software.amazon.smithy.model.traits.HttpTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 /**
@@ -27,6 +33,50 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 public final class AwsEndpointsIntegration implements CSharpIntegration {
 
   private static final ShapeId SIGV4 = ShapeId.from("aws.auth#sigv4");
+  private static final ShapeId S3 = ShapeId.from("com.amazonaws.s3#AmazonS3");
+
+  @Override
+  public Optional<String> writeEndpointRequestPathAdapter(
+      GenerationContext context, ServiceShape service, CSharpWriter writer) {
+    if (!service.getId().equals(S3)) {
+      return Optional.empty();
+    }
+    List<String> bucketOperations =
+        TopDownIndex.of(context.model()).getContainedOperations(service).stream()
+            .filter(
+                operation ->
+                    operation
+                        .getTrait(HttpTrait.class)
+                        .map(http -> http.getUri().toString())
+                        .filter(
+                            uri ->
+                                uri.equals("/{Bucket}")
+                                    || uri.startsWith("/{Bucket}/")
+                                    || uri.startsWith("/{Bucket}?"))
+                        .isPresent())
+            .map(operation -> operation.getId().getName())
+            .sorted()
+            .toList();
+    if (bucketOperations.isEmpty()) {
+      return Optional.empty();
+    }
+    writer.write("// S3 endpoints already place Bucket in the host or base path.");
+    writer.write(
+        "private static string PrepareRequestPath($T operationId, string requestPath) =>"
+            + " operationId.Name switch",
+        RuntimeTypes.SHAPE_ID);
+    writer.write("{");
+    writer.indent();
+    for (int i = 0; i < bucketOperations.size(); i++) {
+      writer.write("$L$L", i == 0 ? "" : "or ", CSharpNaming.formatString(bucketOperations.get(i)));
+    }
+    writer.write("    => $T.RemoveBucket(requestPath),", RuntimeTypes.AWS_S3_ENDPOINT_PATH);
+    writer.write("_ => requestPath,");
+    writer.dedent();
+    writer.write("};");
+    writer.write("");
+    return Optional.of("PrepareRequestPath");
+  }
 
   private static final EndpointValueType PARTITION =
       EndpointValueType.record(

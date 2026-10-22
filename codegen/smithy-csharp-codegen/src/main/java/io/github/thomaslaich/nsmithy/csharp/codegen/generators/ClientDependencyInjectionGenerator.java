@@ -72,6 +72,7 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
       writer.putContext("httpVersionPreference", modeledHttpVersionPreference);
       writer.putContext("httpClientBuilder", RuntimeTypes.I_HTTP_CLIENT_BUILDER);
       writer.putContext("serviceCollection", RuntimeTypes.I_SERVICE_COLLECTION);
+      writer.putContext("serviceProvider", RuntimeTypes.I_SERVICE_PROVIDER);
       writer.putContext("uri", RuntimeTypes.URI);
       writer.putContext("action", RuntimeTypes.ACTION);
       writer.putContext("httpClient", RuntimeTypes.HTTP_CLIENT);
@@ -88,7 +89,7 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
                   ${action:T}<${client:L}Config>? configure = null) =>
                   services.Add${client:L}(client => client.BaseAddress = endpoint, configure);
 
-              /// <summary>Registers <see cref="${clientInterface:L}"/> as a typed HttpClient (IHttpClientFactory). Configure the HttpClient (at minimum its BaseAddress) via <paramref name="configureClient"/>; set the protocol, auth schemes, and interceptors via <paramref name="configure"/>.</summary>
+              /// <summary>Registers <see cref="${clientInterface:L}"/> as a typed HttpClient (IHttpClientFactory). Configure the HttpClient via <paramref name="configureClient"/>; set the protocol, auth schemes, and interceptors via <paramref name="configure"/>.</summary>
               public static ${httpClientBuilder:T} Add${client:L}(
                   this ${serviceCollection:T} services,
                   ${action:T}<${httpClient:T}>? configureClient = null,
@@ -106,6 +107,26 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
                               configureClient?.Invoke(client);
                           })
                       .AddTypedClient<${clientInterface:L}>((httpClient, _) => new ${client:L}(httpClient, config));
+              }
+
+              /// <summary>Registers a typed client whose configuration is created in the resolving DI scope. Use <paramref name="configure"/> to resolve endpoint resolvers and other dependencies. Protocol HTTP defaults are applied when the typed client is created, followed by <paramref name="configureClient"/>.</summary>
+              public static ${httpClientBuilder:T} Add${client:L}(
+                  this ${serviceCollection:T} services,
+                  ${action:T}<${serviceProvider:T}, ${client:L}Config> configure,
+                  ${action:T}<${httpClient:T}>? configureClient = null)
+              {
+                  ${argumentNullException:T}.ThrowIfNull(services);
+                  ${argumentNullException:T}.ThrowIfNull(configure);
+                  return services
+                      .AddHttpClient(${clientKey:L})
+                      .AddTypedClient<${clientInterface:L}>((httpClient, serviceProvider) =>
+                      {
+                          var config = new ${client:L}Config();
+                          configure(serviceProvider, config);
+                          ${httpClientEnvironment:T}.ConfigureHttpClient(httpClient, config, static () => new ${protocol:T}(), ${httpVersionPreference:L});
+                          configureClient?.Invoke(httpClient);
+                          return new ${client:L}(httpClient, config);
+                      });
               }
           }
           """);

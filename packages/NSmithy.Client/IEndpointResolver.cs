@@ -1,4 +1,5 @@
 using NSmithy.Core;
+using NSmithy.Core.Serde;
 
 namespace NSmithy.Client;
 
@@ -43,10 +44,30 @@ public sealed record SmithyEndpoint(
     IReadOnlyDictionary<string, Document>? Properties = null
 )
 {
-    public Uri Uri { get; } =
-        Uri.IsAbsoluteUri
-            ? Uri
-            : throw new ArgumentException("Endpoint URI must be absolute.", nameof(Uri));
+    private Uri uri = RequireAbsolute(Uri);
+
+    /// <summary>The absolute base URI. A record copy preserves the endpoint's other metadata.</summary>
+    public Uri Uri
+    {
+        get => uri;
+        init => uri = RequireAbsolute(value);
+    }
+
+    /// <summary>
+    /// Optional service-specific adaptation of the serialized relative path (including its query).
+    /// Runs once per invocation, before joining the base URI, signing, and retry cloning. Null
+    /// preserves the modeled path. The adapter must be thread-safe and must preserve wire encoding.
+    /// Decorators should preserve this property when copying a resolved endpoint.
+    /// </summary>
+    public Func<ShapeId, string, string>? RequestPathAdapter { get; init; }
+
+    private static Uri RequireAbsolute(Uri value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return value.IsAbsoluteUri
+            ? value
+            : throw new ArgumentException("Endpoint URI must be absolute.", nameof(value));
+    }
 }
 
 /// <summary>
@@ -91,7 +112,15 @@ public sealed record SmithyEndpointParameters(
     ShapeId OperationId,
     Uri? ConfiguredEndpoint,
     object? Input
-);
+)
+{
+    /// <summary>
+    /// The modeled operation, including input/output schemas and traits. Generated clients always
+    /// supply it; manually constructed operation bindings may omit it. Schema visitors recover
+    /// typed input metadata without reflection. This is not a bag of bound endpoint-rule parameters.
+    /// </summary>
+    public IOperationSchema? Operation { get; init; }
+}
 
 /// <summary>Resolves every operation to one fixed endpoint.</summary>
 public sealed class StaticEndpointResolver(Uri uri) : IEndpointResolver

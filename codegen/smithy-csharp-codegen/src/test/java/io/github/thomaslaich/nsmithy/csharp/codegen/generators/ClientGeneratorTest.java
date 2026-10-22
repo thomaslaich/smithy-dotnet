@@ -433,14 +433,16 @@ final class ClientGeneratorTest {
         containsIgnoringWhitespace(
             generated,
             "serviceProtocol.ForClientOperation(global::Example.Example.Auth.Schemas.ReadThingSchema.Schema),"
-                + " new string[] { \"smithy.api#httpBearerAuth\" }, null);"),
+                + " new string[] { \"smithy.api#httpBearerAuth\" }, null,"
+                + " global::Example.Example.Auth.Schemas.ReadThingSchema.Schema);"),
         generated);
     // AdminThing's @auth trait overrides the service default.
     assertTrue(
         containsIgnoringWhitespace(
             generated,
             "serviceProtocol.ForClientOperation(global::Example.Example.Auth.Schemas.AdminThingSchema.Schema),"
-                + " new string[] { \"smithy.api#httpApiKeyAuth\" }, null);"),
+                + " new string[] { \"smithy.api#httpApiKeyAuth\" }, null,"
+                + " global::Example.Example.Auth.Schemas.AdminThingSchema.Schema);"),
         generated);
   }
 

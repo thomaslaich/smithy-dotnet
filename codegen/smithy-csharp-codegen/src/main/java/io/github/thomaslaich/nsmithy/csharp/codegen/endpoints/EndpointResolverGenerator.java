@@ -70,6 +70,7 @@ public final class EndpointResolverGenerator implements Runnable {
   private final String configType;
   private Map<Identifier, Local> parameterLocals = Map.of();
   private boolean usesDefaultAuthSchemes;
+  private String requestPathAdapter;
 
   public EndpointResolverGenerator(
       GenerationContext context, CSharpWriter writer, EndpointRules rules) {
@@ -195,6 +196,17 @@ public final class EndpointResolverGenerator implements Runnable {
     writer.write("public $T? StaticEndpoint { get; }", RuntimeTypes.SMITHY_ENDPOINT);
     writer.write("");
 
+    for (var integration : context.integrations()) {
+      var adapter = integration.writeEndpointRequestPathAdapter(context, rules.service(), writer);
+      if (adapter.isPresent()) {
+        if (requestPathAdapter != null) {
+          throw new IllegalStateException(
+              "Multiple endpoint path adapters for " + rules.service().getId());
+        }
+        requestPathAdapter = adapter.get();
+      }
+    }
+
     writer.write(
         "public $T<$T> ResolveEndpointAsync($T parameters, $T cancellationToken = default)",
         RuntimeTypes.VALUE_TASK,
@@ -259,7 +271,7 @@ public final class EndpointResolverGenerator implements Runnable {
             parameter ->
                 assignments.add(
                     propertyName(parameter)
-                        + " = endpoint?.OriginalString"
+                        + " = (endpoint ?? config.Endpoint)?.OriginalString"
                         + defaultFallback(parameter)));
     for (EndpointRules.ConfigParameter config : rules.configParameters()) {
       assignments.add(
@@ -326,7 +338,17 @@ public final class EndpointResolverGenerator implements Runnable {
       locals.put(
           parameter.getName(),
           new Local(name, valueType(parameter), parameter.getDefault().isEmpty()));
-      declarations.add("var " + name + " = parameters." + propertyName(parameter) + ";");
+      String fallback = valueType(parameter).isValueType() ? "" : defaultFallback(parameter);
+      declarations.add("var " + name + " = parameters." + propertyName(parameter) + fallback + ";");
+      if (parameter.isRequired() && parameter.getDefault().isEmpty()) {
+        declarations.add(
+            writer.format(
+                "if ($L is null) throw new $T($L);",
+                name,
+                RuntimeTypes.SMITHY_ENDPOINT_RESOLUTION_EXCEPTION,
+                CSharpNaming.formatString(
+                    "Endpoint parameter '" + parameter.getNameString() + "' is required.")));
+      }
     }
     parameterLocals = Map.copyOf(locals);
 
@@ -531,7 +553,11 @@ public final class EndpointResolverGenerator implements Runnable {
     if (!properties.isEmpty()) {
       sb.append(", Properties: ").append(documentMap(renderer, properties));
     }
-    return sb.append(')').toString();
+    sb.append(')');
+    if (requestPathAdapter != null) {
+      sb.append(" { RequestPathAdapter = ").append(requestPathAdapter).append(" }");
+    }
+    return sb.toString();
   }
 
   private String headers(
@@ -754,9 +780,13 @@ public final class EndpointResolverGenerator implements Runnable {
 
   // ---------------- operation bindings ----------------
 
+  private record ParameterBinding(String expression, boolean readsInput) {}
+
   /**
-   * Per-operation parameter assignments, keyed by the rendered switch arm pattern: static context
-   * parameters, then {@code @contextParam} members. Operations that bind nothing are absent.
+   * Builds bindings from least to most specific: operation context, member context, then static
+   * context. Nullable sources fall back to the next source, ending with client values/defaults.
+   * Keeping the expression and its input dependency together means a static override does not
+   * accidentally require an input object.
    */
   private Map<String, List<String>> operationBindings() {
     Model model = context.model();
@@ -771,31 +801,7 @@ public final class EndpointResolverGenerator implements Runnable {
             .sorted(Comparator.comparing(o -> o.getId().getName()))
             .toList();
     for (OperationShape operation : operations) {
-      Map<String, String> assignments = new LinkedHashMap<>();
-      index
-          .getStaticContextParams(operation)
-          .map(StaticContextParamsTrait::getParameters)
-          .orElse(Map.of())
-          .forEach(
-              (name, definition) -> {
-                Parameter parameter = parameters.get(name);
-                if (parameter != null) {
-                  assignments.put(
-                      propertyName(parameter), staticValue(definition.getValue(), parameter));
-                }
-              });
-
-      boolean readsInput = false;
-      for (Map.Entry<MemberShape, ContextParamTrait> entry :
-          index.getContextParams(operation).entrySet()) {
-        Parameter parameter = parameters.get(entry.getValue().getName());
-        if (parameter == null) {
-          continue;
-        }
-        assignments.put(propertyName(parameter), contextValue(entry.getKey(), parameter));
-        readsInput = true;
-      }
-
+      Map<String, ParameterBinding> assignments = new LinkedHashMap<>();
       Shape input = model.expectShape(operation.getInputShape());
       for (Map.Entry<String, OperationContextParamDefinition> entry :
           index
@@ -811,19 +817,48 @@ public final class EndpointResolverGenerator implements Runnable {
             paths.render(entry.getValue().getPath(), input, valueType(parameter).kind());
         assignments.put(
             propertyName(parameter),
-            path.nullable()
-                ? EndpointExpressionRenderer.parenthesize(path.code())
-                    + " ?? clientParameters."
-                    + propertyName(parameter)
-                : path.code());
-        readsInput = true;
+            new ParameterBinding(
+                path.nullable()
+                    ? EndpointExpressionRenderer.parenthesize(path.code())
+                        + " ?? clientParameters."
+                        + propertyName(parameter)
+                    : path.code(),
+                true));
       }
+
+      for (Map.Entry<MemberShape, ContextParamTrait> entry :
+          index.getContextParams(operation).entrySet()) {
+        Parameter parameter = parameters.get(entry.getValue().getName());
+        if (parameter == null) {
+          continue;
+        }
+        String property = propertyName(parameter);
+        ParameterBinding lower = assignments.get(property);
+        String fallback = lower == null ? "clientParameters." + property : lower.expression();
+        assignments.put(
+            property,
+            new ParameterBinding(contextValue(entry.getKey(), parameter, fallback), true));
+      }
+
+      index
+          .getStaticContextParams(operation)
+          .map(StaticContextParamsTrait::getParameters)
+          .orElse(Map.of())
+          .forEach(
+              (name, definition) -> {
+                Parameter parameter = parameters.get(name);
+                if (parameter != null) {
+                  assignments.put(
+                      propertyName(parameter),
+                      new ParameterBinding(staticValue(definition.getValue(), parameter), false));
+                }
+              });
 
       if (assignments.isEmpty()) {
         continue;
       }
       String pattern = CSharpNaming.formatString(operation.getId().getName());
-      if (readsInput) {
+      if (assignments.values().stream().anyMatch(ParameterBinding::readsInput)) {
         pattern +=
             " when parameters.Input is "
                 + SchemaGenerator.operationShapeType(writer, context, operation.getInputShape())
@@ -832,7 +867,7 @@ public final class EndpointResolverGenerator implements Runnable {
       bindings.put(
           pattern,
           assignments.entrySet().stream()
-              .map(assignment -> assignment.getKey() + " = " + assignment.getValue())
+              .map(assignment -> assignment.getKey() + " = " + assignment.getValue().expression())
               .toList());
     }
     return bindings;
@@ -852,7 +887,7 @@ public final class EndpointResolverGenerator implements Runnable {
     };
   }
 
-  private String contextValue(MemberShape member, Parameter parameter) {
+  private String contextValue(MemberShape member, Parameter parameter, String fallback) {
     Shape target = context.model().expectShape(member.getTarget());
     boolean nullable = ShapeSupport.isNullable(member);
     String access = "input." + CSharpNaming.memberName(member);
@@ -877,7 +912,7 @@ public final class EndpointResolverGenerator implements Runnable {
     if (isEnum) {
       access += nullable ? "?.Value" : ".Value";
     }
-    return nullable ? access + " ?? clientParameters." + propertyName(parameter) : access;
+    return nullable ? access + " ?? " + EndpointExpressionRenderer.parenthesize(fallback) : access;
   }
 
   // ---------------- helpers ----------------

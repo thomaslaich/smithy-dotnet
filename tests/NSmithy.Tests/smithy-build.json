@@ -135,6 +135,23 @@
           "baseNamespace": ""
         }
       }
+    },
+    "inventory": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.inventory#Inventory",
+          "baseNamespace": "",
+          "generateDependencyInjection": true
+        }
+      }
+    },
+    "endpointbindings": {
+      "plugins": {
+        "csharp-codegen": {
+          "service": "nsmithy.tests.endpointbindings#Routing",
+          "baseNamespace": ""
+        }
+      }
     }
   }
 }

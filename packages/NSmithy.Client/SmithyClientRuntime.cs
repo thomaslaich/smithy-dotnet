@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using NSmithy.Core;
 using NSmithy.Http;
 
 namespace NSmithy.Client;
@@ -89,7 +90,11 @@ public sealed class SmithyClientRuntime(
         var protocol = binding.Protocol;
         var resolvedEndpoint = ApplyHostPrefix(binding, input, endpointResolver?.StaticEndpoint);
         var request = PrepareAttemptRequest(
-            protocol.SerializeRequest(input, cancellationToken),
+            PrepareEndpointRequest(
+                binding.OperationId,
+                resolvedEndpoint,
+                protocol.SerializeRequest(input, cancellationToken)
+            ),
             resolvedEndpoint,
             clone: false
         );
@@ -194,7 +199,10 @@ public sealed class SmithyClientRuntime(
                             binding.OperationId,
                             endpoint,
                             input
-                        ),
+                        )
+                        {
+                            Operation = binding.Operation,
+                        },
                         cancellationToken
                     )
                     .ConfigureAwait(false);
@@ -234,7 +242,11 @@ public sealed class SmithyClientRuntime(
                 interceptor.OnBeforeSerialization(context!, input);
             }
 
-            var request = protocol.SerializeRequest(input, callerToken);
+            var request = PrepareEndpointRequest(
+                binding.OperationId,
+                resolvedEndpoint,
+                protocol.SerializeRequest(input, callerToken)
+            );
             var response = await SendUnaryAsync(
                     context,
                     request,
@@ -490,6 +502,19 @@ public sealed class SmithyClientRuntime(
                 );
         }
 
+        return request;
+    }
+
+    private static SmithyHttpRequest PrepareEndpointRequest(
+        ShapeId operationId,
+        SmithyEndpoint? endpoint,
+        SmithyHttpRequest request
+    )
+    {
+        if (endpoint?.RequestPathAdapter is { } adapt && !IsHttpAbsoluteUri(request.RequestUri))
+        {
+            request.RequestUri = adapt(operationId, request.RequestUri);
+        }
         return request;
     }
 

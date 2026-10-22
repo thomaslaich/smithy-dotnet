@@ -57,10 +57,12 @@ come from each operation and its input.
 | Configuration | Resolution |
 | --- | --- |
 | `EndpointResolver` set | The configured resolver. The generated resolver is not used. |
-| `Endpoint` set | The rules, with `Endpoint` as the custom endpoint. |
+| `Endpoint` set and rules model `SDK::Endpoint` | The rules, with `Endpoint` as the custom endpoint. |
+| `Endpoint` set and rules do not model `SDK::Endpoint` | The configured URL, bypassing rules. |
 | Neither | The rules, from the configured parameters. |
 
-A configured `Endpoint` still goes through the rules. For S3, for example,
+`Endpoint` falls back to `HttpClient.BaseAddress` when unset. A configured URL goes
+through rules that model `SDK::Endpoint`. For S3, for example,
 they still apply path-style addressing and reject a custom endpoint combined
 with FIPS.
 
@@ -77,6 +79,108 @@ When the rules end in an error, such as a missing region, the client throws
 depend only on client configuration are resolved once, when the client is
 constructed. Rules that also bind operation input are resolved on each call,
 before the request is serialized.
+
+## Custom resolvers
+
+A custom resolver works for services with or without modeled endpoint rules. It
+replaces generated resolution and does not require a configured URL:
+
+```csharp
+using var client = new InventoryClient(new InventoryClientConfig
+{
+    EndpointResolver = new DirectoryResolver(directory),
+});
+```
+
+The resolver receives:
+
+| Input | Use |
+| --- | --- |
+| `ServiceId`, `OperationId` | Select a service or operation-specific destination. |
+| `ConfiguredEndpoint` | Honor an optional configured override, if your resolver supports it. |
+| `Input` | Read routing information from the actual generated request object. |
+| `Operation` | Inspect modeled traits and input/output schemas; supplied by generated clients. |
+| `CancellationToken` | Cancel discovery, including when the operation deadline expires. |
+
+`Operation` can be null for manually constructed runtime bindings. For known input
+types, cast `Input`; generic integrations can use schema visitors without reflection.
+These inputs are not the generated rules' bound parameter bag. There is no arbitrary
+per-call routing context API yet; use modeled input or injected dependencies.
+
+Resolution happens before interceptor lifecycle hooks and serialization. It runs once
+per invocation; retries reuse the endpoint. Shared resolvers must support concurrent
+calls. A resolver can expose `StaticEndpoint` to skip per-call resolution only when
+its complete result is constant.
+
+### Example: an internal inventory service
+
+This example uses `alloy#simpleRestJson` with no AWS endpoint functions or built-ins.
+Its rules accept an explicit `SDK::Endpoint` override; otherwise `Environment` selects
+`https://inventory.prod.example.test` or `https://inventory.test.example.test`.
+Unsupported environments produce an error. The complete model and executable examples
+are in `tests/NSmithy.Tests/model/inventory-endpoints.smithy` and
+`tests/NSmithy.Tests/Client/InventoryEndpointExampleTests.cs`.
+
+```csharp
+// Generated rules choose the production URL.
+using var production = new InventoryClient(new InventoryClientConfig
+{
+    Environment = "prod",
+});
+
+// The same rules accept a local URL.
+using var local = new InventoryClient(new InventoryClientConfig
+{
+    Endpoint = new Uri("http://localhost:5000"),
+});
+```
+
+An application can instead supply a directory shared across service clients:
+
+```csharp
+public sealed class DirectoryResolver(ServiceDirectory directory) : IEndpointResolver
+{
+    public ValueTask<SmithyEndpoint> ResolveEndpointAsync(
+        SmithyEndpointParameters parameters,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(
+            new SmithyEndpoint(directory.GetEndpoint(parameters.ServiceId)));
+    }
+}
+```
+
+Here `ServiceDirectory` is an application-owned service mapping Smithy service IDs to
+URLs. An implementation that performs network I/O can await it and pass cancellation.
+It owns caching and refresh policy. To use DI:
+
+```csharp
+services.AddSingleton(directory);
+services.AddSingleton<DirectoryResolver>();
+services.AddInventoryClient((provider, config) =>
+{
+    config.EndpointResolver = provider.GetRequiredService<DirectoryResolver>();
+});
+```
+
+Enable [generated DI registration](/smithy-dotnet/guides/client-configuration/dependency-injection/)
+for this overload. Supplying `EndpointResolver` replaces the Inventory rules.
+
+### Wrapping a generated resolver
+
+A decorator may call a generated resolver and return its endpoint or a record copy:
+
+```csharp
+var endpoint = await inner.ResolveEndpointAsync(parameters, cancellationToken);
+return endpoint with { Headers = updatedHeaders };
+```
+
+Preserve the result's metadata. In particular, `RequestPathAdapter` carries optional
+service-specific path adjustment, such as S3 bucket addressing. It runs before URL
+joining, signing, and retries. A record copy preserves it automatically. An ordinary
+custom endpoint has no adapter and retains the modeled HTTP path. If you change the
+destination, also consider whether its authentication properties need to change.
 
 ## AWS services
 

@@ -42,9 +42,9 @@ public class SmithyClientConfig
     }
 
     /// <summary>
-    /// The service endpoint. Set by the endpoint constructor, and optional when an
-    /// <c>HttpClient</c> is supplied (it then falls back to the
-    /// <c>HttpClient.BaseAddress</c>).
+    /// The configured service endpoint, falling back to <c>HttpClient.BaseAddress</c> when supplied.
+    /// Optional when generated rules or a custom resolver can supply an endpoint. Generated rules
+    /// consume it as SDK::Endpoint when modeled; otherwise it overrides the generated rules.
     /// </summary>
     public Uri? Endpoint { get; set; }
 
@@ -52,10 +52,11 @@ public class SmithyClientConfig
     public IProtocol? Protocol { get; set; }
 
     /// <summary>
-    /// Per-operation endpoint resolution. When set it overrides the static
-    /// <see cref="Endpoint"/> for request routing (an endpoint is still required at
-    /// construction); the resolver runs once per invocation and can vary the endpoint by
-    /// operation, add endpoint headers, and narrow auth schemes.
+    /// Replaces generated endpoint resolution. No static endpoint is required. The configured
+    /// endpoint is passed to the resolver as an optional input; it is not a fallback if resolution
+    /// fails. Resolution runs once per invocation, before interceptor hooks; retries reuse its
+    /// result. A shared resolver must support concurrent calls. Inject discovery/configuration
+    /// dependencies into the resolver; operation identifiers, schema, and input arrive per call.
     /// </summary>
     public IEndpointResolver? EndpointResolver { get; set; }
 

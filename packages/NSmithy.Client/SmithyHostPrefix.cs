@@ -44,11 +44,6 @@ public static class SmithyHostPrefix
         ArgumentException.ThrowIfNullOrWhiteSpace(hostPrefix);
 
         var builder = new UriBuilder(endpoint.Uri) { Host = hostPrefix + endpoint.Uri.Host };
-        return new SmithyEndpoint(
-            builder.Uri,
-            endpoint.Headers,
-            endpoint.AuthSchemes,
-            endpoint.Properties
-        );
+        return endpoint with { Uri = builder.Uri };
     }
 }

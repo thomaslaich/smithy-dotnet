@@ -1,5 +1,7 @@
+using NSmithy.Client;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.Http;
 using NSmithy.Protocols.Rest;
 using NSmithy.Protocols.RestJson;
 using NSmithy.Server;
@@ -25,6 +27,26 @@ var actual = await serverProtocol.DeserializeRequestAsync(request);
 if (actual != expected)
 {
     throw new InvalidOperationException($"REST/JSON NativeAOT round trip failed: {actual}");
+}
+
+// Exercise endpoint metadata and result-carried path adaptation through the native client runtime.
+var endpointTransport = new AotEndpointTransport();
+var runtime = new SmithyClientRuntime(
+    endpointTransport,
+    endpointResolver: new AotEndpointResolver()
+);
+await runtime.InvokeAsync(
+    new SmithyOperationBinding<AotInput, SmithyUnit>(
+        new ShapeId("example", "Service"),
+        operation.Id,
+        clientProtocol,
+        operation: operation
+    ),
+    expected
+);
+if (endpointTransport.RequestUri != "https://aot.example/base/ada%20lovelace")
+{
+    throw new InvalidOperationException("NativeAOT endpoint path adaptation failed.");
 }
 
 var mcpTools = SmithyMcpTools.Create(
@@ -143,5 +165,53 @@ internal sealed class AotInputSchema()
                 builder.DisplayName = Schemas.String.Read(ref deserializer);
                 break;
         }
+    }
+}
+
+internal sealed class AotEndpointResolver : IEndpointResolver
+{
+    public ValueTask<SmithyEndpoint> ResolveEndpointAsync(
+        SmithyEndpointParameters parameters,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (
+            parameters.Operation?.Input is not IStructSchema schema
+            || schema.GetMember("userId") is null
+            || parameters.Input is not AotInput
+        )
+        {
+            throw new InvalidOperationException(
+                "NativeAOT endpoint operation metadata is missing."
+            );
+        }
+        var endpoint = new SmithyEndpoint(new Uri("https://aot.example"))
+        {
+            RequestPathAdapter = static (_, path) => path["/users".Length..],
+        };
+        return ValueTask.FromResult(endpoint with { Uri = new Uri("https://aot.example/base") });
+    }
+}
+
+internal sealed class AotEndpointTransport : IHttpTransport
+{
+    public string? RequestUri { get; private set; }
+
+    public Task<SmithyHttpClientResponse> SendAsync(
+        SmithyHttpRequest request,
+        SmithyHttpClientResponseMode responseMode,
+        CancellationToken cancellationToken = default
+    )
+    {
+        RequestUri = request.RequestUri.Split('?')[0];
+        return Task.FromResult(
+            new SmithyHttpClientResponse(
+                System.Net.HttpStatusCode.OK,
+                "OK",
+                "{}"u8.ToArray(),
+                new Dictionary<string, IReadOnlyList<string>>(),
+                new Dictionary<string, IReadOnlyList<string>>()
+            )
+        );
     }
 }
