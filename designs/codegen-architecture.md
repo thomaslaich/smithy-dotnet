@@ -114,11 +114,11 @@ Integrations get Smithy's hooks (`preprocessModel`, `decorateSymbolProvider`,
 The hooks and the types they receive are `@SmithyUnstableApi`, so an
 integration is built against the generator version it runs with.
 
-A NuGet package puts its integration on the classpath the way packaged
-contracts add trait packages: its `buildTransitive` targets add a
-`SmithyContractsBuildFile` item for a `smithy-build.json` fragment whose
-`maven.dependencies` and `repositories` name the integration's artifact. Those
-are merged into the effective `smithy-build.json`.
+An integration is a JAR on the codegen classpath. A project adds it to
+`maven.dependencies` in its `smithy-build.json`; NSmithy merges that into the
+effective build file, and the `ServiceLoader` finds the integration. A NuGet
+package can add the dependency for its users through a `SmithyContractsBuildFile`
+fragment, but nothing requires one.
 
 ### Symbol provider
 
