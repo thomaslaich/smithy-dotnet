@@ -11,6 +11,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- `CSharpIntegration.serviceGenerator`, which lets an integration in a separate
+  package generate the service surface for a protocol it supplies.
+
 ## [0.13.0]
 
 This release adds the rpcv2Json protocol and reshapes parts of the generated API.
