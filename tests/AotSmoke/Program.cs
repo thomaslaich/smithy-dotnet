@@ -30,9 +30,10 @@ if (actual != expected)
 var mcpTools = SmithyMcpTools.Create(
     new ServiceOperationCatalog(
         Schemas.Service(new ShapeId("example", "Service")),
-        ServiceOperation.Create(
+        ServerOperation.Create(
             operation,
-            static (AotInput _, CancellationToken _) => Task.FromResult(SmithyUnit.Value),
+            static _ =>
+                static (AotInput _, CancellationToken _) => Task.FromResult(SmithyUnit.Value),
             new OperationJsonSchemas(
                 """
                 {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"userId":{"type":"string"},"requestToken":{"type":"string"},"pageSize":{"type":"integer"},"displayName":{"type":"string"}},"required":["userId","pageSize","displayName"],"additionalProperties":false}

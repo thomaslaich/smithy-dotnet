@@ -359,26 +359,36 @@ that streams has to say so.
 ## Generated Server Surface
 
 Generated code describes operations; it contains no routes, no protocol
-branches, and no per-operation endpoint. For each service it emits an operation
-table pairing each operation's schema with a typed handler resolver:
+branches, and no per-operation endpoint. For each service it emits one operation
+table, the `ServiceOperationCatalog` of its `{Service}Definition`. Each entry pairs
+an operation's schema with a typed handler resolver and, for unary operations,
+the JSON Schemas of its input and output:
 
 ```csharp
-private static readonly IReadOnlyList<IServerOperation> ServerOperations =
-[
+internal static ServiceOperationCatalog Catalog { get; } = new(
+    WeatherSchema.Schema,
     ServerOperation.Create(
         GetCitySchema.Schema,
-        services => services.GetRequiredService<IGetCityHandler>().GetCityAsync),
+        services => services.GetRequiredService<IGetCityHandler>().GetCityAsync,
+        GetCityJsonSchemas.Value),
     ServerOperation.Create(
         GetForecastSchema.Schema,
-        services => services.GetRequiredService<IGetForecastHandler>().GetForecastAsync),
-];
+        services => services.GetRequiredService<IGetForecastHandler>().GetForecastAsync,
+        GetForecastJsonSchemas.Value));
 ```
 
-`ServerOperation<TInput, TOutput>` keeps the operation's types, so dispatch
-needs no reflection: `Bind` creates the typed `IServerOperationProtocol` from a
-protocol's `IServiceProtocol` once per mapped protocol, and each request
-resolves the handler from the request's services, so handler lifetimes are the
-application's.
+Every host adapter works from this table: HTTP routing binds its operations to
+protocols, and MCP exposes them as tools. `IServiceDefinition.Operations`
+returns it, so adapters find it through the registered definitions.
+
+`ServerOperation<TInput, TOutput>` keeps the operation's types, so neither
+adapter needs reflection. For HTTP, `Bind` creates the typed
+`IServerOperationProtocol` from a protocol's `IServiceProtocol` once per mapped
+protocol. For adapters that hold the input as an object, such as MCP after
+decoding tool arguments, `InvokeAsync(input, services, cancellationToken)`
+validates the input against the schema and calls the handler. Both resolve the
+handler from the services of the request they serve, so handler lifetimes are
+the application's in every adapter.
 
 `Map{Service}` keeps its signature and maps the selected protocols through the
 host adapter:
@@ -394,13 +404,13 @@ public static IEndpointRouteBuilder MapWeatherService(
         selected.Add(new("RestJson1", new RestJson1Protocol()));
     }
 
-    return endpoints.MapSmithyService(WeatherSchema.Schema, ServerOperations, selected);
+    return endpoints.MapSmithyService(WeatherServiceDefinition.Catalog, selected);
 }
 ```
 
-`MapSmithyService` is public: it maps any service from its schema, operation
-table, and a list of `SmithyServerProtocol(Name, Protocol)` values, the name
-appearing in endpoint display names and route conflict errors.
+`MapSmithyService` is public: it maps any service from its operation catalog and
+a list of `SmithyServerProtocol(Name, Protocol)` values, the name appearing in
+endpoint display names and route conflict errors.
 
 The host adapter turns each protocol's `ServerRouting` into endpoints: one per
 `ServerRoute`, named `{Operation} ({Protocol})`, or one for a `ByDispatch`
@@ -410,9 +420,9 @@ generator. A route that repeats the method and path of an earlier one within
 one `MapSmithyService` call fails at startup, naming the protocol that repeats
 it.
 
-New hosts reuse the operation table, the service and operation schemas, and the
-protocols' `ServerRouting`. HTTP route syntax, MCP JSON Schema, and framework
-types belong in their adapters, not in a parallel service model.
+New hosts reuse the operation catalog, the service and operation schemas, and
+the protocols' `ServerRouting`. HTTP route syntax and framework types belong in
+their adapters, not in a parallel service model.
 
 ## Multiple Protocols per Service
 

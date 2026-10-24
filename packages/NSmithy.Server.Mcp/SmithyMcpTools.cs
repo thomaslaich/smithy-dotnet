@@ -55,11 +55,11 @@ internal sealed class SmithyMcpTool : McpServerTool
     private static readonly ShapeId IdempotentTrait = ShapeId.Parse("smithy.api#idempotent");
     private static readonly ShapeId ReadonlyTrait = ShapeId.Parse("smithy.api#readonly");
 
-    private readonly IServiceOperation operation;
+    private readonly IServerOperation operation;
     private readonly IBoxedJsonCodec inputCodec;
     private readonly IBoxedJsonCodec outputCodec;
 
-    public SmithyMcpTool(IServiceOperation operation)
+    public SmithyMcpTool(IServerOperation operation)
     {
         this.operation = operation ?? throw new ArgumentNullException(nameof(operation));
         var schema = operation.Schema;
@@ -138,7 +138,16 @@ internal sealed class SmithyMcpTool : McpServerTool
         object? output;
         try
         {
-            output = await operation.InvokeAsync(input, cancellationToken).ConfigureAwait(false);
+            output = await operation
+                .InvokeAsync(
+                    input,
+                    request.Services
+                        ?? throw new InvalidOperationException(
+                            $"The MCP request for '{operation.Schema.Id}' carries no services to resolve its handler from."
+                        ),
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
         }
         catch (Exception exception) when (IsModeledError(exception))
         {

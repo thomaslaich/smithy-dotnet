@@ -400,9 +400,7 @@ final class ServerGeneratorTest {
         generated);
     assertTrue(
         generated.contains(
-            "return endpoints.MapSmithyService("
-                + "global::Example.Example.Reststreaming.Schemas.StreamingServiceSchema.Schema,"
-                + " ServerOperations, selected);"),
+            "return endpoints.MapSmithyService(StreamingServiceDefinition.Catalog, selected);"),
         generated);
   }
 
@@ -473,17 +471,26 @@ final class ServerGeneratorTest {
     assertTrue(
         generated.contains("public static OperationJsonSchemas Value { get; } = new("), generated);
     assertTrue(generated.contains("draft/2020-12/schema"), generated);
+    // One table: each entry resolves its handler from the request's services.
+    assertTrue(
+        generated.contains("internal static ServiceOperationCatalog Catalog { get; } = new("),
+        generated);
+    assertTrue(
+        generated.contains("public ServiceOperationCatalog Operations => Catalog;"), generated);
     assertTrue(
         generated.contains(
-            "ServiceOperation.Create(global::Example.Example.Catalog.Schemas.NotifySchema.Schema,"
-                + " async (input, ct) => { await notifyHandler.NotifyAsync(input,"
+            "ServerOperation.Create(global::Example.Example.Catalog.Schemas.NotifySchema.Schema,"
+                + " services => async (input, ct) => { await"
+                + " services.GetRequiredService<INotifyHandler>().NotifyAsync(input,"
                 + " ct).ConfigureAwait(false); return SmithyUnit.Value; },"
                 + " NotifyJsonSchemas.Value),"),
         generated);
     assertTrue(
         generated.contains(
-            "ServiceOperation.Create(global::Example.Example.Catalog.Schemas.PingSchema.Schema, "
-                + "(_, ct) => pingHandler.PingAsync(ct), PingJsonSchemas.Value),"),
+            "ServerOperation.Create(global::Example.Example.Catalog.Schemas.PingSchema.Schema,"
+                + " services => (_, ct) =>"
+                + " services.GetRequiredService<IPingHandler>().PingAsync(ct),"
+                + " PingJsonSchemas.Value)"),
         generated);
   }
 

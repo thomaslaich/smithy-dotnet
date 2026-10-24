@@ -156,22 +156,11 @@ public final class ServerGenerator implements Runnable {
       writer.putContext("catalog", RuntimeTypes.SERVICE_OPERATION_CATALOG);
       writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
       writer.putContext("prompts", writer.consumer(w -> writePromptDefinitions(prompts)));
+      writer.putContext("operations", writer.consumer(w -> writeCatalogOperations(ops)));
       writer.putContext(
-          "handlers",
+          "jsonSchemas",
           writer.consumer(
               w -> {
-                for (int i = 0; i < ops.size(); i++) {
-                  w.write(
-                      "services.GetRequiredService<$L>()$L",
-                      opHandlerName(ops.get(i)),
-                      i + 1 == ops.size() ? "" : ",");
-                }
-              }));
-      writer.putContext(
-          "catalogMembers",
-          writer.consumer(
-              w -> {
-                writeOperationCatalogFactory(ops);
                 if (ops.stream().anyMatch(op -> !isStreaming(op))) {
                   w.write("");
                   writeOperationJsonSchemas(ops);
@@ -185,15 +174,14 @@ public final class ServerGenerator implements Runnable {
 
               ${prompts:C|}
 
-              public ${catalog:T} CreateOperationCatalog(IServiceProvider services)
-              {
-                  ${argumentNullException:T}.ThrowIfNull(services);
-                  return CreateOperationCatalog(
-                      ${handlers:C|}
-                  );
-              }
+              /// <summary>The service's operation table, shared by every host adapter.</summary>
+              internal static ${catalog:T} Catalog { get; } = new(
+                  ${schema:L},
+                  ${operations:C|}
+              );
 
-              ${catalogMembers:C|}
+              public ${catalog:T} Operations => Catalog;
+              ${jsonSchemas:C|}
           }
           """);
     } finally {
@@ -261,49 +249,33 @@ public final class ServerGenerator implements Runnable {
     }
   }
 
-  private void writeOperationCatalogFactory(List<OperationShape> ops) {
-    String parameters =
-        ops.stream()
-            .map(op -> opHandlerName(op) + " " + operationHandlerVariable(op))
-            .collect(Collectors.joining(", "));
-    writer.pushState();
-    try {
-      writer.putContext("parameters", parameters);
-      writer.putContext("catalog", RuntimeTypes.SERVICE_OPERATION_CATALOG);
-      writer.putContext("schema", SchemaGenerator.serviceSchemaAccessor(writer, context, service));
-      writer.putContext("operations", writer.consumer(w -> writeCatalogOperations(ops)));
-      writer.write(
-          """
-          private static ${catalog:T} CreateOperationCatalog(${parameters:L})
-          {
-              return new ${catalog:T}(
-                  ${schema:L},
-                  [
-                      ${operations:C|}
-                  ]
-              );
-          }
-          """);
-    } finally {
-      writer.popState();
-    }
-  }
-
+  /**
+   * The operation table entries: each operation's schema, its handler resolved from a request's
+   * services, and, for unary operations, its JSON Schemas.
+   */
   private void writeCatalogOperations(List<OperationShape> ops) {
-    for (OperationShape op : ops) {
+    for (int i = 0; i < ops.size(); i++) {
+      OperationShape op = ops.get(i);
+      String resolver =
+          "services => "
+              + unaryAdapter(
+                  op, writer.format("services.GetRequiredService<$L>()", opHandlerName(op)));
+      String separator = i + 1 == ops.size() ? "" : ",";
       if (isStreaming(op)) {
         writer.write(
-            "$T.Create($L, $L),",
-            RuntimeTypes.SERVICE_OPERATION,
+            "$T.Create($L, $L)$L",
+            RuntimeTypes.SERVER_OPERATION,
             SchemaGenerator.operationSchemaAccessor(writer, context, op),
-            unaryAdapter(op, operationHandlerVariable(op)));
+            resolver,
+            separator);
       } else {
         writer.write(
-            "$T.Create($L, $L, $L.Value),",
-            RuntimeTypes.SERVICE_OPERATION,
+            "$T.Create($L, $L, $L.Value)$L",
+            RuntimeTypes.SERVER_OPERATION,
             SchemaGenerator.operationSchemaAccessor(writer, context, op),
-            unaryAdapter(op, operationHandlerVariable(op)),
-            operationJsonSchemasClass(op));
+            resolver,
+            operationJsonSchemasClass(op),
+            separator);
       }
     }
   }
@@ -345,7 +317,7 @@ public final class ServerGenerator implements Runnable {
               w -> {
                 if (!serverKinds.isEmpty()) {
                   w.write("");
-                  writeEndpointMapping(ops, contract, serverKinds);
+                  writeEndpointMapping(contract, serverKinds);
                 }
               }));
       writer.write(
@@ -377,10 +349,7 @@ public final class ServerGenerator implements Runnable {
     }
   }
 
-  private void writeEndpointMapping(
-      List<OperationShape> ops, String contract, List<Kind> serverKinds) {
-    writeServerOperations(ops);
-    writer.write("");
+  private void writeEndpointMapping(String contract, List<Kind> serverKinds) {
     writeSelectableMapMethod(contract, serverKinds, protocolEnumName(contract));
   }
 
@@ -465,41 +434,6 @@ public final class ServerGenerator implements Runnable {
     }
   }
 
-  /**
-   * The operation table: each operation's schema and how to resolve its handler from a request's
-   * services. Protocols route requests to these operations at runtime.
-   */
-  private void writeServerOperations(List<OperationShape> ops) {
-    writer.pushState();
-    try {
-      writer.putContext("list", RuntimeTypes.I_READ_ONLY_LIST);
-      writer.putContext("serverOperation", RuntimeTypes.I_SERVER_OPERATION);
-      writer.putContext(
-          "operations",
-          writer.consumer(
-              w -> {
-                for (OperationShape op : ops) {
-                  w.write(
-                      "$T.Create($L, services => $L),",
-                      RuntimeTypes.SERVER_OPERATION,
-                      SchemaGenerator.operationSchemaAccessor(writer, context, op),
-                      unaryAdapter(
-                          op,
-                          writer.format("services.GetRequiredService<$L>()", opHandlerName(op))));
-                }
-              }));
-      writer.write(
-          """
-          private static readonly ${list:T}<${serverOperation:T}> ServerOperations =
-          [
-              ${operations:C|}
-          ];
-          """);
-    } finally {
-      writer.popState();
-    }
-  }
-
   private void writeSelectableMapMethod(
       String contract, List<Kind> serverKinds, String protocolEnum) {
     writer.pushState();
@@ -513,8 +447,6 @@ public final class ServerGenerator implements Runnable {
           "argumentOutOfRangeException", RuntimeTypes.ARGUMENT_OUT_OF_RANGE_EXCEPTION);
       writer.putContext("list", RuntimeTypes.LIST);
       writer.putContext("serverProtocol", RuntimeTypes.SMITHY_SERVER_PROTOCOL);
-      writer.putContext(
-          "serviceSchema", SchemaGenerator.serviceSchemaAccessor(writer, context, service));
       writer.putContext(
           "protocolMappings",
           writer.consumer(w -> writeSelectedProtocolMappings(serverKinds, protocolEnum)));
@@ -534,7 +466,7 @@ public final class ServerGenerator implements Runnable {
               var selected = new ${list:T}<${serverProtocol:T}>();
               ${protocolMappings:C|}
 
-              return endpoints.MapSmithyService(${serviceSchema:L}, ServerOperations, selected);
+              return endpoints.MapSmithyService(${contract:L}Definition.Catalog, selected);
           }
           """);
     } finally {
@@ -671,10 +603,6 @@ public final class ServerGenerator implements Runnable {
 
   private String opHandlerName(OperationShape op) {
     return "I" + CSharpNaming.typeName(op.getId().getName()) + "Handler";
-  }
-
-  private String operationHandlerVariable(OperationShape op) {
-    return CSharpNaming.parameterName(op.getId().getName() + "Handler");
   }
 
   private String serverOperationSignature(SymbolProvider sp, OperationShape op) {

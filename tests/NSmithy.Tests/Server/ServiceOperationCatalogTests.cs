@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 using NSmithy.Server;
@@ -8,26 +9,30 @@ public sealed class ServiceOperationCatalogTests
 {
     private static readonly ShapeId OperationId = new("example", "CountLetters");
 
+    private static readonly IServiceProvider Services =
+        new ServiceCollection().BuildServiceProvider();
+
     [Fact]
     public async Task CatalogEnumeratesLooksUpAndInvokesTypedOperations()
     {
         var serviceSchema = Schemas.Service(new ShapeId("example", "TextService"), "2026-08-30");
         var operationSchema = Schemas.Operation(OperationId, Schemas.String, Schemas.Integer);
         CancellationToken observedCancellationToken = default;
-        var operation = ServiceOperation.Create(
+        var operation = ServerOperation.Create(
             operationSchema,
-            (string input, CancellationToken cancellationToken) =>
-            {
-                observedCancellationToken = cancellationToken;
-                return Task.FromResult(input.Length);
-            }
+            _ =>
+                (string input, CancellationToken cancellationToken) =>
+                {
+                    observedCancellationToken = cancellationToken;
+                    return Task.FromResult(input.Length);
+                }
         );
         var catalog = new ServiceOperationCatalog(serviceSchema, operation);
         using var cancellation = new CancellationTokenSource();
 
         var result = await catalog
             .GetOperation(OperationId)
-            .InvokeAsync("Smithy", cancellation.Token);
+            .InvokeAsync("Smithy", Services, cancellation.Token);
 
         var untypedSchema = Assert.IsAssignableFrom<IOperationSchema>(operationSchema);
         Assert.Same(serviceSchema, catalog.Schema);
@@ -43,13 +48,13 @@ public sealed class ServiceOperationCatalogTests
     [Fact]
     public async Task OperationRejectsInputOfTheWrongRuntimeType()
     {
-        var operation = ServiceOperation.Create(
+        var operation = ServerOperation.Create(
             Schemas.Operation(OperationId, Schemas.String, Schemas.Integer),
-            static (string input, CancellationToken _) => Task.FromResult(input.Length)
+            _ => static (string input, CancellationToken _) => Task.FromResult(input.Length)
         );
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            operation.InvokeAsync(42)
+            operation.InvokeAsync(42, Services)
         );
 
         Assert.Equal("input", exception.ParamName);
@@ -71,17 +76,18 @@ public sealed class ServiceOperationCatalogTests
             ]
         );
         var invoked = false;
-        var operation = ServiceOperation.Create(
+        var operation = ServerOperation.Create(
             Schemas.Operation(OperationId, constrainedString, Schemas.Integer),
-            (string input, CancellationToken _) =>
-            {
-                invoked = true;
-                return Task.FromResult(input.Length);
-            }
+            _ =>
+                (string input, CancellationToken _) =>
+                {
+                    invoked = true;
+                    return Task.FromResult(input.Length);
+                }
         );
 
         await Assert.ThrowsAsync<NSmithy.Core.Validation.ValidationException>(() =>
-            operation.InvokeAsync("no")
+            operation.InvokeAsync("no", Services)
         );
 
         Assert.False(invoked);
@@ -91,13 +97,13 @@ public sealed class ServiceOperationCatalogTests
     public void CatalogRejectsDuplicateOperationIds()
     {
         var schema = Schemas.Operation(OperationId, Schemas.String, Schemas.Integer);
-        var first = ServiceOperation.Create(
+        var first = ServerOperation.Create(
             schema,
-            static (string input, CancellationToken _) => Task.FromResult(input.Length)
+            _ => static (string input, CancellationToken _) => Task.FromResult(input.Length)
         );
-        var second = ServiceOperation.Create(
+        var second = ServerOperation.Create(
             schema,
-            static (string input, CancellationToken _) => Task.FromResult(input.Length * 2)
+            _ => static (string input, CancellationToken _) => Task.FromResult(input.Length * 2)
         );
 
         var exception = Assert.Throws<ArgumentException>(() =>

@@ -11,9 +11,9 @@ public static class SmithyMcpServerBuilderExtensions
 {
     /// <summary>
     /// Adds the tools and prompts for the generated service definition
-    /// <typeparamref name="TDefinition"/>, such as <c>WeatherServiceDefinition</c>. The definition
-    /// and its operation handlers are resolved from dependency injection when MCP server options
-    /// are materialized.
+    /// <typeparamref name="TDefinition"/>, such as <c>WeatherServiceDefinition</c>. The definition is
+    /// resolved from dependency injection when MCP server options are materialized; each tool call
+    /// resolves its handler from the call's services.
     /// </summary>
     public static IMcpServerBuilder WithSmithyService<TDefinition>(this IMcpServerBuilder builder)
         where TDefinition : class, IServiceDefinition
@@ -29,8 +29,9 @@ public static class SmithyMcpServerBuilderExtensions
 
     /// <summary>
     /// Adds the tools and prompts for the generated service identified by
-    /// <paramref name="schema"/>. The generated service definition and operation handlers are
-    /// resolved from dependency injection when MCP server options are materialized.
+    /// <paramref name="schema"/>. The generated service definition is resolved from dependency
+    /// injection when MCP server options are materialized; each tool call resolves its handler from
+    /// the call's services.
     /// </summary>
     public static IMcpServerBuilder WithSmithyService(
         this IMcpServerBuilder builder,
@@ -103,7 +104,7 @@ public static class SmithyMcpServerBuilderExtensions
                 var prompts = options.PromptCollection ?? [];
                 var definition = definitionFactory(services);
                 foreach (
-                    var tool in SmithyMcpTools.Create(definition.CreateOperationCatalog(services))
+                    var tool in SmithyMcpTools.Create(definition.Operations)
                 )
                 {
                     tools.Add(tool);

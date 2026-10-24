@@ -17,22 +17,23 @@ public static partial class SmithyAspNetCoreServer
     public const string PackageName = "NSmithy.Server.AspNetCore";
 
     /// <summary>
-    /// Maps <paramref name="operations"/> of <paramref name="service"/> over each of
+    /// Maps the operations of <paramref name="catalog"/> over each of
     /// <paramref name="protocols"/>: one endpoint per route a protocol reports, or one endpoint for
     /// a protocol that resolves the operation from the request. Two routes with the same method and
     /// path fail.
     /// </summary>
     public static IEndpointRouteBuilder MapSmithyService(
         this IEndpointRouteBuilder endpoints,
-        ServiceSchema service,
-        IReadOnlyList<IServerOperation> operations,
+        ServiceOperationCatalog catalog,
         IReadOnlyList<SmithyServerProtocol> protocols
     )
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-        ArgumentNullException.ThrowIfNull(service);
-        ArgumentNullException.ThrowIfNull(operations);
+        ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(protocols);
+
+        var service = catalog.Schema;
+        var operations = catalog.Operations;
 
         IOperationSchema[] schemas = [.. operations.Select(operation => operation.Schema)];
         var mappedRoutes = new HashSet<string>(StringComparer.Ordinal);

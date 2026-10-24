@@ -201,7 +201,7 @@ modeled error descriptors. For each service, it emits a `ServiceSchema` with
 the service shape id, version, and service-level traits.
 
 Server generation additionally binds each unary operation to JSON Schema
-2020-12 input and output documents in its `IServiceOperation`. These describe
+2020-12 input and output documents in its `IServerOperation`. These describe
 NSmithy's canonical JSON document representation (`@jsonName`, epoch-second
 timestamps, base64 blobs, unions, and constraints), not any particular wire
 protocol, and are what MCP tools consume. Prompt metadata from
