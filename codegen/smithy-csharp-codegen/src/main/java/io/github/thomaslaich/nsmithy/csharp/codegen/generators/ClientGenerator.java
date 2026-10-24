@@ -891,7 +891,7 @@ public final class ClientGenerator implements Runnable {
     if (!isEventStreamOperation(context.model(), op)) {
       return true;
     }
-    return ProtocolSupport.serviceProtocols(context, service).stream()
+    return ProtocolSupport.protocols(context, service).stream()
         .anyMatch(CSharpProtocol::eventStreams);
   }
 

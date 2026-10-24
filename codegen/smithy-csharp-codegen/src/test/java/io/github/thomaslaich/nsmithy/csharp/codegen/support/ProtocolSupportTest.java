@@ -21,14 +21,12 @@ final class ProtocolSupportTest {
   private static final ShapeId MSGPACK = ShapeId.from("acme.protocols#msgpack");
 
   @Test
-  void serviceProtocolsFollowRegistrationOrder() {
+  void protocolsFollowRegistrationOrder() {
     var service = service(TraitIds.GRPC, TraitIds.RPC_V2_JSON, TraitIds.RPC_V2_CBOR);
 
     assertEquals(
         List.of("RpcV2Cbor", "RpcV2Json", "Grpc"),
-        ProtocolSupport.serviceProtocols(List.of(), service).stream()
-            .map(CSharpProtocol::name)
-            .toList());
+        ProtocolSupport.protocols(List.of(), service).stream().map(CSharpProtocol::name).toList());
     assertEquals(
         "NSmithy.Protocols.RpcV2Cbor.RpcV2CborProtocol",
         ProtocolSupport.clientDefault(List.of(), Optional.empty(), service)
@@ -43,7 +41,7 @@ final class ProtocolSupportTest {
 
     assertEquals(
         List.of("RestJson1", "MsgPack"),
-        ProtocolSupport.serviceProtocols(List.of(integration(msgpack("MsgPack"))), service).stream()
+        ProtocolSupport.protocols(List.of(integration(msgpack("MsgPack"))), service).stream()
             .map(CSharpProtocol::name)
             .toList());
   }
@@ -103,9 +101,7 @@ final class ProtocolSupportTest {
     CodegenException ex =
         assertThrows(
             CodegenException.class,
-            () ->
-                ProtocolSupport.serviceProtocols(
-                    List.of(integration(msgpack("RestJson1"))), service));
+            () -> ProtocolSupport.protocols(List.of(integration(msgpack("RestJson1"))), service));
 
     assertTrue(ex.getMessage().contains("share the name 'RestJson1'"), ex.getMessage());
   }

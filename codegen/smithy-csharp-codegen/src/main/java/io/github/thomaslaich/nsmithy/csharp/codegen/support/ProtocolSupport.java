@@ -86,12 +86,11 @@ public final class ProtocolSupport {
    * The protocols {@code service} carries, in registration order. Two of them with the same name
    * fail code generation, since the name is a generated identifier.
    */
-  public static List<CSharpProtocol> serviceProtocols(
-      GenerationContext context, ServiceShape service) {
-    return serviceProtocols(context.integrations(), service);
+  public static List<CSharpProtocol> protocols(GenerationContext context, ServiceShape service) {
+    return protocols(context.integrations(), service);
   }
 
-  public static List<CSharpProtocol> serviceProtocols(
+  public static List<CSharpProtocol> protocols(
       List<CSharpIntegration> integrations, ServiceShape service) {
     List<CSharpProtocol> protocols =
         registered(integrations).stream()
@@ -120,7 +119,7 @@ public final class ProtocolSupport {
   /** The service's protocols that serve requests, in registration order. */
   public static List<CSharpProtocol> serverProtocols(
       GenerationContext context, ServiceShape service) {
-    return serviceProtocols(context, service).stream().filter(CSharpProtocol::server).toList();
+    return protocols(context, service).stream().filter(CSharpProtocol::server).toList();
   }
 
   /**
@@ -134,7 +133,7 @@ public final class ProtocolSupport {
 
   public static Optional<CSharpProtocol> clientDefault(
       List<CSharpIntegration> integrations, Optional<ShapeId> configured, ServiceShape service) {
-    List<CSharpProtocol> protocols = serviceProtocols(integrations, service);
+    List<CSharpProtocol> protocols = protocols(integrations, service);
     if (configured.isEmpty()) {
       return protocols.stream().findFirst();
     }
