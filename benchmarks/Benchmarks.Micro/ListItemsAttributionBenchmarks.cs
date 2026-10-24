@@ -4,6 +4,7 @@ using Bench.Hosting;
 using Bench.Stacks.MinimalApi;
 using BenchmarkDotNet.Attributes;
 using Nsmithy.Bench;
+using Nsmithy.Bench.Schemas;
 using NSmithy.Codecs.Json;
 using NSmithy.Core.Serde;
 

@@ -88,6 +88,10 @@ public final class RuntimeTypes {
   public static final Symbol I_SERVICE_DEFINITION = type("NSmithy.Server.IServiceDefinition");
   public static final Symbol OPERATION_JSON_SCHEMAS = type("NSmithy.Server.OperationJsonSchemas");
   public static final Symbol SERVICE_OPERATION = type("NSmithy.Server.ServiceOperation");
+  public static final Symbol SERVER_OPERATION = type("NSmithy.Server.ServerOperation");
+  public static final Symbol I_SERVER_OPERATION = type("NSmithy.Server.IServerOperation");
+  public static final Symbol SMITHY_SERVER_PROTOCOL =
+      type("NSmithy.Server.AspNetCore.SmithyServerProtocol");
   public static final Symbol SERVICE_OPERATION_CATALOG =
       type("NSmithy.Server.ServiceOperationCatalog");
   public static final Symbol SERVICE_PROMPT_ARGUMENT_DEFINITION =

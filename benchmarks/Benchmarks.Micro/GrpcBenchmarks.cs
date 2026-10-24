@@ -186,7 +186,9 @@ internal static class GrpcCodecCases
     {
         var googleValue = Bench.GrpcNet.GetItemOutput.Parser.ParseFrom(payload);
         var nsmithyValue = new Native.GetItemOutput(Item("item-0", 0));
-        var nsmithyCodec = ProtoCodecFactory.Default.FromSchema(Native.GetItemOutputSchema.Schema);
+        var nsmithyCodec = ProtoCodecFactory.Default.FromSchema(
+            Native.Schemas.GetItemOutputSchema.Schema
+        );
         return new GrpcCodecCase(
             googleValue.ToByteArray,
             () => nsmithyCodec.Serialize(nsmithyValue),
@@ -198,19 +200,17 @@ internal static class GrpcCodecCases
     private static GrpcCodecCase CreateListItems(byte[] payload)
     {
         var googleValue = Bench.GrpcNet.ListItemsOutput.Parser.ParseFrom(payload);
-        var nsmithyValue = new Native.ListItemsOutput(
-            new Native.ItemList(
-                Enumerable.Range(0, 100).Select(index => Item($"item-{index}", index))
-            )
-        );
+        var nsmithyValue = new Native.ListItemsOutput([
+            .. Enumerable.Range(0, 100).Select(index => Item($"item-{index}", index)),
+        ]);
         var nsmithyCodec = ProtoCodecFactory.Default.FromSchema(
-            Native.ListItemsOutputSchema.Schema
+            Native.Schemas.ListItemsOutputSchema.Schema
         );
         return new GrpcCodecCase(
             googleValue.ToByteArray,
             () => nsmithyCodec.Serialize(nsmithyValue),
             () => Bench.GrpcNet.ListItemsOutput.Parser.ParseFrom(payload).Items.Count,
-            () => nsmithyCodec.Deserialize(payload).Items.Values.Count
+            () => nsmithyCodec.Deserialize(payload).Items.Count
         );
     }
 
@@ -220,6 +220,6 @@ internal static class GrpcCodecCases
             Name: $"Benchmark item {index}",
             PriceCents: 1_000 + index,
             InStock: true,
-            Tags: new Native.TagList(["benchmark", "grpc", $"tag-{index % 5}"])
+            Tags: ["benchmark", "grpc", $"tag-{index % 5}"]
         );
 }

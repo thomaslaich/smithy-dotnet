@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
+using Microsoft.Extensions.DependencyInjection;
 using NSmithy.Http;
 using NSmithy.Server;
 
@@ -18,6 +19,9 @@ public static class SmithyAspNetCoreHost
 {
     private const string BufferedRequestBodyItemKey =
         "NSmithy.Server.AspNetCore.BufferedRequestBody";
+
+    // Used when the application registers no runtime of its own.
+    private static readonly SmithyServerRuntime DefaultRuntime = new();
 
     /// <summary>Dispatch. Set <paramref name="streamRequestBody"/> for streaming request bodies.</summary>
     public static async Task DispatchAsync<TInput, TOutput>(
@@ -43,6 +47,61 @@ public static class SmithyAspNetCoreHost
             .ConfigureAwait(false);
         await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Dispatches a request to an operation bound to a protocol. The runtime is the one the
+    /// request's services provide, or a default runtime when none is registered; the handler comes
+    /// from the request's services.
+    /// </summary>
+    public static async Task DispatchAsync(
+        HttpContext httpContext,
+        IServerOperationBinding operation,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(operation);
+        if (operation.StreamsRequestBody)
+        {
+            RelaxRequestBodyRate(httpContext);
+        }
+
+        var request = await ToSmithyRequestAsync(
+                httpContext,
+                operation.StreamsRequestBody,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        await DispatchBuiltRequestAsync(httpContext, operation, request, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    // For callers that already built the request, such as dispatch routing, which reads the
+    // request to resolve the operation before it can dispatch.
+    internal static async Task DispatchBuiltRequestAsync(
+        HttpContext httpContext,
+        IServerOperationBinding operation,
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var services = httpContext.RequestServices;
+        var response = await operation
+            .DispatchAsync(
+                services.GetService<SmithyServerRuntime>() ?? DefaultRuntime,
+                request,
+                services,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static Task WriteResponseAsync(
+        HttpContext httpContext,
+        SmithyHttpServerResponse response,
+        CancellationToken cancellationToken
+    ) => WriteAsync(httpContext, response, cancellationToken);
 
     public static bool HasExpectedQueryLiteral(
         HttpContext httpContext,

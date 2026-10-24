@@ -4,12 +4,13 @@ Target architecture for generated NSmithy servers and the shared server runtime.
 
 ## Goal
 
-Generated server code describes the modeled operation and its routing; a shared
-server runtime owns execution. The generated endpoint maps a route to a handler
-method and the operation's bound protocol; the runtime owns the dispatch
-algorithm — deserialize the request, invoke the handler, serialize the response
-or a modeled error. This mirrors [client-architecture.md](client-architecture.md):
-the generated surface describes the operation, the runtime owns the lifecycle.
+Generated server code describes the modeled operations; the shared server
+runtime and the protocols own routing and execution. A protocol says how
+requests reach each operation; the runtime owns the dispatch algorithm:
+deserialize the request, invoke the handler, serialize the response or a
+modeled error. This mirrors [client-architecture.md](client-architecture.md),
+where the runtime protocol already decides how a request is addressed: the
+generated surface describes the operation, the runtime owns the lifecycle.
 
 The desired shape is:
 
@@ -23,9 +24,9 @@ receive request
   -> host adapter writes the neutral response
 ```
 
-The dispatch algorithm lives in one hand-written runtime, not in codegen. A new
-protocol, a new host, or a new cross-cutting concern extends the runtime, not a
-family of code-generation templates.
+The dispatch algorithm and the routes live in hand-written runtimes, not in
+codegen. A new protocol, a new host, or a new cross-cutting concern extends the
+runtime, not a family of code-generation templates.
 
 ## The Seam
 
@@ -203,15 +204,15 @@ it actually sits.
 
 A host adapter binds a host framework to the runtime. It owns two conversions —
 the host request into a `SmithyHttpRequest`, and a `SmithyHttpServerResponse` onto
-the host response — and one dispatch entry point that generated endpoints call:
+the host response — the mapping of protocols' routes to host endpoints, and one
+dispatch entry point:
 
-Generated endpoints resolve `SmithyServerRuntime` from request services and pass
-it to the host. `Add{Service}Handler<THandler>()` calls `AddSmithyServer()`, which
-uses `TryAddSingleton` to register a default without replacing application
-registrations. Applications registering operation handlers individually must call
-`services.AddSmithyServer()` before building the host. The runtime is currently
-stateless; this ownership boundary allows future lifecycle configuration without
-adding global host state.
+The host adapter resolves `SmithyServerRuntime` from request services, and uses
+a default runtime when the application registers none. `AddSmithyServer()`,
+which `Add{Service}Handler<THandler>()` calls, registers the runtime with
+`TryAddSingleton`, so an application registration takes precedence. The runtime
+is currently stateless; resolving it from the container allows future lifecycle
+configuration without adding global host state.
 
 ```csharp
 public static class SmithyAspNetCoreHost
@@ -279,44 +280,139 @@ Whether a connection can carry trailers is transport-level and belongs to the
 host. The trailer values (`grpc-status: 13`, the message) belong to the protocol.
 
 Direct callers of `SmithyAspNetCoreHost.DispatchAsync` pass the runtime as the
-first argument. Generated endpoints use `[FromServices]` to resolve it, preserving
-application-selected lifetimes and avoiding request-body inference. This is an
-ownership seam; server interceptors and telemetry remain future work.
+first argument; mapped endpoints resolve it from request services, preserving
+application-selected lifetimes. This is an ownership seam; server interceptors
+and telemetry remain future work.
 
-## Generated Endpoint
+## Routing
 
-A generated endpoint is a route bound to a handler method and the operation's
-protocol, delegating to the host adapter:
+Routing belongs to the protocol. A protocol already decides how a client
+addresses a request; on the server, the same knowledge decides which operation a
+request is for. The server half of `IServiceProtocol` reports it:
 
 ```csharp
-endpoints.MapMethods("/foo", ["POST"], (HttpContext context, [FromServices] SmithyServerRuntime runtime, IFooHandler handler, CancellationToken ct) =>
-    SmithyAspNetCoreHost.DispatchAsync(runtime, context, FooProtocol, handler.FooAsync, cancellationToken: ct));
+public interface IServiceProtocol
+{
+    IClientOperationProtocol<TInput, TOutput> ForClientOperation<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation);
+
+    IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
+        OperationSchema<TInput, TOutput> operation);
+
+    // How requests reach the given operations over this protocol. A protocol that does not
+    // serve requests keeps the default, ServerRouting.None.
+    ServerRouting GetServerRouting(IReadOnlyList<IOperationSchema> operations) =>
+        ServerRouting.None;
+}
+
+public abstract record ServerRouting
+{
+    public static ServerRouting None { get; } = new ByRoute([]);
+
+    // Each operation has its own route, matched by method and path.
+    public sealed record ByRoute(IReadOnlyList<ServerRoute> Routes) : ServerRouting;
+
+    // One route for the service; the protocol names the operation from the request.
+    public sealed record ByDispatch(
+        string Method,
+        string Path,
+        Func<SmithyHttpRequest, CancellationToken, ValueTask<ShapeId?>> ResolveOperation,
+        Func<SmithyHttpRequest, SmithyHttpServerResponse> UnknownOperation) : ServerRouting;
+}
+
+public sealed record ServerRoute(
+    ShapeId Operation,
+    string Method,
+    string Path,                                             // {label} and {label+} segments
+    IReadOnlyList<KeyValuePair<string, string?>> RequiredQuery);  // literal query of @http(uri)
 ```
 
-The only per-operation variation in codegen is the handler-adapter lambda (by
-input/output presence and stream direction), the route and URI derived from the
-model, and any static query validation from `@http`. The dispatch algorithm is
-not generated.
+| Protocol | Routing |
+| --- | --- |
+| restJson1, simpleRestJson | `ByRoute`: each operation's `@http` method and URI, read from its schema |
+| rpcv2Cbor, rpcv2Json | `ByRoute`: `POST /service/{Service}/operation/{Operation}` |
+| gRPC | `ByRoute`: `POST /{namespace}.{Service}/{Operation}` |
+| awsJson1_0, awsJson1_1 | `ByDispatch`: `POST /`, the operation named by `X-Amz-Target` |
 
-### Endpoint Mapping and Shared Metadata
+`ByRoute` covers protocols that address operations by method and path, so the
+host matches requests with its own router. `ByDispatch` covers protocols that
+name the operation inside the request (a header, or the body for JSON-RPC and
+Thrift). The protocol may read the body to resolve the operation; the host
+buffers it, so the operation protocol deserializes the same bytes. An operation
+that streams its request body therefore cannot be routed by dispatch, and
+mapping one fails at startup. When the
+protocol names no operation, the host writes the protocol's `UnknownOperation`
+response, so the error has the protocol's shape (a JSON-RPC "method not found",
+say).
 
-Generated code contains contract-specific facts; runtimes own reusable behavior.
-Explicit endpoint mappings retain the route, protocol selection, static query
-guards, streaming flags, and typed handler adapters. Dispatch already delegates
-to the host in one call.
+A protocol leaves out operations it cannot bind, such as event-stream
+operations on a protocol without event streams. Paths are protocol-neutral URI
+patterns; the host adapter translates them into its own routing syntax. A
+request whose literal query does not match `RequiredQuery` is not routed to the
+operation and is answered with 404, as an unmatched route would be.
 
-Descriptor-driven endpoint mapping remains deferred. A descriptor would also
-need typed handler resolution and protocol route collision handling. Before
-introducing it, compare generated source size and total runtime complexity for
-unary, streaming, multi-protocol, and static-query services. Reducing generated
-lines alone does not justify another public abstraction or reflection-based
-dispatch.
+`IServerOperationProtocol.StreamsRequestBody` tells the host whether to hand the
+operation the request body as a stream (event-stream input, a streaming blob
+payload) or buffered. Like `InputValidator`, it has no default, so a protocol
+that streams has to say so.
 
-New host integrations should reuse the transport-neutral service definition,
-operation catalog, and service/operation schemas as their metadata root.
-Adapter-specific descriptors should reference those definitions. HTTP routes,
-MCP JSON Schema, and framework types belong in their respective adapters, rather
-than in a parallel service model or the shared definition.
+## Generated Server Surface
+
+Generated code describes operations; it contains no routes, no protocol
+branches, and no per-operation endpoint. For each service it emits an operation
+table pairing each operation's schema with a typed handler resolver:
+
+```csharp
+private static readonly IReadOnlyList<IServerOperation> ServerOperations =
+[
+    ServerOperation.Create(
+        GetCitySchema.Schema,
+        services => services.GetRequiredService<IGetCityHandler>().GetCityAsync),
+    ServerOperation.Create(
+        GetForecastSchema.Schema,
+        services => services.GetRequiredService<IGetForecastHandler>().GetForecastAsync),
+];
+```
+
+`ServerOperation<TInput, TOutput>` keeps the operation's types, so dispatch
+needs no reflection: `Bind` creates the typed `IServerOperationProtocol` from a
+protocol's `IServiceProtocol` once per mapped protocol, and each request
+resolves the handler from the request's services, so handler lifetimes are the
+application's.
+
+`Map{Service}` keeps its signature and maps the selected protocols through the
+host adapter:
+
+```csharp
+public static IEndpointRouteBuilder MapWeatherService(
+    this IEndpointRouteBuilder endpoints,
+    WeatherServiceProtocols protocols = WeatherServiceProtocols.RestJson1)
+{
+    var selected = new List<SmithyServerProtocol>();
+    if ((protocols & WeatherServiceProtocols.RestJson1) != 0)
+    {
+        selected.Add(new("RestJson1", new RestJson1Protocol()));
+    }
+
+    return endpoints.MapSmithyService(WeatherSchema.Schema, ServerOperations, selected);
+}
+```
+
+`MapSmithyService` is public: it maps any service from its schema, operation
+table, and a list of `SmithyServerProtocol(Name, Protocol)` values, the name
+appearing in endpoint display names and route conflict errors.
+
+The host adapter turns each protocol's `ServerRouting` into endpoints: one per
+`ServerRoute`, named `{Operation} ({Protocol})`, or one for a `ByDispatch`
+protocol. Endpoints are plain `RequestDelegate`s, so mapping uses no minimal-API
+parameter binding and needs neither reflection nor the request delegate
+generator. A route that repeats the method and path of an earlier one within
+one `MapSmithyService` call fails at startup, naming the protocol that repeats
+it.
+
+New hosts reuse the operation table, the service and operation schemas, and the
+protocols' `ServerRouting`. HTTP route syntax, MCP JSON Schema, and framework
+types belong in their adapters, not in a parallel service model.
 
 ## Multiple Protocols per Service
 
@@ -364,9 +460,9 @@ protocols can share a listener depends on their routes and transport:
   occupy different route shapes, so any mix of these three coexists on one
   listener; a client selects its protocol by which route it calls.
 - **Same-route protocols need separate listeners.** awsJson1_0 and awsJson1_1
-  both bind `POST /` and differ only by `Content-Type`. Generated routing does not
-  dispatch on `Content-Type`, so exposing both requires pinning each to its own
-  port with `RequireHost`.
+  both bind `POST /` and differ only by `Content-Type`. Routing does not dispatch
+  on `Content-Type`, so exposing both requires pinning each to its own port with
+  `RequireHost`.
 - **Transport-incompatible protocols need separate listeners.** gRPC requires
   HTTP/2; it goes on its own HTTP/2 listener rather than sharing an HTTP/1.1 port.
 
@@ -394,7 +490,8 @@ what actually streams; see
   given and surfaces the server's `ValidationException` as a modeled error.
 - Protocol-specific types (gRPC status codes, trailer names, media types) do not
   appear in the host adapter or generated server code.
-- Codegen does not own the dispatch algorithm; the runtime is its single owner.
+- Codegen does not own the dispatch algorithm or the routes; the runtime and the
+  protocols are their single owners.
 - Server interceptors and telemetry are out of scope for the initial runtime; the
   runtime only provides the seam where they attach later, as on the client.
 

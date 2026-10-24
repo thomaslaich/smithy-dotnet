@@ -8,9 +8,9 @@ namespace NSmithy.Server.AspNetCore;
 public static class SmithyServerServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds the default server runtime unless the application already registered one.
-    /// Generated aggregate handler registration calls this automatically. Applications that
-    /// register operation handlers individually should call this before building the host.
+    /// Adds the default server runtime unless the application already registered one. Mapped
+    /// services use a default runtime when none is registered, so this is optional; it gives the
+    /// runtime a place in the container for applications that configure or replace it.
     /// </summary>
     public static IServiceCollection AddSmithyServer(this IServiceCollection services)
     {

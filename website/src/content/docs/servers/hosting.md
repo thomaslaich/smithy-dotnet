@@ -25,17 +25,17 @@ The client must select the matching protocol as well as the endpoint.
 
 ## Server runtime registration
 
-`Add{Service}Handler<THandler>()` also registers a default `SmithyServerRuntime`.
-Endpoints resolve it from request services and pass it to the ASP.NET Core host
-adapter. An existing application registration takes precedence.
+Endpoints resolve `SmithyServerRuntime` from request services, and use a default
+runtime when none is registered. `Add{Service}Handler<THandler>()` registers it
+through `AddSmithyServer()`; an existing application registration takes
+precedence.
 
-If you register operation handlers individually, register the runtime explicitly:
+To implement operations separately, register each operation handler. The
+runtime needs no registration of its own:
 
 ```csharp
-using NSmithy.Server.AspNetCore;
-
-builder.Services.AddSmithyServer();
 builder.Services.AddScoped<IGetWeatherHandler, GetWeatherHandler>();
+builder.Services.AddScoped<IGetForecastHandler, GetForecastHandler>();
 ```
 
 The runtime currently has no configurable lifecycle options. DI establishes its

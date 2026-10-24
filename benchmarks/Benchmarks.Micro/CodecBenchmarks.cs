@@ -5,6 +5,7 @@ using Bench.Domain;
 using Bench.Stacks.MinimalApi;
 using BenchmarkDotNet.Attributes;
 using Nsmithy.Bench;
+using Nsmithy.Bench.Schemas;
 using NSmithy.Codecs.Cbor;
 using NSmithy.Codecs.Json;
 using NSmithy.Codecs.Proto;
@@ -59,7 +60,7 @@ public class SerializationBenchmarks
                 Name: item.Name,
                 PriceCents: item.PriceCents,
                 Category: item.Category,
-                Tags: item.Tags is null ? null : new StringList(item.Tags)
+                Tags: item.Tags
             );
             stjSummaries[i] = new ItemSummaryDto
             {
@@ -72,7 +73,7 @@ public class SerializationBenchmarks
             };
         }
 
-        smithyList = new ListItemsOutput(new ItemSummaries(smithySummaries));
+        smithyList = new ListItemsOutput(smithySummaries);
         stjList = new ListItemsResponse { Items = stjSummaries };
     }
 
@@ -251,7 +252,7 @@ public class SerializationExecutionBenchmarks : IDisposable
                 Name: item.Name,
                 PriceCents: item.PriceCents,
                 Category: item.Category,
-                Tags: item.Tags is null ? null : new StringList(item.Tags)
+                Tags: item.Tags
             );
             stjSummaries[i] = new ItemSummaryDto
             {
@@ -264,7 +265,7 @@ public class SerializationExecutionBenchmarks : IDisposable
             };
         }
 
-        smithyList = new ListItemsOutput(new ItemSummaries(smithySummaries));
+        smithyList = new ListItemsOutput(smithySummaries);
         stjList = new ListItemsResponse { Items = stjSummaries };
         writer = new Utf8JsonWriter(destination);
 
@@ -331,7 +332,7 @@ public class SerializationExecutionBenchmarks : IDisposable
         writer.WriteStartObject();
         writer.WritePropertyName(ItemsName);
         writer.WriteStartArray();
-        foreach (var item in value.Items.Values)
+        foreach (var item in value.Items)
         {
             writer.WriteStartObject();
             writer.WriteString(ItemIdName, item.ItemId);
@@ -347,7 +348,7 @@ public class SerializationExecutionBenchmarks : IDisposable
             {
                 writer.WritePropertyName(TagsName);
                 writer.WriteStartArray();
-                foreach (var tag in item.Tags.Values)
+                foreach (var tag in item.Tags)
                 {
                     writer.WriteStringValue(tag);
                 }
@@ -407,17 +408,15 @@ internal static class CodecBenchmarkValues
     public static ListItemsOutput CreateListItemsOutput(int itemCount)
     {
         var items = BenchDomain.ListItems(itemCount);
-        return new ListItemsOutput(
-            new ItemSummaries(
-                items.Select(item => new ItemSummary(
-                    InStock: item.InStock,
-                    ItemId: item.ItemId,
-                    Name: item.Name,
-                    PriceCents: item.PriceCents,
-                    Category: item.Category,
-                    Tags: item.Tags is null ? null : new StringList(item.Tags)
-                ))
-            )
-        );
+        return new ListItemsOutput([
+            .. items.Select(item => new ItemSummary(
+                InStock: item.InStock,
+                ItemId: item.ItemId,
+                Name: item.Name,
+                PriceCents: item.PriceCents,
+                Category: item.Category,
+                Tags: item.Tags
+            )),
+        ]);
     }
 }

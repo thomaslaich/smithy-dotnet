@@ -90,7 +90,6 @@ implementations, register each one instead of using the aggregate helper:
 
 ```csharp
 builder.Services.AddLibraryService();
-builder.Services.AddSmithyServer(); // using NSmithy.Server.AspNetCore;
 builder.Services.AddScoped<IGetBookHandler, GetBookHandler>();
 ```
 

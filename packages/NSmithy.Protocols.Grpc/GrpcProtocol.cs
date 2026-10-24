@@ -53,6 +53,19 @@ public sealed class GrpcProtocol : IProtocol
             OperationSchema<TInput, TOutput> operation
         ) => CreateOperation(operation, validateInput: true);
 
+        public ServerRouting GetServerRouting(IReadOnlyList<IOperationSchema> operations)
+        {
+            ArgumentNullException.ThrowIfNull(operations);
+            return new ServerRouting.ByRoute([
+                .. operations.Select(operation => new ServerRoute(
+                    operation.Id,
+                    "POST",
+                    MethodPath(service, operation.Id.Name),
+                    []
+                )),
+            ]);
+        }
+
         private OperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
             OperationSchema<TInput, TOutput> operation,
             bool validateInput
@@ -257,6 +270,8 @@ public sealed class GrpcProtocol : IProtocol
         // gRPC full method name: "/{package}.{Service}/{Method}". The proto package mirrors the
         // Smithy namespace, matching what smithy-proto-codegen emits.
         private readonly string methodPath = MethodPath(service, operation.Id.Name);
+
+        public bool StreamsRequestBody { get; } = Schemas.HasEventStreamMember(operation.Input);
 
         private readonly ModeledErrorSerializer serverErrors = ModeledErrorSerializer.Compile(
             operation.Errors,

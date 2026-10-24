@@ -1259,12 +1259,19 @@ public static class Schemas
 
     private const string UnitShapeId = "smithy.api#Unit";
 
+    /// <summary>Whether a structure schema has an event-stream member.</summary>
+    public static bool HasEventStreamMember(Schema schema)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        return schema.Resolved is IStructSchema structure
+            && structure.Members.Any(member => member.Target.Resolved is IEventStreamSchema);
+    }
+
     /// <summary>
-    /// Whether a schema is the empty structure Smithy synthesizes for an operation whose input or
-    /// output is <c>smithy.api#Unit</c>. The synthetic shape carries
-    /// <c>smithy.synthetic#originalShapeId</c> pointing back at the unit, which is the only thing
-    /// telling it apart from a structure the model really declares with no members — a distinction
-    /// protocols need, because one has no body and the other has an empty one.
+    /// Whether a schema is the empty structure Smithy synthesizes for an operation input or output
+    /// of <c>smithy.api#Unit</c>. Protocols treat it differently from a declared structure without
+    /// members: it has no body, where the declared one has an empty body. Only its
+    /// <c>smithy.synthetic#originalShapeId</c> trait, pointing back at the unit, tells them apart.
     /// </summary>
     public static bool IsSyntheticUnit(Schema schema)
     {

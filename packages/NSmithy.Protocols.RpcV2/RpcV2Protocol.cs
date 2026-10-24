@@ -75,6 +75,19 @@ public abstract class RpcV2Protocol : IProtocol
             OperationSchema<TInput, TOutput> operation
         ) => CreateOperation(operation, isServer: true);
 
+        public ServerRouting GetServerRouting(IReadOnlyList<IOperationSchema> operations)
+        {
+            ArgumentNullException.ThrowIfNull(operations);
+            return new ServerRouting.ByRoute([
+                .. operations.Select(operation => new ServerRoute(
+                    operation.Id,
+                    "POST",
+                    RequestUri(service, operation.Id),
+                    []
+                )),
+            ]);
+        }
+
         private OperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
             OperationSchema<TInput, TOutput> operation,
             bool isServer
@@ -336,7 +349,9 @@ public abstract class RpcV2Protocol : IProtocol
     ) : IOperationProtocol<TInput, TOutput>
     {
         // The RPC v2 path is service-derived; the protocol owns this wire detail.
-        private readonly string requestUri = RequestUri(service, operation);
+        private readonly string requestUri = RequestUri(service, operation.Id);
+
+        public bool StreamsRequestBody { get; } = Schemas.HasEventStreamMember(operation.Input);
 
         private readonly ModeledErrorSerializer serverErrors = ModeledErrorSerializer.Compile(
             operation.Errors,
@@ -496,10 +511,8 @@ public abstract class RpcV2Protocol : IProtocol
         return response;
     }
 
-    private static string RequestUri<TInput, TOutput>(
-        ServiceSchema service,
-        OperationSchema<TInput, TOutput> operation
-    ) => $"/service/{service.Id.Name}/operation/{operation.Id.Name}";
+    private static string RequestUri(ServiceSchema service, ShapeId operation) =>
+        $"/service/{service.Id.Name}/operation/{operation.Name}";
 
     /// <summary>
     /// An event-stream shape as RPC v2 frames it: the stream's members other than the events

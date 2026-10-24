@@ -39,7 +39,7 @@ public sealed class NSmithyBenchClient : IBenchClient
     )
     {
         var output = await client.ListItemsAsync(new ListItemsInput(count), cancellationToken);
-        var items = output.Items.Values;
+        var items = output.Items;
         var checksum = 0;
         for (var i = 0; i < items.Count; i++)
             checksum = HashCode.Combine(checksum, items[i].ItemId);
@@ -64,13 +64,13 @@ public sealed class NSmithyBenchClient : IBenchClient
                 Query: input.Query,
                 RequestId: input.RequestId,
                 Sort: input.Sort is null ? null : SortOrder.FromValue(input.Sort),
-                Tags: input.Tags is null ? null : new StringList(input.Tags),
+                Tags: input.Tags,
                 TenantId: input.TenantId
             ),
             cancellationToken
         );
 
-        return new BenchSearchResult(output.Items.Values.Count, output.TotalCount);
+        return new BenchSearchResult(output.Items.Count, output.TotalCount);
     }
 
     public async Task<BenchOrderResult> CreateOrderAsync(
@@ -88,7 +88,7 @@ public sealed class NSmithyBenchClient : IBenchClient
                 ItemId: line.ItemId,
                 Quantity: line.Quantity,
                 UnitPriceCents: line.UnitPriceCents,
-                Attributes: line.Attributes is null ? null : new StringMap(line.Attributes),
+                Attributes: line.Attributes,
                 Note: line.Note
             );
         }
@@ -96,9 +96,9 @@ public sealed class NSmithyBenchClient : IBenchClient
         var output = await client.CreateOrderAsync(
             new CreateOrderInput(
                 CustomerId: input.CustomerId,
-                Lines: new OrderLines(lines),
+                Lines: lines,
                 BillingAddress: ToAddress(input.BillingAddress),
-                Metadata: input.Metadata is null ? null : new StringMap(input.Metadata),
+                Metadata: input.Metadata,
                 ShippingAddress: ToAddress(input.ShippingAddress)
             ),
             cancellationToken

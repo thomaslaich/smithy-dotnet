@@ -76,6 +76,16 @@ public interface IServerOperationProtocol<TInput, TOutput>
     /// </remarks>
     ISmithyValidator<TInput>? InputValidator { get; }
 
+    /// <summary>
+    /// Whether the request body reaches <see cref="DeserializeRequestAsync"/> as a stream (an
+    /// event-stream input, a streaming blob payload) rather than buffered.
+    /// </summary>
+    /// <remarks>
+    /// Not defaulted, for the same reason as <see cref="InputValidator"/>: a protocol that streams
+    /// has to say so, or its bodies would be buffered whole.
+    /// </remarks>
+    bool StreamsRequestBody { get; }
+
     ValueTask<TInput> DeserializeRequestAsync(
         SmithyHttpRequest request,
         CancellationToken cancellationToken = default
