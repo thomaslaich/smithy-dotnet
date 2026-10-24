@@ -172,7 +172,7 @@ public final class EndpointResolverGenerator implements Runnable {
       writer.putContext(
           "hasConfig",
           context.settings().generateClient()
-              && !ProtocolSupport.declaredKinds(rules.service()).isEmpty());
+              && !ProtocolSupport.protocols(context, rules.service()).isEmpty());
       writer.putContext(
           "nodes",
           writer.consumer(
