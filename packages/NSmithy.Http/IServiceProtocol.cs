@@ -24,4 +24,11 @@ public interface IServiceProtocol
     IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation
     );
+
+    /// <summary>
+    /// How requests reach <paramref name="operations"/> over this protocol. A protocol that does
+    /// not serve requests returns <see cref="ServerRouting.None"/>, the default.
+    /// </summary>
+    ServerRouting GetServerRouting(IReadOnlyList<IOperationSchema> operations) =>
+        ServerRouting.None;
 }

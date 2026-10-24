@@ -299,12 +299,16 @@ public interface IServiceProtocol
     IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation);
 
-    // How requests reach the given operations over this protocol.
-    ServerRouting GetServerRouting(IReadOnlyList<IOperationSchema> operations);
+    // How requests reach the given operations over this protocol. A protocol that does not
+    // serve requests keeps the default, ServerRouting.None.
+    ServerRouting GetServerRouting(IReadOnlyList<IOperationSchema> operations) =>
+        ServerRouting.None;
 }
 
 public abstract record ServerRouting
 {
+    public static ServerRouting None { get; } = new ByRoute([]);
+
     // Each operation has its own route, matched by method and path.
     public sealed record ByRoute(IReadOnlyList<ServerRoute> Routes) : ServerRouting;
 
@@ -347,7 +351,8 @@ operation and is answered with 404, as an unmatched route would be.
 
 `IServerOperationProtocol.StreamsRequestBody` tells the host whether to hand the
 operation the request body as a stream (event-stream input, a streaming blob
-payload) or buffered.
+payload) or buffered. Like `InputValidator`, it has no default, so a protocol
+that streams has to say so.
 
 ## Generated Server Surface
 
@@ -356,7 +361,7 @@ branches, and no per-operation endpoint. For each service it emits an operation
 table pairing each operation's schema with a typed handler resolver:
 
 ```csharp
-private static readonly IReadOnlyList<IServerOperation> Operations =
+private static readonly IReadOnlyList<IServerOperation> ServerOperations =
 [
     ServerOperation.Create(
         GetCitySchema.Schema,
@@ -368,10 +373,10 @@ private static readonly IReadOnlyList<IServerOperation> Operations =
 ```
 
 `ServerOperation<TInput, TOutput>` keeps the operation's types, so dispatch
-needs no reflection: it binds the typed `IServerOperationProtocol` from a
-protocol's `IServiceProtocol` once, and resolves the handler from each request's
-services, so handler lifetimes are the application's. The same table backs the
-MCP operation catalog.
+needs no reflection: `Bind` creates the typed `IServerOperationProtocol` from a
+protocol's `IServiceProtocol` once per mapped protocol, and each request
+resolves the handler from the request's services, so handler lifetimes are the
+application's.
 
 `Map{Service}` keeps its signature and maps the selected protocols through the
 host adapter:
@@ -379,16 +384,29 @@ host adapter:
 ```csharp
 public static IEndpointRouteBuilder MapWeatherService(
     this IEndpointRouteBuilder endpoints,
-    WeatherServiceProtocols protocols = WeatherServiceProtocols.RestJson1) =>
-    SmithyAspNetCoreServer.MapService(endpoints, WeatherSchema.Schema, Operations, Protocols(protocols));
+    WeatherServiceProtocols protocols = WeatherServiceProtocols.RestJson1)
+{
+    var selected = new List<SmithyServerProtocol>();
+    if ((protocols & WeatherServiceProtocols.RestJson1) != 0)
+    {
+        selected.Add(new("RestJson1", new RestJson1Protocol()));
+    }
+
+    return endpoints.MapSmithyService(WeatherSchema.Schema, ServerOperations, selected);
+}
 ```
 
+`MapSmithyService` is public: it maps any service from its schema, operation
+table, and a list of `SmithyServerProtocol(Name, Protocol)` values, the name
+appearing in endpoint display names and route conflict errors.
+
 The host adapter turns each protocol's `ServerRouting` into endpoints: one per
-`ServerRoute`, or one for a `ByDispatch` protocol. Endpoints are plain
-`RequestDelegate`s, so mapping uses no minimal-API parameter binding and needs
-neither reflection nor the request delegate generator. Two routes with the same
-method and path within one `Map{Service}` call fail at startup, naming both
-protocols.
+`ServerRoute`, named `{Operation} ({Protocol})`, or one for a `ByDispatch`
+protocol. Endpoints are plain `RequestDelegate`s, so mapping uses no minimal-API
+parameter binding and needs neither reflection nor the request delegate
+generator. A route that repeats the method and path of an earlier one within
+one `MapSmithyService` call fails at startup, naming the protocol that repeats
+it.
 
 New hosts reuse the operation table, the service and operation schemas, and the
 protocols' `ServerRouting`. HTTP route syntax, MCP JSON Schema, and framework

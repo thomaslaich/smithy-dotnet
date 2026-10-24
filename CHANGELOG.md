@@ -11,6 +11,23 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- `IServiceProtocol.GetServerRouting`, through which a protocol reports how requests reach a
+  service's operations: a route per operation, or one route on which the protocol names the
+  operation from the request.
+- `MapSmithyService` maps any service from its schema, a table of `ServerOperation`s, and the
+  protocols to serve it over.
+
+### Changed
+
+- Generated servers route at runtime. `Map{Service}` keeps its signature and maps the
+  protocols' routes, and the generated code holds an operation table instead of an endpoint
+  per operation and protocol. Endpoints are plain request delegates, with no minimal-API
+  parameter binding.
+- **BREAKING:** `IServerOperationProtocol` has a required `StreamsRequestBody` member.
+  Custom server protocols must say whether the request body streams.
+
 ## [0.13.0]
 
 This release adds the rpcv2Json protocol and reshapes parts of the generated API.

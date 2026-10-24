@@ -37,7 +37,6 @@ import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.model.traits.DocumentationTrait;
-import software.amazon.smithy.model.traits.HttpTrait;
 import software.amazon.smithy.model.traits.RequiredTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -380,16 +379,9 @@ public final class ServerGenerator implements Runnable {
 
   private void writeEndpointMapping(
       List<OperationShape> ops, String contract, List<Kind> serverKinds) {
-    String protocolEnum = protocolEnumName(contract);
-    writeProtocolFields(ops, serverKinds);
+    writeServerOperations(ops);
     writer.write("");
-    writeSelectableMapMethod(contract, serverKinds, protocolEnum);
-    writer.write("");
-    writeRouteConflictHelper(contract, protocolEnum);
-    for (Kind kind : serverKinds) {
-      writer.write("");
-      writeProtocolMapHelper(kind, ops, contract, protocolEnum);
-    }
+    writeSelectableMapMethod(contract, serverKinds, protocolEnumName(contract));
   }
 
   private void writeOperationJsonSchemas(List<OperationShape> ops) {
@@ -473,37 +465,36 @@ public final class ServerGenerator implements Runnable {
     }
   }
 
-  private void writeProtocolFields(List<OperationShape> ops, List<Kind> serverKinds) {
+  /**
+   * The operation table: each operation's schema and how to resolve its handler from a request's
+   * services. Protocols route requests to these operations at runtime.
+   */
+  private void writeServerOperations(List<OperationShape> ops) {
     writer.pushState();
     try {
-      writer.putContext("serviceProtocol", RuntimeTypes.I_SERVICE_PROTOCOL);
-      writer.putContext("operationProtocol", RuntimeTypes.I_SERVER_OPERATION_PROTOCOL);
+      writer.putContext("list", RuntimeTypes.I_READ_ONLY_LIST);
+      writer.putContext("serverOperation", RuntimeTypes.I_SERVER_OPERATION);
       writer.putContext(
-          "serviceSchema", SchemaGenerator.serviceSchemaAccessor(writer, context, service));
-      for (Kind kind : serverKinds) {
-        writer.putContext("protocol", mapSuffix(kind));
-        writer.putContext("protocolType", ProtocolSupport.protocolType(kind));
-        writer.write(
-            "private static readonly ${serviceProtocol:T} ${protocol:L}ServiceProtocol = new"
-                + " ${protocolType:T}().ForService(${serviceSchema:L});");
-        for (OperationShape op : ops) {
-          if (!canBindOperation(kind, op)) {
-            continue;
-          }
-          writer.putContext(
-              "inputType", SchemaGenerator.operationShapeType(writer, context, op.getInputShape()));
-          writer.putContext(
-              "outputType",
-              SchemaGenerator.operationShapeType(writer, context, op.getOutputShape()));
-          writer.putContext("field", operationProtocolField(kind, op));
-          writer.putContext(
-              "operationSchema", SchemaGenerator.operationSchemaAccessor(writer, context, op));
-          writer.write(
-              "private static readonly ${operationProtocol:T}<${inputType:L}, ${outputType:L}>"
-                  + " ${field:L} ="
-                  + " ${protocol:L}ServiceProtocol.ForServerOperation(${operationSchema:L});");
-        }
-      }
+          "operations",
+          writer.consumer(
+              w -> {
+                for (OperationShape op : ops) {
+                  w.write(
+                      "$T.Create($L, services => $L),",
+                      RuntimeTypes.SERVER_OPERATION,
+                      SchemaGenerator.operationSchemaAccessor(writer, context, op),
+                      unaryAdapter(
+                          op,
+                          writer.format("services.GetRequiredService<$L>()", opHandlerName(op))));
+                }
+              }));
+      writer.write(
+          """
+          private static readonly ${list:T}<${serverOperation:T}> ServerOperations =
+          [
+              ${operations:C|}
+          ];
+          """);
     } finally {
       writer.popState();
     }
@@ -520,11 +511,13 @@ public final class ServerGenerator implements Runnable {
       writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
       writer.putContext(
           "argumentOutOfRangeException", RuntimeTypes.ARGUMENT_OUT_OF_RANGE_EXCEPTION);
-      writer.putContext("hashSet", RuntimeTypes.HASH_SET);
-      writer.putContext("stringComparer", RuntimeTypes.STRING_COMPARER);
+      writer.putContext("list", RuntimeTypes.LIST);
+      writer.putContext("serverProtocol", RuntimeTypes.SMITHY_SERVER_PROTOCOL);
+      writer.putContext(
+          "serviceSchema", SchemaGenerator.serviceSchemaAccessor(writer, context, service));
       writer.putContext(
           "protocolMappings",
-          writer.consumer(w -> writeSelectedProtocolMappings(contract, serverKinds, protocolEnum)));
+          writer.consumer(w -> writeSelectedProtocolMappings(serverKinds, protocolEnum)));
       writer.write(
           """
           public static ${endpointRouteBuilder:T} Map${contract:L}(
@@ -538,10 +531,10 @@ public final class ServerGenerator implements Runnable {
                       nameof(protocols), protocols, "Unknown ${protocolEnum:L} value.");
               }
 
-              var mappedRoutes = new ${hashSet:T}<string>(${stringComparer:T}.Ordinal);
+              var selected = new ${list:T}<${serverProtocol:T}>();
               ${protocolMappings:C|}
 
-              return endpoints;
+              return endpoints.MapSmithyService(${serviceSchema:L}, ServerOperations, selected);
           }
           """);
     } finally {
@@ -549,19 +542,18 @@ public final class ServerGenerator implements Runnable {
     }
   }
 
-  private void writeSelectedProtocolMappings(
-      String contract, List<Kind> serverKinds, String protocolEnum) {
+  private void writeSelectedProtocolMappings(List<Kind> serverKinds, String protocolEnum) {
     writer.pushState();
     try {
-      writer.putContext("contract", contract);
       writer.putContext("protocolEnum", protocolEnum);
       for (Kind kind : serverKinds) {
         writer.putContext("protocol", mapSuffix(kind));
+        writer.putContext("protocolType", ProtocolSupport.protocolType(kind));
         writer.write(
             """
             if ((protocols & ${protocolEnum:L}.${protocol:L}) != 0)
             {
-                Map${contract:L}${protocol:L}(endpoints, mappedRoutes);
+                selected.Add(new("${protocol:L}", new ${protocolType:T}()));
             }
             """);
       }
@@ -570,164 +562,11 @@ public final class ServerGenerator implements Runnable {
     }
   }
 
-  private void writeRouteConflictHelper(String contract, String protocolEnum) {
-    writer.pushState();
-    try {
-      writer.putContext("contract", contract);
-      writer.putContext("protocolEnum", protocolEnum);
-      writer.putContext("hashSet", RuntimeTypes.HASH_SET);
-      writer.putContext("invalidOperationException", RuntimeTypes.INVALID_OPERATION_EXCEPTION);
-      writer.write(
-          """
-          private static void EnsureRouteAvailable(
-              ${hashSet:T}<string> mappedRoutes,
-              string method,
-              string routePattern,
-              ${protocolEnum:L} protocol)
-          {
-              var route = method + " " + routePattern;
-              if (!mappedRoutes.Add(route))
-              {
-                  throw new ${invalidOperationException:T}(
-                      "Mapping " + protocol + " for ${contract:L} would register duplicate route '" + route
-                      + "'. Map conflicting protocols on different endpoint route builders, hosts, or ports.");
-              }
-          }
-          """);
-    } finally {
-      writer.popState();
-    }
-  }
-
-  private void writeProtocolMapHelper(
-      Kind kind, List<OperationShape> ops, String contract, String protocolEnum) {
-    writer.pushState();
-    try {
-      writer.putContext("contract", contract);
-      writer.putContext("protocol", mapSuffix(kind));
-      writer.putContext("endpointRouteBuilder", RuntimeTypes.I_ENDPOINT_ROUTE_BUILDER);
-      writer.putContext("hashSet", RuntimeTypes.HASH_SET);
-      writer.putContext(
-          "operations",
-          writer.consumer(
-              w -> {
-                for (OperationShape op : ops) {
-                  if (canBindOperation(kind, op)) {
-                    writeOperationMap(kind, op, protocolEnum);
-                    w.write("");
-                  }
-                }
-              }));
-      writer.write(
-          """
-          private static void Map${contract:L}${protocol:L}(
-              ${endpointRouteBuilder:T} endpoints, ${hashSet:T}<string> mappedRoutes)
-          {
-              ${operations:C|}
-          }
-          """);
-    } finally {
-      writer.popState();
-    }
-  }
-
-  private void writeOperationMap(Kind kind, OperationShape op, String protocolEnum) {
-    writer.pushState();
-    try {
-      writer.putContext("handler", opHandlerName(op));
-      writer.putContext("protocolEnum", protocolEnum);
-      writer.putContext("protocol", mapSuffix(kind));
-      writer.putContext("httpContext", RuntimeTypes.HTTP_CONTEXT);
-      writer.putContext("fromServices", writer.attributeName(RuntimeTypes.FROM_SERVICES_ATTRIBUTE));
-      writer.putContext("runtime", RuntimeTypes.SMITHY_SERVER_RUNTIME);
-      writer.putContext("cancellationToken", RuntimeTypes.CANCELLATION_TOKEN);
-      writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
-      boolean rest = kind == Kind.SIMPLE_REST_JSON || kind == Kind.REST_JSON_1;
-      if (rest) {
-        HttpTrait http = op.expectTrait(HttpTrait.class);
-        writer.putContext("method", CSharpNaming.formatString(http.getMethod()));
-        writer.putContext("route", CSharpNaming.formatString(routePattern(http)));
-        writer.putContext(
-            "dispatch",
-            writer.consumer(
-                w -> {
-                  writeStaticQueryValidation(http);
-                  writeDispatch(kind, op);
-                }));
-        writer.write(
-            """
-            EnsureRouteAvailable(mappedRoutes, ${method:L}, ${route:L}, ${protocolEnum:L}.${protocol:L});
-            endpoints.MapMethods(${route:L}, [${method:L}], async (
-                ${httpContext:T} httpContext,
-                [${fromServices:L}] ${runtime:T} runtime,
-                ${handler:L} handler,
-                ${cancellationToken:T} cancellationToken) =>
-            {
-                ${argumentNullException:T}.ThrowIfNull(httpContext);
-                ${argumentNullException:T}.ThrowIfNull(handler);
-
-                ${dispatch:C|}
-            });
-            """);
-        return;
-      }
-
-      // RPC v2 and gRPC use structured POST routes derived from the shape ids.
-      String uri =
-          kind == Kind.GRPC
-              ? "/"
-                  + service.getId().getNamespace()
-                  + "."
-                  + service.getId().getName()
-                  + "/"
-                  + op.getId().getName()
-              : "/service/" + service.getId().getName() + "/operation/" + op.getId().getName();
-      writer.putContext("route", CSharpNaming.formatString(uri));
-      writer.putContext("dispatch", writer.consumer(w -> writeDispatch(kind, op)));
-      writer.write(
-          """
-          EnsureRouteAvailable(mappedRoutes, "POST", ${route:L}, ${protocolEnum:L}.${protocol:L});
-          endpoints.MapPost(${route:L}, async (
-              ${httpContext:T} httpContext,
-              [${fromServices:L}] ${runtime:T} runtime,
-              ${handler:L} handler,
-              ${cancellationToken:T} cancellationToken) =>
-          {
-              ${argumentNullException:T}.ThrowIfNull(httpContext);
-              ${argumentNullException:T}.ThrowIfNull(handler);
-
-              ${dispatch:C|}
-          });
-          """);
-    } finally {
-      writer.popState();
-    }
-  }
-
-  private void writeDispatch(Kind kind, OperationShape op) {
-    Model model = context.model();
-    boolean streamRequestBody =
-        isInputStreaming(model, op)
-            || ((kind == Kind.SIMPLE_REST_JSON || kind == Kind.REST_JSON_1)
-                && ShapeSupport.isStreamingBlobShape(model, op.getInputShape()));
-    writer.write(
-        "await $T.DispatchAsync(runtime, httpContext, $L, $L, $L,"
-            + " cancellationToken).ConfigureAwait(false);",
-        RuntimeTypes.SMITHY_ASP_NET_CORE_HOST,
-        operationProtocolField(kind, op),
-        unaryAdapter(op),
-        streamRequestBody ? "true" : "false");
-  }
-
   // ---------------- handler adapters ----------------
 
   // Use a method group when the handler's arity and return type match the runtime delegate.
   // Adapt unit input (no input parameter) and unit output (Task instead of Task<SmithyUnit>)
   // with a lambda.
-
-  private String unaryAdapter(OperationShape op) {
-    return unaryAdapter(op, "handler");
-  }
 
   private String unaryAdapter(OperationShape op, String handlerVariable) {
     boolean hasInput = !ShapeSupport.isUnit(op.getInputShape());
@@ -809,51 +648,6 @@ public final class ServerGenerator implements Runnable {
 
   // ---------------- routing helpers ----------------
 
-  private String routePattern(HttpTrait http) {
-    String uri = http.getUri().toString();
-    int queryIndex = uri.indexOf('?');
-    String path = queryIndex >= 0 ? uri.substring(0, queryIndex) : uri;
-    // Smithy greedy labels `{foo+}` map to ASP.NET Core catch-all route params `{**foo}`.
-    return path.replaceAll("\\{(\\w+)\\+\\}", "{**$1}");
-  }
-
-  private void writeStaticQueryValidation(HttpTrait http) {
-    String uri = http.getUri().toString();
-    int queryIndex = uri.indexOf('?');
-    if (queryIndex < 0 || queryIndex == uri.length() - 1) {
-      return;
-    }
-
-    String query = uri.substring(queryIndex + 1);
-    for (String segment : query.split("&")) {
-      if (segment.isEmpty()) {
-        continue;
-      }
-
-      int equalsIndex = segment.indexOf('=');
-      String name = equalsIndex >= 0 ? segment.substring(0, equalsIndex) : segment;
-      String value = equalsIndex >= 0 ? segment.substring(equalsIndex + 1) : null;
-      writer.pushState();
-      try {
-        writer.putContext("host", RuntimeTypes.SMITHY_ASP_NET_CORE_HOST);
-        writer.putContext("name", CSharpNaming.formatString(name));
-        writer.putContext("value", value == null ? "null" : CSharpNaming.formatString(value));
-        writer.write(
-            """
-            if (!${host:T}.HasExpectedQueryLiteral(httpContext, ${name:L}, ${value:L}))
-            {
-                httpContext.Response.StatusCode = StatusCodes.Status404NotFound;
-                return;
-            }\
-            """);
-      } finally {
-        writer.popState();
-      }
-    }
-
-    writer.write("");
-  }
-
   // ---------------- helpers ----------------
 
   private static String mapSuffix(Kind kind) {
@@ -871,17 +665,8 @@ public final class ServerGenerator implements Runnable {
     return contract + "Protocols";
   }
 
-  private static String operationProtocolField(Kind kind, OperationShape op) {
-    return CSharpNaming.typeName(op.getId().getName()) + mapSuffix(kind) + "Protocol";
-  }
-
   private static String serviceContractName(String serviceTypeName) {
     return serviceTypeName.endsWith("Service") ? serviceTypeName : serviceTypeName + "Service";
-  }
-
-  private boolean canBindOperation(Kind kind, OperationShape op) {
-    return !isEventStreamOperation(context.model(), op)
-        || ProtocolSupport.supportsEventStreams(kind);
   }
 
   private String opHandlerName(OperationShape op) {
@@ -925,18 +710,6 @@ public final class ServerGenerator implements Runnable {
         .getTrait(DocumentationTrait.class)
         .ifPresent(trait -> docs.put("input", trait.getValue()));
     return docs;
-  }
-
-  private boolean isEventStreamOperation(Model model, OperationShape op) {
-    return isInputStreaming(model, op) || isOutputStreaming(model, op);
-  }
-
-  private boolean isInputStreaming(Model model, OperationShape op) {
-    return ShapeSupport.isEventStreamShape(model, op.getInputShape());
-  }
-
-  private boolean isOutputStreaming(Model model, OperationShape op) {
-    return ShapeSupport.isEventStreamShape(model, op.getOutputShape());
   }
 
   private record PromptDefinition(

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Server.Kestrel.Core.Features;
+using Microsoft.Extensions.DependencyInjection;
 using NSmithy.Http;
 using NSmithy.Server;
 
@@ -43,6 +44,58 @@ public static class SmithyAspNetCoreHost
             .ConfigureAwait(false);
         await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Dispatches a request to an operation bound to a protocol, resolving the runtime and the
+    /// handler from the request's services.
+    /// </summary>
+    public static async Task DispatchAsync(
+        HttpContext httpContext,
+        IBoundServerOperation operation,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(httpContext);
+        ArgumentNullException.ThrowIfNull(operation);
+        if (operation.StreamsRequestBody)
+        {
+            RelaxRequestBodyRate(httpContext);
+        }
+
+        var request = await ToSmithyRequestAsync(
+                httpContext,
+                operation.StreamsRequestBody,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        await DispatchAsync(httpContext, operation, request, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    internal static async Task DispatchAsync(
+        HttpContext httpContext,
+        IBoundServerOperation operation,
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var services = httpContext.RequestServices;
+        var response = await operation
+            .DispatchAsync(
+                services.GetRequiredService<SmithyServerRuntime>(),
+                request,
+                services,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        await WriteAsync(httpContext, response, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static Task WriteResponseAsync(
+        HttpContext httpContext,
+        SmithyHttpServerResponse response,
+        CancellationToken cancellationToken
+    ) => WriteAsync(httpContext, response, cancellationToken);
 
     public static bool HasExpectedQueryLiteral(
         HttpContext httpContext,

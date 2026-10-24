@@ -338,11 +338,13 @@ final class ServerGeneratorTest {
                 + " CancellationToken cancellationToken = default);"),
         generated);
     assertFalse(generated.contains("IEventStreamServiceProtocol"));
-    // Streaming endpoints delegate to the shared runtime path; only request-body streaming is
-    // selected per operation.
-    assertTrue(generated.contains("WatchGrpcProtocol, handler.WatchAsync, false"), generated);
-    assertTrue(generated.contains("UploadGrpcProtocol, handler.UploadAsync, true"), generated);
-    assertTrue(generated.contains("ChatGrpcProtocol, handler.ChatAsync, true"), generated);
+    // Streaming operations are ordinary table entries; the protocol decides how bodies stream.
+    assertTrue(
+        generated.contains(
+            "ServerOperation.Create(global::Example.Example.Streaming.Schemas.ChatSchema.Schema,"
+                + " services => services.GetRequiredService<IChatHandler>().ChatAsync),"),
+        generated);
+    assertTrue(generated.contains("selected.Add(new(\"Grpc\", new GrpcProtocol()));"), generated);
     assertTrue(
         containsIgnoringWhitespace(
             generated,
@@ -391,14 +393,21 @@ final class ServerGeneratorTest {
     assertFalse(
         generated.contains("public static IEndpointRouteBuilder MapStreamingServiceRestJson1"),
         generated);
-    assertTrue(generated.contains("endpoints.MapMethods(\"/watch\", [\"GET\"]"), generated);
-    assertTrue(generated.contains("WatchRestJson1Protocol, handler.WatchAsync, false"), generated);
-    assertTrue(generated.contains("endpoints.MapMethods(\"/upload\", [\"POST\"]"), generated);
-    assertTrue(generated.contains("UploadRestJson1Protocol, handler.UploadAsync, true"), generated);
+    // Routes come from the protocol at runtime, not from generated code.
+    assertFalse(generated.contains("MapMethods"), generated);
+    assertTrue(
+        generated.contains("services => services.GetRequiredService<IUploadHandler>().UploadAsync"),
+        generated);
+    assertTrue(
+        generated.contains(
+            "return endpoints.MapSmithyService("
+                + "global::Example.Example.Reststreaming.Schemas.StreamingServiceSchema.Schema,"
+                + " ServerOperations, selected);"),
+        generated);
   }
 
   @Test
-  void multiProtocolServersGenerateSelectableMapperAndRouteConflictChecks() throws Exception {
+  void multiProtocolServersSelectProtocolsOverOneOperationTable() throws Exception {
     String generated =
         renderServer(
             MULTI_PROTOCOL_TRAITS,
@@ -422,18 +431,15 @@ final class ServerGeneratorTest {
         generated.contains("if ((protocols & MultiServiceProtocols.SimpleRestJson) != 0)"),
         generated);
     assertTrue(
-        generated.contains(
-            "EnsureRouteAvailable(mappedRoutes, \"GET\", \"/things/{id}\","
-                + " MultiServiceProtocols.SimpleRestJson);"),
+        generated.contains("selected.Add(new(\"SimpleRestJson\", new SimpleRestJsonProtocol()));"),
         generated);
     assertTrue(
-        generated.contains(
-            "EnsureRouteAvailable(mappedRoutes, \"GET\", \"/things/{id}\","
-                + " MultiServiceProtocols.RestJson1);"),
+        generated.contains("selected.Add(new(\"RestJson1\", new RestJson1Protocol()));"),
         generated);
+    // One table entry per operation, whatever the number of protocols.
     assertTrue(
-        generated.contains(
-            "Map conflicting protocols on different endpoint route builders, hosts, or ports."),
+        generated.indexOf("ServerOperation.Create(")
+            == generated.lastIndexOf("ServerOperation.Create("),
         generated);
     assertFalse(
         generated.contains("public static IEndpointRouteBuilder MapMultiServiceRestJson1"),

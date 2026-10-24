@@ -30,6 +30,42 @@ public sealed class RestServiceProtocol(
         OperationSchema<TInput, TOutput> operation
     ) => CreateOperation(operation, server: true);
 
+    /// <summary>One route per operation, from its <c>@http</c> method and URI.</summary>
+    public ServerRouting GetServerRouting(IReadOnlyList<IOperationSchema> operations)
+    {
+        ArgumentNullException.ThrowIfNull(operations);
+        return new ServerRouting.ByRoute([.. operations.Select(Route)]);
+    }
+
+    private static ServerRoute Route(IOperationSchema operation)
+    {
+        var http =
+            operation.GetTrait(RestTraits.Http)?.Value.AsObject()
+            ?? throw new InvalidOperationException(
+                $"Operation '{operation.Id}' is missing the @http trait."
+            );
+        var uri = http["uri"].AsString();
+        var queryStart = uri.IndexOf('?', StringComparison.Ordinal);
+        var path = queryStart >= 0 ? uri[..queryStart] : uri;
+        var requiredQuery = new List<KeyValuePair<string, string?>>();
+        if (queryStart >= 0)
+        {
+            foreach (
+                var parameter in uri[(queryStart + 1)..]
+                    .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            )
+            {
+                var equals = parameter.IndexOf('=', StringComparison.Ordinal);
+                requiredQuery.Add(
+                    equals >= 0
+                        ? new(parameter[..equals], parameter[(equals + 1)..])
+                        : new(parameter, null)
+                );
+            }
+        }
+        return new ServerRoute(operation.Id, http["method"].AsString(), path, requiredQuery);
+    }
+
     private IOperationProtocol<TInput, TOutput> CreateOperation<TInput, TOutput>(
         OperationSchema<TInput, TOutput> operation,
         bool server
@@ -209,6 +245,9 @@ public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutpu
 ) : IOperationProtocol<TInput, TOutput>
 {
     public ISmithyValidator<TInput>? InputValidator { get; } = inputValidator;
+
+    public bool StreamsRequestBody { get; } =
+        binding.Input.Payload?.PayloadKind is PayloadKind.StreamingBlob or PayloadKind.EventStream;
 
     private readonly IReadOnlyList<HttpOperationError> httpErrors =
         RestProtocol.CompileErrorDeserializers(modeledErrors, codecFactory, rawStringPayloads);

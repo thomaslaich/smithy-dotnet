@@ -1266,6 +1266,14 @@ public static class Schemas
     /// telling it apart from a structure the model really declares with no members — a distinction
     /// protocols need, because one has no body and the other has an empty one.
     /// </summary>
+    /// <summary>Whether a structure schema has an event-stream member.</summary>
+    public static bool HasEventStreamMember(Schema schema)
+    {
+        ArgumentNullException.ThrowIfNull(schema);
+        return schema.Resolved is IStructSchema structure
+            && structure.Members.Any(member => member.Target.Resolved is IEventStreamSchema);
+    }
+
     public static bool IsSyntheticUnit(Schema schema)
     {
         ArgumentNullException.ThrowIfNull(schema);
