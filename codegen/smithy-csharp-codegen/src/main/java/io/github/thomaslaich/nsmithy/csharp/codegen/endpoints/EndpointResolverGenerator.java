@@ -94,9 +94,23 @@ public final class EndpointResolverGenerator implements Runnable {
     writer.writeXmlDocs(
         "Endpoint rule parameters of the " + rules.service().getId().getName() + " service.",
         Map.of());
-    writer.write("public sealed record $L", parametersType);
-    writer.write("{");
-    writer.indent();
+    writer.pushState();
+    try {
+      writer.putContext("parametersType", parametersType);
+      writer.putContext("properties", writer.consumer(w -> writeParameterProperties()));
+      writer.write(
+          """
+          public sealed record ${parametersType:L}
+          {
+              ${properties:C|}
+          }\
+          """);
+    } finally {
+      writer.popState();
+    }
+  }
+
+  private void writeParameterProperties() {
     boolean first = true;
     for (Parameter parameter : rules.bdd().getParameters()) {
       if (!first) {
@@ -125,15 +139,12 @@ public final class EndpointResolverGenerator implements Runnable {
         writer.write("public $L? $L { get; init; }", type, propertyName(parameter));
       }
     }
-    writer.dedent();
-    writer.write("}");
   }
 
   // ---------------- resolver ----------------
 
   private void writeResolver() {
     Map<String, List<String>> bindings = operationBindings();
-    boolean bindsPerOperation = !bindings.isEmpty();
     Bdd bdd = rules.bdd().getBdd();
 
     writer.writeXmlDocs(
@@ -141,117 +152,112 @@ public final class EndpointResolverGenerator implements Runnable {
             + rules.service().getId().getName()
             + " service from its modeled endpoint rules.",
         Map.of());
-    writer.write("public sealed class $L : $T", resolverType, RuntimeTypes.I_ENDPOINT_RESOLVER);
-    writer.write("{");
-    writer.indent();
-
-    writer.write("private const int Root = $L;", bdd.getRootRef());
-    writer.write("private const int ResultOffset = $L;", RESULT_OFFSET);
-    writer.write("");
-    writer.write("// (condition, ifTrue, ifFalse) per node.");
-    writer.write("// csharpier-ignore");
-    writer.write("private static $T<int> Nodes => new int[]", RuntimeTypes.READ_ONLY_SPAN);
-    writer.write("{");
-    writer.indent();
-    for (int i = 0; i < bdd.getNodeCount(); i++) {
-      writer.write("$L, $L, $L,", bdd.getVariable(i), bdd.getHigh(i), bdd.getLow(i));
-    }
-    writer.dedent();
-    writer.write("};");
-    writer.write("");
-
-    writer.write("private readonly $L clientParameters;", parametersType);
-    if (bindsPerOperation) {
-      writer.write("private $T? clientEndpoint;", RuntimeTypes.SMITHY_ENDPOINT);
-    }
-    writer.write("");
-
-    writer.writeXmlDocs(
-        "Creates a resolver for the given client-level parameters."
-            + (bindsPerOperation
-                ? ""
-                : " They fix the endpoint for every operation, so it is resolved here."),
-        Map.of());
-    writer.write("public $L($L clientParameters)", resolverType, parametersType);
-    writer.write("{");
-    writer.indent();
-    writer.write("$T.ThrowIfNull(clientParameters);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
-    writer.write("this.clientParameters = clientParameters;");
-    if (!bindsPerOperation) {
-      writer.write("StaticEndpoint = Resolve(clientParameters);");
-    }
-    writer.dedent();
-    writer.write("}");
-    writer.write("");
-
-    // The generated client, and with it its configuration class, exists only for services with a
-    // supported protocol.
-    if (context.settings().generateClient()
-        && !ProtocolSupport.declaredKinds(rules.service()).isEmpty()) {
-      writeConfigConstructor();
-      writer.write("");
-    }
-
-    writer.write("public $T? StaticEndpoint { get; }", RuntimeTypes.SMITHY_ENDPOINT);
-    writer.write("");
-
-    writer.write(
-        "public $T<$T> ResolveEndpointAsync($T parameters, $T cancellationToken = default)",
-        RuntimeTypes.VALUE_TASK,
-        RuntimeTypes.SMITHY_ENDPOINT,
-        RuntimeTypes.SMITHY_ENDPOINT_PARAMETERS,
-        RuntimeTypes.CANCELLATION_TOKEN);
-    writer.write("{");
-    writer.indent();
-    writer.write("$T.ThrowIfNull(parameters);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
-    writer.write("cancellationToken.ThrowIfCancellationRequested();");
-    if (bindsPerOperation) {
-      writer.write("var bound = Bind(parameters);");
+    writer.pushState();
+    try {
+      boolean bindsPerOperation = !bindings.isEmpty();
+      writer.putContext("resolverType", resolverType);
+      writer.putContext("parametersType", parametersType);
+      writer.putContext("endpointResolver", RuntimeTypes.I_ENDPOINT_RESOLVER);
+      writer.putContext("endpoint", RuntimeTypes.SMITHY_ENDPOINT);
+      writer.putContext("endpointParameters", RuntimeTypes.SMITHY_ENDPOINT_PARAMETERS);
+      writer.putContext("valueTask", RuntimeTypes.VALUE_TASK);
+      writer.putContext("cancellationToken", RuntimeTypes.CANCELLATION_TOKEN);
+      writer.putContext("argumentNull", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
+      writer.putContext("span", RuntimeTypes.READ_ONLY_SPAN);
+      writer.putContext("root", bdd.getRootRef());
+      writer.putContext("resultOffset", RESULT_OFFSET);
+      writer.putContext("bindsPerOperation", bindsPerOperation);
+      // The generated client, and with it its configuration class, exists only for services with
+      // a supported protocol.
+      writer.putContext(
+          "hasConfig",
+          context.settings().generateClient()
+              && !ProtocolSupport.declaredKinds(rules.service()).isEmpty());
+      writer.putContext(
+          "nodes",
+          writer.consumer(
+              w -> {
+                for (int i = 0; i < bdd.getNodeCount(); i++) {
+                  writer.write("$L, $L, $L,", bdd.getVariable(i), bdd.getHigh(i), bdd.getLow(i));
+                }
+              }));
+      writer.putContext(
+          "constructorDocs",
+          writer.consumer(
+              w ->
+                  writer.writeXmlDocs(
+                      "Creates a resolver for the given client-level parameters."
+                          + (bindsPerOperation
+                              ? ""
+                              : " They fix the endpoint for every operation, so it is resolved"
+                                  + " here."),
+                      Map.of())));
+      writer.putContext("configConstructor", writer.consumer(w -> writeConfigConstructor()));
+      writer.putContext("bind", writer.consumer(w -> writeBind(bindings)));
+      writer.putContext("resolve", writer.consumer(w -> writeResolve()));
       writer.write(
-          "return $T.FromResult(bound is null ? clientEndpoint ??= Resolve(clientParameters) :"
-              + " Resolve(bound));",
-          RuntimeTypes.VALUE_TASK);
-    } else {
-      writer.write("return $T.FromResult(StaticEndpoint!);", RuntimeTypes.VALUE_TASK);
+          """
+          public sealed class ${resolverType:L} : ${endpointResolver:T}
+          {
+              private const int Root = ${root:L};
+              private const int ResultOffset = ${resultOffset:L};
+
+              // (condition, ifTrue, ifFalse) per node.
+              // csharpier-ignore
+              private static ${span:T}<int> Nodes => new int[]
+              {
+                  ${nodes:C|}
+              };
+
+              private readonly ${parametersType:L} clientParameters;
+              ${?bindsPerOperation}
+              private ${endpoint:T}? clientEndpoint;
+              ${/bindsPerOperation}
+
+              ${constructorDocs:C|}
+              public ${resolverType:L}(${parametersType:L} clientParameters)
+              {
+                  ${argumentNull:T}.ThrowIfNull(clientParameters);
+                  this.clientParameters = clientParameters;
+                  ${^bindsPerOperation}
+                  StaticEndpoint = Resolve(clientParameters);
+                  ${/bindsPerOperation}
+              }
+
+              ${?hasConfig}
+              ${configConstructor:C|}
+
+              ${/hasConfig}
+              public ${endpoint:T}? StaticEndpoint { get; }
+
+              public ${valueTask:T}<${endpoint:T}> ResolveEndpointAsync(${endpointParameters:T} parameters, ${cancellationToken:T} cancellationToken = default)
+              {
+                  ${argumentNull:T}.ThrowIfNull(parameters);
+                  cancellationToken.ThrowIfCancellationRequested();
+                  ${?bindsPerOperation}
+                  var bound = Bind(parameters);
+                  return ${valueTask:T}.FromResult(bound is null ? clientEndpoint ??= Resolve(clientParameters) : Resolve(bound));
+                  ${/bindsPerOperation}
+                  ${^bindsPerOperation}
+                  return ${valueTask:T}.FromResult(StaticEndpoint!);
+                  ${/bindsPerOperation}
+              }
+
+              ${?bindsPerOperation}
+              ${bind:C|}
+
+              ${/bindsPerOperation}
+              ${resolve:C|}
+
+              private static bool IsNode(int reference) => reference is > 1 and < ResultOffset or < -1 and > -ResultOffset;
+          }\
+          """);
+    } finally {
+      writer.popState();
     }
-    writer.dedent();
-    writer.write("}");
-    writer.write("");
-
-    if (bindsPerOperation) {
-      writeBind(bindings);
-      writer.write("");
-    }
-
-    writeResolve();
-
-    writer.write("");
-    writer.write(
-        "private static bool IsNode(int reference) => reference is > 1 and < ResultOffset or < -1"
-            + " and > -ResultOffset;");
-    writer.dedent();
-    writer.write("}");
   }
 
   private void writeConfigConstructor() {
-    writer.writeXmlDocs(
-        "Creates a resolver for a client's configuration. The endpoint, when set, is the rules'"
-            + " custom endpoint.",
-        Map.of());
-    writer.write(
-        "public $L($L config, $T? endpoint = null)", resolverType, configType, RuntimeTypes.URI);
-    writer.write("    : this(ClientParameters(config, endpoint))");
-    writer.write("{");
-    writer.write("}");
-    writer.write("");
-    writer.write(
-        "private static $L ClientParameters($L config, $T? endpoint)",
-        parametersType,
-        configType,
-        RuntimeTypes.URI);
-    writer.write("{");
-    writer.indent();
-    writer.write("$T.ThrowIfNull(config);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
     List<String> assignments = new ArrayList<>();
     rules
         .endpointParameter()
@@ -268,20 +274,43 @@ public final class EndpointResolverGenerator implements Runnable {
               + config.property()
               + defaultFallback(config.parameter()));
     }
-    if (assignments.isEmpty()) {
-      writer.write("return new $L();", parametersType);
-    } else {
-      writer.write("return new $L", parametersType);
-      writer.write("{");
-      writer.indent();
-      for (String assignment : assignments) {
-        writer.write("$L,", assignment);
-      }
-      writer.dedent();
-      writer.write("};");
+
+    writer.writeXmlDocs(
+        "Creates a resolver for a client's configuration. The endpoint, when set, is the rules'"
+            + " custom endpoint.",
+        Map.of());
+    writer.pushState();
+    try {
+      writer.putContext("configType", configType);
+      writer.putContext("uri", RuntimeTypes.URI);
+      writer.putContext("hasAssignments", !assignments.isEmpty());
+      writer.putContext(
+          "assignments",
+          writer.consumer(w -> assignments.forEach(assignment -> writer.write("$L,", assignment))));
+      writer.write(
+          """
+          public ${resolverType:L}(${configType:L} config, ${uri:T}? endpoint = null)
+              : this(ClientParameters(config, endpoint))
+          {
+          }
+
+          private static ${parametersType:L} ClientParameters(${configType:L} config, ${uri:T}? endpoint)
+          {
+              ${argumentNull:T}.ThrowIfNull(config);
+              ${?hasAssignments}
+              return new ${parametersType:L}
+              {
+                  ${assignments:C|}
+              };
+              ${/hasAssignments}
+              ${^hasAssignments}
+              return new ${parametersType:L}();
+              ${/hasAssignments}
+          }\
+          """);
+    } finally {
+      writer.popState();
     }
-    writer.dedent();
-    writer.write("}");
   }
 
   private String defaultFallback(Parameter parameter) {
@@ -292,28 +321,47 @@ public final class EndpointResolverGenerator implements Runnable {
   }
 
   private void writeBind(Map<String, List<String>> bindings) {
-    writer.write(
-        "private $L? Bind($T parameters) => parameters.OperationId.Name switch",
-        parametersType,
-        RuntimeTypes.SMITHY_ENDPOINT_PARAMETERS);
-    writer.write("{");
-    writer.indent();
-    for (Map.Entry<String, List<String>> binding : bindings.entrySet()) {
-      writer.write("$L", binding.getKey());
-      writer.indent();
-      writer.write("=> clientParameters with");
-      writer.write("{");
-      writer.indent();
-      for (String assignment : binding.getValue()) {
-        writer.write("$L,", assignment);
-      }
-      writer.dedent();
-      writer.write("},");
-      writer.dedent();
+    writer.pushState();
+    try {
+      writer.putContext(
+          "arms",
+          writer.consumer(
+              w -> {
+                for (Map.Entry<String, List<String>> binding : bindings.entrySet()) {
+                  writer.pushState();
+                  try {
+                    writer.putContext("pattern", binding.getKey());
+                    writer.putContext(
+                        "assignments",
+                        writer.consumer(
+                            w2 ->
+                                binding
+                                    .getValue()
+                                    .forEach(assignment -> writer.write("$L,", assignment))));
+                    writer.write(
+                        """
+                        ${pattern:L}
+                            => clientParameters with
+                            {
+                                ${assignments:C|}
+                            },\
+                        """);
+                  } finally {
+                    writer.popState();
+                  }
+                }
+              }));
+      writer.write(
+          """
+          private ${parametersType:L}? Bind(${endpointParameters:T} parameters) => parameters.OperationId.Name switch
+          {
+              ${arms:C|}
+              _ => null,
+          };\
+          """);
+    } finally {
+      writer.popState();
     }
-    writer.write("_ => null,");
-    writer.dedent();
-    writer.write("};");
   }
 
   private void writeResolve() {
@@ -387,57 +435,74 @@ public final class EndpointResolverGenerator implements Runnable {
     }
 
     writer.writeXmlDocs("Resolves the endpoint for a full set of endpoint parameters.", Map.of());
-    writer.write(
-        "public static $T Resolve($L parameters)", RuntimeTypes.SMITHY_ENDPOINT, parametersType);
-    writer.write("{");
-    writer.indent();
-    writer.write("$T.ThrowIfNull(parameters);", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
-    declarations.forEach(declaration -> writer.write("$L", declaration));
-    writer.write("");
-    writer.write("var nodes = Nodes;");
-    writer.write("var reference = Root;");
-    writer.write("while (IsNode(reference))");
-    writer.write("{");
-    writer.indent();
-    writer.write("var index = (reference > 0 ? reference : -reference) - 1;");
-    writer.write("var outcome = Test(nodes[index * 3]) ^ (reference < 0);");
-    writer.write("reference = outcome ? nodes[index * 3 + 1] : nodes[index * 3 + 2];");
-    writer.dedent();
-    writer.write("}");
-    writer.write("return reference >= ResultOffset");
-    writer.write("    ? Result(reference - ResultOffset)");
-    writer.write("    : throw $T.NoMatch();", RuntimeTypes.SMITHY_ENDPOINT_RESOLUTION_EXCEPTION);
-    writer.write("");
+    writer.pushState();
+    try {
+      writer.putContext("resolutionException", RuntimeTypes.SMITHY_ENDPOINT_RESOLUTION_EXCEPTION);
+      writer.putContext("unreachable", RuntimeTypes.UNREACHABLE_EXCEPTION);
+      writer.putContext("usesDefaultAuthSchemes", usesDefaultAuthSchemes);
+      writer.putContext(
+          "declarations",
+          writer.consumer(
+              w -> declarations.forEach(declaration -> writer.write("$L", declaration))));
+      writer.putContext(
+          "conditions",
+          writer.consumer(
+              w -> {
+                for (int i = 0; i < conditions.size(); i++) {
+                  writer.write("// $L", comment(bdd.getConditions().get(i).toString()));
+                  writer.write("$L => $L,", i, conditions.get(i));
+                }
+              }));
+      writer.putContext(
+          "results",
+          writer.consumer(
+              w -> {
+                for (int i = 0; i < results.size(); i++) {
+                  if (results.get(i) != null) {
+                    writer.write("$L => $L,", i, results.get(i));
+                  }
+                }
+              }));
+      writer.putContext("defaultAuthSchemes", writer.consumer(w -> writeDefaultAuthSchemes()));
+      writer.write(
+          """
+          public static ${endpoint:T} Resolve(${parametersType:L} parameters)
+          {
+              ${argumentNull:T}.ThrowIfNull(parameters);
+              ${declarations:C|}
 
-    writer.write("bool Test(int condition) => condition switch");
-    writer.write("{");
-    writer.indent();
-    for (int i = 0; i < conditions.size(); i++) {
-      writer.write("// $L", comment(bdd.getConditions().get(i).toString()));
-      writer.write("$L => $L,", i, conditions.get(i));
-    }
-    writer.write("_ => throw new $T(),", RuntimeTypes.UNREACHABLE_EXCEPTION);
-    writer.dedent();
-    writer.write("};");
-    writer.write("");
+              var nodes = Nodes;
+              var reference = Root;
+              while (IsNode(reference))
+              {
+                  var index = (reference > 0 ? reference : -reference) - 1;
+                  var outcome = Test(nodes[index * 3]) ^ (reference < 0);
+                  reference = outcome ? nodes[index * 3 + 1] : nodes[index * 3 + 2];
+              }
+              return reference >= ResultOffset
+                  ? Result(reference - ResultOffset)
+                  : throw ${resolutionException:T}.NoMatch();
 
-    writer.write("$T Result(int result) => result switch", RuntimeTypes.SMITHY_ENDPOINT);
-    writer.write("{");
-    writer.indent();
-    for (int i = 0; i < results.size(); i++) {
-      if (results.get(i) != null) {
-        writer.write("$L => $L,", i, results.get(i));
-      }
+              bool Test(int condition) => condition switch
+              {
+                  ${conditions:C|}
+                  _ => throw new ${unreachable:T}(),
+              };
+
+              ${endpoint:T} Result(int result) => result switch
+              {
+                  ${results:C|}
+                  _ => throw ${resolutionException:T}.NoMatch(),
+              };
+              ${?usesDefaultAuthSchemes}
+
+              ${defaultAuthSchemes:C|}
+              ${/usesDefaultAuthSchemes}
+          }\
+          """);
+    } finally {
+      writer.popState();
     }
-    writer.write("_ => throw $T.NoMatch(),", RuntimeTypes.SMITHY_ENDPOINT_RESOLUTION_EXCEPTION);
-    writer.dedent();
-    writer.write("};");
-    if (usesDefaultAuthSchemes) {
-      writer.write("");
-      writeDefaultAuthSchemes();
-    }
-    writer.dedent();
-    writer.write("}");
   }
 
   /**
@@ -445,13 +510,24 @@ public final class EndpointResolverGenerator implements Runnable {
    * no {@code authSchemes}.
    */
   private void writeDefaultAuthSchemes() {
-    writer.write(
-        "$T<$T> DefaultAuthSchemes() => new $T[]",
-        RuntimeTypes.I_READ_ONLY_LIST,
-        RuntimeTypes.SMITHY_ENDPOINT_AUTH_SCHEME,
-        RuntimeTypes.SMITHY_ENDPOINT_AUTH_SCHEME);
-    writer.write("{");
-    writer.indent();
+    writer.pushState();
+    try {
+      writer.putContext("readOnlyList", RuntimeTypes.I_READ_ONLY_LIST);
+      writer.putContext("authScheme", RuntimeTypes.SMITHY_ENDPOINT_AUTH_SCHEME);
+      writer.putContext("schemes", writer.consumer(w -> writeDefaultAuthSchemeEntries()));
+      writer.write(
+          """
+          ${readOnlyList:T}<${authScheme:T}> DefaultAuthSchemes() => new ${authScheme:T}[]
+          {
+              ${schemes:C|}
+          };\
+          """);
+    } finally {
+      writer.popState();
+    }
+  }
+
+  private void writeDefaultAuthSchemeEntries() {
     String documentType = writer.typeName(RuntimeTypes.DOCUMENT);
     for (EndpointRules.DefaultAuthScheme scheme : rules.defaultAuthSchemes()) {
       List<String> entries = new ArrayList<>();
@@ -513,8 +589,6 @@ public final class EndpointResolverGenerator implements Runnable {
             String.join(", ", entries));
       }
     }
-    writer.dedent();
-    writer.write("};");
   }
 
   // ---------------- endpoint results ----------------
