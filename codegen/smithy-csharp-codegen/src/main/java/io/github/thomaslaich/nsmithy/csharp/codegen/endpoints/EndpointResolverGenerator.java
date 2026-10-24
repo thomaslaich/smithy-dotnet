@@ -810,9 +810,13 @@ public final class EndpointResolverGenerator implements Runnable {
                 true));
       }
 
-      for (Map.Entry<MemberShape, ContextParamTrait> entry :
-          index.getContextParams(operation).entrySet()) {
-        Parameter parameter = parameters.get(entry.getValue().getName());
+      // Input members in declaration order, so the generated bindings are stable.
+      for (MemberShape member : input.members()) {
+        Parameter parameter =
+            member
+                .getTrait(ContextParamTrait.class)
+                .map(trait -> parameters.get(trait.getName()))
+                .orElse(null);
         if (parameter == null) {
           continue;
         }
@@ -820,8 +824,7 @@ public final class EndpointResolverGenerator implements Runnable {
         ParameterBinding lower = assignments.get(property);
         String fallback = lower == null ? "clientParameters." + property : lower.expression();
         assignments.put(
-            property,
-            new ParameterBinding(contextValue(entry.getKey(), parameter, fallback), true));
+            property, new ParameterBinding(contextValue(member, parameter, fallback), true));
       }
 
       index
