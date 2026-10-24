@@ -18,10 +18,10 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
+import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpProtocol;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport.Kind;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
-import java.util.List;
+import java.util.Optional;
 import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -42,8 +42,8 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
   public void run() {
     // No client is generated for a service with no supported protocol, so there is nothing to
     // register. Leave an (otherwise empty) file so the output set is stable.
-    List<Kind> kinds = ProtocolSupport.declaredKinds(service);
-    if (kinds.isEmpty()) {
+    Optional<CSharpProtocol> defaultProtocol = ProtocolSupport.clientDefault(context, service);
+    if (defaultProtocol.isEmpty()) {
       return;
     }
 
@@ -55,7 +55,7 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
             writer,
             ProtocolSupport.httpVersionPreference(
                 service,
-                kinds.get(0),
+                defaultProtocol.get(),
                 ProtocolSupport.hasEventStreamOperations(context.model(), service)));
     // Fully-qualified named-client key, unique per service.
     String namespace = context.settings().csharpNamespace(service.getId().getNamespace());
@@ -68,7 +68,7 @@ public final class ClientDependencyInjectionGenerator implements Runnable {
       writer.putContext("client", clientName);
       writer.putContext("clientInterface", interfaceName);
       writer.putContext("clientKey", CSharpNaming.formatString(clientKey));
-      writer.putContext("protocol", ProtocolSupport.protocolType(kinds.get(0)));
+      writer.putContext("protocol", defaultProtocol.get().runtimeType());
       writer.putContext("httpVersionPreference", modeledHttpVersionPreference);
       writer.putContext("httpClientBuilder", RuntimeTypes.I_HTTP_CLIENT_BUILDER);
       writer.putContext("serviceCollection", RuntimeTypes.I_SERVICE_COLLECTION);

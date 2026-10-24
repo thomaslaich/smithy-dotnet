@@ -1,7 +1,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
@@ -13,7 +12,6 @@ import java.nio.file.Files;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import software.amazon.smithy.build.FileManifest;
-import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
@@ -55,41 +53,6 @@ final class ClientGeneratorTest {
 
       operation Chat {
           input := {
-              events: ChatEvent
-          }
-          output := {
-              events: ChatEvent
-          }
-      }
-
-      @streaming
-      union ChatEvent {
-          message: MessageEvent
-      }
-
-      structure MessageEvent {
-          text: String
-      }
-      """;
-
-  private static final String STREAMING_SIBLING_MODEL =
-      """
-      $version: "2"
-
-      namespace example.streaming
-
-      use alloy.proto#grpc
-      use smithy.api#streaming
-
-      @grpc
-      service StreamingService {
-          version: "1"
-          operations: [Chat]
-      }
-
-      operation Chat {
-          input := {
-              room: String
               events: ChatEvent
           }
           output := {
@@ -162,27 +125,6 @@ final class ClientGeneratorTest {
         generated.contains("return runtime.InvokeAsync(WatchBinding, input, cancellationToken);"),
         generated);
     assertFalse(generated.contains("return await runtime.InvokeAsync"), generated);
-  }
-
-  @Test
-  void grpcStreamingOperationsRejectSiblingMembers() {
-    CodegenException ex =
-        assertThrows(
-            CodegenException.class,
-            () ->
-                renderClient(
-                    PROTOCOL_TRAITS,
-                    STREAMING_SIBLING_MODEL,
-                    "example.streaming#StreamingService",
-                    "Example.Streaming"));
-
-    assertTrue(
-        ex.getMessage()
-            .contains(
-                "gRPC event-stream operation example.streaming#Chat input shape"
-                    + " example.streaming#ChatInput must contain exactly one event-stream member"),
-        ex.getMessage());
-    assertTrue(ex.getMessage().contains("Members: events (event stream), room."), ex.getMessage());
   }
 
   private static final String REST_PROTOCOL_TRAITS =

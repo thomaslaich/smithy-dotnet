@@ -16,10 +16,15 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - `IServiceProtocol.GetServerRouting`, through which a protocol reports how requests reach a
   service's operations: a route per operation, or one route on which the protocol names the
   operation from the request.
-- `MapSmithyService` maps any service from its schema, a table of `ServerOperation`s, and the
-  protocols to serve it over.
+- `MapSmithyService` maps any service from its operation catalog and the protocols to serve it
+  over.
 - `CSharpIntegration.serviceGenerator`, which lets an integration in a separate
   package generate the service surface for a protocol it supplies.
+- `CSharpIntegration.protocols()`, which lets an integration add a request/response protocol:
+  a service carrying the protocol's trait gets a client and server that use its runtime type,
+  as for a built-in protocol.
+- The `defaultProtocol` code generation setting selects the generated client's default
+  protocol for a service with several.
 
 ### Changed
 
@@ -37,6 +42,8 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   replaces `ServiceOperation.Create`: it takes a function that resolves the handler from a
   request's services. `IServiceDefinition.Operations` replaces `CreateOperationCatalog`, and
   `MapSmithyService` takes the catalog.
+- An event-stream input or output with sibling members on a gRPC service is now a model
+  validation error (`GrpcEventStream`) instead of a code generation failure.
 - **BREAKING:** `IServerOperationProtocol` has a required `StreamsRequestBody` member.
   Custom server protocols must say whether the request body streams.
 

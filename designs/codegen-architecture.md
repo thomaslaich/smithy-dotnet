@@ -155,22 +155,23 @@ protocols in the order below, then integration protocols in integration order.
   names its member of the generated protocols enum that selects which protocols
   to map. Routing belongs to the runtime protocol, not to code generation; see
   [server-architecture.md](server-architecture.md).
-- Event-stream operations bind only through protocols with `eventStreams`.
+- The client binds event-stream operations only when one of the service's
+  protocols has `eventStreams`.
 
 The built-in protocols, in order:
 
-| Protocol | `server` |
-| --- | --- |
-| `smithy.protocols#rpcv2Cbor` | yes |
-| `smithy.protocols#rpcv2Json` | yes |
-| `aws.protocols#restXml` | no |
-| `aws.protocols#awsQuery` | no |
-| `aws.protocols#ec2Query` | no |
-| `aws.protocols#awsJson1_1` | no |
-| `aws.protocols#awsJson1_0` | no |
-| `alloy#simpleRestJson` | yes |
-| `aws.protocols#restJson1` | yes |
-| `alloy.proto#grpc` | yes |
+| Protocol | `name` | `eventStreams` | `server` |
+| --- | --- | --- | --- |
+| `smithy.protocols#rpcv2Cbor` | `RpcV2Cbor` | yes | yes |
+| `smithy.protocols#rpcv2Json` | `RpcV2Json` | yes | yes |
+| `aws.protocols#restXml` | `RestXml` | no | no |
+| `aws.protocols#awsQuery` | `AwsQuery` | no | no |
+| `aws.protocols#ec2Query` | `Ec2Query` | no | no |
+| `aws.protocols#awsJson1_1` | `AwsJson1_1` | no | no |
+| `aws.protocols#awsJson1_0` | `AwsJson1_0` | no | no |
+| `alloy#simpleRestJson` | `SimpleRestJson` | yes | yes |
+| `aws.protocols#restJson1` | `RestJson1` | yes | yes |
+| `alloy.proto#grpc` | `Grpc` | yes | yes |
 
 Two registrations for the same trait, or two protocols of one service with the
 same `name`, fail code generation. A service whose traits match no registered
@@ -180,7 +181,10 @@ An integration protocol ships its runtime type in a NuGet package that the
 generated code's project references, as `NSmithy.Protocols.RpcV2Json` does for
 a built-in one. A protocol whose messages need more than the model provides,
 such as Thrift's numeric field ids, ships those traits in its Smithy JAR and
-validates their use.
+validates their use. Constraints a protocol places on the model are Smithy
+validators too, so the generators contain no protocol-specific checks: the
+built-in gRPC protocol's requirement that an event-stream input or output holds
+only its event stream is the `GrpcEventStream` validator.
 
 Protocols are HTTP protocols: generated clients send `SmithyHttpRequest`s
 through an `IHttpTransport`, and generated servers are ASP.NET Core endpoints.
@@ -301,11 +305,10 @@ Service files contain:
   service-level traits.
 - `<Service>.Client.g.cs` — typed async methods for each operation; binds
   protocol and transport at construction time.
-- `<Service>.Server.g.cs` — server-side handler interface, a
-  DI-registered `IServiceDefinition` that binds operation schemas to their
-  per-operation handlers, prompt definitions generated from
-  `smithy.ai#prompts`, JSON Schema 2020-12 companions for unary operation tool
-  projections, and the ASP.NET Core adapter.
+- `<Service>.Server.g.cs` — handler interfaces, a DI-registered
+  `IServiceDefinition` holding the service's operation table, prompt
+  definitions generated from `smithy.ai#prompts`, JSON Schema 2020-12
+  companions for unary operations, and `Map{Service}`.
 
 Generated client and server methods bind the service schema, operation schemas,
 typed input/output values, selected protocol adapter, and transport options into
@@ -313,15 +316,16 @@ the runtime protocol pipeline. The protocol adapter projects each operation into
 transport fields and delegates body payloads to a schema-bound codec such as
 `JsonCodecFactory`.
 
-The generated service definition is transport-neutral. It resolves each
-operation handler independently and builds an operation catalog that stops at
-typed invocation and runtime metadata. It also exposes prompt definitions, but
-does not interpret or execute their templates. Transport adapters project these
-parts into their own capability model: the MCP adapter creates tools from the
-catalog and renders prompts, while ASP.NET Core continues to bind routes
-directly. JSON Schema metadata lives on the server operation binding rather than
-the shared operation schema, so client-only generation does not carry tool
-metadata.
+The generated service definition is transport-neutral. Its operation table
+pairs each operation schema with a function that resolves the handler from a
+request's services, and contains no routes or protocol code. It also exposes
+prompt definitions, but does not interpret or execute their templates. Every
+host adapter works from the same table: ASP.NET Core binds its operations to
+the selected protocols and maps the protocols' routes, and the MCP adapter
+creates tools from it and renders prompts. JSON Schema metadata lives on the
+server operation rather than the shared operation schema, so client-only
+generation does not carry tool metadata. See
+[server-architecture.md](server-architecture.md).
 
 ## Tradeoffs
 

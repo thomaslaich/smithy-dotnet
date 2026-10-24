@@ -18,8 +18,8 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
+import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpProtocol;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport.Kind;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
@@ -64,12 +64,9 @@ public final class ServerGenerator implements Runnable {
             .collect(Collectors.toList());
     ops.forEach(op -> writer.reserveName(operationJsonSchemasClass(op)));
 
-    List<Kind> serverKinds = serverKinds();
+    List<CSharpProtocol> serverProtocols = ProtocolSupport.serverProtocols(context, service);
     List<PromptDefinition> prompts = promptDefinitions(ops);
-    if (serverKinds.contains(Kind.GRPC)) {
-      ops.forEach(op -> ShapeSupport.requireGrpcEventStreamWrapperIsFlattenable(model, op));
-    }
-    boolean emitsAspNetCore = !serverKinds.isEmpty();
+    boolean emitsAspNetCore = !serverProtocols.isEmpty();
 
     writer.addImport(RuntimeTypes.MS_EXT_DI);
     writer.addImport(RuntimeTypes.MS_EXT_DI_EXTENSIONS);
@@ -96,13 +93,13 @@ public final class ServerGenerator implements Runnable {
     writer.write("");
 
     if (emitsAspNetCore) {
-      writeProtocolEnum(contract, serverKinds);
+      writeProtocolEnum(contract, serverProtocols);
       writer.write("");
     }
 
     writeServiceDefinition(ops, prompts, contract);
     writer.write("");
-    writeServerExtensions(ops, contract, aggInterface, serverKinds);
+    writeServerExtensions(ops, contract, aggInterface, serverProtocols);
   }
 
   private void writeOperationHandler(SymbolProvider sp, OperationShape op) {
@@ -128,19 +125,6 @@ public final class ServerGenerator implements Runnable {
       writer.popState();
     }
     writer.write("");
-  }
-
-  /** Protocols that emit an ASP.NET Core server, in declared precedence order. */
-  private List<Kind> serverKinds() {
-    return ProtocolSupport.declaredKinds(service).stream()
-        .filter(
-            kind ->
-                kind == Kind.RPC_V2_CBOR
-                    || kind == Kind.RPC_V2_JSON
-                    || kind == Kind.SIMPLE_REST_JSON
-                    || kind == Kind.REST_JSON_1
-                    || kind == Kind.GRPC)
-        .collect(Collectors.toList());
   }
 
   // ---------------- DI registration ----------------
@@ -281,7 +265,10 @@ public final class ServerGenerator implements Runnable {
   }
 
   private void writeServerExtensions(
-      List<OperationShape> ops, String contract, String aggInterface, List<Kind> serverKinds) {
+      List<OperationShape> ops,
+      String contract,
+      String aggInterface,
+      List<CSharpProtocol> serverProtocols) {
     writer.pushState();
     try {
       writer.putContext("contract", contract);
@@ -294,7 +281,7 @@ public final class ServerGenerator implements Runnable {
           "registrations",
           writer.consumer(
               w -> {
-                if (!serverKinds.isEmpty()) {
+                if (!serverProtocols.isEmpty()) {
                   w.write("services.AddSmithyServer();");
                 }
                 w.write(
@@ -315,9 +302,9 @@ public final class ServerGenerator implements Runnable {
           "endpointMapping",
           writer.consumer(
               w -> {
-                if (!serverKinds.isEmpty()) {
+                if (!serverProtocols.isEmpty()) {
                   w.write("");
-                  writeEndpointMapping(contract, serverKinds);
+                  writeEndpointMapping(contract, serverProtocols);
                 }
               }));
       writer.write(
@@ -349,8 +336,8 @@ public final class ServerGenerator implements Runnable {
     }
   }
 
-  private void writeEndpointMapping(String contract, List<Kind> serverKinds) {
-    writeSelectableMapMethod(contract, serverKinds, protocolEnumName(contract));
+  private void writeEndpointMapping(String contract, List<CSharpProtocol> serverProtocols) {
+    writeSelectableMapMethod(contract, serverProtocols, protocolEnumName(contract));
   }
 
   private void writeOperationJsonSchemas(List<OperationShape> ops) {
@@ -403,20 +390,20 @@ public final class ServerGenerator implements Runnable {
 
   // ---------------- endpoint mapping ----------------
 
-  private void writeProtocolEnum(String contract, List<Kind> serverKinds) {
+  private void writeProtocolEnum(String contract, List<CSharpProtocol> serverProtocols) {
     writer.pushState();
     try {
       writer.putContext("flags", writer.attributeName(RuntimeTypes.FLAGS_ATTRIBUTE));
       writer.putContext("enumName", protocolEnumName(contract));
       writer.putContext(
           "allProtocols",
-          serverKinds.stream().map(ServerGenerator::mapSuffix).collect(Collectors.joining(" | ")));
+          serverProtocols.stream().map(CSharpProtocol::name).collect(Collectors.joining(" | ")));
       writer.putContext(
           "protocols",
           writer.consumer(
               w -> {
-                for (int i = 0; i < serverKinds.size(); i++) {
-                  w.write("$L = $L,", mapSuffix(serverKinds.get(i)), 1 << i);
+                for (int i = 0; i < serverProtocols.size(); i++) {
+                  w.write("$L = $L,", serverProtocols.get(i).name(), 1 << i);
                 }
               }));
       writer.write(
@@ -435,12 +422,12 @@ public final class ServerGenerator implements Runnable {
   }
 
   private void writeSelectableMapMethod(
-      String contract, List<Kind> serverKinds, String protocolEnum) {
+      String contract, List<CSharpProtocol> serverProtocols, String protocolEnum) {
     writer.pushState();
     try {
       writer.putContext("contract", contract);
       writer.putContext("protocolEnum", protocolEnum);
-      writer.putContext("defaultProtocol", mapSuffix(serverKinds.get(0)));
+      writer.putContext("defaultProtocol", serverProtocols.get(0).name());
       writer.putContext("endpointRouteBuilder", RuntimeTypes.I_ENDPOINT_ROUTE_BUILDER);
       writer.putContext("argumentNullException", RuntimeTypes.ARGUMENT_NULL_EXCEPTION);
       writer.putContext(
@@ -449,7 +436,7 @@ public final class ServerGenerator implements Runnable {
       writer.putContext("serverProtocol", RuntimeTypes.SMITHY_SERVER_PROTOCOL);
       writer.putContext(
           "protocolMappings",
-          writer.consumer(w -> writeSelectedProtocolMappings(serverKinds, protocolEnum)));
+          writer.consumer(w -> writeSelectedProtocolMappings(serverProtocols, protocolEnum)));
       writer.write(
           """
           public static ${endpointRouteBuilder:T} Map${contract:L}(
@@ -474,13 +461,14 @@ public final class ServerGenerator implements Runnable {
     }
   }
 
-  private void writeSelectedProtocolMappings(List<Kind> serverKinds, String protocolEnum) {
+  private void writeSelectedProtocolMappings(
+      List<CSharpProtocol> serverProtocols, String protocolEnum) {
     writer.pushState();
     try {
       writer.putContext("protocolEnum", protocolEnum);
-      for (Kind kind : serverKinds) {
-        writer.putContext("protocol", mapSuffix(kind));
-        writer.putContext("protocolType", ProtocolSupport.protocolType(kind));
+      for (CSharpProtocol protocol : serverProtocols) {
+        writer.putContext("protocol", protocol.name());
+        writer.putContext("protocolType", protocol.runtimeType());
         writer.write(
             """
             if ((protocols & ${protocolEnum:L}.${protocol:L}) != 0)
@@ -578,20 +566,7 @@ public final class ServerGenerator implements Runnable {
         .toList();
   }
 
-  // ---------------- routing helpers ----------------
-
   // ---------------- helpers ----------------
-
-  private static String mapSuffix(Kind kind) {
-    return switch (kind) {
-      case RPC_V2_CBOR -> "RpcV2Cbor";
-      case RPC_V2_JSON -> "RpcV2Json";
-      case SIMPLE_REST_JSON -> "SimpleRestJson";
-      case REST_JSON_1 -> "RestJson1";
-      case GRPC -> "Grpc";
-      default -> throw new IllegalStateException("Unsupported server protocol: " + kind);
-    };
-  }
 
   private static String protocolEnumName(String contract) {
     return contract + "Protocols";

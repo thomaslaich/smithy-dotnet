@@ -12,7 +12,6 @@ import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.MemberShape;
-import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeType;
@@ -371,11 +370,6 @@ public final class ShapeSupport {
         .findFirst();
   }
 
-  public static void requireGrpcEventStreamWrapperIsFlattenable(Model model, OperationShape op) {
-    requireGrpcEventStreamWrapperIsFlattenable(model, op, op.getInputShape(), "input");
-    requireGrpcEventStreamWrapperIsFlattenable(model, op, op.getOutputShape(), "output");
-  }
-
   public static boolean isStreamingBlobMember(Model model, MemberShape member) {
     Shape target = model.expectShape(member.getTarget());
     return target.getType() == ShapeType.BLOB
@@ -534,42 +528,5 @@ public final class ShapeSupport {
       return num.toString();
     }
     return null;
-  }
-
-  private static void requireGrpcEventStreamWrapperIsFlattenable(
-      Model model, OperationShape op, ShapeId shapeId, String direction) {
-    Shape shape = model.expectShape(shapeId);
-    if (!(shape instanceof StructureShape structure) || !isEventStreamShape(model, shapeId)) {
-      return;
-    }
-
-    long streamingMemberCount =
-        structure.members().stream().filter(member -> isEventStreamMember(model, member)).count();
-    if (streamingMemberCount == 1 && structure.members().size() == 1) {
-      return;
-    }
-
-    String members =
-        structure.members().stream()
-            .sorted(Comparator.comparing(MemberShape::getMemberName))
-            .map(
-                member ->
-                    member.getMemberName()
-                        + (isEventStreamMember(model, member) ? " (event stream)" : ""))
-            .reduce((left, right) -> left + ", " + right)
-            .orElse("<none>");
-
-    throw new CodegenException(
-        "gRPC event-stream operation "
-            + op.getId()
-            + " "
-            + direction
-            + " shape "
-            + shapeId
-            + " must contain exactly one event-stream member. Native gRPC flattens the Smithy "
-            + direction
-            + " wrapper to 'stream <Event>', so sibling members cannot be represented. Members: "
-            + members
-            + ".");
   }
 }
