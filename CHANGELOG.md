@@ -25,6 +25,8 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   protocols' routes, and the generated code holds an operation table instead of an endpoint
   per operation and protocol. Endpoints are plain request delegates, with no minimal-API
   parameter binding.
+- Mapped services use a default `SmithyServerRuntime` when the application registers none,
+  so registering operation handlers individually no longer requires `AddSmithyServer()`.
 - **BREAKING:** `IServerOperationProtocol` has a required `StreamsRequestBody` member.
   Custom server protocols must say whether the request body streams.
 

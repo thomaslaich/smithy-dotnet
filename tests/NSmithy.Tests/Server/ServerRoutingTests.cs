@@ -120,7 +120,7 @@ public sealed class ServerRoutingTests
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
-        builder.Services.AddSmithyServer();
+        // No AddSmithyServer: mapped services fall back to a default runtime.
         var app = builder.Build();
         try
         {

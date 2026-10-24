@@ -207,12 +207,12 @@ the host request into a `SmithyHttpRequest`, and a `SmithyHttpServerResponse` on
 the host response — the mapping of protocols' routes to host endpoints, and one
 dispatch entry point:
 
-The host adapter resolves `SmithyServerRuntime` from request services. `Add{Service}Handler<THandler>()` calls `AddSmithyServer()`, which
-uses `TryAddSingleton` to register a default without replacing application
-registrations. Applications registering operation handlers individually must call
-`services.AddSmithyServer()` before building the host. The runtime is currently
-stateless; this ownership boundary allows future lifecycle configuration without
-adding global host state.
+The host adapter resolves `SmithyServerRuntime` from request services, and uses
+a default runtime when the application registers none. `AddSmithyServer()`,
+which `Add{Service}Handler<THandler>()` calls, registers the runtime with
+`TryAddSingleton`, so an application registration takes precedence. The runtime
+is currently stateless; resolving it from the container allows future lifecycle
+configuration without adding global host state.
 
 ```csharp
 public static class SmithyAspNetCoreHost
