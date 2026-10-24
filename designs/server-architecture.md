@@ -338,7 +338,9 @@ public sealed record ServerRoute(
 host matches requests with its own router. `ByDispatch` covers protocols that
 name the operation inside the request (a header, or the body for JSON-RPC and
 Thrift). The protocol may read the body to resolve the operation; the host
-buffers it, so the operation protocol deserializes the same bytes. When the
+buffers it, so the operation protocol deserializes the same bytes. An operation
+that streams its request body therefore cannot be routed by dispatch, and
+mapping one fails at startup. When the
 protocol names no operation, the host writes the protocol's `UnknownOperation`
 response, so the error has the protocol's shape (a JSON-RPC "method not found",
 say).

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
+using NSmithy.Core.Validation;
 using NSmithy.Http;
 using NSmithy.Protocols.Grpc;
 using NSmithy.Protocols.Rest;
@@ -116,6 +117,19 @@ public sealed class ServerRoutingTests
         Assert.Equal(HttpStatusCode.NotImplemented, (await client.SendAsync(unknown)).StatusCode);
     }
 
+    [Fact]
+    public async Task DispatchProtocolsCannotServeStreamingOperations()
+    {
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            StartAsync(
+                new SmithyServerProtocol("Dispatch", new HeaderDispatchProtocol(streams: true))
+            )
+        );
+
+        Assert.Contains("'example.routing#Ping'", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("streams its request body", exception.Message, StringComparison.Ordinal);
+    }
+
     private static async Task<WebApplication> StartAsync(params SmithyServerProtocol[] protocols)
     {
         var builder = WebApplication.CreateBuilder();
@@ -140,14 +154,17 @@ public sealed class ServerRoutingTests
     }
 
     // Names the operation in a header, like AWS JSON's X-Amz-Target, and serializes with
-    // restJson1.
-    private sealed class HeaderDispatchProtocol : IProtocol
+    // restJson1. With streams set, it reports every operation as streaming its request body.
+    private sealed class HeaderDispatchProtocol(bool streams = false) : IProtocol
     {
         public IServiceProtocol ForService(ServiceSchema service) =>
-            new ServiceProtocol(new RestJson1Protocol().ForService(service), service);
+            new ServiceProtocol(new RestJson1Protocol().ForService(service), service, streams);
 
-        private sealed class ServiceProtocol(IServiceProtocol inner, ServiceSchema service)
-            : IServiceProtocol
+        private sealed class ServiceProtocol(
+            IServiceProtocol inner,
+            ServiceSchema service,
+            bool streams
+        ) : IServiceProtocol
         {
             public IClientOperationProtocol<TInput, TOutput> ForClientOperation<TInput, TOutput>(
                 OperationSchema<TInput, TOutput> operation
@@ -155,7 +172,10 @@ public sealed class ServerRoutingTests
 
             public IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
                 OperationSchema<TInput, TOutput> operation
-            ) => inner.ForServerOperation(operation);
+            ) =>
+                streams
+                    ? new StreamingOperation<TInput, TOutput>(inner.ForServerOperation(operation))
+                    : inner.ForServerOperation(operation);
 
             public ServerRouting GetServerRouting(IReadOnlyList<IOperationSchema> operations) =>
                 new ServerRouting.ByDispatch(
@@ -170,6 +190,28 @@ public sealed class ServerRoutingTests
                     _ => new SmithyHttpServerResponse { StatusCode = 501 }
                 );
         }
+    }
+
+    private sealed class StreamingOperation<TInput, TOutput>(
+        IServerOperationProtocol<TInput, TOutput> inner
+    ) : IServerOperationProtocol<TInput, TOutput>
+    {
+        public ISmithyValidator<TInput>? InputValidator => inner.InputValidator;
+
+        public bool StreamsRequestBody => true;
+
+        public ValueTask<TInput> DeserializeRequestAsync(
+            SmithyHttpRequest request,
+            CancellationToken cancellationToken = default
+        ) => inner.DeserializeRequestAsync(request, cancellationToken);
+
+        public SmithyHttpServerResponse SerializeResponse(
+            TOutput output,
+            CancellationToken cancellationToken = default
+        ) => inner.SerializeResponse(output, cancellationToken);
+
+        public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response) =>
+            inner.TrySerializeError(exception, out response);
     }
 
     private sealed class RouteComparer : IEqualityComparer<ServerRoute>

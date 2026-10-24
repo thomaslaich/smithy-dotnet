@@ -77,6 +77,18 @@ public static partial class SmithyAspNetCoreServer
                     break;
 
                 case ServerRouting.ByDispatch byDispatch:
+                    // Resolving the operation reads the request, so its body is buffered before
+                    // any operation sees it.
+                    if (
+                        bound.Values.FirstOrDefault(operation => operation.StreamsRequestBody) is
+                        { } streaming
+                    )
+                    {
+                        throw new InvalidOperationException(
+                            $"{protocol.Name} routes {service.Id.Name} by dispatch, which buffers request bodies, but operation '{streaming.Schema.Id}' streams its request body."
+                        );
+                    }
+
                     EnsureRouteAvailable(
                         mappedRoutes,
                         byDispatch.Method,
@@ -134,7 +146,7 @@ public static partial class SmithyAspNetCoreServer
         if (operationId is { } id && operations.TryGetValue(id, out var operation))
         {
             await SmithyAspNetCoreHost
-                .DispatchAsync(httpContext, operation, request, cancellationToken)
+                .DispatchBuiltRequestAsync(httpContext, operation, request, cancellationToken)
                 .ConfigureAwait(false);
             return;
         }

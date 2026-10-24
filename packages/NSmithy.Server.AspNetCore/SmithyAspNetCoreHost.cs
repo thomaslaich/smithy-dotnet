@@ -72,11 +72,13 @@ public static class SmithyAspNetCoreHost
                 cancellationToken
             )
             .ConfigureAwait(false);
-        await DispatchAsync(httpContext, operation, request, cancellationToken)
+        await DispatchBuiltRequestAsync(httpContext, operation, request, cancellationToken)
             .ConfigureAwait(false);
     }
 
-    internal static async Task DispatchAsync(
+    // For callers that already built the request, such as dispatch routing, which reads the
+    // request to resolve the operation before it can dispatch.
+    internal static async Task DispatchBuiltRequestAsync(
         HttpContext httpContext,
         IServerOperationBinding operation,
         SmithyHttpRequest request,
