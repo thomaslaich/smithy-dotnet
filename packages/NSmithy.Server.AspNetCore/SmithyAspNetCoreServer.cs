@@ -55,7 +55,7 @@ public static partial class SmithyAspNetCoreServer
                             );
                         }
 
-                        var pattern = RoutePattern(route.Path);
+                        var pattern = ToAspNetCoreRoute(route.Path);
                         EnsureRouteAvailable(
                             mappedRoutes,
                             route.Method,
@@ -162,9 +162,12 @@ public static partial class SmithyAspNetCoreServer
         }
     }
 
-    // A greedy `{label+}` segment is ASP.NET Core's catch-all `{**label}`.
-    private static string RoutePattern(string path) => GreedyLabel().Replace(path, "{**$1}");
+    // Converts a route path from Smithy's URI syntax to an ASP.NET Core route template. They
+    // differ only in greedy labels: "/files/{key+}" becomes "/files/{**key}", ASP.NET Core's
+    // catch-all.
+    private static string ToAspNetCoreRoute(string path) => GreedyLabel().Replace(path, "{**$1}");
 
+    // Matches a greedy label such as {key+}, capturing its name.
     [GeneratedRegex(@"\{(\w+)\+\}")]
     private static partial Regex GreedyLabel();
 }
