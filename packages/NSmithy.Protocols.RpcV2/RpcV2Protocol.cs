@@ -349,7 +349,7 @@ public abstract class RpcV2Protocol : IProtocol
     ) : IOperationProtocol<TInput, TOutput>
     {
         // The RPC v2 path is service-derived; the protocol owns this wire detail.
-        private readonly string requestUri = RequestUri(service, operation);
+        private readonly string requestUri = RequestUri(service, operation.Id);
 
         public bool StreamsRequestBody { get; } = Schemas.HasEventStreamMember(operation.Input);
 
@@ -510,11 +510,6 @@ public abstract class RpcV2Protocol : IProtocol
         response.Headers["Content-Type"] = [EventStreamContentType];
         return response;
     }
-
-    private static string RequestUri<TInput, TOutput>(
-        ServiceSchema service,
-        OperationSchema<TInput, TOutput> operation
-    ) => RequestUri(service, operation.Id);
 
     private static string RequestUri(ServiceSchema service, ShapeId operation) =>
         $"/service/{service.Id.Name}/operation/{operation.Name}";
