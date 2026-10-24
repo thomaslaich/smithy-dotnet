@@ -93,6 +93,115 @@ in the service closure:
 All files are written under the Smithy projection's output directory:
 `<SmithyBuildOutputPath>/<projection>/csharp-codegen/`.
 
+### Integrations
+
+`CSharpIntegration` extends Smithy's `SmithyIntegration`. `CodegenDirector`
+finds its implementations with the Java `ServiceLoader`, through
+`META-INF/services/io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration`
+in any JAR on the codegen classpath, and orders them by `name()`, `runBefore()`,
+and `runAfter()`. A package outside this repository extends the generator by
+shipping such a JAR; the generator does not reference it.
+
+An integration is a JAR on the codegen classpath. A project adds it to
+`maven.dependencies` in its `smithy-build.json`; NSmithy merges that into the
+effective build file, and the `ServiceLoader` finds the integration. A NuGet
+package can add the dependency for its users through a `SmithyContractsBuildFile`
+fragment, but nothing requires one.
+
+Integrations get Smithy's hooks (`preprocessModel`, `decorateSymbolProvider`,
+`interceptors`, `customize`) and two of the C# generator's own, one per way a
+service can be extended:
+
+| Hook | Use | The generator still emits |
+| --- | --- | --- |
+| `protocols()` | A request/response protocol: a new wire format or HTTP binding | Client, server, DI registration, endpoint resolution, shapes |
+| `serviceGenerator(context, service)` | A service that does not fit request/response, such as messaging | Shapes, schemas, and operations |
+
+The hooks and the types they receive are `@SmithyUnstableApi`, so an
+integration is built against the generator version it runs with.
+
+#### Protocols
+
+Generated clients and servers are protocol-agnostic: they call a runtime
+`IProtocol` that serializes from schemas, so a protocol needs no generated
+serializers. What code generation needs from a protocol is a `CSharpProtocol`:
+
+```java
+public record CSharpProtocol(
+    ShapeId trait,          // the protocol trait, such as aws.protocols#restJson1
+    String name,            // used in generated identifiers, such as RestJson1
+    Symbol runtimeType,     // the IProtocol implementation
+    boolean eventStreams,   // whether the runtime protocol binds event-stream operations
+    boolean server) {       // whether the runtime protocol also serves requests
+
+  /** A runtime type from its full C# name, such as "Acme.Protocols.MsgPackProtocol". */
+  public static Symbol runtimeType(String fullName) { ... }
+}
+```
+
+The generator registers the built-in protocols as `CSharpProtocol` values, and
+each integration adds its own through `protocols()`. A service's protocols are
+the registered ones whose trait it carries, in registration order: the built-in
+protocols in the order below, then integration protocols in integration order.
+
+- The client's default protocol is the `defaultProtocol` code generation setting
+  when set, which must name one of the service's protocol traits, and otherwise
+  the first of the service's protocols. `{Service}ClientConfig.Protocol` selects
+  another at runtime. `Add{Service}Client` registers the same default.
+- The HTTP version preference comes from the trait's `http` and
+  `eventStreamHttp` members, the convention of Smithy's protocol traits, when
+  the trait has them.
+- The server exposes the service over each protocol with `server`, and `name`
+  names its member of the generated protocols enum that selects which protocols
+  to map. Routing belongs to the runtime protocol, not to code generation; see
+  [server-architecture.md](server-architecture.md).
+- The client binds event-stream operations only when one of the service's
+  protocols has `eventStreams`.
+
+The built-in protocols, in order:
+
+| Protocol | `name` | `eventStreams` | `server` |
+| --- | --- | --- | --- |
+| `smithy.protocols#rpcv2Cbor` | `RpcV2Cbor` | yes | yes |
+| `smithy.protocols#rpcv2Json` | `RpcV2Json` | yes | yes |
+| `aws.protocols#restXml` | `RestXml` | no | no |
+| `aws.protocols#awsQuery` | `AwsQuery` | no | no |
+| `aws.protocols#ec2Query` | `Ec2Query` | no | no |
+| `aws.protocols#awsJson1_1` | `AwsJson1_1` | no | no |
+| `aws.protocols#awsJson1_0` | `AwsJson1_0` | no | no |
+| `alloy#simpleRestJson` | `SimpleRestJson` | yes | yes |
+| `aws.protocols#restJson1` | `RestJson1` | yes | yes |
+| `alloy.proto#grpc` | `Grpc` | yes | yes |
+
+Two registrations for the same trait, or two protocols of one service with the
+same `name`, fail code generation. A service whose traits match no registered
+protocol gets client and handler interfaces only.
+
+An integration protocol ships its runtime type in a NuGet package that the
+generated code's project references, as `NSmithy.Protocols.RpcV2Json` does for
+a built-in one. A protocol whose messages need more than the model provides,
+such as Thrift's numeric field ids, ships those traits in its Smithy JAR and
+validates their use. Constraints a protocol places on the model are Smithy
+validators too, so the generators contain no protocol-specific checks: the
+built-in gRPC protocol's requirement that an event-stream input or output holds
+only its event stream is the `GrpcEventStream` validator.
+
+Protocols are HTTP protocols: generated clients send `SmithyHttpRequest`s
+through an `IHttpTransport`, and generated servers are ASP.NET Core endpoints.
+Each call is one request and one response. A protocol on another transport
+(stdio, raw TCP, a message broker), or with exchanges that are not one request
+and one response (JSON-RPC batches and notifications), is a service generator.
+
+#### Service generators
+
+`serviceGenerator(context, service)` replaces the generated client and server
+surface of a service. It is for protocols whose services are not request and
+response, such as producing and consuming messages, which neither the generated
+client nor the server routing styles fit. Shapes, schemas, and operations are
+still generated by the host. A service generator takes precedence over the
+service's protocols. At most one integration may provide a service generator
+for a service; two fail code generation.
+
 ### Symbol provider
 
 `CSharpSymbolProvider` maps each Smithy shape to a C# `Symbol` carrying the
@@ -196,11 +305,10 @@ Service files contain:
   service-level traits.
 - `<Service>.Client.g.cs` — typed async methods for each operation; binds
   protocol and transport at construction time.
-- `<Service>.Server.g.cs` — server-side handler interface, a
-  DI-registered `IServiceDefinition` that binds operation schemas to their
-  per-operation handlers, prompt definitions generated from
-  `smithy.ai#prompts`, JSON Schema 2020-12 companions for unary operation tool
-  projections, and the ASP.NET Core adapter.
+- `<Service>.Server.g.cs` — handler interfaces, a DI-registered
+  `IServiceDefinition` holding the service's operation table, prompt
+  definitions generated from `smithy.ai#prompts`, JSON Schema 2020-12
+  companions for unary operations, and `Map{Service}`.
 
 Generated client and server methods bind the service schema, operation schemas,
 typed input/output values, selected protocol adapter, and transport options into
@@ -208,15 +316,16 @@ the runtime protocol pipeline. The protocol adapter projects each operation into
 transport fields and delegates body payloads to a schema-bound codec such as
 `JsonCodecFactory`.
 
-The generated service definition is transport-neutral. It resolves each
-operation handler independently and builds an operation catalog that stops at
-typed invocation and runtime metadata. It also exposes prompt definitions, but
-does not interpret or execute their templates. Transport adapters project these
-parts into their own capability model: the MCP adapter creates tools from the
-catalog and renders prompts, while ASP.NET Core continues to bind routes
-directly. JSON Schema metadata lives on the server operation binding rather than
-the shared operation schema, so client-only generation does not carry tool
-metadata.
+The generated service definition is transport-neutral. Its operation table
+pairs each operation schema with a function that resolves the handler from a
+request's services, and contains no routes or protocol code. It also exposes
+prompt definitions, but does not interpret or execute their templates. Every
+host adapter works from the same table: ASP.NET Core binds its operations to
+the selected protocols and maps the protocols' routes, and the MCP adapter
+creates tools from it and renders prompts. JSON Schema metadata lives on the
+server operation rather than the shared operation schema, so client-only
+generation does not carry tool metadata. See
+[server-architecture.md](server-architecture.md).
 
 ## Tradeoffs
 

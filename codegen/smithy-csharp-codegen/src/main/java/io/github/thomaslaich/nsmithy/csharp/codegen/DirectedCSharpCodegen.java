@@ -14,10 +14,12 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StringEnumGenerat
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.StructureGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.UnionGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
+import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpServiceGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;
@@ -37,6 +39,7 @@ import software.amazon.smithy.codegen.core.directed.GenerateServiceDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateStructureDirective;
 import software.amazon.smithy.codegen.core.directed.GenerateUnionDirective;
 import software.amazon.smithy.model.shapes.EnumShape;
+import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
@@ -72,6 +75,21 @@ final class DirectedCSharpCodegen
   public void generateService(
       GenerateServiceDirective<GenerationContext, CSharpSettings> directive) {
     GenerationContext ctx = directive.context();
+    ServiceShape service = directive.shape();
+    List<CSharpServiceGenerator> serviceGenerators =
+        ctx.integrations().stream()
+            .map(integration -> integration.serviceGenerator(ctx, service))
+            .flatMap(Optional::stream)
+            .toList();
+    if (serviceGenerators.size() > 1) {
+      throw new CodegenException(
+          "More than one C# integration provides a service generator for " + service.getId());
+    }
+    if (!serviceGenerators.isEmpty()) {
+      serviceGenerators.get(0).generate(ctx, service);
+      return;
+    }
+
     String csNamespace = ctx.settings().csharpNamespace(directive.shape().getId().getNamespace());
     String typeName = CSharpNaming.typeName(directive.shape().getId().getName());
     String dir = csNamespace.replace('.', '/');

@@ -1,23 +1,21 @@
 /*
- * Encapsulates protocol-specific decisions for HTTP client codegen:
- *   - which runtime helper class to call (REST, AWS JSON/Query, rpcv2Cbor, rpcv2Json, and gRPC
- *     protocols)
- *   - which codec to use (JSON / XML / CBOR)
- *   - whether to use HTTP binding traits or treat the whole input/output as the body
- *   - how to dispatch errors (status code vs error type from body)
- *   - URI scheme (real @http vs synthetic /service/X/operation/Y for rpcv2)
- *
- * Mirrors the protocol-switching helpers in CSharpShapeGenerator.ClientEmitter.cs.
+ * The request/response protocols code generation knows: the built-in ones and those integrations
+ * supply through CSharpIntegration.protocols(). Generators work from a service's matched protocols
+ * and name no protocol themselves.
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.support;
 
+import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
+import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
+import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpProtocol;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import software.amazon.smithy.codegen.core.CodegenException;
-import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
 import software.amazon.smithy.model.node.ArrayNode;
@@ -28,126 +26,137 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 @SmithyInternalApi
 public final class ProtocolSupport {
 
-  public enum Kind {
-    AWS_JSON_1_0,
-    AWS_JSON_1_1,
-    AWS_QUERY,
-    EC2_QUERY,
-    SIMPLE_REST_JSON,
-    REST_JSON_1,
-    REST_XML,
-    RPC_V2_CBOR,
-    RPC_V2_JSON,
-    GRPC
-  }
+  /** The built-in protocols, in the order a service's protocols are listed. */
+  public static final List<CSharpProtocol> BUILT_IN =
+      List.of(
+          new CSharpProtocol(
+              TraitIds.RPC_V2_CBOR, "RpcV2Cbor", RuntimeTypes.RPC_V2_CBOR_PROTOCOL, true, true),
+          new CSharpProtocol(
+              TraitIds.RPC_V2_JSON, "RpcV2Json", RuntimeTypes.RPC_V2_JSON_PROTOCOL, true, true),
+          new CSharpProtocol(
+              TraitIds.REST_XML, "RestXml", RuntimeTypes.REST_XML_PROTOCOL, false, false),
+          new CSharpProtocol(
+              TraitIds.AWS_QUERY, "AwsQuery", RuntimeTypes.AWS_QUERY_PROTOCOL, false, false),
+          new CSharpProtocol(
+              TraitIds.EC2_QUERY, "Ec2Query", RuntimeTypes.EC2_QUERY_PROTOCOL, false, false),
+          new CSharpProtocol(
+              TraitIds.AWS_JSON_1_1, "AwsJson1_1", RuntimeTypes.AWS_JSON11_PROTOCOL, false, false),
+          new CSharpProtocol(
+              TraitIds.AWS_JSON_1_0, "AwsJson1_0", RuntimeTypes.AWS_JSON10_PROTOCOL, false, false),
+          new CSharpProtocol(
+              TraitIds.SIMPLE_REST_JSON,
+              "SimpleRestJson",
+              RuntimeTypes.SIMPLE_REST_JSON_PROTOCOL,
+              true,
+              true),
+          new CSharpProtocol(
+              TraitIds.REST_JSON_1, "RestJson1", RuntimeTypes.REST_JSON1_PROTOCOL, true, true),
+          new CSharpProtocol(TraitIds.GRPC, "Grpc", RuntimeTypes.GRPC_PROTOCOL, true, true));
 
   public record HttpVersionPreference(String alpnId, boolean allowDowngrade) {}
 
-  public static boolean isRestJson1Service(ServiceShape s) {
-    return s.findTrait(TraitIds.REST_JSON_1).isPresent();
-  }
+  /**
+   * Every registered protocol: the built-in ones, then each integration's in integration order. Two
+   * registrations for one trait fail code generation.
+   */
+  public static List<CSharpProtocol> registered(List<CSharpIntegration> integrations) {
+    List<CSharpProtocol> protocols = new ArrayList<>(BUILT_IN);
+    for (CSharpIntegration integration : integrations) {
+      protocols.addAll(integration.protocols());
+    }
 
-  public static boolean isAwsJson10Service(ServiceShape s) {
-    return s.findTrait(TraitIds.AWS_JSON_1_0).isPresent();
-  }
-
-  public static boolean isAwsJson11Service(ServiceShape s) {
-    return s.findTrait(TraitIds.AWS_JSON_1_1).isPresent();
-  }
-
-  public static boolean isAwsQueryService(ServiceShape s) {
-    return s.findTrait(TraitIds.AWS_QUERY).isPresent();
-  }
-
-  public static boolean isEc2QueryService(ServiceShape s) {
-    return s.findTrait(TraitIds.EC2_QUERY).isPresent();
-  }
-
-  public static boolean isSimpleRestJsonService(ServiceShape s) {
-    return s.findTrait(TraitIds.SIMPLE_REST_JSON).isPresent();
-  }
-
-  public static boolean isRestXmlService(ServiceShape s) {
-    return s.findTrait(TraitIds.REST_XML).isPresent();
-  }
-
-  public static boolean isRpcV2CborService(ServiceShape s) {
-    return s.findTrait(TraitIds.RPC_V2_CBOR).isPresent();
-  }
-
-  public static boolean isRpcV2JsonService(ServiceShape s) {
-    return s.findTrait(TraitIds.RPC_V2_JSON).isPresent();
-  }
-
-  public static boolean isGrpcService(ServiceShape s) {
-    return s.findTrait(TraitIds.GRPC).isPresent();
-  }
-
-  public static boolean emitsAspNetCoreServer(ServiceShape s) {
-    return emitsHttpAspNetCoreServer(s) || isGrpcService(s);
-  }
-
-  public static boolean emitsHttpAspNetCoreServer(ServiceShape s) {
-    return isSimpleRestJsonService(s)
-        || isRestJson1Service(s)
-        || isRpcV2CborService(s)
-        || isRpcV2JsonService(s);
-  }
-
-  public static Kind kindOf(ServiceShape s) {
-    if (isRpcV2CborService(s)) return Kind.RPC_V2_CBOR;
-    if (isRpcV2JsonService(s)) return Kind.RPC_V2_JSON;
-    if (isRestXmlService(s)) return Kind.REST_XML;
-    if (isAwsQueryService(s)) return Kind.AWS_QUERY;
-    if (isEc2QueryService(s)) return Kind.EC2_QUERY;
-    if (isAwsJson11Service(s)) return Kind.AWS_JSON_1_1;
-    if (isAwsJson10Service(s)) return Kind.AWS_JSON_1_0;
-    if (isSimpleRestJsonService(s)) return Kind.SIMPLE_REST_JSON;
-    if (isGrpcService(s)) return Kind.GRPC;
-    return Kind.REST_JSON_1;
+    Map<ShapeId, CSharpProtocol> byTrait = new HashMap<>();
+    for (CSharpProtocol protocol : protocols) {
+      CSharpProtocol existing = byTrait.putIfAbsent(protocol.trait(), protocol);
+      if (existing != null) {
+        throw new CodegenException(
+            "Protocol "
+                + protocol.trait()
+                + " is registered twice, as "
+                + existing.runtimeType()
+                + " and "
+                + protocol.runtimeType()
+                + ".");
+      }
+    }
+    return protocols;
   }
 
   /**
-   * Every protocol the service declares, in the documented precedence order {@code rpcv2Cbor >
-   * rpcv2Json > restXml > awsQuery > ec2Query > awsJson1_1 > awsJson1_0 > simpleRestJson >
-   * restJson1 > grpc}. The unified client builder generates a {@code With{Kind}()} method per
-   * declared kind and uses the first as the default protocol. Returns an empty list for a service
-   * with no supported protocol trait.
+   * The protocols {@code service} carries, in registration order. Two of them with the same name
+   * fail code generation, since the name is a generated identifier.
    */
-  public static List<Kind> declaredKinds(ServiceShape s) {
-    List<Kind> kinds = new ArrayList<>();
-    if (isRpcV2CborService(s)) kinds.add(Kind.RPC_V2_CBOR);
-    if (isRpcV2JsonService(s)) kinds.add(Kind.RPC_V2_JSON);
-    if (isRestXmlService(s)) kinds.add(Kind.REST_XML);
-    if (isAwsQueryService(s)) kinds.add(Kind.AWS_QUERY);
-    if (isEc2QueryService(s)) kinds.add(Kind.EC2_QUERY);
-    if (isAwsJson11Service(s)) kinds.add(Kind.AWS_JSON_1_1);
-    if (isAwsJson10Service(s)) kinds.add(Kind.AWS_JSON_1_0);
-    if (isSimpleRestJsonService(s)) kinds.add(Kind.SIMPLE_REST_JSON);
-    if (isRestJson1Service(s)) kinds.add(Kind.REST_JSON_1);
-    if (isGrpcService(s)) kinds.add(Kind.GRPC);
-    return kinds;
+  public static List<CSharpProtocol> protocols(GenerationContext context, ServiceShape service) {
+    return protocols(context.integrations(), service);
   }
 
-  public static ShapeId traitId(Kind kind) {
-    return switch (kind) {
-      case AWS_JSON_1_0 -> TraitIds.AWS_JSON_1_0;
-      case AWS_JSON_1_1 -> TraitIds.AWS_JSON_1_1;
-      case AWS_QUERY -> TraitIds.AWS_QUERY;
-      case EC2_QUERY -> TraitIds.EC2_QUERY;
-      case SIMPLE_REST_JSON -> TraitIds.SIMPLE_REST_JSON;
-      case REST_JSON_1 -> TraitIds.REST_JSON_1;
-      case REST_XML -> TraitIds.REST_XML;
-      case RPC_V2_CBOR -> TraitIds.RPC_V2_CBOR;
-      case RPC_V2_JSON -> TraitIds.RPC_V2_JSON;
-      case GRPC -> TraitIds.GRPC;
-    };
+  public static List<CSharpProtocol> protocols(
+      List<CSharpIntegration> integrations, ServiceShape service) {
+    List<CSharpProtocol> protocols =
+        registered(integrations).stream()
+            .filter(protocol -> service.findTrait(protocol.trait()).isPresent())
+            .toList();
+
+    Map<String, CSharpProtocol> byName = new HashMap<>();
+    for (CSharpProtocol protocol : protocols) {
+      CSharpProtocol existing = byName.putIfAbsent(protocol.name(), protocol);
+      if (existing != null) {
+        throw new CodegenException(
+            "Protocols "
+                + existing.trait()
+                + " and "
+                + protocol.trait()
+                + " of service "
+                + service.getId()
+                + " share the name '"
+                + protocol.name()
+                + "'.");
+      }
+    }
+    return protocols;
+  }
+
+  /** The service's protocols that serve requests, in registration order. */
+  public static List<CSharpProtocol> serverProtocols(
+      GenerationContext context, ServiceShape service) {
+    return protocols(context, service).stream().filter(CSharpProtocol::server).toList();
+  }
+
+  /**
+   * The client's default protocol: the one the {@code defaultProtocol} setting names, or else the
+   * service's first. Empty for a service with no registered protocol.
+   */
+  public static Optional<CSharpProtocol> clientDefault(
+      GenerationContext context, ServiceShape service) {
+    return clientDefault(context.integrations(), context.settings().defaultProtocol(), service);
+  }
+
+  public static Optional<CSharpProtocol> clientDefault(
+      List<CSharpIntegration> integrations, Optional<ShapeId> configured, ServiceShape service) {
+    List<CSharpProtocol> protocols = protocols(integrations, service);
+    if (configured.isEmpty()) {
+      return protocols.stream().findFirst();
+    }
+    return Optional.of(
+        protocols.stream()
+            .filter(protocol -> protocol.trait().equals(configured.get()))
+            .findFirst()
+            .orElseThrow(
+                () ->
+                    new CodegenException(
+                        "defaultProtocol "
+                            + configured.get()
+                            + " is not a protocol of service "
+                            + service.getId()
+                            + ". Its protocols: "
+                            + protocols.stream().map(p -> p.trait().toString()).toList()
+                            + ".")));
   }
 
   /** Reads the selected protocol trait's ordered ALPN preferences, when modeled. */
   public static Optional<HttpVersionPreference> httpVersionPreference(
-      ServiceShape service, Kind kind, boolean eventStream) {
-    var trait = service.findTrait(traitId(kind));
+      ServiceShape service, CSharpProtocol protocol, boolean eventStream) {
+    var trait = service.findTrait(protocol.trait());
     if (trait.isEmpty() || !trait.get().toNode().isObjectNode()) {
       return Optional.empty();
     }
@@ -179,7 +188,7 @@ public final class ProtocolSupport {
     if (selectedIndex < 0) {
       throw new CodegenException(
           "Protocol "
-              + traitId(kind)
+              + protocol.trait()
               + " on service "
               + service.getId()
               + " has no supported HTTP ALPN id in "
@@ -204,67 +213,6 @@ public final class ProtocolSupport {
             operation ->
                 ShapeSupport.isEventStreamShape(model, operation.getInputShape())
                     || ShapeSupport.isEventStreamShape(model, operation.getOutputShape()));
-  }
-
-  /** The default protocol for the client: the first declared kind by precedence. */
-  public static Kind primaryKind(ServiceShape s) {
-    List<Kind> kinds = declaredKinds(s);
-    if (kinds.isEmpty()) {
-      throw new CodegenException(
-          "Service "
-              + s.getId()
-              + " declares no supported protocol trait. Supported protocol traits: "
-              + String.join(
-                  ", ",
-                  TraitIds.RPC_V2_CBOR.toString(),
-                  TraitIds.RPC_V2_JSON.toString(),
-                  TraitIds.REST_XML.toString(),
-                  TraitIds.AWS_QUERY.toString(),
-                  TraitIds.EC2_QUERY.toString(),
-                  TraitIds.AWS_JSON_1_1.toString(),
-                  TraitIds.AWS_JSON_1_0.toString(),
-                  TraitIds.SIMPLE_REST_JSON.toString(),
-                  TraitIds.REST_JSON_1.toString(),
-                  TraitIds.GRPC.toString())
-              + ".");
-    }
-    return kinds.get(0);
-  }
-
-  /** Protocol helper class for the given protocol. */
-  public static Symbol protocolType(Kind kind) {
-    return switch (kind) {
-      case AWS_JSON_1_0 -> RuntimeTypes.AWS_JSON10_PROTOCOL;
-      case AWS_JSON_1_1 -> RuntimeTypes.AWS_JSON11_PROTOCOL;
-      case AWS_QUERY -> RuntimeTypes.AWS_QUERY_PROTOCOL;
-      case EC2_QUERY -> RuntimeTypes.EC2_QUERY_PROTOCOL;
-      case SIMPLE_REST_JSON -> RuntimeTypes.SIMPLE_REST_JSON_PROTOCOL;
-      case REST_JSON_1 -> RuntimeTypes.REST_JSON1_PROTOCOL;
-      case REST_XML -> RuntimeTypes.REST_XML_PROTOCOL;
-      case RPC_V2_CBOR -> RuntimeTypes.RPC_V2_CBOR_PROTOCOL;
-      case RPC_V2_JSON -> RuntimeTypes.RPC_V2_JSON_PROTOCOL;
-      case GRPC -> RuntimeTypes.GRPC_PROTOCOL;
-    };
-  }
-
-  public static String mediaType(Kind kind) {
-    return switch (kind) {
-      case AWS_JSON_1_0 -> "application/x-amz-json-1.0";
-      case AWS_JSON_1_1 -> "application/x-amz-json-1.1";
-      case AWS_QUERY, EC2_QUERY -> "application/x-www-form-urlencoded";
-      case SIMPLE_REST_JSON, REST_JSON_1, RPC_V2_JSON -> "application/json";
-      case REST_XML -> "application/xml";
-      case RPC_V2_CBOR -> "application/cbor";
-      case GRPC -> "application/grpc+proto";
-    };
-  }
-
-  /** True when the runtime protocol can bind Smithy event-stream operation inputs/outputs. */
-  public static boolean supportsEventStreams(Kind kind) {
-    return switch (kind) {
-      case REST_JSON_1, SIMPLE_REST_JSON, RPC_V2_CBOR, RPC_V2_JSON, GRPC -> true;
-      case AWS_JSON_1_0, AWS_JSON_1_1, AWS_QUERY, EC2_QUERY, REST_XML -> false;
-    };
   }
 
   private ProtocolSupport() {}

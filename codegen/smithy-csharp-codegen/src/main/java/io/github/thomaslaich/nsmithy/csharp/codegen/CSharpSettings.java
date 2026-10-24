@@ -9,7 +9,8 @@
  *     "generateClient": true,             // optional; emit the client surface (default true)
  *     "generateServer": true,             // optional; emit the server surface (default true)
  *     "generateDependencyInjection": true, // optional; emit the IHttpClientFactory extension
- *     "generateFakes": false              // optional; emit fakes per surface (default false)
+ *     "generateFakes": false,             // optional; emit fakes per surface (default false)
+ *     "defaultProtocol": "aws.protocols#restJson1" // optional; the client's default protocol
  *   }
  *
  * If baseNamespace is omitted, the C# namespace is just PascalCase of the
@@ -17,6 +18,7 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
+import java.util.Optional;
 import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.utils.SmithyUnstableApi;
@@ -31,6 +33,7 @@ public final class CSharpSettings {
   private static final String GENERATE_SERVER = "generateServer";
   private static final String GENERATE_DEPENDENCY_INJECTION = "generateDependencyInjection";
   private static final String GENERATE_FAKES = "generateFakes";
+  private static final String DEFAULT_PROTOCOL = "defaultProtocol";
 
   private final ShapeId service;
   private final String baseNamespace;
@@ -39,6 +42,7 @@ public final class CSharpSettings {
   private final boolean generateServer;
   private final boolean generateDependencyInjection;
   private final boolean generateFakes;
+  private final ShapeId defaultProtocol;
 
   private CSharpSettings(
       ShapeId service,
@@ -47,7 +51,8 @@ public final class CSharpSettings {
       boolean generateClient,
       boolean generateServer,
       boolean generateDependencyInjection,
-      boolean generateFakes) {
+      boolean generateFakes,
+      ShapeId defaultProtocol) {
     this.service = service;
     this.baseNamespace = baseNamespace;
     this.packageVersion = packageVersion;
@@ -55,6 +60,7 @@ public final class CSharpSettings {
     this.generateServer = generateServer;
     this.generateDependencyInjection = generateDependencyInjection;
     this.generateFakes = generateFakes;
+    this.defaultProtocol = defaultProtocol;
   }
 
   public static CSharpSettings fromNode(ObjectNode config) {
@@ -66,7 +72,8 @@ public final class CSharpSettings {
             GENERATE_CLIENT,
             GENERATE_SERVER,
             GENERATE_DEPENDENCY_INJECTION,
-            GENERATE_FAKES));
+            GENERATE_FAKES,
+            DEFAULT_PROTOCOL));
     ShapeId service = config.expectStringMember(SERVICE).expectShapeId();
     String baseNamespace = config.getStringMemberOrDefault(BASE_NAMESPACE, "");
     String packageVersion = config.getStringMemberOrDefault(PACKAGE_VERSION, "0.0.1");
@@ -75,6 +82,8 @@ public final class CSharpSettings {
     boolean generateDependencyInjection =
         config.getBooleanMemberOrDefault(GENERATE_DEPENDENCY_INJECTION, false);
     boolean generateFakes = config.getBooleanMemberOrDefault(GENERATE_FAKES, false);
+    ShapeId defaultProtocol =
+        config.getStringMember(DEFAULT_PROTOCOL).map(node -> node.expectShapeId()).orElse(null);
     return new CSharpSettings(
         service,
         baseNamespace,
@@ -82,7 +91,8 @@ public final class CSharpSettings {
         generateClient,
         generateServer,
         generateDependencyInjection,
-        generateFakes);
+        generateFakes,
+        defaultProtocol);
   }
 
   public ShapeId service() {
@@ -116,6 +126,14 @@ public final class CSharpSettings {
   /** Whether to emit the opt-in fake handler ({Service}.Fakes.g.cs). Requires generateServer. */
   public boolean generateFakes() {
     return generateFakes;
+  }
+
+  /**
+   * The protocol trait of the client's default protocol, when set; otherwise the service's first
+   * protocol is the default.
+   */
+  public Optional<ShapeId> defaultProtocol() {
+    return Optional.ofNullable(defaultProtocol);
   }
 
   /** Convenience: C# namespace for a given Smithy namespace. */

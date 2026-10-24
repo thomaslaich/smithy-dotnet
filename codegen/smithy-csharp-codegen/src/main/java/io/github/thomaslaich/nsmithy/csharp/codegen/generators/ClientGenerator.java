@@ -8,8 +8,8 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
+import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpProtocol;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport.Kind;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
@@ -57,10 +57,7 @@ public final class ClientGenerator implements Runnable {
         idx.getContainedOperations(service).stream()
             .sorted(Comparator.comparing(o -> o.getId().toString()))
             .collect(Collectors.toList());
-    List<Kind> kinds = ProtocolSupport.declaredKinds(service);
-    if (kinds.contains(Kind.GRPC)) {
-      operations.forEach(op -> ShapeSupport.requireGrpcEventStreamWrapperIsFlattenable(model, op));
-    }
+    Optional<CSharpProtocol> defaultProtocol = ProtocolSupport.clientDefault(context, service);
 
     String typeName = CSharpNaming.typeName(service.getId().getName()) + "Client";
     String interfaceName = "I" + typeName;
@@ -70,14 +67,14 @@ public final class ClientGenerator implements Runnable {
     writer.write("");
 
     // Services with no supported protocol get the interface only; there is nothing to wire.
-    if (kinds.isEmpty()) {
+    if (defaultProtocol.isEmpty()) {
       return;
     }
 
     // The generated client only names the primary protocol (the default constructor argument);
     // callers selecting another declared protocol reference its namespace from their own code.
 
-    writeClient(model, operations, typeName, interfaceName, kinds);
+    writeClient(model, operations, typeName, interfaceName, defaultProtocol.get());
   }
 
   static String httpVersionPreferenceLiteral(
@@ -260,13 +257,15 @@ public final class ClientGenerator implements Runnable {
       List<OperationShape> operations,
       String typeName,
       String interfaceName,
-      List<Kind> kinds) {
-    String primaryProtocol = writer.typeName(ProtocolSupport.protocolType(kinds.get(0)));
+      CSharpProtocol defaultProtocol) {
+    String primaryProtocol = writer.typeName(defaultProtocol.runtimeType());
     String modeledHttpVersionPreference =
         httpVersionPreferenceLiteral(
             writer,
             ProtocolSupport.httpVersionPreference(
-                service, kinds.get(0), ProtocolSupport.hasEventStreamOperations(model, service)));
+                service,
+                defaultProtocol,
+                ProtocolSupport.hasEventStreamOperations(model, service)));
     String serviceSchema = SchemaGenerator.serviceSchemaAccessor(writer, context, service);
     // The idempotency-token provider is only stored/used when an operation has a nullable
     // @idempotencyToken member; emitting the field unconditionally would be an unused private
@@ -892,8 +891,8 @@ public final class ClientGenerator implements Runnable {
     if (!isEventStreamOperation(context.model(), op)) {
       return true;
     }
-    return ProtocolSupport.declaredKinds(service).stream()
-        .anyMatch(ProtocolSupport::supportsEventStreams);
+    return ProtocolSupport.protocols(context, service).stream()
+        .anyMatch(CSharpProtocol::eventStreams);
   }
 
   private static boolean isInputStreaming(Model model, OperationShape op) {
