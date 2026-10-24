@@ -67,14 +67,6 @@ consumes the published contracts instead; see
      </TabItem>
    </Tabs>
 
-   <FileTree>
-   - HelloWorld.Contracts/
-     - HelloWorld.Contracts.csproj
-     - smithy-build.json
-     - model/
-       - **service.smithy** starter restJson1 `HelloService` model
-   </FileTree>
-
 2. **Create the server.** `--contracts-project` adds a `ProjectReference` to the
    contracts project.
 
@@ -149,7 +141,7 @@ The solution now looks like this:
     - HelloWorld.Contracts.csproj
     - smithy-build.json
     - model/
-      - [service.smithy](#the-model)
+      - [service.smithy](#the-model) starter restJson1 `HelloService` model
   - HelloWorld.Server/
     - HelloWorld.Server.csproj references the contracts project
     - [Program.cs](#the-server-handler) handler implementation and route mapping
