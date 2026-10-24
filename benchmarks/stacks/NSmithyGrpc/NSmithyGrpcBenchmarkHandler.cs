@@ -5,11 +5,9 @@ namespace Bench.Stacks.NSmithyGrpc;
 public sealed class NSmithyGrpcBenchmarkHandler : IGrpcBenchmarkServiceHandler
 {
     private static readonly GetItemOutput GetItemResult = new(GrpcBenchmarkData.Item("item-0", 0));
-    private static readonly ListItemsOutput ListItems100Result = new(
-        new ItemList(
-            Enumerable.Range(0, 100).Select(index => GrpcBenchmarkData.Item($"item-{index}", index))
-        )
-    );
+    private static readonly ListItemsOutput ListItems100Result = new([
+        .. Enumerable.Range(0, 100).Select(index => GrpcBenchmarkData.Item($"item-{index}", index)),
+    ]);
 
     public Task<GetItemOutput> GetItemAsync(
         GetItemInput input,
@@ -22,13 +20,11 @@ public sealed class NSmithyGrpcBenchmarkHandler : IGrpcBenchmarkServiceHandler
     ) => Task.FromResult(input.Count == 100 ? ListItems100Result : CreateList(input.Count));
 
     private static ListItemsOutput CreateList(int count) =>
-        new(
-            new ItemList(
-                Enumerable
-                    .Range(0, count)
-                    .Select(index => GrpcBenchmarkData.Item($"item-{index}", index))
-            )
-        );
+        new([
+            .. Enumerable
+                .Range(0, count)
+                .Select(index => GrpcBenchmarkData.Item($"item-{index}", index)),
+        ]);
 }
 
 internal static class GrpcBenchmarkData
@@ -39,6 +35,6 @@ internal static class GrpcBenchmarkData
             Name: $"Benchmark item {index}",
             PriceCents: 1_000 + index,
             InStock: true,
-            Tags: new TagList(["benchmark", "grpc", $"tag-{index % 5}"])
+            Tags: ["benchmark", "grpc", $"tag-{index % 5}"]
         );
 }

@@ -47,7 +47,7 @@ public sealed class NSmithyBenchmarkHandler : IBenchmarkServiceHandler
             input.MinPriceCents,
             input.MaxPriceCents,
             input.Sort?.Value,
-            input.Tags?.Values
+            input.Tags
         );
 
         return Task.FromResult(new SearchItemsOutput(ToSummaries(result.Items), result.TotalCount));
@@ -67,7 +67,7 @@ public sealed class NSmithyBenchmarkHandler : IBenchmarkServiceHandler
         CancellationToken cancellationToken = default
     )
     {
-        var lines = input.Lines.Values;
+        var lines = input.Lines;
         var domainLines = new OrderLineInput[lines.Count];
         for (var i = 0; i < lines.Count; i++)
         {
@@ -81,7 +81,7 @@ public sealed class NSmithyBenchmarkHandler : IBenchmarkServiceHandler
         );
     }
 
-    private static ItemSummaries ToSummaries(ArraySegment<BenchItem> items)
+    private static ItemSummary[] ToSummaries(ArraySegment<BenchItem> items)
     {
         var summaries = new ItemSummary[items.Count];
         for (var i = 0; i < items.Count; i++)
@@ -93,14 +93,10 @@ public sealed class NSmithyBenchmarkHandler : IBenchmarkServiceHandler
                 Name: item.Name,
                 PriceCents: item.PriceCents,
                 Category: item.Category,
-                // NSmithy models lists as nominal wrapper types that defensively
-                // copy on construction. That extra allocation per list is a real
-                // cost the System.Text.Json baselines do not pay; it stays in the
-                // measurement rather than being worked around here.
-                Tags: item.Tags is null ? null : new StringList(item.Tags)
+                Tags: item.Tags
             );
         }
 
-        return new ItemSummaries(summaries);
+        return summaries;
     }
 }

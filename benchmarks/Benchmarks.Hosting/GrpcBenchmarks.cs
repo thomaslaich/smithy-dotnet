@@ -205,8 +205,7 @@ public sealed class GrpcBenchClient : IAsyncDisposable
                 client
             ),
             "list-items-100" => new GrpcBenchClient(
-                async () =>
-                    (await client.ListItemsAsync(new ListItemsInput(100))).Items.Values.Count,
+                async () => (await client.ListItemsAsync(new ListItemsInput(100))).Items.Count,
                 client
             ),
             _ => throw new ArgumentOutOfRangeException(nameof(scenario)),

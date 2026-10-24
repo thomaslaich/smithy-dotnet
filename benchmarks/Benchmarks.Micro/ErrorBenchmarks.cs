@@ -1,6 +1,7 @@
 using Bench.Domain;
 using BenchmarkDotNet.Attributes;
 using Nsmithy.Bench;
+using Nsmithy.Bench.Schemas;
 using NSmithy.Http;
 using NSmithy.Protocols.RestJson;
 
