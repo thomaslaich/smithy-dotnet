@@ -23,10 +23,12 @@ public interface IServerOperation
     IServerOperationBinding Bind(IServiceProtocol protocol);
 
     /// <summary>
-    /// Validates <paramref name="input"/> against the operation's input schema and calls the
-    /// handler resolved from <paramref name="services"/>, the services of the request being served.
+    /// Invokes the operation with an already-decoded <paramref name="input"/> through
+    /// <paramref name="runtime"/>, which validates it and calls the handler resolved from
+    /// <paramref name="services"/>, the services of the request being served.
     /// </summary>
     Task<object?> InvokeAsync(
+        SmithyServerRuntime runtime,
         object input,
         IServiceProvider services,
         CancellationToken cancellationToken = default
@@ -89,7 +91,7 @@ public sealed class ServerOperation<TInput, TOutput>(
 
     public OperationJsonSchemas? JsonSchemas { get; } = jsonSchemas;
 
-    // For direct invocation; HTTP dispatch validates through its protocol instead.
+    // For invocation with decoded input; HTTP dispatch validates through its protocol instead.
     private readonly ISmithyValidator<TInput>? inputValidator = SmithyValidator.FromSchema(
         schema.Input
     );
@@ -101,11 +103,13 @@ public sealed class ServerOperation<TInput, TOutput>(
     }
 
     public async Task<object?> InvokeAsync(
+        SmithyServerRuntime runtime,
         object input,
         IServiceProvider services,
         CancellationToken cancellationToken = default
     )
     {
+        ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(services);
         if (input is not TInput typedInput)
         {
@@ -117,8 +121,9 @@ public sealed class ServerOperation<TInput, TOutput>(
             );
         }
 
-        inputValidator?.Validate(typedInput);
-        return await resolveHandler(services)(typedInput, cancellationToken).ConfigureAwait(false);
+        return await runtime
+            .InvokeAsync(inputValidator, typedInput, resolveHandler(services), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private sealed class Binding(

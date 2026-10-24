@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using NSmithy.Codecs.Json;
@@ -138,13 +139,16 @@ internal sealed class SmithyMcpTool : McpServerTool
         object? output;
         try
         {
+            var services =
+                request.Services
+                ?? throw new InvalidOperationException(
+                    $"The MCP request for '{operation.Schema.Id}' carries no services to resolve its handler from."
+                );
             output = await operation
                 .InvokeAsync(
+                    services.GetService<SmithyServerRuntime>() ?? SmithyServerRuntime.Default,
                     input,
-                    request.Services
-                        ?? throw new InvalidOperationException(
-                            $"The MCP request for '{operation.Schema.Id}' carries no services to resolve its handler from."
-                        ),
+                    services,
                     cancellationToken
                 )
                 .ConfigureAwait(false);

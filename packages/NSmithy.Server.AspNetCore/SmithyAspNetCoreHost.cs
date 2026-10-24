@@ -20,9 +20,6 @@ public static class SmithyAspNetCoreHost
     private const string BufferedRequestBodyItemKey =
         "NSmithy.Server.AspNetCore.BufferedRequestBody";
 
-    // Used when the application registers no runtime of its own.
-    private static readonly SmithyServerRuntime DefaultRuntime = new();
-
     /// <summary>Dispatch. Set <paramref name="streamRequestBody"/> for streaming request bodies.</summary>
     public static async Task DispatchAsync<TInput, TOutput>(
         SmithyServerRuntime runtime,
@@ -88,7 +85,7 @@ public static class SmithyAspNetCoreHost
         var services = httpContext.RequestServices;
         var response = await operation
             .DispatchAsync(
-                services.GetService<SmithyServerRuntime>() ?? DefaultRuntime,
+                services.GetService<SmithyServerRuntime>() ?? SmithyServerRuntime.Default,
                 request,
                 services,
                 cancellationToken

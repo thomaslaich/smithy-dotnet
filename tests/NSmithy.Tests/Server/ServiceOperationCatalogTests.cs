@@ -9,6 +9,8 @@ public sealed class ServiceOperationCatalogTests
 {
     private static readonly ShapeId OperationId = new("example", "CountLetters");
 
+    private static readonly SmithyServerRuntime Runtime = new();
+
     private static readonly IServiceProvider Services =
         new ServiceCollection().BuildServiceProvider();
 
@@ -32,7 +34,7 @@ public sealed class ServiceOperationCatalogTests
 
         var result = await catalog
             .GetOperation(OperationId)
-            .InvokeAsync("Smithy", Services, cancellation.Token);
+            .InvokeAsync(Runtime, "Smithy", Services, cancellation.Token);
 
         var untypedSchema = Assert.IsAssignableFrom<IOperationSchema>(operationSchema);
         Assert.Same(serviceSchema, catalog.Schema);
@@ -54,7 +56,7 @@ public sealed class ServiceOperationCatalogTests
         );
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
-            operation.InvokeAsync(42, Services)
+            operation.InvokeAsync(Runtime, 42, Services)
         );
 
         Assert.Equal("input", exception.ParamName);
@@ -87,7 +89,7 @@ public sealed class ServiceOperationCatalogTests
         );
 
         await Assert.ThrowsAsync<NSmithy.Core.Validation.ValidationException>(() =>
-            operation.InvokeAsync("no", Services)
+            operation.InvokeAsync(Runtime, "no", Services)
         );
 
         Assert.False(invoked);

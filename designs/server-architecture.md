@@ -385,10 +385,14 @@ returns it, so adapters find it through the registered definitions.
 adapter needs reflection. For HTTP, `Bind` creates the typed
 `IServerOperationProtocol` from a protocol's `IServiceProtocol` once per mapped
 protocol. For adapters that hold the input as an object, such as MCP after
-decoding tool arguments, `InvokeAsync(input, services, cancellationToken)`
-validates the input against the schema and calls the handler. Both resolve the
+decoding tool arguments, `InvokeAsync(runtime, input, services, cancellationToken)`
+hands the typed input to the runtime. Either way the runtime validates the input
+and calls the handler, so validation, and the server interceptors and telemetry
+that attach to the runtime, are the same for every adapter. Both resolve the
 handler from the services of the request they serve, so handler lifetimes are
-the application's in every adapter.
+the application's in every adapter. An adapter uses the registered
+`SmithyServerRuntime`, or `SmithyServerRuntime.Default` when none is
+registered.
 
 `Map{Service}` keeps its signature and maps the selected protocols through the
 host adapter:

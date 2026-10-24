@@ -103,9 +103,7 @@ public static class SmithyMcpServerBuilderExtensions
                 var tools = options.ToolCollection ?? [];
                 var prompts = options.PromptCollection ?? [];
                 var definition = definitionFactory(services);
-                foreach (
-                    var tool in SmithyMcpTools.Create(definition.Operations)
-                )
+                foreach (var tool in SmithyMcpTools.Create(definition.Operations))
                 {
                     tools.Add(tool);
                 }
