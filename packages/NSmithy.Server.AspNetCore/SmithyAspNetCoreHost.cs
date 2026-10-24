@@ -55,7 +55,7 @@ public static class SmithyAspNetCoreHost
     /// </summary>
     public static async Task DispatchAsync(
         HttpContext httpContext,
-        IBoundServerOperation operation,
+        IServerOperationBinding operation,
         CancellationToken cancellationToken = default
     )
     {
@@ -78,7 +78,7 @@ public static class SmithyAspNetCoreHost
 
     internal static async Task DispatchAsync(
         HttpContext httpContext,
-        IBoundServerOperation operation,
+        IServerOperationBinding operation,
         SmithyHttpRequest request,
         CancellationToken cancellationToken
     )

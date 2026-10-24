@@ -100,7 +100,7 @@ public static partial class SmithyAspNetCoreServer
 
     private static async Task DispatchRouteAsync(
         HttpContext httpContext,
-        IBoundServerOperation operation,
+        IServerOperationBinding operation,
         IReadOnlyList<KeyValuePair<string, string?>> requiredQuery
     )
     {
@@ -121,7 +121,7 @@ public static partial class SmithyAspNetCoreServer
     private static async Task DispatchByNameAsync(
         HttpContext httpContext,
         ServerRouting.ByDispatch routing,
-        Dictionary<ShapeId, IBoundServerOperation> operations
+        Dictionary<ShapeId, IServerOperationBinding> operations
     )
     {
         var cancellationToken = httpContext.RequestAborted;

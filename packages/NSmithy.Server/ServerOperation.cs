@@ -12,11 +12,11 @@ public interface IServerOperation
     IOperationSchema Schema { get; }
 
     /// <summary>Binds the operation to <paramref name="protocol"/>, once per mapped protocol.</summary>
-    IBoundServerOperation Bind(IServiceProtocol protocol);
+    IServerOperationBinding Bind(IServiceProtocol protocol);
 }
 
 /// <summary>An operation bound to one protocol, ready to dispatch requests.</summary>
-public interface IBoundServerOperation
+public interface IServerOperationBinding
 {
     IOperationSchema Schema { get; }
 
@@ -67,17 +67,17 @@ public sealed class ServerOperation<TInput, TOutput>(
 
     IOperationSchema IServerOperation.Schema => Schema;
 
-    public IBoundServerOperation Bind(IServiceProtocol protocol)
+    public IServerOperationBinding Bind(IServiceProtocol protocol)
     {
         ArgumentNullException.ThrowIfNull(protocol);
-        return new Bound(Schema, protocol.ForServerOperation(Schema), resolveHandler);
+        return new Binding(Schema, protocol.ForServerOperation(Schema), resolveHandler);
     }
 
-    private sealed class Bound(
+    private sealed class Binding(
         OperationSchema<TInput, TOutput> schema,
         IServerOperationProtocol<TInput, TOutput> protocol,
         Func<IServiceProvider, Func<TInput, CancellationToken, Task<TOutput>>> resolveHandler
-    ) : IBoundServerOperation
+    ) : IServerOperationBinding
     {
         public IOperationSchema Schema => schema;
 
