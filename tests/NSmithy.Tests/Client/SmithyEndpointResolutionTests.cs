@@ -115,6 +115,9 @@ public sealed class SmithyEndpointResolutionTests
         Assert.Equal(ShapeId.Parse("example.weather#GetForecast"), seen.OperationId);
         Assert.Equal(configured, seen.ConfiguredEndpoint);
         Assert.Equal("input", seen.Input);
+        Assert.NotNull(seen.Operation);
+        Assert.Equal(seen.OperationId, seen.Operation.Id);
+        Assert.Same(Schemas.String, seen.Operation.Input);
     }
 
     [Fact]
@@ -144,7 +147,10 @@ public sealed class SmithyEndpointResolutionTests
             transport,
             endpointResolver: new DelegateResolver(_ => new SmithyEndpoint(
                 new Uri("https://api.example.com"),
-                Headers: new Dictionary<string, string> { ["x-endpoint-key"] = "route-1" }
+                Headers: new Dictionary<string, IReadOnlyList<string>>
+                {
+                    ["x-endpoint-key"] = ["route-1"],
+                }
             ))
         );
 
@@ -202,7 +208,7 @@ public sealed class SmithyEndpointResolutionTests
             transport,
             endpointResolver: new DelegateResolver(_ => new SmithyEndpoint(
                 new Uri("https://api.example.com"),
-                AuthSchemes: ["scheme#b"]
+                AuthSchemes: [new SmithyEndpointAuthScheme("scheme#b")]
             )),
             authSchemes: new Dictionary<string, ISmithyAuthScheme>(StringComparer.Ordinal)
             {
@@ -281,7 +287,12 @@ public sealed class SmithyEndpointResolutionTests
             ShapeId.Parse("example.weather#GetForecast"),
             new TextProtocol(modeledUserAgent),
             authSchemeIds,
-            hostPrefix
+            hostPrefix,
+            Schemas.Operation(
+                ShapeId.Parse("example.weather#GetForecast"),
+                Schemas.String,
+                Schemas.String
+            )
         );
 
     private sealed class DelegateResolver(Func<SmithyEndpointParameters, SmithyEndpoint> resolve)

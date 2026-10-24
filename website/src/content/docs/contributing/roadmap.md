@@ -16,9 +16,9 @@ The following areas remain under development or consideration.
 - Keep `aws.protocols#restJson1` and `smithy.protocols#rpcv2Cbor` fully
   conformant, and continue hardening
   `aws.protocols#restXml` as a preview implementation.
-- Build on regional endpoint resolution, profile/SSO/IMDS credentials,
-  presigning, and published AWS signing test vectors with modeled endpoint rule sets,
-  additional credential sources, and SigV4a.
+- Build on modeled endpoint rules, profile/SSO/IMDS credentials, presigning,
+  and published AWS signing test vectors with additional credential sources
+  and SigV4a.
 - Grow the LocalStack integration coverage beyond the initial example into a
   broader suite that validates generated AWS clients against realistic protocol,
   signing, and endpoint behavior.

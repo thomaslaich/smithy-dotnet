@@ -1,6 +1,7 @@
 using System.Net;
 using NSmithy.Aws;
 using NSmithy.Client;
+using NSmithy.Core;
 using NSmithy.Http;
 
 namespace NSmithy.Tests.Aws;
@@ -100,6 +101,51 @@ public sealed class AwsSigV4InterceptorTests
     }
 
     [Fact]
+    public async Task SignUsesSigningNameAndRegionFromTheResolvedEndpoint()
+    {
+        var request = new SmithyHttpRequest(
+            HttpMethod.Get,
+            "https://examplebucket.s3.amazonaws.com/test.txt"
+        );
+        request.Headers["Range"] = ["bytes=0-9"];
+        var signer = new AwsSigV4Signer(
+            "s3-control",
+            "eu-west-1",
+            new FixedTimeProvider(new DateTimeOffset(2013, 05, 24, 0, 0, 0, TimeSpan.Zero))
+        );
+        var context = new SmithyContext();
+        context.Set(
+            SmithyContextKeys.ResolvedEndpoint,
+            new SmithyEndpoint(
+                new Uri("https://examplebucket.s3.amazonaws.com"),
+                AuthSchemes:
+                [
+                    new SmithyEndpointAuthScheme(
+                        "aws.auth#sigv4",
+                        new Dictionary<string, Document>
+                        {
+                            ["signingName"] = Document.From("s3"),
+                            ["signingRegion"] = Document.From("us-east-1"),
+                        }
+                    ),
+                ]
+            )
+        );
+
+        await signer.SignAsync(
+            context,
+            request,
+            new AwsCredentials("AKIAIOSFODNN7EXAMPLE", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+        );
+
+        // Same vector as SignMatchesAwsPublishedS3GetObjectVector: the endpoint's scope wins.
+        Assert.Equal(
+            "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request, SignedHeaders=host;range;x-amz-content-sha256;x-amz-date, Signature=f0e8bdb87c964420e857bd35b5d6ed310bd44f0170aba48dd91039c6036bdb41",
+            Assert.Single(request.Headers["Authorization"])
+        );
+    }
+
+    [Fact]
     public async Task SigningTheSameRequestTwiceIsDeterministic()
     {
         var request = new SmithyHttpRequest(
@@ -184,6 +230,111 @@ public sealed class AwsSigV4InterceptorTests
                 TimeSpan.FromSeconds(seconds)
             )
         );
+    }
+
+    // Expected signatures computed independently: the canonical path of a non-S3 request encodes
+    // its wire-encoded path again (%3A becomes %253A); with double encoding disabled, the wire
+    // encoding is signed as is.
+    [Theory]
+    [InlineData(null, "daa93e9045209f22851ad3faacc0acb8ee1b9198ce0d078d5294217f46480e15")]
+    [InlineData(true, "58b11e735a15ba71077a77fa53605ecb99059da8a79ceeaf3871d2144c63da70")]
+    public async Task CanonicalPathIsEncodedTwiceUnlessTheEndpointDisablesIt(
+        bool? disableDoubleEncoding,
+        string signature
+    )
+    {
+        var request = new SmithyHttpRequest(
+            HttpMethod.Get,
+            "https://lambda.us-east-1.amazonaws.com/2015-03-31/functions/arn%3Aaws%3Alambda%3Aus-east-1%3A123456789012%3Afunction%3Amy-fn/invocations"
+        );
+        var properties = Scope("lambda");
+        if (disableDoubleEncoding is { } value)
+        {
+            properties["disableDoubleEncoding"] = Document.From(value);
+        }
+
+        await Signer().SignAsync(EndpointContext(properties), request, Credentials);
+
+        Assert.EndsWith(
+            "Signature=" + signature,
+            Assert.Single(request.Headers["Authorization"]),
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task EmptyPathSegmentsAreRemovedOutsideS3()
+    {
+        Assert.Equal(
+            await SignatureAsync(Scope("service"), "https://example.amazonaws.com/a/b"),
+            await SignatureAsync(Scope("service"), "https://example.amazonaws.com//a//b")
+        );
+        Assert.NotEqual(
+            await SignatureAsync(Scope("s3"), "https://example.amazonaws.com/a/b"),
+            await SignatureAsync(Scope("s3"), "https://example.amazonaws.com//a//b")
+        );
+    }
+
+    [Fact]
+    public async Task EndpointPropertiesDisablePathNormalization()
+    {
+        var properties = Scope("service");
+        properties["disableNormalizePath"] = Document.From(true);
+
+        Assert.NotEqual(
+            await SignatureAsync(Scope("service"), "https://example.amazonaws.com/a/b"),
+            await SignatureAsync(properties, "https://example.amazonaws.com//a//b")
+        );
+    }
+
+    [Fact]
+    public async Task SignerWithoutAScopeNeedsTheEndpointToNameOne()
+    {
+        var request = new SmithyHttpRequest(HttpMethod.Get, "https://example.amazonaws.com/");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await Signer().SignAsync(new SmithyContext(), request, Credentials)
+        );
+
+        Assert.Contains("signing name", exception.Message, StringComparison.Ordinal);
+    }
+
+    private static readonly AwsCredentials Credentials = new("access", "secret");
+
+    private static AwsSigV4Signer Signer() =>
+        new(new FixedTimeProvider(new DateTimeOffset(2026, 06, 22, 12, 34, 56, TimeSpan.Zero)));
+
+    private static Dictionary<string, Document> Scope(string signingName) =>
+        new()
+        {
+            ["signingName"] = Document.From(signingName),
+            ["signingRegion"] = Document.From("us-east-1"),
+        };
+
+    private static SmithyContext EndpointContext(Dictionary<string, Document> properties)
+    {
+        var context = new SmithyContext();
+        context.Set(
+            SmithyContextKeys.ResolvedEndpoint,
+            new SmithyEndpoint(
+                new Uri("https://example.amazonaws.com"),
+                AuthSchemes: [new SmithyEndpointAuthScheme("aws.auth#sigv4", properties)]
+            )
+        );
+        return context;
+    }
+
+    private static async Task<string> SignatureAsync(
+        Dictionary<string, Document> properties,
+        string uri
+    )
+    {
+        var request = new SmithyHttpRequest(HttpMethod.Get, uri);
+        await Signer().SignAsync(EndpointContext(properties), request, Credentials);
+        var authorization = Assert.Single(request.Headers["Authorization"]);
+        return authorization[
+            (authorization.IndexOf("Signature=", StringComparison.Ordinal) + 10)..
+        ];
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider

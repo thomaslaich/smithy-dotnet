@@ -8,6 +8,7 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
+import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointRules;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport.Kind;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
@@ -42,11 +43,18 @@ public final class ClientGenerator implements Runnable {
   private final GenerationContext context;
   private final CSharpWriter writer;
   private final ServiceShape service;
+  private final Optional<EndpointRules> endpointRules;
 
   public ClientGenerator(GenerationContext c, CSharpWriter w, ServiceShape s) {
+    this(c, w, s, EndpointRules.of(c, s));
+  }
+
+  public ClientGenerator(
+      GenerationContext c, CSharpWriter w, ServiceShape s, Optional<EndpointRules> endpointRules) {
     this.context = c;
     this.writer = w;
     this.service = s;
+    this.endpointRules = endpointRules;
   }
 
   @Override
@@ -410,7 +418,8 @@ public final class ClientGenerator implements Runnable {
           writer.consumer(
               w -> writeConstructorBindings(needsRuntime, needsIdempotency, operations)));
 
-      // The explicit endpoint wins over config.Endpoint. The private constructor receives a copy.
+      // The explicit endpoint wins over config.Endpoint. The configuration constructor receives a
+      // copy.
       writer.write(
           """
           public ${client:L}(${uri:T} endpoint, ${client:L}Config? config = null)
@@ -418,7 +427,7 @@ public final class ClientGenerator implements Runnable {
           {
           }
 
-          private ${client:L}(${client:L}Config config)
+          public ${client:L}(${client:L}Config config)
           {
               ${argumentNullException:T}.ThrowIfNull(config);
               ${ownedInitialization:C|}
@@ -505,11 +514,12 @@ public final class ClientGenerator implements Runnable {
       writer.putContext("protocol", primaryProtocol);
       writer.putContext("preference", preference);
       writer.putContext("httpClientArgument", httpClient);
+      writer.putContext("endpointResolver", modeledEndpointResolverArgument());
       writer.write(
           """
           this.environment = ${environment:T}.Create(
               ${serviceSchema:L}, config, static () => new ${protocol:L}(),
-              ModeledAuthSchemes, ${preference:L}, ${httpClientArgument:L});
+              ModeledAuthSchemes, ${preference:L}, ${httpClientArgument:L}${endpointResolver:L});
           this.runtime = environment.Runtime;
           var serviceProtocol = environment.ServiceProtocol;\
           """);
@@ -525,11 +535,49 @@ public final class ClientGenerator implements Runnable {
    * constructor surface. The copy constructor backs the client's copy-at-construction semantics.
    */
   private void writeConfigClass(String typeName) {
+    List<EndpointRules.ConfigParameter> parameters =
+        endpointRules.map(EndpointRules::configParameters).orElse(List.of());
     writer.pushState();
     try {
       writer.putContext("config", typeName + "Config");
       writer.putContext("baseConfig", RuntimeTypes.SMITHY_CLIENT_CONFIG);
       writer.putContext("defaults", writer.consumer(this::writeConfigDefaults));
+      writer.putContext(
+          "copyConstructor",
+          writer.consumer(
+              w -> {
+                if (parameters.isEmpty()) {
+                  w.write(
+                      "public $L($L source) : base(source) { }",
+                      typeName + "Config",
+                      typeName + "Config");
+                  return;
+                }
+                w.write(
+                    "public $L($L source) : base(source)",
+                    typeName + "Config",
+                    typeName + "Config");
+                w.write("{");
+                w.indent();
+                parameters.forEach(p -> w.write("$L = source.$L;", p.property(), p.property()));
+                w.dedent();
+                w.write("}");
+              }));
+      writer.putContext(
+          "properties",
+          writer.consumer(
+              w -> {
+                for (EndpointRules.ConfigParameter parameter : parameters) {
+                  w.write("");
+                  if (parameter.documentation() != null) {
+                    w.writeXmlDocs(parameter.documentation(), Map.of());
+                  }
+                  w.write(
+                      "public $L? $L { get; set; }",
+                      endpointValueType(parameter),
+                      parameter.property());
+                }
+              }));
       writer.write(
           """
           public sealed class ${config:L} : ${baseConfig:T}
@@ -539,12 +587,41 @@ public final class ClientGenerator implements Runnable {
                   ${defaults:C|}
               }
 
-              public ${config:L}(${config:L} source) : base(source) { }
+              ${copyConstructor:C|}
+              ${properties:C|}
           }
           """);
     } finally {
       writer.popState();
     }
+  }
+
+  private String endpointValueType(EndpointRules.ConfigParameter parameter) {
+    return switch (parameter.parameter().getType()) {
+      case STRING -> "string";
+      case BOOLEAN -> "bool";
+      case STRING_ARRAY -> writer.typeName(RuntimeTypes.I_READ_ONLY_LIST) + "<string>";
+    };
+  }
+
+  /**
+   * The trailing argument that hands the environment the generated endpoint resolver. A rule set
+   * without an {@code SDK::Endpoint} parameter cannot take a custom endpoint, so a configured one
+   * bypasses the rules.
+   */
+  private String modeledEndpointResolverArgument() {
+    if (endpointRules.isEmpty()) {
+      return "";
+    }
+    String resolver = EndpointRules.resolverTypeName(service);
+    if (endpointRules.get().endpointParameter().isPresent()) {
+      return ", modeledEndpointResolver: endpoint => new " + resolver + "(config, endpoint)";
+    }
+    return writer.format(
+        ", modeledEndpointResolver: endpoint => endpoint is null ? new $L(config) : new"
+            + " $T(endpoint)",
+        resolver,
+        RuntimeTypes.STATIC_ENDPOINT_RESOLVER);
   }
 
   private void writeConfigDefaults(CSharpWriter writer) {
@@ -636,7 +713,7 @@ public final class ClientGenerator implements Runnable {
             this.${operation:L}Binding = new ${binding:T}<${inputType:L}, ${outputType:L}>(
                 ${serviceSchema:L}.Id, ${operationSchema:L}.Id,
                 serviceProtocol.ForClientOperation(${operationSchema:L}),
-                ${authSchemes:L}, ${hostPrefix:L});\
+                ${authSchemes:L}, ${hostPrefix:L}, ${operationSchema:L});\
             """);
       }
     } finally {

@@ -108,13 +108,14 @@ export default defineConfig({
 					label: 'Clients',
 					items: [
 						{ label: 'Overview', slug: 'guides/client-configuration' },
+						{ label: 'Dependency injection', slug: 'guides/client-configuration/dependency-injection' },
 						{ label: 'Authentication', slug: 'guides/client-configuration/authentication' },
 						{ label: 'Retry', slug: 'guides/client-configuration/retry' },
+						{ label: 'Pagination', slug: 'guides/client-configuration/pagination' },
 						{ label: 'Interceptors', slug: 'guides/client-configuration/interceptors' },
 						{ label: 'Observability', slug: 'guides/client-configuration/observability' },
-						{ label: 'Pagination', slug: 'guides/client-configuration/pagination' },
 						{ label: 'Transport', slug: 'guides/client-configuration/transport' },
-						{ label: 'Dependency injection', slug: 'guides/client-configuration/dependency-injection' },
+						{ label: 'Endpoint rules', slug: 'guides/client-configuration/endpoint-rules' },
 						{ label: 'Fake clients', slug: 'guides/client-configuration/fake-clients' },
 					],
 				},
@@ -136,6 +137,7 @@ export default defineConfig({
 						{ label: 'REST JSON', slug: 'protocols/rest-json', badge: { text: 'Preview', variant: 'note' } },
 						{ label: 'RPC v2 CBOR', slug: 'protocols/rpc-v2-cbor', badge: { text: 'Preview', variant: 'note' } },
 						{ label: 'RPC v2 JSON', slug: 'protocols/rpc-v2-json', badge: { text: 'Preview', variant: 'note' } },
+						{ label: 'gRPC', slug: 'protocols/grpc', badge: { text: 'Experimental', variant: 'danger' } },
 						{
 							label: 'AWS protocols',
 							items: [
@@ -146,7 +148,6 @@ export default defineConfig({
 								{ label: 'AWS restXml', slug: 'protocols/rest-xml', badge: { text: 'Preview', variant: 'note' } },
 							],
 						},
-						{ label: 'gRPC', slug: 'protocols/grpc', badge: { text: 'Experimental', variant: 'danger' } },
 						{ label: 'Protocol status', slug: 'protocols/status' },
 					],
 				},

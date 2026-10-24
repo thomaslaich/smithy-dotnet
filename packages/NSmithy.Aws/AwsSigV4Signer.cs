@@ -6,11 +6,15 @@ using NSmithy.Http;
 
 namespace NSmithy.Aws;
 
-/// <summary>Signs HTTP requests with AWS Signature Version 4.</summary>
+/// <summary>
+/// Signs HTTP requests with AWS Signature Version 4. The signing name and region come from the
+/// resolved endpoint's SigV4 auth scheme properties, falling back to the values this signer is
+/// constructed with.
+/// </summary>
 public sealed class AwsSigV4Signer(
     Uri? endpoint,
-    string service,
-    string region,
+    string? service,
+    string? region,
     TimeProvider? timeProvider = null
 ) : ISmithySigner
 {
@@ -36,18 +40,27 @@ public sealed class AwsSigV4Signer(
             ? endpoint
             : throw new ArgumentException("Endpoint must be an absolute URI.", nameof(endpoint));
 
-    private readonly string service = string.IsNullOrWhiteSpace(service)
-        ? throw new ArgumentException("Service must be set.", nameof(service))
-        : service;
+    private readonly string? service =
+        service is not null && string.IsNullOrWhiteSpace(service)
+            ? throw new ArgumentException("Service must not be empty.", nameof(service))
+            : service;
 
-    private readonly string region = string.IsNullOrWhiteSpace(region)
-        ? throw new ArgumentException("Region must be set.", nameof(region))
-        : region;
+    private readonly string? region =
+        region is not null && string.IsNullOrWhiteSpace(region)
+            ? throw new ArgumentException("Region must not be empty.", nameof(region))
+            : region;
 
     private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
 
     public AwsSigV4Signer(string service, string region, TimeProvider? timeProvider = null)
         : this(null, service, region, timeProvider) { }
+
+    /// <summary>
+    /// A signer that takes its signing name and region from the resolved endpoint only, as the
+    /// endpoints of services with modeled endpoint rules always set them.
+    /// </summary>
+    public AwsSigV4Signer(TimeProvider? timeProvider = null)
+        : this(null, null, null, timeProvider) { }
 
     public ValueTask<SmithyHttpRequest> SignAsync(
         SmithyContext context,
@@ -64,11 +77,77 @@ public sealed class AwsSigV4Signer(
                 $"AWS SigV4 requires an {nameof(AwsCredentials)} identity.",
                 nameof(identity)
             );
-        Sign(request, credentials, timeProvider.GetUtcNow());
+        Sign(request, credentials, timeProvider.GetUtcNow(), ResolveSigningOptions(context));
         return ValueTask.FromResult(request);
     }
 
-    internal void Sign(SmithyHttpRequest request, AwsCredentials credentials, DateTimeOffset now)
+    /// <summary>
+    /// The signing options for one request: the resolved endpoint's SigV4 auth scheme properties
+    /// where it sets them, otherwise the values this signer was constructed with.
+    /// </summary>
+    private SigningOptions ResolveSigningOptions(SmithyContext context)
+    {
+        SmithyEndpointAuthScheme? properties = null;
+        if (
+            context.TryGet(SmithyContextKeys.ResolvedEndpoint, out var endpoint)
+            && endpoint?.AuthSchemes is { } authSchemes
+        )
+        {
+            properties = authSchemes.FirstOrDefault(authScheme =>
+                string.Equals(authScheme.SchemeId, AwsSigV4AuthScheme.Id, StringComparison.Ordinal)
+            );
+        }
+
+        var signingName =
+            properties?.GetString("signingName")
+            ?? service
+            ?? throw new InvalidOperationException(
+                "AWS SigV4 needs a signing name: the resolved endpoint sets none, so construct the "
+                    + "auth scheme with the service's signing name."
+            );
+        var signingRegion =
+            properties?.GetString("signingRegion")
+            ?? region
+            ?? throw new InvalidOperationException(
+                "AWS SigV4 needs a signing region: set the client's Region, or construct the auth "
+                    + "scheme with a region."
+            );
+        var s3 = UsesS3PathRules(signingName);
+        return new SigningOptions(
+            signingName,
+            signingRegion,
+            properties?.GetBoolean("disableDoubleEncoding") ?? s3,
+            properties?.GetBoolean("disableNormalizePath") ?? s3
+        );
+    }
+
+    private SigningOptions DefaultSigningOptions()
+    {
+        if (service is null || region is null)
+        {
+            throw new InvalidOperationException(
+                "AWS SigV4 needs a signing name and region: construct the signer with both."
+            );
+        }
+        var s3 = UsesS3PathRules(service);
+        return new SigningOptions(service, region, s3, s3);
+    }
+
+    // S3 signs the path as sent: encoded once and not normalized. Its endpoint rules say so through
+    // the disableDoubleEncoding and disableNormalizePath properties; this covers requests signed
+    // without them.
+    private static bool UsesS3PathRules(string signingName) =>
+        signingName is "s3" or "s3-outposts" or "s3express";
+
+    internal void Sign(SmithyHttpRequest request, AwsCredentials credentials, DateTimeOffset now) =>
+        Sign(request, credentials, now, DefaultSigningOptions());
+
+    private void Sign(
+        SmithyHttpRequest request,
+        AwsCredentials credentials,
+        DateTimeOffset now,
+        SigningOptions options
+    )
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(credentials);
@@ -98,14 +177,14 @@ public sealed class AwsSigV4Signer(
         var canonicalRequest = string.Join(
             '\n',
             request.Method.Method.ToUpperInvariant(),
-            CanonicalPath(requestUri),
+            CanonicalPath(requestUri, options),
             CanonicalQuery(requestUri),
             string.Concat(canonicalHeaders.Select(h => $"{h.Name}:{h.Value}\n")),
             signedHeaders,
             payloadHash
         );
 
-        var credentialScope = $"{date}/{region}/{service}/aws4_request";
+        var credentialScope = $"{date}/{options.Region}/{options.Service}/aws4_request";
         var stringToSign = string.Join(
             '\n',
             Algorithm,
@@ -115,7 +194,12 @@ public sealed class AwsSigV4Signer(
         );
         var signature = ToHex(
             HmacSha256(
-                DeriveSigningKey(credentials.SecretAccessKey, date, region, service),
+                DeriveSigningKey(
+                    credentials.SecretAccessKey,
+                    date,
+                    options.Region,
+                    options.Service
+                ),
                 stringToSign
             )
         );
@@ -155,6 +239,7 @@ public sealed class AwsSigV4Signer(
             );
         }
 
+        var options = DefaultSigningOptions();
         request.Headers.Remove("Authorization");
         request.Headers.Remove("X-Amz-Date");
         request.Headers.Remove("X-Amz-Security-Token");
@@ -163,7 +248,7 @@ public sealed class AwsSigV4Signer(
 
         var amzDate = now.UtcDateTime.ToString("yyyyMMdd'T'HHmmss'Z'", InvariantDateTime);
         var date = now.UtcDateTime.ToString("yyyyMMdd", InvariantDateTime);
-        var credentialScope = $"{date}/{region}/{service}/aws4_request";
+        var credentialScope = $"{date}/{options.Region}/{options.Service}/aws4_request";
         var canonicalHeaders = CanonicalHeaders(request);
         var signedHeaders = string.Join(';', canonicalHeaders.Select(header => header.Name));
 
@@ -190,7 +275,7 @@ public sealed class AwsSigV4Signer(
         var canonicalRequest = string.Join(
             '\n',
             request.Method.Method.ToUpperInvariant(),
-            CanonicalPath(unsignedUri),
+            CanonicalPath(unsignedUri, options),
             CanonicalQuery(unsignedUri),
             string.Concat(canonicalHeaders.Select(header => $"{header.Name}:{header.Value}\n")),
             signedHeaders,
@@ -205,7 +290,12 @@ public sealed class AwsSigV4Signer(
         );
         var signature = ToHex(
             HmacSha256(
-                DeriveSigningKey(credentials.SecretAccessKey, date, region, service),
+                DeriveSigningKey(
+                    credentials.SecretAccessKey,
+                    date,
+                    options.Region,
+                    options.Service
+                ),
                 stringToSign
             )
         );
@@ -360,10 +450,43 @@ public sealed class AwsSigV4Signer(
         );
     }
 
-    private static string CanonicalPath(Uri uri)
+    /// <summary>
+    /// The canonical URI path. Unless disabled, the path is normalized (empty and <c>.</c>
+    /// segments removed, <c>..</c> segments resolved) and each segment is encoded a second time
+    /// over its wire encoding.
+    /// </summary>
+    private static string CanonicalPath(Uri uri, SigningOptions options)
     {
         var path = string.IsNullOrEmpty(uri.AbsolutePath) ? "/" : uri.AbsolutePath;
-        return string.Join('/', path.Split('/').Select(EscapePathSegment));
+        var segments = path.Split('/').Select(EscapePathSegment);
+        if (!options.DisableDoubleEncoding)
+        {
+            segments = segments.Select(EscapeQueryComponent);
+        }
+        if (options.DisableNormalizePath)
+        {
+            return string.Join('/', segments);
+        }
+
+        var normalized = new List<string>();
+        foreach (var segment in segments)
+        {
+            if (segment is "" or ".")
+            {
+                continue;
+            }
+            if (segment == "..")
+            {
+                if (normalized.Count > 0)
+                {
+                    normalized.RemoveAt(normalized.Count - 1);
+                }
+                continue;
+            }
+            normalized.Add(segment);
+        }
+        var canonical = "/" + string.Join('/', normalized);
+        return path.EndsWith('/') && normalized.Count > 0 ? canonical + "/" : canonical;
     }
 
     private static string EscapePathSegment(string segment)
@@ -453,4 +576,11 @@ public sealed class AwsSigV4Signer(
     {
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
+
+    private readonly record struct SigningOptions(
+        string Service,
+        string Region,
+        bool DisableDoubleEncoding,
+        bool DisableNormalizePath
+    );
 }

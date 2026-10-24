@@ -40,6 +40,7 @@
     <Project Path="tests/Conformance/AwsQuery/AwsQuery.Conformance.csproj" />
     <Project Path="tests/Conformance/AwsJson/AwsJson.Conformance.csproj" />
     <Project Path="tests/Conformance/Ec2Query/Ec2Query.Conformance.csproj" />
+    <Project Path="tests/Conformance/Endpoints/Endpoints.Conformance.csproj" />
     <Project Path="tests/Conformance/RestJson1/RestJson1.Conformance.csproj" />
     <Project Path="tests/Conformance/RestXml/RestXml.Conformance.csproj" />
     <Project Path="tests/Conformance/RpcV2Cbor/RpcV2Cbor.Conformance.csproj" />
