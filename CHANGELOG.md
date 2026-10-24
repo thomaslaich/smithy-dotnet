@@ -18,6 +18,8 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   operation from the request.
 - `MapSmithyService` maps any service from its schema, a table of `ServerOperation`s, and the
   protocols to serve it over.
+- `CSharpIntegration.serviceGenerator`, which lets an integration in a separate
+  package generate the service surface for a protocol it supplies.
 
 ### Changed
 
