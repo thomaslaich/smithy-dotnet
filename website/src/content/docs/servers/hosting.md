@@ -30,6 +30,14 @@ runtime when none is registered. `Add{Service}Handler<THandler>()` registers it
 through `AddSmithyServer()`; an existing application registration takes
 precedence.
 
+To implement operations separately, register each operation handler. The
+runtime needs no registration of its own:
+
+```csharp
+builder.Services.AddScoped<IGetWeatherHandler, GetWeatherHandler>();
+builder.Services.AddScoped<IGetForecastHandler, GetForecastHandler>();
+```
+
 The runtime currently has no configurable lifecycle options. DI establishes its
 ownership and lifetime; it does not add interceptors or telemetry by itself.
 
