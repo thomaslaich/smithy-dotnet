@@ -1,306 +1,160 @@
 # Server Architecture
 
-Target architecture for generated NSmithy servers and the shared server runtime.
+How a generated NSmithy server turns an HTTP request into a handler call, and
+which part of the system owns each step.
 
-## Goal
+## Overview
 
-Generated server code describes the modeled operations; the shared server
-runtime and the protocols own routing and execution. A protocol says how
-requests reach each operation; the runtime owns the dispatch algorithm:
-deserialize the request, invoke the handler, serialize the response or a
-modeled error. This mirrors [client-architecture.md](client-architecture.md),
-where the runtime protocol already decides how a request is addressed: the
-generated surface describes the operation, the runtime owns the lifecycle.
+A generated server is mostly description. Codegen emits the model's types, the
+handler interfaces, and a table of the service's operations. Everything that
+acts on a request is hand-written runtime code, split by responsibility:
 
-The desired shape is:
+| Part | Owns | Knows nothing about |
+| --- | --- | --- |
+| Generated code | the operation table, handler interfaces, `Map{Service}` | routes, wire formats, the host |
+| Protocol | routes, deserializing requests, serializing responses and errors | the host framework, handlers |
+| Server runtime | the dispatch algorithm: validate, call the handler, catch modeled errors | wire formats, the host |
+| Host adapter | turning routes into endpoints, converting requests and responses | wire formats, the model |
+| Handler | the application's logic, in typed model values | protocols, HTTP |
+
+Because each concern has one owner, a new protocol, a new host, or a
+cross-cutting concern such as telemetry is added in one place rather than in
+generated code. The split mirrors
+[client-architecture.md](client-architecture.md), where generated code also
+describes operations and the runtime and protocols own the request lifecycle.
+
+The rest of this document follows one example service:
+
+```smithy
+@restJson1
+service WeatherService {
+    operations: [GetCity]
+}
+
+@readonly
+@http(method: "GET", uri: "/cities/{cityId}")
+operation GetCity {
+    input := {
+        @required @httpLabel @length(min: 1)
+        cityId: String
+    }
+    output := { name: String }
+}
+```
+
+## How a Request Is Served
+
+Serving happens in two phases.
+
+**At startup**, the application registers its handler and maps the service:
+
+```csharp
+builder.Services.AddWeatherServiceHandler<WeatherHandler>();
+app.MapWeatherService(WeatherServiceProtocols.RestJson1);
+```
+
+`MapWeatherService` hands the generated operation table and the selected
+protocols to the host adapter. For each protocol, the adapter binds every
+operation to it, asks the protocol for its routes, and registers one endpoint
+per route. restJson1 reads `GetCity`'s `@http` trait and answers
+`GET /cities/{cityId}`.
+
+**Per request**, a call to `GET /cities/zurich` flows through that endpoint:
 
 ```text
-receive request
-  -> host adapter builds a neutral request
-  -> server runtime dispatches:
-       deserialize request
-       invoke handler
-       serialize response, or serialize a modeled error
-  -> host adapter writes the neutral response
+host adapter     converts the HttpContext into a SmithyHttpRequest
+  -> binding     GetCity bound to restJson1; resolves the handler from the request's services
+  -> runtime     protocol deserializes the input
+                 validator checks the constraints (@length on cityId)
+                 handler runs: GetCityAsync(input, ct)
+                 protocol serializes the output, or a modeled error
+host adapter     writes the SmithyHttpServerResponse to the HttpContext
 ```
 
-The dispatch algorithm and the routes live in hand-written runtimes, not in
-codegen. A new protocol, a new host, or a new cross-cutting concern extends the
-runtime, not a family of code-generation templates.
+The sections below take each part in the order a request meets it.
 
-## The Seam
+## The Generated Operation Table
 
-The server is the dual of the client stack:
+For each service, codegen emits one operation table: the
+`ServiceOperationCatalog` of its `{Service}Definition`. Each entry pairs an
+operation's schema with a function that resolves its handler from a request's
+services, plus the JSON Schemas of its input and output for adapters such as
+MCP:
+
+```csharp
+internal static ServiceOperationCatalog Catalog { get; } = new(
+    WeatherServiceSchema.Schema,
+    ServerOperation.Create(
+        GetCitySchema.Schema,
+        services => services.GetRequiredService<IGetCityHandler>().GetCityAsync,
+        GetCityJsonSchemas.Value));
+```
+
+The table contains no routes and no protocol code. `Map{Service}` only
+translates the generated `{Service}Protocols` flags into protocol instances:
+
+```csharp
+public static IEndpointRouteBuilder MapWeatherService(
+    this IEndpointRouteBuilder endpoints,
+    WeatherServiceProtocols protocols = WeatherServiceProtocols.RestJson1)
+{
+    var selected = new List<SmithyServerProtocol>();
+    if ((protocols & WeatherServiceProtocols.RestJson1) != 0)
+    {
+        selected.Add(new("RestJson1", new RestJson1Protocol()));
+    }
+
+    return endpoints.MapSmithyService(WeatherServiceDefinition.Catalog, selected);
+}
+```
+
+`ServerOperation<TInput, TOutput>` keeps the operation's input and output
+types, so no adapter needs reflection. It offers two ways in:
+
+- `Bind(protocol)` pairs the operation with one protocol, producing an
+  `IServerOperationBinding` that dispatches wire requests. HTTP adapters use
+  this.
+- `InvokeAsync(runtime, input, services, ct)` takes input that is already
+  decoded. Adapters without a wire request use this, such as MCP after
+  decoding tool arguments.
+
+Both resolve the handler from the services of the request being served, so
+handler lifetimes are the application's choice. Both run through the server
+runtime, so validation and anything attached to the runtime apply to every
+adapter. `IServiceDefinition.Operations` exposes the table, so an adapter can
+find it from the registered definitions.
+
+## Protocols
+
+### Three levels
+
+A protocol is used at three levels, each knowing more than the one before:
 
 ```text
-CLIENT                                   SERVER
-  generated client                         generated endpoint (thin)
-    -> SmithyClientRuntime                    -> SmithyServerRuntime      (hand-written, host-agnostic)
-        -> IHttpTransport                     <- host adapter (host request/response <-> neutral)
-        -> IClientOperationProtocol           -> IServerOperationProtocol
+IProtocol                          the protocol itself: new RestJson1Protocol()
+  .ForService(serviceSchema)
+-> IServiceProtocol                applied to one service; sees every operation
+  .ForServerOperation(operation)
+-> IServerOperationProtocol<I, O>  applied to one operation; typed
 ```
 
-Two rules define the layering:
+A question belongs to the level that has the information to answer it.
+Routing is a service-level question: a protocol that names operations in a
+header answers it with one route for the whole service, and route conflicts
+only show across all operations. Deserializing a request is an operation-level
+question and needs the operation's types. The client uses the same levels, with
+`ForClientOperation` at the bottom.
 
-1. **The runtime is host-agnostic.** It takes a neutral request and returns a
-   neutral response, exactly as `SmithyClientRuntime` takes an `IHttpTransport`
-   and never touches `HttpClient`. The host adapter (e.g. the ASP.NET Core
-   package) owns conversion between the host's request/response types and the
-   neutral ones, and holds the only framework dependency. The runtime is
-   unit-testable with a fake protocol and no host.
-2. **The protocol owns trailer *content*; the host owns trailer *transport*.** A
-   protocol decides that a response carries `grpc-status: 0`; the host decides
-   whether the connection can carry trailers and how to write them. No wire
-   detail of any protocol appears in the host adapter or generated code.
+### Routing
 
-## Neutral Types
-
-### Request
-
-The server request is a `SmithyHttpRequest`. It carries method, request target,
-headers, content type, and a `SmithyHttpBody` — which is `Streaming` (a raw body
-stream) for event-stream operations. Streaming server protocol halves read the
-body as a stream and deframe it; unary halves read the buffered bytes. One
-request type serves every operation shape.
-
-### Response — `SmithyHttpServerResponse`
-
-Responses are directional: the server produces them and the host writes them.
-One neutral type carries every response shape — unary bodies, streamed event
-bodies, and protocol trailers:
-
-```csharp
-public sealed class SmithyHttpServerResponse
-{
-    public int StatusCode { get; init; } = 200;
-
-    public IDictionary<string, IReadOnlyList<string>> Headers { get; }
-
-    // Unary responses carry one chunk; streaming responses carry many.
-    public IAsyncEnumerable<ReadOnlyMemory<byte>> Body { get; init; }
-
-    // Set for unary responses so the host can emit Content-Length; null when streaming.
-    public long? ContentLength { get; init; }
-
-    // Trailer content, computed after the body completes. Receives the streaming error
-    // (null = clean completion) so a protocol can map it — e.g. gRPC maps a mid-stream
-    // failure to grpc-status:13. Null when the protocol has no trailers (REST / rpcv2Cbor).
-    // The host decides whether the connection can carry trailers at all.
-    public Func<Exception?, IReadOnlyList<KeyValuePair<string, string>>>? Trailers { get; init; }
-}
-```
-
-The `Trailers` provider is what keeps gRPC's `grpc-status` / `grpc-message`
-protocol-supplied data rather than host knowledge.
-
-## Server Operation Protocol
-
-The server half of an operation protocol deserializes the request and serializes
-the response or a modeled error. Modeled errors resolve from the operation
-schema the protocol already holds, so error identity and status are not passed in
-from the caller:
-
-```csharp
-public interface IServerOperationProtocol<TInput, TOutput>
-{
-    // Validates deserialized input against the model's constraint traits before the
-    // handler runs; null when the input carries no constraints. Not defaulted, so an
-    // implementation that skips validation has to say so.
-    ISmithyValidator<TInput>? InputValidator { get; }
-
-    ValueTask<TInput> DeserializeRequestAsync(
-        SmithyHttpRequest request,
-        CancellationToken cancellationToken = default);
-
-    SmithyHttpServerResponse SerializeResponse(
-        TOutput output,
-        CancellationToken cancellationToken = default);
-
-    // Serializes a modeled error to a protocol error response. Returns false for an
-    // unmodeled exception, which the runtime rethrows (surfaced as a 500 by the host).
-    bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response);
-}
-```
-
-Event-stream server halves use the same interface. The operation input/output
-shape carries any `IAsyncEnumerable<TEvent>` member; the protocol implementation
-owns deframing request bodies and framing streamed response chunks.
-
-## Server Runtime
-
-`SmithyServerRuntime` is the dual of the client runtime's execution core:
-hand-written, host-agnostic, and instance-based so server interceptors and
-telemetry attach to it the way they attach to `SmithyClientRuntime`.
-
-```csharp
-public sealed class SmithyServerRuntime
-{
-    // Deserialize, invoke, serialize — with modeled errors caught once, for every protocol.
-    public async Task<SmithyHttpServerResponse> DispatchAsync<TInput, TOutput>(
-        IServerOperationProtocol<TInput, TOutput> protocol,
-        SmithyHttpRequest request,
-        Func<TInput, CancellationToken, Task<TOutput>> handler,
-        CancellationToken cancellationToken)
-    {
-        var input = await protocol.DeserializeRequestAsync(request, cancellationToken)
-            .ConfigureAwait(false);
-        if (protocol.InputValidator is { } validator)
-        {
-            var errors = validator.GetErrors(input);
-            // Answered with smithy.framework#ValidationException.
-        }
-
-        try
-        {
-            var output = await handler(input, cancellationToken).ConfigureAwait(false);
-            return protocol.SerializeResponse(output, cancellationToken);
-        }
-        catch (Exception ex) when (protocol.TrySerializeError(ex, out var errorResponse))
-        {
-            return errorResponse;
-        }
-    }
-}
-```
-
-One dispatch algorithm covers every protocol and operation shape. Modeled-error
-handling is a single `catch` filtered by `TrySerializeError`, not a generated
-`catch` block per error.
-
-## Input Validation
-
-Constraint traits are enforced on the server, between deserialization and the
-handler, so a handler only ever sees input the model permits. The client does not
-validate: it is not the authority on the contract, and duplicating the check
-there costs latency without buying safety.
-
-`SmithyValidator.FromSchema` compiles an operation's input schema into a tree of
-validators once, when the protocol is built — the same compile-once shape the
-codecs use. It returns `null` when nothing reachable from the schema carries a
-constraint, and the runtime then skips validation altogether, so an unconstrained
-operation pays nothing. Constraints are read from the shape's kind rather than
-its CLR type, because an optional member wraps its target in a nullable schema
-and a member schema is its own kind; a constraint the kind says should apply but
-that cannot be enforced fails at compile time rather than being dropped. Enum
-membership comes from the values the schema carries, and `@uniqueItems` compares
-elements through equality derived from the schema rather than from .NET, which
-would compare a blob or a structure holding a collection by reference.
-
-A violation becomes `smithy.framework#ValidationException`, which every operation
-carries as an implicit modeled error so protocols serialize it like any other and
-generated clients can deserialize it. Each violation is reported as a
-`ValidationExceptionField` whose `path` is a JSONPointer into the input.
-
-A `@required` member absent from the payload fails inside the codec, before the
-compiled validator runs, because the builder cannot produce the shape without it.
-Codecs signal that with `MissingRequiredMemberException`, which the runtime
-converts into the same `ValidationException` — a caller's omission is a 400 on
-the server and an exception on the client, from one throw site. The reader that
-finds the omission knows only the member's own name, so each enclosing reader
-prepends its own step as the exception unwinds and the member is reported where
-it actually sits.
-
-## Host Adapter
-
-A host adapter binds a host framework to the runtime. It owns two conversions —
-the host request into a `SmithyHttpRequest`, and a `SmithyHttpServerResponse` onto
-the host response — the mapping of protocols' routes to host endpoints, and one
-dispatch entry point:
-
-The host adapter resolves `SmithyServerRuntime` from request services, and uses
-a default runtime when the application registers none. `AddSmithyServer()`,
-which `Add{Service}Handler<THandler>()` calls, registers the runtime with
-`TryAddSingleton`, so an application registration takes precedence. The runtime
-is currently stateless; resolving it from the container allows future lifecycle
-configuration without adding global host state.
-
-```csharp
-public static class SmithyAspNetCoreHost
-{
-    public static async Task DispatchAsync<TInput, TOutput>(
-        SmithyServerRuntime runtime,
-        HttpContext context,
-        IServerOperationProtocol<TInput, TOutput> protocol,
-        Func<TInput, CancellationToken, Task<TOutput>> handler,
-        bool streamRequestBody = false,
-        CancellationToken cancellationToken = default)
-    {
-        var request = await ToSmithyRequestAsync(context, streamRequestBody, cancellationToken).ConfigureAwait(false);
-        var response = await runtime.DispatchAsync(protocol, request, handler, cancellationToken).ConfigureAwait(false);
-        await WriteAsync(context, response, cancellationToken).ConfigureAwait(false);
-    }
-
-    // One writer for every protocol. Trailer values come from the response; the host only
-    // decides whether the connection can carry trailers and writes whatever the response holds.
-    private static async Task WriteAsync(HttpContext context, SmithyHttpServerResponse response, CancellationToken ct)
-    {
-        context.Response.StatusCode = response.StatusCode;
-        foreach (var header in response.Headers)
-        {
-            context.Response.Headers[header.Key] = header.Value.ToArray();
-        }
-        if (response.ContentLength is { } length)
-        {
-            context.Response.ContentLength = length;
-        }
-
-        var supportsTrailers = response.Trailers is not null && context.Response.SupportsTrailers();
-        await context.Response.StartAsync(ct).ConfigureAwait(false);
-
-        Exception? streamError = null;
-        try
-        {
-            await foreach (var chunk in response.Body.WithCancellation(ct).ConfigureAwait(false))
-            {
-                await context.Response.Body.WriteAsync(chunk, ct).ConfigureAwait(false);
-                await context.Response.Body.FlushAsync(ct).ConfigureAwait(false);
-            }
-        }
-        catch (Exception ex) when (supportsTrailers)
-        {
-            streamError = ex;
-        }
-        // When the connection cannot carry trailers, a mid-stream failure propagates and aborts
-        // the response so the peer sees a broken stream, not a clean completion.
-
-        if (response.Trailers is { } trailers)
-        {
-            foreach (var trailer in trailers(streamError))
-            {
-                context.Response.AppendTrailer(trailer.Key, trailer.Value);
-            }
-        }
-
-        await context.Response.CompleteAsync().ConfigureAwait(false);
-    }
-}
-```
-
-Whether a connection can carry trailers is transport-level and belongs to the
-host. The trailer values (`grpc-status: 13`, the message) belong to the protocol.
-
-Direct callers of `SmithyAspNetCoreHost.DispatchAsync` pass the runtime as the
-first argument; mapped endpoints resolve it from request services, preserving
-application-selected lifetimes. This is an ownership seam; server interceptors
-and telemetry remain future work.
-
-## Routing
-
-Routing belongs to the protocol. A protocol already decides how a client
-addresses a request; on the server, the same knowledge decides which operation a
-request is for. The server half of `IServiceProtocol` reports it:
+The service-level protocol reports how requests reach operations:
 
 ```csharp
 public interface IServiceProtocol
 {
-    IClientOperationProtocol<TInput, TOutput> ForClientOperation<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation);
+    // ForClientOperation and ForServerOperation omitted.
 
-    IServerOperationProtocol<TInput, TOutput> ForServerOperation<TInput, TOutput>(
-        OperationSchema<TInput, TOutput> operation);
-
-    // How requests reach the given operations over this protocol. A protocol that does not
-    // serve requests keeps the default, ServerRouting.None.
+    // A protocol that does not serve requests keeps the default.
     ServerRouting GetServerRouting(IReadOnlyList<IOperationSchema> operations) =>
         ServerRouting.None;
 }
@@ -323,151 +177,217 @@ public abstract record ServerRouting
 public sealed record ServerRoute(
     ShapeId Operation,
     string Method,
-    string Path,                                             // {label} and {label+} segments
+    string Path,                                                  // {label} and {label+} segments
     IReadOnlyList<KeyValuePair<string, string?>> RequiredQuery);  // literal query of @http(uri)
 ```
 
 | Protocol | Routing |
 | --- | --- |
-| restJson1, simpleRestJson | `ByRoute`: each operation's `@http` method and URI, read from its schema |
+| restJson1, simpleRestJson | `ByRoute`: each operation's `@http` method and URI |
 | rpcv2Cbor, rpcv2Json | `ByRoute`: `POST /service/{Service}/operation/{Operation}` |
 | gRPC | `ByRoute`: `POST /{namespace}.{Service}/{Operation}` |
 | awsJson1_0, awsJson1_1 | `ByDispatch`: `POST /`, the operation named by `X-Amz-Target` |
 
-`ByRoute` covers protocols that address operations by method and path, so the
-host matches requests with its own router. `ByDispatch` covers protocols that
-name the operation inside the request (a header, or the body for JSON-RPC and
-Thrift). The protocol may read the body to resolve the operation; the host
-buffers it, so the operation protocol deserializes the same bytes. An operation
-that streams its request body therefore cannot be routed by dispatch, and
-mapping one fails at startup. When the
-protocol names no operation, the host writes the protocol's `UnknownOperation`
-response, so the error has the protocol's shape (a JSON-RPC "method not found",
-say).
+`ByRoute` lets the host's own router match requests. `ByDispatch` covers
+protocols that name the operation inside the request, in a header or in the
+body (JSON-RPC, Thrift). To find the operation, the host buffers the body and
+the protocol reads it; the operation then deserializes the same bytes. An
+operation that streams its request body therefore cannot be routed by
+dispatch, and mapping one fails at startup. When the protocol names no
+operation, the host writes the protocol's `UnknownOperation` response, so the
+error has the protocol's shape (a JSON-RPC "method not found", say).
 
-A protocol leaves out operations it cannot bind, such as event-stream
-operations on a protocol without event streams. Paths are protocol-neutral URI
-patterns; the host adapter translates them into its own routing syntax. A
-request whose literal query does not match `RequiredQuery` is not routed to the
-operation and is answered with 404, as an unmatched route would be.
+A protocol leaves out operations it cannot serve, such as event-stream
+operations on a protocol without event streams. Paths use Smithy's URI syntax;
+the host adapter translates them into its own route templates. A request whose
+query lacks the route's `RequiredQuery` literals is answered with 404, like an
+unmatched route.
 
-`IServerOperationProtocol.StreamsRequestBody` tells the host whether to hand the
-operation the request body as a stream (event-stream input, a streaming blob
-payload) or buffered. Like `InputValidator`, it has no default, so a protocol
-that streams has to say so.
+### The operation protocol
 
-## Generated Server Surface
-
-Generated code describes operations; it contains no routes, no protocol
-branches, and no per-operation endpoint. For each service it emits an operation
-table pairing each operation's schema with a typed handler resolver:
+The operation-level protocol handles one operation's requests and responses:
 
 ```csharp
-private static readonly IReadOnlyList<IServerOperation> ServerOperations =
-[
-    ServerOperation.Create(
-        GetCitySchema.Schema,
-        services => services.GetRequiredService<IGetCityHandler>().GetCityAsync),
-    ServerOperation.Create(
-        GetForecastSchema.Schema,
-        services => services.GetRequiredService<IGetForecastHandler>().GetForecastAsync),
-];
-```
-
-`ServerOperation<TInput, TOutput>` keeps the operation's types, so dispatch
-needs no reflection: `Bind` creates the typed `IServerOperationProtocol` from a
-protocol's `IServiceProtocol` once per mapped protocol, and each request
-resolves the handler from the request's services, so handler lifetimes are the
-application's.
-
-`Map{Service}` keeps its signature and maps the selected protocols through the
-host adapter:
-
-```csharp
-public static IEndpointRouteBuilder MapWeatherService(
-    this IEndpointRouteBuilder endpoints,
-    WeatherServiceProtocols protocols = WeatherServiceProtocols.RestJson1)
+public interface IServerOperationProtocol<TInput, TOutput>
 {
-    var selected = new List<SmithyServerProtocol>();
-    if ((protocols & WeatherServiceProtocols.RestJson1) != 0)
-    {
-        selected.Add(new("RestJson1", new RestJson1Protocol()));
-    }
+    // Checks deserialized input against the constraint traits; null when there are none.
+    ISmithyValidator<TInput>? InputValidator { get; }
 
-    return endpoints.MapSmithyService(WeatherSchema.Schema, ServerOperations, selected);
+    // Whether the body reaches DeserializeRequestAsync as a stream rather than buffered.
+    bool StreamsRequestBody { get; }
+
+    ValueTask<TInput> DeserializeRequestAsync(
+        SmithyHttpRequest request,
+        CancellationToken cancellationToken = default);
+
+    SmithyHttpServerResponse SerializeResponse(
+        TOutput output,
+        CancellationToken cancellationToken = default);
+
+    // False for an unmodeled exception, which the runtime rethrows.
+    bool TrySerializeError(Exception exception, out SmithyHttpServerResponse response);
 }
 ```
 
-`MapSmithyService` is public: it maps any service from its schema, operation
-table, and a list of `SmithyServerProtocol(Name, Protocol)` values, the name
-appearing in endpoint display names and route conflict errors.
+`StreamsRequestBody` is true for an event-stream input and, on REST protocols,
+for a streaming blob payload; the host needs the answer before it reads the
+body. Neither `InputValidator` nor `StreamsRequestBody` has a default, so a
+protocol that skips validation or streams has to say so rather than get it
+wrong silently.
 
-The host adapter turns each protocol's `ServerRouting` into endpoints: one per
-`ServerRoute`, named `{Operation} ({Protocol})`, or one for a `ByDispatch`
-protocol. Endpoints are plain `RequestDelegate`s, so mapping uses no minimal-API
-parameter binding and needs neither reflection nor the request delegate
-generator. A route that repeats the method and path of an earlier one within
-one `MapSmithyService` call fails at startup, naming the protocol that repeats
-it.
+Modeled errors resolve from the operation schema the protocol holds, so the
+runtime passes only the exception. Event-stream operations use the same
+interface: the input or output carries an `IAsyncEnumerable<TEvent>` member,
+and the protocol frames and deframes the events ([streaming.md](streaming.md)).
 
-New hosts reuse the operation table, the service and operation schemas, and the
-protocols' `ServerRouting`. HTTP route syntax, MCP JSON Schema, and framework
-types belong in their adapters, not in a parallel service model.
+## The Host Adapter
+
+A host adapter connects a web framework to the rest of the system and holds
+the only framework dependency. The ASP.NET Core adapter does four things.
+
+**Maps endpoints.** `MapSmithyService(catalog, protocols)` creates one endpoint
+per `ServerRoute`, named `{Operation} ({Protocol})`, or one per `ByDispatch`
+protocol. It translates greedy labels (`/files/{key+}`) into ASP.NET Core
+catch-alls (`/files/{**key}`). Endpoints are plain `RequestDelegate`s, so
+mapping needs no minimal-API parameter binding, no reflection, and no request
+delegate generator. A route that repeats the method and path of an earlier one
+fails at startup, naming the protocol that repeats it.
+
+**Converts the request.** The `HttpContext` becomes a `SmithyHttpRequest`
+carrying the method, target, headers and a `SmithyHttpBody`: buffered bytes,
+or the live request stream when the operation's `StreamsRequestBody` is set.
+For a streamed body the host also relaxes Kestrel's minimum data rate, since a
+long-lived stream can legitimately go quiet.
+
+**Resolves the runtime.** Each request uses the `SmithyServerRuntime`
+registered in the request's services, or `SmithyServerRuntime.Default` when
+there is none. `Add{Service}Handler<THandler>()` registers one with
+`TryAddSingleton`, so an application's own registration takes precedence.
+
+**Writes the response.** One neutral type carries every response shape:
+
+```csharp
+public sealed class SmithyHttpServerResponse
+{
+    public int StatusCode { get; init; } = 200;
+    public IDictionary<string, IReadOnlyList<string>> Headers { get; }
+
+    // One chunk for a unary response, many for a streamed one.
+    public IAsyncEnumerable<ReadOnlyMemory<byte>> Body { get; init; }
+
+    // Set for unary responses; null when streaming.
+    public long? ContentLength { get; init; }
+
+    // Computed after the body completes, given the streaming error (null on success).
+    // Null when the protocol has no trailers.
+    public Func<Exception?, IReadOnlyList<KeyValuePair<string, string>>>? Trailers { get; init; }
+}
+```
+
+The host writes the status, headers and body chunks, then the trailers. The
+trailer *content* belongs to the protocol: gRPC maps a mid-stream failure to
+`grpc-status: 13`. The trailer *transport* belongs to the host: whether the
+connection can carry trailers at all. When it cannot, a mid-stream failure
+aborts the response, so the peer sees a broken stream rather than a clean
+completion. No protocol's wire details appear in the host adapter.
+
+## The Server Runtime
+
+`SmithyServerRuntime` owns the dispatch algorithm. It takes neutral requests
+and returns neutral responses, so it is unit-testable with a fake protocol and
+no host:
+
+```csharp
+public sealed class SmithyServerRuntime
+{
+    public static SmithyServerRuntime Default { get; } = new();
+
+    // For a wire request: deserialize, validate, invoke, serialize.
+    public Task<SmithyHttpServerResponse> DispatchAsync<TInput, TOutput>(
+        IServerOperationProtocol<TInput, TOutput> protocol,
+        SmithyHttpRequest request,
+        Func<TInput, CancellationToken, Task<TOutput>> handler,
+        CancellationToken cancellationToken);
+
+    // For decoded input: validate, invoke. A violation throws ValidationException.
+    public Task<TOutput> InvokeAsync<TInput, TOutput>(
+        ISmithyValidator<TInput>? validator,
+        TInput input,
+        Func<TInput, CancellationToken, Task<TOutput>> handler,
+        CancellationToken cancellationToken);
+}
+```
+
+`DispatchAsync` is one algorithm for every protocol and operation shape:
+
+```csharp
+var input = await protocol.DeserializeRequestAsync(request, ct);
+// A constraint violation is answered with smithy.framework#ValidationException.
+var output = await handler(input, ct);
+return protocol.SerializeResponse(output, ct);
+// A thrown exception is serialized when protocol.TrySerializeError accepts it and
+// rethrown otherwise, which the host answers with 500.
+```
+
+Both entry points call the handler through the same step, which is where
+server interceptors and telemetry attach, as they do on `SmithyClientRuntime`.
+That is why the runtime is an instance resolved from the container rather than
+a static class.
+
+### Input validation
+
+Constraint traits are enforced between deserialization and the handler, so a
+handler only sees input the model permits. The server enforces them because it
+is the authority on the contract.
+
+`SmithyValidator.FromSchema` compiles an operation's input schema into
+validators once, when the protocol is built, like the codecs compile their
+serializers. It returns `null` when no constraint is reachable from the
+schema, so an unconstrained operation pays nothing.
+
+A violation becomes `smithy.framework#ValidationException`. Every operation
+carries it as an implicit modeled error, so each protocol serializes it like
+any other error and generated clients deserialize it. Each violation is a
+`ValidationExceptionField` whose `path` is a JSON Pointer into the input.
+
+A missing `@required` member is caught earlier, in the codec, which cannot
+build the shape without it. The codec throws `MissingRequiredMemberException`,
+which the runtime converts into the same `ValidationException`. The path is
+complete because each enclosing reader prepends its step as the exception
+unwinds.
 
 ## Multiple Protocols per Service
 
-A service can be exposed over several protocols at once — restJson1, rpcv2Cbor,
-gRPC — from **one set of handlers**. This is a consequence of the layering, not a
-bolted-on feature:
-
-- The handler interface is protocol-agnostic. `IFooHandler.FooAsync(FooInput, ct)`
-  deals only in typed model values; there is one handler interface per service,
-  derived from the operation shapes.
-- All protocol knowledge lives in the operation-protocol binding.
-  `new RestJson1Protocol().ForService(schema).ForServerOperation(op)` and
-  `new RpcV2CborProtocol().ForService(schema).ForServerOperation(op)` are two different
-  `IServerOperationProtocol<FooInput, FooOutput>` over the same typed contract.
-- Dispatch is parameterized by that binding, so the same handler delegate serves
-  every protocol.
-
-Codegen emits one `Map{Service}` endpoint extension with a generated
-`{Service}Protocols` flags enum. Each selected protocol builds its own bindings
-and resolves the same DI-registered handler:
+One set of handlers can serve a service over several protocols at once:
 
 ```csharp
-app.MapWeatherService(
-    WeatherServiceProtocols.RestJson1 | WeatherServiceProtocols.RpcV2Cbor);
-services.AddWeatherServiceHandler<MyWeatherHandler>();   // one handler, both
+builder.Services.AddWeatherServiceHandler<WeatherHandler>();
+app.MapWeatherService(WeatherServiceProtocols.RestJson1 | WeatherServiceProtocols.RpcV2Cbor);
 ```
 
-Two rules keep the handler shared across protocols:
+This follows from the layering. The handler interface deals only in typed
+model values, all wire knowledge lives in the operation protocol, and
+`MapSmithyService` binds each operation once per protocol, with every binding
+resolving the same handler. Streaming surfaces derive from the model
+(`@streaming`), not from a protocol: event framing differs per protocol, but
+the handler always sees `IAsyncEnumerable<TEvent>`. Modeled errors come from
+the schema, so each protocol serializes the same thrown exception its own way.
 
-- The handler interface's streaming surface derives from the model (`@streaming`),
-  not from any one protocol. Event framing differs per protocol (vnd.amazon.eventstream
-  versus gRPC's length prefix), but that lives entirely inside the binding; the
-  handler surface `IAsyncEnumerable<TEvent>` is identical across protocols.
-- Modeled errors and their status codes come from the schema, so each protocol
-  binding serializes the same thrown exception its own way.
+### Listeners and ports
 
-### Listeners and Ports
-
-Generated `Map{Service}` extensions are port-agnostic — ports are a deployment
-concern, not a model concern, so codegen never binds one. Whether two
+`Map{Service}` never binds a port: ports are a deployment concern. Whether
 protocols can share a listener depends on their routes and transport:
 
 - **Disjoint routes share a port.** restJson1 (`@http` paths), rpcv2Cbor
-  (`/service/…/operation/…`), and the awsJson family (`POST /` with `X-Amz-Target`)
-  occupy different route shapes, so any mix of these three coexists on one
-  listener; a client selects its protocol by which route it calls.
-- **Same-route protocols need separate listeners.** awsJson1_0 and awsJson1_1
-  both bind `POST /` and differ only by `Content-Type`. Routing does not dispatch
-  on `Content-Type`, so exposing both requires pinning each to its own port with
-  `RequireHost`.
-- **Transport-incompatible protocols need separate listeners.** gRPC requires
-  HTTP/2; it goes on its own HTTP/2 listener rather than sharing an HTTP/1.1 port.
+  (`/service/…/operation/…`) and awsJson (`POST /` with `X-Amz-Target`) use
+  different route shapes, so a client selects a protocol by the route it calls.
+- **Identical routes need separate listeners.** awsJson1_0 and awsJson1_1 both
+  use `POST /` and differ only in `Content-Type`, which routing ignores.
+  Mapping both in one `MapSmithyService` call fails at startup.
+- **Different transports need separate listeners.** gRPC requires HTTP/2.
 
-The scoping mechanism is ASP.NET Core's `RequireHost`, applied by the app, not the
-generator:
+The application scopes protocols to a listener with ASP.NET Core's
+`RequireHost`:
 
 ```csharp
 app.MapGroup("")
@@ -475,29 +395,31 @@ app.MapGroup("")
     .MapWeatherService(WeatherServiceProtocols.Grpc);   // gRPC on its own HTTP/2 port
 ```
 
-## Streaming Type Naming
+## Extending
 
-The request and response body types are shared with the client and named for
-what actually streams; see
-[streaming.md](streaming.md#framing-and-the-streaming-transport).
+- **A new protocol** implements `IProtocol`. To serve requests it implements
+  `ForServerOperation` and `GetServerRouting`; generated code and host
+  adapters need no changes.
+- **A new HTTP host** converts its request and response types to and from
+  `SmithyHttpRequest` and `SmithyHttpServerResponse`, turns `ServerRouting`
+  into its endpoints, and dispatches through `IServerOperationBinding`.
+- **A non-HTTP adapter** works from the operation table directly. The MCP
+  adapter describes each operation as a tool through its JSON Schemas, decodes
+  tool arguments with its own JSON codec, calls `InvokeAsync`, and reports
+  modeled errors as tool errors.
 
 ## Non-goals
 
-- **Client-side validation of outbound input.** The client is not the authority
-  on the contract — the server is — so checking there would duplicate the check
-  that actually decides, cost latency on every call, and drift the moment a
-  model changes without a client rebuild. A generated client sends what it is
-  given and surfaces the server's `ValidationException` as a modeled error.
-- Protocol-specific types (gRPC status codes, trailer names, media types) do not
-  appear in the host adapter or generated server code.
-- Codegen does not own the dispatch algorithm or the routes; the runtime and the
-  protocols are their single owners.
-- Server interceptors and telemetry are out of scope for the initial runtime; the
-  runtime only provides the seam where they attach later, as on the client.
+- **Client-side validation.** The server decides; a client check would add
+  latency to every call and drift from the server whenever the model changes
+  without a client rebuild. A generated client surfaces the server's
+  `ValidationException` as a modeled error.
+- **Transports other than HTTP.** Other transports reuse the generated types
+  and codecs through their own integrations rather than the protocol stack.
 
 ## Related Docs
 
-- [client-architecture.md](client-architecture.md) — the client stack this mirrors
-- [streaming.md](streaming.md) — event-stream protocol interfaces and framing
-- [http-interfaces.md](http-interfaces.md) — transport abstractions
-- [codegen-architecture.md](codegen-architecture.md) — codegen pipeline
+- [client-architecture.md](client-architecture.md): the client stack this mirrors
+- [streaming.md](streaming.md): event-stream protocol interfaces and framing
+- [http-interfaces.md](http-interfaces.md): transport abstractions
+- [codegen-architecture.md](codegen-architecture.md): the codegen pipeline

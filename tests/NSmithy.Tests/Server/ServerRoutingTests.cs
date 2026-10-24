@@ -139,8 +139,10 @@ public sealed class ServerRoutingTests
         try
         {
             app.MapSmithyService(
-                Service,
-                [ServerOperation.Create(Ping, _ => (_, _) => Task.FromResult(SmithyUnit.Value))],
+                new ServiceOperationCatalog(
+                    Service,
+                    ServerOperation.Create(Ping, _ => (_, _) => Task.FromResult(SmithyUnit.Value))
+                ),
                 protocols
             );
             await app.StartAsync();

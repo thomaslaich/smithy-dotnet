@@ -15,6 +15,9 @@ namespace NSmithy.Server;
 /// </summary>
 public sealed class SmithyServerRuntime
 {
+    /// <summary>The runtime host adapters use when the application registers none.</summary>
+    public static SmithyServerRuntime Default { get; } = new();
+
     /// <summary>
     /// Dispatches an operation: deserialize, invoke, serialize — with the operation's modeled
     /// errors caught once, for every protocol. An unmodeled exception rethrows (surfaced as a 500
@@ -55,21 +58,15 @@ public sealed class SmithyServerRuntime
             return SerializeRequestFailure(protocol, exception);
         }
 
-        if (protocol.InputValidator is { } validator)
+        if (Validate(protocol.InputValidator, input) is { } invalid)
         {
-            var validationErrors = validator.GetErrors(input);
-            if (validationErrors.Count > 0)
-            {
-                return SerializeRequestFailure(
-                    protocol,
-                    ValidationException.FromErrors(validationErrors)
-                );
-            }
+            return SerializeRequestFailure(protocol, invalid);
         }
 
         try
         {
-            var output = await handler(input, cancellationToken).ConfigureAwait(false);
+            var output = await InvokeHandlerAsync(handler, input, cancellationToken)
+                .ConfigureAwait(false);
             return protocol.SerializeResponse(output, cancellationToken);
         }
         catch (Exception exception)
@@ -82,6 +79,49 @@ public sealed class SmithyServerRuntime
             throw;
         }
     }
+
+    /// <summary>
+    /// Validates an already-decoded input and calls the handler, for adapters that hold no wire
+    /// request, such as MCP after decoding tool arguments. A constraint violation throws
+    /// <see cref="ValidationException"/>; the handler's exceptions propagate.
+    /// </summary>
+    public async Task<TOutput> InvokeAsync<TInput, TOutput>(
+        ISmithyValidator<TInput>? validator,
+        TInput input,
+        Func<TInput, CancellationToken, Task<TOutput>> handler,
+        CancellationToken cancellationToken = default
+    )
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        if (Validate(validator, input) is { } invalid)
+        {
+            throw invalid;
+        }
+
+        return await InvokeHandlerAsync(handler, input, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static ValidationException? Validate<TInput>(
+        ISmithyValidator<TInput>? validator,
+        TInput input
+    )
+    {
+        if (validator is null)
+        {
+            return null;
+        }
+
+        var errors = validator.GetErrors(input);
+        return errors.Count > 0 ? ValidationException.FromErrors(errors) : null;
+    }
+
+    // Every handler call, from every adapter, passes through here: the step server interceptors
+    // and telemetry attach to.
+    private static Task<TOutput> InvokeHandlerAsync<TInput, TOutput>(
+        Func<TInput, CancellationToken, Task<TOutput>> handler,
+        TInput input,
+        CancellationToken cancellationToken
+    ) => handler(input, cancellationToken);
 
     /// <summary>
     /// Serialized through the same path as a modeled error: every operation implicitly carries

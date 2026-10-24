@@ -59,13 +59,15 @@ await builder.Build().RunAsync();
 
 `AddWeatherServiceHandler` also registers the generated service definition.
 That definition resolves each operation through its per-operation handler
-interface, so MCP does not require an aggregate handler. For separately
-implemented operation handlers, register the service definition explicitly:
+interface, so MCP does not require an aggregate handler. Each tool call resolves
+its handler from the call's services, so handlers can have any lifetime. For
+separately implemented operation handlers, register the service definition
+explicitly:
 
 ```csharp
 builder.Services.AddWeatherService();
-builder.Services.AddSingleton<IGetCityHandler, GetCityHandler>();
-builder.Services.AddSingleton<IGetForecastHandler, GetForecastHandler>();
+builder.Services.AddScoped<IGetCityHandler, GetCityHandler>();
+builder.Services.AddScoped<IGetForecastHandler, GetForecastHandler>();
 // Register the remaining operation handlers exposed by the service.
 ```
 

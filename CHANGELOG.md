@@ -27,6 +27,14 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   parameter binding.
 - Mapped services use a default `SmithyServerRuntime` when the application registers none,
   so registering operation handlers individually no longer requires `AddSmithyServer()`.
+- Generated servers have one operation table, the `ServiceOperationCatalog` of their
+  `{Service}Definition`, which HTTP routing and MCP both use. MCP tool calls now resolve
+  their handler from the call's services, so scoped handlers work with MCP, and run through
+  `SmithyServerRuntime` like HTTP requests.
+- **BREAKING:** `IServerOperation` replaces `IServiceOperation`, and `ServerOperation.Create`
+  replaces `ServiceOperation.Create`: it takes a function that resolves the handler from a
+  request's services. `IServiceDefinition.Operations` replaces `CreateOperationCatalog`, and
+  `MapSmithyService` takes the catalog.
 - **BREAKING:** `IServerOperationProtocol` has a required `StreamsRequestBody` member.
   Custom server protocols must say whether the request body streams.
 

@@ -152,17 +152,41 @@ public sealed class SmithyMcpToolsTests
     }
 
     [Fact]
+    public async Task ResolvesTheHandlerFromEachCallsServices()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<ILookupWeatherHandler, InstanceReportingHandler>();
+        using var provider = services.BuildServiceProvider();
+        var tool = Assert.Single(SmithyMcpTools.Create(new FixturesServiceDefinition().Operations));
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["place_name"] = JsonSerializer.SerializeToElement("Zurich"),
+        };
+
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var a = await InvokeAsync(tool, arguments, first.ServiceProvider);
+        var b = await InvokeAsync(tool, arguments, second.ServiceProvider);
+
+        Assert.NotEqual(
+            a.StructuredContent!.Value.GetProperty("summary").GetString(),
+            b.StructuredContent!.Value.GetProperty("summary").GetString()
+        );
+    }
+
+    [Fact]
     public void OmitsStreamingOperations()
     {
-        var operation = ServiceOperation.Create(
+        var operation = ServerOperation.Create(
             Schemas.Operation(
                 ShapeId.Parse("nsmithy.tests.mcp#WatchWeather"),
                 Schemas.EventStream(Schemas.String),
                 LookupWeatherOutputSchema.Schema,
                 isStreaming: true
             ),
-            static (IAsyncEnumerable<string> _, CancellationToken _) =>
-                Task.FromResult(new LookupWeatherOutput("unused"))
+            static _ =>
+                static (IAsyncEnumerable<string> _, CancellationToken _) =>
+                    Task.FromResult(new LookupWeatherOutput("unused"))
         );
         var catalog = new ServiceOperationCatalog(FixturesSchema.Schema, operation);
 
@@ -172,10 +196,11 @@ public sealed class SmithyMcpToolsTests
     [Fact]
     public void RequiresJsonSchemaMetadataForHandBuiltOperations()
     {
-        var operation = ServiceOperation.Create(
+        var operation = ServerOperation.Create(
             LookupWeatherSchema.Schema,
-            static (LookupWeatherInput _, CancellationToken _) =>
-                Task.FromResult(new LookupWeatherOutput("unused"))
+            static _ =>
+                static (LookupWeatherInput _, CancellationToken _) =>
+                    Task.FromResult(new LookupWeatherOutput("unused"))
         );
         var catalog = new ServiceOperationCatalog(FixturesSchema.Schema, operation);
 
@@ -251,19 +276,29 @@ public sealed class SmithyMcpToolsTests
         Assert.Contains("FixturesServiceDefinition", exception.Message, StringComparison.Ordinal);
     }
 
-    private static ServiceOperationCatalog Catalog(
+    // The services tool calls resolve their handler from, set by Catalog.
+    private IServiceProvider? callServices;
+
+    private ServiceOperationCatalog Catalog(
         Func<LookupWeatherInput, CancellationToken, Task<LookupWeatherOutput>> handler
     )
     {
         var services = new ServiceCollection();
         services.AddSingleton<ILookupWeatherHandler>(new LookupHandler(handler));
-        using var provider = services.BuildServiceProvider();
-        return new FixturesServiceDefinition().CreateOperationCatalog(provider);
+        callServices = services.BuildServiceProvider();
+        return new FixturesServiceDefinition().Operations;
     }
+
+    private Task<CallToolResult> InvokeAsync(
+        McpServerTool tool,
+        IDictionary<string, JsonElement>? arguments,
+        CancellationToken cancellationToken = default
+    ) => InvokeAsync(tool, arguments, callServices, cancellationToken);
 
     private static async Task<CallToolResult> InvokeAsync(
         McpServerTool tool,
         IDictionary<string, JsonElement>? arguments,
+        IServiceProvider? services,
         CancellationToken cancellationToken = default
     )
     {
@@ -275,8 +310,22 @@ public sealed class SmithyMcpToolsTests
             server,
             new JsonRpcRequest { Id = new RequestId(1), Method = RequestMethods.ToolsCall },
             new CallToolRequestParams { Name = tool.ProtocolTool.Name, Arguments = arguments }
-        );
+        )
+        {
+            Services = services,
+        };
         return await tool.InvokeAsync(context, cancellationToken);
+    }
+
+    // Reports its own instance, so two calls show whether they shared a handler.
+    private sealed class InstanceReportingHandler : ILookupWeatherHandler
+    {
+        private readonly Guid instance = Guid.NewGuid();
+
+        public Task<LookupWeatherOutput> LookupWeatherAsync(
+            LookupWeatherInput input,
+            CancellationToken cancellationToken = default
+        ) => Task.FromResult(new LookupWeatherOutput(instance.ToString()));
     }
 
     private sealed class LookupHandler(
