@@ -113,7 +113,7 @@ public final class ClientGenerator implements Runnable {
    */
   static Optional<PaginationInfo> paginationInfo(
       GenerationContext context, ServiceShape service, OperationShape op) {
-    if (isEventStreamOperation(context.model(), op)) {
+    if (ShapeSupport.isEventStreamOperation(context.model(), op)) {
       return Optional.empty();
     }
     return PaginatedIndex.of(context.model()).getPaginationInfo(service, op);
@@ -951,23 +951,11 @@ public final class ClientGenerator implements Runnable {
     return docs;
   }
 
-  public static boolean isEventStreamOperation(Model model, OperationShape op) {
-    return isInputStreaming(model, op) || isOutputStreaming(model, op);
-  }
-
   private boolean canBindOperation(OperationShape op) {
-    if (!isEventStreamOperation(context.model(), op)) {
+    if (!ShapeSupport.isEventStreamOperation(context.model(), op)) {
       return true;
     }
     return ProtocolSupport.protocols(context, service).stream()
         .anyMatch(CSharpProtocol::eventStreams);
-  }
-
-  private static boolean isInputStreaming(Model model, OperationShape op) {
-    return ShapeSupport.isEventStreamShape(model, op.getInputShape());
-  }
-
-  private static boolean isOutputStreaming(Model model, OperationShape op) {
-    return ShapeSupport.isEventStreamShape(model, op.getOutputShape());
   }
 }

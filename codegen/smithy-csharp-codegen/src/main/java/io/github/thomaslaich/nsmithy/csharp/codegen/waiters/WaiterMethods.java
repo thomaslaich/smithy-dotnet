@@ -6,7 +6,7 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.waiters;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.generators.ClientGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -25,7 +25,7 @@ public final class WaiterMethods {
 
   /** The waiters of {@code op}, by name. Event-stream operations have none. */
   public static Map<String, Waiter> waiters(GenerationContext context, OperationShape op) {
-    if (ClientGenerator.isEventStreamOperation(context.model(), op)) {
+    if (ShapeSupport.isEventStreamOperation(context.model(), op)) {
       return Map.of();
     }
     return op.getTrait(WaitableTrait.class)

@@ -12,6 +12,7 @@ import software.amazon.smithy.codegen.core.Symbol;
 import software.amazon.smithy.codegen.core.SymbolProvider;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.MemberShape;
+import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.ShapeType;
@@ -393,6 +394,12 @@ public final class ShapeSupport {
 
   public static boolean isEventStreamShape(Model model, ShapeId shapeId) {
     return isStreamingShape(model, shapeId) && !isStreamingBlobShape(model, shapeId);
+  }
+
+  /** Whether {@code op}'s input or output holds an event stream. */
+  public static boolean isEventStreamOperation(Model model, OperationShape op) {
+    return isEventStreamShape(model, op.getInputShape())
+        || isEventStreamShape(model, op.getOutputShape());
   }
 
   /** "Foo" -> "FooAsync". Convenience for generated method names. */
