@@ -5,7 +5,8 @@ How the NSmithy Java plugin generates C# files from Smithy models.
 ## Overview
 
 NSmithy generates C# files from Smithy models using a Java Smithy plugin
-(`smithy-csharp-codegen`). The plugin runs inside `smithy build` via the Smithy
+(`smithy-csharp-codegen`), with AWS support in a separate integration
+(`smithy-csharp-aws-codegen`). The plugin runs inside `smithy build` via the Smithy
 CLI, which means it has direct access to Smithy's fully assembled and validated
 semantic model. MSBuild invokes `smithy build` before C# compilation and
 registers the generated files with the .NET toolchain.
@@ -128,13 +129,20 @@ package can add the dependency for its users through a `SmithyContractsBuildFile
 fragment, but nothing requires one.
 
 Integrations get Smithy's hooks (`preprocessModel`, `decorateSymbolProvider`,
-`interceptors`, `customize`) and three of the C# generator's own:
+`interceptors`, `customize`) and the C# generator's own. Three of those shape
+what a service generates:
 
 | Hook | Use | The generator still emits |
 | --- | --- | --- |
 | `protocols()` | A request/response protocol: a new wire format or HTTP binding | Client, server, DI registration, endpoint resolution, shapes |
 | `serviceGenerator(context, service)` | A service that does not fit request/response, such as messaging | Shapes, schemas, and operations |
 | `additionalShapes(model, settings, service)` | Shapes the service does not reach through its operations, such as events it publishes | Everything, plus these shapes and their closures |
+
+The endpoint rules hooks are described in [endpoint-rules.md](endpoint-rules.md).
+Generators also expose code sections to the `interceptors` hook:
+`ClientConfigDefaultsSection` is the body of the parameterless
+`{Service}ClientConfig` constructor, where an integration sets a client's
+defaults.
 
 The hooks and the types they receive are `@SmithyUnstableApi`, so an
 integration is built against the generator version it runs with.
@@ -183,14 +191,16 @@ The built-in protocols, in order:
 | --- | --- | --- | --- |
 | `smithy.protocols#rpcv2Cbor` | `RpcV2Cbor` | yes | yes |
 | `smithy.protocols#rpcv2Json` | `RpcV2Json` | yes | yes |
-| `aws.protocols#restXml` | `RestXml` | no | no |
-| `aws.protocols#awsQuery` | `AwsQuery` | no | no |
-| `aws.protocols#ec2Query` | `Ec2Query` | no | no |
-| `aws.protocols#awsJson1_1` | `AwsJson1_1` | no | no |
-| `aws.protocols#awsJson1_0` | `AwsJson1_0` | no | no |
 | `alloy#simpleRestJson` | `SimpleRestJson` | yes | yes |
 | `aws.protocols#restJson1` | `RestJson1` | yes | yes |
 | `alloy.proto#grpc` | `Grpc` | yes | yes |
+
+The AWS integration registers the AWS protocols, in this order, all client-only
+and without event streams: `aws.protocols#restXml` (`RestXml`),
+`aws.protocols#awsQuery` (`AwsQuery`), `aws.protocols#ec2Query` (`Ec2Query`),
+`aws.protocols#awsJson1_1` (`AwsJson1_1`), and `aws.protocols#awsJson1_0`
+(`AwsJson1_0`). `aws.protocols#restJson1` is built in, since services outside
+AWS use it.
 
 Two registrations for the same trait, or two protocols of one service with the
 same `name`, fail code generation. A service whose traits match no registered

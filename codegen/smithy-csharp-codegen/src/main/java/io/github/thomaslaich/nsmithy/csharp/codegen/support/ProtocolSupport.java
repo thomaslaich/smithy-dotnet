@@ -34,16 +34,6 @@ public final class ProtocolSupport {
           new CSharpProtocol(
               TraitIds.RPC_V2_JSON, "RpcV2Json", RuntimeTypes.RPC_V2_JSON_PROTOCOL, true, true),
           new CSharpProtocol(
-              TraitIds.REST_XML, "RestXml", RuntimeTypes.REST_XML_PROTOCOL, false, false),
-          new CSharpProtocol(
-              TraitIds.AWS_QUERY, "AwsQuery", RuntimeTypes.AWS_QUERY_PROTOCOL, false, false),
-          new CSharpProtocol(
-              TraitIds.EC2_QUERY, "Ec2Query", RuntimeTypes.EC2_QUERY_PROTOCOL, false, false),
-          new CSharpProtocol(
-              TraitIds.AWS_JSON_1_1, "AwsJson1_1", RuntimeTypes.AWS_JSON11_PROTOCOL, false, false),
-          new CSharpProtocol(
-              TraitIds.AWS_JSON_1_0, "AwsJson1_0", RuntimeTypes.AWS_JSON10_PROTOCOL, false, false),
-          new CSharpProtocol(
               TraitIds.SIMPLE_REST_JSON,
               "SimpleRestJson",
               RuntimeTypes.SIMPLE_REST_JSON_PROTOCOL,

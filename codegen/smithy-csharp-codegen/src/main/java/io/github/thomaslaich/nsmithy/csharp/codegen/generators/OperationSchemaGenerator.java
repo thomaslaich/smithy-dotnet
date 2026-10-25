@@ -3,7 +3,6 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
@@ -96,18 +95,6 @@ public final class OperationSchemaGenerator implements Runnable {
   }
 
   private static int httpErrorCode(StructureShape error) {
-    var awsQueryError = error.findTrait(TraitIds.AWS_QUERY_ERROR);
-    if (awsQueryError.isPresent()) {
-      return awsQueryError
-          .get()
-          .toNode()
-          .expectObjectNode()
-          .getMember("httpResponseCode")
-          .orElseThrow()
-          .expectNumberNode()
-          .getValue()
-          .intValue();
-    }
     return error
         .getTrait(HttpErrorTrait.class)
         .map(HttpErrorTrait::getCode)

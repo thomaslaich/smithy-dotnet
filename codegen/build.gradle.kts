@@ -88,9 +88,9 @@ subprojects {
 // ============================================================================
 // Bundled Maven repo for offline codegen (consumed by NSmithy.MSBuild).
 //
-// Assembles the codegen toolchain (smithy-csharp-codegen + smithy-proto-codegen)
-// and the first-party Smithy trait packages our protocols need, plus their full
-// runtime closure (JARs *and* POMs), into a Maven-layout directory. NSmithy.MSBuild
+// Assembles the codegen toolchain (smithy-csharp-codegen, smithy-csharp-aws-codegen,
+// smithy-proto-codegen) and the first-party Smithy trait packages our protocols need,
+// plus their full runtime closure (JARs *and* POMs), into a Maven-layout directory. NSmithy.MSBuild
 // points the Smithy CLI at it via SMITHY_MAVEN_REPOS, so `smithy build` resolves the
 // codegen plugin and model traits from local files — Smithy's own offline mechanism,
 // which (unlike a bare classpath) loads the build plugin correctly.
@@ -108,6 +108,7 @@ dependencies {
     val smithyVer = property("smithyVersion") as String
     val smithyAiTraitsVer = property("smithyAiTraitsVersion") as String
     codegenBundle("io.github.thomaslaich.nsmithy:smithy-csharp-codegen:${project.version}")
+    codegenBundle("io.github.thomaslaich.nsmithy:smithy-csharp-aws-codegen:${project.version}")
     codegenBundle("io.github.thomaslaich.nsmithy:smithy-proto-codegen:${project.version}")
     codegenBundle("software.amazon.smithy.java:smithy-ai-traits:$smithyAiTraitsVer")
     codegenBundle("software.amazon.smithy:smithy-aws-traits:$smithyVer")
@@ -120,7 +121,11 @@ dependencies {
 tasks.register("bundleMavenRepo") {
     // Resolve our plugins from ~/.m2 at the current version, so the bundle never
     // depends on a Maven Central publish having propagated.
-    dependsOn(":smithy-csharp-codegen:publishToMavenLocal", ":smithy-proto-codegen:publishToMavenLocal")
+    dependsOn(
+        ":smithy-csharp-codegen:publishToMavenLocal",
+        ":smithy-csharp-aws-codegen:publishToMavenLocal",
+        ":smithy-proto-codegen:publishToMavenLocal",
+    )
     val conf = codegenBundle
     val outDir = layout.buildDirectory.dir("maven-bundle")
     inputs.files(conf)

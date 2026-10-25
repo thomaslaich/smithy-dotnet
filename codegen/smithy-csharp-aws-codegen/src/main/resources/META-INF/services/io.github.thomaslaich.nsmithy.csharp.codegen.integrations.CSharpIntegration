@@ -1,0 +1,3 @@
+io.github.thomaslaich.nsmithy.csharp.aws.codegen.AwsProtocolsIntegration
+io.github.thomaslaich.nsmithy.csharp.aws.codegen.AwsEndpointsIntegration
+io.github.thomaslaich.nsmithy.csharp.aws.codegen.GlacierIntegration

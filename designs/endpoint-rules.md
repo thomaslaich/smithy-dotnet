@@ -374,8 +374,8 @@ standard functions compile to C# operators and need no runtime support.
 `NSmithy.Aws.AwsEndpointFunctions` implements `aws.partition`,
 `aws.parseArn`, and `aws.isVirtualHostableS3Bucket`. Partition data is a
 generated C# table built from the `partitions.json` of `smithy-aws-endpoints`
-at the Smithy version NSmithy builds against. The codegen build's
-`generateAwsPartitions` task writes it, and its tests fail while the checked-in
+at the Smithy version NSmithy builds against. The `smithy-csharp-aws-codegen`
+build's `generateAwsPartitions` task writes it, and its tests fail while the checked-in
 table is stale. `aws.partition` matches a region exactly, then by each
 partition's region pattern, and falls back to the `aws` partition.
 
@@ -414,8 +414,10 @@ SigV4's standard rules otherwise.
 ## Code generation structure
 
 Endpoint generation lives in `smithy-csharp-codegen`, which depends on
-`smithy-rules-engine` and `smithy-aws-endpoints`; both are part of the bundled
-codegen repository used by `NSmithy.MSBuild`.
+`smithy-rules-engine`. The AWS integration lives in `smithy-csharp-aws-codegen`,
+which depends on `smithy-aws-endpoints`. All of them are part of the bundled
+codegen repository used by `NSmithy.MSBuild`, which puts both NSmithy artifacts
+on the codegen classpath.
 
 The generator core handles the BDD walk, the standard library, parameter
 binding, and result construction. Extension points contributed through
@@ -431,8 +433,8 @@ binding, and result construction. Extension points contributed through
   and supply the properties of results without `authSchemes`.
 
 The AWS integration provides the SigV4 and SigV4a mappings, the SigV4 signing
-scope, and the S3 bucket path transform. It is registered through the Java service loader like any
-third-party integration.
+scope, and the S3 bucket path transform. It is registered through the Java
+service loader like any third-party integration.
 
 A function or built-in no provider handles fails code generation, naming the
 service and the id.

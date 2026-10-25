@@ -10,6 +10,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointRules;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpProtocol;
+import io.github.thomaslaich.nsmithy.csharp.codegen.sections.ClientConfigDefaultsSection;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
@@ -37,8 +38,6 @@ import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
 public final class ClientGenerator implements Runnable {
-
-  private static final ShapeId GLACIER_SERVICE = ShapeId.from("com.amazonaws.glacier#Glacier");
 
   private final GenerationContext context;
   private final CSharpWriter writer;
@@ -615,9 +614,7 @@ public final class ClientGenerator implements Runnable {
   }
 
   private void writeConfigDefaults(CSharpWriter writer) {
-    if (service.getId().equals(GLACIER_SERVICE)) {
-      writer.write("Interceptors.Add(new $T());", RuntimeTypes.GLACIER_INTERCEPTOR);
-    }
+    writer.injectSection(new ClientConfigDefaultsSection(service));
   }
 
   /**

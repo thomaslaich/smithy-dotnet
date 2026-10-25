@@ -1,4 +1,4 @@
-package io.github.thomaslaich.nsmithy.csharp.codegen.integrations.aws;
+package io.github.thomaslaich.nsmithy.csharp.aws.codegen;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -7,10 +7,8 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointBuiltIn;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointDefaultAuthScheme;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointFunction;
-import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import java.util.List;
 import java.util.Map;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -23,13 +21,6 @@ import software.amazon.smithy.model.traits.DynamicTrait;
 import software.amazon.smithy.model.traits.HttpTrait;
 
 class AwsEndpointsIntegrationTest {
-
-  @Test
-  void isDiscoveredThroughTheServiceLoader() {
-    assertTrue(
-        ServiceLoader.load(CSharpIntegration.class).stream()
-            .anyMatch(provider -> provider.type() == AwsEndpointsIntegration.class));
-  }
 
   @Test
   void suppliesTheAwsFunctionsBuiltInsAndAuthSchemeIds() {

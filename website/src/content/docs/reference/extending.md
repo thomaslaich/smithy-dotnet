@@ -7,7 +7,7 @@ NSmithy is extensible without changes to NSmithy itself. A package of your own
 can add a wire protocol, replace the generated client and server for a
 service that is not request/response, such as one that sends messages over a
 broker, or add functions and built-ins to endpoint rules. NSmithy's built-in
-protocols and its AWS endpoint support use the same API.
+protocols use the same API, and its AWS support is an integration of its own.
 
 Such an extension is a **C# integration**: a JAR on the codegen classpath that
 NSmithy's generator discovers, usually paired with a NuGet package holding the
@@ -37,7 +37,10 @@ Smithy's hooks (`preprocessModel`, `decorateSymbolProvider`, `interceptors`,
 | `additionalShapes(model, settings, service)` | Shapes the service does not reach through its operations, such as events it publishes | Everything, plus these shapes and the shapes they reference |
 
 Four more extend generated endpoint resolvers; see
-[Extending endpoint rules](#extending-endpoint-rules).
+[Extending endpoint rules](#extending-endpoint-rules). Through Smithy's
+`interceptors` hook, an integration can also append to code sections of the
+generated code, such as `ClientConfigDefaultsSection` for a client
+configuration's defaults.
 
 Integrations run in the order of their `name()`, `runBefore()`, and
 `runAfter()`.
@@ -197,9 +200,9 @@ built-ins need an integration that maps them to C#:
 | `endpointAuthSchemeIds()` | Auth scheme names used in endpoint `authSchemes`, mapped to the auth trait shape ids client auth schemes are keyed by |
 | `endpointDefaultAuthSchemes(service)` | Auth scheme properties for endpoints whose rules set no `authSchemes`, such as a SigV4 signing name |
 
-NSmithy's AWS support is the built-in `AwsEndpointsIntegration`, which registers
-`aws.partition`, `AWS::Region`, and the other AWS functions and built-ins
-through these hooks.
+NSmithy's AWS support, `smithy-csharp-aws-codegen`, registers `aws.partition`,
+`AWS::Region`, and the other AWS functions and built-ins through these hooks,
+along with the AWS protocols.
 
 ```java title="AcmeEndpointsIntegration.java"
 @Override

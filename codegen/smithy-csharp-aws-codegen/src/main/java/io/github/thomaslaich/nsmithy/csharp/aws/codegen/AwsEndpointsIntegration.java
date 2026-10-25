@@ -1,12 +1,11 @@
 /*
  * The AWS endpoint rules functions, built-ins, and auth scheme names.
  */
-package io.github.thomaslaich.nsmithy.csharp.codegen.integrations.aws;
+package io.github.thomaslaich.nsmithy.csharp.aws.codegen;
 
 import static io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointValueType.field;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
-import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointBuiltIn;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointDefaultAuthScheme;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointFunction;
@@ -86,7 +85,7 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
 
   private static final EndpointValueType PARTITION =
       EndpointValueType.record(
-          RuntimeTypes.AWS_PARTITION,
+          AwsRuntimeTypes.AWS_PARTITION,
           Map.of(
               "name", field("Name", EndpointValueType.STRING),
               "dnsSuffix", field("DnsSuffix", EndpointValueType.STRING),
@@ -97,7 +96,7 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
 
   private static final EndpointValueType ARN =
       EndpointValueType.record(
-          RuntimeTypes.AWS_ARN,
+          AwsRuntimeTypes.AWS_ARN,
           Map.of(
               "partition", field("Partition", EndpointValueType.STRING),
               "service", field("Service", EndpointValueType.STRING),
@@ -114,12 +113,12 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
   public List<EndpointFunction> endpointFunctions() {
     return List.of(
         new EndpointFunction(
-            "aws.partition", RuntimeTypes.AWS_ENDPOINT_FUNCTIONS, "Partition", PARTITION, false),
+            "aws.partition", AwsRuntimeTypes.AWS_ENDPOINT_FUNCTIONS, "Partition", PARTITION, false),
         new EndpointFunction(
-            "aws.parseArn", RuntimeTypes.AWS_ENDPOINT_FUNCTIONS, "ParseArn", ARN, true),
+            "aws.parseArn", AwsRuntimeTypes.AWS_ENDPOINT_FUNCTIONS, "ParseArn", ARN, true),
         new EndpointFunction(
             "aws.isVirtualHostableS3Bucket",
-            RuntimeTypes.AWS_ENDPOINT_FUNCTIONS,
+            AwsRuntimeTypes.AWS_ENDPOINT_FUNCTIONS,
             "IsVirtualHostableS3Bucket",
             EndpointValueType.BOOLEAN,
             false));

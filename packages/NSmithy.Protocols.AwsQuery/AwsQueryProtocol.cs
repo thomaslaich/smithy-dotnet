@@ -178,27 +178,33 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
             where TError : Exception
         {
             var codec = CodecFactory.FromSchema(error.Schema);
-            var code = QueryErrorCode(error.Schema) ?? error.Id.Name;
+            var queryError = QueryErrorTrait(error.Schema);
             return new QueryError(
                 error.Id,
-                code,
-                error.HttpStatusCode,
+                QueryErrorCode(queryError) ?? error.Id.Name,
+                QueryErrorStatusCode(queryError) ?? error.HttpStatusCode,
                 element => codec.Deserialize(ElementBytes(element))
             );
         }
 
-        private static string? QueryErrorCode(Schema schema)
-        {
-            if (schema.GetTrait(AwsQueryError)?.Value is not { Kind: DocumentKind.Object } value)
-            {
-                return null;
-            }
-            return
-                value.AsObject().TryGetValue("code", out var code)
-                && code.Kind == DocumentKind.String
+        private static IReadOnlyDictionary<string, Document>? QueryErrorTrait(Schema schema) =>
+            schema.GetTrait(AwsQueryError)?.Value is { Kind: DocumentKind.Object } value
+                ? value.AsObject()
+                : null;
+
+        private static string? QueryErrorCode(IReadOnlyDictionary<string, Document>? trait) =>
+            trait is not null
+            && trait.TryGetValue("code", out var code)
+            && code.Kind == DocumentKind.String
                 ? code.AsString()
                 : null;
-        }
+
+        private static int? QueryErrorStatusCode(IReadOnlyDictionary<string, Document>? trait) =>
+            trait is not null
+            && trait.TryGetValue("httpResponseCode", out var status)
+            && status.Kind == DocumentKind.Number
+                ? (int)status.AsNumber()
+                : null;
     }
 
     private sealed record QueryError(
