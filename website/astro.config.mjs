@@ -157,6 +157,7 @@ export default defineConfig({
 						{ label: 'Smithy CLI', slug: 'reference/smithy-cli' },
 						{ label: 'Maven dependencies', slug: 'reference/maven-dependencies' },
 						{ label: 'Distributing contracts', slug: 'guides/distributing-contracts' },
+						{ label: 'Extending NSmithy', slug: 'reference/extending' },
 						{ label: 'Known limitations', slug: 'reference/known-limitations' },
 						{ label: 'Changelog', slug: 'reference/changelog' },
 						{ label: 'Design docs', slug: 'reference/design' },

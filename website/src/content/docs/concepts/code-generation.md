@@ -67,7 +67,8 @@ knows nothing about. A custom `@owner("catalog-team")` trait reaches the
 running application without a generator change. Retaining a trait does not
 implement it: a new constraint, protocol, or client feature needs a component
 that interprets it, and traits that change the C# representation, such as
-`@required`, need generator support.
+`@required`, need generator support. Both can come from a package outside
+NSmithy; see [Extending NSmithy](/smithy-dotnet/reference/extending/).
 
 Schemas leave out traits used only at build time, such as `@documentation`,
 `@examples`, `@tags`, `@deprecated`, and test traits.

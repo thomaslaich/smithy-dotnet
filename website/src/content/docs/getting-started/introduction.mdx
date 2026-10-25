@@ -145,7 +145,9 @@ Protocols are traits too. An organization that sends commands over a message
 broker such as RabbitMQ can define a
 [protocol trait](https://smithy.io/2.0/spec/protocol-traits.html#protocoldefinition-trait)
 for that transport and write a generator for it. The service model stays the
-same; only the protocol trait and the generator are new.
+same; only the protocol trait and the generator are new. In NSmithy, that
+generator is a package of its own that plugs into code generation, with no
+change to NSmithy; see [Extending NSmithy](/smithy-dotnet/reference/extending/).
 
 ### Mature
 
@@ -176,8 +178,9 @@ Clients and servers can live in separate projects and share the model as a
 NSmithy supports REST/JSON, RPC v2 CBOR, and gRPC clients and servers, plus AWS JSON,
 AWS Query, EC2 Query, and REST XML clients. See
 [Protocol Status](/smithy-dotnet/protocols/status/) for supported surfaces and
-maturity. Clients generated in another language need support for the same model
-and wire protocol.
+maturity. Other protocols can be added from a separate package; see
+[Extending NSmithy](/smithy-dotnet/reference/extending/). Clients generated in
+another language need support for the same model and wire protocol.
 
 Follow the [Quick Start](/smithy-dotnet/getting-started/quick-start/) to build and
 call your first service.
