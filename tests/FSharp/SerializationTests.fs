@@ -45,7 +45,9 @@ let private dish =
       ToStringValue = Some "s" }
 
 let private input =
-    { Dish = dish
+    { Table = "7"
+      ClientToken = None
+      Dish = dish
       Notes = Some [ Some "n"; None ]
       Seating = Seating.BAR
       Guests = 4
@@ -104,7 +106,9 @@ let ``Reading fills in modeled defaults`` () =
     let codec = JsonCodecFactory.Default.FromSchema(OrderInputSchema.Schema)
 
     let read =
-        codec.Deserialize(Encoding.UTF8.GetBytes """{"dish":{"name":"x","ingredients":["cheese","secret"]}}""")
+        codec.Deserialize(
+            Encoding.UTF8.GetBytes """{"table":"7","dish":{"name":"x","ingredients":["cheese","secret"]}}"""
+        )
 
     Assert.Equal(Seating.TABLE, read.Seating)
     Assert.Equal(2, read.Guests)
@@ -119,5 +123,6 @@ let ``Reading a structure without a required member fails`` () =
     let codec = JsonCodecFactory.Default.FromSchema(OrderInputSchema.Schema)
 
     Assert.Throws<MissingRequiredMemberException>(fun () ->
-        codec.Deserialize(Encoding.UTF8.GetBytes """{"dish":{"name":"x"}}""") |> ignore)
+        codec.Deserialize(Encoding.UTF8.GetBytes """{"table":"7","dish":{"name":"x"}}""")
+        |> ignore)
     |> ignore

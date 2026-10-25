@@ -1,4 +1,4 @@
-// F# codegen module: generates F# types and schemas for Smithy models. Registered with
+// F# codegen module: generates F# types, schemas, and clients for Smithy models. Registered with
 // smithy-build as the `fsharp-codegen` SmithyBuildPlugin; shares its language-neutral core with
 // smithy-csharp-codegen through smithy-dotnet-codegen-core.
 
@@ -41,7 +41,7 @@ mavenPublishing {
 
     pom {
         name.set("NSmithy F# Codegen Plugin")
-        description.set("Smithy build plugin that generates F# types and schemas for Smithy models. Consumed by NSmithy.MSBuild via the Smithy CLI.")
+        description.set("Smithy build plugin that generates F# types, schemas, and clients for Smithy models. Consumed by NSmithy.MSBuild via the Smithy CLI.")
         url.set("https://github.com/thomaslaich/smithy-dotnet")
         inceptionYear.set("2026")
         licenses {

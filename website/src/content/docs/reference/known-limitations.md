@@ -21,6 +21,11 @@ ASP.NET Core hosts the supported wire protocols. The separate
 [MCP adapter](/smithy-dotnet/servers/mcp/) exposes modeled tools and prompts;
 it does not infer MCP resources from Smithy resources.
 
+## F#
+
+F# projects generate model types and clients. Servers and the other C#-only
+features are listed in [F#](/smithy-dotnet/guides/fsharp/).
+
 ## Validation
 
 The server does not validate individual stream events or enforce `@length` on

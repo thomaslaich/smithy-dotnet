@@ -129,17 +129,6 @@ public final class RuntimeTypes {
       type("NSmithy.Server.AspNetCore.SmithyAspNetCoreHost");
   public static final Symbol SMITHY_SERVER_RUNTIME = type("NSmithy.Server.SmithyServerRuntime");
 
-  // NSmithy protocols
-  public static final Symbol GRPC_PROTOCOL = type("NSmithy.Protocols.Grpc.GrpcProtocol");
-  public static final Symbol REST_JSON1_PROTOCOL =
-      type("NSmithy.Protocols.RestJson.RestJson1Protocol");
-  public static final Symbol RPC_V2_CBOR_PROTOCOL =
-      type("NSmithy.Protocols.RpcV2Cbor.RpcV2CborProtocol");
-  public static final Symbol RPC_V2_JSON_PROTOCOL =
-      type("NSmithy.Protocols.RpcV2Json.RpcV2JsonProtocol");
-  public static final Symbol SIMPLE_REST_JSON_PROTOCOL =
-      type("NSmithy.Protocols.RestJson.SimpleRestJsonProtocol");
-
   // ASP.NET Core and dependency injection
   public static final Symbol FROM_SERVICES_ATTRIBUTE =
       type("Microsoft.AspNetCore.Mvc.FromServicesAttribute");
