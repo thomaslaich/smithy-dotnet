@@ -49,7 +49,7 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
    */
   @Override
   public Model preprocessModel(Model model, CSharpSettings settings) {
-    if (!settings.service().equals(S3)
+    if (!settings.service().filter(S3::equals).isPresent()
         || model
             .getShape(S3)
             .filter(
