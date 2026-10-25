@@ -94,13 +94,9 @@ export default defineConfig({
 					items: [
 						{ label: 'Introduction', slug: 'getting-started/introduction' },
 						{ label: 'Quick start', slug: 'getting-started/quick-start' },
-					],
-				},
-				{
-					label: 'Concepts',
-					items: [
 						{ label: 'Modeling contracts', slug: 'concepts/modeling' },
 						{ label: 'Code generation', slug: 'concepts/code-generation' },
+						{ label: 'How NSmithy works', slug: 'concepts/how-it-works' },
 						{ label: 'Smithy and TypeSpec', slug: 'concepts/smithy-and-typespec' },
 					],
 				},
@@ -160,6 +156,7 @@ export default defineConfig({
 						{ label: 'Maven dependencies', slug: 'reference/maven-dependencies' },
 						{ label: 'Distributing contracts', slug: 'guides/distributing-contracts' },
 						{ label: 'Extending NSmithy', slug: 'reference/extending' },
+						{ label: 'Generated code', slug: 'reference/generated-code' },
 						{ label: 'Known limitations', slug: 'reference/known-limitations' },
 						{ label: 'Changelog', slug: 'reference/changelog' },
 						{ label: 'Design docs', slug: 'reference/design' },
