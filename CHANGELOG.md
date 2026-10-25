@@ -11,6 +11,18 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.14.0]
+
+This release generates endpoint resolvers from Smithy endpoint rules and waiters from
+`@waitable`, moves server routing into the runtime, and lets integrations in separate
+packages add protocols, service generators, and shapes. NSmithy's own AWS support is now
+such an integration, `smithy-csharp-aws-codegen`. When upgrading, implement
+`StreamsRequestBody` on custom server protocols, replace `IServiceOperation` and
+`ServiceOperation.Create` with `IServerOperation` and `ServerOperation.Create`, read
+`SmithyEndpoint.Headers` as lists and `AuthSchemes` as records in custom endpoint resolvers,
+expect an unmodeled `SmithyClientException` for error codes an operation does not model, and
+add `smithy-csharp-aws-codegen` to builds that run the Smithy CLI directly for AWS services.
+
 ### Added
 
 - Generated waiters for `@waitable` operations: a `WaitUntil{Waiter}Async` method per waiter on
@@ -46,6 +58,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   example with only an `EndpointResolver`.
 - `ClientConfigDefaultsSection`, a code section integrations can append to through Smithy's
   `interceptors` hook to set a generated client configuration's defaults.
+- The `closure` code generation setting generates the types of a `shapeClosures` metadata
+  entry, with or without a service, and `CSharpIntegration.additionalShapes` lets an
+  integration add shapes that a service's operations do not reach, such as published events.
 - An `Add{Service}Client` overload whose configuration callback receives the
   `IServiceProvider`, to resolve dependencies such as endpoint resolvers.
 
@@ -54,7 +69,7 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **BREAKING:** An error response whose error code names none of the operation's modeled
   errors is now an unmodeled `SmithyClientException`, instead of the modeled error its HTTP
   status matched.
-- AWS support moved out of `smithy-csharp-codegen` into the
+- **BREAKING:** AWS support moved out of `smithy-csharp-codegen` into the
   `smithy-csharp-aws-codegen` integration: the AWS JSON, AWS Query, EC2 Query, and restXml
   protocols, the AWS endpoint rule functions and built-ins, and the Glacier client
   customization. `NSmithy.MSBuild` adds it to every build. Builds that run the Smithy CLI
@@ -643,7 +658,8 @@ without a separate codegen step or a Java installation.
   `NSmithy.Protocols.RestXml`, `NSmithy.Protocols.RpcV2Cbor`.
 - **Tooling:** `NSmithy.Templates`, `dotnet-nsmithy`.
 
-[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/thomaslaich/smithy-dotnet/compare/v0.10.1...v0.11.0
