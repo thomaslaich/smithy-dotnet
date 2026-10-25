@@ -42,3 +42,9 @@ can map several protocols to the same handler.
 See [Hosting and Multiple Protocols](/smithy-dotnet/servers/hosting/) for route
 mapping and [Client Configuration](/smithy-dotnet/guides/client-configuration/)
 for protocol selection.
+
+## Other protocols
+
+A protocol that is not listed here can be added from a separate package, without
+changes to NSmithy. Generated clients and servers then use it like a built-in
+one. See [Extending NSmithy](/smithy-dotnet/reference/extending/).
