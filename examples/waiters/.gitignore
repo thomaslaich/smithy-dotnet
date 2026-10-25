@@ -1,0 +1,6 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# generated build artifacts
+wwwroot/

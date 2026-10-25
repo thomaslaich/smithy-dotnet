@@ -100,6 +100,14 @@ public final class RuntimeTypes {
       type("NSmithy.Http.SmithyHttpVersionPreference");
   public static final Symbol SMITHY_OPERATION_BINDING =
       type("NSmithy.Client.SmithyOperationBinding");
+  public static final Symbol SMITHY_CLIENT_EXCEPTION = type("NSmithy.Client.SmithyClientException");
+  public static final Symbol SMITHY_JMESPATH = type("NSmithy.Client.SmithyJmespath");
+  public static final Symbol SMITHY_WAITER = type("NSmithy.Client.SmithyWaiter");
+  public static final Symbol SMITHY_WAITER_ACCEPTOR = type("NSmithy.Client.SmithyWaiterAcceptor");
+  public static final Symbol SMITHY_WAITER_OPTIONS = type("NSmithy.Client.SmithyWaiterOptions");
+  public static final Symbol SMITHY_WAITER_RESULT = type("NSmithy.Client.SmithyWaiterResult");
+  public static final Symbol SMITHY_WAITER_STATE = type("NSmithy.Client.SmithyWaiterState");
+  public static final Symbol TIME_SPAN = type("System.TimeSpan");
 
   // NSmithy servers
   public static final Symbol I_SERVICE_DEFINITION = type("NSmithy.Server.IServiceDefinition");

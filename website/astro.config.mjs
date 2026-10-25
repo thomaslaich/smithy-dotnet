@@ -112,6 +112,7 @@ export default defineConfig({
 						{ label: 'Authentication', slug: 'guides/client-configuration/authentication' },
 						{ label: 'Retry', slug: 'guides/client-configuration/retry' },
 						{ label: 'Pagination', slug: 'guides/client-configuration/pagination' },
+						{ label: 'Waiters', slug: 'guides/client-configuration/waiters' },
 						{ label: 'Interceptors', slug: 'guides/client-configuration/interceptors' },
 						{ label: 'Observability', slug: 'guides/client-configuration/observability' },
 						{ label: 'Transport', slug: 'guides/client-configuration/transport' },

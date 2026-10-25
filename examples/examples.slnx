@@ -9,6 +9,11 @@
     <Project Path="restjson1/streaming/server/NSmithy.Examples.RestJson1Streaming.Server.csproj" />
     <Project Path="restjson1/streaming/client/NSmithy.Examples.RestJson1Streaming.Client.csproj" />
   </Folder>
+  <Folder Name="/waiters/">
+    <Project Path="waiters/contracts/NSmithy.Examples.Waiters.Contracts.csproj" />
+    <Project Path="waiters/server/NSmithy.Examples.Waiters.Server.csproj" />
+    <Project Path="waiters/client/NSmithy.Examples.Waiters.Client.csproj" />
+  </Folder>
   <Folder Name="/simplerestjson/">
     <Project Path="simplerestjson/contracts/NSmithy.Examples.SimpleRestJson.Contracts.csproj" />
     <Project Path="simplerestjson/server/NSmithy.Examples.SimpleRestJson.Server.csproj" />

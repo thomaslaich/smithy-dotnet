@@ -156,12 +156,26 @@ public abstract class QueryProtocol(bool ec2Query) : IProtocol
                     || string.Equals(candidate.Id.Name, code, StringComparison.Ordinal)
                     || string.Equals(candidate.Id.ToString(), code, StringComparison.Ordinal)
                 );
+            if (code is not null && error is null)
+            {
+                // The response names an error the operation does not model.
+                return ValueTask.FromResult<Exception?>(null);
+            }
             error ??= errors.FirstOrDefault(candidate =>
                 candidate.HttpStatusCode == (int)response.StatusCode
             );
             error ??= errors[0];
             return ValueTask.FromResult<Exception?>(error.Deserialize(errorElement));
         }
+
+        public string? ReadErrorCode(SmithyHttpClientResponse response) =>
+            OperationProtocolErrors.ReadErrorName(
+                response,
+                r =>
+                    r.Content.Length == 0
+                        ? null
+                        : Child(ExtractErrorElement(r.Content, kind), "Code")?.Value
+            );
 
         private static QueryError[] CompileErrors(IReadOnlyList<IOperationErrorSchema> schemas) =>
             schemas.Select(error => error.Accept(QueryErrorCompiler.Instance)).ToArray();

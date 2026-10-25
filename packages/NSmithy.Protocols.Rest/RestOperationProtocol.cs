@@ -328,6 +328,9 @@ public sealed class RestOperationProtocol<TInput, TOutput, TInputBuilder, TOutpu
             )
         );
 
+    public string? ReadErrorCode(SmithyHttpClientResponse response) =>
+        OperationProtocolErrors.ReadErrorName(response, errorDiscriminator);
+
     // One shape serves every malformed-request kind, differing only in shape id and status code, so
     // a single compiled writer covers them all. Compiled eagerly with the rest of the operation:
     // this is the validation-failure path, which for many services is ordinary traffic.

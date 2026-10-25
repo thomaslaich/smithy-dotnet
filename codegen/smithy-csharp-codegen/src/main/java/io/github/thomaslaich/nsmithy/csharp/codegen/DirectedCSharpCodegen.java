@@ -18,6 +18,8 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.generators.UnionGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpServiceGenerator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
+import io.github.thomaslaich.nsmithy.csharp.codegen.waiters.WaiterGenerator;
+import io.github.thomaslaich.nsmithy.csharp.codegen.waiters.WaiterMethods;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpDelegator;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
@@ -123,6 +125,13 @@ final class DirectedCSharpCodegen
                       dir + "/" + typeName + ".Endpoints.Client.g.cs",
                       csNamespace,
                       writer -> new EndpointResolverGenerator(ctx, writer, rules).run()));
+      if (WaiterMethods.hasWaiters(ctx, directive.shape())) {
+        ctx.writerDelegator()
+            .useFileWriter(
+                dir + "/" + typeName + ".Waiters.Client.g.cs",
+                csNamespace,
+                writer -> new WaiterGenerator(ctx, writer, directive.shape()).run());
+      }
     }
 
     if (ctx.settings().generateServer()) {

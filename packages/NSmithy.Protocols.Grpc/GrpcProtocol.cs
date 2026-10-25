@@ -330,6 +330,9 @@ public sealed class GrpcProtocol : IProtocol
             CancellationToken cancellationToken = default
         ) => DeserializeModeledErrorAsync(HttpErrors, message);
 
+        public string? ReadErrorCode(SmithyHttpClientResponse message) =>
+            OperationProtocolErrors.ReadErrorName(message, ErrorDiscriminator);
+
         public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse message) =>
             serverErrors.TrySerialize(exception, out message);
     }

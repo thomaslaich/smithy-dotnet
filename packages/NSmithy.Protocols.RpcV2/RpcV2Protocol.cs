@@ -440,6 +440,12 @@ public abstract class RpcV2Protocol : IProtocol
                 )
             );
 
+        public string? ReadErrorCode(SmithyHttpClientResponse message) =>
+            OperationProtocolErrors.ReadErrorName(
+                message,
+                r => protocol.IsProtocolResponse(r) ? protocol.ReadErrorType(r.Content) : null
+            );
+
         public bool TrySerializeError(Exception exception, out SmithyHttpServerResponse message) =>
             serverErrors.TrySerialize(exception, out message);
     }

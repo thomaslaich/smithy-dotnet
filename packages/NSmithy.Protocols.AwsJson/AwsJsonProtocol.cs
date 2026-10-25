@@ -143,6 +143,9 @@ public abstract class AwsJsonProtocol(string contentType) : IProtocol
                 )
             );
 
+        public string? ReadErrorCode(SmithyHttpClientResponse response) =>
+            OperationProtocolErrors.ReadErrorName(response, DeserializeErrorType);
+
         private static TOutput CreateEmptyOutput(Schema<TOutput> schema) =>
             schema.Resolved is IStructSchema<TOutput> structSchema
                 ? structSchema.BuildEmpty()

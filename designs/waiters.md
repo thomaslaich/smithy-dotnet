@@ -129,7 +129,6 @@ A waiter has:
 | `documentation` | The method's XML documentation |
 | `acceptors` | Compiled to the waiter's acceptor table, in order |
 | `minDelay`, `maxDelay` | Default delays, 2 and 120 seconds unless modeled |
-| `deprecated` | `[Obsolete]` on the method |
 
 ## Generated API
 
@@ -238,19 +237,26 @@ waiters on a fake clock.
 ### Error codes
 
 `errorType` acceptors match by error name. A modeled error matches by its
-shape name or shape id. Waiters also name errors the operation does not model,
-such as EC2's `InvalidInstanceID.NotFound`, so an unmodeled error carries the
-wire error code its protocol read: `SmithyClientException.ErrorCode`. Each
-client protocol already reads that code to select a modeled error (`__type`,
-`X-Amzn-Errortype`, a query `Code` element); it passes it on when no modeled
-error matches.
+type. Waiters also name errors the operation does not model, such as EC2's
+`InvalidInstanceID.NotFound`, so an unmodeled error carries the wire error code
+its protocol read: `SmithyClientException.ErrorCode`, the error's name without
+a namespace or `:` suffix.
+
+Each client protocol reads that code to select a modeled error (`__type`,
+`X-Amzn-Errortype`, a query `Code` element) and reports it through
+`IClientOperationProtocol.ReadErrorCode`. A response whose code names no
+modeled error is unmodeled, whatever its status; the status selects a modeled
+error only for a response that carries no code.
 
 ## Expressions
 
 The generator parses each `path` with `smithy-jmespath` and renders it as a C#
-expression over the typed input and output, reusing the renderer behind
-`@operationContextParams`. The supported subset covers every waiter in the
-AWS models:
+expression over the typed input and output. Each value has a JMESPath type and
+a C# expression that may be null: strings are `string?`, booleans `bool?`,
+numbers `double?`, structures their generated type, lists `IEnumerable<T>?`,
+and maps their generated dictionary. Enums read as their value. JMESPath rules
+that are not plain C# operators live in the runtime's `SmithyJmespath`. The
+supported subset covers every waiter in the AWS models:
 
 | JMESPath | Generated C# |
 | --- | --- |
@@ -260,11 +266,11 @@ AWS models:
 | `.*` over a map | `Values` projection |
 | Multi-select list `[a, b]` | An array of the selected values |
 | `==`, `!=` | Value equality; enums compare by wire value |
-| `<`, `<=`, `>`, `>=` | Numeric comparison; null when either side is not a number |
-| `&&`, `\|\|`, `!` | JMESPath truthiness |
+| `<`, `<=`, `>`, `>=` | `SmithyJmespath.LessThan` and friends; null unless both sides are numbers |
+| `&&`, `\|\|`, `!` | `SmithyJmespath.And`, `Or`, and `IsTruthy`, with JMESPath truthiness |
 | Literals, raw strings | C# constants |
-| `length(x)` | String length, list count, or map count |
-| `contains(list, x)` | `Contains` |
+| `length(x)` | `SmithyJmespath.Length`: code points of a string, items of a list or map |
+| `contains(x, y)` | `SmithyJmespath.Contains` over a list or string |
 
 An expression follows JMESPath's null rules: a missing step yields null, and a
 projection skips null elements. `inputOutput` paths start at an object with
@@ -294,7 +300,8 @@ internal static class TablesWaiters
     [
         // output: Table.TableStatus stringEquals "ACTIVE"
         new(SmithyWaiterState.Success,
-            static (input, output, error) => output?.Table?.TableStatus?.Value == "ACTIVE"),
+            static (input, output, error) =>
+                error is null && ((((output)?.Table)?.TableStatus)?.Value) == "ACTIVE"),
         // errorType: ResourceNotFoundException
         new(SmithyWaiterState.Retry,
             static (input, output, error) => error is ResourceNotFoundException),
