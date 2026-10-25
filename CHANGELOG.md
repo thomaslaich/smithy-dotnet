@@ -31,7 +31,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   and runtime schemas with the new `fsharp-codegen` plugin (`smithy-fsharp-codegen`):
   records, discriminated unions for unions and enums, `option` for members that may be
   absent, F# `list` and `Map`, and exception classes for errors. The schemas work with
-  every NSmithy codec. Clients and servers are not generated for F# yet.
+  every NSmithy codec. Clients are generated too: `I{Service}Client` and `{Service}Client`
+  with `Task`-returning methods on the C# client runtime. Servers, paginators, waiters, and
+  endpoint-rule resolvers are not generated for F# yet.
 - Schema bases that own the generic reading and writing, for a language that cannot override
   those methods: `AccessorStructSchema` with a `StructMember` per member, `AccessorUnionSchema`
   with a `UnionCase` per case, `ElementListSchema`, `EntryMapSchema`, and `Schemas.Optional` for

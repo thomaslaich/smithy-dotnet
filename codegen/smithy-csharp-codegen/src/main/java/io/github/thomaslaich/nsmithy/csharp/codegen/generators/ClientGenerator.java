@@ -5,6 +5,7 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
+import io.github.thomaslaich.nsmithy.codegen.core.Protocols;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
@@ -86,7 +87,7 @@ public final class ClientGenerator implements Runnable {
   }
 
   static String httpVersionPreferenceLiteral(
-      CSharpWriter writer, Optional<ProtocolSupport.HttpVersionPreference> preference) {
+      CSharpWriter writer, Optional<Protocols.HttpVersionPreference> preference) {
     if (preference.isEmpty()) {
       return "null";
     }

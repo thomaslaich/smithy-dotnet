@@ -1,5 +1,6 @@
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
+import io.github.thomaslaich.nsmithy.codegen.core.SchemaSupport;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
@@ -11,8 +12,6 @@ import java.util.stream.Collectors;
 import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.shapes.StructureShape;
-import software.amazon.smithy.model.traits.ErrorTrait;
-import software.amazon.smithy.model.traits.HttpErrorTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 @SmithyInternalApi
@@ -87,22 +86,10 @@ public final class OperationSchemaGenerator implements Runnable {
                       + ", "
                       + SchemaGenerator.shapeSchemaAccessor(writer, context, error)
                       + ", "
-                      + httpErrorCode(error)
+                      + SchemaSupport.errorStatusCode(error)
                       + ")";
                 })
             .collect(Collectors.joining(", "))
         + "]";
-  }
-
-  private static int httpErrorCode(StructureShape error) {
-    return error
-        .getTrait(HttpErrorTrait.class)
-        .map(HttpErrorTrait::getCode)
-        .orElseGet(
-            () ->
-                error
-                    .getTrait(ErrorTrait.class)
-                    .map(trait -> trait.isClientError() ? 400 : 500)
-                    .orElse(500));
   }
 }

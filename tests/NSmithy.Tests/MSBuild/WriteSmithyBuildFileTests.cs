@@ -343,12 +343,14 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
             task.Plugin = "fsharp-codegen";
             task.Service = "example#Service";
             task.GenerateClient = false;
+            task.GenerateServer = false;
         });
 
         Assert.Empty(errors);
         var fsharp = Plugin(file, "source", "fsharp-codegen");
         Assert.Equal("example#Service", fsharp["service"]!.GetValue<string>());
-        Assert.Null(fsharp["generateClient"]);
+        Assert.False(fsharp["generateClient"]!.GetValue<bool>());
+        Assert.Null(fsharp["generateServer"]);
         Assert.Null(file["projections"]!["source"]!["plugins"]!["csharp-codegen"]);
         Assert.Equal(
             ["io.github.thomaslaich.nsmithy:smithy-fsharp-codegen:0.0.0-SNAPSHOT"],
