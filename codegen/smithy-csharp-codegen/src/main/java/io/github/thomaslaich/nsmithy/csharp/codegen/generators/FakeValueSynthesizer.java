@@ -9,10 +9,12 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
+import io.github.thomaslaich.nsmithy.codegen.core.Naming;
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.CSharpShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -296,7 +298,7 @@ final class FakeValueSynthesizer {
               "new "
                   + writer.typeName(RuntimeTypes.MEMORY_STREAM)
                   + "("
-                  + blobBytesExpr(valueNode, CSharpNaming.camel(member.getMemberName()))
+                  + blobBytesExpr(valueNode, Naming.camel(member.getMemberName()))
                   + ")";
         } else {
           expr = memberExpr(member, valueNode, stack);
@@ -321,7 +323,7 @@ final class FakeValueSynthesizer {
 
   private String memberExpr(MemberShape member, Node node, Set<ShapeId> stack) {
     Shape target = context.model().expectShape(member.getTarget());
-    return shapeExpr(target, node, stack, CSharpNaming.camel(member.getMemberName()), member);
+    return shapeExpr(target, node, stack, Naming.camel(member.getMemberName()), member);
   }
 
   private String shapeExpr(
@@ -341,7 +343,7 @@ final class FakeValueSynthesizer {
       case TIMESTAMP -> timestampExpr(node);
       case DOCUMENT ->
           node != null
-              ? ShapeSupport.documentLiteral(writer, node)
+              ? CSharpShapeSupport.documentLiteral(writer, node)
               : (writer.typeName(RuntimeTypes.DOCUMENT) + ".From(")
                   + CSharpNaming.formatString(hint)
                   + ")";
@@ -479,15 +481,14 @@ final class FakeValueSynthesizer {
     if (node != null && node.isArrayNode()) {
       for (Node element : node.expectArrayNode().getElements()) {
         String expr =
-            shapeExpr(union, element, stack, CSharpNaming.camel(member.getMemberName()), member);
+            shapeExpr(union, element, stack, Naming.camel(member.getMemberName()), member);
         if (expr != null) {
           events.add(expr);
         }
       }
     }
     if (events.isEmpty()) {
-      String expr =
-          shapeExpr(union, null, stack, CSharpNaming.camel(member.getMemberName()), member);
+      String expr = shapeExpr(union, null, stack, Naming.camel(member.getMemberName()), member);
       if (expr != null) {
         events.add(expr);
       }

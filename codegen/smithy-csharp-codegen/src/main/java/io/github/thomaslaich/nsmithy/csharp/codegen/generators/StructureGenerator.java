@@ -5,9 +5,10 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.CSharpShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -65,7 +66,7 @@ public final class StructureGenerator implements Runnable {
     StringBuilder sig = new StringBuilder("(");
     for (int i = 0; i < ctorMembers.size(); i++) {
       MemberShape member = ctorMembers.get(i);
-      sig.append(ShapeSupport.parameterTypeExpr(writer, context.model(), sp, member))
+      sig.append(CSharpShapeSupport.parameterTypeExpr(writer, context.model(), sp, member))
           .append(' ')
           .append(CSharpNaming.memberName(member));
       if (ShapeSupport.isOptionalParameter(member)) {

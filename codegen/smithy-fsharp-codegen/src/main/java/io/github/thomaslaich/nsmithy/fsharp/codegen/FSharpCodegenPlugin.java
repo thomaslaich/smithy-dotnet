@@ -1,0 +1,61 @@
+package io.github.thomaslaich.nsmithy.fsharp.codegen;
+
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeClosures;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.ServiceLoader;
+import java.util.TreeSet;
+import software.amazon.smithy.build.FileManifest;
+import software.amazon.smithy.build.PluginContext;
+import software.amazon.smithy.build.SmithyBuildPlugin;
+import software.amazon.smithy.codegen.core.directed.CodegenDirector;
+import software.amazon.smithy.model.Model;
+import software.amazon.smithy.model.shapes.ServiceShape;
+import software.amazon.smithy.utils.SmithyUnstableApi;
+
+/**
+ * Generates F# types and schemas: {@code Types.g.fs}, then {@code Schemas.g.fs}, which a project
+ * compiles in that order ahead of its own files.
+ */
+@SmithyUnstableApi
+public final class FSharpCodegenPlugin implements SmithyBuildPlugin {
+
+  @Override
+  public String getName() {
+    return "fsharp-codegen";
+  }
+
+  @Override
+  public void execute(PluginContext context) {
+    List<FSharpIntegration> integrations = new ArrayList<>();
+    ServiceLoader.load(FSharpIntegration.class, CodegenDirector.class.getClassLoader())
+        .forEach(integrations::add);
+    generate(
+        context.getModel(),
+        FSharpSettings.fromNode(context.getSettings()),
+        context.getFileManifest(),
+        integrations);
+  }
+
+  static void generate(
+      Model model,
+      FSharpSettings settings,
+      FileManifest manifest,
+      List<FSharpIntegration> integrations) {
+    CodegenDirector<FSharpWriter, FSharpIntegration, FSharpContext, FSharpSettings> runner =
+        new CodegenDirector<>();
+    runner.settings(settings);
+    runner.directedCodegen(new DirectedFSharpCodegen());
+    runner.fileManifest(manifest);
+    runner.model(model);
+    runner.integrationClass(FSharpIntegration.class);
+    runner.integrationFinder(() -> integrations);
+    runner.performDefaultCodegenTransforms();
+    runner.createDedicatedInputsAndOutputs();
+    Optional<ServiceShape> service =
+        settings.service().map(id -> model.expectShape(id, ServiceShape.class));
+    ShapeClosures.configure(runner, model, service, settings.closure(), new TreeSet<>());
+    runner.run();
+  }
+}

@@ -52,10 +52,10 @@ ways fails the build. When no Maven repository is listed, Maven Central is.
 | `SmithyGenerateClient` | Emit client types. Set to `false` in server-only projects; this sets `generateClient` to `false` and leaves generated client files out of compilation. Default: `true`. |
 | `SmithyBuildFile` | Path to the project's own Smithy build file, which NSmithy merges into the effective one. Optional. Default: `$(MSBuildProjectDirectory)/smithy-build.json`. |
 | `SmithyProjection` | Projection that receives the plugin settings from properties, and whose docs and OpenAPI output is copied to `wwwroot/`. A projection other than `source` must exist in `smithy-build.json`. Default: `source`. |
-| `SmithyPlugin` | Smithy build plugin name. Default: `csharp-codegen`. |
+| `SmithyPlugin` | Smithy build plugin name. Default: `csharp-codegen`, or `fsharp-codegen` in an F# project. |
 | `SmithyBuildOutputPath` | Root directory for all Smithy build output. Default: `$(IntermediateOutputPath)Smithy/`. |
 | `SmithyStampFile` | Incremental build stamp file. Smithy codegen is skipped when inputs have not changed since this file was last written. Default: `$(SmithyBuildOutputPath)NSmithy.Generated.stamp`. |
-| `SmithyEmitGeneratedFiles` | Show generated `.g.cs` files in IDE project views when `true`. Default: `false`. |
+| `SmithyEmitGeneratedFiles` | Show generated `.g.cs` or `.g.fs` files in IDE project views when `true`. Default: `false`. |
 
 ### csharp-codegen settings
 

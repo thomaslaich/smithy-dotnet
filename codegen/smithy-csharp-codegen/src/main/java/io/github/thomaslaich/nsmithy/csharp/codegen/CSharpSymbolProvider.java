@@ -6,8 +6,8 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.generators.SchemaGenerator;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
 import java.util.List;
 import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.codegen.core.Symbol;

@@ -5,10 +5,11 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.CSharpShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -124,7 +125,7 @@ public final class ErrorGenerator implements Runnable {
                     MemberShape member = ctor.get(i);
                     w.write(
                         "$L $L$L$L",
-                        ShapeSupport.parameterTypeExpr(w, model, sp, member),
+                        CSharpShapeSupport.parameterTypeExpr(w, model, sp, member),
                         CSharpNaming.parameterName(member.getMemberName()),
                         ShapeSupport.isOptionalParameter(member) ? " = null" : "",
                         i + 1 == ctor.size() ? "" : ",");
@@ -157,12 +158,12 @@ public final class ErrorGenerator implements Runnable {
       String defaultValue =
           ShapeSupport.isNullable(member)
               ? null
-              : ShapeSupport.defaultValueExpression(
+              : CSharpShapeSupport.defaultValueExpression(
                   writer, context.model(), context.symbolProvider(), member);
       if (defaultValue != null) {
         writer.write("$L = $L ?? $L;", property, parameter, defaultValue);
       } else if (!ShapeSupport.isNullable(member)
-          && ShapeSupport.isReferenceType(context.model(), member)) {
+          && CSharpShapeSupport.isReferenceType(context.model(), member)) {
         writer.write(
             "$L = $L ?? throw new $T(nameof($L));",
             property,
@@ -179,7 +180,7 @@ public final class ErrorGenerator implements Runnable {
     for (MemberShape m : ShapeSupport.sortedMembers(shape, excluded)) {
       String prop = CSharpNaming.memberName(m);
       boolean nullable = ShapeSupport.isNullable(m);
-      String type = ShapeSupport.memberTypeExpr(writer, model, sp, m, nullable);
+      String type = CSharpShapeSupport.memberTypeExpr(writer, model, sp, m, nullable);
       ShapeSupport.memberDocumentation(model, m)
           .ifPresent(doc -> writer.writeXmlDocs(doc, Map.of()));
       writer.write("public $L $L { get; }", type, prop);

@@ -34,6 +34,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/AotSmoke/NSmithy.AotSmoke.csproj" />
     <Project Path="tests/Fakes/Fakes.Tests.csproj" />
+    <Project Path="tests/FSharp/FSharp.Tests.fsproj" />
     <Project Path="tests/NSmithy.Tests/NSmithy.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Conformance/">
