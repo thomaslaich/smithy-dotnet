@@ -1,10 +1,38 @@
 ---
 title: Generated code
-description: How NSmithy names generated C# when a Smithy name collides, and how to generate shapes that no service operation reaches.
+description: What each kind of Smithy shape becomes in C#, how colliding names are renamed, and how to generate shapes that no service operation reaches.
 ---
 
-For what each kind of shape becomes, see
-[Code generation](/smithy-dotnet/concepts/code-generation/).
+## Shapes
+
+For the Weather model in [Modeling contracts](/smithy-dotnet/concepts/modeling/),
+the generator emits:
+
+| Model | Generated C# |
+| --- | --- |
+| Structures, including inline operation inputs and outputs | Records such as `GetCityInput`, `GetCityOutput`, and `CityCoordinates` |
+| `@error` structures | Exceptions such as `NoSuchResource`, thrown by handlers and caught by clients |
+| Lists and maps | `IReadOnlyList<T>` and `IReadOnlyDictionary<string, T>` where they are used, with no class for the list or map shape itself |
+| The service, when `SmithyGenerateServer` is on | A handler interface `IWeatherHandler` composed of one interface per operation, plus `AddWeatherHandler` and `MapWeather` extensions for ASP.NET Core |
+| The service, when `SmithyGenerateClient` is on | A `WeatherClient` with a typed async method per operation |
+| Every shape | A schema class |
+
+Operation `@examples` become `<example>` code samples in the XML documentation
+of the generated client methods. Each sample constructs the input, calls the
+method on a `client` variable, and shows the expected output, or for an error
+example a typed `try`/`catch` with the expected exception properties.
+
+## Schemas
+
+Each shape's schema is a class in the child `Schemas` namespace:
+`Example.Weather.Person` has `Example.Weather.Schemas.PersonSchema`. Import that
+namespace when you hand a schema to a codec.
+
+A schema carries the shape's members and its trait values, with typed accessors
+for each trait. It leaves out traits used only at build time, such as
+`@documentation`, `@examples`, `@tags`, `@deprecated`, and test traits.
+[How NSmithy works](/smithy-dotnet/concepts/how-it-works/#schemas) explains
+what reads them.
 
 ## Name collisions
 
