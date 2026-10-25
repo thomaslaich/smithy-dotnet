@@ -9,10 +9,12 @@
     <!--
       NSmithy.MSBuild carries the smithy codegen MSBuild targets. We keep it out of the
       compile/runtime closure (it produces no DLL) but leave "build" un-private so its
-      buildTransitive targets flow to consumers of NSmithy.Client.
+      buildTransitive targets flow to consumers of NSmithy.Client. The tasks run in MSBuild's
+      CLR process, so native publish settings must not propagate into that build tool.
     -->
     <ProjectReference
       Include="../NSmithy.MSBuild/NSmithy.MSBuild.csproj"
+      GlobalPropertiesToRemove="PublishAot;PublishTrimmed"
       PrivateAssets="compile;runtime;contentfiles;analyzers;native"
     />
 

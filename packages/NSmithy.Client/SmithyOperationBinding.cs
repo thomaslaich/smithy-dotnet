@@ -1,4 +1,5 @@
 using NSmithy.Core;
+using NSmithy.Core.Serde;
 using NSmithy.Http;
 
 namespace NSmithy.Client;
@@ -17,13 +18,22 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
         ShapeId operationId,
         IClientOperationProtocol<TInput, TOutput> protocol,
         IReadOnlyList<string>? authSchemeIds = null,
-        Func<TInput, string>? hostPrefix = null
+        Func<TInput, string>? hostPrefix = null,
+        OperationSchema<TInput, TOutput>? operation = null
     )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceId.Name, nameof(serviceId));
         ArgumentException.ThrowIfNullOrWhiteSpace(operationId.Name, nameof(operationId));
         ArgumentNullException.ThrowIfNull(protocol);
 
+        if (operation is not null && operation.Id != operationId)
+        {
+            throw new ArgumentException(
+                "Operation schema must match the binding's operation ID.",
+                nameof(operation)
+            );
+        }
+        Operation = operation;
         ServiceId = serviceId;
         OperationId = operationId;
         Protocol = protocol;
@@ -32,6 +42,9 @@ public sealed class SmithyOperationBinding<TInput, TOutput>
         ActivityName = $"{serviceId.Name}.{operationId.Name}";
         ServiceIdTag = serviceId.ToString();
     }
+
+    /// <summary>The modeled operation, when available. Generated clients always supply it.</summary>
+    public OperationSchema<TInput, TOutput>? Operation { get; }
 
     public ShapeId ServiceId { get; }
 

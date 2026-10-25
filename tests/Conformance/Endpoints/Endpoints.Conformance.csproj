@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace></RootNamespace>
+    <IsPackable>false</IsPackable>
+    <SmithyBuildFile>smithy-build.json</SmithyBuildFile>
+    <SmithyProjection>endpointbindingservice</SmithyProjection>
+    <SmithyBuildOutputPath>$(BaseIntermediateOutputPath)Smithy/</SmithyBuildOutputPath>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../packages/NSmithy.Aws/NSmithy.Aws.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Client/NSmithy.Client.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Core/NSmithy.Core.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Http/NSmithy.Http.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.MSBuild/NSmithy.MSBuild.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Protocols.AwsJson/NSmithy.Protocols.AwsJson.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Protocols.AwsQuery/NSmithy.Protocols.AwsQuery.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Protocols.RestJson/NSmithy.Protocols.RestJson.csproj" />
+    <ProjectReference Include="../../../packages/NSmithy.Protocols.RestXml/NSmithy.Protocols.RestXml.csproj" />
+  </ItemGroup>
+
+  <Import Project="../../../packages/NSmithy.MSBuild/Targets/NSmithy.MSBuild.targets" />
+
+  <Target
+    Name="_CopySmithyModelJsonToOutput"
+    DependsOnTargets="GenerateSmithyCode"
+    BeforeTargets="AssignTargetPaths;CopyFilesToOutputDirectory"
+  >
+    <ItemGroup>
+      <Content
+        Include="$(SmithyBuildOutputPath)source/model/model.json"
+        Link="smithy-model.json"
+        CopyToOutputDirectory="PreserveNewest"
+        Visible="false"
+      />
+    </ItemGroup>
+  </Target>
+</Project>

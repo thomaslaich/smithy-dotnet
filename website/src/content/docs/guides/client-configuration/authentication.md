@@ -66,31 +66,47 @@ For most applications that call AWS from .NET, use the official AWS SDK for
 .NET. NSmithy's AWS integration support is intended for focused integrations,
 emulators, and protocol validation, not as a complete SDK replacement.
 
-NSmithy now provides standard regional endpoint resolution, environment and
-shared-profile credentials (including cached IAM Identity Center sessions),
-IMDSv2 role credentials, presigning, and golden coverage against AWS's published
-S3 signing vectors. Modeled per-service endpoint rule sets, assume-role and web
-identity providers, ECS container credentials, SigV4a, and the full production
-hardening of the official AWS SDK are still outside this preview.
+NSmithy now provides modeled endpoint rules, environment and shared-profile
+credentials (including cached IAM Identity Center sessions), IMDSv2 role
+credentials, presigning, and golden coverage against AWS's published S3 signing
+vectors. Assume-role and web identity providers, ECS container credentials,
+SigV4a, and the full production hardening of the official AWS SDK are still
+outside this preview.
 :::
 
-Add `NSmithy.Aws` and configure `AwsSigV4AuthScheme`:
+Add `NSmithy.Aws` and configure `AwsSigV4AuthScheme`. For a service with
+modeled [endpoint rules](/smithy-dotnet/guides/client-configuration/endpoint-rules/),
+the resolved endpoint names the signing name and region, so the scheme needs
+only credentials:
 
 ```csharp
 using NSmithy.Aws;
 
-var region = Environment.GetEnvironmentVariable("AWS_REGION") ?? "us-east-1";
-var endpoint = new AwsRegionalEndpointResolver("lambda", region);
 var credentials = new DefaultAwsCredentialsProvider();
 
-using var lambda = new LambdaClient(
-    new HttpClient(),
-    new LambdaClientConfig
-    {
-        EndpointResolver = endpoint,
-        AuthSchemes = { new AwsSigV4AuthScheme("lambda", region, credentials) },
-    });
+using var lambda = new LambdaClient(new LambdaClientConfig
+{
+    Region = Environment.GetEnvironmentVariable("AWS_REGION") ?? "us-east-1",
+    AuthSchemes = { new AwsSigV4AuthScheme(credentials) },
+});
 ```
+
+For a model without endpoint rules, pass the signing name and region, and
+resolve the endpoint with `AwsRegionalEndpointResolver`:
+
+```csharp
+var region = "us-east-1";
+
+using var lambda = new LambdaClient(new LambdaClientConfig
+{
+    EndpointResolver = new AwsRegionalEndpointResolver("lambda", region),
+    AuthSchemes = { new AwsSigV4AuthScheme("lambda", region, credentials) },
+});
+```
+
+The signer double-encodes and normalizes the canonical request path as SigV4
+specifies. For S3, it signs the path as sent, as S3's endpoint rules and the
+`s3` signing name require.
 
 Available credential providers:
 

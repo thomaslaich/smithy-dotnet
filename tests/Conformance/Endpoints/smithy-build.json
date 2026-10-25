@@ -1,0 +1,404 @@
+{
+  "version": "1.0",
+  "sources": [
+    "model"
+  ],
+  "maven": {
+    "repositories": [
+      {
+        "url": "https://repo.maven.apache.org/maven2/"
+      }
+    ],
+    "dependencies": [
+      "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT",
+      "software.amazon.smithy:smithy-rules-engine-tests:1.73.0",
+      "software.amazon.api.models:dynamodb:1.0.15",
+      "software.amazon.api.models:lambda:1.0.32",
+      "software.amazon.api.models:s3:1.0.25",
+      "software.amazon.api.models:s3-control:1.0.12",
+      "software.amazon.api.models:sts:1.0.8"
+    ]
+  },
+  "projections": {
+    "amazons3": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "com.amazonaws.s3#AmazonS3"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "com.amazonaws.s3#AmazonS3",
+          "baseNamespace": "AmazonS3",
+          "generateServer": false
+        }
+      }
+    },
+    "awsgirapiservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "com.amazonaws.lambda#AWSGirApiService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "com.amazonaws.lambda#AWSGirApiService",
+          "baseNamespace": "AWSGirApiService",
+          "generateServer": false
+        }
+      }
+    },
+    "awss3controlservicev20180820": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "com.amazonaws.s3control#AWSS3ControlServiceV20180820"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "com.amazonaws.s3control#AWSS3ControlServiceV20180820",
+          "baseNamespace": "AWSS3ControlServiceV20180820",
+          "generateServer": false
+        }
+      }
+    },
+    "awssecuritytokenservicev20110615": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "com.amazonaws.sts#AWSSecurityTokenServiceV20110615"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "com.amazonaws.sts#AWSSecurityTokenServiceV20110615",
+          "baseNamespace": "AWSSecurityTokenServiceV20110615",
+          "generateServer": false
+        }
+      }
+    },
+    "coalescetest": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#CoalesceTest"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#CoalesceTest",
+          "baseNamespace": "CoalesceTest",
+          "generateServer": false
+        }
+      }
+    },
+    "defaultvaluesservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#DefaultValuesService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#DefaultValuesService",
+          "baseNamespace": "DefaultValuesService",
+          "generateServer": false
+        }
+      }
+    },
+    "dynamodb_20120810": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "com.amazonaws.dynamodb#DynamoDB_20120810"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "com.amazonaws.dynamodb#DynamoDB_20120810",
+          "baseNamespace": "DynamoDB_20120810",
+          "generateServer": false
+        }
+      }
+    },
+    "endpointbindingservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#EndpointBindingService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#EndpointBindingService",
+          "baseNamespace": "EndpointBindingService",
+          "generateServer": false
+        }
+      }
+    },
+    "endpointstringarrayservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#EndpointStringArrayService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#EndpointStringArrayService",
+          "baseNamespace": "EndpointStringArrayService",
+          "generateServer": false
+        }
+      }
+    },
+    "getattrservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#GetAttrService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#GetAttrService",
+          "baseNamespace": "GetAttrService",
+          "generateServer": false
+        }
+      }
+    },
+    "headersservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#HeadersService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#HeadersService",
+          "baseNamespace": "HeadersService",
+          "generateServer": false
+        }
+      }
+    },
+    "isvirtualhostables3bucketservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "aws.functions.tests#IsVirtualHostableS3BucketService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "aws.functions.tests#IsVirtualHostableS3BucketService",
+          "baseNamespace": "IsVirtualHostableS3BucketService",
+          "generateServer": false
+        }
+      }
+    },
+    "itetest": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#IteTest"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#IteTest",
+          "baseNamespace": "IteTest",
+          "generateServer": false
+        }
+      }
+    },
+    "parsearnservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "aws.functions.tests#ParseArnService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "aws.functions.tests#ParseArnService",
+          "baseNamespace": "ParseArnService",
+          "generateServer": false
+        }
+      }
+    },
+    "parseurlservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#ParseUrlService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#ParseUrlService",
+          "baseNamespace": "ParseUrlService",
+          "generateServer": false
+        }
+      }
+    },
+    "partitionservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "aws.functions.tests#PartitionService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "aws.functions.tests#PartitionService",
+          "baseNamespace": "PartitionService",
+          "generateServer": false
+        }
+      }
+    },
+    "splittest": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#SplitTest"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#SplitTest",
+          "baseNamespace": "SplitTest",
+          "generateServer": false
+        }
+      }
+    },
+    "substringservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#SubstringService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#SubstringService",
+          "baseNamespace": "SubstringService",
+          "generateServer": false
+        }
+      }
+    },
+    "urlencodeservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#UrlEncodeService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#UrlEncodeService",
+          "baseNamespace": "UrlEncodeService",
+          "generateServer": false
+        }
+      }
+    },
+    "validhostlabelservice": {
+      "transforms": [
+        {
+          "name": "includeServices",
+          "args": {
+            "services": [
+              "smithy.rules.tests#ValidHostLabelService"
+            ]
+          }
+        }
+      ],
+      "plugins": {
+        "csharp-codegen": {
+          "service": "smithy.rules.tests#ValidHostLabelService",
+          "baseNamespace": "ValidHostLabelService",
+          "generateServer": false
+        }
+      }
+    }
+  }
+}

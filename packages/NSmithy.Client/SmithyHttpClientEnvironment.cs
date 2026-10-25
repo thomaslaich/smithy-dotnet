@@ -32,13 +32,19 @@ public sealed class SmithyHttpClientEnvironment : IDisposable
     /// HttpClient retains its version settings; modeled preferences apply only to an owned client
     /// using the default protocol. The caller's configuration is never modified.
     /// </summary>
+    /// <param name="modeledEndpointResolver">
+    /// Creates the service's generated endpoint resolver from the configured endpoint (null when
+    /// none is set). Used unless <c>Config.EndpointResolver</c> is set; a service without endpoint
+    /// rules passes null and requires either a configured endpoint or a custom resolver.
+    /// </param>
     public static SmithyHttpClientEnvironment Create(
         ServiceSchema service,
         SmithyClientConfig config,
         Func<IProtocol> defaultProtocol,
         IReadOnlyList<string> modeledAuthSchemes,
         SmithyHttpVersionPreference? modeledHttpVersion = null,
-        HttpClient? httpClient = null
+        HttpClient? httpClient = null,
+        Func<Uri?, IEndpointResolver>? modeledEndpointResolver = null
     )
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -46,13 +52,15 @@ public sealed class SmithyHttpClientEnvironment : IDisposable
         ArgumentNullException.ThrowIfNull(defaultProtocol);
         ArgumentNullException.ThrowIfNull(modeledAuthSchemes);
 
-        var endpoint =
-            config.Endpoint
-            ?? httpClient?.BaseAddress
-            ?? throw new ArgumentException(
-                "Set Config.Endpoint or httpClient.BaseAddress.",
+        var endpoint = config.Endpoint ?? httpClient?.BaseAddress;
+        var endpointResolver = config.EndpointResolver ?? modeledEndpointResolver?.Invoke(endpoint);
+        if (endpoint is null && endpointResolver is null)
+        {
+            throw new ArgumentException(
+                "Set Config.Endpoint, httpClient.BaseAddress, or Config.EndpointResolver, or provide modeled endpoint rules.",
                 nameof(config)
             );
+        }
         var protocol = config.Protocol ?? defaultProtocol();
         var serviceProtocol = protocol.ForService(service);
         var authSchemes = SmithyAuthSchemeResolver.ResolveSchemes(
@@ -76,7 +84,7 @@ public sealed class SmithyHttpClientEnvironment : IDisposable
                 config.RetryStrategy,
                 endpoint,
                 config.OperationTimeout,
-                config.EndpointResolver,
+                endpointResolver,
                 authSchemes,
                 config.DisableHostPrefixInjection,
                 config.UserAgent

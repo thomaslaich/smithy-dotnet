@@ -97,7 +97,7 @@ public sealed class SmithyAuthSchemeResolverTests
 
         var selected = SmithyAuthSchemeResolver.SelectScheme(
             ["scheme#a", "scheme#b"],
-            endpointAuthSchemes: ["scheme#b"],
+            endpointAuthSchemes: [new SmithyEndpointAuthScheme("scheme#b")],
             interceptors
         );
 
@@ -112,7 +112,7 @@ public sealed class SmithyAuthSchemeResolverTests
         Assert.Null(
             SmithyAuthSchemeResolver.SelectScheme(
                 ["scheme#a"],
-                endpointAuthSchemes: ["scheme#other"],
+                endpointAuthSchemes: [new SmithyEndpointAuthScheme("scheme#other")],
                 interceptors
             )
         );
