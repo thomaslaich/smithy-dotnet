@@ -124,7 +124,8 @@ using var local = new InventoryClient(new InventoryClientConfig
 ```
 
 Rules that need functions or built-ins beyond the standard library need a
-`CSharpIntegration` that maps them to C#, as `NSmithy.Aws` does for AWS.
+`CSharpIntegration` that maps them to C#, as `NSmithy.Aws` does for AWS. See
+[Extending endpoint rules](/smithy-dotnet/reference/extending/#extending-endpoint-rules).
 
 ## Custom resolvers
 

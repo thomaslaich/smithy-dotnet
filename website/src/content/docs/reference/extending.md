@@ -1,12 +1,13 @@
 ---
 title: Extending NSmithy
-description: Add protocols and service generators to NSmithy code generation through C# integrations, and the runtime types they ship with.
+description: Add protocols, service generators, and endpoint rule functions to NSmithy code generation through C# integrations, and the runtime types they ship with.
 ---
 
 NSmithy is extensible without changes to NSmithy itself. A package of your own
-can add a wire protocol, or replace the generated client and server for a
+can add a wire protocol, replace the generated client and server for a
 service that is not request/response, such as one that sends messages over a
-broker. NSmithy's built-in protocols register through the same API.
+broker, or add functions and built-ins to endpoint rules. NSmithy's built-in
+protocols and its AWS endpoint support use the same API.
 
 Such an extension is a **C# integration**: a JAR on the codegen classpath that
 NSmithy's generator discovers, usually paired with a NuGet package holding the
@@ -27,12 +28,15 @@ integration against the NSmithy version it runs with.
 
 `CSharpIntegration` extends Smithy's `SmithyIntegration`, so an integration gets
 Smithy's hooks (`preprocessModel`, `decorateSymbolProvider`, `interceptors`,
-`customize`) and two of NSmithy's own:
+`customize`) and NSmithy's own. Two of them shape a service's generated surface:
 
 | Hook | Use | NSmithy still generates |
 | --- | --- | --- |
 | `protocols()` | A request/response protocol over HTTP | Client, server, DI registration, endpoint resolution, shapes |
 | `serviceGenerator(context, service)` | A service that is not request/response, such as messaging | Shapes, schemas, and operations |
+
+Four more extend generated endpoint resolvers; see
+[Extending endpoint rules](#extending-endpoint-rules).
 
 Integrations run in the order of their `name()`, `runBefore()`, and
 `runAfter()`.
@@ -158,6 +162,54 @@ public Optional<CSharpServiceGenerator> serviceGenerator(
 `context.writerDelegator()`. Return a generator only for services your
 integration owns: two integrations that both return one for a service fail code
 generation.
+
+## Extending endpoint rules
+
+Generated [endpoint resolvers](/smithy-dotnet/guides/client-configuration/endpoint-rules/)
+implement the rules engine's standard library. Rules that use other functions or
+built-ins need an integration that maps them to C#:
+
+| Hook | Supplies |
+| --- | --- |
+| `endpointFunctions()` | A rules function id and the static C# method generated resolvers call for it |
+| `endpointBuiltIns()` | A built-in id and the `{Service}ClientConfig` property that supplies it |
+| `endpointAuthSchemeIds()` | Auth scheme names used in endpoint `authSchemes`, mapped to the auth trait shape ids client auth schemes are keyed by |
+| `endpointDefaultAuthSchemes(service)` | Auth scheme properties for endpoints whose rules set no `authSchemes`, such as a SigV4 signing name |
+
+NSmithy's AWS support is the built-in `AwsEndpointsIntegration`, which registers
+`aws.partition`, `AWS::Region`, and the other AWS functions and built-ins
+through these hooks.
+
+```java title="AcmeEndpointsIntegration.java"
+@Override
+public List<EndpointFunction> endpointFunctions() {
+  Symbol functions =
+      Symbol.builder().name("AcmeEndpointFunctions").namespace("Acme.Endpoints", ".").build();
+  return List.of(
+      new EndpointFunction(
+          "acme.cellHost", functions, "CellHost", EndpointValueType.STRING, true)); // nullable
+}
+
+@Override
+public List<EndpointBuiltIn> endpointBuiltIns() {
+  return List.of(new EndpointBuiltIn("Acme::Cell", "Cell", "The cell requests are routed to."));
+}
+```
+
+```csharp title="AcmeEndpointFunctions.cs"
+namespace Acme.Endpoints;
+
+public static class AcmeEndpointFunctions
+{
+    public static string? CellHost(string cell) => cell.Length == 0 ? null : $"{cell}.acme.example";
+}
+```
+
+The method takes the function's arguments in order. A `nullable` function
+returns null where the rules expect an empty value. Smithy validates rule sets
+before code generation, so the same JAR also declares the functions and
+built-ins to the rules engine through Smithy's `EndpointRuleSetExtension`, as
+`smithy-aws-endpoints` does for AWS.
 
 ## Using an integration
 
