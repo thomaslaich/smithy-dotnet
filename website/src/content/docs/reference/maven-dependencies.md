@@ -14,7 +14,7 @@ plugins, the C# plugin's AWS integration, and the artifacts the templates and
 examples use:
 
 - `software.amazon.smithy`: `smithy-aws-traits`, `smithy-protocol-traits`,
-  `smithy-openapi`, `smithy-docgen`, and their dependencies.
+  `smithy-waiters`, `smithy-openapi`, `smithy-docgen`, and their dependencies.
 - `com.disneystreaming.alloy:alloy-core`.
 
 During generation NSmithy points the CLI at this repository and at a Maven
@@ -31,7 +31,7 @@ assumes it:
   "version": "1.0",
   "sources": ["model"],
   "maven": {
-    "dependencies": ["software.amazon.smithy:smithy-waiters:1.73.0"]
+    "dependencies": ["software.amazon.smithy:smithy-aws-iam-traits:1.73.0"]
   }
 }
 ```

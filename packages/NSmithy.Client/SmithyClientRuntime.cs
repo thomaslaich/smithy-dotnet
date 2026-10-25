@@ -109,7 +109,11 @@ public sealed class SmithyClientRuntime(
                 await protocol
                     .DeserializeErrorAsync(response, cancellationToken)
                     .ConfigureAwait(false)
-                ?? new SmithyClientException(response.StatusCode, response.ReasonPhrase);
+                ?? new SmithyClientException(
+                    response.StatusCode,
+                    response.ReasonPhrase,
+                    protocol.ReadErrorCode(response)
+                );
             await DisposeBodyAsync(response).ConfigureAwait(false);
             throw error;
         }
@@ -408,7 +412,11 @@ public sealed class SmithyClientRuntime(
                 await protocol
                     .DeserializeErrorAsync(response, cancellationToken)
                     .ConfigureAwait(false)
-                ?? new SmithyClientException(response.StatusCode, response.ReasonPhrase);
+                ?? new SmithyClientException(
+                    response.StatusCode,
+                    response.ReasonPhrase,
+                    protocol.ReadErrorCode(response)
+                );
 
             attemptActivity?.SetStatus(ActivityStatusCode.Error, error.Message);
             attemptActivity?.SetTag("error.type", error.GetType().FullName);

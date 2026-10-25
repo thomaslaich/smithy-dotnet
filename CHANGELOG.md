@@ -13,6 +13,10 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- Generated waiters for `@waitable` operations: a `WaitUntil{Waiter}Async` method per waiter on
+  the client, its interface, and the fake client. Acceptor paths compile to C# at build time.
+- `SmithyClientException.ErrorCode`, the error code the protocol read from an error response
+  that matched no modeled error, through the new `IClientOperationProtocol.ReadErrorCode`.
 - `IServiceProtocol.GetServerRouting`, through which a protocol reports how requests reach a
   service's operations: a route per operation, or one route on which the protocol names the
   operation from the request.
@@ -47,6 +51,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **BREAKING:** An error response whose error code names none of the operation's modeled
+  errors is now an unmodeled `SmithyClientException`, instead of the modeled error its HTTP
+  status matched.
 - AWS support moved out of `smithy-csharp-codegen` into the
   `smithy-csharp-aws-codegen` integration: the AWS JSON, AWS Query, EC2 Query, and restXml
   protocols, the AWS endpoint rule functions and built-ins, and the Glacier client

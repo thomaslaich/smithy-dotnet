@@ -13,6 +13,7 @@ package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
+import io.github.thomaslaich.nsmithy.csharp.codegen.waiters.WaiterMethods;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
 import java.util.List;
@@ -78,6 +79,7 @@ public final class FakeClientGenerator implements Runnable {
                   writeOperationMethod(op);
                   ClientGenerator.paginationInfo(context, service, op)
                       .ifPresent(info -> writePaginatorMethods(op, info));
+                  WaiterMethods.writeImplementations(w, context, service, op, "public virtual ");
                   w.write("");
                 }
               }));

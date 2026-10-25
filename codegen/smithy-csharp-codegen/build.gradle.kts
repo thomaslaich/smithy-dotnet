@@ -27,6 +27,8 @@ dependencies {
     // @operationContextParams.
     implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion")
     implementation("software.amazon.smithy:smithy-jmespath:$smithyVersion")
+    // @waitable: the trait, its validators (which type-check acceptor paths), and the waiter model.
+    implementation("software.amazon.smithy:smithy-waiters:$smithyVersion")
 
     // Makes the official smithy.ai trait definitions and validators available whenever the
     // C# build plugin is loaded. In particular, models can use smithy.ai#prompts without copying

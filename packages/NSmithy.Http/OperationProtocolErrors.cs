@@ -49,10 +49,9 @@ public static class OperationProtocolErrors
                 string.Equals(errorType, error.Id.Name, StringComparison.Ordinal)
                 || string.Equals(errorType, error.Id.ToString(), StringComparison.Ordinal)
             );
-            if (matched is not null)
-            {
-                return matched.Deserialize(response);
-            }
+            // A response that names an error the operation does not model is not one of its
+            // modeled errors, whatever its status code.
+            return matched?.Deserialize(response);
         }
 
         if (supportsHttpStatusErrorFallback)
@@ -70,5 +69,49 @@ public static class OperationProtocolErrors
         return supportsHttpStatusErrorFallback && response.Content.Length == 0
             ? null
             : fallback.Deserialize(response);
+    }
+
+    /// <summary>
+    /// The error name <paramref name="errorDiscriminator"/> reads from <paramref name="response"/>,
+    /// without a namespace (<c>ns#Name</c>) or a trailing <c>:</c> suffix. Null when the response
+    /// names no error or its body cannot be read.
+    /// </summary>
+    public static string? ReadErrorName(
+        SmithyHttpClientResponse response,
+        Func<SmithyHttpClientResponse, string?> errorDiscriminator
+    )
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(errorDiscriminator);
+
+        string? errorType;
+        try
+        {
+            errorType = errorDiscriminator(response);
+        }
+        catch (Exception exception)
+            when (exception
+                    is FormatException
+                        or InvalidOperationException
+                        or System.Xml.XmlException
+                        or System.Text.Json.JsonException
+            )
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(errorType))
+        {
+            return null;
+        }
+
+        var colon = errorType.IndexOf(':', StringComparison.Ordinal);
+        if (colon >= 0)
+        {
+            errorType = errorType[..colon];
+        }
+
+        var hash = errorType.LastIndexOf('#');
+        return hash >= 0 ? errorType[(hash + 1)..] : errorType;
     }
 }

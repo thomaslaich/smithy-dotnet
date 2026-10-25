@@ -13,6 +13,7 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpProtocol;
 import io.github.thomaslaich.nsmithy.csharp.codegen.sections.ClientConfigDefaultsSection;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ProtocolSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
+import io.github.thomaslaich.nsmithy.csharp.codegen.waiters.WaiterMethods;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -112,7 +113,7 @@ public final class ClientGenerator implements Runnable {
    */
   static Optional<PaginationInfo> paginationInfo(
       GenerationContext context, ServiceShape service, OperationShape op) {
-    if (isEventStreamOperation(context.model(), op)) {
+    if (ShapeSupport.isEventStreamOperation(context.model(), op)) {
       return Optional.empty();
     }
     return PaginatedIndex.of(context.model()).getPaginationInfo(service, op);
@@ -244,6 +245,7 @@ public final class ClientGenerator implements Runnable {
                                       w.write("$L;", signature);
                                     });
                           });
+                  WaiterMethods.writeDeclarations(w, context, op);
                 }
               }));
       writer.writeXmlDocs(service);
@@ -327,6 +329,7 @@ public final class ClientGenerator implements Runnable {
                   writeOperationMethod(model, op);
                   paginationInfo(context, service, op)
                       .ifPresent(info -> writePaginatorMethods(op, info));
+                  WaiterMethods.writeImplementations(w, context, service, op, "public ");
                 }
               }));
       writer.writeXmlDocs(service);
@@ -948,23 +951,11 @@ public final class ClientGenerator implements Runnable {
     return docs;
   }
 
-  private static boolean isEventStreamOperation(Model model, OperationShape op) {
-    return isInputStreaming(model, op) || isOutputStreaming(model, op);
-  }
-
   private boolean canBindOperation(OperationShape op) {
-    if (!isEventStreamOperation(context.model(), op)) {
+    if (!ShapeSupport.isEventStreamOperation(context.model(), op)) {
       return true;
     }
     return ProtocolSupport.protocols(context, service).stream()
         .anyMatch(CSharpProtocol::eventStreams);
-  }
-
-  private static boolean isInputStreaming(Model model, OperationShape op) {
-    return ShapeSupport.isEventStreamShape(model, op.getInputShape());
-  }
-
-  private static boolean isOutputStreaming(Model model, OperationShape op) {
-    return ShapeSupport.isEventStreamShape(model, op.getOutputShape());
   }
 }

@@ -54,6 +54,14 @@ public interface IClientOperationProtocol<TInput, TOutput>
         SmithyHttpClientResponse response,
         CancellationToken cancellationToken = default
     );
+
+    /// <summary>
+    /// The error code an error response carries, by the protocol's own rules (a <c>__type</c>
+    /// member, an <c>X-Amzn-Errortype</c> header, a query <c>Code</c> element), as the error's
+    /// name without a namespace. Null when the response names no error. The client runtime puts
+    /// it on the <c>SmithyClientException</c> it throws for an error that is not modeled.
+    /// </summary>
+    string? ReadErrorCode(SmithyHttpClientResponse response) => null;
 }
 
 /// <summary>
