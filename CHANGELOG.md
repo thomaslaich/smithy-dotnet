@@ -51,8 +51,9 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
-- An error response whose error code names none of the operation's modeled errors is now an
-  unmodeled `SmithyClientException`, instead of the modeled error its HTTP status matched.
+- **BREAKING:** An error response whose error code names none of the operation's modeled
+  errors is now an unmodeled `SmithyClientException`, instead of the modeled error its HTTP
+  status matched.
 - AWS support moved out of `smithy-csharp-codegen` into the
   `smithy-csharp-aws-codegen` integration: the AWS JSON, AWS Query, EC2 Query, and restXml
   protocols, the AWS endpoint rule functions and built-ins, and the Glacier client
