@@ -6,14 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpServiceGenerator;
-import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import software.amazon.smithy.build.MockManifest;
 import software.amazon.smithy.codegen.core.CodegenException;
-import software.amazon.smithy.codegen.core.directed.CodegenDirector;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.node.Node;
 import software.amazon.smithy.model.node.ObjectNode;
@@ -74,18 +72,7 @@ class ServiceGeneratorIntegrationTest {
                 .build());
     MockManifest manifest = new MockManifest();
 
-    CodegenDirector<CSharpWriter, CSharpIntegration, GenerationContext, CSharpSettings> runner =
-        new CodegenDirector<>();
-    runner.settings(settings);
-    runner.directedCodegen(new DirectedCSharpCodegen());
-    runner.fileManifest(manifest);
-    runner.service(settings.service());
-    runner.model(model);
-    runner.integrationClass(CSharpIntegration.class);
-    runner.integrationFinder(() -> integrations);
-    runner.performDefaultCodegenTransforms();
-    runner.createDedicatedInputsAndOutputs();
-    runner.run();
+    CSharpCodegenPlugin.generate(model, settings, manifest, integrations);
     return manifest;
   }
 

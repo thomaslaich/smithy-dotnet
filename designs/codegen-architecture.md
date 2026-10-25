@@ -75,7 +75,7 @@ in `smithy-build.json`, Smithy invokes `CSharpCodegenPlugin.execute()`.
 
 The plugin delegates to `DirectedCSharpCodegen`, which implements
 `DirectedCodegen`. Smithy's `CodegenDirector` calls a method for each shape kind
-in the service closure:
+in the generated set:
 
 | Method | Generator | Output |
 | --- | --- | --- |
@@ -93,6 +93,25 @@ in the service closure:
 All files are written under the Smithy projection's output directory:
 `<SmithyBuildOutputPath>/<projection>/csharp-codegen/`.
 
+### Generated set
+
+The settings name a `service`, a `closure`, or both. A closure is a
+`shapeClosures` metadata entry in the model, resolved by Smithy's
+`ShapeClosureIndex`:
+
+| Settings | Generated set | `generateService` |
+| --- | --- | --- |
+| `service` | Shapes the service reaches | Yes |
+| `closure` | Shapes in the closure | No; data shapes only |
+| Both | Shapes in the closure, which must contain the service | Yes |
+
+When integrations add shapes to the service (`additionalShapes`), the plugin
+gives the director a closure of its own, `nsmithy.generated`: the configured
+closure, or the service when none is configured, plus the added shapes the
+configured closure does not already contain. The plugin discovers integrations
+before the director runs, so the closure can include their shapes, and hands
+the director the same list.
+
 ### Integrations
 
 `CSharpIntegration` extends Smithy's `SmithyIntegration`. `CodegenDirector`
@@ -109,13 +128,13 @@ package can add the dependency for its users through a `SmithyContractsBuildFile
 fragment, but nothing requires one.
 
 Integrations get Smithy's hooks (`preprocessModel`, `decorateSymbolProvider`,
-`interceptors`, `customize`) and two of the C# generator's own, one per way a
-service can be extended:
+`interceptors`, `customize`) and three of the C# generator's own:
 
 | Hook | Use | The generator still emits |
 | --- | --- | --- |
 | `protocols()` | A request/response protocol: a new wire format or HTTP binding | Client, server, DI registration, endpoint resolution, shapes |
 | `serviceGenerator(context, service)` | A service that does not fit request/response, such as messaging | Shapes, schemas, and operations |
+| `additionalShapes(model, settings, service)` | Shapes the service does not reach through its operations, such as events it publishes | Everything, plus these shapes and their closures |
 
 The hooks and the types they receive are `@SmithyUnstableApi`, so an
 integration is built against the generator version it runs with.
