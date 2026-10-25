@@ -14,8 +14,9 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
+import io.github.thomaslaich.nsmithy.codegen.core.JsonSchemas;
+import io.github.thomaslaich.nsmithy.codegen.core.ServicePrompts;
 import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
-import io.github.thomaslaich.nsmithy.codegen.core.TraitIds;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
@@ -32,14 +33,10 @@ import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.ServiceIndex;
 import software.amazon.smithy.model.knowledge.ServiceIndex.AuthSchemeMode;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
-import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.shapes.OperationShape;
 import software.amazon.smithy.model.shapes.ServiceShape;
-import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
-import software.amazon.smithy.model.shapes.StructureShape;
 import software.amazon.smithy.model.traits.DocumentationTrait;
-import software.amazon.smithy.model.traits.RequiredTrait;
 import software.amazon.smithy.model.traits.synthetic.NoAuthTrait;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
@@ -68,7 +65,7 @@ public final class ServerGenerator implements Runnable {
     ops.forEach(op -> writer.reserveName(operationJsonSchemasClass(op)));
 
     List<CSharpProtocol> serverProtocols = ProtocolSupport.serverProtocols(context, service);
-    List<PromptDefinition> prompts = promptDefinitions(ops);
+    List<ServicePrompts.Prompt> prompts = ServicePrompts.of(model, service, ops);
     boolean emitsAspNetCore = !serverProtocols.isEmpty();
 
     writer.addImport(RuntimeTypes.MS_EXT_DI);
@@ -133,7 +130,7 @@ public final class ServerGenerator implements Runnable {
   // ---------------- DI registration ----------------
 
   private void writeServiceDefinition(
-      List<OperationShape> ops, List<PromptDefinition> prompts, String contract) {
+      List<OperationShape> ops, List<ServicePrompts.Prompt> prompts, String contract) {
     writer.pushState();
     try {
       writer.putContext("contract", contract);
@@ -176,7 +173,7 @@ public final class ServerGenerator implements Runnable {
     }
   }
 
-  private void writePromptDefinitions(List<PromptDefinition> prompts) {
+  private void writePromptDefinitions(List<ServicePrompts.Prompt> prompts) {
     writer.pushState();
     try {
       writer.putContext("promptDefinition", RuntimeTypes.SERVICE_PROMPT_DEFINITION);
@@ -194,7 +191,7 @@ public final class ServerGenerator implements Runnable {
     }
   }
 
-  private void writePromptDefinition(PromptDefinition prompt) {
+  private void writePromptDefinition(ServicePrompts.Prompt prompt) {
     writer.pushState();
     try {
       writer.putContext("promptDefinition", RuntimeTypes.SERVICE_PROMPT_DEFINITION);
@@ -208,7 +205,7 @@ public final class ServerGenerator implements Runnable {
           "arguments",
           writer.consumer(
               w -> {
-                for (PromptArgumentDefinition argument : prompt.arguments()) {
+                for (ServicePrompts.Argument argument : prompt.arguments()) {
                   w.write(
                       "new $T($L, $L, $L),",
                       RuntimeTypes.SERVICE_PROMPT_ARGUMENT_DEFINITION,
@@ -348,12 +345,10 @@ public final class ServerGenerator implements Runnable {
         writer.putContext("operationJsonSchemas", RuntimeTypes.OPERATION_JSON_SCHEMAS);
         writer.putContext(
             "inputSchema",
-            CSharpNaming.formatString(
-                JsonSchemaGenerator.generate(context.model(), op.getInputShape())));
+            CSharpNaming.formatString(JsonSchemas.generate(context.model(), op.getInputShape())));
         writer.putContext(
             "outputSchema",
-            CSharpNaming.formatString(
-                JsonSchemaGenerator.generate(context.model(), op.getOutputShape())));
+            CSharpNaming.formatString(JsonSchemas.generate(context.model(), op.getOutputShape())));
         op.getTrait(DocumentationTrait.class)
             .ifPresent(
                 trait ->
@@ -528,61 +523,6 @@ public final class ServerGenerator implements Runnable {
     return handlerVariable + "." + CSharpNaming.typeName(op.getId().getName()) + "Async";
   }
 
-  // ---------------- prompts ----------------
-
-  private List<PromptDefinition> promptDefinitions(List<OperationShape> ops) {
-    var prompts = new java.util.ArrayList<PromptDefinition>();
-    addPromptDefinitions(service, prompts);
-    for (OperationShape op : ops) {
-      addPromptDefinitions(op, prompts);
-    }
-    return List.copyOf(prompts);
-  }
-
-  private void addPromptDefinitions(Shape owner, List<PromptDefinition> prompts) {
-    owner
-        .findTrait(TraitIds.PROMPTS)
-        .ifPresent(
-            trait -> {
-              var entries =
-                  trait.toNode().expectObjectNode().getStringMap().entrySet().stream()
-                      .sorted(Map.Entry.comparingByKey())
-                      .toList();
-              for (var entry : entries) {
-                ObjectNode definition = entry.getValue().expectObjectNode();
-                String description = definition.expectStringMember("description").getValue();
-                String template = definition.expectStringMember("template").getValue();
-                String preferWhen =
-                    definition.getStringMember("preferWhen").map(n -> n.getValue()).orElse(null);
-                List<PromptArgumentDefinition> arguments =
-                    definition
-                        .getStringMember("arguments")
-                        .map(node -> promptArguments(node.getValue()))
-                        .orElse(List.of());
-                prompts.add(
-                    new PromptDefinition(
-                        entry.getKey(), description, template, preferWhen, arguments));
-              }
-            });
-  }
-
-  private List<PromptArgumentDefinition> promptArguments(String shapeId) {
-    StructureShape structure =
-        context.model().expectShape(ShapeId.from(shapeId), StructureShape.class);
-    return structure.getAllMembers().values().stream()
-        .sorted(Comparator.comparing(member -> member.getMemberName()))
-        .map(
-            member ->
-                new PromptArgumentDefinition(
-                    member.getMemberName(),
-                    member
-                        .getTrait(DocumentationTrait.class)
-                        .map(trait -> trait.getValue())
-                        .orElse(null),
-                    member.hasTrait(RequiredTrait.class)))
-        .toList();
-  }
-
   // ---------------- helpers ----------------
 
   private static String protocolEnumName(String contract) {
@@ -631,13 +571,4 @@ public final class ServerGenerator implements Runnable {
         .ifPresent(trait -> docs.put("input", trait.getValue()));
     return docs;
   }
-
-  private record PromptDefinition(
-      String name,
-      String description,
-      String template,
-      String preferWhen,
-      List<PromptArgumentDefinition> arguments) {}
-
-  private record PromptArgumentDefinition(String name, String description, boolean required) {}
 }

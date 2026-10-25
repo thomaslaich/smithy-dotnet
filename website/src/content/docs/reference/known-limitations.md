@@ -23,8 +23,8 @@ it does not infer MCP resources from Smithy resources.
 
 ## F#
 
-F# projects generate model types and clients. Servers and the other C#-only
-features are listed in [F#](/smithy-dotnet/guides/fsharp/).
+F# projects generate model types, clients, and servers. The features that are C#
+only are listed in [F#](/smithy-dotnet/guides/fsharp/).
 
 ## Validation
 

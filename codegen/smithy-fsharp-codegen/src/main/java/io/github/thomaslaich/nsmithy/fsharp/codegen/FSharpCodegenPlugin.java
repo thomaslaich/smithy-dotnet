@@ -16,8 +16,9 @@ import software.amazon.smithy.model.shapes.ServiceShape;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
 /**
- * Generates F# types, schemas, and the service's client: {@code Types.g.fs}, {@code Schemas.g.fs},
- * then {@code Client.g.fs}, which a project compiles in that order ahead of its own files.
+ * Generates F# types, schemas, and the service's client and server: {@code Types.g.fs}, {@code
+ * Schemas.g.fs}, {@code Client.g.fs}, then {@code Server.g.fs}, which a project compiles in that
+ * order ahead of its own files.
  */
 @SmithyUnstableApi
 public final class FSharpCodegenPlugin implements SmithyBuildPlugin {

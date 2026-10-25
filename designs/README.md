@@ -33,7 +33,7 @@ NSmithy follows this pattern:
 
 - `codegen/smithy-csharp-codegen` — Java Smithy plugin (Gradle, published to Maven Central)
 - `codegen/smithy-csharp-aws-codegen` — AWS integration for the plugin (published alongside it)
-- `codegen/smithy-fsharp-codegen` — Java Smithy plugin that generates F# types, schemas, and clients
+- `codegen/smithy-fsharp-codegen` — Java Smithy plugin that generates F# types, schemas, clients, and servers
 - `codegen/smithy-dotnet-codegen-core` — language-neutral support both plugins share
 - `packages/` — .NET runtime libraries (NuGet)
 - `packages/NSmithy.MSBuild` — MSBuild integration that connects the two
