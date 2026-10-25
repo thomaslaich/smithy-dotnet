@@ -684,8 +684,8 @@
 
   <!--
     F# compiles files in order, and a file can only use what the files before it declare. The
-    generated files come first: types, the schemas that read and write them, then the client. The
-    project's own files come after them and can use all three. CoreCompile compiles @(Compile) in
+    generated files come first: types, the schemas that read and write them, then the client and
+    the server. The project's own files come after them and can use all of them. CoreCompile compiles @(Compile) in
     the order FSharpSourceCodeCompileOrder leaves it, so the files are added before that target
     runs.
   -->
@@ -709,6 +709,11 @@
         Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/Client.g.fs"
         Visible="$(SmithyEmitGeneratedFiles)"
         Condition="'$(SmithyGenerateClient)' == 'true'"
+      />
+      <CompileBefore
+        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/Server.g.fs"
+        Visible="$(SmithyEmitGeneratedFiles)"
+        Condition="'$(SmithyGenerateServer)' == 'true'"
       />
     </ItemGroup>
   </Target>

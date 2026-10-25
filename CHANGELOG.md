@@ -31,9 +31,10 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   and runtime schemas with the new `fsharp-codegen` plugin (`smithy-fsharp-codegen`):
   records, discriminated unions for unions and enums, `option` for members that may be
   absent, F# `list` and `Map`, and exception classes for errors. The schemas work with
-  every NSmithy codec. Clients are generated too: `I{Service}Client` and `{Service}Client`
-  with `Task`-returning methods on the C# client runtime. Servers, paginators, waiters, and
-  endpoint-rule resolvers are not generated for F# yet.
+  every NSmithy codec. Clients and servers are generated too, on the same runtime as C#:
+  `I{Service}Client` and `{Service}Client` with `Task`-returning methods, and handler
+  interfaces with `Add{Service}ServiceHandler` and `Map{Service}Service` for ASP.NET Core.
+  Paginators, waiters, endpoint-rule resolvers, fakes, and MCP are not generated for F# yet.
 - Schema bases that own the generic reading and writing, for a language that cannot override
   those methods: `AccessorStructSchema` with a `StructMember` per member, `AccessorUnionSchema`
   with a `UnionCase` per case, `ElementListSchema`, `EntryMapSchema`, and `Schemas.Optional` for
@@ -60,6 +61,7 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- A structure with a member named `type` no longer fails server code generation.
 - A waiter whose last delay came to under a millisecond never stopped on a test clock such as
   `FakeTimeProvider`: `Task.Delay` takes such a delay as none and completes without consulting the
   clock. Delays are now rounded up to whole milliseconds.

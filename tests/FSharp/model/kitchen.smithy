@@ -2,11 +2,17 @@ $version: "2"
 
 namespace example.kitchen
 
+use alloy#simpleRestJson
 use aws.protocols#restJson1
+use smithy.protocols#rpcv2Cbor
+use smithy.protocols#rpcv2Json
 use example.shared#Money
 
 /// A kitchen that serves dishes.
 @restJson1
+@simpleRestJson
+@rpcv2Cbor
+@rpcv2Json
 service Kitchen {
     version: "2024-01-01"
     operations: [Order, Ping]
@@ -68,8 +74,6 @@ structure Dish {
 
     @timestampFormat("date-time")
     madeAt: Timestamp
-
-    doc: Document
 
     big: BigInteger
 

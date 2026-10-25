@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import software.amazon.smithy.codegen.core.CodegenException;
 import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.knowledge.ServiceIndex;
 import software.amazon.smithy.model.knowledge.TopDownIndex;
@@ -67,7 +66,7 @@ final class ClientGenerator {
     String client = name + "Client";
     String config = client + "Config";
     String clientInterface = "I" + client;
-    checkNames(client, config, clientInterface);
+    GeneratedNames.check(model, service, client, config, clientInterface);
     List<OperationShape> operations =
         TopDownIndex.of(model).getContainedOperations(service).stream()
             .sorted(Comparator.comparing(operation -> operation.getId().toString()))
@@ -463,31 +462,6 @@ final class ClientGenerator {
                     + ", "
                     + preference.allowDowngrade()
                     + ")");
-  }
-
-  /** The client's names cannot clash with a model type of the service's namespace. */
-  private void checkNames(String... names) {
-    String namespace = service.getId().getNamespace();
-    for (String name : names) {
-      model
-          .shapes()
-          .filter(shape -> !shape.isMemberShape())
-          .filter(shape -> shape.getId().getNamespace().equals(namespace))
-          .filter(shape -> FSharpNaming.typeName(shape.getId().getName()).equals(name))
-          .findFirst()
-          .ifPresent(
-              shape -> {
-                throw new CodegenException(
-                    "Shape "
-                        + shape.getId()
-                        + " would generate an F# type named "
-                        + name
-                        + ", which the client of "
-                        + service.getId()
-                        + " declares. Rename the shape, for example with the renameShapes build"
-                        + " transform.");
-              });
-    }
   }
 
   private static String strings(List<String> values) {

@@ -1,29 +1,30 @@
 ---
 title: F#
-description: Generate F# model types, runtime schemas, and clients from a Smithy model.
+description: Generate F# model types, runtime schemas, clients, and servers from a Smithy model.
 ---
 
 An F# project that references NSmithy generates F#: records and discriminated
-unions for the model's shapes, their runtime schemas, and the service's client.
-Generation runs during `dotnet build`, as it does for C#, and the generated
-code uses the same runtime packages.
+unions for the model's shapes, their runtime schemas, and the service's client
+and server. Generation runs during `dotnet build`, as it does for C#, and the
+generated code uses the same runtime packages.
 
 :::caution[Experimental]
-F# generates model types and clients. Servers, paginators, waiters, endpoint-rule
-resolvers, fake clients, and dependency-injection registration are C# only.
+Paginators, waiters, endpoint-rule resolvers, fake clients and handlers,
+client dependency-injection registration, and the MCP adapter are C# only.
 :::
 
 ## Set up a project
 
-Reference `NSmithy.Client` and the package of the service's protocol, and name
-the service with `SmithyService`. NSmithy sees that the project is an F# project
-and generates F#.
+Name the service with `SmithyService`. NSmithy sees that the project is an F#
+project and generates F#. A client project references `NSmithy.Client` and the
+package of the service's protocol:
 
 ```xml title="Weather.Client.fsproj"
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SmithyService>example.weather#Weather</SmithyService>
+    <SmithyGenerateServer>false</SmithyGenerateServer>
   </PropertyGroup>
 
   <ItemGroup>
@@ -37,6 +38,31 @@ and generates F#.
   </ItemGroup>
 </Project>
 ```
+
+A server project uses the Web SDK and references `NSmithy.Server.AspNetCore`
+instead:
+
+```xml title="Weather.Server.fsproj"
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <SmithyService>example.weather#Weather</SmithyService>
+    <SmithyGenerateClient>false</SmithyGenerateClient>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSmithy.Server.AspNetCore" Version="NSMITHY_VERSION" />
+    <PackageReference Include="NSmithy.Protocols.RestJson" Version="NSMITHY_VERSION" />
+    <PackageReference Include="NSmithy.SmithyCli" Version="1.73.0" />
+  </ItemGroup>
+</Project>
+```
+
+Both read the model through a `smithy-build.json`:
 
 ```json title="smithy-build.json"
 {
@@ -65,7 +91,41 @@ file in the project can use them.
 | Int enums | F# enums. |
 | Lists and maps | `'T list` and `Map<string, 'T>`, with `option` elements when `@sparse`. |
 | The service, when `SmithyGenerateClient` is on | `IWeatherClient`, `WeatherClient`, and `WeatherClientConfig`. |
+| The service, when `SmithyGenerateServer` is on | A handler interface `IWeatherServiceHandler` composed of one interface per operation, plus `AddWeatherServiceHandler` and `MapWeatherService` extensions for ASP.NET Core. |
 | Every shape | A runtime schema in the child `Schemas` namespace, such as `Example.Weather.Schemas.GetCityOutputSchema`. |
+
+## Serve the service
+
+Implement the handler interface and register it. The runtime reads each
+request, validates it against the model, calls the handler, and writes the
+response. A modeled error the handler raises is written as that error.
+
+```fsharp title="Program.fs"
+open System.Threading.Tasks
+open Microsoft.AspNetCore.Builder
+open Example.Weather
+
+type WeatherHandler() =
+    interface IWeatherServiceHandler with
+        member _.GetCityAsync(input, _) =
+            match input.CityId with
+            | "SEA" ->
+                Task.FromResult
+                    { Name = "Seattle"
+                      Coordinates = { Latitude = 47.6f; Longitude = -122.3f } }
+            | _ -> raise (NoSuchResource("City"))
+
+let builder = WebApplication.CreateBuilder()
+builder.Services.AddWeatherServiceHandler<WeatherHandler>() |> ignore
+
+let app = builder.Build()
+app.MapWeatherService() |> ignore
+app.Run()
+```
+
+`MapWeatherService` serves the service's first protocol. Pass
+`WeatherServiceProtocols` flags to serve others; see
+[Hosting multiple protocols](/smithy-dotnet/servers/hosting/).
 
 ## Call the service
 

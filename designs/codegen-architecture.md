@@ -7,7 +7,7 @@ How the NSmithy Java plugin generates C# files from Smithy models.
 NSmithy generates C# files from Smithy models using a Java Smithy plugin
 (`smithy-csharp-codegen`), with AWS support in a separate integration
 (`smithy-csharp-aws-codegen`). A second plugin, `smithy-fsharp-codegen`, generates
-F# types, schemas, and clients for F# projects (see [F# Generator](#f-generator)). Both
+F# types, schemas, clients, and servers for F# projects (see [F# Generator](#f-generator)). Both
 plugins build on `smithy-dotnet-codegen-core`. The plugin runs inside `smithy build` via the Smithy
 CLI, which means it has direct access to Smithy's fully assembled and validated
 semantic model. MSBuild invokes `smithy build` before C# compilation and
@@ -257,6 +257,8 @@ way, whatever language they write. It registers no plugin of its own.
 | `Naming` | PascalCase and camelCase, and Smithy namespace to .NET namespace |
 | `ShapeClosures` | The generated set: service, closure, and shapes integrations add |
 | `Protocols` | The built-in protocols and their runtime types, which protocols a service's client uses, and its HTTP version |
+| `JsonSchemas` | The JSON Schema of an operation's input and output, for MCP and documentation |
+| `ServicePrompts` | The `smithy.ai#prompts` a service and its operations declare |
 | `TraitIds` | Ids of traits outside the Smithy prelude |
 
 Rendering stays in each generator: `CSharpShapeSupport` writes C# type
@@ -265,9 +267,10 @@ expressions and literals, and the F# generator its own.
 ## F# Generator
 
 `FSharpCodegenPlugin` (`fsharp-codegen`) generates the F# type and runtime
-schema of every shape in the generated set, and the service's client. It takes
-`service`, `closure`, `baseNamespace`, `generateClient`, and `defaultProtocol`,
-with the same meaning as for `csharp-codegen`. The schemas
+schema of every shape in the generated set, and the service's client and server.
+It takes `service`, `closure`, `baseNamespace`, `generateClient`,
+`generateServer`, and `defaultProtocol`, with the same meaning as for
+`csharp-codegen`. The schemas
 derive from the runtime's accessor bases (`AccessorStructSchema`,
 `AccessorUnionSchema`, `ElementListSchema`, `EntryMapSchema`; see
 [serialization.md](serialization.md)), which are `StructSchema`, `UnionSchema`,
@@ -289,8 +292,9 @@ default a client can rely on. A member with such a default is a plain value,
 which reading fills in when the input leaves it out.
 
 F# compiles files, and the declarations in a file, in order, and a declaration
-can only refer to one before it. The plugin therefore writes three files,
-`Types.g.fs`, `Schemas.g.fs`, and `Client.g.fs`, compiled in that order. Each holds one
+can only refer to one before it. The plugin therefore writes four files,
+`Types.g.fs`, `Schemas.g.fs`, `Client.g.fs`, and `Server.g.fs`, compiled in that
+order. Each holds one
 `namespace rec` section per Smithy namespace, so the shapes of a namespace can
 refer to each other, with the sections in dependency order. Namespaces whose
 shapes refer to each other fail generation.
@@ -317,6 +321,15 @@ retries, auth, and serialization are the C# client's. It fills in a missing
 `@idempotencyToken` member and expands `@endpoint` host prefixes. It has no
 paginators, waiters, or generated endpoint resolver: a service with endpoint
 rules needs `Endpoint` or `EndpointResolver` set in its config.
+
+The server is the C# server's: `I{Operation}Handler` and
+`I{Service}ServiceHandler` interfaces, a `{Service}ServiceProtocols` flags enum,
+a `{Service}ServiceDefinition` operation table, and `Add{Service}ServiceHandler`
+and `Map{Service}Service` extension methods. A handler method takes the input
+record and a `CancellationToken` and returns a `Task`; `SmithyServerRuntime`
+reads requests, validates input, calls it, and writes the response or modeled
+error. Fake handlers and MCP prompts beyond the definition's `Prompts` are not
+generated.
 
 ## MSBuild Integration
 
@@ -345,9 +358,9 @@ optionally exclude client or server files.
 
 Runs instead of `_AddSmithyGeneratedCompileItems` in an F# project, where
 `SmithyPlugin` defaults to `fsharp-codegen`. Adds `Types.g.fs`, `Schemas.g.fs`,
-then `Client.g.fs` (unless `SmithyGenerateClient` is `false`) to `<CompileBefore>`
-ahead of `FSharpSourceCodeCompileOrder`, so the project's own files come after
-them.
+`Client.g.fs` (unless `SmithyGenerateClient` is `false`), then `Server.g.fs`
+(unless `SmithyGenerateServer` is `false`) to `<CompileBefore>` ahead of
+`FSharpSourceCodeCompileOrder`, so the project's own files come after them.
 
 ## Configuration
 
