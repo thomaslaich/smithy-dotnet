@@ -55,7 +55,7 @@ structure NoSuchResource {
     resourceType: String
 }
 
-apply Weather @alloy#simpleRestJson
+apply Weather @aws.protocols#restJson1
 apply NoSuchResource @httpError(404)
 ```
 
@@ -104,13 +104,12 @@ its `.csproj` and needs Node on every build machine.
 wires the compiler into the build but expects it to be installed through npm.
 Models are shared as npm packages.
 
-The C# emitters are at different stages of maturity. As of September 2026,
+The C# emitters are at different stages of maturity.
 [`@typespec/http-client-csharp`](https://www.npmjs.com/package/@typespec/http-client-csharp)
-generates the Azure SDK for .NET and the OpenAI .NET library and is published as
-prerelease builds;
+generates the Azure SDK for .NET and the OpenAI .NET library;
 [`@typespec/http-server-csharp`](https://www.npmjs.com/package/@typespec/http-server-csharp)
-is alpha. Both target HTTP. NSmithy is itself in preview, and
-[Protocol status](/smithy-dotnet/protocols/status/) lists what it covers.
+is earlier in its development. Both target HTTP. NSmithy is itself in preview,
+and [Protocol status](/smithy-dotnet/protocols/status/) lists what it covers.
 
 ## Where TypeSpec is the better fit
 

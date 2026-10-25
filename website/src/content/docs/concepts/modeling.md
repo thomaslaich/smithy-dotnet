@@ -90,7 +90,7 @@ live in a second `.smithy` file in the same namespace:
 $version: "2"
 namespace example.weather
 
-apply Weather @alloy#simpleRestJson
+apply Weather @aws.protocols#restJson1
 apply GetCity @http(method: "GET", uri: "/cities/{cityId}", code: 200)
 apply GetCityInput$cityId @httpLabel
 apply NoSuchResource @httpError(404)

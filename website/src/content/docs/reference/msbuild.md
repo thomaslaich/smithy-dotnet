@@ -46,7 +46,7 @@ Set these in `smithy-build.json`, under `plugins` or a projection's `plugins`:
 
 | Setting | Description |
 | --- | --- |
-| `closure` | Id of a `shapeClosures` metadata entry to generate. Without `SmithyService`, only the closure's types are generated; with it, the closure must contain the service. See [Types without a service](/smithy-dotnet/concepts/code-generation/#types-without-a-service). |
+| `closure` | Id of a `shapeClosures` metadata entry to generate. Without `SmithyService`, only the closure's types are generated; with it, the closure must contain the service. See [Types without a service](/smithy-dotnet/reference/generated-code/#types-without-a-service). |
 | `baseNamespace` | Prefix prepended to generated C# namespaces. For example, `Acme` maps `example.library` to `Acme.Example.Library`. It does not filter model shapes. |
 | `defaultProtocol` | The protocol trait of the generated client's default protocol, such as `aws.protocols#restJson1`, for a service with several protocols. It must be one of the service's protocol traits. Default: the service's first protocol. |
 | `generateDependencyInjection` | Generate the `Add{Service}Client` IHttpClientFactory extension. Requires referencing `Microsoft.Extensions.Http` (or the `Microsoft.AspNetCore.App` shared framework). See [Dependency Injection](/smithy-dotnet/guides/client-configuration/dependency-injection/). |
