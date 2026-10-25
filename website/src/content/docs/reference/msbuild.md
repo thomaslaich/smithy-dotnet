@@ -8,6 +8,23 @@ generation pipeline. It invokes the `smithy` CLI, which runs the
 `csharp-codegen` Java plugin to emit `.g.cs` files, then registers those files
 with the .NET toolchain.
 
+## Toolchain
+
+Two NuGet packages provide what generation needs:
+
+- `NSmithy.MSBuild` contains the MSBuild integration, NSmithy's C# and Protobuf
+  generators, the Smithy OpenAPI and documentation plugins, the trait libraries
+  NSmithy uses, and their Java dependencies, as a local Maven repository inside
+  the package.
+- `NSmithy.SmithyCli` contains the Smithy CLI with its Java runtime. It is
+  optional; see [Smithy CLI](/smithy-dotnet/reference/smithy-cli/).
+
+MSBuild points the CLI at the bundled repository and an isolated Maven cache,
+so NSmithy's plugins resolve from local files. Model dependencies a project
+declares resolve separately; see
+[Maven dependencies](/smithy-dotnet/reference/maven-dependencies/). Sphinx HTML
+documentation additionally requires Python.
+
 ## Configuration sources
 
 On every build, NSmithy writes an effective `smithy-build.json` to `obj/` and

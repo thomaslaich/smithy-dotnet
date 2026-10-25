@@ -95,7 +95,6 @@ export default defineConfig({
 						{ label: 'Introduction', slug: 'getting-started/introduction' },
 						{ label: 'Quick start', slug: 'getting-started/quick-start' },
 						{ label: 'Modeling contracts', slug: 'concepts/modeling' },
-						{ label: 'Code generation', slug: 'concepts/code-generation' },
 						{ label: 'How NSmithy works', slug: 'concepts/how-it-works' },
 						{ label: 'Smithy and TypeSpec', slug: 'concepts/smithy-and-typespec' },
 					],

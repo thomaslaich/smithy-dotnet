@@ -1,6 +1,6 @@
 ---
 title: How NSmithy works
-description: What generated code does and what the runtime does, and how a client call and a server request flow through them.
+description: How a Smithy model becomes C# during the build, what generated code and the runtime each do, and how a client call and a server request flow through them.
 ---
 
 Generated code describes the service; runtime libraries act on it. The
@@ -18,6 +18,22 @@ hand-written NuGet packages that read those schemas.
 | Client runtime | Runtime | A call's lifecycle: endpoint, auth, interceptors, retries, telemetry |
 | Server runtime and host | Runtime | Dispatching a request to its handler on ASP.NET Core |
 
+## At build time
+
+Generation is part of `dotnet build`; there is no separate command. It runs in
+three steps:
+
+1. MSBuild collects the model files, including those of referenced contracts
+   projects, and writes the Smithy build configuration.
+2. The Smithy CLI assembles and validates the model and runs NSmithy's
+   generator.
+3. MSBuild compiles the generated `.g.cs` files under `obj/` with the project.
+
+Unchanged models skip generation, and `dotnet watch build` regenerates on every
+model edit. Handler implementations are application code and are never
+overwritten. The [MSBuild reference](/smithy-dotnet/reference/msbuild/) covers
+configuration and the bundled toolchain.
+
 ## Schemas
 
 A schema such as `GetCityInputSchema` describes its shape's members and traits,
@@ -26,15 +42,21 @@ it. A JSON codec writes the member as JSON, the validator checks its
 constraints, and an HTTP binding puts it in a path label or header. Every
 consumer goes through the same generated code, so a new wire format or protocol
 needs no new generated code, and nothing reflects over model types.
-[Code generation](/smithy-dotnet/concepts/code-generation/#runtime-schemas)
-shows what a schema carries.
+
+Trait values are model data, so a schema keeps traits the generator knows
+nothing about: a custom `@owner("catalog-team")` trait reaches the running
+application without a generator change. Keeping a trait does not implement it.
+A new constraint or protocol needs a runtime component that reads it, and a
+trait that changes the C# representation, such as `@required`, needs generator
+support. Both can come from a package outside NSmithy.
 
 ## Protocols
 
 A protocol is a runtime object, such as `RestJson1Protocol`. It binds an
 operation's schema to HTTP requests and responses: how input is encoded, which
 route an operation answers on, and how a modeled error is represented and
-recognized. Generated code never branches on a protocol. A client uses one
+recognized. Generated code never branches on a protocol, so the generated
+types are the same under every protocol the service declares. A client uses one
 protocol at a time and can switch it in configuration; a server can serve the
 same handlers over several at once, as
 [Hosting multiple protocols](/smithy-dotnet/servers/hosting/) shows.
@@ -61,7 +83,7 @@ operation methods, so each page or poll is a normal call.
 
 ## A server request
 
-`MapWeatherService` hands the service's operations and the selected protocols
+`MapWeather` hands the service's operations and the selected protocols
 to the ASP.NET Core host. Each protocol reports its routes, and the host maps
 them as endpoints. A request then flows:
 

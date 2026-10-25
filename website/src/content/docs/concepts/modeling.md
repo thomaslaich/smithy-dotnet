@@ -112,5 +112,5 @@ apply Weather @smithy.protocols#rpcv2Cbor
 A service may declare both, and NSmithy serves them from one implementation; see
 [Hosting multiple protocols](/smithy-dotnet/servers/hosting/). The
 [Protocols](/smithy-dotnet/protocols/overview/) overview compares the options.
-Continue with [Code generation](/smithy-dotnet/concepts/code-generation/) to
-see what the model becomes in C#.
+Continue with [How NSmithy works](/smithy-dotnet/concepts/how-it-works/) to
+see how the model becomes C# and what runs it.

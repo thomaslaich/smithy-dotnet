@@ -93,7 +93,7 @@ not change what the model describes.
 NuGet packages provide the Smithy CLI, a Java runtime, and the generation
 plugins. Restoring them is the whole setup, and generation runs inside
 `dotnet build`.
-[Code generation](/smithy-dotnet/concepts/code-generation/) describes the packages.
+The [MSBuild reference](/smithy-dotnet/reference/msbuild/#toolchain) describes the packages.
 Models are shared as Maven JARs, which every Smithy toolchain can consume; see
 [Distributing contracts](/smithy-dotnet/guides/distributing-contracts/).
 
