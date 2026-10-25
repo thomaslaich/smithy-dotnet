@@ -10,7 +10,8 @@ NSmithy's code-generation plugin.
 ## The bundled repository
 
 `NSmithy.MSBuild` contains a Maven repository with NSmithy's C# and Protobuf
-plugins and the artifacts the templates and examples use:
+plugins, the C# plugin's AWS integration, and the artifacts the templates and
+examples use:
 
 - `software.amazon.smithy`: `smithy-aws-traits`, `smithy-protocol-traits`,
   `smithy-openapi`, `smithy-docgen`, and their dependencies.
@@ -63,6 +64,6 @@ plugins included, the way the plain Smithy CLI does:
 Artifacts then come from the repositories in `smithy-build.json` or
 `SMITHY_MAVEN_REPOS`, or from Maven Central when neither lists one, and are
 cached in your Maven cache (`~/.m2/repository`). NSmithy's plugins are
-published to Maven Central as `io.github.thomaslaich.nsmithy:smithy-csharp-codegen`
-and `smithy-proto-codegen`, at the NSmithy version. Use this to resolve through
+published to Maven Central as `io.github.thomaslaich.nsmithy:smithy-csharp-codegen`,
+`smithy-csharp-aws-codegen`, and `smithy-proto-codegen`, at the NSmithy version. Use this to resolve through
 a mirror, or to share one Maven cache across projects.

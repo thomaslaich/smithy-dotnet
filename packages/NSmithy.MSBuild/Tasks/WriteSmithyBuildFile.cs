@@ -349,10 +349,16 @@ public sealed class WriteSmithyBuildFile : MsBuildTask
                         names.Add(name);
 
         if (names.Contains(CSharpPlugin))
+        {
             dependencies.Add(
                 $"{NSmithyGroup}:smithy-csharp-codegen:{CSharpCodegenVersion}",
                 "NSmithy"
             );
+            dependencies.Add(
+                $"{NSmithyGroup}:smithy-csharp-aws-codegen:{CSharpCodegenVersion}",
+                "NSmithy"
+            );
+        }
         if (names.Contains(ProtoPlugin))
             dependencies.Add(
                 $"{NSmithyGroup}:smithy-proto-codegen:{CSharpCodegenVersion}",

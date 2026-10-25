@@ -11,6 +11,9 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
     private const string CodegenArtifact =
         "io.github.thomaslaich.nsmithy:smithy-csharp-codegen:0.0.0-SNAPSHOT";
 
+    private const string AwsCodegenArtifact =
+        "io.github.thomaslaich.nsmithy:smithy-csharp-aws-codegen:0.0.0-SNAPSHOT";
+
     private readonly string _directory = Path.Combine(
         Path.GetTempPath(),
         $"nsmithy-build-file-{Guid.NewGuid():N}"
@@ -47,7 +50,11 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
         Assert.Empty(errors);
         Assert.Equal(source, file["sources"]![0]!.GetValue<string>());
         Assert.Equal(
-            ["software.amazon.smithy:smithy-aws-traits:1.73.0", CodegenArtifact],
+            [
+                "software.amazon.smithy:smithy-aws-traits:1.73.0",
+                CodegenArtifact,
+                AwsCodegenArtifact,
+            ],
             Dependencies(file)
         );
         Assert.Equal(
@@ -292,7 +299,7 @@ public sealed class WriteSmithyBuildFileTests : IDisposable
             Plugin(file, "cbor", "csharp-codegen")["service"]!.GetValue<string>()
         );
         Assert.Null(file["projections"]!["source"]);
-        Assert.Equal([CodegenArtifact], Dependencies(file));
+        Assert.Equal([CodegenArtifact, AwsCodegenArtifact], Dependencies(file));
         var repository = Assert.Single(file["maven"]!["repositories"]!.AsArray());
         Assert.Equal("https://mirror.example/maven", repository!["url"]!.GetValue<string>());
     }

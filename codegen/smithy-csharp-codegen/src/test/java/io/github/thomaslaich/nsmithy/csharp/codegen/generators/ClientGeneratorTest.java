@@ -172,35 +172,6 @@ final class ClientGeneratorTest {
       }
       """;
 
-  private static final String GLACIER_MODEL =
-      """
-      $version: "2"
-
-      namespace com.amazonaws.glacier
-
-      use aws.protocols#restJson1
-
-      @restJson1
-      service Glacier {
-          version: "2012-06-01"
-          operations: [UploadArchive]
-      }
-
-      @http(method: "POST", uri: "/{accountId}/vaults/{vaultName}/archives")
-      operation UploadArchive {
-          input := {
-              @required
-              @httpLabel
-              accountId: String
-
-              @required
-              @httpLabel
-              vaultName: String
-          }
-          output := {}
-      }
-      """;
-
   private static final String REST_STREAMING_MODEL =
       """
       $version: "2"
@@ -556,18 +527,6 @@ final class ClientGeneratorTest {
             "public StreamingServiceClientConfig(StreamingServiceClientConfig source) :"
                 + " base(source) { }"),
         generated);
-  }
-
-  @Test
-  void glacierClientConfigInstallsServiceCustomization() throws Exception {
-    String generated =
-        renderClient(
-            REST_PROTOCOL_TRAITS,
-            GLACIER_MODEL,
-            "com.amazonaws.glacier#Glacier",
-            "Auxiliary.Com.Amazonaws.Glacier");
-
-    assertTrue(generated.contains("Interceptors.Add(new GlacierInterceptor());"), generated);
   }
 
   private static boolean containsIgnoringWhitespace(String actual, String expected) {

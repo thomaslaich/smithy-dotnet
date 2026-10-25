@@ -40,11 +40,21 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   operation's schema.
 - Every generated client can be constructed from its configuration alone, for
   example with only an `EndpointResolver`.
+- `ClientConfigDefaultsSection`, a code section integrations can append to through Smithy's
+  `interceptors` hook to set a generated client configuration's defaults.
 - An `Add{Service}Client` overload whose configuration callback receives the
   `IServiceProvider`, to resolve dependencies such as endpoint resolvers.
 
 ### Changed
 
+- AWS support moved out of `smithy-csharp-codegen` into the
+  `smithy-csharp-aws-codegen` integration: the AWS JSON, AWS Query, EC2 Query, and restXml
+  protocols, the AWS endpoint rule functions and built-ins, and the Glacier client
+  customization. `NSmithy.MSBuild` adds it to every build. Builds that run the Smithy CLI
+  directly add `io.github.thomaslaich.nsmithy:smithy-csharp-aws-codegen` to
+  `maven.dependencies` for AWS services.
+- `AwsQueryProtocol` takes an error's status code from its `@awsQueryError` trait at
+  runtime. The status code in generated error schemas no longer comes from that trait.
 - Generated servers route at runtime. `Map{Service}` keeps its signature and maps the
   protocols' routes, and the generated code holds an operation table instead of an endpoint
   per operation and protocol. Endpoints are plain request delegates, with no minimal-API

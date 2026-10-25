@@ -30,5 +30,6 @@ for the recommended layout.
 NSmithy follows this pattern:
 
 - `codegen/smithy-csharp-codegen` — Java Smithy plugin (Gradle, published to Maven Central)
+- `codegen/smithy-csharp-aws-codegen` — AWS integration for the plugin (published alongside it)
 - `packages/` — .NET runtime libraries (NuGet)
 - `packages/NSmithy.MSBuild` — MSBuild integration that connects the two
