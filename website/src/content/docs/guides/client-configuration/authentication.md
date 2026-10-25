@@ -66,12 +66,10 @@ For most applications that call AWS from .NET, use the official AWS SDK for
 .NET. NSmithy's AWS integration support is intended for focused integrations,
 emulators, and protocol validation, not as a complete SDK replacement.
 
-NSmithy now provides modeled endpoint rules, environment and shared-profile
-credentials (including cached IAM Identity Center sessions), IMDSv2 role
-credentials, presigning, and golden coverage against AWS's published S3 signing
-vectors. Assume-role and web identity providers, ECS container credentials,
-SigV4a, and the full production hardening of the official AWS SDK are still
-outside this preview.
+NSmithy provides modeled endpoint rules, the AWS SDKs' default credential
+chain and region resolution, presigning, and golden coverage against AWS's
+published S3 signing vectors. SigV4a and the full production hardening of the
+official AWS SDK are still outside this preview.
 :::
 
 Add `NSmithy.Aws` and configure `AwsSigV4AuthScheme`. For a service with
@@ -86,10 +84,14 @@ var credentials = new DefaultAwsCredentialsProvider();
 
 using var lambda = new LambdaClient(new LambdaClientConfig
 {
-    Region = Environment.GetEnvironmentVariable("AWS_REGION") ?? "us-east-1",
     AuthSchemes = { new AwsSigV4AuthScheme(credentials) },
 });
 ```
+
+`Region` defaults to `AWS_REGION`, then `AWS_DEFAULT_REGION`, then the `region`
+of the selected profile in `~/.aws/config` (`AwsRegion.Resolve()`). Set it to
+use another region. Resolution reads no network, so on EC2 set `AWS_REGION`;
+Lambda, ECS, and App Runner set it for you.
 
 For a model without endpoint rules, pass the signing name and region, and
 resolve the endpoint with `AwsRegionalEndpointResolver`:
@@ -112,12 +114,21 @@ Available credential providers:
 
 | Provider | Source |
 | --- | --- |
-| `StaticAwsCredentialsProvider` | Explicit `AwsCredentials` instance |
+| `DefaultAwsCredentialsProvider` | The sources below, in this order: environment, web identity, shared profile, container, instance metadata |
 | `EnvironmentAwsCredentialsProvider` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, optional `AWS_SESSION_TOKEN` |
-| `ProfileAwsCredentialsProvider` | Static shared profiles or cached IAM Identity Center/SSO sessions |
-| `SsoAwsCredentialsProvider` | Explicit IAM Identity Center account/role using the AWS CLI token cache |
+| `WebIdentityAwsCredentialsProvider` | `AWS_WEB_IDENTITY_TOKEN_FILE` and `AWS_ROLE_ARN` (EKS service accounts, GitHub Actions OIDC), exchanged with STS |
+| `ProfileAwsCredentialsProvider` | A shared profile: an assumed role (`source_profile`, `credential_source`, or `web_identity_token_file`), IAM Identity Center, `credential_process`, or static keys |
+| `ContainerAwsCredentialsProvider` | The container credentials endpoint of ECS, Fargate, App Runner, CodeBuild, and EKS Pod Identity |
 | `InstanceMetadataAwsCredentialsProvider` | EC2 role credentials over IMDSv2 (optional IMDSv1 fallback) |
-| `DefaultAwsCredentialsProvider` | Environment → shared profile/SSO → IMDS |
+| `AssumeRoleAwsCredentialsProvider` | An IAM role assumed with credentials from another provider |
+| `ProcessAwsCredentialsProvider` | The JSON output of a credential process command |
+| `SsoAwsCredentialsProvider` | Explicit IAM Identity Center account/role using the AWS CLI token cache |
+| `StaticAwsCredentialsProvider` | Explicit `AwsCredentials` instance |
+
+The default chain skips sources that are not configured. A source that is
+configured but fails, such as a profile whose role cannot be assumed, stops the
+chain with its error. Profiles with `mfa_serial` are not supported, since they
+need an interactive token code.
 
 For presigned requests, construct an `AwsSigV4Presigner`, serialize the generated
 operation request, and call `PresignAsync`. Durations are limited to AWS's range

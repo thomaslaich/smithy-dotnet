@@ -6,11 +6,14 @@ package io.github.thomaslaich.nsmithy.csharp.aws.codegen;
 import static io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointValueType.field;
 
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpSettings;
+import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointBuiltIn;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointDefaultAuthScheme;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointFunction;
 import io.github.thomaslaich.nsmithy.csharp.codegen.endpoints.EndpointValueType;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
+import io.github.thomaslaich.nsmithy.csharp.codegen.sections.ClientConfigDefaultsSection;
+import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -24,8 +27,11 @@ import software.amazon.smithy.model.shapes.Shape;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.model.traits.HttpTrait;
 import software.amazon.smithy.model.transform.ModelTransformer;
+import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters;
 import software.amazon.smithy.rulesengine.traits.EndpointBddTrait;
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait;
+import software.amazon.smithy.utils.CodeInterceptor;
+import software.amazon.smithy.utils.CodeSection;
 import software.amazon.smithy.utils.SmithyInternalApi;
 
 /**
@@ -172,6 +178,43 @@ public final class AwsEndpointsIntegration implements CSharpIntegration {
             "AWS::STS::UseGlobalEndpoint",
             "UseGlobalEndpoint",
             "Whether us-east-1 requests use the global STS endpoint."));
+  }
+
+  /**
+   * Generated configurations of services whose endpoint rules read {@code AWS::Region} default
+   * {@code Region} to the region of the environment or shared config.
+   */
+  @Override
+  public List<? extends CodeInterceptor<? extends CodeSection, CSharpWriter>> interceptors(
+      GenerationContext context) {
+    return List.of(
+        CodeInterceptor.appender(
+            ClientConfigDefaultsSection.class,
+            (writer, section) -> {
+              if (declaresRegion(section.service())) {
+                writer.write("Region = $T.Resolve();", AwsRuntimeTypes.AWS_REGION);
+              }
+            }));
+  }
+
+  private static boolean declaresRegion(ServiceShape service) {
+    Optional<Parameters> parameters =
+        service
+            .getTrait(EndpointBddTrait.class)
+            .map(EndpointBddTrait::getParameters)
+            .or(
+                () ->
+                    service
+                        .getTrait(EndpointRuleSetTrait.class)
+                        .map(trait -> trait.getEndpointRuleSet().getParameters()));
+    return parameters
+        .map(
+            declared ->
+                declared.toList().stream()
+                    .anyMatch(
+                        parameter ->
+                            parameter.getBuiltIn().filter("AWS::Region"::equals).isPresent()))
+        .orElse(false);
   }
 
   @Override

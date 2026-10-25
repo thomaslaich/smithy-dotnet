@@ -167,6 +167,5 @@ constructing a configuration does no network I/O.
   every source with fakes: profile resolution including role chains and
   cycles, STS request and error parsing, container URI rules and tokens,
   process output and failures, and chain order and stickiness.
-- STS request signing is checked against the SigV4 signer's existing vectors.
-- The AWS LocalStack example exercises AssumeRole and web identity end to end
-  against LocalStack's STS.
+- STS requests are checked for their endpoint, form parameters, and SigV4
+  signature against a fake STS that also exercises role chains and errors.

@@ -51,17 +51,18 @@ part of the AWS client stack:
 - Modeled endpoint rules, including partitions, FIPS, dual-stack, and S3
   addressing, plus standard regional endpoint resolution for models without
   rules
-- Environment, shared-profile, SSO, and IMDS credentials
+- The AWS SDKs' default credential chain: environment, web identity, shared
+  profiles (assumed roles, IAM Identity Center, credential processes), container,
+  and IMDS credentials, with region resolution from the environment and profile
 - Standard retries with jitter, retry quotas, `Retry-After`, and modeled
   `@retryable` errors
-- Generated page and item paginators for modeled `@paginated` operations
+- Generated page and item paginators for modeled `@paginated` operations, and
+  waiters for `@waitable` operations
 - Clients for the supported AWS protocols when supplied with a Smithy model
 
 NSmithy does not yet provide:
 
 - SigV4a
-- The complete credential provider chain, including assume-role, web identity,
-  and ECS container credentials
 - AWS service-specific retry, paginator, and utility behavior
 - Maintained coverage for the full AWS service catalog or official AWS support
 
