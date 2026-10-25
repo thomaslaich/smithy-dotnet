@@ -529,9 +529,8 @@ public final class ClientGenerator implements Runnable {
 
   /**
    * Renders the per-service client config: a sealed subclass of the runtime's {@code
-   * SmithyClientConfig}. It inherits the common knobs today; service-specific options (e.g.
-   * endpoint client-context params) can be added here later without changing the client's
-   * constructor surface. The copy constructor backs the client's copy-at-construction semantics.
+   * SmithyClientConfig}, with a property per endpoint rule parameter bound to client config. The
+   * copy constructor backs the client's copy-at-construction semantics.
    */
   private void writeConfigClass(String typeName) {
     List<EndpointRules.ConfigParameter> parameters =
@@ -541,27 +540,11 @@ public final class ClientGenerator implements Runnable {
       writer.putContext("config", typeName + "Config");
       writer.putContext("baseConfig", RuntimeTypes.SMITHY_CLIENT_CONFIG);
       writer.putContext("defaults", writer.consumer(this::writeConfigDefaults));
+      writer.putContext("hasParameters", !parameters.isEmpty());
       writer.putContext(
-          "copyConstructor",
+          "assignments",
           writer.consumer(
-              w -> {
-                if (parameters.isEmpty()) {
-                  w.write(
-                      "public $L($L source) : base(source) { }",
-                      typeName + "Config",
-                      typeName + "Config");
-                  return;
-                }
-                w.write(
-                    "public $L($L source) : base(source)",
-                    typeName + "Config",
-                    typeName + "Config");
-                w.write("{");
-                w.indent();
-                parameters.forEach(p -> w.write("$L = source.$L;", p.property(), p.property()));
-                w.dedent();
-                w.write("}");
-              }));
+              w -> parameters.forEach(p -> w.write("$1L = source.$1L;", p.property()))));
       writer.putContext(
           "properties",
           writer.consumer(
@@ -586,7 +569,15 @@ public final class ClientGenerator implements Runnable {
                   ${defaults:C|}
               }
 
-              ${copyConstructor:C|}
+              ${^hasParameters}
+              public ${config:L}(${config:L} source) : base(source) { }
+              ${/hasParameters}
+              ${?hasParameters}
+              public ${config:L}(${config:L} source) : base(source)
+              {
+                  ${assignments:C|}
+              }
+              ${/hasParameters}
               ${properties:C|}
           }
           """);
