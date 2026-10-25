@@ -4,6 +4,7 @@
  * smithy-build.json:
  *   "csharp-codegen": {
  *     "service": "example.hello#HelloService",
+ *     "closure": "example.hello#events",  // optional; a shapeClosures metadata entry to generate
  *     "baseNamespace": "MyOrg",         // optional; prepended to PascalCase(smithyNamespace)
  *     "packageVersion": "0.1.0",          // optional
  *     "generateClient": true,             // optional; emit the client surface (default true)
@@ -13,12 +14,17 @@
  *     "defaultProtocol": "aws.protocols#restJson1" // optional; the client's default protocol
  *   }
  *
+ * At least one of service and closure is required. A closure alone generates only the types in
+ * it. With both, the closure is the generated set and the service, which must be in it, gets its
+ * client and server.
+ *
  * If baseNamespace is omitted, the C# namespace is just PascalCase of the
  * Smithy namespace (e.g. example.hello -> Example.Hello).
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen;
 
 import java.util.Optional;
+import software.amazon.smithy.model.node.ExpectationNotMetException;
 import software.amazon.smithy.model.node.ObjectNode;
 import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.utils.SmithyUnstableApi;
@@ -27,6 +33,7 @@ import software.amazon.smithy.utils.SmithyUnstableApi;
 public final class CSharpSettings {
 
   private static final String SERVICE = "service";
+  private static final String CLOSURE = "closure";
   private static final String BASE_NAMESPACE = "baseNamespace";
   private static final String PACKAGE_VERSION = "packageVersion";
   private static final String GENERATE_CLIENT = "generateClient";
@@ -36,6 +43,7 @@ public final class CSharpSettings {
   private static final String DEFAULT_PROTOCOL = "defaultProtocol";
 
   private final ShapeId service;
+  private final String closure;
   private final String baseNamespace;
   private final String packageVersion;
   private final boolean generateClient;
@@ -46,6 +54,7 @@ public final class CSharpSettings {
 
   private CSharpSettings(
       ShapeId service,
+      String closure,
       String baseNamespace,
       String packageVersion,
       boolean generateClient,
@@ -54,6 +63,7 @@ public final class CSharpSettings {
       boolean generateFakes,
       ShapeId defaultProtocol) {
     this.service = service;
+    this.closure = closure;
     this.baseNamespace = baseNamespace;
     this.packageVersion = packageVersion;
     this.generateClient = generateClient;
@@ -67,6 +77,7 @@ public final class CSharpSettings {
     config.warnIfAdditionalProperties(
         java.util.List.of(
             SERVICE,
+            CLOSURE,
             BASE_NAMESPACE,
             PACKAGE_VERSION,
             GENERATE_CLIENT,
@@ -74,7 +85,13 @@ public final class CSharpSettings {
             GENERATE_DEPENDENCY_INJECTION,
             GENERATE_FAKES,
             DEFAULT_PROTOCOL));
-    ShapeId service = config.expectStringMember(SERVICE).expectShapeId();
+    ShapeId service =
+        config.getStringMember(SERVICE).map(node -> node.expectShapeId()).orElse(null);
+    String closure = config.getStringMember(CLOSURE).map(node -> node.getValue()).orElse(null);
+    if (service == null && closure == null) {
+      throw new ExpectationNotMetException(
+          "csharp-codegen requires `service`, `closure`, or both.", config);
+    }
     String baseNamespace = config.getStringMemberOrDefault(BASE_NAMESPACE, "");
     String packageVersion = config.getStringMemberOrDefault(PACKAGE_VERSION, "0.0.1");
     boolean generateClient = config.getBooleanMemberOrDefault(GENERATE_CLIENT, true);
@@ -86,6 +103,7 @@ public final class CSharpSettings {
         config.getStringMember(DEFAULT_PROTOCOL).map(node -> node.expectShapeId()).orElse(null);
     return new CSharpSettings(
         service,
+        closure,
         baseNamespace,
         packageVersion,
         generateClient,
@@ -95,8 +113,14 @@ public final class CSharpSettings {
         defaultProtocol);
   }
 
-  public ShapeId service() {
-    return service;
+  /** The service to generate a client and server for. Empty when only a closure is generated. */
+  public Optional<ShapeId> service() {
+    return Optional.ofNullable(service);
+  }
+
+  /** The id of the {@code shapeClosures} metadata entry to generate, when set. */
+  public Optional<String> closure() {
+    return Optional.ofNullable(closure);
   }
 
   /** May be empty (no prefix). */

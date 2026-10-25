@@ -28,12 +28,13 @@ integration against the NSmithy version it runs with.
 
 `CSharpIntegration` extends Smithy's `SmithyIntegration`, so an integration gets
 Smithy's hooks (`preprocessModel`, `decorateSymbolProvider`, `interceptors`,
-`customize`) and NSmithy's own. Two of them shape a service's generated surface:
+`customize`) and NSmithy's own. Three of them shape a service's generated surface:
 
 | Hook | Use | NSmithy still generates |
 | --- | --- | --- |
 | `protocols()` | A request/response protocol over HTTP | Client, server, DI registration, endpoint resolution, shapes |
 | `serviceGenerator(context, service)` | A service that is not request/response, such as messaging | Shapes, schemas, and operations |
+| `additionalShapes(model, settings, service)` | Shapes the service does not reach through its operations, such as events it publishes | Everything, plus these shapes and the shapes they reference |
 
 Four more extend generated endpoint resolvers; see
 [Extending endpoint rules](#extending-endpoint-rules).
@@ -161,6 +162,26 @@ public Optional<CSharpServiceGenerator> serviceGenerator(
 `CSharpServiceGenerator.generate(context, service)` writes files through
 `context.writerDelegator()`. Return a generator only for services your
 integration owns: two integrations that both return one for a service fail code
+generation.
+
+## Adding shapes to a service
+
+A service generator often needs types the service's operations never reference,
+such as the events it publishes. Return them from `additionalShapes`:
+
+```java
+@Override
+public Set<ShapeId> additionalShapes(
+    Model model, CSharpSettings settings, ServiceShape service) {
+  return service.getTrait(PublishesTrait.class)
+      .map(PublishesTrait::getChannels)
+      .orElse(Set.of());
+}
+```
+
+NSmithy generates each shape with the shapes it references, alongside the
+service and any configured `closure`. The hook receives the model as assembled,
+before codegen transforms. A shape the model does not contain fails code
 generation.
 
 ## Extending endpoint rules

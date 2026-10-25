@@ -14,8 +14,11 @@ import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import software.amazon.smithy.codegen.core.SmithyIntegration;
+import software.amazon.smithy.model.Model;
 import software.amazon.smithy.model.shapes.ServiceShape;
+import software.amazon.smithy.model.shapes.ShapeId;
 import software.amazon.smithy.utils.SmithyUnstableApi;
 
 @SmithyUnstableApi
@@ -28,6 +31,16 @@ public interface CSharpIntegration
    */
   default List<CSharpProtocol> protocols() {
     return List.of();
+  }
+
+  /**
+   * Shapes to generate with {@code service} that the service does not reach through its operations,
+   * such as the events it publishes. Each shape is generated with the shapes it references. Called
+   * with the model as assembled, before codegen transforms, and only when a service is generated.
+   */
+  default Set<ShapeId> additionalShapes(
+      Model model, CSharpSettings settings, ServiceShape service) {
+    return Set.of();
   }
 
   /**
