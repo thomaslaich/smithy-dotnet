@@ -45,12 +45,15 @@ stale or missing staged JAR produces confusing codegen errors.
 
 - `codegen/` — Java/Gradle code generators. `smithy-csharp-codegen` (C# emission),
   `smithy-csharp-aws-codegen` (AWS protocols, endpoint rules, and customizations,
-  as a `CSharpIntegration`), and `smithy-proto-codegen` (`.proto` emission for gRPC).
+  as a `CSharpIntegration`), `smithy-fsharp-codegen` (F# types and schemas),
+  `smithy-dotnet-codegen-core` (language-neutral support the C# and F# plugins
+  share), and `smithy-proto-codegen` (`.proto` emission for gRPC).
 - `packages/` — C# runtime and tooling packages (`NSmithy.Core`, `NSmithy.Http`,
   `NSmithy.Client`, `NSmithy.Server.AspNetCore`, `NSmithy.Codecs.*`,
   `NSmithy.Protocols.*`, `NSmithy.MSBuild`).
-- `tests/` — `NSmithy.Tests` (unit) and `tests/Conformance/*` (one project per
-  protocol, run against the official Smithy/AWS protocol-test fixtures).
+- `tests/` — `NSmithy.Tests` (unit), `tests/FSharp` (F# codegen through MSBuild),
+  and `tests/Conformance/*` (one project per protocol, run against the official
+  Smithy/AWS protocol-test fixtures).
 - `examples/` — runnable end-to-end samples (`simplerestjson`, nested
   `restjson1` / `rpcv2cbor` / `grpc` unary and streaming variants,
   `aws-localstack`, `polyglot`). These

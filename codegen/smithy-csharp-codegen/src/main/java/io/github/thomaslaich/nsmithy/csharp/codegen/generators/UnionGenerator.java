@@ -4,10 +4,11 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.generators;
 
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.CSharpNaming;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.support.ShapeSupport;
+import io.github.thomaslaich.nsmithy.csharp.codegen.support.CSharpShapeSupport;
 import io.github.thomaslaich.nsmithy.csharp.codegen.writer.CSharpWriter;
 import java.util.List;
 import software.amazon.smithy.model.Model;
@@ -84,9 +85,9 @@ public final class UnionGenerator implements Runnable {
   private void writeVariant(String typeName, MemberShape member) {
     Model model = context.model();
     String valueType =
-        ShapeSupport.memberTypeExpr(writer, model, context.symbolProvider(), member, false);
+        CSharpShapeSupport.memberTypeExpr(writer, model, context.symbolProvider(), member, false);
     String valueExpression =
-        ShapeSupport.isReferenceType(model, member)
+        CSharpShapeSupport.isReferenceType(model, member)
             ? writer.format(
                 "value ?? throw new $T(nameof(value))", RuntimeTypes.ARGUMENT_NULL_EXCEPTION)
             : "value";
@@ -134,7 +135,7 @@ public final class UnionGenerator implements Runnable {
                   w.write(
                       "$T<$L, T> $L,",
                       RuntimeTypes.FUNC,
-                      ShapeSupport.memberTypeExpr(
+                      CSharpShapeSupport.memberTypeExpr(
                           w, context.model(), context.symbolProvider(), member, false),
                       matchParameterName(member));
                 }

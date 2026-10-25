@@ -5,9 +5,10 @@
  */
 package io.github.thomaslaich.nsmithy.csharp.codegen.support;
 
+import io.github.thomaslaich.nsmithy.codegen.core.ShapeSupport;
+import io.github.thomaslaich.nsmithy.codegen.core.TraitIds;
 import io.github.thomaslaich.nsmithy.csharp.codegen.GenerationContext;
 import io.github.thomaslaich.nsmithy.csharp.codegen.RuntimeTypes;
-import io.github.thomaslaich.nsmithy.csharp.codegen.TraitIds;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpIntegration;
 import io.github.thomaslaich.nsmithy.csharp.codegen.integrations.CSharpProtocol;
 import java.util.ArrayList;

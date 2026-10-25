@@ -104,10 +104,10 @@ public abstract class Schema
 public abstract class Schema<T> : Schema
 {
     public abstract void Write<TSerializer>(int member, T value, ref TSerializer serializer)
-        where TSerializer : struct, IShapeSerializer, allows ref struct;
+        where TSerializer : struct, IShapeSerializer;
 
     public abstract T Read<TDeserializer>(ref TDeserializer deserializer)
-        where TDeserializer : struct, IShapeDeserializer, allows ref struct;
+        where TDeserializer : struct, IShapeDeserializer;
 }
 ```
 
@@ -338,9 +338,10 @@ The serializer and deserializer are `struct` type arguments, so the JIT
 compiles the generated methods once per implementation with every call bound
 directly: no interface dispatch and no casts per value.
 
-They may also be `ref struct`s, so an implementation can hold a span or a
-`Utf8JsonReader` directly; they are always passed by `ref`, never copied or
-boxed.
+They are always passed by `ref`, never copied or boxed. They are not
+`ref struct`s: the type parameters carry no `allows ref struct`, because F#
+cannot override a method that declares it, and generated F# schemas override
+these methods.
 
 The JSON deserializer is one. It reads forward-only off a `Utf8JsonReader`
 without building a document first. A `ref` field cannot refer to a `ref struct`,

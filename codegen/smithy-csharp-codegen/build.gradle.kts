@@ -18,6 +18,7 @@ plugins {
 }
 
 dependencies {
+    api(project(":smithy-dotnet-codegen-core"))
     api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
     api("software.amazon.smithy:smithy-model:$smithyVersion")
     api("software.amazon.smithy:smithy-build:$smithyVersion")

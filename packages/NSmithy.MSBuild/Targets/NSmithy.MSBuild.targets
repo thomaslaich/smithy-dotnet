@@ -176,7 +176,20 @@
       >$(MSBuildProjectDirectory)/smithy-build.json</SmithyBuildFile
     >
     <SmithyProjection Condition="'$(SmithyProjection)' == ''">source</SmithyProjection>
+    <!-- An F# project generates F#: fsharp-codegen writes Types.g.fs and Schemas.g.fs, which
+         _AddSmithyGeneratedFSharpCompileItems compiles in that order ahead of the project's own
+         files. -->
+    <_SmithyIsFSharp Condition="'$(MSBuildProjectExtension)' == '.fsproj'">true</_SmithyIsFSharp>
+    <SmithyPlugin Condition="'$(SmithyPlugin)' == '' and '$(_SmithyIsFSharp)' == 'true'"
+      >fsharp-codegen</SmithyPlugin
+    >
     <SmithyPlugin Condition="'$(SmithyPlugin)' == ''">csharp-codegen</SmithyPlugin>
+    <_SmithyGeneratedExtension Condition="'$(_SmithyIsFSharp)' == 'true'"
+      >fs</_SmithyGeneratedExtension
+    >
+    <_SmithyGeneratedExtension Condition="'$(_SmithyIsFSharp)' != 'true'"
+      >cs</_SmithyGeneratedExtension
+    >
     <SmithyBuildOutputPath Condition="'$(SmithyBuildOutputPath)' == ''"
       >$(IntermediateOutputPath)Smithy/</SmithyBuildOutputPath
     >
@@ -184,7 +197,7 @@
       >$(SmithyBuildOutputPath)$(SmithyProjection)/$(SmithyPlugin)/</SmithyGeneratedOutputPath
     >
     <SmithyAllProjectionsGlob Condition="'$(SmithyAllProjectionsGlob)' == ''"
-      >$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.g.cs</SmithyAllProjectionsGlob
+      >$(SmithyBuildOutputPath)*/$(SmithyPlugin)/**/*.g.$(_SmithyGeneratedExtension)</SmithyAllProjectionsGlob
     >
     <SmithyProtoPlugin Condition="'$(SmithyProtoPlugin)' == ''">proto-codegen</SmithyProtoPlugin>
     <SmithyAllProtosGlob Condition="'$(SmithyAllProtosGlob)' == ''"
@@ -410,6 +423,7 @@
       Grpc="$(SmithyGrpc)"
       ProtoPlugin="$(SmithyProtoPlugin)"
       Projection="$(SmithyProjection)"
+      Plugin="$(SmithyPlugin)"
       CSharpCodegenVersion="$(SmithyCSharpCodegenVersion)"
       SmithyVersion="$(SmithyVersion)"
       OutputFile="$(_SmithyEffectiveBuildFile)"
@@ -648,6 +662,7 @@
     Name="_AddSmithyGeneratedCompileItems"
     DependsOnTargets="GenerateSmithyCode"
     BeforeTargets="CoreCompile"
+    Condition="'$(_SmithyIsFSharp)' != 'true'"
   >
     <ItemGroup Condition="'$(_SmithyEffectiveBuildFile)' != ''">
       <Compile Remove="$(SmithyAllProjectionsGlob)" />
@@ -662,6 +677,31 @@
       <Compile
         Include="$(SmithyAllProjectionsGlob)"
         Exclude="@(_SmithyExcludedGeneratedCompile)"
+        Visible="$(SmithyEmitGeneratedFiles)"
+      />
+    </ItemGroup>
+  </Target>
+
+  <!--
+    F# compiles files in order, and a file can only use what the files before it declare. The
+    generated files come first, types before the schemas that read and write them, so the project's
+    own files can use both. CoreCompile compiles @(Compile) in the order FSharpSourceCodeCompileOrder
+    leaves it, so the files are added before that target runs.
+  -->
+  <Target
+    Name="_AddSmithyGeneratedFSharpCompileItems"
+    DependsOnTargets="GenerateSmithyCode"
+    BeforeTargets="FSharpSourceCodeCompileOrder"
+    Condition="'$(_SmithyIsFSharp)' == 'true'"
+  >
+    <ItemGroup Condition="'$(_SmithyEffectiveBuildFile)' != ''">
+      <CompileBefore Remove="$(SmithyAllProjectionsGlob)" />
+      <CompileBefore
+        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/Types.g.fs"
+        Visible="$(SmithyEmitGeneratedFiles)"
+      />
+      <CompileBefore
+        Include="$(SmithyBuildOutputPath)*/$(SmithyPlugin)/Schemas.g.fs"
         Visible="$(SmithyEmitGeneratedFiles)"
       />
     </ItemGroup>

@@ -27,6 +27,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - `SmithyHttpServerResponse.SingleChunk` and `TryGetSingleChunk`: a body of one buffered chunk,
   which a host can recognize and write in one call. The built-in protocols use it for unary
   responses.
+- F# code generation. An F# project that references `NSmithy.MSBuild` generates F# types
+  and runtime schemas with the new `fsharp-codegen` plugin (`smithy-fsharp-codegen`):
+  records, discriminated unions for unions and enums, `option` for members that may be
+  absent, F# `list` and `Map`, and exception classes for errors. The schemas work with
+  every NSmithy codec. Clients and servers are not generated for F# yet.
 
 ### Changed
 
@@ -42,6 +47,10 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   faster.
 - The published packages require the lowest dependency versions they work with:
   `System.Formats.Cbor` and `System.IO.Hashing` 10.0.0 and `Scalar.AspNetCore` 2.11.3.
+- The language-neutral parts of the C# plugin moved to `smithy-dotnet-codegen-core`.
+  Integrations that use `TraitIds` or `ShapeSupport` import them from
+  `io.github.thomaslaich.nsmithy.codegen.core`; the C#-specific helpers of `ShapeSupport`
+  are now `CSharpShapeSupport`.
 
 ### Fixed
 

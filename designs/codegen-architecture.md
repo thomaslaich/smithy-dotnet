@@ -6,7 +6,9 @@ How the NSmithy Java plugin generates C# files from Smithy models.
 
 NSmithy generates C# files from Smithy models using a Java Smithy plugin
 (`smithy-csharp-codegen`), with AWS support in a separate integration
-(`smithy-csharp-aws-codegen`). The plugin runs inside `smithy build` via the Smithy
+(`smithy-csharp-aws-codegen`). A second plugin, `smithy-fsharp-codegen`, generates
+F# types and schemas for F# projects (see [F# Generator](#f-generator)). Both
+plugins build on `smithy-dotnet-codegen-core`. The plugin runs inside `smithy build` via the Smithy
 CLI, which means it has direct access to Smithy's fully assembled and validated
 semantic model. MSBuild invokes `smithy build` before C# compilation and
 registers the generated files with the .NET toolchain.
@@ -243,6 +245,61 @@ namespace, type name, and import list. The mapping follows the rules in
 blocks, using statements, XML doc comments). `CSharpDelegator` manages file
 creation and routes each shape's output to the correct `.g.cs` file.
 
+## Shared Codegen Core
+
+`smithy-dotnet-codegen-core` holds what the C# and F# generators decide the same
+way, whatever language they write. It registers no plugin of its own.
+
+| Class | What it decides |
+| --- | --- |
+| `ShapeSupport` | Shape predicates: required, nullable, defaults, HTTP bindings, streaming, error messages |
+| `SchemaSupport` | What a runtime schema carries: runtime traits, a member's effective traits, enum values, prelude schemas |
+| `Naming` | PascalCase and camelCase, and Smithy namespace to .NET namespace |
+| `ShapeClosures` | The generated set: service, closure, and shapes integrations add |
+| `TraitIds` | Ids of traits outside the Smithy prelude |
+
+Rendering stays in each generator: `CSharpShapeSupport` writes C# type
+expressions and literals, and the F# generator its own.
+
+## F# Generator
+
+`FSharpCodegenPlugin` (`fsharp-codegen`) generates the F# type and runtime
+schema of every shape in the generated set. It takes `service`, `closure`, and
+`baseNamespace`, with the same meaning as for `csharp-codegen`. The schemas
+derive from the same runtime classes as the C# ones (`StructSchema`,
+`UnionSchema`, `ListSchema`, `MapSchema`), so every codec and protocol reads and
+writes F# values unchanged.
+
+| Shape | F# type |
+| --- | --- |
+| structure | Record. A structure with no members is a class with value equality. |
+| `@error` structure | Class deriving from `Exception`, taking optional members as optional constructor arguments |
+| union | Discriminated union with an `Unknown of tag * value` case; a `Unit` member is a case without data |
+| enum | Discriminated union with an `Unknown of string` case, implementing `IStringEnumValue` |
+| intEnum | F# enum |
+| list / set | `'T list` (`'T option list` when `@sparse`) |
+| map | `Map<string, 'T>` (`Map<string, 'T option>` when `@sparse`) |
+
+A member is an `option` when it may be absent: not `@required` and without a
+default a client can rely on. A member with such a default is a plain value,
+which reading fills in when the input leaves it out.
+
+F# compiles files, and the declarations in a file, in order, and a declaration
+can only refer to one before it. The plugin therefore writes two files,
+`Types.g.fs` and `Schemas.g.fs`, compiled in that order. Each holds one
+`namespace rec` section per Smithy namespace, so the shapes of a namespace can
+refer to each other, with the sections in dependency order. Namespaces whose
+shapes refer to each other fail generation.
+
+Every reference is qualified from `global`, so a model type never hides an F#
+or runtime type and the files need no `open` declarations. A schema refers to
+another structure, union, list, or map through `Schemas.Lazy`, because F#
+initializes a file's static values in declaration order; enum schemas come first
+in their section and are referred to directly.
+
+The runtime's serializer and deserializer type parameters carry no `allows ref
+struct`: F# cannot override a method that declares it.
+
 ## MSBuild Integration
 
 `NSmithy.MSBuild` is a NuGet package that provides the MSBuild targets used to
@@ -265,6 +322,13 @@ Depends on `GenerateSmithyCode`. Adds all `.g.cs` files matching
 `<SmithyBuildOutputPath>*/csharp-codegen/**/*.g.cs` to `<Compile>`.
 Respects `SmithyGenerateClient` / `SmithyGenerateServer` properties to
 optionally exclude client or server files.
+
+### `_AddSmithyGeneratedFSharpCompileItems`
+
+Runs instead of `_AddSmithyGeneratedCompileItems` in an F# project, where
+`SmithyPlugin` defaults to `fsharp-codegen`. Adds `Types.g.fs`, then
+`Schemas.g.fs`, to `<CompileBefore>` ahead of `FSharpSourceCodeCompileOrder`, so
+the project's own files come after them.
 
 ## Configuration
 
