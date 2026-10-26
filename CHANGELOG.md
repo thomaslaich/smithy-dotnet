@@ -31,6 +31,8 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `AwsSigV4AuthScheme`, which generated AWS clients already do.
 - **BREAKING:** `AwsSigV4Presigner`. Call `AwsSigV4Signer.Presign` with resolved credentials
   instead.
+- **BREAKING:** `AwsRegionalEndpointResolver`. Services with endpoint rules generate their own
+  resolver; for a model without them, set the client's `Endpoint`.
 - **BREAKING:** `AwsSigV4Signer` no longer takes an endpoint and signs only absolute request
   URIs.
 

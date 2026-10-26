@@ -93,16 +93,14 @@ of the selected profile in `~/.aws/config` (`AwsRegion.Resolve()`). Set it to
 use another region. Resolution reads no network, so on EC2 set `AWS_REGION`;
 Lambda, ECS, and App Runner set it for you.
 
-For a model without endpoint rules, pass the signing name and region, and
-resolve the endpoint with `AwsRegionalEndpointResolver`:
+For a model without endpoint rules, set the endpoint and pass the signing name
+and region:
 
 ```csharp
-var region = "us-east-1";
-
 using var lambda = new LambdaClient(new LambdaClientConfig
 {
-    EndpointResolver = new AwsRegionalEndpointResolver("lambda", region),
-    AuthSchemes = { new AwsSigV4AuthScheme("lambda", region, credentials) },
+    Endpoint = new Uri("https://lambda.us-east-1.amazonaws.com"),
+    AuthSchemes = { new AwsSigV4AuthScheme("lambda", "us-east-1", credentials) },
 });
 ```
 
