@@ -25,6 +25,13 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   Generated configurations of AWS services whose endpoint rules read `AWS::Region` default
   `Region` to it.
 
+### Removed
+
+- **BREAKING:** `AwsSigV4Interceptor`, a leftover from before auth schemes. Use
+  `AwsSigV4AuthScheme`, which generated AWS clients already do. `AwsSigV4Signer` no longer
+  takes an endpoint and signs only absolute request URIs; `AwsSigV4Presigner` still resolves a
+  relative one against its endpoint.
+
 ## [0.14.0]
 
 This release generates endpoint resolvers from Smithy endpoint rules and waiters from

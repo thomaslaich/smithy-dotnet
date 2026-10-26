@@ -6,30 +6,27 @@ using NSmithy.Http;
 
 namespace NSmithy.Tests.Aws;
 
-public sealed class AwsSigV4InterceptorTests
+public sealed class AwsSigV4SignerTests
 {
     [Fact]
     public async Task SignAddsSigV4Headers()
     {
-        var request = new SmithyHttpRequest(HttpMethod.Post, "/");
+        var request = new SmithyHttpRequest(HttpMethod.Post, "http://localhost:4566/");
         request.Body = new SmithyHttpBody.Bytes("{}"u8.ToArray());
         request.ContentType = "application/x-amz-json-1.0";
         request.Headers["X-Amz-Target"] = ["DynamoDB_20120810.ListTables"];
 
-        var interceptor = new AwsSigV4Interceptor(
-            new Uri("http://localhost:4566"),
+        var signer = new AwsSigV4Signer(
             "dynamodb",
             "us-east-1",
-            new StaticAwsCredentialsProvider(
-                new AwsCredentials("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY")
-            ),
             new FixedTimeProvider(new DateTimeOffset(2026, 06, 22, 12, 34, 56, TimeSpan.Zero))
         );
 
-        var context = new SmithyContext();
-        context.Set(SmithyContextKeys.ServiceName, "DynamoDB");
-        context.Set(SmithyContextKeys.OperationName, "ListTables");
-        _ = await interceptor.OnBeforeTransmitAsync(context, request);
+        _ = await signer.SignAsync(
+            new SmithyContext(),
+            request,
+            new AwsCredentials("AKIDEXAMPLE", "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY")
+        );
 
         Assert.Equal(["localhost:4566"], request.Headers["Host"]);
         Assert.Equal(["20260622T123456Z"], request.Headers["X-Amz-Date"]);
@@ -53,25 +50,33 @@ public sealed class AwsSigV4InterceptorTests
     }
 
     [Fact]
-    public async Task InterceptorSignsBeforeTransmit()
+    public async Task SignAddsTheSessionToken()
     {
-        var interceptor = new AwsSigV4Interceptor(
-            new Uri("http://localhost:4566"),
-            "s3",
-            "us-east-1",
-            new StaticAwsCredentialsProvider(new AwsCredentials("test", "test", "token")),
-            TimeProvider.System
-        );
-        var context = new SmithyContext();
-        context.Set(SmithyContextKeys.ServiceName, "S3");
-        context.Set(SmithyContextKeys.OperationName, "ListBuckets");
-        var request = new SmithyHttpRequest(HttpMethod.Get, "/");
+        var request = new SmithyHttpRequest(HttpMethod.Get, "http://localhost:4566/");
 
-        var signed = await interceptor.OnBeforeTransmitAsync(context, request);
+        var signed = await new AwsSigV4Signer("s3", "us-east-1").SignAsync(
+            new SmithyContext(),
+            request,
+            new AwsCredentials("test", "test", "token")
+        );
 
         Assert.Same(request, signed);
         Assert.True(request.Headers.ContainsKey("Authorization"));
         Assert.Equal(["token"], request.Headers["X-Amz-Security-Token"]);
+    }
+
+    [Fact]
+    public async Task SignRejectsARelativeRequestUri()
+    {
+        var request = new SmithyHttpRequest(HttpMethod.Get, "/");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await new AwsSigV4Signer("s3", "us-east-1").SignAsync(
+                new SmithyContext(),
+                request,
+                Credentials
+            )
+        );
     }
 
     [Fact]
@@ -190,6 +195,28 @@ public sealed class AwsSigV4InterceptorTests
             uri.AbsoluteUri
         );
         Assert.Equal(uri.AbsoluteUri, request.RequestUri);
+    }
+
+    [Fact]
+    public async Task PresignerResolvesARelativeRequestUriAgainstItsEndpoint()
+    {
+        var presigner = new AwsSigV4Presigner(
+            "s3",
+            "us-east-1",
+            new StaticAwsCredentialsProvider(Credentials),
+            new Uri("https://examplebucket.s3.amazonaws.com")
+        );
+
+        var uri = await presigner.PresignAsync(
+            new SmithyHttpRequest(HttpMethod.Get, "/test.txt"),
+            TimeSpan.FromMinutes(5)
+        );
+
+        Assert.StartsWith(
+            "https://examplebucket.s3.amazonaws.com/test.txt?X-Amz-Algorithm=",
+            uri.AbsoluteUri,
+            StringComparison.Ordinal
+        );
     }
 
     [Fact]

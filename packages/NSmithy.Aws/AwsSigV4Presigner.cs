@@ -13,7 +13,7 @@ public sealed class AwsSigV4Presigner(
 {
     private readonly IAwsCredentialsProvider credentialsProvider =
         credentialsProvider ?? throw new ArgumentNullException(nameof(credentialsProvider));
-    private readonly AwsSigV4Signer signer = new(endpoint, service, region, timeProvider);
+    private readonly AwsSigV4Signer signer = new(service, region, timeProvider);
 
     public async ValueTask<Uri> PresignAsync(
         SmithyHttpRequest request,
@@ -22,6 +22,17 @@ public sealed class AwsSigV4Presigner(
     )
     {
         ArgumentNullException.ThrowIfNull(request);
+        // A request serialized outside the client pipeline has a relative URI.
+        if (
+            endpoint is not null
+            && !(
+                Uri.TryCreate(request.RequestUri, UriKind.Absolute, out var absolute)
+                && absolute.Scheme is "http" or "https"
+            )
+        )
+        {
+            request.RequestUri = new Uri(endpoint, request.RequestUri).AbsoluteUri;
+        }
         var credentials = await credentialsProvider
             .GetCredentialsAsync(cancellationToken)
             .ConfigureAwait(false);
