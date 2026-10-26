@@ -25,6 +25,12 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   Generated configurations of AWS services whose endpoint rules read `AWS::Region` default
   `Region` to it.
 
+### Changed
+
+- The server reads a modeled error an `async` handler raises off the handler's task instead of
+  awaiting the task, which threw the error a second time. Such an error response is about 20%
+  faster.
+
 ### Removed
 
 - **BREAKING:** `AwsSigV4Interceptor`, a leftover from before auth schemes. Use

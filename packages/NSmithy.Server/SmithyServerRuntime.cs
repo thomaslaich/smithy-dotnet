@@ -65,8 +65,21 @@ public sealed class SmithyServerRuntime
 
         try
         {
-            var output = await InvokeHandlerAsync(handler, input, cancellationToken)
-                .ConfigureAwait(false);
+            var invocation = InvokeHandlerAsync(handler, input, cancellationToken);
+
+            // An exception an async handler raises is already caught into its task. Awaiting the task
+            // would throw it a second time, which doubles what a modeled error costs, so a modeled
+            // error is read off the task instead. Anything else is awaited as usual.
+            await ((Task)invocation).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            if (
+                invocation.Exception?.InnerExceptions is [var raised]
+                && protocol.TrySerializeError(raised, out var modeledResponse)
+            )
+            {
+                return modeledResponse;
+            }
+
+            var output = await invocation.ConfigureAwait(false);
             return protocol.SerializeResponse(output, cancellationToken);
         }
         catch (Exception exception)

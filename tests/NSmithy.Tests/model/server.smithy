@@ -22,4 +22,14 @@ operation CreateUser {
         @required
         name: String
     }
+
+    errors: [
+        UserExists
+    ]
+}
+
+@error("client")
+@httpError(409)
+structure UserExists {
+    message: String
 }
