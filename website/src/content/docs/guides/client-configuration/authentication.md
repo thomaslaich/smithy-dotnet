@@ -130,9 +130,15 @@ configured but fails, such as a profile whose role cannot be assumed, stops the
 chain with its error. Profiles with `mfa_serial` are not supported, since they
 need an interactive token code.
 
-For presigned requests, construct an `AwsSigV4Presigner`, serialize the generated
-operation request, and call `PresignAsync`. Durations are limited to AWS's range
-of one second through seven days.
+To presign a request with an absolute URI, sign it with `AwsSigV4Signer.Presign`:
+
+```csharp
+var credentials = await credentialsProvider.GetCredentialsAsync();
+var url = new AwsSigV4Signer("s3", "us-east-1")
+    .Presign(request, credentials, TimeSpan.FromHours(1));
+```
+
+Durations are limited to AWS's range of one second through seven days.
 
 See [AWS Protocols](/smithy-dotnet/protocols/aws-overview/) for the supported AWS
 runtime features and the remaining gaps. NSmithy also provides standard retries

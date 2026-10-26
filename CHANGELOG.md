@@ -28,9 +28,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 ### Removed
 
 - **BREAKING:** `AwsSigV4Interceptor`, a leftover from before auth schemes. Use
-  `AwsSigV4AuthScheme`, which generated AWS clients already do. `AwsSigV4Signer` no longer
-  takes an endpoint and signs only absolute request URIs; `AwsSigV4Presigner` still resolves a
-  relative one against its endpoint.
+  `AwsSigV4AuthScheme`, which generated AWS clients already do.
+- **BREAKING:** `AwsSigV4Presigner`. Call `AwsSigV4Signer.Presign` with resolved credentials
+  instead.
+- **BREAKING:** `AwsSigV4Signer` no longer takes an endpoint and signs only absolute request
+  URIs.
 
 ## [0.14.0]
 

@@ -198,28 +198,6 @@ public sealed class AwsSigV4SignerTests
     }
 
     [Fact]
-    public async Task PresignerResolvesARelativeRequestUriAgainstItsEndpoint()
-    {
-        var presigner = new AwsSigV4Presigner(
-            "s3",
-            "us-east-1",
-            new StaticAwsCredentialsProvider(Credentials),
-            new Uri("https://examplebucket.s3.amazonaws.com")
-        );
-
-        var uri = await presigner.PresignAsync(
-            new SmithyHttpRequest(HttpMethod.Get, "/test.txt"),
-            TimeSpan.FromMinutes(5)
-        );
-
-        Assert.StartsWith(
-            "https://examplebucket.s3.amazonaws.com/test.txt?X-Amz-Algorithm=",
-            uri.AbsoluteUri,
-            StringComparison.Ordinal
-        );
-    }
-
-    [Fact]
     public void PresignPreservesNonAuthenticationXAmzQueryParameters()
     {
         var request = new SmithyHttpRequest(
