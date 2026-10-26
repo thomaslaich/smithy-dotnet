@@ -80,6 +80,65 @@ class AwsIntegrationsTest {
     assertFalse(client.contains("GlacierInterceptor"), client);
   }
 
+  @Test
+  void aServiceWhoseRulesReadTheRegionDefaultsItFromTheEnvironment() throws Exception {
+    String client =
+        generate(
+            regionModel("builtIn: \"AWS::Region\"", ""),
+            "example.regional#Regional",
+            "Example/Regional/Regional.Client.g.cs");
+
+    assertTrue(client.contains("Region = AwsRegion.Resolve();"), client);
+  }
+
+  @Test
+  void aServiceWhoseRulesDoNotReadTheRegionGetsNoDefault() throws Exception {
+    String client =
+        generate(
+            regionModel(
+                "documentation: \"A client setting.\"",
+                "@clientContextParams(Region: { type: \"string\", documentation: \"A client"
+                    + " setting.\" })"),
+            "example.regional#Regional",
+            "Example/Regional/Regional.Client.g.cs");
+
+    assertFalse(client.contains("AwsRegion"), client);
+  }
+
+  private static String regionModel(String regionParameter, String serviceTrait) {
+    return """
+    $version: "2"
+    metadata suppressions = [{ id: "UnstableTrait", namespace: "example.regional" }]
+    namespace example.regional
+
+    use aws.protocols#awsJson1_0
+    use smithy.rules#clientContextParams
+    use smithy.rules#endpointRuleSet
+
+    %s
+    @awsJson1_0
+    @endpointRuleSet({
+        version: "1.0"
+        parameters: { Region: { type: "string", %s } }
+        rules: [
+            {
+                conditions: [{ fn: "isSet", argv: [{ ref: "Region" }] }]
+                type: "endpoint"
+                endpoint: { url: "https://regional.{Region}.example.com" }
+            }
+            { conditions: [], type: "error", error: "Region is required" }
+        ]
+    })
+    service Regional {
+        version: "2024-01-01"
+        operations: [Ping]
+    }
+
+    operation Ping {}
+    """
+        .formatted(serviceTrait, regionParameter);
+  }
+
   private static String glacierModel(String namespace) {
     return """
     $version: "2"

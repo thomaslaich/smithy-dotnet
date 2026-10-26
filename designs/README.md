@@ -15,6 +15,7 @@ tradeoffs.
 | [http-interfaces.md](http-interfaces.md) | HTTP transport abstractions |
 | [client-architecture.md](client-architecture.md) | Generated client lifecycle, config, interceptors, auth, retries |
 | [endpoint-rules.md](endpoint-rules.md) | Generated endpoint resolvers from Smithy endpoint rules (BDD) |
+| [aws-credentials.md](aws-credentials.md) | AWS credential chain and default region resolution |
 | [waiters.md](waiters.md) | Generated waiters from `@waitable`, with acceptors compiled to C# |
 | [server-architecture.md](server-architecture.md) | Generated server dispatch, shared server runtime, host adapter |
 | [native-grpc.md](native-grpc.md) | Native proto codec + gRPC protocol (no protoc/Grpc.Tools) |

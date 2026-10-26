@@ -11,6 +11,31 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- `DefaultAwsCredentialsProvider` covers the AWS SDKs' default chain: environment, web
+  identity, shared profile, container credentials, then instance metadata. It sticks to the
+  source that succeeds, and stops at a configured source that fails instead of falling through.
+- `WebIdentityAwsCredentialsProvider`, `AssumeRoleAwsCredentialsProvider`,
+  `ContainerAwsCredentialsProvider` (ECS, Fargate, App Runner, CodeBuild, EKS Pod Identity), and
+  `ProcessAwsCredentialsProvider`.
+- Shared profiles assume roles through `source_profile`, `credential_source`, and
+  `web_identity_token_file`, and run `credential_process`.
+- `AwsRegion.Resolve()` reads `AWS_REGION`, `AWS_DEFAULT_REGION`, and the profile's `region`.
+  Generated configurations of AWS services whose endpoint rules read `AWS::Region` default
+  `Region` to it.
+
+### Removed
+
+- **BREAKING:** `AwsSigV4Interceptor`, a leftover from before auth schemes. Use
+  `AwsSigV4AuthScheme`, which generated AWS clients already do.
+- **BREAKING:** `AwsSigV4Presigner`. Call `AwsSigV4Signer.Presign` with resolved credentials
+  instead.
+- **BREAKING:** `AwsRegionalEndpointResolver`. Services with endpoint rules generate their own
+  resolver; for a model without them, set the client's `Endpoint`.
+- **BREAKING:** `AwsSigV4Signer` no longer takes an endpoint and signs only absolute request
+  URIs.
+
 ## [0.14.0]
 
 This release generates endpoint resolvers from Smithy endpoint rules and waiters from

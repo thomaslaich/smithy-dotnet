@@ -12,7 +12,6 @@ namespace NSmithy.Aws;
 /// constructed with.
 /// </summary>
 public sealed class AwsSigV4Signer(
-    Uri? endpoint,
     string? service,
     string? region,
     TimeProvider? timeProvider = null
@@ -35,11 +34,6 @@ public sealed class AwsSigV4Signer(
         .InvariantCulture
         .DateTimeFormat;
 
-    private readonly Uri? endpoint =
-        endpoint is null || endpoint.IsAbsoluteUri
-            ? endpoint
-            : throw new ArgumentException("Endpoint must be an absolute URI.", nameof(endpoint));
-
     private readonly string? service =
         service is not null && string.IsNullOrWhiteSpace(service)
             ? throw new ArgumentException("Service must not be empty.", nameof(service))
@@ -52,15 +46,12 @@ public sealed class AwsSigV4Signer(
 
     private readonly TimeProvider timeProvider = timeProvider ?? TimeProvider.System;
 
-    public AwsSigV4Signer(string service, string region, TimeProvider? timeProvider = null)
-        : this(null, service, region, timeProvider) { }
-
     /// <summary>
     /// A signer that takes its signing name and region from the resolved endpoint only, as the
     /// endpoints of services with modeled endpoint rules always set them.
     /// </summary>
     public AwsSigV4Signer(TimeProvider? timeProvider = null)
-        : this(null, null, null, timeProvider) { }
+        : this(null, null, timeProvider) { }
 
     public ValueTask<SmithyHttpRequest> SignAsync(
         SmithyContext context,
@@ -139,10 +130,7 @@ public sealed class AwsSigV4Signer(
     private static bool UsesS3PathRules(string signingName) =>
         signingName is "s3" or "s3-outposts" or "s3express";
 
-    internal void Sign(SmithyHttpRequest request, AwsCredentials credentials, DateTimeOffset now) =>
-        Sign(request, credentials, now, DefaultSigningOptions());
-
-    private void Sign(
+    private static void Sign(
         SmithyHttpRequest request,
         AwsCredentials credentials,
         DateTimeOffset now,
@@ -354,26 +342,13 @@ public sealed class AwsSigV4Signer(
         return builder.Uri;
     }
 
-    private Uri ResolveRequestUri(string requestUri)
-    {
-        if (
-            Uri.TryCreate(requestUri, UriKind.Absolute, out var absolute)
-            && absolute.IsAbsoluteUri
-            && (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps)
-        )
-        {
-            return absolute;
-        }
-
-        if (endpoint is null)
-        {
-            throw new InvalidOperationException(
+    private static Uri ResolveRequestUri(string requestUri) =>
+        Uri.TryCreate(requestUri, UriKind.Absolute, out var absolute)
+        && (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps)
+            ? absolute
+            : throw new InvalidOperationException(
                 "AWS SigV4 requires an absolute request URI after endpoint resolution."
             );
-        }
-
-        return new Uri(endpoint, requestUri);
-    }
 
     private static byte[] SignablePayloadBytes(SmithyHttpBody body) =>
         body switch

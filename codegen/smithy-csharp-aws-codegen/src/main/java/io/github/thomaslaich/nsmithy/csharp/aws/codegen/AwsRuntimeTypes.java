@@ -23,6 +23,7 @@ final class AwsRuntimeTypes {
   static final Symbol AWS_ARN = runtimeType("NSmithy.Aws.AwsArn");
   static final Symbol AWS_ENDPOINT_FUNCTIONS = runtimeType("NSmithy.Aws.AwsEndpointFunctions");
   static final Symbol AWS_PARTITION = runtimeType("NSmithy.Aws.AwsPartition");
+  static final Symbol AWS_REGION = runtimeType("NSmithy.Aws.AwsRegion");
   static final Symbol GLACIER_INTERCEPTOR = runtimeType("NSmithy.Aws.GlacierInterceptor");
 
   private AwsRuntimeTypes() {}

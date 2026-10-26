@@ -198,28 +198,6 @@ public sealed class AwsCredentialsProviderTests
         Assert.Same(expected, credentials);
     }
 
-    [Theory]
-    [InlineData("us-east-1", "https://lambda.us-east-1.amazonaws.com/")]
-    [InlineData("cn-north-1", "https://lambda.cn-north-1.amazonaws.com.cn/")]
-    [InlineData("us-gov-west-1", "https://lambda.us-gov-west-1.amazonaws.com/")]
-    [InlineData("us-iso-east-1", "https://lambda.us-iso-east-1.c2s.ic.gov/")]
-    public async Task RegionalEndpointResolverUsesAwsPartitions(string region, string expected)
-    {
-        var resolver = new AwsRegionalEndpointResolver("lambda", region);
-
-        var endpoint = await resolver.ResolveEndpointAsync(
-            new SmithyEndpointParameters(
-                new ShapeId("example", "Service"),
-                new ShapeId("example", "Operation"),
-                null,
-                null
-            )
-        );
-
-        Assert.Equal(expected, endpoint.Uri.AbsoluteUri);
-        Assert.Same(resolver.StaticEndpoint, endpoint);
-    }
-
     private sealed class StubProvider : IAwsCredentialsProvider
     {
         private readonly AwsCredentials? credentials;
