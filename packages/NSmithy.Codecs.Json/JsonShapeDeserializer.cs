@@ -1,108 +1,322 @@
 using System.Globalization;
 using System.Numerics;
+using System.Text;
 using System.Text.Json;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
-using static NSmithy.Codecs.Json.JsonWire;
 
 namespace NSmithy.Codecs.Json;
 
 /// <summary>
-/// Reads one JSON value, described by the plan of the member it belongs to. An aggregate read
-/// walks the value and hands each member, element, entry, or case back to the schema.
+/// Reads JSON straight off a <see cref="Utf8JsonReader"/>. One deserializer is the cursor for the
+/// whole payload: a nested value is read through the same instance with <see cref="entry"/> set to
+/// the plan of the member it belongs to. The reader is positioned on a value's first token and is
+/// left on its last, so the caller moves on with one <see cref="Utf8JsonReader.Read"/>.
 /// </summary>
-internal readonly struct JsonShapeDeserializer(
-    JsonElement current,
-    JsonMemberPlan entry,
-    WireReadMode mode
-) : IShapeDeserializer
+internal ref struct JsonShapeDeserializer : IShapeDeserializer
 {
-    private readonly JsonElement current = current;
-    private readonly JsonMemberPlan entry = entry;
-    private readonly WireReadMode mode = mode;
+    private Utf8JsonReader reader;
+    private JsonMemberPlan entry;
+    private readonly WireReadMode mode;
 
-    public bool TryReadNull() => current.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined;
+    private JsonShapeDeserializer(byte[] payload, JsonMemberPlan entry, WireReadMode mode)
+    {
+        reader = new Utf8JsonReader(payload);
+        this.entry = entry;
+        this.mode = mode;
+    }
 
-    public bool ReadBoolean() =>
-        ReadValue(current, "a boolean", static element => element.GetBoolean());
+    /// <summary>Reads a whole payload, rejecting anything that is not one JSON value.</summary>
+    public static T ReadPayload<T>(
+        byte[] payload,
+        Schema<T> schema,
+        JsonMemberPlan root,
+        WireReadMode mode
+    )
+    {
+        var deserializer = new JsonShapeDeserializer(payload, root, mode);
+        try
+        {
+            Start(ref deserializer.reader);
+            var value = schema.Read(ref deserializer);
+            End(ref deserializer.reader);
+            return value;
+        }
+        catch (JsonException exception)
+        {
+            throw NotJson(exception);
+        }
+    }
 
-    public readonly sbyte ReadByte() =>
-        ReadValue(current, "a byte", static element => element.GetSByte());
+    /// <summary>Reads a payload's members into <paramref name="builder"/>.</summary>
+    public static void ReadPayloadMembers<T, TBuilder>(
+        byte[] payload,
+        JsonShapePlan plan,
+        StructSchema<T, TBuilder> schema,
+        TBuilder builder,
+        WireReadMode mode
+    )
+    {
+        var deserializer = new JsonShapeDeserializer(payload, null!, mode);
+        try
+        {
+            Start(ref deserializer.reader);
+            deserializer.ReadMembers(plan, schema, builder, projection: true);
+            End(ref deserializer.reader);
+        }
+        catch (JsonException exception)
+        {
+            throw NotJson(exception);
+        }
+    }
 
-    public readonly short ReadShort() =>
-        ReadValue(current, "a short", static element => element.GetInt16());
+    private static void Start(ref Utf8JsonReader reader)
+    {
+        if (!reader.Read())
+        {
+            throw new JsonException("The input does not contain any JSON tokens.");
+        }
+    }
 
-    public int ReadInteger() =>
-        ReadValue(current, "an integer", static element => element.GetInt32());
+    // Reading past the value is what makes the reader reject anything after it.
+    private static void End(ref Utf8JsonReader reader)
+    {
+        while (reader.Read()) { }
+    }
 
-    public readonly long ReadLong() =>
-        ReadValue(current, "a long", static element => element.GetInt64());
+    private static MalformedRequestException NotJson(JsonException exception) =>
+        MalformedRequestException.Serialization(
+            $"Request body is not valid JSON: {exception.Message}"
+        );
 
-    public readonly float ReadFloat() => ReadValue(current, "a float", JsonWire.ReadFloat);
+    public bool TryReadNull() => reader.TokenType == JsonTokenType.Null;
 
-    public readonly double ReadDouble() => ReadValue(current, "a double", JsonWire.ReadDouble);
+    public bool ReadBoolean()
+    {
+        try
+        {
+            return reader.GetBoolean();
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, "a boolean");
+        }
+    }
 
-    public BigInteger ReadBigInteger() =>
-        entry.BigNumbersAsStrings
-            ? ReadValue(
-                current,
-                "a bigInteger string",
-                static element =>
-                    BigInteger.Parse(
-                        element.GetString()!,
+    public sbyte ReadByte()
+    {
+        try
+        {
+            return reader.GetSByte();
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, "a byte");
+        }
+    }
+
+    public short ReadShort()
+    {
+        try
+        {
+            return reader.GetInt16();
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, "a short");
+        }
+    }
+
+    public int ReadInteger()
+    {
+        try
+        {
+            return reader.GetInt32();
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, "an integer");
+        }
+    }
+
+    public long ReadLong()
+    {
+        try
+        {
+            return reader.GetInt64();
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, "a long");
+        }
+    }
+
+    public float ReadFloat()
+    {
+        try
+        {
+            return reader.TokenType == JsonTokenType.String
+                ? reader.GetString() switch
+                {
+                    "NaN" => float.NaN,
+                    "Infinity" => float.PositiveInfinity,
+                    "-Infinity" => float.NegativeInfinity,
+                    var s => throw new FormatException($"'{s}' is not a float."),
+                }
+                : reader.GetSingle();
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, "a float");
+        }
+    }
+
+    public double ReadDouble()
+    {
+        try
+        {
+            return reader.TokenType == JsonTokenType.String
+                ? reader.GetString() switch
+                {
+                    "NaN" => double.NaN,
+                    "Infinity" => double.PositiveInfinity,
+                    "-Infinity" => double.NegativeInfinity,
+                    var s => throw new FormatException($"'{s}' is not a double."),
+                }
+                : reader.GetDouble();
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, "a double");
+        }
+    }
+
+    public BigInteger ReadBigInteger()
+    {
+        var asString = entry.BigNumbersAsStrings;
+        try
+        {
+            return asString
+                    ? BigInteger.Parse(
+                        reader.GetString()!,
                         NumberStyles.AllowLeadingSign,
                         CultureInfo.InvariantCulture
                     )
-            )
-            : ReadValue(
-                current,
-                "a bigInteger",
-                static element =>
-                    BigInteger.Parse(element.GetRawText(), CultureInfo.InvariantCulture)
-            );
-
-    public readonly decimal ReadBigDecimal() =>
-        entry.BigNumbersAsStrings
-            ? ReadValue(
-                current,
-                "a bigDecimal string",
-                static element =>
-                    decimal.Parse(
-                        element.GetString()!,
-                        NumberStyles.Float,
+                : reader.TokenType == JsonTokenType.Number
+                    ? BigInteger.Parse(
+                        Encoding.UTF8.GetString(reader.ValueSpan),
                         CultureInfo.InvariantCulture
                     )
-            )
-            : ReadValue(current, "a bigDecimal", static element => element.GetDecimal());
+                : throw new FormatException("Not a number.");
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, asString ? "a bigInteger string" : "a bigInteger");
+        }
+    }
 
-    public string ReadString() =>
-        TryReadNull()
-            ? null!
-            : ReadValue(current, "a string", static element => element.GetString()!);
+    public decimal ReadBigDecimal()
+    {
+        var asString = entry.BigNumbersAsStrings;
+        try
+        {
+            return asString
+                ? decimal.Parse(
+                    reader.GetString()!,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture
+                )
+                : reader.GetDecimal();
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, asString ? "a bigDecimal string" : "a bigDecimal");
+        }
+    }
 
-    public readonly byte[] ReadBlob() =>
-        ReadValue(current, "a base64-encoded blob", static element => element.GetBytesFromBase64());
+    public string ReadString()
+    {
+        if (TryReadNull())
+        {
+            return null!;
+        }
+
+        try
+        {
+            return reader.GetString()!;
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, "a string");
+        }
+    }
+
+    public byte[] ReadBlob()
+    {
+        try
+        {
+            return reader.GetBytesFromBase64();
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, "a base64-encoded blob");
+        }
+    }
 
     public DateTimeOffset ReadTimestamp()
     {
         var format = entry.TimestampFormat;
-        var readMode = mode;
-        return ReadValue(
-            current,
-            $"a {format} timestamp",
-            element => TimestampFormat.Read(element, format, readMode)
-        );
+        try
+        {
+            return format switch
+            {
+                "epoch-seconds" => DateTimeOffset.FromUnixTimeMilliseconds(
+                    (long)(reader.GetDouble() * 1000)
+                ),
+                "http-date" => DateTimeOffset.ParseExact(
+                    reader.GetString()!,
+                    "r",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None
+                ),
+                _ => Rfc3339.Parse(reader.GetString()!, mode),
+            };
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, $"a {format} timestamp");
+        }
     }
 
-    public Document ReadDocument() => Document.FromJsonElement(current);
+    public Document ReadDocument() => Document.FromJsonElement(JsonElement.ParseValue(ref reader));
 
     // An unmodeled value is not rejected here: enums stay open on the wire, and it is the
     // constraint validator that closes them on the server. Only a non-string is malformed.
-    public string ReadStringEnum() =>
-        ReadValue(current, "a string", static element => element.GetString()!);
+    public string ReadStringEnum()
+    {
+        try
+        {
+            return reader.TokenType == JsonTokenType.String
+                ? reader.GetString()!
+                : throw new InvalidOperationException();
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, "a string");
+        }
+    }
 
-    public int ReadIntEnum() =>
-        ReadValue(current, "an integer", static element => element.GetInt32());
+    public int ReadIntEnum()
+    {
+        try
+        {
+            return reader.GetInt32();
+        }
+        catch (Exception exception) when (IsValueError(exception))
+        {
+            throw Malformed(ref reader, "an integer");
+        }
+    }
 
     public Stream ReadStream() =>
         throw new NotSupportedException("JSON codec does not support streaming blob schemas.");
@@ -113,7 +327,7 @@ internal readonly struct JsonShapeDeserializer(
     public T ReadStruct<T, TBuilder>(StructSchema<T, TBuilder> schema)
     {
         var builder = schema.CreateTypedBuilder();
-        ReadMembers(current, entry.Shape!, schema, builder, mode, projection: false);
+        ReadMembers(entry.Shape!, schema, builder, projection: false);
         return schema.Build(builder);
     }
 
@@ -121,34 +335,35 @@ internal readonly struct JsonShapeDeserializer(
     /// Reads the members of a structure into <paramref name="builder"/>, in one pass over the
     /// object. An explicit null reads as an absent member, so a modeled default still applies.
     /// </summary>
-    internal static void ReadMembers<T, TBuilder>(
-        JsonElement value,
+    private void ReadMembers<T, TBuilder>(
         JsonShapePlan plan,
         StructSchema<T, TBuilder> schema,
         TBuilder builder,
-        WireReadMode mode,
         bool projection
     )
     {
-        if (value.ValueKind != JsonValueKind.Object)
+        if (reader.TokenType != JsonTokenType.StartObject)
         {
-            throw Malformed(value, "a JSON object");
+            throw Malformed(ref reader, "a JSON object");
         }
 
         var members = plan.Members;
         Span<bool> seen = members.Length <= 64 ? stackalloc bool[64] : new bool[members.Length];
 
-        foreach (var property in value.EnumerateObject())
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
         {
-            var index = plan.IndexOf(property);
+            var index = plan.IndexOf(ref reader);
+            reader.Read();
+
             // First occurrence wins, as it does for a payload carrying a duplicate key.
             if (index < 0 || seen[index] || !plan.IsIncluded(index))
             {
+                reader.Skip();
                 continue;
             }
 
             var member = members[index];
-            if (property.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            if (reader.TokenType == JsonTokenType.Null)
             {
                 if (projection && member.IsRequired)
                 {
@@ -159,16 +374,19 @@ internal readonly struct JsonShapeDeserializer(
             }
 
             seen[index] = true;
-            var nested = new JsonShapeDeserializer(property.Value, member, mode);
+            var outer = entry;
+            entry = member;
             try
             {
-                schema.DeserializeMember(builder, index, ref nested);
+                schema.DeserializeMember(builder, index, ref this);
             }
             catch (MissingRequiredMemberException exception)
             {
                 exception.PrependPathToken(member.WireName);
                 throw;
             }
+
+            entry = outer;
         }
 
         for (var index = 0; index < members.Length; index++)
@@ -178,12 +396,11 @@ internal readonly struct JsonShapeDeserializer(
                 continue;
             }
 
-            var member = members[index];
             // An absent member keeps the value its builder started with: its modeled default, or
             // none.
-            if (member.IsRequired)
+            if (members[index].IsRequired)
             {
-                throw new MissingRequiredMemberException(member.WireName);
+                throw new MissingRequiredMemberException(members[index].WireName);
             }
         }
     }
@@ -192,18 +409,18 @@ internal readonly struct JsonShapeDeserializer(
         ListSchema<TCollection, TElement, TBuilder> schema
     )
     {
-        if (current.ValueKind != JsonValueKind.Array)
+        if (reader.TokenType != JsonTokenType.StartArray)
         {
-            throw Malformed(current, "a JSON array");
+            throw Malformed(ref reader, "a JSON array");
         }
 
         var plan = entry.Shape!;
         var element = plan.Members[0];
         var builder = schema.CreateTypedBuilder();
         var index = 0;
-        foreach (var item in current.EnumerateArray())
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
         {
-            if (item.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            if (reader.TokenType == JsonTokenType.Null)
             {
                 if (!plan.Sparse)
                 {
@@ -217,16 +434,19 @@ internal readonly struct JsonShapeDeserializer(
                 continue;
             }
 
-            var nested = new JsonShapeDeserializer(item, element, mode);
+            var outer = entry;
+            entry = element;
             try
             {
-                schema.DeserializeElement(builder, ref nested);
+                schema.DeserializeElement(builder, ref this);
             }
             catch (MissingRequiredMemberException exception)
             {
                 exception.PrependPathToken(index.ToString(CultureInfo.InvariantCulture));
                 throw;
             }
+
+            entry = outer;
 
             index++;
         }
@@ -238,17 +458,19 @@ internal readonly struct JsonShapeDeserializer(
         MapSchema<TDictionary, TValue, TBuilder> schema
     )
     {
-        if (current.ValueKind != JsonValueKind.Object)
+        if (reader.TokenType != JsonTokenType.StartObject)
         {
-            throw Malformed(current, "a JSON object");
+            throw Malformed(ref reader, "a JSON object");
         }
 
         var plan = entry.Shape!;
         var valueEntry = plan.Members[1];
         var builder = schema.CreateTypedBuilder();
-        foreach (var property in current.EnumerateObject())
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
         {
-            if (property.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+            var key = reader.GetString()!;
+            reader.Read();
+            if (reader.TokenType == JsonTokenType.Null)
             {
                 if (!plan.Sparse)
                 {
@@ -257,20 +479,23 @@ internal readonly struct JsonShapeDeserializer(
                     );
                 }
 
-                schema.Add(builder, property.Name, default!);
+                schema.Add(builder, key, default!);
                 continue;
             }
 
-            var nested = new JsonShapeDeserializer(property.Value, valueEntry, mode);
+            var outer = entry;
+            entry = valueEntry;
             try
             {
-                schema.DeserializeEntry(builder, property.Name, ref nested);
+                schema.DeserializeEntry(builder, key, ref this);
             }
             catch (MissingRequiredMemberException exception)
             {
-                exception.PrependPathToken(property.Name);
+                exception.PrependPathToken(key);
                 throw;
             }
+
+            entry = outer;
         }
 
         return schema.Build(builder);
@@ -278,30 +503,36 @@ internal readonly struct JsonShapeDeserializer(
 
     public T ReadUnion<T>(UnionSchema<T> schema)
     {
-        if (current.ValueKind != JsonValueKind.Object)
+        if (reader.TokenType != JsonTokenType.StartObject)
         {
-            throw Malformed(current, "a JSON object");
+            throw Malformed(ref reader, "a JSON object");
         }
 
         var plan = entry.Shape!;
-        return plan.Discriminator is { } discriminator
-            ? ReadDiscriminated(schema, plan, discriminator)
+        return plan.Discriminator is not null
+            ? ReadDiscriminated(schema, plan)
             : ReadSingleCase(schema, plan);
     }
 
     private T ReadSingleCase<T>(UnionSchema<T> schema, JsonShapePlan plan)
     {
-        JsonProperty? found = null;
+        // A copy of the reader looks ahead without moving this one: the object must hold exactly
+        // one case before any of it is read.
+        var scan = reader;
         var count = 0;
-        foreach (var property in current.EnumerateObject())
+        var index = -1;
+        string? name = null;
+        while (scan.Read() && scan.TokenType == JsonTokenType.PropertyName)
         {
-            if (property.NameEquals("__type"))
+            if (!scan.ValueTextEquals("__type"u8))
             {
-                continue;
+                index = plan.IndexOf(ref scan);
+                name = scan.GetString();
+                count++;
             }
 
-            found = property;
-            count++;
+            scan.Read();
+            scan.Skip();
         }
 
         if (count != 1)
@@ -311,70 +542,130 @@ internal readonly struct JsonShapeDeserializer(
             );
         }
 
-        var index = plan.IndexOf(found!.Value);
-        if (index >= 0 && index != plan.UnknownCase)
+        if (index < 0 || index == plan.UnknownCase)
         {
-            var nested = new JsonShapeDeserializer(found.Value.Value, plan.Members[index], mode);
-            return schema.DeserializeCase(index, ref nested);
+            return plan.UnknownCase >= 0
+                ? ReadUnknown(schema, plan)
+                : throw MalformedRequestException.Serialization($"Unknown union member '{name}'.");
         }
 
-        return plan.UnknownCase >= 0
-            ? ReadUnknown(schema, plan)
-            : throw MalformedRequestException.Serialization(
-                $"Unknown union member '{found.Value.Name}'."
-            );
+        T value = default!;
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            var isCase = !reader.ValueTextEquals("__type"u8);
+            reader.Read();
+            if (isCase)
+            {
+                value = ReadCase(schema, index, plan.Members[index]);
+            }
+            else
+            {
+                reader.Skip();
+            }
+        }
+
+        return value;
     }
 
-    private T ReadDiscriminated<T>(UnionSchema<T> schema, JsonShapePlan plan, string discriminator)
+    private T ReadDiscriminated<T>(UnionSchema<T> schema, JsonShapePlan plan)
     {
-        if (
-            current.TryGetProperty(discriminator, out var tag)
-            && tag.ValueKind == JsonValueKind.String
-            && plan.IndexOf(tag.GetString()!) is var index and >= 0
-            && index != plan.UnknownCase
-        )
+        var tagName = plan.Utf8Discriminator!;
+        var scan = reader;
+        string? tag = null;
+        while (scan.Read() && scan.TokenType == JsonTokenType.PropertyName)
         {
-            // The case's own value is the object without its tag, or the "value" property of a
-            // case that is not a structure.
-            var caseEntry = plan.Members[index];
-            if (caseEntry.Shape?.Kind != ShapeKind.Structure)
+            var isTag = tag is null && scan.ValueTextEquals(tagName);
+            scan.Read();
+            if (isTag && scan.TokenType == JsonTokenType.String)
             {
-                var wrapped = current.TryGetProperty("value", out var inner) ? inner : default;
-                var nested = new JsonShapeDeserializer(wrapped, caseEntry, mode);
-                return schema.DeserializeCase(index, ref nested);
+                tag = scan.GetString();
+                break;
             }
 
-            using var buffer = new MemoryStream();
-            using (var writer = new Utf8JsonWriter(buffer))
-            {
-                writer.WriteStartObject();
-                foreach (var property in current.EnumerateObject())
-                {
-                    if (!property.NameEquals(discriminator))
-                    {
-                        property.WriteTo(writer);
-                    }
-                }
-
-                writer.WriteEndObject();
-            }
-
-            using var document = JsonDocument.Parse(buffer.ToArray());
-            var untagged = new JsonShapeDeserializer(document.RootElement, caseEntry, mode);
-            return schema.DeserializeCase(index, ref untagged);
+            scan.Skip();
         }
 
-        return plan.UnknownCase >= 0
-            ? ReadUnknown(schema, plan)
-            : throw new InvalidOperationException(
-                "Discriminated union is missing an unknown JSON case."
+        if (
+            tag is null
+            || plan.IndexOf(tag) is not (var index and >= 0)
+            || index == plan.UnknownCase
+        )
+        {
+            return plan.UnknownCase >= 0
+                ? ReadUnknown(schema, plan)
+                : throw new InvalidOperationException(
+                    "Discriminated union is missing an unknown JSON case."
+                );
+        }
+
+        // A structure case is the object itself, which skips the tag as a property it does not
+        // model (alloy forbids a case structure from having a member of that name). Any other case is the
+        // object's "value" property.
+        var caseEntry = plan.Members[index];
+        if (caseEntry.Shape?.Kind == ShapeKind.Structure)
+        {
+            return ReadCase(schema, index, caseEntry);
+        }
+
+        T value = default!;
+        var found = false;
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            var isValue = !found && reader.ValueTextEquals("value"u8);
+            reader.Read();
+            if (isValue)
+            {
+                value = ReadCase(schema, index, caseEntry);
+                found = true;
+            }
+            else
+            {
+                reader.Skip();
+            }
+        }
+
+        return found
+            ? value
+            : throw MalformedRequestException.Serialization(
+                $"Expected a 'value' property for union case '{caseEntry.WireName}'."
             );
     }
 
     // An open union's unknown case holds the whole value as a document.
-    private T ReadUnknown<T>(UnionSchema<T> schema, JsonShapePlan plan)
+    private T ReadUnknown<T>(UnionSchema<T> schema, JsonShapePlan plan) =>
+        ReadCase(schema, plan.UnknownCase, plan.Members[plan.UnknownCase]);
+
+    private T ReadCase<T>(UnionSchema<T> schema, int index, JsonMemberPlan caseEntry)
     {
-        var nested = new JsonShapeDeserializer(current, plan.Members[plan.UnknownCase], mode);
-        return schema.DeserializeCase(plan.UnknownCase, ref nested);
+        var outer = entry;
+        entry = caseEntry;
+        var value = schema.DeserializeCase(index, ref this);
+        entry = outer;
+        return value;
+    }
+
+    private static bool IsValueError(Exception exception) =>
+        exception
+            is FormatException
+                or InvalidOperationException
+                or OverflowException
+                or ArgumentException;
+
+    private static MalformedRequestException Malformed(ref Utf8JsonReader reader, string expected)
+    {
+        const int limit = 64;
+        var found = reader.TokenType switch
+        {
+            JsonTokenType.StartObject => "an object",
+            JsonTokenType.StartArray => "an array",
+            JsonTokenType.String => $"\"{Encoding.UTF8.GetString(reader.ValueSpan)}\"",
+            _ => Encoding.UTF8.GetString(reader.ValueSpan),
+        };
+        if (found.Length > limit)
+        {
+            found = string.Concat(found.AsSpan(0, limit), "…");
+        }
+
+        return MalformedRequestException.Serialization($"Expected {expected} but found {found}.");
     }
 }

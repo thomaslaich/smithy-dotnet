@@ -25,6 +25,11 @@ and NSmithy aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.
   Generated configurations of AWS services whose endpoint rules read `AWS::Region` default
   `Region` to it.
 
+### Changed
+
+- The JSON codec reads a payload forward-only with `Utf8JsonReader` instead of parsing it into a
+  `JsonDocument` first, which makes reading about a third faster.
+
 ### Removed
 
 - **BREAKING:** `AwsSigV4Interceptor`, a leftover from before auth schemes. Use

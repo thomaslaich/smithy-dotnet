@@ -1,4 +1,3 @@
-using System.Text.Json;
 using NSmithy.Core;
 using NSmithy.Core.Serde;
 
@@ -42,31 +41,7 @@ internal sealed class CompiledJsonCodec<T>(
     public T Deserialize(byte[] payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
-        using var document = JsonBody.Parse(payload);
-        var deserializer = new JsonShapeDeserializer(document.RootElement, root, readMode);
-        return schema.Read(ref deserializer);
-    }
-}
-
-/// <summary>
-/// The outermost step of reading a JSON payload: turning bytes into a document at all. A body that
-/// is not JSON — unbalanced braces, a comment, a trailing comma, anything after the closing brace —
-/// fails here, before a single member is read, and is the caller's mistake rather than a fault.
-/// </summary>
-internal static class JsonBody
-{
-    public static JsonDocument Parse(byte[] payload)
-    {
-        try
-        {
-            return JsonDocument.Parse(payload);
-        }
-        catch (JsonException exception)
-        {
-            throw MalformedRequestException.Serialization(
-                $"Request body is not valid JSON: {exception.Message}"
-            );
-        }
+        return JsonShapeDeserializer.ReadPayload(payload, schema, root, readMode);
     }
 }
 
@@ -113,14 +88,6 @@ internal sealed class CompiledJsonProjectionCodec<T, TBuilder>(
         ArgumentNullException.ThrowIfNull(payload);
         ArgumentNullException.ThrowIfNull(builder);
 
-        using var document = JsonBody.Parse(payload);
-        JsonShapeDeserializer.ReadMembers(
-            document.RootElement,
-            plan,
-            source,
-            builder,
-            readMode,
-            projection: true
-        );
+        JsonShapeDeserializer.ReadPayloadMembers(payload, plan, source, builder, readMode);
     }
 }

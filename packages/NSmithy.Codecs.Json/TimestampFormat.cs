@@ -1,8 +1,6 @@
 using System.Globalization;
-using System.Numerics;
 using System.Text.Json;
 using NSmithy.Core;
-using NSmithy.Core.Serde;
 
 namespace NSmithy.Codecs.Json;
 
@@ -52,19 +50,4 @@ internal static class TimestampFormat
                 break;
         }
     }
-
-    public static DateTimeOffset Read(JsonElement value, string format, WireReadMode readMode) =>
-        format switch
-        {
-            "epoch-seconds" => DateTimeOffset.FromUnixTimeMilliseconds(
-                (long)(value.GetDouble() * 1000)
-            ),
-            "http-date" => DateTimeOffset.ParseExact(
-                value.GetString()!,
-                "r",
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None
-            ),
-            _ => Rfc3339.Parse(value.GetString()!, readMode),
-        };
 }

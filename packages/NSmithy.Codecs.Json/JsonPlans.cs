@@ -57,6 +57,9 @@ internal sealed class JsonShapePlan(ShapeKind kind, bool sparse)
     /// <summary>The discriminator property of an <c>@alloy#discriminated</c> union.</summary>
     public string? Discriminator { get; set; }
 
+    /// <summary><see cref="Discriminator"/> as UTF-8, to match against property names.</summary>
+    public byte[]? Utf8Discriminator { get; set; }
+
     /// <summary>The <c>@alloy#jsonUnknown</c> case of an open union, or -1.</summary>
     public int UnknownCase { get; set; } = -1;
 
@@ -64,11 +67,11 @@ internal sealed class JsonShapePlan(ShapeKind kind, bool sparse)
 
     public bool IsIncluded(int member) => Excluded is null || !Excluded[member];
 
-    public int IndexOf(JsonProperty property)
+    public int IndexOf(ref Utf8JsonReader reader)
     {
         for (var index = 0; index < Members.Length; index++)
         {
-            if (property.NameEquals(Members[index].Utf8Name))
+            if (reader.ValueTextEquals(Members[index].Utf8Name))
             {
                 return index;
             }
@@ -181,6 +184,7 @@ internal sealed class JsonPlans(
             if (resolved.Traits.TryGetValue(AlloyDiscriminatedTrait, out var discriminated))
             {
                 plan.Discriminator = discriminated.Value.AsString();
+                plan.Utf8Discriminator = Encoding.UTF8.GetBytes(plan.Discriminator);
             }
 
             for (var index = 0; index < unionSchema.Cases.Count; index++)
