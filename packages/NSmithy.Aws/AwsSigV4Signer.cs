@@ -130,9 +130,6 @@ public sealed class AwsSigV4Signer(
     private static bool UsesS3PathRules(string signingName) =>
         signingName is "s3" or "s3-outposts" or "s3express";
 
-    internal void Sign(SmithyHttpRequest request, AwsCredentials credentials, DateTimeOffset now) =>
-        Sign(request, credentials, now, DefaultSigningOptions());
-
     private static void Sign(
         SmithyHttpRequest request,
         AwsCredentials credentials,
