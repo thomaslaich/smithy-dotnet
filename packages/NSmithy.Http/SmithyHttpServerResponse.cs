@@ -6,7 +6,11 @@ namespace NSmithy.Http;
 /// protocol trailers — behind one type, so the host writes them uniformly and holds no wire
 /// knowledge of any protocol.
 /// </summary>
-public sealed class SmithyHttpServerResponse
+/// <remarks>
+/// A body made from a <see cref="SmithyPooledBuffer"/> holds pooled memory until the response is
+/// disposed, which the host does once the body is written.
+/// </remarks>
+public sealed class SmithyHttpServerResponse : IDisposable
 {
     public int StatusCode { get; init; } = 200;
 
@@ -40,7 +44,17 @@ public sealed class SmithyHttpServerResponse
     /// </summary>
     public static IAsyncEnumerable<ReadOnlyMemory<byte>> SingleChunk(
         ReadOnlyMemory<byte> content
-    ) => new SingleChunkBody(content);
+    ) => new SingleChunkBody(content, owner: null);
+
+    /// <summary>
+    /// A body of one chunk holding what <paramref name="buffer"/> has written. The response owns the
+    /// buffer from here on and returns it to its pool when disposed.
+    /// </summary>
+    public static IAsyncEnumerable<ReadOnlyMemory<byte>> SingleChunk(SmithyPooledBuffer buffer)
+    {
+        ArgumentNullException.ThrowIfNull(buffer);
+        return new SingleChunkBody(buffer.WrittenMemory, buffer);
+    }
 
     /// <summary>The whole body, when it was made with <see cref="SingleChunk"/>.</summary>
     public bool TryGetSingleChunk(out ReadOnlyMemory<byte> content)
@@ -55,10 +69,21 @@ public sealed class SmithyHttpServerResponse
         return false;
     }
 
-    private sealed class SingleChunkBody(ReadOnlyMemory<byte> content)
+    /// <summary>Returns a pooled body's memory to its pool.</summary>
+    public void Dispose()
+    {
+        if (Body is SingleChunkBody single)
+        {
+            single.Owner?.Dispose();
+        }
+    }
+
+    private sealed class SingleChunkBody(ReadOnlyMemory<byte> content, IDisposable? owner)
         : IAsyncEnumerable<ReadOnlyMemory<byte>>
     {
         public ReadOnlyMemory<byte> Content { get; } = content;
+
+        public IDisposable? Owner { get; } = owner;
 
         public IAsyncEnumerator<ReadOnlyMemory<byte>> GetAsyncEnumerator(
             CancellationToken cancellationToken = default

@@ -34,6 +34,8 @@ internal sealed class ProtoWriter(int initialCapacity = 64) : IDisposable
 
     public byte[] ToArray() => buffer.AsSpan(0, length).ToArray();
 
+    public ReadOnlySpan<byte> WrittenSpan => buffer.AsSpan(0, length);
+
     public void WriteTag(int fieldNumber, WireType wireType) =>
         WriteVarint(((ulong)fieldNumber << 3) | (ulong)wireType);
 
